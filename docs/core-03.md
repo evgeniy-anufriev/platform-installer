@@ -19,14 +19,16 @@ variables, or Ansible files.
   defaults for the standalone role contract.
 - Deployment-level `serviceDeployments[*].configuration` in portable
   `group_vars` is the explicit logical override.
-- `host_vars` and `members[*].configuration` are outside this milestone.
+- `host_vars` remain a physical-host context and `members[*].configuration`
+  is resolved by CORE-04 as a distinct logical-member scope.
 - `ResolvedTopology` contributes only deployment identity, service type,
   definition version and mode. Host placement does not affect the
   configuration fingerprint.
 
 CORE-03 does not evaluate Jinja, Ansible precedence, facts or runtime values.
 Literal role defaults may be materialized. Non-literal defaults are reported
-as `DEFERRED` with reason `NON_LITERAL_ROLE_DEFAULT`.
+as `DEFERRED` with reason `NON_LITERAL_ROLE_DEFAULT`. Scoped inheritance and
+the restricted exact-reference model are defined by CORE-04.
 
 ## Package mapping
 
@@ -45,9 +47,10 @@ variables and does not depend on Core or Installer.
 ## Projection and fingerprint
 
 `ResolvedServiceConfiguration` contains effective logical values, resolved or
-deferred state, service identity, relevant input digests and findings. It does
-not contain role-variable dictionaries, hosts, endpoints, certificates,
-secrets, artifacts or generated files.
+deferred state, service identity, member variable contexts, relevant input
+digests and findings. It does not contain role-variable dictionaries,
+endpoints, certificates, secrets, artifacts or generated files. Host identity
+is context metadata only; host variables never enter member precedence.
 
 The fingerprint includes canonical service identity/mode, effective logical
 configuration, service-definition/schema/default/mapping digests and excludes

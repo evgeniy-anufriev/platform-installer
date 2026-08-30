@@ -125,6 +125,21 @@ Not ready when:
 - generic Core guesses logical-to-role-variable names;
 - schema defaults and role defaults are both treated as canonical.
 
+### CORE-04: Scoped configuration and variable context
+
+Status: DONE. Scoped configuration, variable contexts, opaque pass-through
+preservation, deterministic references and independent member projections were
+implemented and validated on the RED OS QA VM.
+
+CORE-04 adds deployment/member configuration scopes while preserving host vars
+as physical-host context and preserving standalone Ansible as the runtime
+authority. Service mappings declare allowed scopes. Derived output retains
+independent member projections for multiple members on one host, exact static
+reference states, source metadata and deterministic fingerprints.
+
+The milestone does not implement a Jinja interpreter, facts, lookups, runtime
+role-variable generation, plan/apply/verify, or production services.
+
 ## Phase C — First production service
 
 ### SERVICE-01A: Kafka KRaft standalone

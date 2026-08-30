@@ -2,7 +2,7 @@
 
 ## Phase
 
-CORE-03 - deterministic service configuration resolution.
+CORE-04 - scoped configuration and variable context.
 
 ## Established direction
 
@@ -22,6 +22,8 @@ CORE-03 - deterministic service configuration resolution.
   generic Core does not infer names.
 - `ResolvedTopology` and `ResolvedServiceConfiguration` are derived,
   read-only projections and never persistent sources of truth.
+- Unknown Ansible variables outside service mappings remain opaque,
+  pass-through values with physical origin metadata.
 
 ## Implemented
 
@@ -38,29 +40,38 @@ CORE-03 - deterministic service configuration resolution.
 - Versioned `ResolvedServiceConfiguration/v1alpha1` contract.
 - Deterministic deployment-level configuration resolver combining literal role
   defaults with `serviceDeployments[*].configuration` overrides.
-- Non-literal Ansible/Jinja defaults are represented as `DEFERRED`; Core does
-  not implement an Ansible/Jinja variable engine.
+- Deployment/member scoped configuration with
+  `ROLE_DEFAULT -> DEPLOYMENT_OVERRIDE -> MEMBER_OVERRIDE` precedence and
+  `VariableContext(deploymentId, memberId, hostId)` projections.
+- Non-literal Ansible/Jinja defaults are represented as `DEFERRED`; exact
+  static references resolve deterministically, with `UNRESOLVED` and `CYCLIC`
+  findings where applicable.
 - Explicit service-package configuration mappings and Kafka role defaults.
-- `MEMBER_CONFIGURATION_UNSUPPORTED` blocking findings with deployment/member
-  identity and exact paths.
-- Configuration fingerprint independent of actual member placement.
+- Structured findings for unsupported member-scoped settings.
+- Opaque/pass-through variables retain physical origin and redact secret-like
+  values without becoming managed settings.
+- Independent deterministic member projections and configuration fingerprints.
 - Portable valid/invalid fixtures, including Kafka and PostgreSQL topology cases.
 - Kafka service collection and explicit `roles/kafka_kraft` skeleton; production
   tasks are intentionally absent.
 
 ## Validation evidence
 
-- RED OS controller VM: `python3 -m unittest discover -s tests -p 'test_*.py'` -
-  34 tests passed.
+- RED OS controller VM: targeted CORE-04 suite - 15 tests passed.
+- RED OS controller VM: `python3 -m unittest discover -s ansible-core/tests` -
+  43 tests passed.
 - RED OS controller VM: `python3 ansible-core/tools/build_fixture_catalog.py
   --check` - fixture catalog reproducibility passed.
-- No production Kafka installation or target mutation was performed.
+- RED OS controller VM: Ansible validation smoke passed with `changed=0`,
+  `failed=0`, and validation status `PASS` on `localhost` only.
+- RED OS controller VM: privileged `unshare -n` offline check passed.
+- No production Kafka installation or target mutation was performed; temporary
+  remote QA workspace and validation artifact were removed.
 
 ## Not implemented
 
 - Dependency DAG, endpoint/certificate resolution, runtime role variables and
   deployment plan.
-- Member/host-specific configuration precedence.
 - Generic Core mutation roles and production Kafka role tasks.
 - Production services.
 - Go backend.
@@ -69,6 +80,6 @@ CORE-03 - deterministic service configuration resolution.
 
 ## Next gate
 
-CORE-01, CORE-02 and CORE-03 are complete. The next gate is `SERVICE-01A`
+CORE-01, CORE-02, CORE-03 and CORE-04 are complete. The next gate is `SERVICE-01A`
 Kafka KRaft standalone installation and verification. It must be requested
 explicitly before production service tasks begin.

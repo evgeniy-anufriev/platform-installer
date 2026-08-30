@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:e3d8a8a02d740af8a6e93dc550c0f2f6d31e6fe229f209dcd77519a98abf7f82
+digest: sha256:91669c264c40d061c75d95528c57bc8384014baac1033a67dcb49d58ca4cf942
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -81,13 +81,24 @@ definitions:
     configurationMapping:
       clientPort:
         roleVariable: platform_kafka_client_port
+        scopes:
+          - deployment
+          - member
       controllerPort:
         roleVariable: platform_kafka_controller_port
+        scopes:
+          - deployment
+          - member
       dataDirectory:
         roleVariable: platform_kafka_data_directory
+        scopes:
+          - deployment
+          - member
       logRetentionHours:
         roleVariable: platform_kafka_log_retention_hours
-    x-definitionDigest: sha256:c8ec922eb9d7e399469c9384deaa4220ba63180b2e7a79b98b0c1e6b6a106f9d
+        scopes:
+          - deployment
+    x-definitionDigest: sha256:bbc8e9ee84d1ef808cffd5a491d97bfbf217cd14de78e6f9edb0a9f5537adbf9
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest

@@ -4,7 +4,7 @@
   "title": "Resolved service configuration projection",
   "description": "Read-only derived logical configuration; never a desired-state source.",
   "type": "object",
-  "required": ["apiVersion", "kind", "services", "configurationFingerprint", "findings"],
+  "required": ["apiVersion", "kind", "services", "opaqueVariables", "configurationFingerprint", "findings"],
   "properties": {
     "apiVersion": { "const": "platform.installer/resolved-service-configuration/v1alpha1" },
     "kind": { "const": "ResolvedServiceConfiguration" },
@@ -14,7 +14,11 @@
       "additionalProperties": { "$ref": "#/$defs/service" }
     },
     "configurationFingerprint": { "$ref": "#/$defs/digest" },
-    "findings": { "type": "array", "items": { "type": "object" } }
+    "findings": { "type": "array", "items": { "type": "object" } },
+    "opaqueVariables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/opaqueVariable" }
+    }
   },
   "additionalProperties": false,
   "$defs": {
@@ -30,7 +34,9 @@
           "properties": {
             "state": { "const": "RESOLVED" },
             "value": { "$ref": "#/$defs/literal" },
-            "source": { "enum": ["DEFAULT", "OVERRIDE"] }
+            "source": { "enum": ["DEFAULT", "OVERRIDE", "ROLE_DEFAULT", "DEPLOYMENT_OVERRIDE", "MEMBER_OVERRIDE", "STATIC_REFERENCE"] },
+            "origin": { "enum": ["ROLE_DEFAULT", "DEPLOYMENT_OVERRIDE", "MEMBER_OVERRIDE"] },
+            "reference": { "type": "string", "minLength": 1 }
           },
           "additionalProperties": false
         },
@@ -39,12 +45,61 @@
           "required": ["state", "reason"],
           "properties": {
             "state": { "const": "DEFERRED" },
-            "reason": { "enum": ["NON_LITERAL_ROLE_DEFAULT"] },
-            "source": { "const": "DEFAULT" }
+            "reason": { "enum": ["NON_LITERAL_ROLE_DEFAULT", "NON_LITERAL_CONFIGURATION"] },
+            "source": { "enum": ["DEFAULT", "ROLE_DEFAULT", "DEPLOYMENT_OVERRIDE", "MEMBER_OVERRIDE", "RUNTIME_DEFERRED"] },
+            "expression": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["state", "reason"],
+          "properties": {
+            "state": { "enum": ["UNRESOLVED", "CYCLIC"] },
+            "reason": { "enum": ["STATIC_REFERENCE_NOT_FOUND", "STATIC_REFERENCE_CYCLE"] },
+            "source": { "const": "STATIC_REFERENCE" },
+            "reference": { "type": "string", "minLength": 1 },
+            "expression": { "type": "string", "minLength": 1 }
           },
           "additionalProperties": false
         }
       ]
+    },
+    "variableContext": {
+      "type": "object",
+      "required": ["deploymentId", "memberId", "hostId"],
+      "properties": {
+        "deploymentId": { "type": "string", "minLength": 1 },
+        "memberId": { "type": "string", "minLength": 1 },
+        "hostId": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "opaqueVariable": {
+      "type": "object",
+      "required": ["state", "name", "origin"],
+      "properties": {
+        "state": { "const": "OPAQUE" },
+        "name": { "type": "string", "minLength": 1 },
+        "origin": {
+          "type": "object",
+          "required": ["source", "path"],
+          "properties": {
+            "source": { "enum": ["ROLE_DEFAULT", "DEPLOYMENT_CONFIGURATION", "MEMBER_CONFIGURATION", "HOST_CONTEXT"] },
+            "path": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "value": { "$ref": "#/$defs/literal" },
+        "expression": { "type": "string", "minLength": 1 },
+        "redacted": { "const": true }
+      },
+      "anyOf": [
+        { "required": ["value"] },
+        { "required": ["expression"] },
+        { "required": ["redacted"] }
+      ],
+      "additionalProperties": false
     },
     "service": {
       "type": "object",
@@ -57,6 +112,32 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/value" }
         },
+        "opaqueVariables": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/opaqueVariable" }
+        },
+        "members": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["variableContext", "configuration", "configurationFingerprint"],
+            "properties": {
+              "variableContext": { "$ref": "#/$defs/variableContext" },
+              "configuration": {
+                "type": "object",
+                "additionalProperties": { "$ref": "#/$defs/value" }
+              },
+              "opaqueVariables": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/opaqueVariable" }
+              },
+              "configurationFingerprint": { "$ref": "#/$defs/digest" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "configurationFingerprint": { "$ref": "#/$defs/digest" },
         "inputs": {
           "type": "object",
           "required": ["serviceDefinitionDigest", "configurationSchemaDigest", "roleDefaultsDigest"],

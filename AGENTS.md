@@ -81,3 +81,19 @@ Local integration-test credentials may exist under `.runtime/secrets/`.
 - Load them only at runtime.
 - Redact them from command and error output.
 - Missing credentials must produce a clear test prerequisite failure.
+
+## Test Execution Environment
+
+The Windows development workstation is not the canonical runtime for Python/Ansible Core tests.
+
+- Prefer the configured RED OS test VM when Python or Ansible is unavailable locally.
+- Missing `python`, `py`, `pytest` or `ansible-playbook` on Windows is not by itself a reason to mark tests `NOT TESTED` when the RED OS QA environment is available.
+- Execute Python/Ansible tests on the RED OS VM through the existing test connection.
+- Use local Windows execution only for checks supported there, such as Git, diff and static-file checks.
+- Do not install Python/Ansible on Windows merely to run Core QA unless explicitly requested.
+- Test commands must use the current working-tree version, not a stale remote copy.
+- Transfer only required repository content to a temporary remote test workspace.
+- Clean temporary remote test workspaces after QA unless preservation is explicitly required for debugging.
+- Never modify target hosts during read-only Core tests.
+- RED OS is the primary current Core QA environment.
+- ALT Linux validation is required only for ALT-specific milestone behavior or when explicitly requested.

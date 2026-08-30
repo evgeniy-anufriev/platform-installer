@@ -6,11 +6,11 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e3d8a8a02d740af8a6e93dc550c0f2f6d31e6fe229f209dcd77519a98abf7f82
+  digest: sha256:91669c264c40d061c75d95528c57bc8384014baac1033a67dcb49d58ca4cf942
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:c8ec922eb9d7e399469c9384deaa4220ba63180b2e7a79b98b0c1e6b6a106f9d
+      digest: sha256:bbc8e9ee84d1ef808cffd5a491d97bfbf217cd14de78e6f9edb0a9f5537adbf9
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222

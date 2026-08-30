@@ -61,6 +61,12 @@
           "roleVariable": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "scopes": {
+            "type": "array",
+            "items": { "enum": ["deployment", "member"] },
+            "minItems": 1,
+            "uniqueItems": true
           }
         },
         "additionalProperties": false

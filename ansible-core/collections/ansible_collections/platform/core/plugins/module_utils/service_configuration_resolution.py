@@ -49,6 +49,48 @@ def _canonical_defaults(role_defaults, mapping):
     }
 
 
+_EXACT_REFERENCE = re.compile(r"^{{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*}}$")
+
+
+def _exact_reference(value):
+    if not isinstance(value, str):
+        return None
+    match = _EXACT_REFERENCE.match(value)
+    return match.group(1) if match else None
+
+
+def _mapping_scopes(entry):
+    if not isinstance(entry, dict):
+        return []
+    scopes = entry.get("scopes", ["deployment"])
+    return scopes if isinstance(scopes, list) else []
+
+
+def _value(state, source, **extra):
+    result = {"state": state, "source": source}
+    result.update(extra)
+    return result
+
+
+_SECRET_TERMS = ("password", "passphrase", "privatekey", "token", "secret")
+
+
+def _opaque_variable(name, value, source, path):
+    entry = {
+        "state": "OPAQUE",
+        "name": name,
+        "origin": {"source": source, "path": path},
+    }
+    normalized = name.lower().replace("_", "").replace("-", "") if isinstance(name, str) else ""
+    if any(term in normalized for term in _SECRET_TERMS):
+        entry["redacted"] = True
+    elif _literal(value):
+        entry["value"] = value
+    else:
+        entry["expression"] = value
+    return entry
+
+
 def _service_definition_digest(definition):
     if not isinstance(definition, dict):
         return None
@@ -91,6 +133,8 @@ def _validate_override(logical, value, schema, field):
             "Configuration property is not declared by the service schema",
         ))
         return findings
+    if isinstance(value, str) and JINJA_MARKER.search(value):
+        return findings
     definition = properties.get(logical, {}) if isinstance(properties, dict) else {}
     expected = definition.get("type") if isinstance(definition, dict) else None
     expected_types = expected if isinstance(expected, list) else [expected]
@@ -126,24 +170,38 @@ def _validate_override(logical, value, schema, field):
 
 
 def resolve_service_configuration(
-    resolved_topology, topology, service_catalog, role_defaults, configuration_schemas=None
+    resolved_topology, topology, service_catalog, role_defaults, configuration_schemas=None,
+    host_contexts=None,
 ):
-    """Resolve literal deployment configuration without evaluating Ansible/Jinja.
+    """Resolve static deployment/member configuration without being Ansible.
 
-    role_defaults is keyed by service type and contains the loaded role
-    defaults as ordinary data. The mapping is service-package metadata. This
-    function never emits role variables and deliberately ignores placements.
+    This deliberately implements only exact variable references. It does not
+    evaluate filters, facts, lookups, expressions or host vars. The resulting
+    member projections are keyed by deployment/member identity, not by host.
     """
     resolved_topology = resolved_topology if isinstance(resolved_topology, dict) else {}
     topology = topology if isinstance(topology, dict) else {}
     service_catalog = service_catalog if isinstance(service_catalog, dict) else {}
     role_defaults = role_defaults if isinstance(role_defaults, dict) else {}
     configuration_schemas = configuration_schemas if isinstance(configuration_schemas, dict) else {}
+    host_contexts = host_contexts if isinstance(host_contexts, dict) else {}
     definitions = service_catalog.get("definitions", service_catalog)
     desired_deployments = topology.get("serviceDeployments", {})
     resolved_deployments = resolved_topology.get("resolvedTopology", {}).get("serviceDeployments", {})
     services = {}
     findings = []
+    opaque_host_variables = []
+    for host_id in sorted(host_contexts):
+        values = host_contexts[host_id]
+        if not isinstance(values, dict):
+            continue
+        for name, value in sorted(values.items()):
+            opaque_host_variables.append(_opaque_variable(
+                name,
+                value,
+                "HOST_CONTEXT",
+                "inventory/host_vars/%s.yml" % host_id,
+            ))
 
     for deployment_id in sorted(resolved_deployments):
         resolved = resolved_deployments[deployment_id]
@@ -180,17 +238,9 @@ def resolve_service_configuration(
             ))
             overrides = {}
         members = desired.get("members", {}) if isinstance(desired, dict) else {}
-        for member_id in (sorted(members) if isinstance(members, dict) else []):
-            member = members[member_id]
-            if isinstance(member, dict) and member.get("configuration"):
-                findings.append(_finding(
-                    "MEMBER_CONFIGURATION_UNSUPPORTED",
-                    "serviceDeployments.%s.members.%s.configuration" % (deployment_id, member_id),
-                    "Member-specific configuration is not supported by CORE-03",
-                    {"deploymentId": deployment_id, "memberId": member_id},
-                ))
+        members = members if isinstance(members, dict) else {}
 
-        for logical in sorted(set(mapping) | set(overrides)):
+        for logical in sorted(mapping):
             entry = mapping.get(logical)
             if not isinstance(entry, dict) or not entry.get("roleVariable"):
                 findings.append(_finding(
@@ -198,52 +248,189 @@ def resolve_service_configuration(
                     "catalog.definitions.%s.configurationMapping.%s" % (service_type, logical),
                     "Logical configuration property must map to one role variable",
                 ))
-                continue
-            role_variable = entry["roleVariable"]
-            if logical in overrides:
-                value = overrides[logical]
-                if _literal(value):
-                    findings.extend(_validate_override(
+        schema = configuration_schemas.get(service_type)
+        mapped_role_variables = {
+            entry.get("roleVariable")
+            for entry in mapping.values()
+            if isinstance(entry, dict) and entry.get("roleVariable")
+        }
+        opaque_variables = [
+            _opaque_variable(
+                role_variable,
+                defaults[role_variable],
+                "ROLE_DEFAULT",
+                "roles/%s/defaults/main.yml" % service_type,
+            )
+            for role_variable in sorted(defaults)
+            if role_variable not in mapped_role_variables
+        ]
+        opaque_variables.extend(
+            _opaque_variable(
+                logical,
+                value,
+                "DEPLOYMENT_CONFIGURATION",
+                "%s.%s" % (field_prefix, logical),
+            )
+            for logical, value in sorted(overrides.items())
+            if logical not in mapping
+        )
+
+        def resolve_scope(scope_member=None):
+            scope_name = "member" if scope_member is not None else "deployment"
+            scope_field_prefix = field_prefix if scope_member is None else "serviceDeployments.%s.members.%s.configuration" % (deployment_id, scope_member.get("id", ""))
+            member_overrides = scope_member.get("configuration", {}) if isinstance(scope_member, dict) else {}
+            member_overrides = member_overrides if isinstance(member_overrides, dict) else {}
+            values = {}
+            visiting = []
+
+            def source_for(logical):
+                entry = mapping.get(logical)
+                if not isinstance(entry, dict) or not entry.get("roleVariable"):
+                    return None
+                if scope_name == "member" and logical in member_overrides and "member" in _mapping_scopes(entry):
+                    return "MEMBER_OVERRIDE", member_overrides[logical]
+                if logical in overrides:
+                    return "DEPLOYMENT_OVERRIDE", overrides[logical]
+                role_variable = entry["roleVariable"]
+                if role_variable in defaults:
+                    return "ROLE_DEFAULT", defaults[role_variable]
+                return None
+
+            def resolve_variable(name):
+                if name in mapping:
+                    return resolve_setting(name)
+                for logical, entry in mapping.items():
+                    if isinstance(entry, dict) and entry.get("roleVariable") == name:
+                        return resolve_setting(logical)
+                if name in defaults:
+                    return resolve_raw(name, defaults[name])
+                if "." in name:
+                    namespace, key = name.split(".", 1)
+                    candidate = defaults.get(namespace)
+                    if isinstance(candidate, dict) and key in candidate:
+                        return resolve_raw(name, candidate[key])
+                return {"state": "UNRESOLVED", "reason": "STATIC_REFERENCE_NOT_FOUND", "source": "STATIC_REFERENCE", "reference": name}
+
+            def resolve_raw(name, raw):
+                if name in visiting:
+                    return {"state": "CYCLIC", "reason": "STATIC_REFERENCE_CYCLE", "source": "STATIC_REFERENCE", "reference": name}
+                reference = _exact_reference(raw)
+                if reference:
+                    visiting.append(name)
+                    resolved = resolve_variable(reference)
+                    visiting.pop()
+                    if resolved.get("state") == "RESOLVED":
+                        return _value("RESOLVED", "STATIC_REFERENCE", value=resolved["value"], reference=reference)
+                    return dict(resolved, source="STATIC_REFERENCE", reference=reference)
+                if _literal(raw):
+                    return {"state": "RESOLVED", "value": raw}
+                return {"state": "DEFERRED", "reason": "NON_LITERAL_CONFIGURATION", "source": "RUNTIME_DEFERRED", "expression": raw}
+
+            def resolve_setting(logical):
+                if logical in values:
+                    return values[logical]
+                if logical in visiting:
+                    return {"state": "CYCLIC", "reason": "STATIC_REFERENCE_CYCLE", "source": "STATIC_REFERENCE", "reference": logical}
+                entry = mapping.get(logical)
+                if not isinstance(entry, dict) or not entry.get("roleVariable"):
+                    return None
+                source = source_for(logical)
+                if source is None:
+                    findings.append(_finding(
+                        "ROLE_DEFAULT_NOT_DECLARED",
+                        "%s.%s" % (scope_field_prefix, logical),
+                        "Mapped logical configuration has no corresponding role default",
+                        {"roleVariable": entry["roleVariable"]},
+                    ))
+                    return None
+                source_name, raw = source
+                reference = _exact_reference(raw)
+                if reference:
+                    visiting.append(logical)
+                    resolved = resolve_variable(reference)
+                    visiting.pop()
+                    if resolved.get("state") == "RESOLVED":
+                        result = _value("RESOLVED", "STATIC_REFERENCE", value=resolved["value"], reference=reference, origin=source_name)
+                    else:
+                        result = dict(resolved, source="STATIC_REFERENCE", reference=reference)
+                elif _literal(raw):
+                    result = _value("RESOLVED", source_name, value=raw)
+                else:
+                    result = {
+                        "state": "DEFERRED",
+                        "reason": "NON_LITERAL_ROLE_DEFAULT" if source_name == "ROLE_DEFAULT" else "NON_LITERAL_CONFIGURATION",
+                        "source": "RUNTIME_DEFERRED",
+                        "expression": raw,
+                    }
+                values[logical] = result
+                if result.get("state") in ("UNRESOLVED", "CYCLIC"):
+                    findings.append(_finding(
+                        "STATIC_REFERENCE_NOT_FOUND" if result["state"] == "UNRESOLVED" else "STATIC_REFERENCE_CYCLE",
+                        "%s.%s" % (scope_field_prefix, logical),
+                        "Static configuration reference could not be resolved" if result["state"] == "UNRESOLVED" else "Static configuration reference is cyclic",
+                        {"reference": result.get("reference")},
+                    ))
+                return result
+
+            for logical in sorted(mapping):
+                result = resolve_setting(logical)
+                if result is not None:
+                    values[logical] = result
+            return values
+
+        deployment_configuration = resolve_scope()
+        for logical, value in sorted(overrides.items()):
+            if logical in mapping:
+                findings.extend(_validate_override(logical, value, schema, field_prefix))
+        service = services.setdefault(deployment_id, {})
+        service["configuration"] = deployment_configuration
+        service["opaqueVariables"] = opaque_variables
+
+        scoped_members = {}
+        for member_id in sorted(members):
+            member = members[member_id]
+            member_configuration = member.get("configuration", {}) if isinstance(member, dict) else {}
+            member_opaque_variables = []
+            if not isinstance(member_configuration, dict):
+                findings.append(_finding(
+                    "INVALID_MEMBER_CONFIGURATION",
+                    "serviceDeployments.%s.members.%s.configuration" % (deployment_id, member_id),
+                    "Member configuration must be an object",
+                ))
+                member_configuration = {}
+            for logical, value in sorted(member_configuration.items()):
+                entry = mapping.get(logical)
+                if not isinstance(entry, dict) or not entry.get("roleVariable"):
+                    member_opaque_variables.append(_opaque_variable(
                         logical,
                         value,
-                        configuration_schemas.get(service_type),
-                        field_prefix,
+                        "MEMBER_CONFIGURATION",
+                        "serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical),
                     ))
-                    services.setdefault(deployment_id, {}).setdefault("configuration", {})[logical] = {
-                        "state": "RESOLVED", "value": value, "source": "OVERRIDE"
-                    }
-                else:
+                elif "member" not in _mapping_scopes(entry):
                     findings.append(_finding(
-                        "SERVICE_CONFIGURATION_OVERRIDE_NON_LITERAL",
-                        "%s.%s" % (field_prefix, logical),
-                        "Deployment configuration overrides must be literal values",
+                        "MEMBER_SETTING_SCOPE_UNSUPPORTED",
+                        "serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical),
+                        "Configuration setting does not allow member scope",
+                        {"setting": logical, "allowedScopes": _mapping_scopes(entry)},
                     ))
-                continue
-            if role_variable not in defaults:
-                findings.append(_finding(
-                    "ROLE_DEFAULT_NOT_DECLARED",
-                    "%s.%s" % (field_prefix, logical),
-                    "Mapped logical configuration has no corresponding role default",
-                    {"roleVariable": role_variable},
-                ))
-                continue
-            value = defaults[role_variable]
-            if _literal(value):
-                services.setdefault(deployment_id, {}).setdefault("configuration", {})[logical] = {
-                    "state": "RESOLVED", "value": value, "source": "DEFAULT"
-                }
-            else:
-                services.setdefault(deployment_id, {}).setdefault("configuration", {})[logical] = {
-                    "state": "DEFERRED", "reason": "NON_LITERAL_ROLE_DEFAULT", "source": "DEFAULT"
-                }
+                if logical in mapping:
+                    findings.extend(_validate_override(
+                        logical, value, schema,
+                        "serviceDeployments.%s.members.%s.configuration" % (deployment_id, member_id),
+                    ))
+            member_values = resolve_scope(dict(member, id=member_id) if isinstance(member, dict) else {"id": member_id})
+            host_id = member.get("host") if isinstance(member, dict) else None
+            context = {"deploymentId": deployment_id, "memberId": member_id, "hostId": host_id}
+            member_fingerprint = canonical_digest({"serviceType": service_type, "definitionVersion": resolved.get("definitionVersion"), "mode": resolved.get("mode"), "configuration": member_values, "opaqueVariables": member_opaque_variables, "inputs": {"serviceDefinitionDigest": _service_definition_digest(definition), "configurationSchemaDigest": canonical_digest(schema if schema is not None else {}), "roleDefaultsDigest": canonical_digest(_canonical_defaults(defaults, mapping)), "mappingDigest": canonical_digest(_canonical_mapping(mapping))}})
+            scoped_members[member_id] = {"variableContext": context, "configuration": member_values, "opaqueVariables": member_opaque_variables, "configurationFingerprint": member_fingerprint}
+        service["members"] = scoped_members
 
-        service = services.setdefault(deployment_id, {})
         service.update({
             "serviceType": service_type,
             "definitionVersion": resolved.get("definitionVersion"),
             "mode": resolved.get("mode"),
         })
-        schema = configuration_schemas.get(service_type)
         schema_ref = definition.get("configurationSchema", {}).get("$ref") if isinstance(definition.get("configurationSchema"), dict) else None
         service["inputs"] = {
             "topologyFingerprint": resolved_topology.get("topologyFingerprint"),
@@ -252,6 +439,15 @@ def resolve_service_configuration(
             "roleDefaultsDigest": canonical_digest(_canonical_defaults(defaults, mapping)),
             "mappingDigest": canonical_digest(_canonical_mapping(mapping)),
         }
+        service["configurationFingerprint"] = canonical_digest({
+            "serviceType": service_type,
+            "definitionVersion": service["definitionVersion"],
+            "mode": service["mode"],
+            "configuration": service["configuration"],
+            "opaqueVariables": service["opaqueVariables"],
+            "members": {member_id: {"configuration": value["configuration"], "opaqueVariables": value["opaqueVariables"]} for member_id, value in sorted(scoped_members.items())},
+            "inputs": {key: value for key, value in service["inputs"].items() if key != "topologyFingerprint"},
+        })
 
     for service in services.values():
         service["configuration"] = {
@@ -263,12 +459,21 @@ def resolve_service_configuration(
         }
     findings.sort(key=lambda item: (item["field"], item["code"]))
     fingerprint_input = {
+        "opaqueVariables": opaque_host_variables,
         "services": {
             deployment_id: {
                 "serviceType": service["serviceType"],
                 "definitionVersion": service["definitionVersion"],
                 "mode": service["mode"],
                 "configuration": service["configuration"],
+                "opaqueVariables": service.get("opaqueVariables", []),
+                "members": {
+                    member_id: {
+                        "configuration": value["configuration"],
+                        "opaqueVariables": value.get("opaqueVariables", []),
+                    }
+                    for member_id, value in sorted(service.get("members", {}).items())
+                },
                 "inputs": {
                     key: value for key, value in service["inputs"].items()
                     if key != "topologyFingerprint"
@@ -281,6 +486,7 @@ def resolve_service_configuration(
         "apiVersion": API_VERSION,
         "kind": "ResolvedServiceConfiguration",
         "services": services,
+        "opaqueVariables": opaque_host_variables,
         "configurationFingerprint": canonical_digest(fingerprint_input),
         "findings": findings,
         "status": "BLOCKED" if findings else "PASS",

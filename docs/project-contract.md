@@ -182,6 +182,11 @@ Effective role values are composed from distinct sources:
 - `SECRET`: runtime-only secret material.
 
 The project stores only supported desired overrides and references. It does not copy every default.
+Deployment configuration applies to the logical deployment; member
+configuration applies to one logical member and is never converted into
+`host_vars`. A physical host may contain multiple members, including members
+from different deployments. Service-package mappings declare which settings
+permit the member scope.
 
 ## Versioning and migration
 
