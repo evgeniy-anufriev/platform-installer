@@ -51,3 +51,22 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 - `docs/architecture-decisions.md`
 - `docs/roadmap.md`
 - `CURRENT_STATE.md`
+
+## Context Efficiency
+
+- Always start with `AGENTS.md` and `CURRENT_STATE.md`.
+- Read only architecture and contract documentation relevant to the task.
+- Prefer targeted searches and symbols before opening full files.
+- Do not inspect `ansible-core/**/_vendor/**` by default; inspect vendored tests
+  or benchmarks only for dependency validation or vendor maintenance.
+- Do not read all fixtures when one representative fixture and targeted search
+  are sufficient. Do not inspect V1 unless its reference behavior is required.
+- For generated artifacts, inspect source manifests and generators first.
+- Do not perform repository-wide source dumps or paste complete successful logs;
+  surface only relevant failure excerpts.
+- Main Agent runs affected tests and uses representative fixtures. Delegate
+  milestone-level regression, clean/offline and OS-specific checks to QA/Test.
+
+`examples/catalog/service-catalog.yml` is generated, intentionally tracked and
+reproducible. Its source of truth is the catalog manifests plus
+`ansible-core/tools/build_fixture_catalog.py`.

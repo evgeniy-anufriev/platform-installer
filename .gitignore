@@ -1,7 +1,6 @@
 # Generated Ansible workspaces and runtime evidence
 .runtime/
 runs/
-artifacts/
 
 # Secrets must never be committed
 secrets/
@@ -13,3 +12,33 @@ secrets/
 .vscode/
 *.tmp
 *.log
+
+# Python runtime and test cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+env/
+
+# Ansible local state
+*.retry
+.ansible/
+fact_cache/
+
+# Go build/test output
+bin/
+*.test
+*.out
+
+# Frontend dependencies
+node_modules/
+
+# OS/editor metadata
+.DS_Store
+Thumbs.db
+*.swp
