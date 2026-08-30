@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha1/schema.json",
+  "title": "Platform immutable resolved plan",
+  "type": "object",
+  "required": ["apiVersion", "kind", "id", "createdAt", "fingerprints", "readiness", "phases", "findings"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/plan/v1alpha1" },
+    "kind": { "const": "DeploymentPlan" },
+    "id": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "fingerprints": { "$ref": "#/$defs/fingerprints" },
+    "factsSnapshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["host", "ref", "fingerprint", "observedAt"],
+        "properties": {
+          "host": { "type": "string", "minLength": 1 },
+          "ref": { "type": "string", "minLength": 1 },
+          "fingerprint": { "$ref": "#/$defs/digest" },
+          "observedAt": { "type": "string", "format": "date-time" },
+          "freshUntil": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "readiness": { "enum": ["READY", "REQUIRES_PREPARATION", "BLOCKED", "UNKNOWN"] },
+    "phases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/phase" }
+    },
+    "requiredCredentials": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["requirementRef", "hosts"],
+        "properties": {
+          "requirementRef": { "type": "string", "minLength": 1 },
+          "hosts": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "summary"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "summary": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "../../finding/v1alpha1/schema.json" }
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "fingerprints": {
+      "type": "object",
+      "required": ["project", "catalog", "artifacts", "core", "plan"],
+      "properties": {
+        "project": { "$ref": "#/$defs/digest" },
+        "catalog": { "$ref": "#/$defs/digest" },
+        "artifacts": { "$ref": "#/$defs/digest" },
+        "core": { "$ref": "#/$defs/digest" },
+        "plan": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "phase": {
+      "type": "object",
+      "required": ["id", "order", "actions"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 0 },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "required": ["id", "type", "targets", "dependsOn", "mutating", "reboot"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "serviceDeployment": { "type": "string", "minLength": 1 },
+        "targets": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "dependsOn": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "mutating": { "type": "boolean" },
+        "reboot": { "enum": ["NONE", "RECOMMENDED", "REQUIRED"] },
+        "packageSource": { "enum": ["INSTALLED", "REPOSITORY", "PAYLOAD", "BLOCKED"] },
+        "summary": { "type": "string", "minLength": 1 }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    }
+  }
+}

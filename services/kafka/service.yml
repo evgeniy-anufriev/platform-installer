@@ -1,0 +1,56 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: kafka
+  version: "1.0.0-alpha.1"
+  displayName: Apache Kafka
+  description: Apache Kafka using KRaft metadata management
+  category: messaging
+modes:
+  kraft-standalone:
+    displayName: Single-node KRaft
+    description: One combined broker and controller member
+    memberRoles: [broker, controller]
+    placement:
+      explicit: true
+      minMembers: 1
+      maxMembers: 1
+      distinctHosts: false
+      roleCardinality:
+        broker: {minimum: 1, maximum: 1}
+        controller: {minimum: 1, maximum: 1}
+    x-maturity: planned-service-01a
+  kraft-distributed:
+    displayName: Distributed KRaft
+    description: Explicit controller and broker placements
+    memberRoles: [broker, controller]
+    placement:
+      explicit: true
+      minMembers: 3
+      distinctHosts: true
+      roleCardinality:
+        broker: {minimum: 1}
+        controller: {minimum: 3}
+    x-maturity: planned-service-01b
+listeners:
+  client: {protocol: tcp, defaultPort: 9092, tlsCapable: true, scope: deployment}
+  controller: {protocol: tcp, defaultPort: 9093, tlsCapable: true, scope: member}
+capabilities:
+  - service.kafka.client
+  - service.kafka.kraft
+dependencies: []
+configurationSchema:
+  $ref: configuration.schema.json
+roleEntrypoints:
+  apply:
+    fqcn: platform.kafka.kafka_kraft
+    variablesPrefix: platform_kafka_
+  verify:
+    fqcn: platform.kafka.kafka_kraft
+    variablesPrefix: platform_kafka_
+artifacts: []
+compatibilityRef: compatibility.yml
+x-initialSecurityScope:
+  sasl: unsupported
+  mtls: deferred
+  customListeners: deferred

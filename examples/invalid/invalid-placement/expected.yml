@@ -1,0 +1,4 @@
+status: BLOCKED
+findings:
+  - code: PLACEMENT_DISTINCT_HOSTS_REQUIRED
+    field: serviceDeployments.kafka-main.members

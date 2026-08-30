@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/result/v1alpha1/schema.json",
+  "title": "Platform execution result",
+  "type": "object",
+  "required": ["apiVersion", "kind", "runId", "planFingerprint", "startedAt", "finishedAt", "status", "versions", "phases", "hosts", "actions", "summary", "findings"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/result/v1alpha1" },
+    "kind": { "const": "DeploymentResult" },
+    "runId": { "type": "string", "minLength": 1 },
+    "planFingerprint": { "$ref": "#/$defs/digest" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "status": { "$ref": "#/$defs/runStatus" },
+    "versions": {
+      "type": "object",
+      "required": ["core", "collections", "roles", "payload", "artifacts"],
+      "properties": {
+        "core": { "type": "string", "minLength": 1 },
+        "collections": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+        "roles": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+        "payload": { "$ref": "#/$defs/digest" },
+        "artifacts": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "phases": { "type": "array", "items": { "$ref": "#/$defs/outcome" } },
+    "hosts": { "type": "array", "items": { "$ref": "#/$defs/outcome" } },
+    "actions": { "type": "array", "items": { "$ref": "#/$defs/outcome" } },
+    "summary": {
+      "type": "object",
+      "required": ["changed", "rebootRequired"],
+      "properties": {
+        "changed": { "type": "boolean" },
+        "changedHosts": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "rebootRequired": { "type": "boolean" },
+        "rebootHosts": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "safeMessage": { "type": "string", "maxLength": 2048 }
+      },
+      "additionalProperties": false
+    },
+    "findings": { "type": "array", "items": { "$ref": "../../finding/v1alpha1/schema.json" } },
+    "diagnosticRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "runStatus": { "enum": ["SUCCESS", "PARTIAL", "FAILED", "CANCELLED", "INTERRUPTED"] },
+    "outcomeStatus": { "enum": ["SUCCESS", "FAILED", "SKIPPED", "CANCELLED", "INTERRUPTED"] },
+    "outcome": {
+      "type": "object",
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/outcomeStatus" },
+        "changed": { "type": "boolean" },
+        "rebootRequired": { "type": "boolean" },
+        "safeMessage": { "type": "string", "maxLength": 2048 },
+        "errorCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "diagnosticRef": { "type": "string", "minLength": 1 }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    }
+  }
+}

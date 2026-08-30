@@ -1,0 +1,23 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: etcd
+  version: fixture-v1
+  displayName: etcd
+  description: Contract-conformance DCS dependency definition
+  category: coordination
+modes:
+  cluster:
+    displayName: Cluster
+    memberRoles: [member]
+    placement: {explicit: true, minMembers: 3, distinctHosts: true}
+listeners:
+  client: {protocol: tcp, defaultPort: 2379, tlsCapable: true, scope: deployment}
+capabilities: [dcs]
+dependencies: []
+configurationSchema: {$ref: ../fixtures/etcd.configuration.schema.json}
+roleEntrypoints:
+  apply: {fqcn: platform.etcd.etcd, variablesPrefix: platform_etcd_}
+  verify: {fqcn: platform.etcd.etcd, variablesPrefix: platform_etcd_}
+artifacts: []
+x-conformanceOnly: true

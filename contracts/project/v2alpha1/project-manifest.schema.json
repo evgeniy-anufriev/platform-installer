@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha1/project-manifest.schema.json",
+  "title": "Platform portable project manifest (project.yml)",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "desiredStateContract", "catalogLock", "artifactLock"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/v2alpha1" },
+    "kind": { "const": "PlatformProject" },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "desiredStateContract": { "const": "platform.installer/project-desired-state/v2alpha1" },
+    "catalogLock": { "$ref": "#/$defs/catalogLock" },
+    "artifactLock": { "$ref": "#/$defs/artifactLock" }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+    },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "metadata": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 4096 },
+        "labels": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "additionalProperties": { "type": "string", "maxLength": 512 }
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "catalogLock": {
+      "type": "object",
+      "required": ["apiVersion", "digest", "services"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/catalog/v1alpha1" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "services": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["definitionVersion", "digest"],
+            "properties": {
+              "definitionVersion": { "$ref": "#/$defs/nonEmptyString" },
+              "digest": { "$ref": "#/$defs/digest" }
+            },
+            "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+            "additionalProperties": false
+          }
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "artifactLock": {
+      "type": "object",
+      "required": ["apiVersion", "digest"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/artifacts/v1alpha1" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "signatureEnvelope": {
+          "type": "object",
+          "description": "Signature-neutral envelope. Signature technology is intentionally deferred.",
+          "required": ["formatVersion", "signatures"],
+          "properties": {
+            "formatVersion": { "$ref": "#/$defs/nonEmptyString" },
+            "signerId": { "type": "string" },
+            "keyId": { "type": "string" },
+            "signatures": { "type": "array", "items": { "type": "object" } }
+          },
+          "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+          "additionalProperties": false
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    }
+  }
+}

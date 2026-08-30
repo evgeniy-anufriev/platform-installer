@@ -2,7 +2,7 @@
 
 ## Phase
 
-Architecture and contract design.
+CORE-01 — standalone contract and read-only validation foundation.
 
 ## Established direction
 
@@ -22,11 +22,18 @@ Architecture and contract design.
 - Repository initialized.
 - Architecture documentation skeleton created.
 - Owner decisions OQ-001 through OQ-007 incorporated; `ARCH-01` is complete.
+- Published alpha schemas for project parts, catalog, service manifest, findings,
+  validation, plan, event and result.
+- Standard `platform.core` validation playbook and controller-side module.
+- Portable valid/invalid fixtures, including Kafka and PostgreSQL topology cases.
+- Kafka service collection and explicit `roles/kafka_kraft` skeleton; production
+  tasks are intentionally absent.
 
 ## Not implemented
 
-- Contract schemas.
-- Ansible collection, roles, plugins or playbooks.
+- Full Draft 2020-12 runtime schema enforcement and fixture conformance runner.
+- Deterministic topology plan/resolved execution projection (`CORE-02`).
+- Generic Core mutation roles and production Kafka role tasks.
 - Production services.
 - Go backend.
 - Persistence.
@@ -34,4 +41,5 @@ Architecture and contract design.
 
 ## Next gate
 
-Begin `CORE-01 Repository and Contract Skeleton` from `docs/roadmap.md` only after an explicit implementation request.
+Close the remaining CORE-01 schema-enforcement/conformance gate. Do not begin
+CORE-02 until that gate is complete.

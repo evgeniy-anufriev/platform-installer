@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/examples/postgresql/configuration.schema.json",
+  "title": "PostgreSQL contract-fixture configuration",
+  "type": "object",
+  "additionalProperties": true
+}

@@ -30,6 +30,11 @@ Not ready when:
 
 ### CORE-01: Repository and contract skeleton
 
+Status: IN PROGRESS. Contract documents, standard playbook validation, service
+package skeletons and fixtures are implemented. Full offline-compatible Draft
+2020-12 schema enforcement and repository-wide conformance execution remain
+before this gate can be marked complete.
+
 Deliverables:
 
 - Ansible collection/package layout;

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/validation-result/v1alpha1/schema.json",
+  "title": "Platform project validation result",
+  "type": "object",
+  "required": ["apiVersion", "kind", "status", "projectFingerprint", "summary", "findings"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/validation-result/v1alpha1" },
+    "kind": { "const": "ProjectValidationResult" },
+    "status": { "enum": ["PASS", "WARNING", "BLOCKED", "UNKNOWN"] },
+    "projectFingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "summary": {
+      "type": "object",
+      "required": ["pass", "actionRequired", "warning", "blocked", "unknown", "skipped"],
+      "properties": {
+        "pass": { "type": "integer", "minimum": 0 },
+        "actionRequired": { "type": "integer", "minimum": 0 },
+        "warning": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "unknown": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "../../finding/v1alpha1/schema.json" }
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false
+}

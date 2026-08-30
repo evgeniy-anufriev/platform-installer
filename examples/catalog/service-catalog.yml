@@ -1,0 +1,116 @@
+apiVersion: platform.installer/catalog/v1alpha1
+kind: ServiceCatalog
+digest: "sha256:b6ba51e9e55be0b5ac66a679119f8c56e1b56f684b38deaf325382725d512399"
+definitions:
+  kafka:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: kafka
+      version: "1.0.0-alpha.1"
+      displayName: Apache Kafka
+      description: Apache Kafka using KRaft metadata management
+      category: messaging
+    modes:
+      kraft-standalone:
+        displayName: Single-node KRaft
+        description: One combined broker and controller member
+        memberRoles: [broker, controller]
+        placement:
+          explicit: true
+          minMembers: 1
+          maxMembers: 1
+          distinctHosts: false
+          roleCardinality:
+            broker: {minimum: 1, maximum: 1}
+            controller: {minimum: 1, maximum: 1}
+        x-maturity: planned-service-01a
+      kraft-distributed:
+        displayName: Distributed KRaft
+        description: Explicit controller and broker placements
+        memberRoles: [broker, controller]
+        placement:
+          explicit: true
+          minMembers: 3
+          distinctHosts: true
+          roleCardinality:
+            broker: {minimum: 1}
+            controller: {minimum: 3}
+        x-maturity: planned-service-01b
+    listeners:
+      client: {protocol: tcp, defaultPort: 9092, tlsCapable: true, scope: deployment}
+      controller: {protocol: tcp, defaultPort: 9093, tlsCapable: true, scope: member}
+    capabilities: [service.kafka.client, service.kafka.kraft]
+    dependencies: []
+    configurationSchema: {$ref: ../../services/kafka/configuration.schema.json}
+    roleEntrypoints:
+      apply: {fqcn: platform.kafka.kafka_kraft, variablesPrefix: platform_kafka_}
+      verify: {fqcn: platform.kafka.kafka_kraft, variablesPrefix: platform_kafka_}
+    artifacts: []
+    compatibilityRef: ../../services/kafka/compatibility.yml
+    x-initialSecurityScope:
+      sasl: unsupported
+      mtls: deferred
+      customListeners: deferred
+    x-definitionDigest: "sha256:82932122f4678afab213aeecedef05fbab9740184bf726043ffc0ecbacebc197"
+    x-sourceManifest: services/kafka/service.yml
+  postgresql:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: postgresql
+      version: fixture-v1
+      displayName: PostgreSQL
+      description: Contract-conformance definition; no production role is included
+      category: database
+    modes:
+      standalone:
+        displayName: Standalone
+        memberRoles: [database]
+        placement: {explicit: true, minMembers: 1, maxMembers: 1, distinctHosts: false}
+      patroni:
+        displayName: Patroni
+        memberRoles: [database]
+        placement: {explicit: true, minMembers: 3, distinctHosts: true}
+      pg_auto_failover:
+        displayName: pg_auto_failover
+        memberRoles: [database, monitor]
+        placement: {explicit: true, minMembers: 3, distinctHosts: false}
+    listeners:
+      client: {protocol: tcp, defaultPort: 5432, tlsCapable: true, scope: deployment}
+    capabilities: [service.postgresql.client]
+    dependencies: []
+    configurationSchema: {$ref: fixtures/postgresql.configuration.schema.json}
+    roleEntrypoints:
+      apply: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+      verify: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+    artifacts: []
+    x-definitionDigest: "sha256:2efe3a392cec66ca627fa86a1f2cba1c9013838d9f75d3939fcd646b3ea3a849"
+    x-sourceManifest: examples/catalog/manifests/postgresql.yml
+    x-conformanceOnly: true
+  etcd:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: etcd
+      version: fixture-v1
+      displayName: etcd
+      description: Contract-conformance DCS dependency definition
+      category: coordination
+    modes:
+      cluster:
+        displayName: Cluster
+        memberRoles: [member]
+        placement: {explicit: true, minMembers: 3, distinctHosts: true}
+    listeners:
+      client: {protocol: tcp, defaultPort: 2379, tlsCapable: true, scope: deployment}
+    capabilities: [dcs]
+    dependencies: []
+    configurationSchema: {$ref: fixtures/etcd.configuration.schema.json}
+    roleEntrypoints:
+      apply: {fqcn: platform.etcd.etcd, variablesPrefix: platform_etcd_}
+      verify: {fqcn: platform.etcd.etcd, variablesPrefix: platform_etcd_}
+    artifacts: []
+    x-definitionDigest: "sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0"
+    x-sourceManifest: examples/catalog/manifests/etcd.yml
+    x-conformanceOnly: true

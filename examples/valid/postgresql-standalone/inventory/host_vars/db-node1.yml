@@ -1,0 +1,1 @@
+platform_host: {desiredHostname: db-node1, address: 192.0.2.11}

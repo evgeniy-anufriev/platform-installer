@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha1/desired-state.schema.json",
+  "title": "Platform desired topology (value of platform_project)",
+  "type": "object",
+  "required": ["serviceDeployments"],
+  "properties": {
+    "serviceDeployments": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/serviceDeployment" },
+      "default": {}
+    },
+    "endpointGroups": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/endpointGroup" },
+      "default": {}
+    },
+    "endpointBindings": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/endpointBinding" },
+      "default": {}
+    },
+    "certificateProfiles": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/certificateProfile" },
+      "default": {}
+    },
+    "certificateScopes": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/certificateScope" },
+      "default": {}
+    },
+    "secretRequirements": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/secretRequirement" },
+      "default": {}
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+    },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "idList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/identifier" },
+      "default": []
+    },
+    "ipAddress": {
+      "type": "string",
+      "anyOf": [
+        { "format": "ipv4" },
+        { "format": "ipv6" }
+      ]
+    },
+    "serviceDeployment": {
+      "type": "object",
+      "required": ["serviceType", "definitionVersion", "mode", "members"],
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "serviceType": { "$ref": "#/$defs/identifier" },
+        "definitionVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "mode": { "$ref": "#/$defs/identifier" },
+        "configuration": { "type": "object", "default": {} },
+        "members": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/member" }
+        },
+        "dependencies": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/dependency" },
+          "default": {}
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "member": {
+      "type": "object",
+      "required": ["host", "roles"],
+      "properties": {
+        "host": { "$ref": "#/$defs/identifier" },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "configuration": { "type": "object", "default": {} }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "dependency": {
+      "type": "object",
+      "required": ["serviceDeployment", "capability"],
+      "properties": {
+        "serviceDeployment": { "$ref": "#/$defs/identifier" },
+        "capability": { "$ref": "#/$defs/identifier" },
+        "optional": { "type": "boolean", "default": false }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "endpointGroup": {
+      "type": "object",
+      "properties": {
+        "baseDomain": { "type": "string", "minLength": 1 },
+        "additionalDomains": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "wildcard": { "type": "boolean", "default": false },
+        "vip": { "$ref": "#/$defs/ipAddress" },
+        "address": { "type": "string", "minLength": 1 },
+        "networkProfile": { "$ref": "#/$defs/identifier" }
+      },
+      "anyOf": [
+        { "required": ["baseDomain"] },
+        { "required": ["vip"] },
+        { "required": ["address"] }
+      ],
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "endpointBinding": {
+      "type": "object",
+      "required": ["serviceDeployment", "listener", "endpointGroup", "alias"],
+      "properties": {
+        "serviceDeployment": { "$ref": "#/$defs/identifier" },
+        "listener": { "$ref": "#/$defs/identifier" },
+        "endpointGroup": { "$ref": "#/$defs/identifier" },
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$"
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "certificateProfile": {
+      "type": "object",
+      "required": ["authorityRef", "sanPolicy"],
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1 },
+        "authorityRef": { "$ref": "#/$defs/identifier" },
+        "keyAlgorithm": { "enum": ["RSA", "EC"] },
+        "validityDays": { "type": "integer", "minimum": 1 },
+        "sanPolicy": { "$ref": "#/$defs/sanPolicy" }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "sanPolicy": {
+      "type": "object",
+      "properties": {
+        "includeHostDns": { "type": "boolean", "default": false },
+        "includeHostIp": { "type": "boolean", "default": false },
+        "includeEndpointFqdns": { "type": "boolean", "default": false },
+        "includeEndpointWildcard": { "type": "boolean", "default": false },
+        "includeEndpointVip": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "certificateScope": {
+      "type": "object",
+      "required": ["profile", "sources"],
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1 },
+        "profile": { "$ref": "#/$defs/identifier" },
+        "sources": {
+          "type": "object",
+          "properties": {
+            "endpointBindings": { "$ref": "#/$defs/idList" },
+            "serviceDeployments": { "$ref": "#/$defs/idList" },
+            "hosts": { "$ref": "#/$defs/idList" },
+            "explicitDnsNames": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "explicitIpAddresses": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/ipAddress" }
+            }
+          },
+          "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+          "additionalProperties": false
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "secretRequirement": {
+      "type": "object",
+      "required": ["purpose", "providerRef"],
+      "properties": {
+        "purpose": { "$ref": "#/$defs/identifier" },
+        "providerRef": {
+          "type": "string",
+          "minLength": 3,
+          "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+        },
+        "required": { "type": "boolean", "default": true },
+        "description": { "type": "string", "maxLength": 1024 }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    }
+  }
+}

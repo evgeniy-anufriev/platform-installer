@@ -1,0 +1,11 @@
+platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_project:
+  serviceDeployments:
+    kafka-main:
+      serviceType: kafka
+      definitionVersion: "1.0.0-alpha.1"
+      mode: legacy-zookeeper
+      configuration: {}
+      members:
+        kafka-1: {host: redos-node1, roles: [broker]}

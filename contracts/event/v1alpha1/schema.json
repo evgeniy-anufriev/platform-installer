@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/event/v1alpha1/schema.json",
+  "title": "Platform normalized execution event",
+  "type": "object",
+  "required": ["apiVersion", "kind", "sequence", "timestamp", "runId", "eventType", "status", "safeMessage", "redaction"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/event/v1alpha1" },
+    "kind": { "const": "ExecutionEvent" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "runId": { "type": "string", "minLength": 1 },
+    "planFingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "eventType": {
+      "enum": ["RUN_STARTED", "PHASE_STARTED", "ACTION_STARTED", "TASK_STARTED", "TASK_COMPLETED", "ACTION_COMPLETED", "PHASE_COMPLETED", "RUN_COMPLETED", "DIAGNOSTIC"]
+    },
+    "status": { "enum": ["PENDING", "RUNNING", "SUCCESS", "CHANGED", "SKIPPED", "FAILED", "CANCELLED", "INTERRUPTED"] },
+    "phaseId": { "type": "string", "minLength": 1 },
+    "actionId": { "type": "string", "minLength": 1 },
+    "host": { "type": "string", "minLength": 1 },
+    "serviceDeployment": { "type": "string", "minLength": 1 },
+    "task": {
+      "type": "object",
+      "properties": {
+        "role": { "type": "string" },
+        "name": { "type": "string" },
+        "uuid": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "elapsedMilliseconds": { "type": "integer", "minimum": 0 },
+    "safeMessage": { "type": "string", "maxLength": 8192 },
+    "error": {
+      "type": "object",
+      "required": ["code", "summary"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "diagnosticRef": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "redaction": {
+      "type": "object",
+      "required": ["applied"],
+      "properties": {
+        "applied": { "type": "boolean" },
+        "fields": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false
+}

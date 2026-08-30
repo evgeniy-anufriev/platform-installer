@@ -1,0 +1,15 @@
+---
+namespace: platform
+name: core
+version: 0.1.0
+readme: README.md
+authors:
+  - Platform Installer maintainers
+description: Standalone validation and orchestration primitives for Platform projects.
+license:
+  - MIT
+tags:
+  - infrastructure
+  - offline
+  - platform
+dependencies: {}

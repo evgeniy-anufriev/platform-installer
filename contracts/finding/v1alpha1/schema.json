@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/finding/v1alpha1/schema.json",
+  "title": "Platform finding",
+  "type": "object",
+  "required": ["apiVersion", "kind", "code", "status", "safeMessage"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/finding/v1alpha1" },
+    "kind": { "const": "Finding" },
+    "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+    "status": {
+      "enum": ["PASS", "ACTION_REQUIRED", "WARNING", "BLOCKED", "UNKNOWN", "SKIPPED"]
+    },
+    "category": { "type": "string", "minLength": 1 },
+    "subject": { "$ref": "#/$defs/reference" },
+    "field": { "type": "string", "minLength": 1 },
+    "safeMessage": { "type": "string", "minLength": 1, "maxLength": 1024 },
+    "safeDetails": {
+      "type": "object",
+      "description": "Structured, redacted evidence safe for persisted results and operator display.",
+      "propertyNames": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "array", "object", "null"]
+      }
+    },
+    "remediation": {
+      "type": "object",
+      "required": ["available"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "actionCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "safeMessage": { "type": "string", "maxLength": 1024 },
+        "helpUri": { "type": "string", "pattern": "^help://[A-Za-z0-9/_-]+$" }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false,
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["project", "host", "serviceDeployment", "member", "endpointBinding", "certificateScope", "artifact", "action"] },
+        "id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

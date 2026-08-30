@@ -1,0 +1,17 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata: {id: postgresql-patroni, name: PostgreSQL Patroni fixture}
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: "sha256:b6ba51e9e55be0b5ac66a679119f8c56e1b56f684b38deaf325382725d512399"
+  services:
+    postgresql:
+      definitionVersion: fixture-v1
+      digest: "sha256:2efe3a392cec66ca627fa86a1f2cba1c9013838d9f75d3939fcd646b3ea3a849"
+    etcd:
+      definitionVersion: fixture-v1
+      digest: "sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0"

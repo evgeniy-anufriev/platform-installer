@@ -1,0 +1,4 @@
+---
+platform_host:
+  desiredHostname: node-1
+  address: 192.0.2.10

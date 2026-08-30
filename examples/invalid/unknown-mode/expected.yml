@@ -1,0 +1,4 @@
+status: BLOCKED
+findings:
+  - code: SERVICE_MODE_UNSUPPORTED
+    field: serviceDeployments.kafka-main.mode

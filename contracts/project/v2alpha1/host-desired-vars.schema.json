@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha1/host-desired-vars.schema.json",
+  "title": "Platform host desired variables (value of platform_host)",
+  "description": "An empty object is valid when a target has no host-specific desired overrides.",
+  "type": "object",
+  "properties": {
+    "desiredHostname": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$"
+    },
+    "address": {
+      "type": "string",
+      "anyOf": [
+        { "format": "ipv4" },
+        { "format": "ipv6" }
+      ]
+    },
+    "preparation": {
+      "type": "object",
+      "description": "Host-specific desired preparation overrides defined by later contract revisions.",
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false
+}

@@ -1,0 +1,3 @@
+platform_host:
+  desiredHostname: redos-node1
+  address: 192.0.2.11

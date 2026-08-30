@@ -8,13 +8,16 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 
 ## Current phase
 
-The repository is in architecture and contract design. Do not add application code until the corresponding architecture milestone is approved.
+The repository is implementing CORE-01. Only standalone Ansible Core,
+published contracts, service-package skeletons, fixtures and their tests are
+in scope. Do not begin CORE-02, a production service, backend or frontend
+without the corresponding milestone request.
 
 ## Boundaries
 
 - Ansible Core must validate, plan, apply and verify a project without Go, Wails, SQLite or the UI.
 - The portable project is the canonical desired state.
-- Generated inventory, runtime workspaces, facts, plans and results are derived state.
+- Resolved execution groups/variables, runtime workspaces, facts, plans and results are derived state. Operator-authored inventory is desired project input.
 - Ansible roles consume ordinary documented variables and remain usable with manual inventory.
 - Go may orchestrate Ansible Core but must not reimplement service or topology rules.
 - UI is an editor and projection of the portable contract, not another source of truth.

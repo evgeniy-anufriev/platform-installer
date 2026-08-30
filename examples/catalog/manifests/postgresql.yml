@@ -1,0 +1,31 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: postgresql
+  version: fixture-v1
+  displayName: PostgreSQL
+  description: Contract-conformance definition; no production role is included
+  category: database
+modes:
+  standalone:
+    displayName: Standalone
+    memberRoles: [database]
+    placement: {explicit: true, minMembers: 1, maxMembers: 1, distinctHosts: false}
+  patroni:
+    displayName: Patroni
+    memberRoles: [database]
+    placement: {explicit: true, minMembers: 3, distinctHosts: true}
+  pg_auto_failover:
+    displayName: pg_auto_failover
+    memberRoles: [database, monitor]
+    placement: {explicit: true, minMembers: 3, distinctHosts: false}
+listeners:
+  client: {protocol: tcp, defaultPort: 5432, tlsCapable: true, scope: deployment}
+capabilities: [service.postgresql.client]
+dependencies: []
+configurationSchema: {$ref: ../fixtures/postgresql.configuration.schema.json}
+roleEntrypoints:
+  apply: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+  verify: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+artifacts: []
+x-conformanceOnly: true

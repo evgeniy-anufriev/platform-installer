@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/examples/etcd/configuration.schema.json",
+  "title": "etcd contract-fixture configuration",
+  "type": "object",
+  "additionalProperties": true
+}

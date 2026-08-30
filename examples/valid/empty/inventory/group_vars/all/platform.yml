@@ -1,0 +1,9 @@
+platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_project:
+  serviceDeployments: {}
+  endpointGroups: {}
+  endpointBindings: {}
+  certificateProfiles: {}
+  certificateScopes: {}
+  secretRequirements: {}

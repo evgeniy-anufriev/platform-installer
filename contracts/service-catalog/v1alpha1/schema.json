@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/service-catalog/v1alpha1/schema.json",
+  "title": "Derived Platform service catalog",
+  "description": "A catalog is derived from authored service package manifests and is never an independent source of service semantics.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "digest", "definitions"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/catalog/v1alpha1" },
+    "kind": { "const": "ServiceCatalog" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "definitions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+      },
+      "description": "Complete service manifests embedded from authored service packages.",
+      "additionalProperties": { "$ref": "../../service-manifest/v1alpha1/schema.json" }
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false
+}

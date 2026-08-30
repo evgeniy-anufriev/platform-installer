@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha1/assembled-project.schema.json",
+  "title": "Normalized project assembled from standard Ansible project files",
+  "description": "Derived validation input; it is not another persisted desired-state format.",
+  "type": "object",
+  "required": ["manifest", "desiredState", "hosts"],
+  "properties": {
+    "manifest": { "$ref": "project-manifest.schema.json" },
+    "desiredState": { "$ref": "desired-state.schema.json" },
+    "hosts": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+      },
+      "additionalProperties": { "$ref": "host-desired-vars.schema.json" }
+    }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false
+}

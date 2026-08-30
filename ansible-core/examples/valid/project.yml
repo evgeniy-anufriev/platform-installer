@@ -1,0 +1,17 @@
+---
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: kafka-single-node-example
+  name: Kafka single-node validation fixture
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: "sha256:b6ba51e9e55be0b5ac66a679119f8c56e1b56f684b38deaf325382725d512399"
+  services:
+    kafka:
+      definitionVersion: "1.0.0-alpha.1"
+      digest: "sha256:82932122f4678afab213aeecedef05fbab9740184bf726043ffc0ecbacebc197"
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222"

@@ -8,10 +8,10 @@ The backend consumes the published Core playbook/artifact protocol through a typ
 
 ```text
 ReadCatalog
-ValidateProject  -> platform.core.validate
-PlanProject      -> platform.core.plan
-ApplyPlan        -> platform.core.apply
-VerifyRun        -> platform.core.verify
+ValidateProject  -> playbooks/validate.yml (current CORE-01 filesystem entry point)
+PlanProject      -> deferred; no public playbook exists yet
+ApplyPlan        -> deferred; no public playbook exists yet
+VerifyRun        -> deferred; no public playbook exists yet
 MigrateProject   -> explicit contract migration operation
 ```
 

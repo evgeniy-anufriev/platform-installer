@@ -9,10 +9,11 @@ The portable project directory is the single canonical desired state shared by s
 ```text
 project/
   project.yml
-  inventory/hosts.yml
-  group_vars/all/platform.yml
-  group_vars/<service-or-operator-group>.yml
-  host_vars/<host>.yml
+  inventory/
+    hosts.yml
+    group_vars/all/platform.yml
+    group_vars/<service-or-operator-group>.yml
+    host_vars/<host>.yml
   ansible.cfg
 ```
 
@@ -20,59 +21,74 @@ The contract covers the directory as a whole. `project.yml` carries metadata and
 
 ## Root outline
 
-The illustrative `platform.yml` shape below is not yet a final schema:
+`project.yml` is the only owner of identity and contract/lock versions:
+
+```yaml
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: production-scada
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  services: {}
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+```
+
+The illustrative `inventory/group_vars/all/platform.yml` shape contains only
+desired topology and policy. It does not repeat the project ID or API version:
 
 ```yaml
 platform_project:
-  apiVersion: platform.installer/v2alpha1
-  id: production-scada
+  serviceDeployments:
+    accounting-db:
+      serviceType: postgresql
+      definitionVersion: 1
+      mode: standalone
+      configuration: {}
+      members:
+        database-1:
+          host: redos-node1
+          roles: [database]
 
-serviceDeployments:
-  accounting-db:
-    serviceType: postgresql
-    definitionVersion: 1
-    mode: standalone
-    configuration: {}
-    members:
-      database-1:
-        host: redos-node1
-        roles: [database]
+  endpointGroups:
+    applications:
+      baseDomain: scada.local
+      additionalDomains: [apps.example.local]
+      wildcard: true
+      vip: 10.10.10.2
 
-endpointGroups:
-  applications:
-    baseDomain: scada.local
-    additionalDomains: [apps.example.local]
-    wildcard: true
-    vip: 10.10.10.2
+  endpointBindings:
+    accounting-client:
+      serviceDeployment: accounting-db
+      listener: client
+      endpointGroup: applications
+      alias: postgres
 
-endpointBindings:
-  accounting-client:
-    serviceDeployment: accounting-db
-    listener: client
-    endpointGroup: applications
-    alias: postgres
+  certificateProfiles:
+    infrastructure:
+      authorityRef: platform-ca
+      sanPolicy:
+        includeHostDns: true
+        includeHostIp: true
+        includeEndpointFqdns: true
+        includeEndpointWildcard: true
+        includeEndpointVip: true
 
-certificateProfiles:
-  infrastructure:
-    authorityRef: platform-ca
-    sanPolicy:
-      includeHostDns: true
-      includeHostIp: true
-      includeEndpointFqdns: true
-      includeEndpointWildcard: true
-      includeEndpointVip: true
+  certificateScopes:
+    infrastructure-services:
+      profile: infrastructure
+      sources:
+        endpointBindings: [accounting-client]
+        serviceDeployments: [accounting-db]
 
-certificateScopes:
-  infrastructure-services:
-    profile: infrastructure
-    sources:
-      endpointBindings: [accounting-client]
-      serviceDeployments: [accounting-db]
-
-secretRequirements:
-  postgres-admin:
-    purpose: postgresql_admin_password
-    providerRef: runtime:postgres-admin
+  secretRequirements:
+    postgres-admin:
+      purpose: postgresql_admin_password
+      providerRef: runtime:postgres-admin
 ```
 
 ## Identity model

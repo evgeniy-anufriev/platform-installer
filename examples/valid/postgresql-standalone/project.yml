@@ -1,0 +1,14 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata: {id: postgresql-standalone, name: PostgreSQL standalone fixture}
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: "sha256:b6ba51e9e55be0b5ac66a679119f8c56e1b56f684b38deaf325382725d512399"
+  services:
+    postgresql:
+      definitionVersion: fixture-v1
+      digest: "sha256:2efe3a392cec66ca627fa86a1f2cba1c9013838d9f75d3939fcd646b3ea3a849"

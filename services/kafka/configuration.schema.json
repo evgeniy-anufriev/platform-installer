@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.installer/schemas/services/kafka/configuration-v1alpha1.schema.json",
+  "title": "Kafka KRaft desired configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "clientPort": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 9092},
+    "controllerPort": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 9093},
+    "dataDirectory": {"type": "string", "minLength": 1, "default": "/var/lib/kafka"},
+    "logRetentionHours": {"type": "integer", "minimum": 1, "default": 168}
+  }
+}

@@ -1,0 +1,18 @@
+platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_project:
+  serviceDeployments:
+    kafka-main:
+      serviceType: kafka
+      definitionVersion: "1.0.0-alpha.1"
+      mode: kraft-standalone
+      configuration: {clientPort: 9092}
+      members:
+        kafka-1: {host: redos-node1, roles: [broker, controller]}
+  endpointGroups:
+    internal: {baseDomain: scada.local, additionalDomains: [], wildcard: false}
+  endpointBindings:
+    kafka-client: {serviceDeployment: kafka-main, listener: client, endpointGroup: internal, alias: kafka}
+  certificateProfiles: {}
+  certificateScopes: {}
+  secretRequirements: {}

@@ -1,0 +1,15 @@
+---
+platform_project:
+  serviceDeployments:
+    kafka-main:
+      serviceType: kafka
+      definitionVersion: "1.0.0-alpha.1"
+      mode: kraft-standalone
+      members:
+        broker-1:
+          host: node-1
+          roles:
+            - broker
+            - controller
+
+platform_service_catalog_path: "{{ inventory_dir }}/../../../../examples/catalog/service-catalog.yml"

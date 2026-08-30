@@ -1,0 +1,4 @@
+status: BLOCKED
+findings:
+  - code: MEMBER_HOST_NOT_FOUND
+    field: serviceDeployments.kafka-main.members.kafka-1.host

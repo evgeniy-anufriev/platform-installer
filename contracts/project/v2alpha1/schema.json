@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha1/schema.json",
+  "title": "Platform portable project assembled validation input",
+  "$ref": "assembled-project.schema.json"
+}

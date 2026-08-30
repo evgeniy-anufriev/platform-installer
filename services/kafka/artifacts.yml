@@ -1,0 +1,4 @@
+apiVersion: platform.installer/artifacts/v1alpha1
+service: kafka
+artifacts: []
+status: deferred-until-service-01a

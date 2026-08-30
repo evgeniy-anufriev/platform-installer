@@ -1,0 +1,29 @@
+platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_project:
+  serviceDeployments:
+    dcs-main:
+      serviceType: etcd
+      definitionVersion: fixture-v1
+      mode: cluster
+      configuration: {}
+      members:
+        etcd-1: {host: db-node1, roles: [member]}
+        etcd-2: {host: db-node2, roles: [member]}
+        etcd-3: {host: db-node3, roles: [member]}
+    database-main:
+      serviceType: postgresql
+      definitionVersion: fixture-v1
+      mode: patroni
+      dependencies:
+        dcs: {serviceDeployment: dcs-main, capability: dcs}
+      configuration: {}
+      members:
+        postgres-1: {host: db-node1, roles: [database]}
+        postgres-2: {host: db-node2, roles: [database]}
+        postgres-3: {host: db-node3, roles: [database]}
+  endpointGroups: {}
+  endpointBindings: {}
+  certificateProfiles: {}
+  certificateScopes: {}
+  secretRequirements: {}

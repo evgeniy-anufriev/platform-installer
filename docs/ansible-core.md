@@ -91,10 +91,11 @@ The initial portable project is a normal Ansible project:
 ```text
 project/
   project.yml                  # metadata, catalog/artifact locks
-  inventory/hosts.yml         # desired hosts and normal Ansible groups
-  group_vars/all/platform.yml # service topology, endpoints and policies
-  group_vars/<group>.yml       # ordinary service/group overrides
-  host_vars/<host>.yml         # host/member desired overrides
+  inventory/
+    hosts.yml                  # desired hosts and normal Ansible groups
+    group_vars/all/platform.yml # service topology, endpoints and policies
+    group_vars/<group>.yml       # ordinary service/group overrides
+    host_vars/<host>.yml         # host/member desired overrides
   ansible.cfg
 ```
 
@@ -104,9 +105,10 @@ Core playbooks validate the project and produce an ephemeral resolved workspace:
 
 ```text
 .runtime/<run-id>/
-  inventory/hosts.yml
-  group_vars/
-  host_vars/
+  inventory/
+    hosts.yml
+    group_vars/
+    host_vars/
   resolved/plan.json
   private/                 # runtime-only, restrictive, cleaned
   events/
@@ -128,16 +130,21 @@ Generated workspaces are disposable evidence, not editable project state.
 
 ## Standard playbook interface
 
-The initial public interface uses standard commands such as:
+CORE-01 publishes one filesystem playbook entry point. From the installed or
+checked-out Ansible Core root, validation uses:
 
 ```text
-ansible-playbook -i inventory/hosts.yml platform.core.validate
-ansible-playbook -i inventory/hosts.yml platform.core.plan
-ansible-playbook -i inventory/hosts.yml platform.core.apply
-ansible-playbook -i inventory/hosts.yml platform.core.verify
+ansible-playbook -i <project>/inventory/hosts.yml playbooks/validate.yml
 ```
 
-Exact FQCN/playbook paths and required non-secret extra variables are defined during CORE-01. The contract requires standard Ansible inventory and automatic loading of normal `group_vars`/`host_vars`. Playbooks write versioned machine-readable artifacts separately from human diagnostics and return documented exit behavior.
+The collection does not currently publish `platform.core.validate`,
+`platform.core.plan`, `platform.core.apply` or `platform.core.verify` collection
+playbooks. Plan, apply and verify entry points will be named only when their
+playbooks exist and their contracts are tested. The contract requires standard
+Ansible inventory and automatic inventory-relative loading of normal
+`group_vars` and `host_vars`. Playbooks write versioned machine-readable
+artifacts separately from human diagnostics and return documented exit
+behavior.
 
 A later convenience CLI may wrap these commands, but it remains optional and Ansible Core, projects and roles must work identically without it.
 

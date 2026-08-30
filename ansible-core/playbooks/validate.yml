@@ -1,0 +1,71 @@
+---
+- name: Validate Platform project contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Load the portable project manifest
+      ansible.builtin.include_vars:
+        file: >-
+          {{ platform_project_manifest_path |
+             default(inventory_dir ~ '/../project.yml', true) }}
+        name: platform_project_manifest_document
+      run_once: true
+
+    - name: Require a published service catalog artifact
+      ansible.builtin.assert:
+        that:
+          - platform_service_catalog_path is defined
+          - platform_service_catalog_path | length > 0
+        fail_msg: >-
+          platform_service_catalog_path must reference a published service catalog YAML artifact
+      run_once: true
+
+    - name: Load the published service catalog artifact
+      ansible.builtin.include_vars:
+        file: "{{ platform_service_catalog_path }}"
+        name: platform_catalog_artifact
+      run_once: true
+
+    - name: Initialize safe desired host projection
+      ansible.builtin.set_fact:
+        platform_desired_hosts: {}
+      run_once: true
+
+    - name: Collect only platform_host desired variables
+      ansible.builtin.set_fact:
+        platform_desired_hosts: >-
+          {{ platform_desired_hosts |
+             combine({item: (hostvars[item].platform_host | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      loop_control:
+        label: "{{ item }}"
+      no_log: true
+      run_once: true
+
+  tasks:
+    - name: Validate desired project on the Ansible controller
+      platform.core.validate_project:
+        manifest: "{{ platform_project_manifest_document }}"
+        topology: "{{ platform_project | default({}) }}"
+        desired_hosts: "{{ platform_desired_hosts }}"
+        service_catalog: >-
+          {{ platform_catalog_artifact.platform_service_catalog |
+             default(platform_catalog_artifact, true) }}
+        inventory_hosts: "{{ groups['platform_targets'] | default([]) }}"
+        artifact_path: >-
+          {{ platform_validation_artifact |
+             default(playbook_dir ~ '/../.runtime/validation-result.json', true) }}
+      run_once: true
+      become: false
+      check_mode: false
+      register: platform_validation
+
+    - name: Show validation summary
+      ansible.builtin.debug:
+        msg:
+          status: "{{ platform_validation.validation.status }}"
+          artifact: "{{ platform_validation.artifact_path }}"
+          findings: "{{ platform_validation.validation.summary }}"
+      run_once: true

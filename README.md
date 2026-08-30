@@ -20,7 +20,34 @@ Visual UI editor
 
 ## Current status
 
-Architecture baseline only. No application or Ansible implementation has been started.
+`ARCH-01` is complete. `CORE-01` is in progress: published contracts, the
+`platform.core` collection, a controller-only validation playbook, project
+fixtures and the Kafka service-package/role skeleton now exist. No production
+role, target mutation, backend or frontend has been implemented.
+
+## Repository layout
+
+```text
+ansible-core/                    standalone Core collection and playbooks
+  collections/.../platform/core/
+    plugins/
+    roles/                       generic Core roles are added here
+contracts/                       published versioned schemas
+services/
+  kafka/
+    ansible_collections/platform/kafka/
+      roles/kafka_kraft/         independently usable service role
+examples/                        portable valid/invalid Ansible projects
+backend/                         deferred until the Core contract is stable
+frontend/                        deferred until the backend contract is stable
+```
+
+Validate the self-contained Core fixture on a Linux Ansible controller:
+
+```bash
+cd ansible-core
+ansible-playbook -i examples/valid/inventory/hosts.yml playbooks/validate.yml
+```
 
 The current decisions, contract outline and milestone gates are documented in:
 
@@ -32,6 +59,7 @@ The current decisions, contract outline and milestone gates are documented in:
 - [V1 reference audit](docs/v1-reference-audit.md)
 - [Open questions](docs/open-questions.md)
 - [Roadmap](docs/roadmap.md)
+- [CORE-01 implementation](docs/core-01.md)
 - [Current state](CURRENT_STATE.md)
 
 ## Relationship to V1
