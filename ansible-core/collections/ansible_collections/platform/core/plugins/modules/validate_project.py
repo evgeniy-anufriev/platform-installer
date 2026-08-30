@@ -38,6 +38,10 @@ options:
     description: Controller path for the structured validation result.
     type: path
     required: true
+  contracts_root:
+    description: Local published contracts directory. Network resolution is never used.
+    type: path
+    required: true
 author:
   - Platform Installer maintainers
 attributes:
@@ -54,6 +58,7 @@ EXAMPLES = r"""
     service_catalog: "{{ platform_service_catalog }}"
     inventory_hosts: "{{ groups['platform_targets'] }}"
     artifact_path: /tmp/platform-validation.json
+    contracts_root: /workspace/contracts
   delegate_to: localhost
   run_once: true
 """
@@ -76,6 +81,10 @@ from ansible_collections.platform.core.plugins.module_utils.project_validation i
     validate_project,
     write_validation_artifact,
 )
+from ansible_collections.platform.core.plugins.module_utils.schema_validation import (
+    SchemaValidationError,
+    SchemaValidator,
+)
 
 
 def main():
@@ -87,6 +96,7 @@ def main():
             "service_catalog": {"type": "dict", "required": True},
             "inventory_hosts": {"type": "list", "elements": "str", "required": True},
             "artifact_path": {"type": "path", "required": True},
+            "contracts_root": {"type": "path", "required": True},
         },
         supports_check_mode=True,
     )
@@ -98,6 +108,36 @@ def main():
         service_catalog=module.params["service_catalog"],
         inventory_hosts=module.params["inventory_hosts"],
     )
+    try:
+        schema_validator = SchemaValidator(module.params["contracts_root"])
+        contracts_root = os.path.abspath(os.path.expanduser(module.params["contracts_root"]))
+        schema_specs = [
+            (os.path.join(contracts_root, "project", "v2alpha1", "project-manifest.schema.json"), module.params["manifest"]),
+            (os.path.join(contracts_root, "project", "v2alpha1", "desired-state.schema.json"), module.params["topology"]),
+            (os.path.join(contracts_root, "service-catalog", "v1alpha1", "schema.json"), module.params["service_catalog"]),
+        ]
+        for schema_path, document in schema_specs:
+            result["findings"].extend(schema_validator.validate(document, schema_path))
+        host_schema = os.path.join(contracts_root, "project", "v2alpha1", "host-desired-vars.schema.json")
+        for host_name in sorted(module.params["desired_hosts"]):
+            result["findings"].extend(schema_validator.validate(module.params["desired_hosts"][host_name], host_schema))
+    except SchemaValidationError as error:
+        result["findings"].append(
+            {
+                "apiVersion": "platform.installer/finding/v1alpha1",
+                "kind": "Finding",
+                "code": "SCHEMA_VALIDATION_ENGINE_ERROR",
+                "status": "BLOCKED",
+                "category": "schema-validation",
+                "field": "schema",
+                "safeMessage": "Не удалось выполнить проверку опубликованной схемы",
+                "safeDetails": {"reason": str(error).split(":", 1)[0]},
+            }
+        )
+    result["findings"].sort(key=lambda item: (item.get("field", ""), item.get("code", "")))
+    result["summary"]["blocked"] = len(result["findings"])
+    result["summary"]["pass"] = 0 if result["findings"] else 1
+    result["status"] = "BLOCKED" if result["findings"] else "PASS"
     artifact_path = os.path.abspath(os.path.expanduser(module.params["artifact_path"]))
 
     try:

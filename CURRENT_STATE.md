@@ -31,7 +31,6 @@ CORE-01 — standalone contract and read-only validation foundation.
 
 ## Not implemented
 
-- Full Draft 2020-12 runtime schema enforcement and fixture conformance runner.
 - Deterministic topology plan/resolved execution projection (`CORE-02`).
 - Generic Core mutation roles and production Kafka role tasks.
 - Production services.
@@ -41,5 +40,5 @@ CORE-01 — standalone contract and read-only validation foundation.
 
 ## Next gate
 
-Close the remaining CORE-01 schema-enforcement/conformance gate. Do not begin
-CORE-02 until that gate is complete.
+CORE-01 is complete. The next gate is `CORE-02` deterministic topology
+resolution; it must be requested explicitly before implementation begins.

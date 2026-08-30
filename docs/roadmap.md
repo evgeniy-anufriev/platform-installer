@@ -30,10 +30,9 @@ Not ready when:
 
 ### CORE-01: Repository and contract skeleton
 
-Status: IN PROGRESS. Contract documents, standard playbook validation, service
-package skeletons and fixtures are implemented. Full offline-compatible Draft
-2020-12 schema enforcement and repository-wide conformance execution remain
-before this gate can be marked complete.
+Status: DONE. Contract documents, standard playbook validation, the offline
+Draft 2020-12 schema engine, service-package skeletons and fixture conformance
+execution are implemented and tested.
 
 Deliverables:
 

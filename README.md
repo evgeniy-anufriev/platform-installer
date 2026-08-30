@@ -20,7 +20,7 @@ Visual UI editor
 
 ## Current status
 
-`ARCH-01` is complete. `CORE-01` is in progress: published contracts, the
+`ARCH-01` and `CORE-01` are complete: published contracts, the
 `platform.core` collection, a controller-only validation playbook, project
 fixtures and the Kafka service-package/role skeleton now exist. No production
 role, target mutation, backend or frontend has been implemented.

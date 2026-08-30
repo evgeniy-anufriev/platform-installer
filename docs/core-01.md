@@ -91,7 +91,7 @@ The read-only Core smoke was executed on RED OS as an Ansible controller:
 - Python 3.11.15;
 - ansible-core 2.18.15;
 - contract schema-document tests: 4/4 passed;
-- Core unit and catalog-consistency tests: 20/20 passed;
+- Core, catalog and Draft 2020-12 engine tests: 23/23 passed;
 - derived catalog reproducibility check passed;
 - syntax check passed;
 - all six valid root fixtures passed with `changed=0`;
@@ -101,14 +101,12 @@ The read-only Core smoke was executed on RED OS as an Ansible controller:
 No target host was contacted or modified. Temporary controller files were
 removed after the test.
 
-## Remaining CORE-01 gate
+## CORE-01 status
 
-The target controller does not contain the Python `jsonschema` package. The
-repository therefore does not claim full JSON Schema Draft 2020-12 runtime
-enforcement. Current validation is a dependency-free semantic subset, while
-the published schemas are syntax/reference checked.
-
-Before CORE-01 is marked complete, choose and prove an offline-compatible
-schema conformance mechanism, run every valid/invalid repository fixture
-through it, and record the exact dependency/bundle contract. This is a
-technical closure task and currently requires no product-owner decision.
+CORE-01 is **DONE**. Draft 2020-12 validation is provided by the vendored
+`jsonschema` 4.17.3 engine behind `SchemaValidator`. The local registry and
+network-denying handlers are covered by positive/negative tests, including
+`$defs`/`$ref`, `if`/`then`, `const`, `enum` and `unevaluatedProperties`.
+The RED OS controller ran the complete schema, Core, catalog and fixture
+validation suite successfully without installing dependencies or contacting
+target hosts.

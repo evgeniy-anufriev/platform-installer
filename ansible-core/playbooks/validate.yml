@@ -57,6 +57,9 @@
         artifact_path: >-
           {{ platform_validation_artifact |
              default(playbook_dir ~ '/../.runtime/validation-result.json', true) }}
+        contracts_root: >-
+          {{ platform_contracts_root |
+             default(playbook_dir ~ '/../../contracts', true) }}
       run_once: true
       become: false
       check_mode: false

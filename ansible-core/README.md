@@ -49,6 +49,33 @@ play. Ansible therefore exits non-zero without requiring an operator to parse a
 Python traceback. The artifact contains no inventory connection variables and
 must never be given secret values.
 
+### Draft 2020-12 schema engine
+
+CORE-01 uses `jsonschema` 4.17.3, vendored behind
+`platform.core`'s `SchemaValidator` interface together with its pinned pure-
+Python dependencies (`attrs` 23.2.0 and `pyrsistent` 0.19.3). The engine is
+selected explicitly as `Draft202012Validator` and uses a `FormatChecker`.
+The vendored source licenses are retained beside the packages.
+
+The validator builds a registry from the local `contracts/` directory by
+schema `$id`. Only registered local IDs and fragments are resolvable; HTTP(S)
+and file handlers fail with `SCHEMA_EXTERNAL_REF_FORBIDDEN`, so schema
+validation cannot make a network request. Engine exceptions and validation
+errors are converted to safe `Finding` records without copying instance
+values or raw exception text into diagnostics.
+The published `validate_project` action plugin executes this boundary on the
+controller; it is intentionally not transferred to managed hosts, which also
+keeps the vendored JSON schema resources available offline.
+
+The playbook passes the contracts root explicitly or defaults to the sibling
+`contracts/` directory:
+
+```bash
+ansible-playbook -i ../examples/valid/kafka-single/inventory/hosts.yml \
+  playbooks/validate.yml \
+  -e platform_contracts_root=../contracts
+```
+
 The `projectFingerprint` covers the manifest and topology together. Inventory
 connection variables, runtime credentials, and external catalog contents are
 deliberately excluded; later plan fingerprints pin their own catalog and
