@@ -11,6 +11,7 @@ platform_kafka_java_package: java-21-openjdk-headless
 platform_kafka_client_port: 9092
 platform_kafka_controller_port: 9093
 platform_kafka_log_retention_hours: 168
+platform_kafka_advanced_config: {}
 platform_kafka_service_name: kafka
 platform_kafka_advertised_host: "{{ ansible_host | default(inventory_hostname) }}"
 platform_kafka_verify_only: false

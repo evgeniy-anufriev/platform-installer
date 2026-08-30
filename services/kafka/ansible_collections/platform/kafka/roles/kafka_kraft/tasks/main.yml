@@ -1,4 +1,5 @@
 ---
+# Input validation and preflight
 - name: Validate Kafka role inputs
   ansible.builtin.assert:
     that:
@@ -9,19 +10,207 @@
       - platform_kafka_cluster_id | length > 0
       - platform_kafka_install_directory | length > 0
       - platform_kafka_data_directory | length > 0
-    fail_msg: Kafka SERVICE-01A requires explicit node_id, cluster_id and directories
+      - platform_kafka_advanced_config is mapping
+    fail_msg: Kafka SERVICE-01A requires explicit node_id, cluster_id, directories and a mapping advanced_config
 
 - name: Run Kafka verification only
   ansible.builtin.include_tasks: verify.yml
   when: platform_kafka_verify_only | bool
 
-- name: Run Kafka installation and apply
+- name: Run Kafka apply lifecycle
   when: not (platform_kafka_verify_only | bool)
   block:
-    - ansible.builtin.include_tasks: preflight.yml
-    - ansible.builtin.include_tasks: java.yml
-    - ansible.builtin.include_tasks: artifact.yml
-    - ansible.builtin.include_tasks: directories.yml
-    - ansible.builtin.include_tasks: configure.yml
-    - ansible.builtin.include_tasks: storage.yml
-    - ansible.builtin.include_tasks: service.yml
+    - name: Define Kafka reserved configuration keys
+      ansible.builtin.set_fact:
+        _platform_kafka_reserved_config_keys:
+          - node.id
+          - process.roles
+          - listeners
+          - advertised.listeners
+          - controller.listener.names
+          - controller.quorum.bootstrap.servers
+          - log.dirs
+          - listener.security.protocol.map
+          - inter.broker.listener.name
+
+    - name: Find advanced settings that conflict with reserved Kafka settings
+      ansible.builtin.set_fact:
+        _platform_kafka_advanced_reserved_conflicts: >-
+          {{ platform_kafka_advanced_config.keys() | list |
+             intersect(_platform_kafka_reserved_config_keys) | sort }}
+
+    - name: Block reserved Kafka settings in advanced configuration
+      ansible.builtin.assert:
+        that: _platform_kafka_advanced_reserved_conflicts | length == 0
+        fail_msg: >-
+          ADVANCED_SETTING_RESERVED: BLOCKED; advanced configuration contains
+          reserved Kafka keys: {{ _platform_kafka_advanced_reserved_conflicts | join(', ') }}
+
+    - name: Require caller-supplied offline Kafka artifact
+      ansible.builtin.assert:
+        that:
+          - platform_kafka_artifact_path is defined
+          - platform_kafka_artifact_checksum is defined
+          - platform_kafka_artifact_checksum is match('^sha256:[0-9a-fA-F]{64}$')
+        fail_msg: Kafka artifact path and sha256 checksum are required; Internet download is not supported
+
+    - name: Check Kafka artifact on the controller
+      ansible.builtin.stat:
+        path: "{{ platform_kafka_artifact_path }}"
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: platform_kafka_artifact_stat
+
+    - name: Reject missing or mismatched Kafka artifact before target mutation
+      ansible.builtin.assert:
+        that:
+          - platform_kafka_artifact_stat.stat.exists
+          - platform_kafka_artifact_stat.stat.checksum is defined
+          - ('sha256:' ~ platform_kafka_artifact_stat.stat.checksum) == platform_kafka_artifact_checksum
+        fail_msg: Kafka artifact is missing or its SHA-256 does not match the approved offline contract
+
+    - name: Require Kafka 4.3.1 artifact layout
+      ansible.builtin.assert:
+        that:
+          - platform_kafka_version == '4.3.1'
+          - platform_kafka_archive_directory == 'kafka_2.13-4.3.1'
+        fail_msg: SERVICE-01A supports only the approved Kafka 4.3.1 artifact
+
+    - name: Inspect existing KRaft metadata before any target mutation
+      ansible.builtin.stat:
+        path: "{{ platform_kafka_data_directory }}/meta.properties"
+      register: platform_kafka_existing_metadata
+
+    - name: Read existing KRaft metadata before any target mutation
+      ansible.builtin.slurp:
+        src: "{{ platform_kafka_data_directory }}/meta.properties"
+      register: platform_kafka_existing_metadata_content
+      when: platform_kafka_existing_metadata.stat.exists
+
+    - name: Reject an existing KRaft identity mismatch before mutation
+      ansible.builtin.assert:
+        that:
+          - (platform_kafka_existing_metadata_content.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
+          - (platform_kafka_existing_metadata_content.content | b64decode) is search('(?m)^node.id=' ~ (platform_kafka_node_id | string) ~ '$')
+        fail_msg: Existing Kafka storage identity does not match explicit node_id/cluster_id; refusing mutation
+      when: platform_kafka_existing_metadata.stat.exists
+
+    - name: Install OpenJDK 21 prerequisite
+      ansible.builtin.package:
+        name: "{{ platform_kafka_java_package }}"
+        state: present
+
+    - name: Verify Java major version
+      ansible.builtin.command: java -version
+      changed_when: false
+      register: platform_kafka_java_version
+      failed_when: >-
+        platform_kafka_java_version.rc != 0 or
+        ('version "21.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout))
+
+    - name: Extract approved Kafka binary artifact
+      ansible.builtin.unarchive:
+        src: "{{ platform_kafka_artifact_path }}"
+        dest: /opt
+        remote_src: false
+        creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
+
+    - name: Point stable Kafka install path at approved version
+      ansible.builtin.file:
+        src: "/opt/{{ platform_kafka_archive_directory }}"
+        dest: "{{ platform_kafka_install_directory }}"
+        state: link
+        force: true
+      notify: Restart Kafka
+
+    - name: Create Kafka service user
+      ansible.builtin.user:
+        name: "{{ platform_kafka_user }}"
+        system: true
+        create_home: false
+
+    - name: Create Kafka directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ platform_kafka_user }}"
+        group: "{{ platform_kafka_group }}"
+        mode: '0750'
+      loop:
+        - "{{ platform_kafka_config_directory }}"
+        - "{{ platform_kafka_data_directory }}"
+        - "{{ platform_kafka_install_directory }}/logs"
+
+    - name: Build internal Kafka effective configuration
+      ansible.builtin.set_fact:
+        kafka_effective_config: >-
+          {{ platform_kafka_advanced_config
+             | combine({'log.retention.hours': platform_kafka_log_retention_hours})
+             | combine({
+                 'process.roles': 'broker,controller',
+                 'node.id': platform_kafka_node_id | int,
+                 'controller.quorum.bootstrap.servers': platform_kafka_advertised_host ~ ':' ~ (platform_kafka_controller_port | string),
+                 'listeners': 'PLAINTEXT://0.0.0.0:' ~ (platform_kafka_client_port | string) ~ ',CONTROLLER://0.0.0.0:' ~ (platform_kafka_controller_port | string),
+                 'advertised.listeners': 'PLAINTEXT://' ~ platform_kafka_advertised_host ~ ':' ~ (platform_kafka_client_port | string),
+                 'listener.security.protocol.map': 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT',
+                 'inter.broker.listener.name': 'PLAINTEXT',
+                 'controller.listener.names': 'CONTROLLER',
+                 'log.dirs': platform_kafka_data_directory
+               }) }}
+
+    - name: Validate effective Kafka configuration value types
+      ansible.builtin.assert:
+        that:
+          - item.value is boolean or item.value is number or item.value is string
+        fail_msg: >-
+          Kafka effective configuration key {{ item.key }} has unsupported type
+          {{ item.value | type_debug }}; only string, integer/number and boolean are supported
+      loop: "{{ kafka_effective_config | dict2items | sort(attribute='key') }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Render deterministic Kafka KRaft configuration
+      ansible.builtin.template:
+        src: server.properties.j2
+        dest: "{{ platform_kafka_config_file }}"
+        owner: "{{ platform_kafka_user }}"
+        group: "{{ platform_kafka_group }}"
+        mode: '0640'
+      notify: Restart Kafka
+
+    - name: Check whether KRaft storage is already initialized
+      ansible.builtin.stat:
+        path: "{{ platform_kafka_data_directory }}/meta.properties"
+      register: platform_kafka_metadata
+
+    - name: Format empty KRaft storage as a standalone dynamic quorum
+      become_user: "{{ platform_kafka_user }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
+          - format
+          - --standalone
+          - --cluster-id
+          - "{{ platform_kafka_cluster_id }}"
+          - --config
+          - "{{ platform_kafka_config_file }}"
+      when: not platform_kafka_metadata.stat.exists
+      changed_when: true
+
+    - name: Install Kafka systemd unit
+      ansible.builtin.template:
+        src: kafka.service.j2
+        dest: "/etc/systemd/system/{{ platform_kafka_service_name }}.service"
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart Kafka
+
+    - name: Enable and start Kafka
+      ansible.builtin.systemd:
+        name: "{{ platform_kafka_service_name }}"
+        enabled: true
+        state: started
