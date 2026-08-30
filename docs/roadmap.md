@@ -61,6 +61,9 @@ Not ready when:
 
 ### CORE-02: Deterministic topology resolution
 
+Status: DONE. The topology-only slice was implemented and validated on the
+RED OS controller in an offline network namespace.
+
 Deliverables:
 
 - deterministic project resolver over inventory, `group_vars` and `host_vars`;
@@ -68,6 +71,15 @@ Deliverables:
 - endpoint and certificate-scope resolution;
 - canonical plan fingerprint;
 - golden fixtures and property/invariant tests.
+
+Delivered in this milestone:
+
+- pure resolver output limited to canonical `ResolvedTopology`;
+- explicit placement and generic reference validation reused from CORE-01;
+- stable ordering and topology fingerprint using only used service-definition
+  digests;
+- no dependency DAG, endpoints, certificates, runtime role variables or
+  deployment plan.
 
 Ready when:
 

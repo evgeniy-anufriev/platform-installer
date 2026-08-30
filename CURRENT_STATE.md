@@ -2,7 +2,7 @@
 
 ## Phase
 
-CORE-01 — standalone contract and read-only validation foundation.
+CORE-02 — deterministic explicit topology and placement resolution.
 
 ## Established direction
 
@@ -25,13 +25,18 @@ CORE-01 — standalone contract and read-only validation foundation.
 - Published alpha schemas for project parts, catalog, service manifest, findings,
   validation, plan, event and result.
 - Standard `platform.core` validation playbook and controller-side module.
+- Pure deterministic topology resolver producing canonical `ResolvedTopology`
+  and a topology fingerprint from only used service-definition digests.
+- Explicit placement/reference resolution with stable ordering and structured
+  placement diagnostics; `host_vars` are not resolver inputs.
 - Portable valid/invalid fixtures, including Kafka and PostgreSQL topology cases.
 - Kafka service collection and explicit `roles/kafka_kraft` skeleton; production
   tasks are intentionally absent.
 
 ## Not implemented
 
-- Deterministic topology plan/resolved execution projection (`CORE-02`).
+- Dependency DAG, endpoint/certificate resolution, runtime role variables and
+  deployment plan.
 - Generic Core mutation roles and production Kafka role tasks.
 - Production services.
 - Go backend.
@@ -40,5 +45,6 @@ CORE-01 — standalone contract and read-only validation foundation.
 
 ## Next gate
 
-CORE-01 is complete. The next gate is `CORE-02` deterministic topology
-resolution; it must be requested explicitly before implementation begins.
+CORE-01 and CORE-02 are complete. The next gate is CORE-03 runtime, events and
+security foundation; it must be requested explicitly before implementation
+begins.

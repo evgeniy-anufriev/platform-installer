@@ -70,3 +70,14 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 `examples/catalog/service-catalog.yml` is generated, intentionally tracked and
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
+
+## Test Credentials
+
+Local integration-test credentials may exist under `.runtime/secrets/`.
+
+- Never commit them.
+- Never copy secret values into docs, Skills, fixtures or source.
+- Never print secret values in logs or reports.
+- Load them only at runtime.
+- Redact them from command and error output.
+- Missing credentials must produce a clear test prerequisite failure.
