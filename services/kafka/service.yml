@@ -41,6 +41,11 @@ capabilities:
 dependencies: []
 configurationSchema:
   $ref: configuration.schema.json
+configurationMapping:
+  clientPort: {roleVariable: platform_kafka_client_port}
+  controllerPort: {roleVariable: platform_kafka_controller_port}
+  dataDirectory: {roleVariable: platform_kafka_data_directory}
+  logRetentionHours: {roleVariable: platform_kafka_log_retention_hours}
 roleEntrypoints:
   apply:
     fqcn: platform.kafka.kafka_kraft

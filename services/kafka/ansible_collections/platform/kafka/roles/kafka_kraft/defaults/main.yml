@@ -1,2 +1,5 @@
 ---
-# Production defaults are introduced and tested in SERVICE-01A.
+platform_kafka_client_port: 9092
+platform_kafka_controller_port: 9093
+platform_kafka_data_directory: /var/lib/kafka
+platform_kafka_log_retention_hours: 168

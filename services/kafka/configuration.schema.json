@@ -5,9 +5,9 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "clientPort": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 9092},
-    "controllerPort": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 9093},
-    "dataDirectory": {"type": "string", "minLength": 1, "default": "/var/lib/kafka"},
-    "logRetentionHours": {"type": "integer", "minimum": 1, "default": 168}
+    "clientPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "controllerPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "dataDirectory": {"type": "string", "minLength": 1},
+    "logRetentionHours": {"type": "integer", "minimum": 1}
   }
 }

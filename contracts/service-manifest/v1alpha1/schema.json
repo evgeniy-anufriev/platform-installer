@@ -50,6 +50,22 @@
       "properties": { "$ref": { "type": "string", "minLength": 1 } },
       "additionalProperties": false
     },
+    "configurationMapping": {
+      "type": "object",
+      "description": "Versioned logical configuration property to ordinary role variable mapping.",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["roleVariable"],
+        "properties": {
+          "roleVariable": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "roleEntrypoints": {
       "type": "object",
       "required": ["apply", "verify"],

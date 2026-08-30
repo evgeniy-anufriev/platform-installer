@@ -96,31 +96,34 @@ Not ready when:
 - output ordering changes between runs;
 - generated files must be manually edited.
 
-### CORE-03: Runtime, events and security foundation
+### CORE-03: Deterministic service configuration resolution
+
+The first CORE-03 slice is intentionally limited to resolving logical
+deployment configuration. It does not start execution lifecycle work.
 
 Deliverables:
 
-- apply/verify lifecycle;
-- runtime secret-provider contract;
-- normalized callback events and result;
-- cancellation and interruption semantics;
-- offline artifact/trust verification;
-- sanitized full diagnostics.
+- versioned logical-setting to ordinary role-variable mapping in service packages;
+- canonical role defaults loaded from service-role `defaults/main.yml`;
+- deployment-level defaults plus portable project override resolution;
+- explicit `DEFERRED` state for non-literal Ansible/Jinja defaults;
+- canonical `ResolvedServiceConfiguration` projection and fingerprint;
+- precise blocking finding for unsupported member configuration;
+- deterministic configuration fixtures and standalone role-conformance boundary.
 
 Ready when:
 
-- apply executes only a matching fingerprinted plan;
-- a wrong/missing credential fails safely without leakage;
-- cancellation prevents later phases from starting;
-- exact actionable errors and full sanitized diagnostics are available;
-- a second no-change execution is measurable.
+- identical defaults, overrides and package inputs produce byte-stable output;
+- placement changes affect topology fingerprint but not configuration fingerprint;
+- no derived configuration is persisted as desired state;
+- Core does not evaluate Ansible/Jinja variables or emit role runtime variables;
+- manual inventory, group_vars and role defaults remain a valid standalone role input.
 
 Not ready when:
 
-- consumers parse human stdout as the primary protocol;
-- secrets occur in commands, events or plan files;
-- public repositories are used implicitly;
-- apply reconstructs a different plan.
+- member/host precedence is inferred;
+- generic Core guesses logical-to-role-variable names;
+- schema defaults and role defaults are both treated as canonical.
 
 ## Phase C — First production service
 

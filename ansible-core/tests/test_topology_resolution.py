@@ -41,6 +41,10 @@ def catalog(extra=False):
             }
         },
         "configurationSchema": {"$ref": "configuration.schema.json"},
+        "configurationMapping": {
+            "clientPort": {"roleVariable": "platform_kafka_client_port"},
+            "controllerPort": {"roleVariable": "platform_kafka_controller_port"},
+        },
         "roleEntrypoints": {},
     }
     definition["x-definitionDigest"] = VALIDATION.canonical_digest(definition)

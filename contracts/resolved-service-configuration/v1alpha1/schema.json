@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.installer.local/contracts/resolved-service-configuration/v1alpha1/schema.json",
+  "title": "Resolved service configuration projection",
+  "description": "Read-only derived logical configuration; never a desired-state source.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "services", "configurationFingerprint", "findings"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/resolved-service-configuration/v1alpha1" },
+    "kind": { "const": "ResolvedServiceConfiguration" },
+    "services": {
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/service" }
+    },
+    "configurationFingerprint": { "$ref": "#/$defs/digest" },
+    "findings": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "literal": {
+      "type": ["string", "number", "integer", "boolean", "array", "object", "null"]
+    },
+    "value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["state", "value"],
+          "properties": {
+            "state": { "const": "RESOLVED" },
+            "value": { "$ref": "#/$defs/literal" },
+            "source": { "enum": ["DEFAULT", "OVERRIDE"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["state", "reason"],
+          "properties": {
+            "state": { "const": "DEFERRED" },
+            "reason": { "enum": ["NON_LITERAL_ROLE_DEFAULT"] },
+            "source": { "const": "DEFAULT" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "service": {
+      "type": "object",
+      "required": ["serviceType", "definitionVersion", "mode", "configuration", "inputs"],
+      "properties": {
+        "serviceType": { "type": "string", "minLength": 1 },
+        "definitionVersion": { "type": "string", "minLength": 1 },
+        "mode": { "type": "string", "minLength": 1 },
+        "configuration": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/value" }
+        },
+        "inputs": {
+          "type": "object",
+          "required": ["serviceDefinitionDigest", "configurationSchemaDigest", "roleDefaultsDigest"],
+          "properties": {
+            "topologyFingerprint": { "$ref": "#/$defs/digest" },
+            "serviceDefinitionDigest": { "$ref": "#/$defs/digest" },
+            "configurationSchemaDigest": { "$ref": "#/$defs/digest" },
+            "roleDefaultsDigest": { "$ref": "#/$defs/digest" },
+            "mappingDigest": { "$ref": "#/$defs/digest" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -16,6 +16,7 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Derived service catalog | `v1alpha1` | `service-catalog/v1alpha1/schema.json` |
 | Finding | `v1alpha1` | `finding/v1alpha1/schema.json` |
 | Project validation result | `v1alpha1` | `validation-result/v1alpha1/schema.json` |
+| Resolved service configuration | `v1alpha1` | `resolved-service-configuration/v1alpha1/schema.json` |
 | Resolved plan | `v1alpha1` | `plan/v1alpha1/schema.json` |
 | Normalized execution event | `v1alpha1` | `event/v1alpha1/schema.json` |
 | Execution result | `v1alpha1` | `result/v1alpha1/schema.json` |
