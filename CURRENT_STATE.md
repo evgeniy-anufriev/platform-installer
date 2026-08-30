@@ -2,7 +2,7 @@
 
 ## Phase
 
-CORE-04 - scoped configuration and variable context.
+SERVICE-01A - Kafka KRaft standalone installation and verification.
 
 ## Established direction
 
@@ -24,6 +24,8 @@ CORE-04 - scoped configuration and variable context.
   read-only projections and never persistent sources of truth.
 - Unknown Ansible variables outside service mappings remain opaque,
   pass-through values with physical origin metadata.
+- Production Kafka SERVICE-01A is implemented as a standalone service package;
+  Kafka-specific playbooks remain inside `services/kafka`.
 
 ## Implemented
 
@@ -52,8 +54,9 @@ CORE-04 - scoped configuration and variable context.
   values without becoming managed settings.
 - Independent deterministic member projections and configuration fingerprints.
 - Portable valid/invalid fixtures, including Kafka and PostgreSQL topology cases.
-- Kafka service collection and explicit `roles/kafka_kraft` skeleton; production
-  tasks are intentionally absent.
+- Kafka 4.3.1 single-node combined broker/controller role with offline artifact,
+  Java 21 prerequisite, KRaft storage initialization, configuration and
+  systemd apply/verify playbooks.
 
 ## Validation evidence
 
@@ -65,14 +68,17 @@ CORE-04 - scoped configuration and variable context.
 - RED OS controller VM: Ansible validation smoke passed with `changed=0`,
   `failed=0`, and validation status `PASS` on `localhost` only.
 - RED OS controller VM: privileged `unshare -n` offline check passed.
-- No production Kafka installation or target mutation was performed; temporary
-  remote QA workspace and validation artifact were removed.
+- RED OS controller VM: Kafka 4.3.1 apply and verify passed; repeat apply and
+  verify passed with `changed=0` and no storage re-format.
+- RED OS controller VM: offline apply through `sudo unshare -n` passed with
+  `changed=0`.
+- No temporary remote QA workspace or artifact copy remained after QA.
 
 ## Not implemented
 
 - Dependency DAG, endpoint/certificate resolution, runtime role variables and
   deployment plan.
-- Generic Core mutation roles and production Kafka role tasks.
+- Generic Core mutation roles and distributed Kafka role tasks.
 - Production services.
 - Go backend.
 - Persistence.
@@ -80,6 +86,6 @@ CORE-04 - scoped configuration and variable context.
 
 ## Next gate
 
-CORE-01, CORE-02, CORE-03 and CORE-04 are complete. The next gate is `SERVICE-01A`
-Kafka KRaft standalone installation and verification. It must be requested
-explicitly before production service tasks begin.
+CORE-01, CORE-02, CORE-03, CORE-04 and SERVICE-01A are complete. The next gate
+is `SERVICE-01B` Kafka KRaft distributed operation. It must be requested
+explicitly before distributed service tasks begin.

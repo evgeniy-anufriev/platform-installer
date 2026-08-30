@@ -1,0 +1,27 @@
+---
+- name: Validate Kafka role inputs
+  ansible.builtin.assert:
+    that:
+      - platform_kafka_node_id is defined
+      - (platform_kafka_node_id | string) is match('^[0-9]+$')
+      - (platform_kafka_node_id | int) >= 0
+      - platform_kafka_cluster_id is defined
+      - platform_kafka_cluster_id | length > 0
+      - platform_kafka_install_directory | length > 0
+      - platform_kafka_data_directory | length > 0
+    fail_msg: Kafka SERVICE-01A requires explicit node_id, cluster_id and directories
+
+- name: Run Kafka verification only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_kafka_verify_only | bool
+
+- name: Run Kafka installation and apply
+  when: not (platform_kafka_verify_only | bool)
+  block:
+    - ansible.builtin.include_tasks: preflight.yml
+    - ansible.builtin.include_tasks: java.yml
+    - ansible.builtin.include_tasks: artifact.yml
+    - ansible.builtin.include_tasks: directories.yml
+    - ansible.builtin.include_tasks: configure.yml
+    - ansible.builtin.include_tasks: storage.yml
+    - ansible.builtin.include_tasks: service.yml

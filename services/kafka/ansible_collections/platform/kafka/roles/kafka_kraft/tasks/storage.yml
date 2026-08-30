@@ -1,0 +1,20 @@
+---
+- name: Check whether KRaft storage is already initialized
+  ansible.builtin.stat:
+    path: "{{ platform_kafka_data_directory }}/meta.properties"
+  register: platform_kafka_metadata
+
+- name: Format empty KRaft storage as a standalone dynamic quorum
+  become_user: "{{ platform_kafka_user }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
+      - format
+      - --standalone
+      - --cluster-id
+      - "{{ platform_kafka_cluster_id }}"
+      - --config
+      - "{{ platform_kafka_config_file }}"
+  when: not platform_kafka_metadata.stat.exists
+  register: platform_kafka_storage_format
+  changed_when: true

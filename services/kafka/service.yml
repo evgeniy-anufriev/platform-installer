@@ -19,7 +19,7 @@ modes:
       roleCardinality:
         broker: {minimum: 1, maximum: 1}
         controller: {minimum: 1, maximum: 1}
-    x-maturity: planned-service-01a
+    x-maturity: implemented-service-01a
   kraft-distributed:
     displayName: Distributed KRaft
     description: Explicit controller and broker placements
@@ -61,7 +61,11 @@ roleEntrypoints:
   verify:
     fqcn: platform.kafka.kafka_kraft
     variablesPrefix: platform_kafka_
-artifacts: []
+artifacts:
+  - id: kafka-binary
+    version: "4.3.1"
+    digest: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
+    requiredOffline: true
 compatibilityRef: compatibility.yml
 x-initialSecurityScope:
   sasl: unsupported

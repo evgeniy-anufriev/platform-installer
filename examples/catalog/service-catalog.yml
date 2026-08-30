@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:91669c264c40d061c75d95528c57bc8384014baac1033a67dcb49d58ca4cf942
+digest: sha256:1d3e591b4b5409d1b66d159ae0487b79743ae9827c7b548f04da021e8404d322
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -16,8 +16,8 @@ definitions:
         displayName: Single-node KRaft
         description: One combined broker and controller member
         memberRoles:
-          - broker
-          - controller
+        - broker
+        - controller
         placement:
           explicit: true
           minMembers: 1
@@ -30,13 +30,13 @@ definitions:
             controller:
               minimum: 1
               maximum: 1
-        x-maturity: planned-service-01a
+        x-maturity: implemented-service-01a
       kraft-distributed:
         displayName: Distributed KRaft
         description: Explicit controller and broker placements
         memberRoles:
-          - broker
-          - controller
+        - broker
+        - controller
         placement:
           explicit: true
           minMembers: 3
@@ -59,11 +59,31 @@ definitions:
         tlsCapable: true
         scope: member
     capabilities:
-      - service.kafka.client
-      - service.kafka.kraft
+    - service.kafka.client
+    - service.kafka.kraft
     dependencies: []
     configurationSchema:
       $ref: ../../services/kafka/configuration.schema.json
+    configurationMapping:
+      clientPort:
+        roleVariable: platform_kafka_client_port
+        scopes:
+        - deployment
+        - member
+      controllerPort:
+        roleVariable: platform_kafka_controller_port
+        scopes:
+        - deployment
+        - member
+      dataDirectory:
+        roleVariable: platform_kafka_data_directory
+        scopes:
+        - deployment
+        - member
+      logRetentionHours:
+        roleVariable: platform_kafka_log_retention_hours
+        scopes:
+        - deployment
     roleEntrypoints:
       apply:
         fqcn: platform.kafka.kafka_kraft
@@ -71,34 +91,18 @@ definitions:
       verify:
         fqcn: platform.kafka.kafka_kraft
         variablesPrefix: platform_kafka_
-    artifacts: []
+    artifacts:
+    - id: kafka-binary
+      version: 4.3.1
+      digest: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
+      requiredOffline: true
     compatibilityRef: ../../services/kafka/compatibility.yml
     x-initialSecurityScope:
       sasl: unsupported
       mtls: deferred
       customListeners: deferred
+    x-definitionDigest: sha256:e30eafc78be252a82aca06dfba6e588939aca0597a7762f3e7f1a614572b6508
     x-sourceManifest: services/kafka/service.yml
-    configurationMapping:
-      clientPort:
-        roleVariable: platform_kafka_client_port
-        scopes:
-          - deployment
-          - member
-      controllerPort:
-        roleVariable: platform_kafka_controller_port
-        scopes:
-          - deployment
-          - member
-      dataDirectory:
-        roleVariable: platform_kafka_data_directory
-        scopes:
-          - deployment
-          - member
-      logRetentionHours:
-        roleVariable: platform_kafka_log_retention_hours
-        scopes:
-          - deployment
-    x-definitionDigest: sha256:bbc8e9ee84d1ef808cffd5a491d97bfbf217cd14de78e6f9edb0a9f5537adbf9
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest
@@ -112,7 +116,7 @@ definitions:
       standalone:
         displayName: Standalone
         memberRoles:
-          - database
+        - database
         placement:
           explicit: true
           minMembers: 1
@@ -121,7 +125,7 @@ definitions:
       patroni:
         displayName: Patroni
         memberRoles:
-          - database
+        - database
         placement:
           explicit: true
           minMembers: 3
@@ -129,8 +133,8 @@ definitions:
       pg_auto_failover:
         displayName: pg_auto_failover
         memberRoles:
-          - database
-          - monitor
+        - database
+        - monitor
         placement:
           explicit: true
           minMembers: 3
@@ -142,7 +146,7 @@ definitions:
         tlsCapable: true
         scope: deployment
     capabilities:
-      - service.postgresql.client
+    - service.postgresql.client
     dependencies: []
     configurationSchema:
       $ref: fixtures/postgresql.configuration.schema.json
@@ -154,9 +158,9 @@ definitions:
         fqcn: platform.postgresql.postgresql
         variablesPrefix: platform_postgresql_
     artifacts: []
+    x-conformanceOnly: true
     x-definitionDigest: sha256:2efe3a392cec66ca627fa86a1f2cba1c9013838d9f75d3939fcd646b3ea3a849
     x-sourceManifest: examples/catalog/manifests/postgresql.yml
-    x-conformanceOnly: true
   etcd:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest
@@ -170,7 +174,7 @@ definitions:
       cluster:
         displayName: Cluster
         memberRoles:
-          - member
+        - member
         placement:
           explicit: true
           minMembers: 3
@@ -182,7 +186,7 @@ definitions:
         tlsCapable: true
         scope: deployment
     capabilities:
-      - dcs
+    - dcs
     dependencies: []
     configurationSchema:
       $ref: fixtures/etcd.configuration.schema.json
@@ -194,6 +198,6 @@ definitions:
         fqcn: platform.etcd.etcd
         variablesPrefix: platform_etcd_
     artifacts: []
+    x-conformanceOnly: true
     x-definitionDigest: sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0
     x-sourceManifest: examples/catalog/manifests/etcd.yml
-    x-conformanceOnly: true

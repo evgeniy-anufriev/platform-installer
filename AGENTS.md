@@ -97,3 +97,18 @@ The Windows development workstation is not the canonical runtime for Python/Ansi
 - Never modify target hosts during read-only Core tests.
 - RED OS is the primary current Core QA environment.
 - ALT Linux validation is required only for ALT-specific milestone behavior or when explicitly requested.
+
+## Local Test Artifacts
+
+Local binary artifacts used for offline/integration QA live under:
+
+`.runtime/artifacts/<service>/`
+
+They are local test inputs and must not be committed.
+
+Do not search Downloads/Desktop or download artifacts automatically during QA
+or production execution when the expected artifact is missing. Report the
+missing expected path instead. A separately authorized DEV acquisition may
+download and verify an official artifact into this local cache; production
+roles and production execution must use only approved local artifacts,
+repositories or payloads and must never download from the Internet.

@@ -1,9 +1,11 @@
 # `platform.kafka.kafka_kraft`
 
-Reserved role contract for Kafka KRaft. This skeleton intentionally has no
-`tasks/main.yml`: CORE-01 defines package shape and variables, while production
-mutation begins only in SERVICE-01A.
+Standalone Kafka 4.3.1 KRaft role for one combined broker/controller on one
+physical host. It installs only from a caller-supplied offline artifact and
+does not download from the Internet.
 
-Planned ordinary role variables use the `platform_kafka_` prefix. Resolved
-topology inputs must contain stable deployment/member identities, explicit
-hosts and roles, and no Installer DTOs or persisted secret values.
+Required inputs are `platform_kafka_node_id`, `platform_kafka_cluster_id`,
+`platform_kafka_artifact_path` and `platform_kafka_artifact_checksum`. The
+role accepts ordinary inventory variables and has no Installer DTO or runtime
+launcher dependency. Existing initialized storage is never reformatted when
+its cluster and node identities match; mismatches fail before mutation.

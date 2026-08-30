@@ -1,0 +1,10 @@
+process.roles=broker,controller
+node.id={{ platform_kafka_node_id }}
+controller.quorum.bootstrap.servers={{ platform_kafka_advertised_host }}:{{ platform_kafka_controller_port }}
+listeners=PLAINTEXT://0.0.0.0:{{ platform_kafka_client_port }},CONTROLLER://0.0.0.0:{{ platform_kafka_controller_port }}
+advertised.listeners=PLAINTEXT://{{ platform_kafka_advertised_host }}:{{ platform_kafka_client_port }}
+listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+inter.broker.listener.name=PLAINTEXT
+controller.listener.names=CONTROLLER
+log.dirs={{ platform_kafka_data_directory }}
+log.retention.hours={{ platform_kafka_log_retention_hours }}

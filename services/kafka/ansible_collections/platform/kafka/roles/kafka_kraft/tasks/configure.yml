@@ -1,0 +1,9 @@
+---
+- name: Render Kafka KRaft configuration
+  ansible.builtin.template:
+    src: server.properties.j2
+    dest: "{{ platform_kafka_config_file }}"
+    owner: "{{ platform_kafka_user }}"
+    group: "{{ platform_kafka_group }}"
+    mode: '0640'
+  notify: Restart Kafka

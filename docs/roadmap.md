@@ -144,6 +144,10 @@ role-variable generation, plan/apply/verify, or production services.
 
 ### SERVICE-01A: Kafka KRaft standalone
 
+Status: DONE. Kafka 4.3.1 single-node KRaft apply and verify were implemented
+inside the Kafka service package and validated on RED OS with offline artifact,
+idempotent storage initialization and `changed=0` repeat execution.
+
 Deliverables:
 
 - Kafka KRaft single-node service package and role;

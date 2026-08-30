@@ -1,0 +1,17 @@
+---
+- name: Install OpenJDK 21 prerequisite
+  ansible.builtin.package:
+    name: "{{ platform_kafka_java_package }}"
+    state: present
+
+- name: Verify Java major version
+  ansible.builtin.command: java -version
+  changed_when: false
+  register: platform_kafka_java_version
+  failed_when: >-
+    platform_kafka_java_version.rc != 0 or
+    ('version "21.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout) and
+     'version "22.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout) and
+     'version "23.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout) and
+     'version "24.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout) and
+     'version "25.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout))

@@ -1,0 +1,34 @@
+---
+- name: Read Kafka systemd state
+  become: true
+  ansible.builtin.command: systemctl is-active {{ platform_kafka_service_name }}
+  changed_when: false
+  register: platform_kafka_service_state
+
+- name: Verify Kafka service is active
+  ansible.builtin.assert:
+    that: platform_kafka_service_state.stdout == 'active'
+    fail_msg: Kafka systemd service is not active
+
+- name: Read KRaft storage metadata
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ platform_kafka_data_directory }}/meta.properties"
+  register: platform_kafka_verify_metadata
+
+- name: Verify explicit KRaft identity
+  ansible.builtin.assert:
+    that:
+      - (platform_kafka_verify_metadata.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
+      - (platform_kafka_verify_metadata.content | b64decode) is search('(?m)^node.id=' ~ (platform_kafka_node_id | string) ~ '$')
+    fail_msg: Kafka metadata does not match explicit SERVICE-01A identity
+
+- name: Verify Kafka listeners are reachable locally
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item }}"
+    state: started
+    timeout: 5
+  loop:
+    - "{{ platform_kafka_client_port }}"
+    - "{{ platform_kafka_controller_port }}"

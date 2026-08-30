@@ -1,5 +1,16 @@
 ---
+platform_kafka_version: "4.3.1"
+platform_kafka_archive_directory: kafka_2.13-4.3.1
+platform_kafka_install_directory: /opt/kafka
+platform_kafka_config_directory: /etc/kafka
+platform_kafka_config_file: /etc/kafka/server.properties
+platform_kafka_data_directory: /var/lib/kafka
+platform_kafka_user: kafka
+platform_kafka_group: kafka
+platform_kafka_java_package: java-21-openjdk-headless
 platform_kafka_client_port: 9092
 platform_kafka_controller_port: 9093
-platform_kafka_data_directory: /var/lib/kafka
 platform_kafka_log_retention_hours: 168
+platform_kafka_service_name: kafka
+platform_kafka_advertised_host: "{{ ansible_host | default(inventory_hostname) }}"
+platform_kafka_verify_only: false

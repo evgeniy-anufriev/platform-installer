@@ -1,7 +1,7 @@
 galaxy_info:
   role_name: kafka_kraft
   author: Platform Installer maintainers
-  description: Kafka KRaft role contract skeleton
+  description: Single-node Kafka 4.3.1 KRaft broker and controller role
   license: Proprietary
   min_ansible_version: "2.15"
 dependencies: []
