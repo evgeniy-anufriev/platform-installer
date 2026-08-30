@@ -24,7 +24,7 @@ Backend databases and frontend stores are projections/caches. They cannot introd
 
 Status: Accepted.
 
-Service deployment, mode, members, roles, placements, dependencies and endpoint bindings are explicit project entities. Inventory is derived.
+Service deployment, mode, members, roles, placements, dependencies and endpoint bindings are explicit project entities. Initial standalone projects use normal Ansible inventory, `group_vars` and `host_vars`; resolved execution groups and runtime variables are derived.
 
 ## ADR-005: Service catalog belongs to versioned service packages
 
@@ -36,13 +36,13 @@ React may render and enhance the catalog but does not manually redefine supporte
 
 Status: Accepted.
 
-Roles accept documented normal Ansible variables. The project compiler is one producer of those variables, not a mandatory Installer-specific runtime inside every role.
+Roles accept documented normal Ansible variables. The project resolver is one producer of resolved role variables, not a mandatory Installer-specific runtime inside every role.
 
 ## ADR-007: Derived state is immutable and disposable
 
 Status: Accepted.
 
-Facts, plans, inventory, resolved topology and results are fingerprinted outputs. They are never silently merged back into desired state.
+Facts, plans, resolved execution topology, generated runtime variables and results are fingerprinted outputs. They are never silently merged back into desired state. Operator-authored inventory and variable files remain desired project input.
 
 ## ADR-008: Secrets are references in desired state
 
@@ -54,7 +54,7 @@ Plaintext secret values exist only in the execution boundary and are never inclu
 
 Status: Accepted.
 
-Dedicated Linux node, container, WSL2 development and future mechanisms implement the same Core invocation contract. None appear in topology or service domain models.
+The production baseline is a dedicated Linux execution node. WSL2 is a development adapter; container and other future mechanisms may implement the same Core invocation contract. None appear in topology or service domain models.
 
 ## ADR-010: Compatibility is evidence-backed data
 
@@ -62,44 +62,56 @@ Status: Accepted.
 
 Certified OS/runtime/service combinations are populated by integration tests. Architecture documents do not invent supported RED OS or ALT Linux versions.
 
-## ADR-011: First production service is a contract probe
+## ADR-011: Kafka KRaft is the first production service
 
-Status: Proposed.
+Status: Accepted.
 
-The first service must exercise packages, configuration, systemd, topology, secrets, endpoints, TLS, verification, offline artifacts and idempotency. PostgreSQL is a strong candidate, but selection requires an explicit scope decision before implementation.
+Delivery is split into `SERVICE-01A` standalone/single-node KRaft and `SERVICE-01B` distributed KRaft. SERVICE-01A proves installation, offline artifacts, Java, configuration, systemd, basic endpoint/TLS hooks, verification and idempotency without attempting every security or listener feature. PostgreSQL modes remain contract fixtures.
 
-## ADR-012: Standalone launcher implementation technology
+## ADR-012: Standard Ansible is the standalone interface
 
-Status: Deferred.
+Status: Accepted.
 
-The behavioral CLI contract is defined first. Whether the launcher is Python, an Ansible plugin/collection command or a thin packaged executable will be decided during CORE-01 using offline distribution and maintainability evidence.
+Initial Core operations are invoked with standard `ansible-playbook` and normal inventory, `group_vars` and `host_vars`. A proprietary launcher is neither required nor planned. A convenience CLI may be added later as an optional client only when real operational use cases justify it.
 
 ## ADR-013: Automatic placement
 
-Status: Deferred.
+Status: Accepted for initial V2.
 
-Explicit placement is supported first. Automatic placement requires a deterministic algorithm, explanation contract and independent tests before becoming part of stable V2.
+Only explicit placement is supported initially. Future automatic placement must return a deterministic, explainable proposed project patch and requires operator acceptance before changing desired state.
 
-## ADR-014: Production execution packaging
+## ADR-014: Dedicated Linux execution node is the production baseline
 
-Status: Deferred.
+Status: Accepted.
 
-The initial production adapter is chosen after standalone Core prerequisites are measured. WSL2 remains development-only unless explicitly selected by deployment policy.
+Production runs Core on a dedicated Linux execution node. WSL2 is a development adapter. This choice does not enter the portable project, topology or service contracts.
 
 ## ADR-015: Project mode and direct-role mode coexist
 
 Status: Accepted.
 
-The portable project compiler provides the platform workflow, while every production role remains callable with manual inventory and ordinary role variables. This prevents the service automation from becoming dependent on the project editor or compiler.
+The portable project resolver provides the platform workflow, while every production role remains callable with manual inventory and ordinary role variables. This prevents service automation from becoming dependent on the project editor or resolver.
 
 ## ADR-016: Project files, not SQLite, own desired state
 
 Status: Accepted.
 
-The future backend may index and revision projects in SQLite, but the managed project file remains authoritative. SQLite owns discovered, execution, audit and local-environment state.
+The future backend may index and revision projects in SQLite, but the managed Ansible project directory remains authoritative. SQLite owns discovered, execution, audit and local-environment state.
 
 ## ADR-017: Certificate profile and scope are distinct
 
 Status: Accepted.
 
 A profile defines issuance, key and SAN policy. A scope explicitly defines one aggregation boundary and its topology/endpoint sources. Certificates are never implicitly created per service member.
+
+## ADR-018: Semantic YAML round trips
+
+Status: Accepted.
+
+Project import/export preserves semantics and declared unknown extensions. Byte-identical formatting and comments are not guaranteed, and V2 will not introduce a complex YAML AST editor without demonstrated need.
+
+## ADR-019: One boundary-enforced monorepo
+
+Status: Accepted.
+
+Ansible Core, service packages, published contracts, backend and frontend start in one repository with explicit dependency rules. Core and roles remain independently testable, distributable and usable without Installer.

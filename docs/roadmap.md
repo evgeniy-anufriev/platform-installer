@@ -33,29 +33,33 @@ Not ready when:
 Deliverables:
 
 - Ansible collection/package layout;
+- monorepo dependency boundaries and independently packageable Core/service-role targets;
 - draft JSON/YAML schemas for project, service manifest, plan, event and result;
-- standalone launcher spike;
+- standard Ansible project layout and documented `ansible-playbook` invocations;
 - example projects for zero, one and multiple deployments;
 - schema validation tests.
 
 Ready when:
 
 - a project can be validated on Linux without Go/UI;
+- validation runs through standard `ansible-playbook` with normal inventory, `group_vars` and `host_vars`;
 - invalid references and modes produce structured diagnostics;
 - no plaintext-secret field exists in schemas;
-- format and exit-code behavior are documented.
+- format and exit-code behavior are documented;
+- Core validation/tests run without backend or frontend source dependencies.
 
 Not ready when:
 
 - validation depends on Installer DTOs;
 - service lists or modes are hard-coded in a client;
-- schema errors require reading a Python/Ansible traceback.
+- schema errors require reading a Python/Ansible traceback;
+- a proprietary launcher is required.
 
-### CORE-02: Deterministic topology compiler
+### CORE-02: Deterministic topology resolution
 
 Deliverables:
 
-- project-to-inventory/group_vars compiler;
+- deterministic project resolver over inventory, `group_vars` and `host_vars`;
 - explicit placement and dependency resolution;
 - endpoint and certificate-scope resolution;
 - canonical plan fingerprint;
@@ -65,9 +69,9 @@ Ready when:
 
 - identical inputs produce byte-stable logical output and fingerprint;
 - two deployments of the same service remain isolated;
-- no deployment produces no role invocation;
+- a service type absent from the project produces no role invocation;
 - conflicts block planning with precise diagnostics;
-- generated inventory is disposable and reproducible.
+- resolved execution groups/runtime variables are disposable and reproducible.
 
 Not ready when:
 
@@ -104,50 +108,57 @@ Not ready when:
 
 ## Phase C — First production service
 
-### SERVICE-01: Select and freeze service scope
+### SERVICE-01A: Kafka KRaft standalone
 
 Deliverables:
 
-- chosen service and supported modes;
+- Kafka KRaft single-node service package and role;
 - supported target matrix marked as test targets, not certification claims;
-- package, topology, endpoint, TLS, secret and verification requirements;
+- offline package acquisition, Java, configuration and systemd management;
+- minimal endpoint/TLS hooks required by the agreed slice;
+- service health and KRaft verification;
 - acceptance fixture set.
 
 Ready when:
 
-- scope exercises the Core contracts adequately;
+- clean single-node installation succeeds through standard `ansible-playbook`;
+- a second run has no avoidable changes;
+- failure and verification results are structured and actionable;
 - unsupported features are explicit;
 - integration hosts and offline artifacts are available.
 
 Not ready when:
 
-- “production service” means only writing defaults/schema;
-- HA behavior or destructive initialization remains ambiguous.
+- the role is only defaults/schema/set_fact;
+- the target requires manual repair;
+- the slice silently claims unsupported security/listener features.
 
-### SERVICE-02: Production role and standalone deployment
+### SERVICE-01B: Kafka KRaft distributed
 
 Deliverables:
 
-- complete role and verification;
-- offline package/artifact paths;
-- standalone examples;
+- controller/broker/combined member roles and explicit placements;
+- stable node identities and deterministic quorum configuration;
+- multiple independent Kafka deployments;
+- distributed verification and failure evidence;
 - RED OS and ALT Linux integration evidence where environments are available;
 - failure, retry and idempotency tests.
 
 Ready when:
 
-- clean installation succeeds from standalone Core;
+- clean distributed installation succeeds from standalone Core;
 - second run has no avoidable changes;
 - configuration changes converge predictably;
 - failure is actionable and resumable;
 - secrets and host keys remain protected;
-- service health and topology are verified, not assumed.
+- service health, membership and quorum are verified, not assumed.
 
 Not ready when:
 
 - manual target repair is required;
 - only the happy path is tested;
-- the role needs Go-generated internal objects.
+- the role needs Go-generated internal objects;
+- the role chooses or moves placements itself.
 
 ## Phase D — Stable project contract
 
@@ -165,6 +176,7 @@ Ready when:
 
 - first production service no longer requires ad hoc contract exceptions;
 - examples round-trip without semantic loss;
+- declared unknown extensions survive semantic YAML round trips;
 - older supported project versions have deterministic migration or explicit rejection;
 - Core versions declare compatible contract ranges.
 
@@ -180,15 +192,16 @@ Not ready when:
 
 Deliverables:
 
-- typed invocation of inspect/validate/plan/apply/verify;
+- typed invocation of the published validate/plan/apply/verify playbooks and artifacts;
 - normalized event streaming;
 - execution-node transport abstraction;
+- dedicated Linux execution-node production adapter and WSL2 development adapter boundary;
 - cancellation, timeout and lost-process recovery;
 - contract conformance tests against standalone Core.
 
 Ready when:
 
-- backend launches the exact same Core distribution operators use directly;
+- backend launches the same standard Core playbooks operators use directly;
 - it contains no service-specific topology rules;
 - active and interrupted runs are recovered correctly;
 - execution mechanisms can be replaced behind one port.

@@ -2,7 +2,7 @@
 
 ## Product contract
 
-Ansible Core must be installable and usable without Platform Installer. A Linux operator must be able to take a portable project and offline bundle and run the complete lifecycle from a documented command surface.
+Ansible Core must be installable and usable without Platform Installer. A Linux operator must be able to take a portable Ansible project and offline bundle and run the complete lifecycle with standard `ansible-playbook` commands.
 
 The lifecycle is:
 
@@ -42,7 +42,6 @@ platform-ansible-core/
   artifacts/
     manifest.yml
   examples/
-  bin/
   docs/
 ```
 
@@ -69,7 +68,7 @@ Production roles must also work with conventional manual inventory and variables
 
 ```text
 manual inventory + group_vars/host_vars -> role
-portable project -> compiler -> generated inventory/vars -> same role
+portable project -> resolver -> ordinary resolved role variables -> same role
 ```
 
 Rules:
@@ -85,9 +84,23 @@ Rules:
 - `no_log` and restrictive temporary files for sensitive operations;
 - safe structured failure plus retained sanitized stdout/stderr.
 
-## Compiler and projections
+## Project input and resolved projections
 
-The portable project is compiled into an ephemeral workspace:
+The initial portable project is a normal Ansible project:
+
+```text
+project/
+  project.yml                  # metadata, catalog/artifact locks
+  inventory/hosts.yml         # desired hosts and normal Ansible groups
+  group_vars/all/platform.yml # service topology, endpoints and policies
+  group_vars/<group>.yml       # ordinary service/group overrides
+  host_vars/<host>.yml         # host/member desired overrides
+  ansible.cfg
+```
+
+This multi-file layout is one versioned project contract. It avoids a proprietary launcher and does not make the role contract depend on a monolithic Installer DTO.
+
+Core playbooks validate the project and produce an ephemeral resolved workspace:
 
 ```text
 .runtime/<run-id>/
@@ -100,7 +113,7 @@ The portable project is compiled into an ephemeral workspace:
   result.json
 ```
 
-The compiler must:
+The resolver must:
 
 - validate every reference before generation;
 - resolve service modes, member roles and dependencies;
@@ -113,19 +126,20 @@ The compiler must:
 
 Generated workspaces are disposable evidence, not editable project state.
 
-## Commands
+## Standard playbook interface
 
-The final launcher technology is deferred. Its behavioral interface is stable:
+The initial public interface uses standard commands such as:
 
 ```text
-platform-ansible inspect <project>
-platform-ansible validate <project> [--facts <snapshot>]
-platform-ansible plan <project> [--facts <snapshot>] --output <plan>
-platform-ansible apply <project> --plan <plan> --secrets-provider <provider>
-platform-ansible verify <project> [--result <path>]
+ansible-playbook -i inventory/hosts.yml platform.core.validate
+ansible-playbook -i inventory/hosts.yml platform.core.plan
+ansible-playbook -i inventory/hosts.yml platform.core.apply
+ansible-playbook -i inventory/hosts.yml platform.core.verify
 ```
 
-Commands return documented exit codes and write machine-readable outputs separately from human diagnostics. The launcher must run on the supported Linux execution environment and remain callable directly by operators and by the future Go adapter.
+Exact FQCN/playbook paths and required non-secret extra variables are defined during CORE-01. The contract requires standard Ansible inventory and automatic loading of normal `group_vars`/`host_vars`. Playbooks write versioned machine-readable artifacts separately from human diagnostics and return documented exit behavior.
+
+A later convenience CLI may wrap these commands, but it remains optional and Ansible Core, projects and roles must work identically without it.
 
 ## Plan
 

@@ -4,19 +4,18 @@ This document defines the layers that will be designed in detail only after the 
 
 ## Go backend as an anti-corruption adapter
 
-The backend consumes the published Core protocol:
+The backend consumes the published Core playbook/artifact protocol through a typed `CoreClient`:
 
 ```text
-InspectProject
 ReadCatalog
-ValidateProject
-PlanProject
-ApplyPlan
-VerifyRun
-MigrateProject
+ValidateProject  -> platform.core.validate
+PlanProject      -> platform.core.plan
+ApplyPlan        -> platform.core.apply
+VerifyRun        -> platform.core.verify
+MigrateProject   -> explicit contract migration operation
 ```
 
-It does not invoke internal playbook names as its public application model and does not reconstruct Core decisions.
+The adapter maps application operations to the published standard playbooks and versioned artifacts. It does not depend on internal role task names and does not reconstruct Core decisions.
 
 Recommended ports:
 
@@ -33,7 +32,7 @@ Recommended ports:
 
 ## Persistence
 
-The managed project directory contains canonical desired state. SQLite, if retained, stores local operational data:
+The managed Ansible project directory—`project.yml`, inventory, `group_vars` and `host_vars`—contains canonical desired state. SQLite, if retained, stores local operational data:
 
 - project index, path, revision and digest;
 - execution-environment bindings;
@@ -51,8 +50,8 @@ Project save is atomic:
 1. receive a document or typed patch with expected revision;
 2. validate through Core;
 3. reject revision conflict;
-4. write a temporary sibling file;
-5. atomically replace the canonical file;
+4. write affected files to a temporary project staging area;
+5. atomically replace the affected canonical files or project revision;
 6. update index/digest;
 7. publish the new revision.
 

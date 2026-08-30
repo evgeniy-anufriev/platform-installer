@@ -25,7 +25,7 @@ The architecture optimizes for:
                                │
 ┌──────────────────────────────▼────────────────────────────────┐
 │ Standalone Ansible Core                                       │
-│ schema validation | topology compiler | inventory projection  │
+│ schema validation | topology resolver | execution projection  │
 │ plan | roles | verification | events/results                  │
 └──────────────────────────────┬────────────────────────────────┘
                                │ SSH/become
@@ -39,7 +39,7 @@ Optional clients of the same boundary:
 └──────────────────────────┘       └────────────────────────────┘
 ```
 
-`Ansible Core` means the independently distributable automation product, not only upstream `ansible-core`. It may contain an Ansible collection, roles, playbooks, inventory/validation plugins, schemas, callbacks and a small standalone launcher. It must not depend on Go or the Installer database.
+`Ansible Core` means the independently distributable automation product, not only upstream `ansible-core`. It may contain an Ansible collection, roles, standard playbooks, validation modules/plugins, schemas and callbacks. Its initial public interface is standard `ansible-playbook`; it has no required proprietary launcher and does not depend on Go or the Installer database.
 
 ## Three layers
 
@@ -55,7 +55,7 @@ Owns:
 - apply-time safety assertions;
 - target verification;
 - normalized events and execution result contract;
-- standalone CLI/command contract.
+- standard `ansible-playbook` invocation contract.
 
 It does not own GUI state, SQLite identities, Wails DTOs or desktop lifecycle.
 
@@ -121,7 +121,7 @@ Examples supported by the same model:
 - two independent `pg_auto_failover` deployments;
 - no PostgreSQL deployment at all.
 
-Ansible inventory is a deterministic derived projection. Roles apply the resolved topology; they do not silently choose placement.
+The portable project initially uses normal Ansible inventory, `group_vars` and `host_vars` as desired input. Service topology remains explicit data rather than being inferred from ad hoc group membership. Core deterministically resolves execution groups and runtime role variables from that input. Roles apply the selected placement; they do not silently choose it.
 
 ## Distribution model
 
@@ -134,7 +134,7 @@ The standalone distribution is a digest-locked offline bundle containing:
 - artifact manifest and signatures/trust metadata;
 - examples and operator documentation.
 
-The precise production execution packaging—dedicated node, container or another Linux environment—is an adapter decision and does not affect project or role contracts.
+The production baseline is a dedicated Linux execution node; WSL2 is limited to a development adapter. Container or other future execution mechanisms remain adapter choices and do not affect project or role contracts. The monorepo boundary keeps Core and service roles independently packageable and testable despite sharing one source repository with the later backend and frontend.
 
 ## Security invariants
 

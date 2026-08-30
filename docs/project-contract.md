@@ -2,27 +2,30 @@
 
 ## Purpose
 
-The portable project is the single canonical desired state shared by standalone Ansible, the future backend and the UI. It is human-reviewable, schema-validatable, versioned and free of discovered facts, execution state and plaintext secrets.
+The portable project directory is the single canonical desired state shared by standalone Ansible, the future backend and the UI. It uses standard inventory, `group_vars` and `host_vars`, is human-reviewable and versioned, and is free of discovered facts, execution state and plaintext secrets.
+
+## Physical layout
+
+```text
+project/
+  project.yml
+  inventory/hosts.yml
+  group_vars/all/platform.yml
+  group_vars/<service-or-operator-group>.yml
+  host_vars/<host>.yml
+  ansible.cfg
+```
+
+The contract covers the directory as a whole. `project.yml` carries metadata and locks; inventory declares desired hosts; platform topology and policy live in an ordinary group variable document; service and host overrides use normal Ansible variable precedence within the restrictions defined by the contract.
 
 ## Root outline
 
-The illustrative shape below is not yet a final schema:
+The illustrative `platform.yml` shape below is not yet a final schema:
 
 ```yaml
-apiVersion: platform.installer/v2alpha1
-kind: PlatformProject
-metadata:
+platform_project:
+  apiVersion: platform.installer/v2alpha1
   id: production-scada
-  name: Production SCADA
-
-catalog:
-  lock: catalog.lock.yml
-
-hosts:
-  redos-node1:
-    address: 192.168.56.101
-    desiredHostname: redos-node1
-    preparationProfile: default-redos
 
 serviceDeployments:
   accounting-db:
@@ -88,7 +91,7 @@ This supports multiple independent deployments of one type without duplicating s
 
 The catalog answers “what can this Core install?” The project answers “what does this customer want installed?”
 
-If PostgreSQL is in the catalog but absent from `serviceDeployments`, no PostgreSQL plan action, role invocation, group or variables are generated. If two PostgreSQL deployments exist, both are projected independently using the same pinned definition.
+If PostgreSQL is in the catalog but absent from `serviceDeployments`, no PostgreSQL plan action, role invocation or resolved execution group is generated. If two PostgreSQL deployments exist, both are resolved independently using the same pinned definition. PostgreSQL scenarios remain conformance fixtures while Kafka KRaft is implemented first.
 
 ## Desired/discovered/resolved separation
 
@@ -97,7 +100,7 @@ Not stored in the portable desired project:
 - CPU, memory and OS facts discovered from hosts;
 - SSH reachability and sudo probe results;
 - compatibility evaluation outcomes;
-- generated inventory;
+- generated execution groups and runtime variables;
 - resolved ports, SAN lists or dependency DAG;
 - active run state and logs;
 - plaintext credentials.
@@ -149,7 +152,7 @@ Common Name selection is deterministic but SAN remains the primary identity:
 
 ## Dependencies
 
-Dependencies reference deployments and declared capabilities/listeners rather than copied IP lists. The compiler builds a DAG, rejects missing/cyclic mandatory dependencies and passes resolved values to roles.
+Dependencies reference deployments and declared capabilities/listeners rather than copied IP lists. The resolver builds a DAG, rejects missing/cyclic mandatory dependencies and passes resolved values to roles.
 
 ## Configuration sources
 
@@ -158,7 +161,7 @@ Effective role values are composed from distinct sources:
 - `DEFAULT`: immutable service/role defaults;
 - `OVERRIDE`: desired project configuration;
 - `NODE`: placement-specific input;
-- `COMPUTED`: deterministic compiler output;
+- `COMPUTED`: deterministic resolver output;
 - `RUNTIME`: ephemeral execution values;
 - `SECRET`: runtime-only secret material.
 

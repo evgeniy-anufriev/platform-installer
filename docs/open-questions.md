@@ -1,50 +1,56 @@
-# Open architecture questions
+# Architecture owner decisions and deferred questions
 
-These questions do not block the architecture baseline unless stated otherwise.
+## Resolved owner decisions
 
-## OQ-001: First production service
+### OQ-001: First production service
 
-Status: NEEDS OWNER DECISION before `SERVICE-01`.
+Status: RESOLVED.
 
-Candidates:
+Kafka KRaft is the first production service, split into two independently gated slices:
 
-- Kafka KRaft: exercises Java, offline artifacts, systemd, TLS, listener identity and distributed quorum; V1 contains an initial contract example.
-- PostgreSQL: directly exercises the most important topology examples—standalone, Patroni and pg_auto_failover—but the first production scope is larger if all modes are included.
+- `SERVICE-01A`: standalone/single-node KRaft;
+- `SERVICE-01B`: distributed KRaft.
 
-Recommendation: use Kafka KRaft single-node followed immediately by distributed KRaft as the first Core proof, while keeping PostgreSQL multi-deployment fixtures in the project-contract conformance suite. If PostgreSQL is the commercial priority, restrict the first production slice to standalone before adding HA modes.
+The first slice intentionally excludes the full security/listener feature set. PostgreSQL standalone, Patroni and two independent pg_auto_failover deployments remain project-contract fixtures, not first-service implementation scope.
 
-## OQ-002: Standalone launcher technology
+### OQ-002: Standalone interface
 
-Status: DEFERRED to `CORE-01` spike.
+Status: RESOLVED.
 
-Compare a Python launcher shipped with the collection, an Ansible-native plugin/command and a small packaged executable. Selection criteria are offline installation, predictable dependencies, Windows independence, version negotiation and maintainability.
+The initial canonical interface is standard `ansible-playbook` with normal inventory, `group_vars` and `host_vars`. No proprietary launcher is introduced. A convenience CLI may be proposed later only from demonstrated operational need, and Ansible Core must never depend on it.
 
-## OQ-003: Initial production execution environment
+### OQ-003: Initial production execution environment
 
-Status: DEFERRED until Core prerequisites are measured.
+Status: RESOLVED.
 
-The project contract is neutral. Initial expectation remains a dedicated Linux execution node; WSL2 is a development adapter. Container/bundled Linux options remain possible.
+The production baseline is a dedicated Linux execution node. WSL2 is a development adapter. The portable project and service-role contracts remain execution-environment neutral.
 
-## OQ-004: Automatic placement
+### OQ-004: Automatic placement
 
-Status: DEFERRED.
+Status: RESOLVED FOR INITIAL V2.
 
-V2 first supports explicit placement. Auto-placement requires deterministic scoring, explanation and an operator-accepted project patch; it may never mutate explicit placements silently.
+Initial V2 supports explicit placement only. A future placement engine may produce an explainable proposed project patch, but cannot apply it without operator acceptance.
 
-## OQ-005: Signature technology
+### OQ-005: Signature technology
 
-Status: DEFERRED.
+Status: DEFERRED; no owner input required now.
 
-The bundle trust envelope is signature-neutral. Concrete technology and trust-root lifecycle require a separate security decision.
+Bundle and signature contracts remain extensible. No concrete signature technology is selected during the initial Core milestones.
 
-## OQ-006: Canonical YAML preservation
+### OQ-006: YAML preservation
 
-Status: PROPOSED.
+Status: RESOLVED.
 
-Guarantee semantic and extension-preserving round trips, not byte-identical formatting/comments. Confirm before UI import/export implementation.
+Import/export guarantees semantic preservation and preservation of declared unknown extensions. It does not guarantee byte-identical formatting or comments. A complex round-trip YAML AST editor is out of scope until a demonstrated requirement justifies it.
 
-## OQ-007: Repository packaging
+### OQ-007: Repository packaging
 
-Status: PROPOSED.
+Status: RESOLVED.
 
-Start as one V2 repository with independently bounded `ansible-core`, service packages, contracts, backend and frontend directories. Split service packages or Core into separate repositories only when release cadence or access-control evidence justifies it.
+V2 begins as one monorepo with strict boundaries between Ansible Core, service roles/packages, contracts, Installer backend and frontend. Ansible Core and service roles remain independently testable and usable without Installer.
+
+## Remaining decisions requiring owner input
+
+None currently block `CORE-01` through `CORE-03`.
+
+Before later milestones, owner input will be requested only if implementation evidence exposes a product-policy choice, such as reducing the agreed Kafka scope or choosing a specific trust/signature technology. Technical details such as exact schema layout, Ansible collection structure and supported compatibility entries are resolved through milestone design and integration evidence rather than assumed owner policy.
