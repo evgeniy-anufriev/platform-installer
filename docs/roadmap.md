@@ -1,0 +1,284 @@
+# V2 roadmap and milestone gates
+
+The roadmap is dependency-based, not a calendar promise. A milestone is complete only when every “ready” criterion is demonstrated. Partial implementation does not unlock the next architectural layer.
+
+## Phase A — Architecture baseline
+
+### ARCH-01: Repository and boundaries
+
+Deliverables:
+
+- independent V2 repository;
+- canonical architecture, project contract and decision log;
+- explicit V1 reuse/reject policy;
+- risk and deferred-decision list.
+
+Ready when:
+
+- Ansible/Core, backend and UI responsibilities have no intentional overlap;
+- topology and standalone operation are represented;
+- no application code has been introduced before contract approval;
+- owner approves the baseline.
+
+Not ready when:
+
+- Go or React is still required to produce runnable Ansible input;
+- topology is represented only as inventory;
+- service definitions are owned by more than one layer.
+
+## Phase B — Standalone Ansible Core foundation
+
+### CORE-01: Repository and contract skeleton
+
+Deliverables:
+
+- Ansible collection/package layout;
+- draft JSON/YAML schemas for project, service manifest, plan, event and result;
+- standalone launcher spike;
+- example projects for zero, one and multiple deployments;
+- schema validation tests.
+
+Ready when:
+
+- a project can be validated on Linux without Go/UI;
+- invalid references and modes produce structured diagnostics;
+- no plaintext-secret field exists in schemas;
+- format and exit-code behavior are documented.
+
+Not ready when:
+
+- validation depends on Installer DTOs;
+- service lists or modes are hard-coded in a client;
+- schema errors require reading a Python/Ansible traceback.
+
+### CORE-02: Deterministic topology compiler
+
+Deliverables:
+
+- project-to-inventory/group_vars compiler;
+- explicit placement and dependency resolution;
+- endpoint and certificate-scope resolution;
+- canonical plan fingerprint;
+- golden fixtures and property/invariant tests.
+
+Ready when:
+
+- identical inputs produce byte-stable logical output and fingerprint;
+- two deployments of the same service remain isolated;
+- no deployment produces no role invocation;
+- conflicts block planning with precise diagnostics;
+- generated inventory is disposable and reproducible.
+
+Not ready when:
+
+- roles choose hidden placements;
+- service instance IDs become endpoint DNS names implicitly;
+- output ordering changes between runs;
+- generated files must be manually edited.
+
+### CORE-03: Runtime, events and security foundation
+
+Deliverables:
+
+- apply/verify lifecycle;
+- runtime secret-provider contract;
+- normalized callback events and result;
+- cancellation and interruption semantics;
+- offline artifact/trust verification;
+- sanitized full diagnostics.
+
+Ready when:
+
+- apply executes only a matching fingerprinted plan;
+- a wrong/missing credential fails safely without leakage;
+- cancellation prevents later phases from starting;
+- exact actionable errors and full sanitized diagnostics are available;
+- a second no-change execution is measurable.
+
+Not ready when:
+
+- consumers parse human stdout as the primary protocol;
+- secrets occur in commands, events or plan files;
+- public repositories are used implicitly;
+- apply reconstructs a different plan.
+
+## Phase C — First production service
+
+### SERVICE-01: Select and freeze service scope
+
+Deliverables:
+
+- chosen service and supported modes;
+- supported target matrix marked as test targets, not certification claims;
+- package, topology, endpoint, TLS, secret and verification requirements;
+- acceptance fixture set.
+
+Ready when:
+
+- scope exercises the Core contracts adequately;
+- unsupported features are explicit;
+- integration hosts and offline artifacts are available.
+
+Not ready when:
+
+- “production service” means only writing defaults/schema;
+- HA behavior or destructive initialization remains ambiguous.
+
+### SERVICE-02: Production role and standalone deployment
+
+Deliverables:
+
+- complete role and verification;
+- offline package/artifact paths;
+- standalone examples;
+- RED OS and ALT Linux integration evidence where environments are available;
+- failure, retry and idempotency tests.
+
+Ready when:
+
+- clean installation succeeds from standalone Core;
+- second run has no avoidable changes;
+- configuration changes converge predictably;
+- failure is actionable and resumable;
+- secrets and host keys remain protected;
+- service health and topology are verified, not assumed.
+
+Not ready when:
+
+- manual target repair is required;
+- only the happy path is tested;
+- the role needs Go-generated internal objects.
+
+## Phase D — Stable project contract
+
+### CONTRACT-01: V2 contract release candidate
+
+Deliverables:
+
+- versioned schemas and compatibility policy;
+- catalog/artifact lock format;
+- migration rules;
+- import/export round-trip fixtures;
+- contract conformance suite.
+
+Ready when:
+
+- first production service no longer requires ad hoc contract exceptions;
+- examples round-trip without semantic loss;
+- older supported project versions have deterministic migration or explicit rejection;
+- Core versions declare compatible contract ranges.
+
+Not ready when:
+
+- changing UI needs changes to the canonical schema;
+- generated state is stored as desired configuration;
+- service upgrades are not reproducible.
+
+## Phase E — Go backend adapter
+
+### BACKEND-01: Core process adapter
+
+Deliverables:
+
+- typed invocation of inspect/validate/plan/apply/verify;
+- normalized event streaming;
+- execution-node transport abstraction;
+- cancellation, timeout and lost-process recovery;
+- contract conformance tests against standalone Core.
+
+Ready when:
+
+- backend launches the exact same Core distribution operators use directly;
+- it contains no service-specific topology rules;
+- active and interrupted runs are recovered correctly;
+- execution mechanisms can be replaced behind one port.
+
+Not ready when:
+
+- backend rebuilds inventory independently;
+- a service requires a new backend execution branch;
+- WSL2 appears in domain models.
+
+### BACKEND-02: Project, secrets, runs and audit
+
+Deliverables:
+
+- transactional project lifecycle;
+- portable import/export;
+- runtime credential broker;
+- persisted run/result metadata and sanitized log references;
+- UI-oriented read models.
+
+Ready when:
+
+- deleting one project cannot affect unrelated/global data;
+- plaintext secrets never enter persistence;
+- project export runs standalone;
+- concurrency and stale-plan gates are enforced server-side.
+
+Not ready when:
+
+- SQLite becomes a second desired-state schema;
+- UI must coordinate multi-call transactional mutations.
+
+## Phase F — UI visual editor
+
+### UI-01: Project, hosts and topology editor
+
+Deliverables:
+
+- project lifecycle;
+- service catalog driven by Core manifests;
+- multiple deployments per service type;
+- explicit member placement and dependency editing;
+- endpoint binding editor;
+- validation projection.
+
+Ready when:
+
+- standalone, Patroni and multiple independent cluster scenarios are expressible;
+- a customer can omit an available service entirely;
+- no implicit Kafka/PostgreSQL instance is created;
+- exported project matches the editor state and runs standalone.
+
+Not ready when:
+
+- React contains a parallel service/mode catalog;
+- changing tabs loses desired state;
+- raw internal IDs or translation keys appear in normal UI.
+
+### UI-02: Installation workflow
+
+Deliverables:
+
+- readiness, plan, confirmation, execution and result views;
+- execution-node configuration/preparation;
+- certificate configuration and derived preview;
+- structured progress, cancellation and diagnostics;
+- offline help.
+
+Ready when:
+
+- UI survives navigation and restores backend-owned active state;
+- raw Ansible events are normalized before presentation;
+- blocked/action-required/warning semantics are distinct;
+- complete workflow uses only stable backend/Core contracts.
+
+Not ready when:
+
+- frontend parses callback text;
+- UI can mutate without an approved plan;
+- passwords or internal URIs are rendered.
+
+## Phase G — Expansion
+
+### SERVICE-N: Additional production services
+
+Each additional service is delivered as a service package plus fixtures and evidence. Adding it must not require changes to topology engine, backend execution branches or the base frontend catalog.
+
+Ready when:
+
+- catalog discovery makes the service available automatically;
+- generic validation/plan/apply/result paths are reused;
+- only genuinely specialized UI uses an optional extension component;
+- standalone and Installer executions are equivalent.

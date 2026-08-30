@@ -1,0 +1,15 @@
+# Generated Ansible workspaces and runtime evidence
+.runtime/
+runs/
+artifacts/
+
+# Secrets must never be committed
+secrets/
+*.vault-password
+*.private-key
+
+# Local tools and editor state
+.idea/
+.vscode/
+*.tmp
+*.log
