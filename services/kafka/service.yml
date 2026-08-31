@@ -41,19 +41,44 @@ capabilities:
 dependencies: []
 configurationSchema:
   $ref: configuration.schema.json
-configurationMapping:
-  clientPort:
-    roleVariable: platform_kafka_client_port
-    scopes: [deployment, member]
-  controllerPort:
-    roleVariable: platform_kafka_controller_port
-    scopes: [deployment, member]
-  dataDirectory:
-    roleVariable: platform_kafka_data_directory
-    scopes: [deployment, member]
-  logRetentionHours:
-    roleVariable: platform_kafka_log_retention_hours
-    scopes: [deployment]
+configuration:
+  additionalProperties: true
+  settings:
+    clientPort:
+      kind: MANAGED
+      roleVariable: platform_kafka_client_port
+      type: integer
+      scopes: [deployment, member]
+      validation: {minimum: 1, maximum: 65535}
+      ui: {label: Client port, order: 10}
+    controllerPort:
+      kind: MANAGED
+      roleVariable: platform_kafka_controller_port
+      type: integer
+      scopes: [deployment, member]
+      validation: {minimum: 1, maximum: 65535}
+      ui: {label: Controller port, order: 20}
+    dataDirectory:
+      kind: MANAGED
+      roleVariable: platform_kafka_data_directory
+      type: string
+      scopes: [deployment, member]
+      validation: {minLength: 1}
+      ui: {label: Data directory, order: 30}
+    logRetentionHours:
+      kind: MANAGED
+      roleVariable: platform_kafka_log_retention_hours
+      type: integer
+      scopes: [deployment]
+      validation: {minimum: 1}
+      ui: {label: Log retention hours, order: 40}
+    advancedConfig:
+      kind: ADVANCED
+      roleVariable: platform_kafka_advanced_config
+      type: object
+      scopes: [deployment]
+      validation: {additionalProperties: true}
+      ui: {label: Advanced Kafka properties, order: 90}
 roleEntrypoints:
   apply:
     fqcn: platform.kafka.kafka_kraft

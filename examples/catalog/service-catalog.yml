@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:1d3e591b4b5409d1b66d159ae0487b79743ae9827c7b548f04da021e8404d322
+digest: sha256:3aee454c6a3a2ce196636d55f1b336c0744e73b6f70596bc5a979b0566af2d99
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -64,26 +64,69 @@ definitions:
     dependencies: []
     configurationSchema:
       $ref: ../../services/kafka/configuration.schema.json
-    configurationMapping:
-      clientPort:
-        roleVariable: platform_kafka_client_port
-        scopes:
-        - deployment
-        - member
-      controllerPort:
-        roleVariable: platform_kafka_controller_port
-        scopes:
-        - deployment
-        - member
-      dataDirectory:
-        roleVariable: platform_kafka_data_directory
-        scopes:
-        - deployment
-        - member
-      logRetentionHours:
-        roleVariable: platform_kafka_log_retention_hours
-        scopes:
-        - deployment
+    configuration:
+      additionalProperties: true
+      settings:
+        clientPort:
+          kind: MANAGED
+          roleVariable: platform_kafka_client_port
+          type: integer
+          scopes:
+          - deployment
+          - member
+          validation:
+            minimum: 1
+            maximum: 65535
+          ui:
+            label: Client port
+            order: 10
+        controllerPort:
+          kind: MANAGED
+          roleVariable: platform_kafka_controller_port
+          type: integer
+          scopes:
+          - deployment
+          - member
+          validation:
+            minimum: 1
+            maximum: 65535
+          ui:
+            label: Controller port
+            order: 20
+        dataDirectory:
+          kind: MANAGED
+          roleVariable: platform_kafka_data_directory
+          type: string
+          scopes:
+          - deployment
+          - member
+          validation:
+            minLength: 1
+          ui:
+            label: Data directory
+            order: 30
+        logRetentionHours:
+          kind: MANAGED
+          roleVariable: platform_kafka_log_retention_hours
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+          ui:
+            label: Log retention hours
+            order: 40
+        advancedConfig:
+          kind: ADVANCED
+          roleVariable: platform_kafka_advanced_config
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: true
+          ui:
+            label: Advanced Kafka properties
+            order: 90
     roleEntrypoints:
       apply:
         fqcn: platform.kafka.kafka_kraft
@@ -101,7 +144,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: deferred
-    x-definitionDigest: sha256:e30eafc78be252a82aca06dfba6e588939aca0597a7762f3e7f1a614572b6508
+    x-definitionDigest: sha256:fe128ff91c1dea0762be0d90c4097464a6c83cdee03f7d319d896493947c4606
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1

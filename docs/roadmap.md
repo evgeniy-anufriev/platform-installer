@@ -140,6 +140,18 @@ reference states, source metadata and deterministic fingerprints.
 The milestone does not implement a Jinja interpreter, facts, lookups, runtime
 role-variable generation, plan/apply/verify, or production services.
 
+### CORE-05: Canonical service metadata and variable preservation
+
+Status: DONE. Service packages now author canonical managed/advanced setting
+metadata in `service.yml`; tracked `configuration.schema.json` files are
+deterministically generated and checked for reproducibility. Role defaults
+remain standalone Ansible's canonical default/Jinja source.
+
+CORE-05 preserves unknown group and host variables as opaque pass-through
+values with physical origin. Managed configuration and opaque input have
+separate deterministic fingerprints, and an explicit future mapping promotes
+an existing opaque role variable without rewriting its stored value.
+
 ## Phase C — First production service
 
 ### SERVICE-01A: Kafka KRaft standalone

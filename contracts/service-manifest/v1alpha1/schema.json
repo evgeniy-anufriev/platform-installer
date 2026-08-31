@@ -72,6 +72,20 @@
         "additionalProperties": false
       }
     },
+    "configuration": {
+      "type": "object",
+      "required": ["settings"],
+      "properties": {
+        "additionalProperties": { "type": "boolean" },
+        "unevaluatedProperties": { "type": "boolean" },
+        "settings": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/configurationSetting" }
+        }
+      },
+      "additionalProperties": false
+    },
     "roleEntrypoints": {
       "type": "object",
       "required": ["apply", "verify"],
@@ -101,6 +115,13 @@
       "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "not": {
+        "required": ["configuration", "configurationMapping"]
+      }
+    }
+  ],
   "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
   "additionalProperties": false,
   "$defs": {
@@ -199,6 +220,36 @@
         "requiredOffline": { "type": "boolean", "default": true }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "configurationSetting": {
+      "type": "object",
+      "required": ["kind", "roleVariable", "type", "scopes", "validation"],
+      "properties": {
+        "kind": { "enum": ["MANAGED", "ADVANCED"] },
+        "roleVariable": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "type": { "enum": ["string", "integer", "number", "boolean", "object", "array", "null"] },
+        "scopes": {
+          "type": "array",
+          "items": { "enum": ["deployment", "member"] },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "validation": { "type": "object" },
+        "ui": {
+          "type": "object",
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "description": { "type": "string" },
+            "order": { "type": "integer" }
+          },
+          "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+          "additionalProperties": false
+        }
+      },
       "additionalProperties": false
     }
   }

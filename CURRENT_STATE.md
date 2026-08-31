@@ -49,9 +49,12 @@ SERVICE-01A - Kafka KRaft standalone installation and verification.
   static references resolve deterministically, with `UNRESOLVED` and `CYCLIC`
   findings where applicable.
 - Explicit service-package configuration mappings and Kafka role defaults.
+- Canonical service-manifest metadata for managed and advanced settings, with
+  generated tracked configuration schemas and defaults conformance checks.
 - Structured findings for unsupported member-scoped settings.
 - Opaque/pass-through variables retain physical origin and redact secret-like
-  values without becoming managed settings.
+  values without becoming managed settings; their deterministic fingerprint is
+  separate from managed configuration fingerprints.
 - Independent deterministic member projections and configuration fingerprints.
 - Portable valid/invalid fixtures, including Kafka and PostgreSQL topology cases.
 - Kafka 4.3.1 single-node combined broker/controller role with offline artifact,
@@ -72,6 +75,10 @@ SERVICE-01A - Kafka KRaft standalone installation and verification.
   verify passed with `changed=0` and no storage re-format.
 - RED OS controller VM: offline apply through `sudo unshare -n` passed with
   `changed=0`.
+- RED OS controller VM: CORE-05 contract/resolver suite, full Core regression,
+  generated-schema check, catalog check and offline `unshare -n` check passed.
+- RED OS controller VM: Kafka SERVICE-01A apply, verify and repeat apply passed
+  with `changed=0` after the metadata migration.
 - No temporary remote QA workspace or artifact copy remained after QA.
 
 ## Not implemented
@@ -86,6 +93,6 @@ SERVICE-01A - Kafka KRaft standalone installation and verification.
 
 ## Next gate
 
-CORE-01, CORE-02, CORE-03, CORE-04 and SERVICE-01A are complete. The next gate
+CORE-01, CORE-02, CORE-03, CORE-04, CORE-05 and SERVICE-01A are complete. The next gate
 is `SERVICE-01B` Kafka KRaft distributed operation. It must be requested
 explicitly before distributed service tasks begin.

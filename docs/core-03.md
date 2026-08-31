@@ -15,8 +15,10 @@ variables, or Ansible files.
 
 ## Sources
 
-- Role defaults in `roles/<service>/defaults/main.yml` are the canonical
-  defaults for the standalone role contract.
+- `service.yml` canonical setting metadata declares the logical-to-role-variable
+  mapping, type and validation contract. Role defaults in
+  `roles/<service>/defaults/main.yml` remain the canonical defaults for the
+  standalone role contract; generated schemas never replace them.
 - Deployment-level `serviceDeployments[*].configuration` in portable
   `group_vars` is the explicit logical override.
 - `host_vars` remain a physical-host context and `members[*].configuration`
@@ -32,7 +34,8 @@ the restricted exact-reference model are defined by CORE-04.
 
 ## Package mapping
 
-Each service package may declare versioned `configurationMapping` metadata:
+Each service package declares versioned canonical `configuration.settings`
+metadata. Legacy `configurationMapping` is read only as a compatibility form:
 
 ```yaml
 configurationMapping:
@@ -52,7 +55,7 @@ digests and findings. It does not contain role-variable dictionaries,
 endpoints, certificates, secrets, artifacts or generated files. Host identity
 is context metadata only; host variables never enter member precedence.
 
-The fingerprint includes canonical service identity/mode, effective logical
-configuration, service-definition/schema/default/mapping digests and excludes
-actual placement. A placement change changes `topologyFingerprint`, but does
-not change `configurationFingerprint` when logical configuration is unchanged.
+The managed fingerprint includes canonical service identity/mode, effective
+managed/advanced logical configuration and service-definition/schema/default
+digests. It excludes actual placement and opaque pass-through values. Opaque
+input receives its own `opaqueVariablesFingerprint`.

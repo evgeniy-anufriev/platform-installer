@@ -36,3 +36,8 @@ Ansible variables outside the declared service mapping are preserved as
 not rejected, dropped, assigned a semantic scope or exposed as managed
 settings. Secret-like opaque values are redacted. Their editing and
 classification belong to the future backend/UI milestone.
+
+CORE-05 adds explicit `GROUP_VARS`/`HOST_VARS` physical origins and a separate
+deterministic `opaqueVariablesFingerprint`. Opaque data does not enter the
+managed `configurationFingerprint`; physical origin never implies a semantic
+deployment or member scope.

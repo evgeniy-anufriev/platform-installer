@@ -21,10 +21,11 @@ def load_module(name, filename):
 
 VALIDATION = load_module("project_validation", "project_validation.py")
 RESOLUTION = load_module("topology_resolution_for_configuration", "topology_resolution.py")
+CONTRACT = load_module("service_configuration_contract", "service_configuration_contract.py")
 CONFIGURATION = load_module("service_configuration_resolution", "service_configuration_resolution.py")
 
 
-def catalog():
+def catalog(canonical=False):
     definition = {
         "metadata": {"id": "kafka", "version": "1"},
         "modes": {"kraft-standalone": {}},
@@ -35,6 +36,17 @@ def catalog():
             "logRetentionHours": {"roleVariable": "platform_kafka_log_retention_hours", "scopes": ["deployment"]},
         },
     }
+    if canonical:
+        definition.pop("configurationMapping")
+        definition["configuration"] = {
+            "additionalProperties": True,
+            "settings": {
+                "clientPort": {"kind": "MANAGED", "roleVariable": "platform_kafka_client_port", "type": "integer", "scopes": ["deployment", "member"], "validation": {"minimum": 1, "maximum": 65535}},
+                "dataDirectory": {"kind": "MANAGED", "roleVariable": "platform_kafka_data_directory", "type": "string", "scopes": ["deployment", "member"], "validation": {"minLength": 1}},
+                "logRetentionHours": {"kind": "MANAGED", "roleVariable": "platform_kafka_log_retention_hours", "type": "integer", "scopes": ["deployment"], "validation": {"minimum": 1}},
+                "advancedConfig": {"kind": "ADVANCED", "roleVariable": "platform_kafka_advanced_config", "type": "object", "scopes": ["deployment"], "validation": {"additionalProperties": True}},
+            },
+        }
     definition["x-definitionDigest"] = VALIDATION.canonical_digest(definition)
     unsigned = {
         "apiVersion": "platform.installer/catalog/v1alpha1",
@@ -80,26 +92,33 @@ def resolved(topology_value):
 
 
 class ServiceConfigurationResolutionTests(unittest.TestCase):
-    def resolve(self, project_topology, defaults=None, topology_result=None, host_contexts=None):
+    def resolve(self, project_topology, defaults=None, topology_result=None, host_contexts=None, variable_documents=None, service_catalog=None):
         project_topology = project_topology or topology()
+        selected_catalog = service_catalog or catalog()
+        definition = selected_catalog["definitions"]["kafka"]
+        selected_defaults = defaults if defaults is not None else {
+            "platform_kafka_client_port": 9092,
+            "platform_kafka_data_directory": "/var/lib/kafka",
+            "platform_kafka_log_retention_hours": 168,
+        }
+        if "configuration" in definition and "platform_kafka_advanced_config" not in selected_defaults:
+            selected_defaults = dict(selected_defaults, platform_kafka_advanced_config={})
+        selected_schema = CONTRACT.generated_schema(definition) if "configuration" in definition and "configurationMapping" not in definition else {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "clientPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "dataDirectory": {"type": "string", "minLength": 1},
+            },
+        }
         return CONFIGURATION.resolve_service_configuration(
             topology_result or resolved(project_topology),
             project_topology,
-            catalog(),
-            {"kafka": defaults or {
-                "platform_kafka_client_port": 9092,
-                "platform_kafka_data_directory": "/var/lib/kafka",
-                "platform_kafka_log_retention_hours": 168,
-            }},
-            {"kafka": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "clientPort": {"type": "integer", "minimum": 1, "maximum": 65535},
-                    "dataDirectory": {"type": "string", "minLength": 1},
-                },
-            }},
+            selected_catalog,
+            {"kafka": selected_defaults},
+            {"kafka": selected_schema},
             host_contexts=host_contexts,
+            variable_documents=variable_documents,
         )
 
     def test_materializes_literal_role_defaults_and_override(self):
@@ -241,6 +260,70 @@ class ServiceConfigurationResolutionTests(unittest.TestCase):
         result = self.resolve(topology({"clientPort": 0}))
         self.assertEqual("BLOCKED", result["status"])
         self.assertEqual("SERVICE_CONFIGURATION_MINIMUM_INVALID", result["findings"][0]["code"])
+
+    def test_canonical_settings_and_advanced_container_resolve(self):
+        project = topology({"advancedConfig": {"compression.type": "lz4"}})
+        result = self.resolve(project, service_catalog=catalog(canonical=True))
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual("MANAGED", catalog(canonical=True)["definitions"]["kafka"]["configuration"]["settings"]["clientPort"]["kind"])
+        self.assertEqual({"compression.type": "lz4"}, result["services"]["kafka-main"]["configuration"]["advancedConfig"]["value"])
+
+    def test_legacy_and_canonical_contract_conflict_is_blocked(self):
+        conflicted = catalog(canonical=True)
+        conflicted["definitions"]["kafka"]["configurationMapping"] = {"clientPort": {"roleVariable": "platform_kafka_client_port"}}
+        result = self.resolve(topology(), service_catalog=conflicted)
+        self.assertIn("SERVICE_CONFIGURATION_CONTRACT_CONFLICT", [item["code"] for item in result["findings"]])
+
+    def test_bound_group_vars_manage_known_and_preserve_unknown(self):
+        documents = [{
+            "kind": "GROUP_VARS", "deploymentId": "kafka-main", "serviceType": "kafka",
+            "groupId": "kafka-main", "logicalPath": "inventory/group_vars/kafka-main.yml",
+            "variables": {"platform_kafka_client_port": 9192, "platform_kafka_heap_size": "4g", "company_custom_variable": "abc"},
+        }]
+        result = self.resolve(topology(), service_catalog=catalog(canonical=True), variable_documents=documents)
+        service = result["services"]["kafka-main"]
+        self.assertEqual(9192, service["configuration"]["clientPort"]["value"])
+        self.assertEqual("GROUP_VARS", service["configuration"]["clientPort"]["physicalOrigin"]["kind"])
+        self.assertEqual(["company_custom_variable", "platform_kafka_heap_size"], sorted(item["name"] for item in service["opaqueVariables"]))
+        self.assertTrue(service["opaqueVariablesFingerprint"].startswith("sha256:"))
+
+    def test_opaque_values_do_not_change_managed_configuration_fingerprint(self):
+        first = [{"kind": "GROUP_VARS", "deploymentId": "kafka-main", "serviceType": "kafka", "groupId": "kafka-main", "logicalPath": "inventory/group_vars/kafka-main.yml", "variables": {"platform_kafka_heap_size": "4g"}}]
+        second = [{"kind": "GROUP_VARS", "deploymentId": "kafka-main", "serviceType": "kafka", "groupId": "kafka-main", "logicalPath": "inventory/group_vars/kafka-main.yml", "variables": {"platform_kafka_heap_size": "8g"}}]
+        one = self.resolve(topology(), service_catalog=catalog(canonical=True), variable_documents=first)
+        two = self.resolve(topology(), service_catalog=catalog(canonical=True), variable_documents=second)
+        self.assertEqual(one["configurationFingerprint"], two["configurationFingerprint"])
+        self.assertNotEqual(one["opaqueVariablesFingerprint"], two["opaqueVariablesFingerprint"])
+
+    def test_opaque_fingerprint_normalizes_logical_path_formatting(self):
+        first = [{"kind": "GROUP_VARS", "deploymentId": "kafka-main", "serviceType": "kafka", "groupId": "kafka-main", "logicalPath": "inventory/group_vars/kafka-main.yml", "variables": {"platform_kafka_heap_size": "4g"}}]
+        second = [{"kind": "GROUP_VARS", "deploymentId": "kafka-main", "serviceType": "kafka", "groupId": "kafka-main", "logicalPath": "inventory/group_vars/./kafka-main.yml", "variables": {"platform_kafka_heap_size": "4g"}}]
+        one = self.resolve(topology(), service_catalog=catalog(canonical=True), variable_documents=first)
+        two = self.resolve(topology(), service_catalog=catalog(canonical=True), variable_documents=second)
+        self.assertEqual(one["opaqueVariablesFingerprint"], two["opaqueVariablesFingerprint"])
+
+    def test_unknown_host_vars_are_opaque_without_semantic_scope(self):
+        documents = [{"kind": "HOST_VARS", "hostId": "node-a", "logicalPath": "inventory/host_vars/node-a.yml", "variables": {"platform_kafka_heap_size": "4g"}}]
+        result = self.resolve(topology(), variable_documents=documents)
+        opaque = result["opaqueVariables"][0]
+        self.assertEqual("HOST_VARS", opaque["origin"]["source"])
+        self.assertNotIn("platform_kafka_heap_size", result["services"]["kafka-main"]["configuration"])
+
+    def test_future_mapping_promotes_existing_group_variable(self):
+        documents = [{"kind": "GROUP_VARS", "deploymentId": "kafka-main", "serviceType": "kafka", "groupId": "kafka-main", "logicalPath": "inventory/group_vars/kafka-main.yml", "variables": {"platform_kafka_heap_size": "4g"}}]
+        before = self.resolve(topology(), service_catalog=catalog(canonical=True), variable_documents=documents)
+        promoted = catalog(canonical=True)
+        promoted["definitions"]["kafka"]["configuration"]["settings"]["heapSize"] = {"kind": "MANAGED", "roleVariable": "platform_kafka_heap_size", "type": "string", "scopes": ["deployment"], "validation": {}}
+        after = self.resolve(topology(), defaults={"platform_kafka_client_port": 9092, "platform_kafka_data_directory": "/var/lib/kafka", "platform_kafka_log_retention_hours": 168, "platform_kafka_heap_size": "1g"}, service_catalog=promoted, variable_documents=documents)
+        self.assertIn("platform_kafka_heap_size", [item["name"] for item in before["services"]["kafka-main"]["opaqueVariables"]])
+        self.assertEqual("4g", after["services"]["kafka-main"]["configuration"]["heapSize"]["value"])
+
+    def test_canonical_setting_without_default_is_not_blocked(self):
+        selected = catalog(canonical=True)
+        selected["definitions"]["kafka"]["configuration"]["settings"]["requiredInput"] = {"kind": "MANAGED", "roleVariable": "platform_kafka_required_input", "type": "string", "scopes": ["deployment"], "validation": {}}
+        result = self.resolve(topology(), service_catalog=selected)
+        self.assertEqual("PASS", result["status"])
+        self.assertNotIn("requiredInput", result["services"]["kafka-main"]["configuration"])
 
 
 if __name__ == "__main__":
