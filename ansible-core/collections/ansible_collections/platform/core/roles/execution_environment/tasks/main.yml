@@ -18,6 +18,31 @@
   changed_when: false
   when: platform_execution_require_ansible | bool
 
+- name: Require a technical user when execution identity is managed
+  ansible.builtin.assert:
+    that:
+      - platform_execution_technical_user | length > 0
+    fail_msg: Managed execution identity requires platform_execution_technical_user
+  when: platform_execution_manage_technical_user | bool
+
+- name: Ensure managed execution technical user exists
+  ansible.builtin.user:
+    name: "{{ platform_execution_technical_user }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+  when: platform_execution_manage_technical_user | bool
+
+- name: Install explicitly supplied execution sudo policy
+  ansible.builtin.copy:
+    content: "{{ platform_execution_sudoers_content }}"
+    dest: "/etc/sudoers.d/platform-execution"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  when: platform_execution_sudoers_content | length > 0
+
 - name: Create execution workspace
   ansible.builtin.file:
     path: "{{ item }}"
@@ -27,6 +52,34 @@
     - "{{ platform_execution_workspace }}"
     - "{{ platform_execution_private_workspace }}"
     - "{{ platform_execution_payload_root }}"
+
+- name: Assign managed execution workspace ownership
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_execution_technical_user }}"
+    group: "{{ platform_execution_technical_group }}"
+    mode: "0700"
+  loop:
+    - "{{ platform_execution_workspace }}"
+    - "{{ platform_execution_private_workspace }}"
+  when: platform_execution_technical_user | length > 0
+
+- name: Create managed execution SSH identity exactly once
+  become_user: "{{ platform_execution_technical_user }}"
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -q
+      - -t
+      - ed25519
+      - -N
+      - ""
+      - -f
+      - "{{ platform_execution_ssh_key_path }}"
+  args:
+    creates: "{{ platform_execution_ssh_key_path }}"
+  when: platform_execution_technical_user | length > 0
 
 - name: Verify offline payload location when required
   ansible.builtin.stat:

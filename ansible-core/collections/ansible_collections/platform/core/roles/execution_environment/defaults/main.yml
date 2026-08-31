@@ -5,3 +5,8 @@ platform_execution_payload_root: "{{ platform_execution_workspace }}/payload"
 platform_execution_require_ansible: true
 platform_execution_require_offline_payload: true
 platform_execution_offline_payload_root: ""
+platform_execution_technical_user: ""
+platform_execution_technical_group: "{{ platform_execution_technical_user }}"
+platform_execution_manage_technical_user: false
+platform_execution_sudoers_content: ""
+platform_execution_ssh_key_path: "{{ platform_execution_private_workspace }}/id_ed25519"

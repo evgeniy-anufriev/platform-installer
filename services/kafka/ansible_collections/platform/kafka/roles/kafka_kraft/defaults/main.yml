@@ -15,6 +15,8 @@ platform_kafka_advanced_config: {}
 platform_kafka_service_name: kafka
 platform_kafka_advertised_host: "{{ ansible_host | default(inventory_hostname) }}"
 platform_kafka_verify_only: false
+platform_kafka_startup_readiness_retries: 30
+platform_kafka_startup_readiness_delay: 2
 platform_kafka_instances: []
 platform_kafka_log_directory: /var/log/kafka
 platform_kafka_quorum_mode: dynamic

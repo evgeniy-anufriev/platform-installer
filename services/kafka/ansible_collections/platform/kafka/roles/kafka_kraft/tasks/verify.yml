@@ -22,3 +22,45 @@
   changed_when: false
   register: platform_kafka_quorum_status
   failed_when: platform_kafka_quorum_status.rc != 0
+
+- name: Assert Kafka controller quorum leader and membership
+  ansible.builtin.assert:
+    that:
+      - >-
+        platform_kafka_quorum_status.stdout is search(
+        'LeaderId:\s*(' ~
+        (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | join('|')) ~
+        ')(?:\s|$)')
+      - >-
+        platform_kafka_quorum_status.stdout is search(
+        '"id":\s*' ~ (item.node_id | string) ~ ',')
+    fail_msg: Kafka controller quorum does not represent exactly the expected controller members
+  loop: "{{ _platform_kafka_controller_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Query Kafka broker registrations read-only
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
+      - --bootstrap-server
+      - "{{ _platform_kafka_broker_bootstrap_servers | trim }}"
+  changed_when: false
+  register: platform_kafka_broker_api_versions
+  failed_when: platform_kafka_broker_api_versions.rc != 0
+
+- name: Assert Kafka brokers are registered and unfenced
+  ansible.builtin.assert:
+    that:
+      - >-
+        (platform_kafka_broker_api_versions.stdout |
+         regex_findall('\(id:\s*[0-9]+.*isFenced:\s*false\)') | length)
+        == (_platform_kafka_broker_instances | length)
+      - >-
+        platform_kafka_broker_api_versions.stdout is search(
+        (item.advertised_host | regex_escape) ~ ':' ~ (item.client_port | string) ~
+        '\s+\(id:\s*' ~ (item.node_id | string) ~ '\s+.*isFenced:\s*false\)')
+    fail_msg: Kafka broker is absent from the cluster or remains fenced
+  loop: "{{ _platform_kafka_broker_instances }}"
+  loop_control:
+    label: "{{ item.id }}"

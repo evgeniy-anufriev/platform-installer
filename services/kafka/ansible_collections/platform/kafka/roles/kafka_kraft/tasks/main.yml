@@ -193,6 +193,8 @@
       {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_static_quorum_voters: >-
       {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
+    _platform_kafka_broker_bootstrap_servers: >-
+      {% for member in _platform_kafka_broker_instances %}{{ member.advertised_host }}:{{ member.client_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 - name: Prepare Kafka host prerequisites once
   ansible.builtin.include_tasks: prepare_host.yml

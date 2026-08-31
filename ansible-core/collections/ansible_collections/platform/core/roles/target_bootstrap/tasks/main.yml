@@ -7,6 +7,13 @@
 - name: Bootstrap remote target user and key
   when: not (platform_bootstrap_skip_self | bool)
   block:
+    - name: Load execution public key from the controller runtime workspace
+      ansible.builtin.set_fact:
+        platform_bootstrap_public_key: "{{ lookup('ansible.builtin.file', platform_bootstrap_public_key_file) | trim }}"
+      when:
+        - platform_bootstrap_public_key | length == 0
+        - platform_bootstrap_public_key_file | length > 0
+
     - name: Require a runtime-provided public key
       ansible.builtin.assert:
         that:

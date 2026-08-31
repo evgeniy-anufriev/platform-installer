@@ -1,0 +1,16 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: kafka-split-multihost
+  name: Split Broker Controller Kafka KRaft
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:7d2301f40f6255aff053860ecc8c2f710d360a3f2653c8da7fef65be6bdf7a14
+  services:
+    kafka:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:c9baaca78f36874d99c7943acc16a5499f1a85152c984c0de381e88441cc6377

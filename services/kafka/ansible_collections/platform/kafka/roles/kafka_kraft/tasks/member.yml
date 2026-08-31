@@ -85,6 +85,19 @@
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; member advanced configuration contains reserved Kafka keys'
   when: not (platform_kafka_verify_only | bool)
 
+- name: Validate role-specific effective Kafka configuration
+  ansible.builtin.assert:
+    that:
+      - "'broker' in kafka_member.roles or 'inter.broker.listener.name' not in kafka_effective_config"
+      - "'broker' in kafka_member.roles or 'log.retention.hours' not in kafka_effective_config"
+      - "'broker' in kafka_member.roles or 'PLAINTEXT://' not in kafka_effective_config['listeners']"
+      - "'broker' in kafka_member.roles or 'PLAINTEXT://' not in kafka_effective_config['advertised.listeners']"
+      - "'controller' in kafka_member.roles or 'CONTROLLER://' not in kafka_effective_config['listeners']"
+      - "'controller' in kafka_member.roles or 'CONTROLLER://' not in kafka_effective_config['advertised.listeners']"
+      - "'controller' in kafka_member.roles or (kafka_member.node_id | string) not in (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | list)"
+    fail_msg: Kafka effective configuration contains behavior from an unassigned member role
+  when: not (platform_kafka_verify_only | bool)
+
 - name: Validate effective member configuration values
   ansible.builtin.assert:
     that: item.value is boolean or item.value is number or item.value is string
@@ -235,4 +248,19 @@
     name: "{{ kafka_member.systemd_unit_name }}"
     enabled: true
     state: started
+  when: not (platform_kafka_verify_only | bool)
+
+- name: Wait for Kafka member systemd startup readiness
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ kafka_member.systemd_unit_name }}"
+  register: platform_kafka_member_startup_state
+  changed_when: false
+  retries: "{{ platform_kafka_startup_readiness_retries }}"
+  delay: "{{ platform_kafka_startup_readiness_delay }}"
+  until:
+    - platform_kafka_member_startup_state.rc == 0
+    - platform_kafka_member_startup_state.stdout | trim == 'active'
   when: not (platform_kafka_verify_only | bool)
