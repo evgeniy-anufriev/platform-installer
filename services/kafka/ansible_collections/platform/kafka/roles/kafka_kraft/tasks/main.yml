@@ -156,11 +156,13 @@
     _platform_kafka_local_instances: >-
       {{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
 
-- name: Require exactly one local Kafka member for SERVICE-01C
+- name: Require exactly one local Kafka member for real multi-host deployment
   ansible.builtin.assert:
     that: _platform_kafka_local_instances | length == 1
     fail_msg: Each SERVICE-01C physical host must have exactly one assigned Kafka member
-  when: _platform_kafka_instances | length > 1
+  when:
+    - _platform_kafka_instances | length > 1
+    - (_platform_kafka_instances | map(attribute='host') | list | unique | length) > 1
 
 - name: Install host-wide Java prerequisite
   ansible.builtin.package:

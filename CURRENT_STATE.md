@@ -2,7 +2,9 @@
 
 ## Phase
 
-EXEC-01 complete. SERVICE-01C is PAUSED pending centralized re-acceptance.
+EXEC-01 and SERVICE-01C centralized acceptance are complete. SERVICE-01B
+dynamic same-host quorum is proven; its apply post-start readiness gate remains
+the focused follow-up.
 
 ## Established direction
 
@@ -67,7 +69,7 @@ EXEC-01 complete. SERVICE-01C is PAUSED pending centralized re-acceptance.
   explicit dynamic/static quorum mode, stable member directory IDs, full-cluster
   bootstrap projection and host-local member mutation.
 - SERVICE-01C real three-host fixture for `192.168.56.101` through `.103`,
-  dynamic KRaft quorum, with centralized Kafka acceptance still pending.
+  dynamic KRaft quorum, with centralized Kafka acceptance completed.
 - EXEC-01 execution selection contract with separate candidate eligibility and
   post-preparation readiness, generic execution-environment preparation,
   target bootstrap, local self-target transport and runtime credential boundary.
@@ -97,13 +99,26 @@ EXEC-01 complete. SERVICE-01C is PAUSED pending centralized re-acceptance.
 - EXEC-01 regression: 60 Core tests and 4 contract tests passed; preparation,
   bootstrap and centralized connectivity playbooks passed syntax-check; unified
   PLAY RECAP contained node1, node2 and node3 with `changed=0`.
+- Centralized SERVICE-01C acceptance through node1 Execution Node passed:
+  apply/repeat/verify all returned `failed=0`; repeat and verify returned
+  `changed=0` for node1, node2 and node3. Stopping node3 preserved a passing
+  node1/node2 quorum verify; full verify reported node3 failed; recovery and
+  final verify returned all three members healthy.
+- Centralized SERVICE-01A replay passed after completing its fixture inputs:
+  apply, repeat and verify passed; repeat and verify returned `changed=0`.
+- SERVICE-01B focused diagnosis: a fresh canonical dynamic same-host run and a
+  separate `127.0.0.1` endpoint experiment both formed a three-voter quorum;
+  apply/repeat/verify passed after all controller listeners were ready. The
+  earlier verify failure was an immediate post-start convergence race, not a
+  dynamic-quorum, identity, storage-format or endpoint incompatibility.
 
 ## Not implemented
 
 - Dependency DAG, endpoint/certificate resolution, runtime role variables and
   deployment plan.
 - Generic Core mutation roles.
-- SERVICE-01C centralized Kafka acceptance is paused until rerun through EXEC-01.
+- SERVICE-01B apply lacks an explicit post-start quorum-readiness gate; direct
+  verify can race Kafka's normal initial controller convergence.
 - Production services beyond the accepted service slices.
 - Go backend.
 - Persistence.
@@ -111,6 +126,6 @@ EXEC-01 complete. SERVICE-01C is PAUSED pending centralized re-acceptance.
 
 ## Next gate
 
-CORE-01 through CORE-05, SERVICE-01A, SERVICE-01B and EXEC-01 are complete.
-The next gate is to resume SERVICE-01C using the EXEC-01 centralized execution
-path; no additional Kafka workaround is authorized.
+CORE-01 through CORE-05, SERVICE-01A, EXEC-01 and SERVICE-01C are complete.
+The next gate is an explicit SERVICE-01B post-start readiness gate and replay;
+dynamic quorum remains required and no fallback or storage change is authorized.

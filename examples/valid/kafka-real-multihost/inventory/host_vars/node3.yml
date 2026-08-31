@@ -1,1 +1,2 @@
+ansible_user: platform-automation
 platform_host: {desiredHostname: node3, address: 192.168.56.103}

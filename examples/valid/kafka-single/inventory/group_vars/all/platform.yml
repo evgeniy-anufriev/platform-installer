@@ -1,5 +1,10 @@
 platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_kafka_quorum_mode: dynamic
+platform_kafka_cluster_id: MkU3OEVBNTcwNTJENDM2Qk
+platform_kafka_node_id: 1
+platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../.runtime/artifacts/kafka/kafka_2.13-4.3.1.tgz"
+platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
 platform_project:
   serviceDeployments:
     kafka-main:
