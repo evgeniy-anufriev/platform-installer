@@ -1,6 +1,6 @@
 ---
-- name: Verify standalone Kafka KRaft
-  hosts: kafka_targets
+- name: Verify Kafka KRaft members
+  hosts: platform_targets
   become: true
   gather_facts: false
   roles:

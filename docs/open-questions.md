@@ -23,7 +23,11 @@ The initial canonical interface is standard `ansible-playbook` with normal inven
 
 Status: RESOLVED.
 
-The production baseline is a dedicated Linux execution node. WSL2 is a development adapter. The portable project and service-role contracts remain execution-environment neutral.
+Execution Node is a selectable logical role, not a mandatory dedicated host.
+`AUTO`, `EXPLICIT_TARGET`, `LOCAL_INSTALLER` and
+`EXTERNAL_EXECUTION_HOST` are execution-level choices. A project target may
+also be the Execution Node; local transport may then be used for that host.
+WSL2 remains a development adapter and service topology remains independent.
 
 ### OQ-004: Automatic placement
 

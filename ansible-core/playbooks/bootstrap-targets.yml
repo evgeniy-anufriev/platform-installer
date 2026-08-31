@@ -1,0 +1,7 @@
+---
+- name: Bootstrap target hosts from the Execution Node
+  hosts: bootstrap_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.core.target_bootstrap

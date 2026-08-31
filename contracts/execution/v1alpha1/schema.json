@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution/v1alpha1/schema.json",
+  "title": "Platform execution node selection",
+  "type": "object",
+  "required": ["apiVersion", "kind", "selection"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/execution/v1alpha1" },
+    "kind": { "const": "ExecutionNodeSelection" },
+    "selection": { "$ref": "#/$defs/selection" },
+    "policy": { "$ref": "#/$defs/policy" }
+  },
+  "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+    },
+    "selection": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "enum": ["AUTO", "EXPLICIT_TARGET", "LOCAL_INSTALLER", "EXTERNAL_EXECUTION_HOST"]
+        },
+        "targetHostId": { "$ref": "#/$defs/identifier" },
+        "externalHost": { "$ref": "#/$defs/externalHost" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "EXPLICIT_TARGET" } } },
+          "then": { "required": ["targetHostId"] }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "EXTERNAL_EXECUTION_HOST" } } },
+          "then": { "required": ["externalHost"] }
+        }
+      ],
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "externalHost": {
+      "type": "object",
+      "required": ["address", "user"],
+      "properties": {
+        "address": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 22 },
+        "user": { "type": "string", "minLength": 1 },
+        "credentialRef": { "type": "string", "minLength": 3, "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$" }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "autoOrder": {
+          "type": "array",
+          "items": { "enum": ["LOCAL_INSTALLER", "EXPLICIT_TARGET"] },
+          "uniqueItems": true,
+          "default": ["LOCAL_INSTALLER", "EXPLICIT_TARGET"]
+        }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    }
+  }
+}

@@ -27,11 +27,11 @@ modes:
     placement:
       explicit: true
       minMembers: 3
-      distinctHosts: true
+      distinctHosts: false
       roleCardinality:
         broker: {minimum: 1}
         controller: {minimum: 3}
-    x-maturity: planned-service-01b
+    x-maturity: implemented-service-01b
 listeners:
   client: {protocol: tcp, defaultPort: 9092, tlsCapable: true, scope: deployment}
   controller: {protocol: tcp, defaultPort: 9093, tlsCapable: true, scope: member}
@@ -51,6 +51,13 @@ configuration:
       scopes: [deployment, member]
       validation: {minimum: 1, maximum: 65535}
       ui: {label: Client port, order: 10}
+    quorumMode:
+      kind: MANAGED
+      roleVariable: platform_kafka_quorum_mode
+      type: string
+      scopes: [deployment]
+      validation: {enum: [dynamic, static]}
+      ui: {label: KRaft quorum mode, order: 5}
     controllerPort:
       kind: MANAGED
       roleVariable: platform_kafka_controller_port
@@ -58,6 +65,20 @@ configuration:
       scopes: [deployment, member]
       validation: {minimum: 1, maximum: 65535}
       ui: {label: Controller port, order: 20}
+    nodeId:
+      kind: MANAGED
+      roleVariable: platform_kafka_node_id
+      type: integer
+      scopes: [member]
+      validation: {minimum: 0, maximum: 2147483647}
+      ui: {label: Node ID, order: 25}
+    directoryId:
+      kind: MANAGED
+      roleVariable: platform_kafka_directory_id
+      type: string
+      scopes: [member]
+      validation: {pattern: '^[A-Za-z0-9_-]{22}$'}
+      ui: {label: KRaft directory ID, order: 26}
     dataDirectory:
       kind: MANAGED
       roleVariable: platform_kafka_data_directory

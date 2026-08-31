@@ -20,6 +20,13 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Resolved plan | `v1alpha1` | `plan/v1alpha1/schema.json` |
 | Normalized execution event | `v1alpha1` | `event/v1alpha1/schema.json` |
 | Execution result | `v1alpha1` | `result/v1alpha1/schema.json` |
+| Execution node selection | `v1alpha1` | `execution/v1alpha1/schema.json` |
+
+Execution selection is project/execution state, not service topology. Candidate
+eligibility is evaluated before preparation; `EXECUTION_READY` is reported only
+after Python, Ansible, workspace, offline payload and execution identity are
+prepared. Target bootstrap is a separate phase and may skip a self-target when
+the selected Execution Node uses explicit `ansible_connection: local`.
 
 All schemas use JSON Schema 2020-12 and validate YAML after YAML-to-JSON data
 model conversion.

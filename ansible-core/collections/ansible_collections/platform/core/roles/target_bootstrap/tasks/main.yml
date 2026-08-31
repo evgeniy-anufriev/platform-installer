@@ -1,0 +1,60 @@
+---
+- name: Skip target bootstrap for Execution Node self-target
+  ansible.builtin.debug:
+    msg: Self-target bootstrap skipped; Execution Node local transport is used
+  when: platform_bootstrap_skip_self | bool
+
+- name: Bootstrap remote target user and key
+  when: not (platform_bootstrap_skip_self | bool)
+  block:
+    - name: Require a runtime-provided public key
+      ansible.builtin.assert:
+        that:
+          - platform_bootstrap_public_key | length > 0
+        fail_msg: Target bootstrap requires a public SSH key from the runtime credential boundary
+
+    - name: Ensure technical automation user exists
+      ansible.builtin.user:
+        name: "{{ platform_bootstrap_user }}"
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Create technical user SSH directory
+      ansible.builtin.file:
+        path: "/home/{{ platform_bootstrap_user }}/.ssh"
+        state: directory
+        owner: "{{ platform_bootstrap_user }}"
+        group: "{{ platform_bootstrap_user }}"
+        mode: "0700"
+
+    - name: Install managed technical user public key without removing existing keys
+      ansible.builtin.lineinfile:
+        line: "{{ platform_bootstrap_public_key | trim }}"
+        dest: "/home/{{ platform_bootstrap_user }}/.ssh/authorized_keys"
+        search_string: "{{ platform_bootstrap_public_key | trim }}"
+        create: true
+        owner: "{{ platform_bootstrap_user }}"
+        group: "{{ platform_bootstrap_user }}"
+        mode: "0600"
+
+    - name: Install explicitly supplied sudo policy
+      ansible.builtin.copy:
+        content: "{{ platform_bootstrap_sudoers_content }}"
+        dest: "/etc/sudoers.d/platform-automation"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+      when: platform_bootstrap_sudoers_content | length > 0
+
+    - name: Verify technical user sudo capability
+      ansible.builtin.command:
+        argv:
+          - su
+          - -s
+          - /bin/bash
+          - -c
+          - sudo -n -u root true
+          - "{{ platform_bootstrap_user }}"
+      changed_when: false

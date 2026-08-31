@@ -1,0 +1,53 @@
+---
+- name: Collect execution environment facts
+  ansible.builtin.setup:
+    gather_subset:
+      - min
+
+- name: Validate supported execution environment
+  ansible.builtin.assert:
+    that:
+      - ansible_system == 'Linux'
+      - ansible_python_version is defined
+      - ansible_python_version is version('3.8', '>=')
+    fail_msg: Execution Node requires a supported Linux/Python environment
+
+- name: Check local Ansible executable
+  ansible.builtin.command: ansible-playbook --version
+  register: platform_execution_ansible_version
+  changed_when: false
+  when: platform_execution_require_ansible | bool
+
+- name: Create execution workspace
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ platform_execution_workspace }}"
+    - "{{ platform_execution_private_workspace }}"
+    - "{{ platform_execution_payload_root }}"
+
+- name: Verify offline payload location when required
+  ansible.builtin.stat:
+    path: "{{ platform_execution_offline_payload_root }}"
+  register: platform_execution_payload_stat
+  when:
+    - platform_execution_require_offline_payload | bool
+    - platform_execution_offline_payload_root | length > 0
+
+- name: Reject missing offline execution payload
+  ansible.builtin.assert:
+    that:
+      - platform_execution_payload_stat.stat.exists
+      - platform_execution_payload_stat.stat.isdir
+    fail_msg: Required offline execution payload is not available on the Execution Node
+  when:
+    - platform_execution_require_offline_payload | bool
+    - platform_execution_offline_payload_root | length > 0
+
+- name: Publish execution readiness marker
+  ansible.builtin.copy:
+    content: "execution-node-ready-v1\\n"
+    dest: "{{ platform_execution_workspace }}/.execution-node-ready"
+    mode: "0600"

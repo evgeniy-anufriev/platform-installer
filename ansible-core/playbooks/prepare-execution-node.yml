@@ -1,0 +1,8 @@
+---
+- name: Prepare selected Execution Node environment
+  hosts: execution_node
+  connection: "{{ platform_execution_connection | default('ssh') }}"
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.core.execution_environment

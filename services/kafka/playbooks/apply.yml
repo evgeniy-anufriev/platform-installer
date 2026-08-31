@@ -1,6 +1,6 @@
 ---
-- name: Apply standalone Kafka KRaft
-  hosts: kafka_targets
+- name: Apply Kafka KRaft members
+  hosts: platform_targets
   become: true
   gather_facts: true
   roles:

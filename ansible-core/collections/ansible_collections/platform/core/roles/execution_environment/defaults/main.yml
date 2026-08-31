@@ -1,0 +1,7 @@
+---
+platform_execution_workspace: /var/tmp/platform-installer
+platform_execution_private_workspace: "{{ platform_execution_workspace }}/private"
+platform_execution_payload_root: "{{ platform_execution_workspace }}/payload"
+platform_execution_require_ansible: true
+platform_execution_require_offline_payload: true
+platform_execution_offline_payload_root: ""

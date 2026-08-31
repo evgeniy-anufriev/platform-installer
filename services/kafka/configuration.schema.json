@@ -21,9 +21,25 @@
       "minLength": 1,
       "type": "string"
     },
+    "directoryId": {
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "type": "string"
+    },
     "logRetentionHours": {
       "minimum": 1,
       "type": "integer"
+    },
+    "nodeId": {
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "quorumMode": {
+      "enum": [
+        "dynamic",
+        "static"
+      ],
+      "type": "string"
     }
   },
   "title": "Apache Kafka desired configuration",

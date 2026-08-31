@@ -185,6 +185,9 @@ Not ready when:
 
 ### SERVICE-01B: Kafka KRaft distributed
 
+Status: DONE for same-host multi-member deployment and SERVICE-01C real
+multi-host extension.
+
 Deliverables:
 
 - controller/broker/combined member roles and explicit placements;
@@ -202,6 +205,47 @@ Ready when:
 - failure is actionable and resumable;
 - secrets and host keys remain protected;
 - service health, membership and quorum are verified, not assumed.
+
+### EXEC-01: Execution Node and target bootstrap
+
+Status: DONE. This milestone establishes selectable execution-node
+semantics, separates candidate eligibility from post-preparation readiness,
+and provides generic preparation/bootstrap phases. The selected Execution Node
+may be local, a project target, or external; a dedicated host is optional.
+
+Ready when:
+
+- local Installer, target-host and external-host selections are contractually
+  representable;
+- Phase A prepares the selected execution environment;
+- Phase B bootstraps remote targets from that Execution Node;
+- a self-target skips password bootstrap and uses explicit local transport;
+- runtime credentials are never persisted or logged;
+- one standard Ansible invocation produces a unified multi-host recap.
+
+### SERVICE-01C: Kafka KRaft real multi-host deployment
+
+Status: PAUSED until centralized EXEC-01 acceptance is applied to the Kafka
+deployment. The Kafka-specific implementation is retained, but it must be
+re-accepted through one Execution Node invocation.
+
+Deliverables:
+
+- explicit `node1`/`node2`/`node3` member fixture with shared cluster state;
+- dynamic quorum bootstrap using `controller.quorum.bootstrap.servers` and
+  full `--initial-controllers` formatting input;
+- repeat apply and verify idempotency, quorum-preserving one-node failure and
+  member recovery acceptance;
+- static quorum remains a compatibility contract/unit/fixture path using
+  `controller.quorum.voters`, without fallback between modes.
+
+Ready when:
+
+- real three-host apply, repeat apply and verify pass;
+- two remaining controllers verify quorum while one member is stopped;
+- the stopped member is diagnosed as degraded/failed and returns healthy after
+  restart;
+- no TLS/SASL, placement automation or generic endpoint model is introduced.
 
 Not ready when:
 
@@ -245,7 +289,8 @@ Deliverables:
 - typed invocation of the published validate/plan/apply/verify playbooks and artifacts;
 - normalized event streaming;
 - execution-node transport abstraction;
-- dedicated Linux execution-node production adapter and WSL2 development adapter boundary;
+- selectable local, project-target and external Linux execution-node adapters,
+  with WSL2 as a development adapter;
 - cancellation, timeout and lost-process recovery;
 - contract conformance tests against standalone Core.
 

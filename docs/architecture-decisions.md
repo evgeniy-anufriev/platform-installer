@@ -54,7 +54,11 @@ Plaintext secret values exist only in the execution boundary and are never inclu
 
 Status: Accepted.
 
-The production baseline is a dedicated Linux execution node. WSL2 is a development adapter; container and other future mechanisms may implement the same Core invocation contract. None appear in topology or service domain models.
+The Execution Node is a selectable logical role, not a mandatory dedicated
+server. Supported choices include an eligible local Linux Installer, an
+eligible project target, and an external Linux host. WSL2 is a development
+adapter; container and other future mechanisms may implement the same Core
+invocation contract. None appear in service topology or service manifests.
 
 ## ADR-010: Compatibility is evidence-backed data
 
@@ -80,11 +84,16 @@ Status: Accepted for initial V2.
 
 Only explicit placement is supported initially. Future automatic placement must return a deterministic, explainable proposed project patch and requires operator acceptance before changing desired state.
 
-## ADR-014: Dedicated Linux execution node is the production baseline
+## ADR-014: Execution Node is a selectable logical role
 
 Status: Accepted.
 
-Production runs Core on a dedicated Linux execution node. WSL2 is a development adapter. This choice does not enter the portable project, topology or service contracts.
+Execution Node selection is an execution concern separate from service
+topology. `AUTO`, `EXPLICIT_TARGET`, `LOCAL_INSTALLER` and
+`EXTERNAL_EXECUTION_HOST` are supported contract concepts. A selected target
+may also be the Execution Node; in that case explicit local Ansible transport
+may be used and self-target bootstrap is skipped. WSL2 remains a development
+adapter and no selection is written into service manifests.
 
 ## ADR-015: Project mode and direct-role mode coexist
 

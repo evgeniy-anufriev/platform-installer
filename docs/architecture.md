@@ -134,7 +134,14 @@ The standalone distribution is a digest-locked offline bundle containing:
 - artifact manifest and signatures/trust metadata;
 - examples and operator documentation.
 
-The production baseline is a dedicated Linux execution node; WSL2 is limited to a development adapter. Container or other future execution mechanisms remain adapter choices and do not affect project or role contracts. The monorepo boundary keeps Core and service roles independently packageable and testable despite sharing one source repository with the later backend and frontend.
+The execution node is a selectable logical execution role. It may be the
+supported local Linux Installer environment, an eligible project target, or an
+external Linux host. A dedicated Linux host is one supported topology, not a
+requirement; WSL2 remains a development adapter. Container or other future
+execution mechanisms remain adapter choices and do not affect project or role
+contracts. The monorepo boundary keeps Core and service roles independently
+packageable and testable despite sharing one source repository with the later
+backend and frontend.
 
 ## Security invariants
 

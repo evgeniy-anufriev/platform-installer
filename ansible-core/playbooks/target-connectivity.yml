@@ -1,0 +1,17 @@
+---
+- name: Verify centralized target connectivity and elevation
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read effective elevated user
+      ansible.builtin.command: id -u
+      register: platform_effective_uid
+      changed_when: false
+
+    - name: Assert elevated execution is available
+      ansible.builtin.assert:
+        that:
+          - platform_effective_uid.rc == 0
+          - platform_effective_uid.stdout | trim == '0'
+        fail_msg: Centralized Ansible target execution lacks working elevation
