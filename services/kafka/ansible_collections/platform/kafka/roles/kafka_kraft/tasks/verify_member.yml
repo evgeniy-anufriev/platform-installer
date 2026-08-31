@@ -1,8 +1,8 @@
 ---
 - name: Set member verification paths
   ansible.builtin.set_fact:
-    _platform_kafka_verify_config_dir: "{{ kafka_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_member.id) }}"
-    _platform_kafka_verify_service: "{{ platform_kafka_service_name if _platform_kafka_legacy_single else platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_member.id }}"
+    _platform_kafka_verify_config_dir: "{{ kafka_member.config_directory }}"
+    _platform_kafka_verify_service: "{{ kafka_member.systemd_unit_name }}"
 
 - name: Verify Kafka member systemd state
   ansible.builtin.command: systemctl is-active {{ _platform_kafka_verify_service }}
@@ -52,6 +52,4 @@
     port: "{{ item }}"
     state: started
     timeout: 5
-  loop:
-    - "{{ kafka_member.client_port }}"
-    - "{{ kafka_member.controller_port }}"
+  loop: "{{ kafka_member.listener_ports }}"

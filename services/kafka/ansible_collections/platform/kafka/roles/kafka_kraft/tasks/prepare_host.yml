@@ -1,0 +1,39 @@
+---
+- name: Install host-wide Java prerequisite
+  ansible.builtin.package:
+    name: "{{ platform_kafka_java_package }}"
+    state: present
+
+- name: Verify Java major version
+  ansible.builtin.command: java -version
+  changed_when: false
+  register: platform_kafka_java_version
+  failed_when: >-
+    platform_kafka_java_version.rc != 0 or
+    ('version "21.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout))
+
+- name: Extract approved Kafka binary once
+  ansible.builtin.unarchive:
+    src: "{{ platform_kafka_artifact_path }}"
+    dest: /opt
+    remote_src: false
+    creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
+
+- name: Point stable Kafka install path at approved version
+  ansible.builtin.file:
+    src: "/opt/{{ platform_kafka_archive_directory }}"
+    dest: "{{ platform_kafka_install_directory }}"
+    state: link
+    force: true
+
+- name: Create shared Kafka group
+  ansible.builtin.group:
+    name: "{{ platform_kafka_group }}"
+    system: true
+
+- name: Create shared Kafka user
+  ansible.builtin.user:
+    name: "{{ platform_kafka_user }}"
+    group: "{{ platform_kafka_group }}"
+    system: true
+    create_home: false

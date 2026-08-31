@@ -2,9 +2,9 @@
 
 ## Phase
 
-EXEC-01 and SERVICE-01C centralized acceptance are complete. SERVICE-01B
-dynamic same-host quorum is proven; its apply post-start readiness gate remains
-the focused follow-up.
+EXEC-01, SERVICE-01C centralized acceptance and the focused generic Kafka role
+lifecycle refactor are complete. SERVICE-01B dynamic same-host quorum is
+proven; its apply post-start readiness gate remains the focused follow-up.
 
 ## Established direction
 
@@ -31,6 +31,9 @@ the focused follow-up.
   pass-through values with physical origin metadata.
 - Production Kafka SERVICE-01A is implemented as a standalone service package;
   Kafka-specific playbooks remain inside `services/kafka`.
+- The production Kafka role is topology-profile agnostic after input
+  normalization; SERVICE-01A/01B/01C names are fixture and acceptance concerns,
+  not role lifecycle branches.
 
 ## Implemented
 
@@ -65,9 +68,15 @@ the focused follow-up.
 - Kafka 4.3.1 single-node combined broker/controller role with offline artifact,
   Java 21 prerequisite, KRaft storage initialization, configuration and
   systemd apply/verify playbooks.
-- Kafka SERVICE-01B/01C distributed combined broker/controller role with
-  explicit dynamic/static quorum mode, stable member directory IDs, full-cluster
-  bootstrap projection and host-local member mutation.
+- Generic Kafka member lifecycle with a legacy single-member compatibility
+  adapter, deterministic full/local/controller/broker member sets, controller-
+  only quorum projections, role-aware listener requirements, host-scoped
+  listener/path collision validation, host-once preparation and deterministic
+  application of zero or more local logical members.
+- Explicit mutually exclusive dynamic/static quorum modes, stable dynamic
+  controller directory IDs and role-derived `process.roles`; broker-only,
+  controller-only and combined internal members are no longer prohibited by
+  production role assumptions.
 - SERVICE-01C real three-host fixture for `192.168.56.101` through `.103`,
   dynamic KRaft quorum, with centralized Kafka acceptance completed.
 - EXEC-01 execution selection contract with separate candidate eligibility and
@@ -111,6 +120,15 @@ the focused follow-up.
   apply/repeat/verify passed after all controller listeners were ready. The
   earlier verify failure was an immediate post-start convergence race, not a
   dynamic-quorum, identity, storage-format or endpoint incompatibility.
+- Focused Kafka lifecycle refactor regression on RED OS / Ansible Core 2.18.15:
+  9 Kafka contract tests and 60 Core tests passed; fixture catalog check and
+  SERVICE-01A/01B/01C apply/verify syntax checks passed.
+- Final real lifecycle replay passed through the centralized Execution Node:
+  SERVICE-01A repeat/verify, SERVICE-01B repeat/verify and SERVICE-01C
+  repeat/verify all returned `changed=0`, `failed=0`. With node3 stopped,
+  node1/node2 quorum verify passed while full desired-state verify failed on
+  node3; node3 recovery and final three-host verify returned `changed=0`,
+  `failed=0`. Runtime QA SSH key material was removed from node2/node3.
 
 ## Not implemented
 
@@ -126,6 +144,8 @@ the focused follow-up.
 
 ## Next gate
 
-CORE-01 through CORE-05, SERVICE-01A, EXEC-01 and SERVICE-01C are complete.
+CORE-01 through CORE-05, SERVICE-01A, EXEC-01, SERVICE-01C and the generic Kafka
+role lifecycle refactor are complete. The production role no longer prevents a
+future split broker/controller topology, but SERVICE-01D is not implemented.
 The next gate is an explicit SERVICE-01B post-start readiness gate and replay;
 dynamic quorum remains required and no fallback or storage change is authorized.

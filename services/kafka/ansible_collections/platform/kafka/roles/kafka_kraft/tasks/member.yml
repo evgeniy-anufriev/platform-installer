@@ -1,10 +1,9 @@
 ---
 - name: Set member-derived Kafka paths
   ansible.builtin.set_fact:
-    _platform_kafka_member_config_dir: "{{ kafka_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_member.id) }}"
-    _platform_kafka_member_config_file: "{{ (kafka_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_member.id)) ~ '/server.properties' }}"
-    _platform_kafka_member_instance: "{{ platform_kafka_service_name if _platform_kafka_legacy_single else platform_kafka_service_name ~ '-' ~ kafka_member.id }}"
-    _platform_kafka_member_runtime_dir: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name if _platform_kafka_legacy_single else platform_kafka_service_name ~ '-' ~ kafka_member.id }}"
+    _platform_kafka_member_config_dir: "{{ kafka_member.config_directory }}"
+    _platform_kafka_member_config_file: "{{ kafka_member.config_directory }}/server.properties"
+    _platform_kafka_member_runtime_dir: "{{ kafka_member.runtime_directory }}"
 
 - name: Create isolated member directories
   ansible.builtin.file:
@@ -20,24 +19,51 @@
     - "{{ kafka_member.log_directory }}"
   when: not (platform_kafka_verify_only | bool)
 
-- name: Build independent member effective configuration
+- name: Build role-aware member listener projection
   ansible.builtin.set_fact:
     _platform_kafka_member_advanced_config: "{{ platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})) }}"
+    _platform_kafka_member_listeners: >-
+      {{ ((['PLAINTEXT://0.0.0.0:' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else [])
+          + (['CONTROLLER://0.0.0.0:' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}
+    _platform_kafka_member_advertised_listeners: >-
+      {{ ((['PLAINTEXT://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else [])
+          + (['CONTROLLER://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}
+
+- name: Build common member effective configuration
+  ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ (platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})))
-         | combine({'log.retention.hours': kafka_member.log_retention_hours | default(platform_kafka_log_retention_hours)})
          | combine({
-             'process.roles': 'broker,controller',
+             'process.roles': kafka_member.roles | join(','),
              'node.id': kafka_member.node_id | int,
-             'controller.quorum.bootstrap.servers': _platform_kafka_controller_bootstrap_servers | trim,
-             'listeners': 'PLAINTEXT://0.0.0.0:' ~ (kafka_member.client_port | string) ~ ',CONTROLLER://0.0.0.0:' ~ (kafka_member.controller_port | string),
-             'advertised.listeners': 'PLAINTEXT://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.client_port | string),
+             'listeners': _platform_kafka_member_listeners,
+             'advertised.listeners': _platform_kafka_member_advertised_listeners,
              'listener.security.protocol.map': 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT',
-             'inter.broker.listener.name': 'PLAINTEXT',
              'controller.listener.names': 'CONTROLLER',
              'log.dirs': kafka_member.data_directory
            }) }}
   when: not (platform_kafka_verify_only | bool)
+
+- name: Add broker effective configuration
+  ansible.builtin.set_fact:
+    kafka_effective_config: >-
+      {{ kafka_effective_config | combine({
+           'inter.broker.listener.name': 'PLAINTEXT',
+           'log.retention.hours': kafka_member.log_retention_hours | default(platform_kafka_log_retention_hours)
+         }) }}
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - "'broker' in kafka_member.roles"
+
+- name: Add dynamic quorum projection when explicitly selected
+  ansible.builtin.set_fact:
+    kafka_effective_config: >-
+      {{ kafka_effective_config | combine({
+           'controller.quorum.bootstrap.servers': _platform_kafka_controller_bootstrap_servers | trim
+         }) }}
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - platform_kafka_quorum_mode == 'dynamic'
 
 - name: Add static quorum projection when explicitly selected
   ansible.builtin.set_fact:
@@ -92,11 +118,11 @@
     that:
       - (platform_kafka_member_metadata_content.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
       - (platform_kafka_member_metadata_content.content | b64decode) is search('(?m)^node.id=' ~ (kafka_member.node_id | string) ~ '$')
-      - platform_kafka_quorum_mode != 'dynamic' or (_platform_kafka_instances | length == 1) or ((platform_kafka_member_metadata_content.content | b64decode) is search('(?m)^directory.id=' ~ (kafka_member.directory_id | string) ~ '$'))
+      - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in kafka_member.roles or ((platform_kafka_member_metadata_content.content | b64decode) is search('(?m)^directory.id=' ~ (kafka_member.directory_id | string) ~ '$'))
     fail_msg: Existing Kafka member storage identity mismatch; refusing destructive repair
   when: platform_kafka_member_metadata.stat.exists
 
-- name: Format uninitialized dynamic multi-controller storage exactly once
+- name: Format uninitialized dynamic initial-controller storage exactly once
   become_user: "{{ platform_kafka_user }}"
   ansible.builtin.command:
     argv:
@@ -112,7 +138,8 @@
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
     - platform_kafka_quorum_mode == 'dynamic'
-    - _platform_kafka_instances | length > 1
+    - _platform_kafka_controller_instances | length > 1
+    - "'controller' in kafka_member.roles"
   changed_when: true
 
 - name: Format uninitialized static quorum storage exactly once
@@ -132,7 +159,25 @@
     - platform_kafka_quorum_mode == 'static'
   changed_when: true
 
-- name: Format uninitialized standalone dynamic storage exactly once
+- name: Format uninitialized dynamic non-controller storage exactly once
+  become_user: "{{ platform_kafka_user }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
+      - format
+      - --cluster-id
+      - "{{ platform_kafka_cluster_id }}"
+      - --config
+      - "{{ _platform_kafka_member_config_file }}"
+      - --no-initial-controllers
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - not platform_kafka_member_metadata.stat.exists
+    - platform_kafka_quorum_mode == 'dynamic'
+    - "'controller' not in kafka_member.roles"
+  changed_when: true
+
+- name: Format uninitialized single-controller dynamic storage exactly once
   become_user: "{{ platform_kafka_user }}"
   ansible.builtin.command:
     argv:
@@ -147,7 +192,8 @@
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
     - platform_kafka_quorum_mode == 'dynamic'
-    - _platform_kafka_instances | length == 1
+    - _platform_kafka_controller_instances | length == 1
+    - "'controller' in kafka_member.roles"
   changed_when: true
 
 - name: Write systemd instance environment
@@ -163,7 +209,7 @@
 - name: Install reusable Kafka systemd template
   ansible.builtin.template:
     src: kafka.service.j2
-    dest: "/etc/systemd/system/{{ platform_kafka_service_name ~ ('@.service' if not _platform_kafka_legacy_single else '.service') }}"
+    dest: "{{ kafka_member.systemd_unit_destination }}"
     owner: root
     group: root
     mode: '0644'
@@ -178,7 +224,7 @@
 
 - name: Restart changed Kafka member only
   ansible.builtin.systemd:
-    name: "{{ platform_kafka_service_name if _platform_kafka_legacy_single else platform_kafka_service_name ~ '@' ~ _platform_kafka_member_instance }}"
+    name: "{{ kafka_member.systemd_unit_name }}"
     state: restarted
   when:
     - not (platform_kafka_verify_only | bool)
@@ -186,7 +232,7 @@
 
 - name: Enable and start Kafka member
   ansible.builtin.systemd:
-    name: "{{ platform_kafka_service_name if _platform_kafka_legacy_single else platform_kafka_service_name ~ '@' ~ _platform_kafka_member_instance }}"
+    name: "{{ kafka_member.systemd_unit_name }}"
     enabled: true
     state: started
   when: not (platform_kafka_verify_only | bool)

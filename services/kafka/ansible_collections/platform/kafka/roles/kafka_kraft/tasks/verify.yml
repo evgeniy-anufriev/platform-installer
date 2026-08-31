@@ -10,8 +10,13 @@
   ansible.builtin.command:
     argv:
       - "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh"
-      - --bootstrap-server
-      - "127.0.0.1:{{ (_platform_kafka_local_instances | first).client_port }}"
+      - --bootstrap-controller
+      - >-
+        {{ ((_platform_kafka_local_controller_instances | first)
+             if _platform_kafka_local_controller_instances | length > 0
+             else (_platform_kafka_controller_instances | first)).advertised_host }}:{{ ((_platform_kafka_local_controller_instances | first)
+             if _platform_kafka_local_controller_instances | length > 0
+             else (_platform_kafka_controller_instances | first)).controller_port }}
       - describe
       - --status
   changed_when: false

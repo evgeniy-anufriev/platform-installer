@@ -1,0 +1,14 @@
+---
+- name: Reject Kafka listener port collisions on one physical host
+  ansible.builtin.assert:
+    that: >-
+      (kafka_host_members.1 | map(attribute='listener_ports') | list | flatten | unique | length)
+      == (kafka_host_members.1 | map(attribute='listener_ports') | list | flatten | length)
+    fail_msg: Kafka listener ports must be unique per physical host
+
+- name: Reject Kafka managed path collisions on one physical host
+  ansible.builtin.assert:
+    that: >-
+      (kafka_host_members.1 | map(attribute='managed_paths') | list | flatten | unique | length)
+      == (kafka_host_members.1 | map(attribute='managed_paths') | list | flatten | length)
+    fail_msg: Kafka member config, runtime, data and log paths must be isolated per physical host

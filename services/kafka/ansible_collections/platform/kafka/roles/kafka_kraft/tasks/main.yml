@@ -1,5 +1,5 @@
 ---
-- name: Validate Kafka cluster inputs
+- name: Validate Kafka deployment inputs
   ansible.builtin.assert:
     that:
       - platform_kafka_cluster_id is defined
@@ -7,17 +7,16 @@
       - platform_kafka_advanced_config is mapping
       - platform_kafka_instances is iterable
       - platform_kafka_quorum_mode in ['dynamic', 'static']
-    fail_msg: Kafka requires an explicit cluster_id and a valid instances list
+    fail_msg: Kafka requires an explicit cluster_id, quorum mode and a valid member list
 
-- name: Normalize explicit Kafka members
+- name: Select explicit Kafka member input
   ansible.builtin.set_fact:
-    _platform_kafka_instances: "{{ platform_kafka_instances }}"
-    _platform_kafka_legacy_single: false
+    _platform_kafka_input_instances: "{{ platform_kafka_instances }}"
   when: platform_kafka_instances | length > 0
 
-- name: Normalize SERVICE-01A input into one member
+- name: Adapt legacy single-member variables
   ansible.builtin.set_fact:
-    _platform_kafka_instances:
+    _platform_kafka_input_instances:
       - id: "{{ platform_kafka_service_name }}"
         node_id: "{{ platform_kafka_node_id }}"
         roles: [broker, controller]
@@ -28,28 +27,86 @@
         config_directory: "{{ platform_kafka_config_directory }}"
         host: "{{ inventory_hostname }}"
         advertised_host: "{{ platform_kafka_advertised_host }}"
-    _platform_kafka_legacy_single: true
+        _compatibility_unit:
+          name: "{{ platform_kafka_service_name }}"
+          destination: "/etc/systemd/system/{{ platform_kafka_service_name }}.service"
+          environment_pattern: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name }}/systemd.env"
+          runtime_directory: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name }}"
+          description: Apache Kafka 4.3.1 KRaft member
   when: platform_kafka_instances | length == 0
 
-- name: Validate member identity and paths
+- name: Validate common Kafka member inputs
   ansible.builtin.assert:
     that:
+      - item is mapping
       - item.id is defined
       - item.id | string is match('^[A-Za-z0-9_.-]+$')
       - item.node_id is defined
-      - (item.node_id | string) is match('^[0-9]+$')
-      - item.client_port is defined
-      - item.controller_port is defined
-      - item.data_directory is defined
-      - item.log_directory is defined
+      - item.node_id | string is match('^[0-9]+$')
+      - item.roles is defined
+      - item.roles is iterable
+      - item.roles is not string
+      - item.roles | length > 0
+      - item.roles | difference(['broker', 'controller']) | length == 0
       - item.host is defined
+      - item.host | string | length > 0
       - item.advertised_host is defined
-      - platform_kafka_quorum_mode == 'static' or (_platform_kafka_instances | length == 1) or item.directory_id is defined
-      - platform_kafka_quorum_mode == 'static' or (_platform_kafka_instances | length == 1) or (item.directory_id | string) is match('^[A-Za-z0-9_-]{22}$')
-    fail_msg: Every Kafka member requires a safe id, node_id, ports and isolated directories
-  loop: "{{ _platform_kafka_instances }}"
+      - item.advertised_host | string | length > 0
+      - item.data_directory is defined
+      - item.data_directory | string | length > 0
+      - item.log_directory is defined
+      - item.log_directory | string | length > 0
+    fail_msg: Every Kafka member requires identity, roles, placement, address and isolated directories
+  loop: "{{ _platform_kafka_input_instances }}"
   loop_control:
     label: "{{ item.id | default('unknown') }}"
+
+- name: Initialize normalized Kafka member list
+  ansible.builtin.set_fact:
+    _platform_kafka_instances: []
+
+- name: Normalize Kafka members into the generic internal model
+  ansible.builtin.include_tasks: normalize_member.yml
+  loop: "{{ _platform_kafka_input_instances }}"
+  loop_control:
+    loop_var: kafka_input_member
+    label: "{{ kafka_input_member.id }}"
+
+- name: Order normalized Kafka members deterministically
+  ansible.builtin.set_fact:
+    _platform_kafka_instances: "{{ _platform_kafka_instances | sort(attribute='node_id') }}"
+
+- name: Derive Kafka member sets
+  ansible.builtin.set_fact:
+    _platform_kafka_controller_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'controller') | list }}"
+    _platform_kafka_broker_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'broker') | list }}"
+    _platform_kafka_local_instances: "{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+
+- name: Derive local Kafka role member sets
+  ansible.builtin.set_fact:
+    _platform_kafka_local_controller_instances: "{{ _platform_kafka_local_instances | selectattr('roles', 'contains', 'controller') | list }}"
+    _platform_kafka_local_broker_instances: "{{ _platform_kafka_local_instances | selectattr('roles', 'contains', 'broker') | list }}"
+
+- name: Validate role-aware Kafka member inputs
+  ansible.builtin.assert:
+    that:
+      - "'broker' not in item.roles or item.client_port is defined"
+      - "'broker' not in item.roles or (item.client_port | string) is match('^[0-9]+$')"
+      - "'controller' not in item.roles or item.controller_port is defined"
+      - "'controller' not in item.roles or (item.controller_port | string) is match('^[0-9]+$')"
+      - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in item.roles or item.directory_id is defined
+      - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in item.roles or (item.directory_id | string) is match('^[A-Za-z0-9_-]{22}$')
+    fail_msg: Kafka listener and dynamic controller identity inputs must match member roles
+  loop: "{{ _platform_kafka_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Require at least one Kafka controller and broker
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_controller_instances | length > 0
+      - _platform_kafka_broker_instances | length > 0
+    fail_msg: Kafka deployment requires at least one controller and one broker member
 
 - name: Reject duplicate Kafka node IDs
   ansible.builtin.assert:
@@ -72,26 +129,12 @@
       == (_platform_kafka_instances | map(attribute='directory_id') | select('defined') | list | length)
     fail_msg: Duplicate Kafka directory_id is not safe to apply
 
-- name: Reject duplicate Kafka ports on one physical host
-  ansible.builtin.assert:
-    that: >-
-      (((item.1 | map(attribute='client_port') | list)
-       + (item.1 | map(attribute='controller_port') | list)) | unique | length)
-      == ((item.1 | length) * 2)
-    fail_msg: Kafka client and controller ports must be unique per physical host
+- name: Validate host-local Kafka resource isolation
+  ansible.builtin.include_tasks: validate_host_resources.yml
   loop: "{{ _platform_kafka_instances | groupby('host') }}"
   loop_control:
-    label: "{{ item.0 }}"
-
-- name: Reject duplicate member directories on one physical host
-  ansible.builtin.assert:
-    that:
-      - (item.1 | map(attribute='data_directory') | list | unique | length) == (item.1 | length)
-      - (item.1 | map(attribute='log_directory') | list | unique | length) == (item.1 | length)
-    fail_msg: Kafka member data and log directories must be isolated per physical host
-  loop: "{{ _platform_kafka_instances | groupby('host') }}"
-  loop_control:
-    label: "{{ item.0 }}"
+    loop_var: kafka_host_members
+    label: "{{ kafka_host_members.0 }}"
 
 - name: Define reserved Kafka settings
   ansible.builtin.set_fact:
@@ -142,80 +185,29 @@
     fail_msg: Kafka artifact is missing or its SHA-256 does not match the approved offline contract
   when: not (platform_kafka_verify_only | bool)
 
-- name: Build deterministic dynamic controller bootstrap servers
+- name: Build deterministic controller-only quorum projections
   ansible.builtin.set_fact:
     _platform_kafka_controller_bootstrap_servers: >-
-      {% for member in (_platform_kafka_instances | sort(attribute='node_id')) %}{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_initial_controllers: >-
-      {% for member in (_platform_kafka_instances | sort(attribute='node_id')) %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_static_quorum_voters: >-
-      {% for member in (_platform_kafka_instances | sort(attribute='node_id')) %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
-- name: Select members assigned to this physical Ansible host
-  ansible.builtin.set_fact:
-    _platform_kafka_local_instances: >-
-      {{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
-
-- name: Require exactly one local Kafka member for real multi-host deployment
-  ansible.builtin.assert:
-    that: _platform_kafka_local_instances | length == 1
-    fail_msg: Each SERVICE-01C physical host must have exactly one assigned Kafka member
+- name: Prepare Kafka host prerequisites once
+  ansible.builtin.include_tasks: prepare_host.yml
   when:
-    - _platform_kafka_instances | length > 1
-    - (_platform_kafka_instances | map(attribute='host') | list | unique | length) > 1
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_local_instances | length > 0
 
-- name: Install host-wide Java prerequisite
-  ansible.builtin.package:
-    name: "{{ platform_kafka_java_package }}"
-    state: present
-  when: not (platform_kafka_verify_only | bool)
-
-- name: Verify Java major version
-  ansible.builtin.command: java -version
-  changed_when: false
-  register: platform_kafka_java_version
-  failed_when: >-
-    platform_kafka_java_version.rc != 0 or
-    ('version "21.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout))
-  when: not (platform_kafka_verify_only | bool)
-
-- name: Extract approved Kafka binary once
-  ansible.builtin.unarchive:
-    src: "{{ platform_kafka_artifact_path }}"
-    dest: /opt
-    remote_src: false
-    creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
-  when: not (platform_kafka_verify_only | bool)
-
-- name: Point stable Kafka install path at approved version
-  ansible.builtin.file:
-    src: "/opt/{{ platform_kafka_archive_directory }}"
-    dest: "{{ platform_kafka_install_directory }}"
-    state: link
-    force: true
-  when: not (platform_kafka_verify_only | bool)
-
-- name: Create shared Kafka group
-  ansible.builtin.group:
-    name: "{{ platform_kafka_group }}"
-    system: true
-  when: not (platform_kafka_verify_only | bool)
-
-- name: Create shared Kafka user
-  ansible.builtin.user:
-    name: "{{ platform_kafka_user }}"
-    group: "{{ platform_kafka_group }}"
-    system: true
-    create_home: false
-  when: not (platform_kafka_verify_only | bool)
-
-- name: Apply members in deterministic node order
+- name: Apply local Kafka members in deterministic node order
   ansible.builtin.include_tasks: member.yml
-  loop: "{{ _platform_kafka_local_instances | sort(attribute='node_id') }}"
+  loop: "{{ _platform_kafka_local_instances }}"
   loop_control:
     loop_var: kafka_member
     label: "{{ kafka_member.id }}"
+  when: not (platform_kafka_verify_only | bool)
 
-- name: Verify Kafka members and quorum
+- name: Verify local Kafka members and cluster
   ansible.builtin.include_tasks: verify.yml
   when: platform_kafka_verify_only | bool
