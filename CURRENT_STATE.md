@@ -2,9 +2,9 @@
 
 ## Phase
 
-EXEC-01, SERVICE-01C centralized acceptance and the focused generic Kafka role
-lifecycle refactor are complete. SERVICE-01B dynamic same-host quorum is
-proven; its apply post-start readiness gate remains the focused follow-up.
+EXEC-01, SERVICE-01B, SERVICE-01C and SERVICE-01D centralized acceptance and
+the focused generic Kafka role lifecycle refactor are complete. Dynamic
+same-host quorum is proven with the bounded post-start readiness gate.
 
 ## Established direction
 
@@ -129,14 +129,24 @@ proven; its apply post-start readiness gate remains the focused follow-up.
   node1/node2 quorum verify passed while full desired-state verify failed on
   node3; node3 recovery and final three-host verify returned `changed=0`,
   `failed=0`. Runtime QA SSH key material was removed from node2/node3.
+- Centralized SERVICE-01D acceptance through node1 Execution Node passed:
+  split broker/controller deployment applied and verified with six members;
+  repeat apply and final verify returned `changed=0`, `failed=0`. Broker stop
+  preserved controller quorum and produced the expected degraded full-state
+  verification; broker recovery restored all members. Controller stop likewise
+  preserved the two-controller quorum, and controller recovery restored the
+  full healthy state. Readiness polling closed the bounded post-start race.
+- SERVICE-01D runner lifecycle evidence is persisted under the Execution Node
+  QA directory. The runner records PID/stage/status, rejects a live duplicate,
+  converts an orphaned `RUNNING` state to `STALE`, and records terminal PASS or
+  FAILED states without secrets.
 
 ## Not implemented
 
 - Dependency DAG, endpoint/certificate resolution, runtime role variables and
   deployment plan.
 - Generic Core mutation roles.
-- SERVICE-01B apply lacks an explicit post-start quorum-readiness gate; direct
-  verify can race Kafka's normal initial controller convergence.
+- CORE-06 canonical project projection and runtime fingerprint migration.
 - Production services beyond the accepted service slices.
 - Go backend.
 - Persistence.
@@ -144,8 +154,7 @@ proven; its apply post-start readiness gate remains the focused follow-up.
 
 ## Next gate
 
-CORE-01 through CORE-05, SERVICE-01A, EXEC-01, SERVICE-01C and the generic Kafka
-role lifecycle refactor are complete. The production role no longer prevents a
-future split broker/controller topology, but SERVICE-01D is not implemented.
-The next gate is an explicit SERVICE-01B post-start readiness gate and replay;
-dynamic quorum remains required and no fallback or storage change is authorized.
+CORE-01 through CORE-05, SERVICE-01A, SERVICE-01B, SERVICE-01C, SERVICE-01D,
+EXEC-01 and the generic Kafka role lifecycle refactor are complete. CORE-06 is
+the next gated milestone; it must preserve the frozen normalized Kafka member
+boundary and must not create a second persistent source of truth.

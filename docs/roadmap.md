@@ -225,9 +225,8 @@ Ready when:
 
 ### SERVICE-01C: Kafka KRaft real multi-host deployment
 
-Status: PAUSED until centralized EXEC-01 acceptance is applied to the Kafka
-deployment. The Kafka-specific implementation is retained, but it must be
-re-accepted through one Execution Node invocation.
+Status: DONE. Centralized EXEC-01 acceptance was applied through one Execution
+Node invocation.
 
 Deliverables:
 
@@ -253,6 +252,27 @@ Not ready when:
 - only the happy path is tested;
 - the role needs Go-generated internal objects;
 - the role chooses or moves placements itself.
+
+### SERVICE-01D: Kafka split broker/controller deployment
+
+Status: DONE. The generic Kafka lifecycle accepts split broker-only and
+controller-only members without topology-profile branches. Centralized
+acceptance uses node1 as the selectable Execution Node and node1/node2/node3 as
+the three physical targets.
+
+Acceptance evidence:
+
+- six Kafka members applied and verified with dynamic controller quorum;
+- repeat apply and final verify returned `changed=0`, `failed=0`;
+- broker and controller stop/recovery scenarios preserved quorum and restored
+  the complete healthy deployment;
+- bounded systemd readiness polling prevents immediate post-start verify races;
+- the resumable runner persists stage, PID, terminal status and log directory,
+  detects orphaned `RUNNING` state as `STALE`, and prevents live duplicates.
+
+Static quorum remains an explicit compatibility mode covered by contract and
+fixture tests; no automatic fallback is introduced. CORE-06 remains separate
+and is not started by this milestone.
 
 ## Phase D — Stable project contract
 

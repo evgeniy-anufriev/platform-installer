@@ -15,13 +15,36 @@ completed=""
 started_at="$(date -u +%FT%TZ)"
 status_file="$qa_dir/status.json"
 
+if [[ -f "$status_file" ]]; then
+  python3 - "$status_file" <<'PY'
+import json, os, sys
+p = sys.argv[1]
+try:
+    state = json.loads(open(p, encoding="utf-8").read())
+except (OSError, ValueError):
+    state = {}
+if state.get("status") == "RUNNING":
+    pid = state.get("pid")
+    if isinstance(pid, int) and pid != os.getpid():
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            state["status"] = "STALE"
+            state["staleReason"] = "runner process is no longer alive"
+            open(p, "w", encoding="utf-8").write(json.dumps(state, indent=2)+"\n")
+        else:
+            raise SystemExit("SERVICE-01D runner is already active")
+PY
+fi
+
 write_status() {
-  python3 - "$status_file" "$stage" "$1" "$started_at" "$completed" "${2:-}" <<'PY'
+  python3 - "$status_file" "$stage" "$1" "$started_at" "$completed" "${2:-}" "$$" <<'PY'
 import json, pathlib, sys
-path, stage, status, started, completed, failed = sys.argv[1:]
+path, stage, status, started, completed, failed, pid = sys.argv[1:]
 pathlib.Path(path).write_text(json.dumps({"scenario":"SERVICE-01D","stage":stage,"status":status,
  "startedAt":started,"completedStages":[x for x in completed.split(',') if x],
- "failedStage":failed or None,"logDirectory":str(pathlib.Path(path).parent)}, indent=2)+"\n")
+ "failedStage":failed or None,"pid":int(pid),"heartbeat":"updated",
+ "logDirectory":str(pathlib.Path(path).parent)}, indent=2)+"\n")
 PY
 }
 

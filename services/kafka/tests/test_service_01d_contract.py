@@ -53,6 +53,17 @@ class Service01DContractTests(unittest.TestCase):
         self.assertIn("kafka-broker-api-versions.sh", verify)
         self.assertIn("Assert Kafka brokers are registered and unfenced", verify)
 
+    def test_acceptance_runner_persists_recoverable_lifecycle_state(self):
+        runner = (SERVICE / "tests" / "run_service_01d_acceptance.sh").read_text(encoding="utf-8")
+        for token in ("status.json", "pid", "STALE", "write_status PASS", "write_status FAILED"):
+            self.assertIn(token, runner)
+        self.assertIn("runner process is no longer alive", runner)
+
+    def test_acceptance_runner_rejects_a_live_duplicate(self):
+        runner = (SERVICE / "tests" / "run_service_01d_acceptance.sh").read_text(encoding="utf-8")
+        self.assertIn("runner is already active", runner)
+        self.assertIn("os.kill(pid, 0)", runner)
+
 
 if __name__ == "__main__":
     unittest.main()
