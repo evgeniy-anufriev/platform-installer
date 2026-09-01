@@ -5,12 +5,26 @@
   gather_facts: false
   any_errors_fatal: true
   pre_tasks:
-    - name: Load the portable project manifest
+    - name: Inspect optional legacy portable project manifest
+      ansible.builtin.stat:
+        path: >-
+          {{ platform_project_manifest_path |
+             default(inventory_dir ~ '/../project.yml', true) }}
+      register: platform_project_manifest_stat
+      run_once: true
+
+    - name: Initialize absent project manifest
+      ansible.builtin.set_fact:
+        platform_project_manifest_document: {}
+      run_once: true
+
+    - name: Load optional legacy portable project manifest
       ansible.builtin.include_vars:
         file: >-
           {{ platform_project_manifest_path |
              default(inventory_dir ~ '/../project.yml', true) }}
         name: platform_project_manifest_document
+      when: platform_project_manifest_stat.stat.exists
       run_once: true
 
     - name: Require a published service catalog artifact
@@ -60,6 +74,9 @@
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
+        ansible_desired_state: "{{ platform_desired_state | default({}) }}"
+        generated_state: "{{ platform_generated_state | default({}) }}"
+        project_id: "{{ platform_project_id | default((inventory_dir | dirname | basename), true) }}"
         inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
         desired_hosts: "{{ platform_desired_hosts }}"
         service_catalog: >-

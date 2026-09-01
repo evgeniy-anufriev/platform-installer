@@ -20,14 +20,34 @@ def finding(code, field, message, status="BLOCKED"):
     }
 
 
-def select_desired_state(manifest, legacy_topology):
-    """Choose the one logical desired-state authority with bounded legacy support."""
+def select_desired_state(manifest, legacy_topology, ansible_desired_state=None):
+    """Choose Ansible-native desired state with bounded project compatibility."""
     manifest = manifest if isinstance(manifest, dict) else {}
     legacy = legacy_topology if isinstance(legacy_topology, dict) else {}
+    native = ansible_desired_state if isinstance(ansible_desired_state, dict) else {}
     current = manifest.get("desiredState")
     has_current = isinstance(current, dict)
     has_legacy = bool(legacy)
+    has_native = bool(native)
     findings = []
+    if has_native:
+        compatibility = []
+        if has_current:
+            compatibility.append(("project.yml desiredState", current))
+        if has_legacy:
+            compatibility.append(("platform_project", legacy))
+        if any(canonical_digest(candidate) != canonical_digest(native) for _, candidate in compatibility):
+            findings.append(finding(
+                "ANSIBLE_DESIRED_STATE_CONFLICT", "platform_desired_state",
+                "Ansible-native desired state differs from a compatibility desired-state source",
+            ))
+        elif compatibility:
+            findings.append(finding(
+                "ANSIBLE_DESIRED_STATE_COMPATIBILITY_DEPRECATED", "platform_desired_state",
+                "Ansible-native desired state duplicates deprecated compatibility input: %s" %
+                ", ".join(source for source, _ in compatibility), "DEPRECATED",
+            ))
+        return native, findings
     if has_current and has_legacy:
         if canonical_digest(current) != canonical_digest(legacy):
             findings.append(finding(
@@ -50,6 +70,41 @@ def select_desired_state(manifest, legacy_topology):
         ))
         return legacy, findings
     return {}, findings
+
+
+def synthesize_ansible_manifest(desired_state, service_catalog, project_id="ansible-project"):
+    """Build an ephemeral validation manifest; it is never persisted as desired state."""
+    desired_state = desired_state if isinstance(desired_state, dict) else {}
+    service_catalog = service_catalog if isinstance(service_catalog, dict) else {}
+    definitions = service_catalog.get("definitions", {}) if isinstance(service_catalog.get("definitions"), dict) else {}
+    deployments = desired_state.get("serviceDeployments", {}) if isinstance(desired_state.get("serviceDeployments"), dict) else {}
+    used = sorted(set(
+        item.get("serviceType") for item in deployments.values()
+        if isinstance(item, dict) and item.get("serviceType")
+    ))
+    services = {}
+    for service_type in used:
+        definition = definitions.get(service_type, {})
+        metadata = definition.get("metadata", {}) if isinstance(definition, dict) else {}
+        services[service_type] = {
+            "definitionVersion": metadata.get("version", "unknown"),
+            "digest": definition.get("x-definitionDigest", "sha256:" + ("0" * 64)),
+        }
+    return {
+        "apiVersion": "platform.installer/v2alpha1",
+        "kind": "PlatformProject",
+        "metadata": {"id": project_id or "ansible-project"},
+        "desiredStateContract": "platform.installer/project-desired-state/v2alpha1",
+        "catalogLock": {
+            "apiVersion": "platform.installer/catalog/v1alpha1",
+            "digest": service_catalog.get("digest", "sha256:" + ("0" * 64)),
+            "services": services,
+        },
+        "artifactLock": {
+            "apiVersion": "platform.installer/artifacts/v1alpha1",
+            "digest": "sha256:" + ("0" * 64),
+        },
+    }
 
 
 def canonical_placements(placement_by_host, inventory_hosts):

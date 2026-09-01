@@ -21,21 +21,32 @@ def _inventory_hosts(inventory):
 
 def main():
     module = AnsibleModule(argument_spec={
-        "project_path": {"type": "path", "required": True},
-        "inventory_path": {"type": "path", "required": True},
+        "project_path": {"type": "path", "required": False, "default": None},
+        "inventory_path": {"type": "path", "required": False, "default": None},
+        "desired_state": {"type": "dict", "required": False, "default": {}},
+        "inventory_hosts": {"type": "dict", "required": False, "default": {}},
+        "project_id": {"type": "str", "required": False, "default": "ansible-project"},
         "pki_defaults": {"type": "dict", "required": True},
     }, supports_check_mode=True)
     try:
-        project = _load_yaml(module.params["project_path"])
-        inventory = _load_yaml(module.params["inventory_path"])
-        desired = project.get("desiredState", {}) if isinstance(project.get("desiredState"), dict) else {}
-        hosts = _inventory_hosts(inventory)
+        if module.params["desired_state"]:
+            desired = module.params["desired_state"]
+            hosts = module.params["inventory_hosts"]
+            project_id = module.params["project_id"]
+        else:
+            if not module.params["project_path"] or not module.params["inventory_path"]:
+                module.fail_json(msg="Legacy PKI resolution requires project and inventory paths", error_code="PKI_LEGACY_PATH_REQUIRED")
+            project = _load_yaml(module.params["project_path"])
+            inventory = _load_yaml(module.params["inventory_path"])
+            desired = project.get("desiredState", {}) if isinstance(project.get("desiredState"), dict) else {}
+            hosts = _inventory_hosts(inventory)
+            project_id = project.get("metadata", {}).get("id", "project")
         by_host = {host_id: values.get("platform_deployments", {}) for host_id, values in hosts.items() if isinstance(values, dict)}
         members, findings = canonical_inventory_members(by_host, hosts.keys())
         if findings:
             result = {"status": "BLOCKED", "findings": findings}
         else:
-            result = resolve_certificate_requests(project.get("metadata", {}).get("id", "project"), topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"])
+            result = resolve_certificate_requests(project_id, topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"])
     except Exception as error:
         module.fail_json(msg="PKI request resolution failed", error_code="PKI_RESOLUTION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":

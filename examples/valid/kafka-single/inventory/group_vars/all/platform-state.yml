@@ -1,0 +1,10 @@
+---
+# Machine-owned generated state. Do not edit as service desired state.
+platform_generated_state:
+  apiVersion: platform.installer/generated-state/v1alpha1
+  kind: PlatformGeneratedState
+  metadata: {projectId: kafka-single}
+  serviceDeployments:
+    kafka-main:
+      identity:
+        clusterId: MkU3OEVBNTcwNTJENDM2Qk

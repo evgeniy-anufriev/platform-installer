@@ -4,13 +4,27 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Load canonical project for path projection
+    - name: Initialize optional legacy Kafka project state
+      ansible.builtin.set_fact:
+        _kafka_discovery_project: {}
+      when: platform_desired_state | default({}) | length == 0
+
+    - name: Load legacy project for path projection
       ansible.builtin.include_vars:
         file: "{{ platform_kafka_project_path | default(inventory_dir ~ '/../project.yml', true) }}"
         name: _kafka_discovery_project
+      when: platform_desired_state | default({}) | length == 0
+
+    - name: Select effective Kafka discovery desired state
+      ansible.builtin.set_fact:
+        _kafka_discovery_desired_state: >-
+          {{ platform_desired_state
+             if (platform_desired_state | default({}) | length > 0)
+             else (_kafka_discovery_project.desiredState | default(platform_project | default({}))) }}
+
     - name: Build local Kafka metadata path records
       ansible.builtin.include_tasks: discover_deployment.yml
-      loop: "{{ (_kafka_discovery_project.desiredState.serviceDeployments | default({}) | dict2items) }}"
+      loop: "{{ (_kafka_discovery_desired_state.serviceDeployments | default({}) | dict2items) }}"
       loop_control:
         loop_var: _kafka_discovery_deployment
       when: _kafka_discovery_deployment.value.serviceType | default('') == 'kafka'

@@ -13,8 +13,10 @@ FIXTURE = ROOT / "examples" / "valid" / "kafka-split-multihost"
 class Service01DContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with (FIXTURE / "project.yml").open(encoding="utf-8") as stream:
+        with (FIXTURE / "inventory" / "group_vars" / "all" / "platform.yml").open(encoding="utf-8") as stream:
             cls.variables = yaml.safe_load(stream)
+        with (FIXTURE / "inventory" / "group_vars" / "all" / "platform-state.yml").open(encoding="utf-8") as stream:
+            cls.generated_variables = yaml.safe_load(stream)
 
     def test_fixture_has_three_split_members_on_three_hosts(self):
         placement = yaml.safe_load((FIXTURE / "inventory" / "hosts.yml").read_text(encoding="utf-8"))["all"]["hosts"]
@@ -35,7 +37,10 @@ class Service01DContractTests(unittest.TestCase):
         self.assertEqual({1, 2, 3, 4, 5, 6}, {member["configuration"]["nodeId"] for member in members})
         self.assertTrue(all("clientPort" not in member.get("configuration", {}) for member in controllers))
         self.assertTrue(all("controllerPort" not in member.get("configuration", {}) for member in brokers))
-        self.assertTrue(all("directoryId" in member.get("identity", {}) for member in controllers))
+        generated = self.generated_variables["platform_generated_state"]["serviceDeployments"]["kafka-main"]["members"]
+        self.assertNotIn("platform_generated_state", self.variables)
+        self.assertTrue(all("directoryId" in generated[member["id"]]["identity"] for member in controllers))
+        self.assertTrue(all("identity" not in member for member in members))
 
     def test_fixture_places_one_controller_and_broker_on_each_host(self):
         placement = yaml.safe_load((FIXTURE / "inventory" / "hosts.yml").read_text(encoding="utf-8"))["all"]["hosts"]

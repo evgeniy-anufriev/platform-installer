@@ -14,17 +14,21 @@ Status: Accepted.
 
 The first executable product is standalone Ansible Core. Go backend work starts only after one production service proves the lifecycle and project contract.
 
-## ADR-003: Portable project is the canonical desired state
+## ADR-003: Portable Ansible project is the canonical desired state
 
 Status: Accepted.
 
-Backend databases and frontend stores are projections/caches. They cannot introduce desired-state concepts absent from the portable contract.
+Standard Ansible inventory, `group_vars`, `host_vars` and role defaults are the
+canonical user-owned desired state. Backend databases and frontend stores are
+projections/caches. They cannot introduce desired-state concepts absent from
+those ordinary Ansible inputs. `project.yml` is optional compatibility and
+machine metadata, never a required user-authored desired-state document.
 
 ## ADR-004: Topology is explicit and first-class
 
 Status: Accepted.
 
-Service deployment, mode, members, roles, placements, dependencies and endpoint bindings are explicit project entities. Initial standalone projects use normal Ansible inventory, `group_vars` and `host_vars`; resolved execution groups and runtime variables are derived.
+Service deployment, mode, members, roles, placements, dependencies and endpoint bindings are explicit Ansible variables. Resolved execution groups and runtime variables are derived.
 
 ## ADR-005: Service catalog belongs to versioned service packages
 

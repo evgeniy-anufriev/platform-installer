@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha1/generated-state.schema.json",
+  "title": "Platform machine-owned generated state",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "serviceDeployments"],
+  "properties": {
+    "apiVersion": { "const": "platform.installer/generated-state/v1alpha1" },
+    "kind": { "const": "PlatformGeneratedState" },
+    "metadata": {
+      "type": "object",
+      "required": ["projectId"],
+      "properties": {
+        "projectId": { "$ref": "#/$defs/identifier" },
+        "fingerprints": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/digest" }
+        },
+        "locks": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "serviceDeployments": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "identity": { "$ref": "#/$defs/identity" },
+          "fingerprints": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/digest" }
+          },
+          "members": {
+            "type": "object",
+            "propertyNames": { "$ref": "#/$defs/identifier" },
+            "additionalProperties": {
+              "type": "object",
+              "properties": { "identity": { "$ref": "#/$defs/identity" } },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+    },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "identity": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identityKey" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "identityKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z][A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+)*$"
+    }
+  }
+}

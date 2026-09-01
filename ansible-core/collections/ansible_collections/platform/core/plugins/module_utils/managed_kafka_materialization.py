@@ -3,14 +3,76 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import copy
+import os
 import yaml
 
 try:
     from .kafka_identity import materialize_kafka_identities, validate_kafka_discovery
-    from .identity_persistence import persist_identity_documents
+    from .identity_persistence import persist_generated_state, persist_identity_documents
 except ImportError:
     from kafka_identity import materialize_kafka_identities, validate_kafka_discovery
-    from identity_persistence import persist_identity_documents
+    from identity_persistence import persist_generated_state, persist_identity_documents
+
+
+def materialize_ansible_kafka(desired_state, inventory_path, state_path, discovery, project_id="ansible-project", random_bytes=None):
+    """Materialize Kafka identities into machine-owned Ansible state only."""
+    with open(inventory_path, "r", encoding="utf-8") as source:
+        inventory = yaml.safe_load(source) or {}
+    if state_path and os.path.exists(state_path):
+        with open(state_path, "r", encoding="utf-8") as source:
+            loaded_document = yaml.safe_load(source) or {}
+    else:
+        loaded_document = {}
+    loaded = loaded_document.get("platform_generated_state", {}) if isinstance(loaded_document, dict) else {}
+    state = copy.deepcopy(loaded) if isinstance(loaded, dict) else {}
+    state.setdefault("apiVersion", "platform.installer/generated-state/v1alpha1")
+    state.setdefault("kind", "PlatformGeneratedState")
+    state.setdefault("metadata", {"projectId": project_id})
+    state.setdefault("serviceDeployments", {})
+    deployments = desired_state.get("serviceDeployments", {}) if isinstance(desired_state, dict) else {}
+    result = {"status": "PASS", "changed": False, "decisions": {}}
+    for deployment_id, declared in sorted(deployments.items()):
+        if not isinstance(declared, dict) or declared.get("serviceType") != "kafka":
+            continue
+        deployment_state = state["serviceDeployments"].setdefault(deployment_id, {})
+        effective = copy.deepcopy(declared)
+        effective.setdefault("identity", {}).update(deployment_state.get("identity", {}))
+        members = {}
+        for host, host_data in sorted((inventory.get("all", {}).get("hosts", {}) or {}).items()):
+            owned = (host_data.get("platform_deployments", {}) if isinstance(host_data, dict) else {}).get(deployment_id, {})
+            for member_id, member in sorted((owned.get("members", {}) if isinstance(owned, dict) else {}).items()):
+                normalized = copy.deepcopy(member)
+                normalized.setdefault("identity", {}).update(
+                    deployment_state.get("members", {}).get(member_id, {}).get("identity", {})
+                )
+                members[member_id] = normalized
+        metadata, records = {}, []
+        for host_discovery in discovery.values() if isinstance(discovery, dict) else []:
+            values = host_discovery if isinstance(host_discovery, list) else []
+            for record in values:
+                if isinstance(record, dict) and record.get("deploymentId") in (None, deployment_id) and record.get("memberId"):
+                    records.append(record)
+                    metadata[record["memberId"]] = record
+        findings = validate_kafka_discovery(members.keys(), records)
+        if findings:
+            return dict(result, status="BLOCKED", findings=findings)
+        kwargs = {"random_bytes": random_bytes} if random_bytes is not None else {}
+        decision = materialize_kafka_identities(deployment_id, effective, members, metadata, **kwargs)
+        result["decisions"][deployment_id] = decision
+        if decision["status"] != "PASS":
+            return dict(result, status="BLOCKED", findings=decision.get("findings", []))
+        patch = decision.get("patch", {})
+        if patch.get("deploymentIdentity"):
+            deployment_state.setdefault("identity", {}).update(patch["deploymentIdentity"])
+        for member_id, identity in patch.get("memberIdentities", {}).items():
+            deployment_state.setdefault("members", {}).setdefault(member_id, {}).setdefault("identity", {}).update(identity)
+        result["changed"] = result["changed"] or bool(decision.get("changed"))
+    if result["changed"] or not loaded:
+        persisted = persist_generated_state(state_path, {"platform_generated_state": state})
+        result["changed"] = persisted["changed"]
+    with open(state_path, "r", encoding="utf-8") as source:
+        result["stateDocument"] = yaml.safe_load(source) or {}
+    return result
 
 
 def materialize_managed_kafka(project_path, inventory_path, discovery, random_bytes=None):

@@ -8,11 +8,12 @@ try:
         canonical_inventory_members,
         canonical_placements,
         select_desired_state,
+        synthesize_ansible_manifest,
         topology_with_inventory_members,
     )
 except ImportError:
     from project_validation import canonical_digest, validate_project
-    from project_state import canonical_inventory_members, canonical_placements, select_desired_state, topology_with_inventory_members
+    from project_state import canonical_inventory_members, canonical_placements, select_desired_state, synthesize_ansible_manifest, topology_with_inventory_members
 
 
 TOPOLOGY_FIELDS = ("serviceType", "definitionVersion", "mode", "identity", "members")
@@ -97,14 +98,17 @@ def _used_definition_digests(topology, service_catalog):
     }
 
 
-def resolve_topology(manifest, topology, inventory_hosts, service_catalog, placement_by_host=None, inventory_deployments_by_host=None):
+def resolve_topology(manifest, topology, inventory_hosts, service_catalog, placement_by_host=None, inventory_deployments_by_host=None, ansible_desired_state=None):
     """Resolve explicit topology without filesystem, Ansible or host-var knowledge.
 
     CORE-01 remains responsible for project/catalog/reference and manifest
     constraint validation. This function only canonicalizes the validated
     topology and fingerprints it with digests of definitions actually used.
     """
-    desired_state, state_findings = select_desired_state(manifest, topology)
+    desired_state, state_findings = select_desired_state(manifest, topology, ansible_desired_state)
+    effective_manifest = manifest
+    if ansible_desired_state and not isinstance(manifest.get("desiredState"), dict):
+        effective_manifest = synthesize_ansible_manifest(desired_state, service_catalog)
     placements = None
     placement_findings = []
     if inventory_deployments_by_host is not None:
@@ -118,7 +122,7 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
                     "apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
                     "code": "PERSISTED_MEMBERS_NOT_ALLOWED", "status": "BLOCKED",
                     "category": "project-state", "field": "serviceDeployments.%s.members" % deployment_id,
-                    "safeMessage": "Canonical project desiredState must not enumerate service members",
+                    "safeMessage": "Ansible desired state must not duplicate inventory-owned service members",
                 })
         for deployment_id, member_id in sorted(inventory_members):
             if deployment_id not in deployments:
@@ -160,7 +164,7 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
                 elif member_id not in deployments[deployment_id].get("members", {}):
                     placement_findings.append({"apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding", "code": "PLACEMENT_MEMBER_NOT_FOUND", "status": "BLOCKED", "category": "project-state", "field": "platform_members.%s.%s" % (deployment_id, member_id), "safeMessage": "Placement references an unknown member"})
     validation = validate_project(
-        manifest=manifest,
+        manifest=effective_manifest,
         topology=desired_state,
         desired_hosts={},
         service_catalog=service_catalog,

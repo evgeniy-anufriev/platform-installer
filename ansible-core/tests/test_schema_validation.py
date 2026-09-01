@@ -86,6 +86,21 @@ class Draft202012EngineTests(unittest.TestCase):
             engine.validate({"value": "x"}, external_path)
         self.assertIn("SCHEMA_EXTERNAL_REF_FORBIDDEN", str(context.exception))
 
+    def test_generated_state_rejects_user_configuration(self):
+        contracts = Path(__file__).resolve().parents[2] / "contracts"
+        schema = contracts / "project" / "v2alpha1" / "generated-state.schema.json"
+        document = {
+            "apiVersion": "platform.installer/generated-state/v1alpha1",
+            "kind": "PlatformGeneratedState",
+            "metadata": {"projectId": "example"},
+            "serviceDeployments": {
+                "kafka-main": {"configuration": {"clientPort": 9092}},
+            },
+        }
+        findings = ENGINE.SchemaValidator(contracts).validate(document, schema)
+        self.assertTrue(findings)
+        self.assertTrue(all(item["code"] == "SCHEMA_VALIDATION_FAILED" for item in findings))
+
 
 if __name__ == "__main__":
     unittest.main()

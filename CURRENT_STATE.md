@@ -2,16 +2,18 @@
 
 ## Phase
 
-CORE-06, EXEC-01, SERVICE-01A through SERVICE-01D centralized acceptance and
-the focused generic Kafka role lifecycle refactor are complete. Canonical
-project/inventory ownership and deterministic managed Kafka runtime projection
-are proven through the standalone Ansible execution path.
+CORE-07, CORE-06, EXEC-01, SERVICE-01A through SERVICE-01D centralized
+acceptance and the focused generic Kafka role lifecycle refactor are complete.
+Ansible-native desired-state ownership and deterministic managed Kafka/PKI
+projection are proven through the standalone execution path without requiring
+`project.yml`.
 
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
 - Ansible Core is the first deliverable and must operate without Installer.
-- The portable project contract is the single desired-state source.
+- Standard inventory, `group_vars`, `host_vars` and role defaults are the
+  canonical user-owned desired-state source.
 - Topology remains a first-class part of desired state.
 - Service deployments, placements, endpoint bindings and certificate scopes are explicit.
 - Go backend and UI are deferred until the standalone contract is proven by a production service.
@@ -35,9 +37,13 @@ are proven through the standalone Ansible execution path.
 - The production Kafka role is topology-profile agnostic after input
   normalization; SERVICE-01A/01B/01C names are fixture and acceptance concerns,
   not role lifecycle branches.
-- `project.yml.desiredState` owns deployment-level desired state; inventory
-  `platform_deployments` owns physical member placement, roles, member
-  configuration and member identity.
+- `platform_desired_state` in ordinary Ansible variables owns logical
+  deployment intent; inventory `platform_deployments` owns physical member
+  placement, roles and member configuration.
+- `platform_generated_state` is machine-owned and limited to generated
+  identities, fingerprints, locks and metadata. `project.yml.desiredState` and
+  legacy `platform_project` are bounded compatibility readers, not new-writer
+  targets or required Ansible user input.
 - Managed service projections are runtime-only. Kafka continues to consume its
   public manual `platform_kafka_instances` input in standalone mode.
 - Kafka `clientPort` and `controllerPort` remain simplified PLAINTEXT
@@ -104,6 +110,14 @@ are proven through the standalone Ansible execution path.
 - Kafka identity discovery and pure generate/recover/validate decisions,
   transaction-safe project/inventory persistence, disk reload and second
   validation before any Kafka mutation. Verify remains read-only.
+- CORE-07 Ansible-native canonical state selection, optional project metadata,
+  inventory-owned member composition and isolated generated-state schema.
+  Managed Kafka identity materialization writes only
+  `platform-state.yml`, reloads from disk and validates again before service
+  mutation; unrelated inventory/group/host variables remain byte-preserved.
+- Managed PKI request resolution now consumes the same Ansible-native topology
+  without requiring `project.yml`; standalone manual Kafka and PKI inputs remain
+  supported public contracts.
 - Explicit deployment-scoped Kafka clean-install and separately acknowledged
   administrative/QA host reset operations; neither is an automatic reconcile
   or identity-mismatch fallback.
@@ -187,6 +201,16 @@ are proven through the standalone Ansible execution path.
   managed CA, PEM and dedicated PKCS12 key/trust stores on node1; target verify
   and repeat apply returned `changed=0`. A changed standalone request was
   blocked with `CERTIFICATE_REISSUE_REQUIRED` before certificate mutation.
+- CORE-07 RED OS regression: 104 Core tests and 22 Kafka tests passed; generated
+  configuration schemas and catalog are reproducible; Core, Kafka and PKI
+  syntax checks passed; privileged network-isolated validation passed with
+  `localhost changed=0` and no target contact.
+- CORE-07 centralized Kafka FAST acceptance passed for SERVICE-01A through
+  SERVICE-01D with managed `project.yml` deliberately absent. Every apply and
+  verify passed; every repeat apply returned `changed=0` on all participating
+  hosts. Failure/recovery scenarios were not repeated.
+- CORE-07 managed PKI no-project acceptance passed. Apply, repeat apply and
+  verify returned `failed=0`; repeat apply and verify returned `changed=0`.
 
 ## Not implemented
 
@@ -203,7 +227,7 @@ are proven through the standalone Ansible execution path.
 
 ## Next gate
 
-CORE-01 through CORE-06, PKI-01, SERVICE-01A through SERVICE-01D, EXEC-01 and
+CORE-01 through CORE-07, PKI-01, SERVICE-01A through SERVICE-01D, EXEC-01 and
 the generic Kafka role lifecycle refactor are complete. SERVICE-02A (Kafka
 named listeners and SSL consumption) remains gated by an explicit owner
 request.

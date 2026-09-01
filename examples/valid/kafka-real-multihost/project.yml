@@ -7,19 +7,6 @@ desiredStateContract: platform.installer/project-desired-state/v2alpha1
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-desiredState:
-  serviceDeployments:
-    kafka-main:
-      serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
-      mode: kraft-distributed
-      identity:
-        clusterId: MkU3OEVBNTcwNTJENDM2Qk
-      configuration:
-        clientPort: 9092
-        controllerPort: 9093
-        quorumMode: dynamic
-        runtimePathNamespace: kafka-main
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
   digest: sha256:14f53d2d65562ce6b07466d45f011816a0b1909da2669683bd25c604483fa534

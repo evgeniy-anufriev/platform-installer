@@ -1,8 +1,27 @@
 ---
+- name: Initialize safe Ansible-native PKI host projection
+  ansible.builtin.set_fact:
+    _platform_pki_inventory_hosts: {}
+  when: platform_pki_resolve_managed | bool
+
+- name: Collect PKI placement and service-address inputs
+  ansible.builtin.set_fact:
+    _platform_pki_inventory_hosts: >-
+      {{ _platform_pki_inventory_hosts | combine({item: {
+           'ansible_host': (hostvars[item].ansible_host | default(item)),
+           'platform_deployments': (hostvars[item].platform_deployments | default({}))
+         }}) }}
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  when: platform_pki_resolve_managed | bool
+  no_log: true
+
 - name: Resolve topology-derived managed PKI requests
   platform.core.resolve_pki_requests:
-    project_path: "{{ platform_pki_project_path }}"
-    inventory_path: "{{ platform_pki_inventory_path }}"
+    project_path: "{{ platform_pki_project_path if (platform_desired_state | default({}) | length == 0) else omit }}"
+    inventory_path: "{{ platform_pki_inventory_path if (platform_desired_state | default({}) | length == 0) else omit }}"
+    desired_state: "{{ platform_desired_state | default({}) }}"
+    inventory_hosts: "{{ _platform_pki_inventory_hosts | default({}) }}"
+    project_id: "{{ platform_project_id | default((inventory_dir | dirname | basename), true) }}"
     pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
   register: platform_pki_managed_resolution
   when: platform_pki_resolve_managed | bool

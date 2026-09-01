@@ -3,7 +3,7 @@
   ansible.builtin.include_tasks: project_runtime.yml
   when:
     - platform_kafka_instances | length == 0
-    - platform_project is defined or platform_project_manifest_path is defined
+    - platform_desired_state is defined or platform_project is defined or platform_project_manifest_path is defined
 
 - name: Validate Kafka deployment inputs
   ansible.builtin.assert:

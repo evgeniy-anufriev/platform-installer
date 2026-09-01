@@ -28,6 +28,34 @@ def _dump(document):
     return yaml.safe_dump(document, allow_unicode=True, default_flow_style=False, sort_keys=False, width=100).encode("utf-8")
 
 
+def persist_generated_state(state_path, document):
+    """Atomically persist one machine-owned state document without rewriting inventory."""
+    path = os.path.abspath(state_path)
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    original = _read_bytes(path) if os.path.exists(path) else b""
+    candidate = _dump(document)
+    if original:
+        try:
+            if yaml.safe_load(original) == document:
+                return {"status": "PASS", "changed": False, "candidateHash": _hash(original)}
+        except (TypeError, ValueError, yaml.YAMLError):
+            pass
+    fd, temporary = tempfile.mkstemp(prefix=".%s." % os.path.basename(path), dir=directory)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(candidate)
+            output.flush()
+            os.fsync(output.fileno())
+        if os.path.exists(path) and _hash(_read_bytes(path)) != _hash(original):
+            raise RuntimeError("MATERIALIZATION_CONCURRENT_EDIT")
+        os.replace(temporary, path)
+        return {"status": "PASS", "changed": True, "candidateHash": _hash(candidate)}
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def persist_identity_documents(project_path, inventory_path, project, inventory, transaction_dir=None, before_commit=None):
     """Persist a complete project/inventory pair with optimistic locking.
 

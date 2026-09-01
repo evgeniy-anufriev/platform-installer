@@ -90,7 +90,7 @@ The initial portable project is a normal Ansible project:
 
 ```text
 project/
-  project.yml                  # metadata, catalog/artifact locks
+  project.yml                  # optional machine metadata/compatibility
   inventory/
     hosts.yml                  # desired hosts and normal Ansible groups
     group_vars/all/platform.yml # service topology, endpoints and policies
@@ -100,6 +100,14 @@ project/
 ```
 
 This multi-file layout is one versioned project contract. It avoids a proprietary launcher and does not make the role contract depend on a monolithic Installer DTO.
+
+The Ansible-only user configures inventory and ordinary variables only.
+`platform_desired_state` in `group_vars` owns logical deployments and policy;
+host `platform_deployments` owns logical members and physical placement.
+Generated identities, fingerprints and locks are machine-owned under
+`platform_generated_state`, conventionally in
+`inventory/group_vars/all/platform-state.yml`. They are not desired
+configuration and are never merged back into `platform_desired_state`.
 
 The repository `ansible.cfg` is part of the standalone execution contract.
 It requires `hash_behaviour = merge` so inventory policy maps can recursively

@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 import os
 import sys
 import unittest
@@ -121,6 +122,31 @@ class TopologyResolutionTests(unittest.TestCase):
         second = RESOLUTION.resolve_topology(manifest("project-b"), topology(), ["node-a", "node-b"], catalog())
         self.assertEqual(first["topologyFingerprint"], second["topologyFingerprint"])
 
+    def test_inventory_placement_changes_topology_fingerprint(self):
+        desired = topology()
+        desired["serviceDeployments"]["kafka-main"].pop("members")
+        first_inventory = {
+            "node-a": {"kafka-main": {"members": {"member-a": {"roles": ["broker"], "configuration": {}}}}},
+            "node-b": {"kafka-main": {"members": {"member-b": {"roles": ["broker", "controller"], "configuration": {}}}}},
+        }
+        second_inventory = copy.deepcopy(first_inventory)
+        second_inventory["node-a"], second_inventory["node-b"] = (
+            second_inventory["node-b"], second_inventory["node-a"],
+        )
+        first = RESOLUTION.resolve_topology(
+            {}, {}, ["node-a", "node-b"], catalog(),
+            inventory_deployments_by_host=first_inventory,
+            ansible_desired_state=desired,
+        )
+        second = RESOLUTION.resolve_topology(
+            {}, {}, ["node-a", "node-b"], catalog(),
+            inventory_deployments_by_host=second_inventory,
+            ansible_desired_state=desired,
+        )
+        self.assertEqual("PASS", first["status"])
+        self.assertEqual("PASS", second["status"])
+        self.assertNotEqual(first["topologyFingerprint"], second["topologyFingerprint"])
+
     def test_only_used_definition_digests_affect_fingerprint(self):
         first_catalog = catalog()
         second_catalog = catalog(extra=True)
@@ -166,6 +192,30 @@ class TopologyResolutionTests(unittest.TestCase):
         )
         self.assertEqual("PASS", result["status"])
         self.assertEqual("node-b", result["resolvedTopology"]["serviceDeployments"]["kafka-main"]["members"]["member-b"]["host"])
+
+    def test_resolves_ansible_native_state_without_project_desired_state(self):
+        desired = topology()
+        desired["serviceDeployments"]["kafka-main"].pop("members")
+        inventory = {
+            "node-a": {"kafka-main": {"members": {"member-a": {"roles": ["broker"], "configuration": {}}}}},
+            "node-b": {"kafka-main": {"members": {"member-b": {"roles": ["broker", "controller"], "configuration": {}}}}},
+        }
+        result = RESOLUTION.resolve_topology(
+            {}, {}, ["node-a", "node-b"], catalog(),
+            inventory_deployments_by_host=inventory,
+            ansible_desired_state=desired,
+        )
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual("node-a", result["resolvedTopology"]["serviceDeployments"]["kafka-main"]["members"]["member-a"]["host"])
+
+    def test_ansible_native_state_cannot_duplicate_inventory_members(self):
+        result = RESOLUTION.resolve_topology(
+            {}, {}, ["node-a", "node-b"], catalog(),
+            inventory_deployments_by_host={},
+            ansible_desired_state=topology(),
+        )
+        self.assertEqual("BLOCKED", result["status"])
+        self.assertIn("PERSISTED_MEMBERS_NOT_ALLOWED", [item["code"] for item in result["findings"]])
 
 if __name__ == "__main__":
     unittest.main()

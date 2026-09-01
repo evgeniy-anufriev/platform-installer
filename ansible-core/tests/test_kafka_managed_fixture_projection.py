@@ -30,9 +30,12 @@ class ManagedKafkaFixtureProjectionTests(unittest.TestCase):
         for name, expected in self.FIXTURES.items():
             with self.subTest(fixture=name):
                 fixture = os.path.join(ROOT, "..", "examples", "valid", name)
-                manifest = yaml.safe_load(Path(fixture, "project.yml").read_text(encoding="utf-8"))
+                variables = yaml.safe_load(Path(fixture, "inventory", "group_vars", "all", "platform.yml").read_text(encoding="utf-8"))
+                state_variables = yaml.safe_load(Path(fixture, "inventory", "group_vars", "all", "platform-state.yml").read_text(encoding="utf-8"))
                 inventory = yaml.safe_load(Path(fixture, "inventory", "hosts.yml").read_text(encoding="utf-8"))
-                desired = manifest["desiredState"]["serviceDeployments"]["kafka-main"]
+                desired = variables["platform_desired_state"]["serviceDeployments"]["kafka-main"]
+                generated = state_variables["platform_generated_state"]["serviceDeployments"]["kafka-main"]
+                self.assertNotIn("platform_generated_state", variables)
                 placement = inventory["all"]["hosts"]
                 members = {}
                 addresses = {}
@@ -46,7 +49,7 @@ class ManagedKafkaFixtureProjectionTests(unittest.TestCase):
                     "kafka-main": {
                         "serviceType": "kafka",
                         "mode": expected["mode"],
-                        "identity": desired.get("identity", {}),
+                        "identity": generated.get("identity", {}),
                         "members": members,
                     }
                 }}}
@@ -57,7 +60,7 @@ class ManagedKafkaFixtureProjectionTests(unittest.TestCase):
                 result = projection.project_kafka_runtime(
                     topology, {"services": {"kafka-main": configuration}}, addresses
                 )["kafka-main"]
-                self.assertEqual(desired["identity"].get("clusterId"), result["clusterId"])
+                self.assertEqual(generated["identity"].get("clusterId"), result["clusterId"])
                 self.assertEqual("dynamic", result["quorumMode"])
                 self.assertTrue(result["runtimeProjectionFingerprint"].startswith("sha256:"))
                 self.assertEqual(len(members), len(result["instances"]))

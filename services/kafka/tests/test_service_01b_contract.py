@@ -40,6 +40,15 @@ class Service01BContractTests(unittest.TestCase):
         self.assertNotIn("_platform_kafka_legacy_single", source)
         self.assertNotIn("exactly one local Kafka member", source)
 
+    def test_manual_member_input_does_not_require_project_state(self):
+        with (ROLE / "tasks" / "main.yml").open(encoding="utf-8") as stream:
+            tasks = yaml.safe_load(stream)
+        projection = next(task for task in tasks if task["name"] == "Project managed Kafka members when the public list is absent")
+        self.assertIn("platform_kafka_instances | length == 0", projection["when"])
+        explicit = next(task for task in tasks if task["name"] == "Select explicit Kafka member input")
+        self.assertEqual("platform_kafka_instances | length > 0", explicit["when"])
+        self.assertNotIn("platform_project", explicit["when"])
+
     def test_role_blocks_identity_port_and_storage_collisions(self):
         source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
         self.assertIn("Reject duplicate Kafka node IDs", source)

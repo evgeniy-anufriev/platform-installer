@@ -1,0 +1,21 @@
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_desired_state:
+  certificateAuthorities:
+    platform-ca:
+      mode: MANAGED
+      commonName: Platform test CA
+  certificateProfiles:
+    infrastructure:
+      authorityRef: platform-ca
+      sanPolicy: {}
+  tlsProfiles:
+    infrastructure-tls:
+      certificateProfileRef: infrastructure
+      storePasswordSecretRef: runtime:pki-store-password
+  serviceDeployments:
+    kafka-main:
+      serviceType: kafka
+      definitionVersion: 1.0.0-alpha.1
+      mode: kraft-standalone
+      configuration:
+        tlsProfile: infrastructure-tls

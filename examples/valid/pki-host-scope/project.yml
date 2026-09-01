@@ -14,23 +14,3 @@ catalogLock:
     kafka:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:e5f138fb429ac62c6a70ba230d6198197cf3f9e4465255a85c1772a8efbb28b2
-desiredState:
-  certificateAuthorities:
-    platform-ca:
-      mode: MANAGED
-      commonName: Platform test CA
-  certificateProfiles:
-    infrastructure:
-      authorityRef: platform-ca
-      sanPolicy: {}
-  tlsProfiles:
-    infrastructure-tls:
-      certificateProfileRef: infrastructure
-      storePasswordSecretRef: runtime:pki-store-password
-  serviceDeployments:
-    kafka-main:
-      serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
-      mode: kraft-standalone
-      configuration:
-        tlsProfile: infrastructure-tls

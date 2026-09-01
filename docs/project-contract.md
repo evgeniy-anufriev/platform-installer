@@ -2,98 +2,73 @@
 
 ## Purpose
 
-The portable project directory is the single canonical desired state shared by standalone Ansible, the future backend and the UI. It uses standard inventory, `group_vars` and `host_vars`, is human-reviewable and versioned, and is free of discovered facts, execution state and plaintext secrets.
+The portable project directory contains the single canonical user-owned desired
+state shared by standalone Ansible, the future backend and the UI. Desired
+state is ordinary inventory, `group_vars`, `host_vars` and role defaults. The
+Installer edits those same files and invokes the same playbooks. An
+Ansible-only user does not need to create or understand `project.yml`.
 
 ## Physical layout
 
 ```text
 project/
-  project.yml
+  project.yml                         # optional compatibility/machine metadata
   inventory/
     hosts.yml
-    group_vars/all/platform.yml
+    group_vars/all/platform.yml       # user-owned desired state
+    group_vars/all/platform-state.yml # machine-owned generated state
     group_vars/<service-or-operator-group>.yml
     host_vars/<host>.yml
   ansible.cfg
 ```
 
-The contract covers the directory as a whole. `project.yml` carries metadata and locks; inventory declares desired hosts; platform topology and policy live in an ordinary group variable document; service and host overrides use normal Ansible variable precedence within the restrictions defined by the contract.
+The contract covers the directory as a whole. Inventory declares desired
+hosts; platform topology and policy live in ordinary variable documents;
+service and host overrides use normal Ansible precedence. Optional
+`project.yml` and `platform_generated_state` may carry machine-owned metadata,
+generated identities, fingerprints and locks only.
 
 The project execution configuration must keep `hash_behaviour = merge`.
 This is a required Platform Installer convention: partial map values in
 `group_vars` and `host_vars` recursively overlay role defaults.
 
-## Root outline
+## User-owned desired state
 
-`project.yml` is the only owner of identity and contract/lock versions:
-
-```yaml
-apiVersion: platform.installer/v2alpha1
-kind: PlatformProject
-metadata:
-  id: production-scada
-desiredStateContract: platform.installer/project-desired-state/v2alpha1
-catalogLock:
-  apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  services: {}
-artifactLock:
-  apiVersion: platform.installer/artifacts/v1alpha1
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-```
-
-The illustrative `inventory/group_vars/all/platform.yml` shape contains only
-desired topology and policy. It does not repeat the project ID or API version:
+`inventory/group_vars/all/platform.yml` owns logical desired state:
 
 ```yaml
-platform_project:
+platform_desired_state:
   serviceDeployments:
-    accounting-db:
-      serviceType: postgresql
-      definitionVersion: 1
-      mode: standalone
-      configuration: {}
-      members:
-        database-1:
-          host: redos-node1
-          roles: [database]
-
-  endpointGroups:
-    applications:
-      baseDomain: scada.local
-      additionalDomains: [apps.example.local]
-      wildcard: true
-      vip: 10.10.10.2
-
-  endpointBindings:
-    accounting-client:
-      serviceDeployment: accounting-db
-      listener: client
-      endpointGroup: applications
-      alias: postgres
-
-  certificateProfiles:
-    infrastructure:
-      authorityRef: platform-ca
-      sanPolicy:
-        includeHostDns: true
-        includeHostIp: true
-        includeEndpointFqdns: true
-        includeEndpointWildcard: true
-        includeEndpointVip: true
-
-  certificateScopes:
-    infrastructure-services:
-      profile: infrastructure
-      sources:
-        endpointBindings: [accounting-client]
-        serviceDeployments: [accounting-db]
-
-  secretRequirements:
-    postgres-admin:
-      purpose: postgresql_admin_password
-      providerRef: runtime:postgres-admin
+    kafka-main:
+      serviceType: kafka
+      definitionVersion: '1'
+      mode: kraft-distributed
+      configuration:
+        quorumMode: dynamic
 ```
+
+Inventory hosts own physical placement and member-scoped desired settings:
+
+```yaml
+all:
+  hosts:
+    node1:
+      platform_deployments:
+        kafka-main:
+          members:
+            kafka-1:
+              roles: [broker, controller]
+              configuration:
+                nodeId: 1
+```
+
+Machine materialization writes only generated state, for example Kafka
+`clusterId` and `directoryId`, under `platform_generated_state`. It must not
+write service configuration, placement or secrets. The generated-state schema
+enforces this boundary. `project.yml.desiredState` and legacy
+`platform_project` are bounded readers for older projects: identical duplicate
+input is deprecated, conflicting input is blocked, and new writers emit only
+the Ansible-native shape.
 
 ## Identity model
 
@@ -194,7 +169,7 @@ permit the member scope.
 
 ## Versioning and migration
 
-- `apiVersion` versions the portable project structure.
+- Published schemas version portable machine state and resolved projections.
 - Every service deployment pins a compatible service-definition version through the catalog lock.
 - Plans pin project, catalog, artifact and Core fingerprints.
 - Readers reject unknown major versions safely.

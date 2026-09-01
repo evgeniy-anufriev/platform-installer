@@ -123,6 +123,12 @@ Examples supported by the same model:
 
 The portable project initially uses normal Ansible inventory, `group_vars` and `host_vars` as desired input. Service topology remains explicit data rather than being inferred from ad hoc group membership. Core deterministically resolves execution groups and runtime role variables from that input. Roles apply the selected placement; they do not silently choose it.
 
+CORE-07 fixes those standard Ansible inputs and role defaults as the canonical
+user-owned desired state. The Installer edits the same files; it does not own a
+parallel service model. Generated identities, fingerprints and locks are kept
+in schema-constrained machine state, while `project.yml` is optional
+compatibility/metadata and is not required for standalone operation.
+
 ## Distribution model
 
 The standalone distribution is a digest-locked offline bundle containing:

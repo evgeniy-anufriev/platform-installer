@@ -1,0 +1,14 @@
+---
+# Machine-owned generated state. Do not edit as service desired state.
+platform_generated_state:
+  apiVersion: platform.installer/generated-state/v1alpha1
+  kind: PlatformGeneratedState
+  metadata: {projectId: kafka-split-multihost}
+  serviceDeployments:
+    kafka-main:
+      identity:
+        clusterId: hXLEilPxTe2nBKPRUufZJg
+      members:
+        controller-1: {identity: {directoryId: JEXY6aqzQY-32P5TStzaFg}}
+        controller-2: {identity: {directoryId: MvDxzVmcRsaTz33bUuRU6A}}
+        controller-3: {identity: {directoryId: 07R5amHmR32VDA6jHkGbTA}}

@@ -284,10 +284,11 @@ and is not started by this milestone.
 
 ### CORE-06: Canonical project state and runtime projection
 
-Status: DONE. Deployment-level desired state is canonical in
-`project.yml.desiredState`; physical member ownership, roles, member
-configuration and member identity are canonical in inventory
-`platform_deployments`. Managed Kafka projects those inputs into the existing
+Status: DONE under its original contract. Deployment-level desired state was
+canonical in `project.yml.desiredState`; physical member ownership and
+placement were inventory-owned. CORE-07 supersedes the desired-state ownership
+boundary while preserving CORE-06 projections and compatibility readers.
+Managed Kafka projects normalized inputs into the existing
 runtime-only standalone role contract and records a deterministic
 `runtimeProjectionFingerprint` from final service-relevant values.
 
@@ -310,6 +311,17 @@ request or authority identity with `CERTIFICATE_REISSUE_REQUIRED`.
 
 Kafka TLS, JKS, mTLS, imported/external CA, renewal and rotation remain
 explicitly deferred to later milestones.
+
+### CORE-07: Ansible-native canonical desired state
+
+Status: DONE. Standard inventory, `group_vars`, `host_vars` and role defaults
+are canonical user-owned desired state. `platform_desired_state` declares
+logical deployments; inventory `platform_deployments` declares members and
+placement. Machine-owned identities, fingerprints and locks are isolated in
+`platform_generated_state`. Managed Kafka and PKI work without `project.yml`;
+legacy project inputs and standalone role variables remain bounded
+compatibility paths. The Installer must edit these same files and invoke the
+same standalone playbooks.
 
 ### CONTRACT-01: V2 contract release candidate
 

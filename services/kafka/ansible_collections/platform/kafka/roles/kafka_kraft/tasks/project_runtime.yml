@@ -1,5 +1,12 @@
 ---
-- name: Load canonical project desired state for managed Kafka projection
+- name: Initialize optional legacy project manifest
+  ansible.builtin.set_fact:
+    _platform_kafka_project_manifest: {}
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Load legacy project desired state when Ansible-native state is absent
   ansible.builtin.include_vars:
     file: "{{ platform_project_manifest_path | default(inventory_dir ~ '/../project.yml', true) }}"
     name: _platform_kafka_project_manifest
@@ -7,13 +14,16 @@
   delegate_facts: true
   run_once: true
   become: false
+  when: platform_desired_state | default({}) | length == 0
 
-- name: Select project desired state with legacy compatibility
+- name: Select Ansible-native desired state with legacy compatibility
   ansible.builtin.set_fact:
     _platform_kafka_project_state: >-
-      {{ hostvars['localhost']._platform_kafka_project_manifest.desiredState
+      {{ platform_desired_state
+         if (platform_desired_state | default({}) | length > 0)
+         else (hostvars['localhost']._platform_kafka_project_manifest.desiredState
          if (hostvars['localhost']._platform_kafka_project_manifest.desiredState is defined)
-         else (platform_project | default({})) }}
+         else (platform_project | default({}))) }}
   delegate_to: localhost
   delegate_facts: true
   run_once: true
@@ -22,15 +32,26 @@
   ansible.builtin.set_fact:
     platform_kafka_instances: []
 
+- name: Select managed Kafka deployment
+  ansible.builtin.set_fact:
+    _platform_kafka_managed_deployment: >-
+      {{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
+          | selectattr('value.serviceType', 'equalto', 'kafka') | list | first) }}
+
+- name: Select machine-owned Kafka deployment state
+  ansible.builtin.set_fact:
+    _platform_kafka_generated_deployment_state: >-
+      {{ (platform_generated_state | default({})).get('serviceDeployments', {}).get(
+           _platform_kafka_managed_deployment.key, {}) }}
+
 - name: Project deployment-scoped Kafka identity and quorum settings
   ansible.builtin.set_fact:
     platform_kafka_cluster_id: >-
-      {{ ((hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
-          | selectattr('value.serviceType', 'equalto', 'kafka') | list | first).value.identity.clusterId
-          | default(platform_kafka_cluster_id, true)) }}
+      {{ _platform_kafka_generated_deployment_state.get('identity', {}).get('clusterId', '')
+          | default(_platform_kafka_managed_deployment.value.get('identity', {}).get('clusterId', ''), true)
+          | default(platform_kafka_cluster_id, true) }}
     platform_kafka_quorum_mode: >-
-      {{ ((hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
-          | selectattr('value.serviceType', 'equalto', 'kafka') | list | first).value.configuration.quorumMode
+      {{ (_platform_kafka_managed_deployment.value.configuration.quorumMode
           | default(platform_kafka_quorum_mode, true)) }}
 
 - name: Project each Kafka deployment

@@ -14,6 +14,7 @@ from ansible_collections.platform.core.plugins.module_utils.project_state import
     canonical_inventory_members,
     canonical_placements,
     select_desired_state,
+    synthesize_ansible_manifest,
     topology_with_inventory_members,
 )
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import (
@@ -31,11 +32,15 @@ class ActionModule(ActionBase):
         del tmp
         task_vars = task_vars or {}
         args = self._task.args
-        topology, state_findings = select_desired_state(args["manifest"], args["topology"])
+        native = args.get("ansible_desired_state", {})
+        topology, state_findings = select_desired_state(args["manifest"], args["topology"], native)
+        manifest = args["manifest"]
+        if native and not isinstance(manifest.get("desiredState"), dict):
+            manifest = synthesize_ansible_manifest(topology, args["service_catalog"], args.get("project_id", "ansible-project"))
         schema_topology = topology
         inventory_deployments = args.get("inventory_deployments_by_host")
         use_inventory_members = isinstance(inventory_deployments, dict)
-        use_placements = isinstance(args["manifest"].get("desiredState"), dict) or bool(args.get("placement_by_host"))
+        use_placements = bool(native) or isinstance(args["manifest"].get("desiredState"), dict) or bool(args.get("placement_by_host"))
         placements, placement_findings = canonical_placements(
             args.get("placement_by_host", {}), args["inventory_hosts"]
         )
@@ -48,13 +53,13 @@ class ActionModule(ActionBase):
             placement_findings.extend(inventory_findings)
             deployments = schema_topology.get("serviceDeployments", {})
             for deployment_id, deployment in (sorted(deployments.items()) if isinstance(deployments, dict) else []):
-                if isinstance(args["manifest"].get("desiredState"), dict) and isinstance(deployment, dict) and "members" in deployment:
+                if isinstance(deployment, dict) and "members" in deployment:
                     placement_findings.append({
                         "apiVersion": "platform.installer/finding/v1alpha1",
                         "kind": "Finding", "code": "PERSISTED_MEMBERS_NOT_ALLOWED",
                         "status": "BLOCKED", "category": "project-state",
                         "field": "serviceDeployments.%s.members" % deployment_id,
-                        "safeMessage": "Canonical project desiredState must not enumerate service members",
+                        "safeMessage": "Ansible desired state must not duplicate inventory-owned service members",
                     })
             for deployment_id, member_id in sorted(inventory_members):
                 if deployment_id not in deployments:
@@ -67,7 +72,7 @@ class ActionModule(ActionBase):
                     })
             use_placements = True
         result = validate_project(
-            manifest=args["manifest"],
+            manifest=manifest,
             topology=topology,
             desired_hosts=args["desired_hosts"],
             service_catalog=args["service_catalog"],
@@ -80,10 +85,12 @@ class ActionModule(ActionBase):
             validator = SchemaValidator(args["contracts_root"])
             root = os.path.abspath(os.path.expanduser(args["contracts_root"]))
             specs = [
-                (os.path.join(root, "project", "v2alpha1", "project-manifest.schema.json"), args["manifest"]),
+                (os.path.join(root, "project", "v2alpha1", "project-manifest.schema.json"), manifest),
                 (os.path.join(root, "project", "v2alpha1", "desired-state.schema.json"), schema_topology),
                 (os.path.join(root, "service-catalog", "v1alpha1", "schema.json"), args["service_catalog"]),
             ]
+            if args.get("generated_state"):
+                specs.append((os.path.join(root, "project", "v2alpha1", "generated-state.schema.json"), args["generated_state"]))
             for schema_path, document in specs:
                 result["findings"].extend(validator.validate(document, schema_path))
             host_schema = os.path.join(root, "project", "v2alpha1", "host-desired-vars.schema.json")

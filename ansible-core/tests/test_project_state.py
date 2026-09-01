@@ -37,6 +37,28 @@ class ProjectStateTests(unittest.TestCase):
         )
         self.assertEqual("DESIRED_STATE_LEGACY_CONFLICT", findings[0]["code"])
 
+    def test_ansible_native_state_is_canonical(self):
+        native = {"serviceDeployments": {"native": {}}}
+        state, findings = STATE.select_desired_state({}, {}, native)
+        self.assertEqual(native, state)
+        self.assertEqual([], findings)
+
+    def test_ansible_native_and_project_state_conflict(self):
+        _, findings = STATE.select_desired_state(
+            {"desiredState": {"serviceDeployments": {}}}, {},
+            {"serviceDeployments": {"native": {}}},
+        )
+        self.assertEqual("ANSIBLE_DESIRED_STATE_CONFLICT", findings[0]["code"])
+
+    def test_identical_ansible_native_and_project_state_is_deprecated(self):
+        native = {"serviceDeployments": {"native": {}}}
+        state, findings = STATE.select_desired_state(
+            {"desiredState": native}, native, native,
+        )
+        self.assertEqual(native, state)
+        self.assertEqual("ANSIBLE_DESIRED_STATE_COMPATIBILITY_DEPRECATED", findings[0]["code"])
+        self.assertEqual("DEPRECATED", findings[0]["status"])
+
     def test_placement_is_host_scoped_and_duplicate_is_reported(self):
         placements, findings = STATE.canonical_placements(
             {"node1": {"kafka-main": ["broker-1"]}, "node2": {"kafka-main": ["broker-1"]}},
