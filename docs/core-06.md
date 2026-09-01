@@ -101,6 +101,47 @@ may remove all managed Kafka runtime, storage, installation and unit files on
 explicitly selected hosts. It is not part of normal managed apply and preserves
 the EXEC-01 execution identity and approved controller-side offline payload.
 
+## Kafka listener compatibility boundary
+
+The managed `clientPort` and `controllerPort` settings are simplified
+compatibility settings for the proven PLAINTEXT SERVICE-01A through SERVICE-01D
+profiles. They are not the final Kafka listener contract and must not be reused
+as a generic Core endpoint model.
+
+Generic Core and `ResolvedTopology` do not assume that Kafka has exactly one
+client listener, exactly one controller listener, or a PLAINTEXT controller
+listener. For the current profiles, the Kafka service-package projector may
+continue producing the role's existing `client_port` and `controller_port`
+inputs. That translation is Kafka package responsibility and does not add
+Kafka listener semantics to the generic Core contract.
+
+A future Kafka service-contract milestone may replace the simplified settings
+with a named collection capable of representing simultaneous listeners, for
+example:
+
+```yaml
+listeners:
+  <listenerName>:
+    purpose: client | controller | interBroker
+    securityProtocol: PLAINTEXT | SSL | SASL_PLAINTEXT | SASL_SSL
+    port: 9092
+    bindAddress: 0.0.0.0
+    advertisedAddress: kafka.example.test
+    tlsProfile: null
+    saslProfile: null
+```
+
+That model must support multiple concurrent client/inter-broker listeners and
+an independently selected controller-listener protocol. TLS, SASL and this
+collection model are deliberately outside CORE-06 and require a separate Kafka
+service-contract milestone.
+
+Until then, Kafka native properties `listeners`, `advertised.listeners`,
+`listener.security.protocol.map`, `controller.listener.names` and
+`inter.broker.listener.name` remain role-controlled reserved properties. This
+compatibility note does not change SERVICE-01A through SERVICE-01D runtime
+behavior.
+
 ## Deferred boundaries
 
 - The future UI edits canonical deployment state in `project.yml` and physical
@@ -109,9 +150,8 @@ the EXEC-01 execution identity and approved controller-side offline payload.
 - Generated identities and transactional persistence establish compatibility
   prerequisites for future stateful transitions, but upgrade, migration,
   replacement and identity-rotation workflows are not implemented by CORE-06.
-- A generic Kafka listener/endpoint model is intentionally deferred. Current
-  projection uses the explicitly supported address and port inputs proven by
-  SERVICE-01A through SERVICE-01D.
+- The Kafka listener collection and security-profile contract described above
+  is intentionally deferred.
 - Failure/recovery acceptance remains SERVICE-01A–01D evidence. CORE-06 used
   fast apply, verify and repeat-apply idempotency regression and did not add a
   second failure orchestration framework.

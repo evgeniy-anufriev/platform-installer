@@ -40,6 +40,10 @@ are proven through the standalone Ansible execution path.
   configuration and member identity.
 - Managed service projections are runtime-only. Kafka continues to consume its
   public manual `platform_kafka_instances` input in standalone mode.
+- Kafka `clientPort` and `controllerPort` remain simplified PLAINTEXT
+  compatibility settings for SERVICE-01A through SERVICE-01D. Their projection
+  is Kafka package responsibility, not a Generic Core endpoint contract;
+  multi-listener TLS/SASL modeling is explicitly deferred.
 
 ## Implemented
 
