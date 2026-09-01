@@ -1,4 +1,10 @@
 ---
+- name: Project managed Kafka members when the public list is absent
+  ansible.builtin.include_tasks: project_runtime.yml
+  when:
+    - platform_kafka_instances | length == 0
+    - platform_project is defined or platform_project_manifest_path is defined
+
 - name: Validate Kafka deployment inputs
   ansible.builtin.assert:
     that:
@@ -7,6 +13,7 @@
       - platform_kafka_advanced_config is mapping
       - platform_kafka_instances is iterable
       - platform_kafka_quorum_mode in ['dynamic', 'static']
+      - platform_kafka_clean_install is boolean
     fail_msg: Kafka requires an explicit cluster_id, quorum mode and a valid member list
 
 - name: Select explicit Kafka member input
@@ -82,6 +89,17 @@
     _platform_kafka_broker_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'broker') | list }}"
     _platform_kafka_local_instances: "{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
+- name: Derive Kafka deployment identity for optional cleanup
+  ansible.builtin.set_fact:
+    _platform_kafka_cleanup_deployment_ids: "{{ _platform_kafka_instances | map(attribute='deployment_id') | select('defined') | list | unique }}"
+
+- name: Validate optional Kafka clean-install acknowledgement
+  ansible.builtin.assert:
+    that:
+      - not (platform_kafka_clean_install | bool) or (_platform_kafka_cleanup_deployment_ids | length <= 1)
+      - not (platform_kafka_clean_install | bool) or (_platform_kafka_cleanup_deployment_ids | first | default(platform_kafka_service_name)) == platform_kafka_confirm_destructive_reset
+    fail_msg: 'BLOCKED: clean_install acknowledgement must match exactly one Kafka deployment'
+
 - name: Derive local Kafka role member sets
   ansible.builtin.set_fact:
     _platform_kafka_local_controller_instances: "{{ _platform_kafka_local_instances | selectattr('roles', 'contains', 'controller') | list }}"
@@ -95,7 +113,7 @@
       - "'controller' not in item.roles or item.controller_port is defined"
       - "'controller' not in item.roles or (item.controller_port | string) is match('^[0-9]+$')"
       - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in item.roles or item.directory_id is defined
-      - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in item.roles or (item.directory_id | string) is match('^[A-Za-z0-9_-]{22}$')
+      - platform_kafka_quorum_mode != 'dynamic' or 'controller' not in item.roles or item.directory_id is not defined or (item.directory_id | string) is match('^[A-Za-z0-9_-]{22}$')
     fail_msg: Kafka listener and dynamic controller identity inputs must match member roles
   loop: "{{ _platform_kafka_instances }}"
   loop_control:
@@ -202,12 +220,30 @@
     - not (platform_kafka_verify_only | bool)
     - _platform_kafka_local_instances | length > 0
 
+- name: Clear selected Kafka deployment explicitly when requested
+  ansible.builtin.include_tasks: clear.yml
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - platform_kafka_clean_install | bool
+    - _platform_kafka_local_instances | length > 0
+
 - name: Apply local Kafka members in deterministic node order
   ansible.builtin.include_tasks: member.yml
   loop: "{{ _platform_kafka_local_instances }}"
   loop_control:
     loop_var: kafka_member
     label: "{{ kafka_member.id }}"
+  when: not (platform_kafka_verify_only | bool)
+
+- name: Wait for all local Kafka member listeners after member startup
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item.1 }}"
+    state: started
+    timeout: "{{ (platform_kafka_startup_readiness_retries | int) * (platform_kafka_startup_readiness_delay | int) }}"
+  loop: "{{ _platform_kafka_local_instances | subelements('listener_ports', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.id }}:{{ item.1 }}"
   when: not (platform_kafka_verify_only | bool)
 
 - name: Verify local Kafka members and cluster

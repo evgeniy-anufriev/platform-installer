@@ -54,7 +54,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("--initial-controllers", source)
         self.assertIn("--no-initial-controllers", source)
         self.assertIn("--standalone", source)
-        self.assertIn("_platform_kafka_controller_instances | length > 1", source)
+        self.assertIn("kafka_member.directory_id is defined", source)
         self.assertIn("'controller' not in kafka_member.roles", source)
 
     def test_quorum_and_effective_config_are_role_aware(self):
@@ -103,6 +103,68 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("platform_kafka_instances", source)
         self.assertIn("include_tasks: member.yml", source)
         self.assertNotIn("add_host", source)
+
+    def test_optional_clean_install_is_guarded_and_reuses_common_lifecycle(self):
+        defaults = (ROLE / "defaults" / "main.yml").read_text(encoding="utf-8")
+        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        clear = (ROLE / "tasks" / "clear.yml").read_text(encoding="utf-8")
+        member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_kafka_clean_install: false", defaults)
+        self.assertIn("platform_kafka_confirm_destructive_reset: ''", defaults)
+        self.assertIn("include_tasks: clear.yml", main)
+        self.assertIn("platform_kafka_clean_install | bool", main)
+        self.assertIn("platform_kafka_confirm_destructive_reset", main)
+        self.assertIn("Remove only selected Kafka deployment member state", clear)
+        self.assertIn("systemctl, is-active", clear)
+        self.assertIn("'/var/lib/kafka'", clear)
+        self.assertIn("state: stopped", clear)
+        self.assertIn("Discover Kafka JVMs owning selected listener ports", clear)
+        self.assertIn("Stop attributable conflicting Kafka units before clear", clear)
+        self.assertIn("Terminate only attributable Kafka JVMs remaining after bounded stop", clear)
+        self.assertEqual(clear.count("item.split('|')[2] in _platform_kafka_clear_owned_config_files"), 2)
+        self.assertIn("Reject occupied Kafka listener ports after bounded cleanup", clear)
+        self.assertIn("Remove only deployment-owned dedicated Kafka unit files", clear)
+        self.assertIn("daemon_reload: true", clear)
+        self.assertIn("Clear stale state for selected Kafka units", clear)
+        self.assertIn("reject('equalto', '/etc/systemd/system/kafka@.service')", clear)
+        self.assertNotIn("state: absent\n  loop: \"{{ [platform_kafka_install_directory]", clear)
+        self.assertIn("Format uninitialized dynamic initial-controller storage exactly once", member)
+        self.assertNotIn("platform_kafka_operation", main + defaults + clear)
+
+    def test_host_reset_is_separate_guarded_qa_operation(self):
+        reset = (SERVICE / "playbooks" / "reset_kafka_host.yml").read_text(encoding="utf-8")
+        self.assertIn("RESET_ALL_KAFKA_RUNTIME_ON_TARGET_HOSTS", reset)
+        self.assertIn("Require exact destructive Kafka host-reset acknowledgement", reset)
+        self.assertIn("Discover all Kafka systemd service units", reset)
+        self.assertIn("Wait bounded time for Kafka JVM shutdown", reset)
+        self.assertIn("Verify Kafka JVMs are absent before deleting runtime files", reset)
+        self.assertIn("/opt/kafka_2.13-4.3.1", reset)
+        self.assertIn("patterns:\n          - 'kafka*.service'", reset)
+        self.assertIn("daemon_reload: true", reset)
+        self.assertIn("Clear stale state for discovered Kafka units", reset)
+        self.assertNotIn("platform_kafka_host_reset_confirmation", (ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
+
+    def test_fresh_distribution_has_writable_runtime_log_directory(self):
+        prepare = (ROLE / "tasks" / "prepare_host.yml").read_text(encoding="utf-8")
+        self.assertIn("Prepare writable Kafka distribution log directory", prepare)
+        self.assertIn('path: "/opt/{{ platform_kafka_archive_directory }}/logs"', prepare)
+        self.assertIn('owner: "{{ platform_kafka_user }}"', prepare)
+        self.assertIn("mode: '0750'", prepare)
+
+    def test_apply_waits_for_all_role_aware_member_listeners(self):
+        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
+        self.assertIn("Wait for all local Kafka member listeners after member startup", main)
+        self.assertIn("subelements('listener_ports'", main)
+        self.assertIn("state: started", main)
+        self.assertNotIn("listener startup readiness", member)
+
+    def test_single_controller_explicit_identity_uses_initial_controllers(self):
+        member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
+        self.assertIn("kafka_member.directory_id is defined", member)
+        self.assertIn("kafka_member.directory_id is not defined", member)
+        self.assertIn("--initial-controllers", member)
+        self.assertIn("--standalone", member)
 
 
 if __name__ == "__main__":

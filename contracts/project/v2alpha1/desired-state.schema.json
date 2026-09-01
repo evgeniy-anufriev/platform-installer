@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/project/v2alpha1/desired-state.schema.json",
-  "title": "Platform desired topology (value of platform_project)",
+  "title": "Platform desired state (project.yml desiredState or legacy platform_project)",
   "type": "object",
   "required": ["serviceDeployments"],
   "properties": {
@@ -67,14 +67,16 @@
     },
     "serviceDeployment": {
       "type": "object",
-      "required": ["serviceType", "definitionVersion", "mode", "members"],
+      "required": ["serviceType", "definitionVersion", "mode"],
       "properties": {
         "displayName": { "type": "string", "minLength": 1, "maxLength": 256 },
         "serviceType": { "$ref": "#/$defs/identifier" },
         "definitionVersion": { "$ref": "#/$defs/nonEmptyString" },
         "mode": { "$ref": "#/$defs/identifier" },
+        "identity": { "type": "object", "default": {} },
         "configuration": { "type": "object", "default": {} },
         "members": {
+          "description": "Legacy platform_project compatibility input only; canonical project.yml desiredState must not persist members.",
           "type": "object",
           "minProperties": 1,
           "propertyNames": { "$ref": "#/$defs/identifier" },

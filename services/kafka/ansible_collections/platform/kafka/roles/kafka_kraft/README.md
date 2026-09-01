@@ -28,3 +28,12 @@ the effective configuration is assembled. `kafka_effective_config` is an
 internal role variable, not part of the public role input contract. The
 serializer accepts strings, numbers and booleans deterministically; other
 types are rejected explicitly until a serialization contract is defined.
+
+`platform_kafka_clean_install=true` is an invocation-only destructive reset
+of the selected deployment and requires
+`platform_kafka_confirm_destructive_reset` to equal its deployment ID. The
+cleanup inventories Kafka JVMs and listener owners, stops selected and
+attributable conflicting units, bounds process shutdown, removes only
+member-owned config/data/log paths and dedicated unit files, and preserves the
+shared Kafka distribution, JDK, account, offline payload and `kafka@.service`.
+Normal reconcile never invokes cleanup automatically.

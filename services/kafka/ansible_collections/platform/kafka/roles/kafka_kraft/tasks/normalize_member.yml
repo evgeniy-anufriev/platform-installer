@@ -30,6 +30,11 @@
            'systemd_environment_pattern': _platform_kafka_normalized_environment_pattern,
            'systemd_description': _platform_kafka_normalized_description,
            'listener_ports': _platform_kafka_normalized_listener_ports,
+           'clear_paths': [
+             _platform_kafka_normalized_config_directory,
+             kafka_input_member.data_directory,
+             kafka_input_member.log_directory
+           ],
            'managed_paths': [
              _platform_kafka_normalized_config_directory,
              _platform_kafka_normalized_runtime_directory,

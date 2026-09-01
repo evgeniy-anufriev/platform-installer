@@ -541,7 +541,8 @@ def resolve_service_configuration(
                         "serviceDeployments.%s.members.%s.configuration" % (deployment_id, member_id),
                     ))
             member_values = resolve_scope(dict(member, id=member_id) if isinstance(member, dict) else {"id": member_id})
-            host_id = member.get("host") if isinstance(member, dict) else None
+            resolved_member = resolved.get("members", {}).get(member_id, {}) if isinstance(resolved, dict) else {}
+            host_id = resolved_member.get("host") if isinstance(resolved_member, dict) else None
             context = {"deploymentId": deployment_id, "memberId": member_id, "hostId": host_id}
             member_fingerprint = canonical_digest({"serviceType": service_type, "definitionVersion": resolved.get("definitionVersion"), "mode": resolved.get("mode"), "configuration": member_values, "inputs": {"serviceDefinitionDigest": _service_definition_digest(definition), "configurationSchemaDigest": canonical_digest(schema if schema is not None else {}), "roleDefaultsDigest": canonical_digest(_canonical_defaults(defaults, mapping)), "mappingDigest": canonical_digest(_canonical_mapping(mapping))}})
             scoped_members[member_id] = {"variableContext": context, "configuration": member_values, "opaqueVariables": member_opaque_variables, "configurationFingerprint": member_fingerprint, "opaqueVariablesFingerprint": canonical_digest(sorted(member_opaque_variables, key=lambda item: (item["name"], item["origin"]["source"], item["origin"]["path"]))) }

@@ -1,0 +1,26 @@
+---
+- name: Kafka identity discovery
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Load canonical project for path projection
+      ansible.builtin.include_vars:
+        file: "{{ platform_kafka_project_path | default(inventory_dir ~ '/../project.yml', true) }}"
+        name: _kafka_discovery_project
+    - name: Build local Kafka metadata path records
+      ansible.builtin.include_tasks: discover_deployment.yml
+      loop: "{{ (_kafka_discovery_project.desiredState.serviceDeployments | default({}) | dict2items) }}"
+      loop_control:
+        loop_var: _kafka_discovery_deployment
+      when: _kafka_discovery_deployment.value.serviceType | default('') == 'kafka'
+    - name: Discover Kafka metadata read-only
+      platform.core.discover_kafka_metadata:
+        records: "{{ _kafka_discovery_records | default([]) }}"
+      register: _kafka_discovery_result
+    - name: Publish normalized discovery records
+      ansible.builtin.set_fact:
+        platform_kafka_identity_discovery: "{{ _kafka_discovery_result.discovery }}"
+    - name: Show sanitized Kafka identity discovery
+      ansible.builtin.debug:
+        var: platform_kafka_identity_discovery

@@ -10,6 +10,12 @@ from ansible_collections.platform.core.plugins.module_utils.project_validation i
     validate_project,
     write_validation_artifact,
 )
+from ansible_collections.platform.core.plugins.module_utils.project_state import (
+    canonical_inventory_members,
+    canonical_placements,
+    select_desired_state,
+    topology_with_inventory_members,
+)
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import (
     SchemaValidationError,
     SchemaValidator,
@@ -25,19 +31,57 @@ class ActionModule(ActionBase):
         del tmp
         task_vars = task_vars or {}
         args = self._task.args
+        topology, state_findings = select_desired_state(args["manifest"], args["topology"])
+        schema_topology = topology
+        inventory_deployments = args.get("inventory_deployments_by_host")
+        use_inventory_members = isinstance(inventory_deployments, dict)
+        use_placements = isinstance(args["manifest"].get("desiredState"), dict) or bool(args.get("placement_by_host"))
+        placements, placement_findings = canonical_placements(
+            args.get("placement_by_host", {}), args["inventory_hosts"]
+        )
+        if use_inventory_members:
+            inventory_members, inventory_findings = canonical_inventory_members(
+                inventory_deployments, args["inventory_hosts"]
+            )
+            topology = topology_with_inventory_members(topology, inventory_members)
+            placements = {key: member["host"] for key, member in inventory_members.items()}
+            placement_findings.extend(inventory_findings)
+            deployments = schema_topology.get("serviceDeployments", {})
+            for deployment_id, deployment in (sorted(deployments.items()) if isinstance(deployments, dict) else []):
+                if isinstance(args["manifest"].get("desiredState"), dict) and isinstance(deployment, dict) and "members" in deployment:
+                    placement_findings.append({
+                        "apiVersion": "platform.installer/finding/v1alpha1",
+                        "kind": "Finding", "code": "PERSISTED_MEMBERS_NOT_ALLOWED",
+                        "status": "BLOCKED", "category": "project-state",
+                        "field": "serviceDeployments.%s.members" % deployment_id,
+                        "safeMessage": "Canonical project desiredState must not enumerate service members",
+                    })
+            for deployment_id, member_id in sorted(inventory_members):
+                if deployment_id not in deployments:
+                    placement_findings.append({
+                        "apiVersion": "platform.installer/finding/v1alpha1",
+                        "kind": "Finding", "code": "INVENTORY_DEPLOYMENT_NOT_FOUND",
+                        "status": "BLOCKED", "category": "project-state",
+                        "field": "platform_deployments.%s.%s" % (inventory_members[(deployment_id, member_id)]["host"], deployment_id),
+                        "safeMessage": "Inventory member references an unknown deployment",
+                    })
+            use_placements = True
         result = validate_project(
             manifest=args["manifest"],
-            topology=args["topology"],
+            topology=topology,
             desired_hosts=args["desired_hosts"],
             service_catalog=args["service_catalog"],
             inventory_hosts=args["inventory_hosts"],
+            placements=placements if use_placements else None,
         )
+        if use_placements:
+            result["findings"].extend(placement_findings)
         try:
             validator = SchemaValidator(args["contracts_root"])
             root = os.path.abspath(os.path.expanduser(args["contracts_root"]))
             specs = [
                 (os.path.join(root, "project", "v2alpha1", "project-manifest.schema.json"), args["manifest"]),
-                (os.path.join(root, "project", "v2alpha1", "desired-state.schema.json"), args["topology"]),
+                (os.path.join(root, "project", "v2alpha1", "desired-state.schema.json"), schema_topology),
                 (os.path.join(root, "service-catalog", "v1alpha1", "schema.json"), args["service_catalog"]),
             ]
             for schema_path, document in specs:
@@ -56,10 +100,12 @@ class ActionModule(ActionBase):
                 "safeMessage": "Не удалось выполнить проверку опубликованной схемы",
                 "safeDetails": {"reason": str(error).split(":", 1)[0]},
             })
+        result["findings"].extend(state_findings)
         result["findings"].sort(key=lambda item: (item.get("field", ""), item.get("code", "")))
-        result["summary"]["blocked"] = len(result["findings"])
-        result["summary"]["pass"] = 0 if result["findings"] else 1
-        result["status"] = "BLOCKED" if result["findings"] else "PASS"
+        blocked = [item for item in result["findings"] if item.get("status") == "BLOCKED"]
+        result["summary"]["blocked"] = len(blocked)
+        result["summary"]["pass"] = 0 if blocked else 1
+        result["status"] = "BLOCKED" if blocked else "PASS"
 
         artifact_path = os.path.abspath(os.path.expanduser(args["artifact_path"]))
         write_validation_artifact(artifact_path, result)

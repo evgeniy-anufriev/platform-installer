@@ -13,29 +13,36 @@ FIXTURE = ROOT / "examples" / "valid" / "kafka-split-multihost"
 class Service01DContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with (FIXTURE / "inventory" / "group_vars" / "all" / "platform.yml").open(encoding="utf-8") as stream:
+        with (FIXTURE / "project.yml").open(encoding="utf-8") as stream:
             cls.variables = yaml.safe_load(stream)
 
     def test_fixture_has_three_split_members_on_three_hosts(self):
-        members = self.variables["platform_kafka_instances"]
+        placement = yaml.safe_load((FIXTURE / "inventory" / "hosts.yml").read_text(encoding="utf-8"))["all"]["hosts"]
+        members = [
+            dict(member, id=member_id, host=host)
+            for host, host_vars in placement.items()
+            for member_id, member in host_vars.get("platform_deployments", {}).get("kafka-main", {}).get("members", {}).items()
+        ]
         controllers = [member for member in members if member["roles"] == ["controller"]]
         brokers = [member for member in members if member["roles"] == ["broker"]]
         self.assertEqual(6, len(members))
         self.assertEqual(3, len(controllers))
         self.assertEqual(3, len(brokers))
-        self.assertEqual({"node1", "node2", "node3"}, {member["host"] for member in members})
-        self.assertEqual({1, 2, 3, 4, 5, 6}, {member["node_id"] for member in members})
-        self.assertTrue(all("client_port" not in member for member in controllers))
-        self.assertTrue(all("controller_port" not in member for member in brokers))
-        self.assertTrue(all("directory_id" in member for member in controllers))
+        self.assertEqual({"node1", "node2", "node3"}, {
+            host for host in placement
+            if placement[host].get("platform_deployments", {}).get("kafka-main", {}).get("members")
+        })
+        self.assertEqual({1, 2, 3, 4, 5, 6}, {member["configuration"]["nodeId"] for member in members})
+        self.assertTrue(all("clientPort" not in member.get("configuration", {}) for member in controllers))
+        self.assertTrue(all("controllerPort" not in member.get("configuration", {}) for member in brokers))
+        self.assertTrue(all("directoryId" in member.get("identity", {}) for member in controllers))
 
     def test_fixture_places_one_controller_and_broker_on_each_host(self):
-        members = self.variables["platform_kafka_instances"]
+        placement = yaml.safe_load((FIXTURE / "inventory" / "hosts.yml").read_text(encoding="utf-8"))["all"]["hosts"]
         for host in ("node1", "node2", "node3"):
-            local = [member for member in members if member["host"] == host]
+            local = list(placement[host]["platform_deployments"]["kafka-main"]["members"].values())
             self.assertEqual([["broker"], ["controller"]], sorted(member["roles"] for member in local))
-            self.assertEqual(2, len({member["data_directory"] for member in local}))
-            self.assertEqual(2, len({member["log_directory"] for member in local}))
+            self.assertEqual(2, len(local))
 
     def test_role_projects_quorum_from_only_controllers_and_formats_brokers_outside_it(self):
         main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")

@@ -1,0 +1,27 @@
+---
+- name: Project Kafka members from inventory-owned deployment members
+  ansible.builtin.set_fact:
+    platform_kafka_instances: "{{ platform_kafka_instances + [ {
+      'id': item.key,
+      'deployment_id': _platform_kafka_project_deployment.key,
+      'host': _platform_kafka_project_member_host,
+      'advertised_host': (hostvars[_platform_kafka_project_member_host].ansible_host | default(_platform_kafka_project_member_host)),
+      'node_id': (item.value.configuration.nodeId),
+      'directory_id': (item.value.identity.directoryId | default(omit)),
+      'roles': (item.value.roles | sort),
+      'client_port': (item.value.configuration.clientPort | default(_platform_kafka_project_deployment.value.configuration.clientPort | default(platform_kafka_client_port))),
+      'controller_port': (item.value.configuration.controllerPort | default(_platform_kafka_project_deployment.value.configuration.controllerPort | default(platform_kafka_controller_port))),
+      'data_directory': (item.value.configuration.dataDirectory | default(_platform_kafka_project_deployment.value.configuration.dataDirectory | default(platform_kafka_data_directory ~ '/' ~ (_platform_kafka_project_deployment.value.configuration.runtimePathNamespace | default(_platform_kafka_project_deployment.key)) ~ '/' ~ item.key))),
+      'log_directory': (item.value.configuration.logDirectory | default(_platform_kafka_project_deployment.value.configuration.logDirectory | default(platform_kafka_log_directory ~ '/' ~ (_platform_kafka_project_deployment.value.configuration.runtimePathNamespace | default(_platform_kafka_project_deployment.key)) ~ '/' ~ item.key))),
+      'config_directory': (item.value.configuration.configDirectory | default(_platform_kafka_project_deployment.value.configuration.configDirectory | default(platform_kafka_config_directory ~ '/' ~ (_platform_kafka_project_deployment.value.configuration.configPathNamespace | default('kafka')) ~ '/' ~ item.key))),
+      '_compatibility_unit': ({
+        'name': 'kafka-standalone',
+        'destination': '/etc/systemd/system/kafka-standalone.service',
+        'environment_pattern': '/etc/kafka/kafka-standalone/systemd.env',
+        'runtime_directory': '/etc/kafka/kafka-standalone',
+        'description': 'Apache Kafka 4.3.1 KRaft member'
+      } if _platform_kafka_project_deployment.value.mode | default('') == 'kraft-standalone' else {})
+    } ] }}"
+  loop: "{{ (hostvars[_platform_kafka_project_member_host].platform_deployments | default({})).get(_platform_kafka_project_deployment.key, {}).get('members', {}) | dict2items }}"
+  loop_control:
+    label: "{{ _platform_kafka_project_member_host }}:{{ item.key }}"

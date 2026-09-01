@@ -1,4 +1,35 @@
 ---
+- import_playbook: discover.yml
+
+- name: Kafka identity discovery aggregation
+  hosts: platform_targets
+  gather_facts: false
+  tasks:
+    - name: Aggregate normalized read-only discovery
+      ansible.builtin.set_fact:
+        platform_kafka_discovery_by_host: "{{ platform_kafka_discovery_by_host | default({}) | combine({item: (hostvars[item].platform_kafka_identity_discovery | default([]))}) }}"
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+
+- name: Kafka identity materialization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Materialize managed Kafka identities before mutation
+      platform.core.materialize_kafka_identities:
+        project_path: "{{ platform_kafka_project_path | default(inventory_dir ~ '/../project.yml', true) }}"
+        inventory_path: "{{ platform_kafka_inventory_path | default(inventory_dir ~ '/hosts.yml', true) }}"
+        discovery: "{{ hostvars['localhost'].platform_kafka_discovery_by_host | default({}) }}"
+      register: platform_kafka_materialization
+
+    - name: Refresh inventory after canonical identity persistence
+      ansible.builtin.meta: refresh_inventory
+
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
 - name: Apply Kafka KRaft members
   hosts: platform_targets
   become: true

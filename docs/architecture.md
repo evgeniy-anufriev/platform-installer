@@ -154,6 +154,14 @@ backend and frontend.
 - Package resolution is `INSTALLED -> configured REPOSITORY -> verified PAYLOAD -> BLOCKED`.
 - Passwordless sudo is not required and sudoers is never changed implicitly.
 
+Execution access has separate lifetimes from QA workspaces. A prepared
+Execution Node stores its managed SSH identity under a persistent runtime
+state root, outside per-run QA workspaces, with restrictive permissions. The
+workspace, logs and temporary inventory overlays remain ephemeral. Before a
+managed run, the generic EXEC-01 access gate may prepare or reuse that
+identity, reconcile its public key on remote targets, and verify elevation;
+service playbooks do not implement SSH recovery.
+
 ## Compatibility
 
 Supported combinations are compatibility data populated by integration evidence. The design must not invent certified RED OS, ALT Linux, Ansible, Python, Java, container-runtime or LXC versions.

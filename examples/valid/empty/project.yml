@@ -9,5 +9,5 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:7d2301f40f6255aff053860ecc8c2f710d360a3f2653c8da7fef65be6bdf7a14
+  digest: sha256:14f53d2d65562ce6b07466d45f011816a0b1909da2669683bd25c604483fa534
   services: {}

@@ -53,6 +53,36 @@
     - "{{ platform_execution_private_workspace }}"
     - "{{ platform_execution_payload_root }}"
 
+- name: Create persistent execution identity state
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_execution_technical_user | default(omit, true) }}"
+    group: "{{ platform_execution_technical_group | default(omit, true) }}"
+    mode: "0700"
+  loop:
+    - "{{ platform_execution_state_root }}"
+    - "{{ platform_execution_state_root }}/identities"
+    - "{{ platform_execution_identity_root }}"
+  when: platform_execution_technical_user | length > 0
+
+- name: Inspect persistent execution known-hosts file
+  ansible.builtin.stat:
+    path: "{{ platform_execution_known_hosts_path }}"
+  register: platform_execution_known_hosts_stat
+  when: platform_execution_technical_user | length > 0
+
+- name: Create persistent execution known-hosts file once
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ platform_execution_known_hosts_path }}"
+    owner: "{{ platform_execution_technical_user | default(omit, true) }}"
+    group: "{{ platform_execution_technical_group | default(omit, true) }}"
+    mode: "0600"
+  when:
+    - platform_execution_technical_user | length > 0
+    - not platform_execution_known_hosts_stat.stat.exists
+
 - name: Assign managed execution workspace ownership
   ansible.builtin.file:
     path: "{{ item }}"

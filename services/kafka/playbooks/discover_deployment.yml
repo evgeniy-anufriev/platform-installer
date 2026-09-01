@@ -1,0 +1,12 @@
+---
+- name: Add Kafka member metadata paths
+  ansible.builtin.set_fact:
+    _kafka_discovery_records: "{{ _kafka_discovery_records | default([]) + [ {
+      'deploymentId': _kafka_discovery_deployment.key,
+      'memberId': item.key,
+      'hostId': inventory_hostname,
+      'metadataPath': (((_kafka_discovery_deployment.value.configuration.dataDirectory | default('/var/lib/kafka/' ~ (_kafka_discovery_deployment.value.configuration.runtimePathNamespace | default(_kafka_discovery_deployment.key)) ~ '/' ~ item.key))) ~ '/meta.properties')
+    } ] }}"
+  loop: "{{ (hostvars[inventory_hostname].platform_deployments | default({})).get(_kafka_discovery_deployment.key, {}).get('members', {}) | dict2items }}"
+  loop_control:
+    label: "{{ inventory_hostname }}:{{ item.key }}"

@@ -9,6 +9,7 @@
     "kind": { "const": "PlatformProject" },
     "metadata": { "$ref": "#/$defs/metadata" },
     "desiredStateContract": { "const": "platform.installer/project-desired-state/v2alpha1" },
+    "desiredState": { "$ref": "desired-state.schema.json" },
     "catalogLock": { "$ref": "#/$defs/catalogLock" },
     "artifactLock": { "$ref": "#/$defs/artifactLock" }
   },

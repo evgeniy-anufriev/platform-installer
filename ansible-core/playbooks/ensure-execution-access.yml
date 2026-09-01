@@ -1,0 +1,8 @@
+---
+# Generic EXEC-01 prerequisite. The selected Execution Node is prepared first;
+# target bootstrap and connectivity then run from that execution environment.
+- import_playbook: prepare-execution-node.yml
+
+- import_playbook: bootstrap-targets.yml
+
+- import_playbook: target-connectivity.yml

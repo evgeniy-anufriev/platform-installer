@@ -136,5 +136,36 @@ class TopologyResolutionTests(unittest.TestCase):
         self.assertEqual("BLOCKED", result["status"])
         self.assertIn("PLACEMENT_DISTINCT_HOSTS_REQUIRED", [item["code"] for item in result["findings"]])
 
+    def test_joins_current_desired_state_with_inventory_placement(self):
+        desired = topology()
+        for member in desired["serviceDeployments"]["kafka-main"]["members"].values():
+            member.pop("host")
+        current_manifest = manifest()
+        current_manifest["desiredState"] = desired
+        result = RESOLUTION.resolve_topology(
+            current_manifest, {}, ["node-a", "node-b"], catalog(),
+            {"node-a": {"kafka-main": ["member-a"]}, "node-b": {"kafka-main": ["member-b"]}},
+        )
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual("node-a", result["resolvedTopology"]["serviceDeployments"]["kafka-main"]["members"]["member-a"]["host"])
+
+    def test_composes_inventory_owned_members_for_canonical_desired_state(self):
+        desired = topology()
+        for member in desired["serviceDeployments"]["kafka-main"]["members"].values():
+            member.pop("host")
+        desired["serviceDeployments"]["kafka-main"].pop("members")
+        current_manifest = manifest()
+        current_manifest["desiredState"] = desired
+        inventory = {
+            "node-a": {"kafka-main": {"members": {"member-a": {"roles": ["broker"], "configuration": {}}}}},
+            "node-b": {"kafka-main": {"members": {"member-b": {"roles": ["broker", "controller"], "configuration": {}}}}},
+        }
+        result = RESOLUTION.resolve_topology(
+            current_manifest, {}, ["node-a", "node-b"], catalog(),
+            inventory_deployments_by_host=inventory,
+        )
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual("node-b", result["resolvedTopology"]["serviceDeployments"]["kafka-main"]["members"]["member-b"]["host"])
+
 if __name__ == "__main__":
     unittest.main()

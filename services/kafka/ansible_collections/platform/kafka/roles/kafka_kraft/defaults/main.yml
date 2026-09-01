@@ -20,3 +20,7 @@ platform_kafka_startup_readiness_delay: 2
 platform_kafka_instances: []
 platform_kafka_log_directory: /var/log/kafka
 platform_kafka_quorum_mode: dynamic
+platform_kafka_clean_install: false
+platform_kafka_confirm_destructive_reset: ''
+platform_kafka_clear_stop_retries: 15
+platform_kafka_clear_stop_delay: 2

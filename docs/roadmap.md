@@ -223,6 +223,12 @@ Ready when:
 - runtime credentials are never persisted or logged;
 - one standard Ansible invocation produces a unified multi-host recap.
 
+Hardening follow-up: persistent execution identity state is kept outside
+ephemeral QA workspaces; repeated preparation reuses the identity and the
+generic `ensure-execution-access.yml` entrypoint composes preparation, target
+bootstrap and centralized elevation verification. Explicit rotation or
+execution-environment destruction remains the identity removal path.
+
 ### SERVICE-01C: Kafka KRaft real multi-host deployment
 
 Status: DONE. Centralized EXEC-01 acceptance was applied through one Execution
@@ -275,6 +281,23 @@ fixture tests; no automatic fallback is introduced. CORE-06 remains separate
 and is not started by this milestone.
 
 ## Phase D — Stable project contract
+
+### CORE-06: Canonical project state and runtime projection
+
+Status: DONE. Deployment-level desired state is canonical in
+`project.yml.desiredState`; physical member ownership, roles, member
+configuration and member identity are canonical in inventory
+`platform_deployments`. Managed Kafka projects those inputs into the existing
+runtime-only standalone role contract and records a deterministic
+`runtimeProjectionFingerprint` from final service-relevant values.
+
+Kafka deployment/member identities are discovered, generated or recovered
+before first mutation, transactionally persisted to project plus inventory,
+reloaded and validated before runtime projection. Verify remains read-only.
+The bounded legacy `platform_project` adapter and manual standalone
+`platform_kafka_instances` input remain compatible without becoming additional
+canonical stores. Centralized EXEC-01 fast acceptance for SERVICE-01A through
+SERVICE-01D passed with repeat apply and verify at `changed=0`.
 
 ### CONTRACT-01: V2 contract release candidate
 

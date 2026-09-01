@@ -44,11 +44,23 @@
       no_log: true
       run_once: true
 
+    - name: Collect canonical inventory-owned service members
+      ansible.builtin.set_fact:
+        platform_inventory_deployments: >-
+          {{ platform_inventory_deployments | default({}) |
+             combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      loop_control:
+        label: "{{ item }}"
+      no_log: true
+      run_once: true
+
   tasks:
     - name: Validate desired project on the Ansible controller
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
+        inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
         desired_hosts: "{{ platform_desired_hosts }}"
         service_catalog: >-
           {{ platform_catalog_artifact.platform_service_catalog |

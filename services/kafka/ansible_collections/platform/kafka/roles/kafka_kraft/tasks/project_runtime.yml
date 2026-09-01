@@ -1,0 +1,42 @@
+---
+- name: Load canonical project desired state for managed Kafka projection
+  ansible.builtin.include_vars:
+    file: "{{ platform_project_manifest_path | default(inventory_dir ~ '/../project.yml', true) }}"
+    name: _platform_kafka_project_manifest
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+  become: false
+
+- name: Select project desired state with legacy compatibility
+  ansible.builtin.set_fact:
+    _platform_kafka_project_state: >-
+      {{ hostvars['localhost']._platform_kafka_project_manifest.desiredState
+         if (hostvars['localhost']._platform_kafka_project_manifest.desiredState is defined)
+         else (platform_project | default({})) }}
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Initialize projected Kafka member list
+  ansible.builtin.set_fact:
+    platform_kafka_instances: []
+
+- name: Project deployment-scoped Kafka identity and quorum settings
+  ansible.builtin.set_fact:
+    platform_kafka_cluster_id: >-
+      {{ ((hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
+          | selectattr('value.serviceType', 'equalto', 'kafka') | list | first).value.identity.clusterId
+          | default(platform_kafka_cluster_id, true)) }}
+    platform_kafka_quorum_mode: >-
+      {{ ((hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
+          | selectattr('value.serviceType', 'equalto', 'kafka') | list | first).value.configuration.quorumMode
+          | default(platform_kafka_quorum_mode, true)) }}
+
+- name: Project each Kafka deployment
+  ansible.builtin.include_tasks: project_deployment.yml
+  loop: "{{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | default({}) | dict2items) }}"
+  loop_control:
+    loop_var: _platform_kafka_project_deployment
+    label: "{{ _platform_kafka_project_deployment.key }}"
+  when: _platform_kafka_project_deployment.value.serviceType | default('') == 'kafka'

@@ -116,11 +116,12 @@ def _secret_value_fields(value, path="", identifier_map=False):
     return fields
 
 
-def validate_project(manifest, topology, desired_hosts, service_catalog, inventory_hosts):
+def validate_project(manifest, topology, desired_hosts, service_catalog, inventory_hosts, placements=None):
     manifest = manifest if isinstance(manifest, dict) else {}
     topology = topology if isinstance(topology, dict) else {}
     service_catalog = service_catalog if isinstance(service_catalog, dict) else {}
     inventory_host_set = set(inventory_hosts or [])
+    placements = placements if isinstance(placements, dict) else None
     findings = []
 
     if manifest.get("apiVersion") != SUPPORTED_PROJECT_API_VERSION:
@@ -397,7 +398,7 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
         for member_id in sorted(members):
             member = members[member_id]
             field = prefix + ".members.%s.host" % member_id
-            host = member.get("host") if isinstance(member, dict) else None
+            host = placements.get((deployment_id, member_id)) if placements is not None else (member.get("host") if isinstance(member, dict) else None)
             if host:
                 placed_hosts.append(host)
             if not host or host not in inventory_host_set:

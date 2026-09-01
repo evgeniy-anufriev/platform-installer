@@ -21,10 +21,6 @@
       "minLength": 1,
       "type": "string"
     },
-    "directoryId": {
-      "pattern": "^[A-Za-z0-9_-]{22}$",
-      "type": "string"
-    },
     "logRetentionHours": {
       "minimum": 1,
       "type": "integer"
@@ -39,6 +35,10 @@
         "dynamic",
         "static"
       ],
+      "type": "string"
+    },
+    "runtimePathNamespace": {
+      "minLength": 1,
       "type": "string"
     }
   },

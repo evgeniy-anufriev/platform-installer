@@ -72,13 +72,6 @@ configuration:
       scopes: [member]
       validation: {minimum: 0, maximum: 2147483647}
       ui: {label: Node ID, order: 25}
-    directoryId:
-      kind: MANAGED
-      roleVariable: platform_kafka_directory_id
-      type: string
-      scopes: [member]
-      validation: {pattern: '^[A-Za-z0-9_-]{22}$'}
-      ui: {label: KRaft directory ID, order: 26}
     dataDirectory:
       kind: MANAGED
       roleVariable: platform_kafka_data_directory
@@ -86,6 +79,13 @@ configuration:
       scopes: [deployment, member]
       validation: {minLength: 1}
       ui: {label: Data directory, order: 30}
+    runtimePathNamespace:
+      kind: MANAGED
+      roleVariable: platform_kafka_runtime_path_namespace
+      type: string
+      scopes: [deployment]
+      validation: {minLength: 1}
+      ui: {label: Runtime path namespace, order: 31}
     logRetentionHours:
       kind: MANAGED
       roleVariable: platform_kafka_log_retention_hours

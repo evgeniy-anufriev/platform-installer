@@ -34,6 +34,10 @@ options:
     type: list
     elements: str
     required: true
+  inventory_deployments_by_host:
+    description: Canonical inventory platform_deployments keyed by target host.
+    type: dict
+    required: false
   artifact_path:
     description: Controller path for the structured validation result.
     type: path
@@ -85,6 +89,12 @@ from ansible_collections.platform.core.plugins.module_utils.schema_validation im
     SchemaValidationError,
     SchemaValidator,
 )
+from ansible_collections.platform.core.plugins.module_utils.project_state import (
+    canonical_inventory_members,
+    canonical_placements,
+    select_desired_state,
+    topology_with_inventory_members,
+)
 
 
 def main():
@@ -95,25 +105,62 @@ def main():
             "desired_hosts": {"type": "dict", "required": True},
             "service_catalog": {"type": "dict", "required": True},
             "inventory_hosts": {"type": "list", "elements": "str", "required": True},
+            "placement_by_host": {"type": "dict", "required": False, "default": None},
+            "inventory_deployments_by_host": {"type": "dict", "required": False, "default": None},
             "artifact_path": {"type": "path", "required": True},
             "contracts_root": {"type": "path", "required": True},
         },
         supports_check_mode=True,
     )
 
+    topology, state_findings = select_desired_state(module.params["manifest"], module.params["topology"])
+    schema_topology = topology
+    use_placements = isinstance(module.params["manifest"].get("desiredState"), dict) or bool(module.params["placement_by_host"])
+    placements, placement_findings = canonical_placements(module.params["placement_by_host"] or {}, module.params["inventory_hosts"])
+    inventory_deployments = module.params["inventory_deployments_by_host"]
+    if isinstance(inventory_deployments, dict):
+        inventory_members, inventory_findings = canonical_inventory_members(
+            inventory_deployments, module.params["inventory_hosts"]
+        )
+        topology = topology_with_inventory_members(topology, inventory_members)
+        placements = {key: member["host"] for key, member in inventory_members.items()}
+        placement_findings.extend(inventory_findings)
+        deployments = schema_topology.get("serviceDeployments", {})
+        for deployment_id, deployment in (sorted(deployments.items()) if isinstance(deployments, dict) else []):
+            if isinstance(module.params["manifest"].get("desiredState"), dict) and isinstance(deployment, dict) and "members" in deployment:
+                placement_findings.append({
+                    "apiVersion": "platform.installer/finding/v1alpha1",
+                    "kind": "Finding", "code": "PERSISTED_MEMBERS_NOT_ALLOWED",
+                    "status": "BLOCKED", "category": "project-state",
+                    "field": "serviceDeployments.%s.members" % deployment_id,
+                    "safeMessage": "Canonical project desiredState must not enumerate service members",
+                })
+        for deployment_id, member_id in sorted(inventory_members):
+            if deployment_id not in deployments:
+                placement_findings.append({
+                    "apiVersion": "platform.installer/finding/v1alpha1",
+                    "kind": "Finding", "code": "INVENTORY_DEPLOYMENT_NOT_FOUND",
+                    "status": "BLOCKED", "category": "project-state",
+                    "field": "platform_deployments.%s.%s" % (inventory_members[(deployment_id, member_id)]["host"], deployment_id),
+                    "safeMessage": "Inventory member references an unknown deployment",
+                })
+        use_placements = True
     result = validate_project(
         manifest=module.params["manifest"],
-        topology=module.params["topology"],
+        topology=topology,
         desired_hosts=module.params["desired_hosts"],
         service_catalog=module.params["service_catalog"],
         inventory_hosts=module.params["inventory_hosts"],
+        placements=placements if use_placements else None,
     )
+    if use_placements:
+        result["findings"].extend(placement_findings)
     try:
         schema_validator = SchemaValidator(module.params["contracts_root"])
         contracts_root = os.path.abspath(os.path.expanduser(module.params["contracts_root"]))
         schema_specs = [
             (os.path.join(contracts_root, "project", "v2alpha1", "project-manifest.schema.json"), module.params["manifest"]),
-            (os.path.join(contracts_root, "project", "v2alpha1", "desired-state.schema.json"), module.params["topology"]),
+            (os.path.join(contracts_root, "project", "v2alpha1", "desired-state.schema.json"), schema_topology),
             (os.path.join(contracts_root, "service-catalog", "v1alpha1", "schema.json"), module.params["service_catalog"]),
         ]
         for schema_path, document in schema_specs:
@@ -134,10 +181,12 @@ def main():
                 "safeDetails": {"reason": str(error).split(":", 1)[0]},
             }
         )
+    result["findings"].extend(state_findings)
     result["findings"].sort(key=lambda item: (item.get("field", ""), item.get("code", "")))
-    result["summary"]["blocked"] = len(result["findings"])
-    result["summary"]["pass"] = 0 if result["findings"] else 1
-    result["status"] = "BLOCKED" if result["findings"] else "PASS"
+    blocked = [item for item in result["findings"] if item.get("status") == "BLOCKED"]
+    result["summary"]["blocked"] = len(blocked)
+    result["summary"]["pass"] = 0 if blocked else 1
+    result["status"] = "BLOCKED" if blocked else "PASS"
     artifact_path = os.path.abspath(os.path.expanduser(module.params["artifact_path"]))
 
     try:

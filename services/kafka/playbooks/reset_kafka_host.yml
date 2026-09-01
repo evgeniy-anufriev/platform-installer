@@ -1,0 +1,138 @@
+---
+- name: Destructively reset Kafka runtime from explicitly selected QA hosts
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  vars:
+    platform_kafka_host_reset_confirmation: ''
+    platform_kafka_host_reset_expected_confirmation: RESET_ALL_KAFKA_RUNTIME_ON_TARGET_HOSTS
+    platform_kafka_host_reset_paths:
+      - /etc/kafka
+      - /var/lib/kafka
+      - /var/log/kafka
+      - /opt/kafka
+      - /opt/kafka_2.13-4.3.1
+  tasks:
+    - name: Require exact destructive Kafka host-reset acknowledgement
+      ansible.builtin.assert:
+        that:
+          - platform_kafka_host_reset_confirmation == platform_kafka_host_reset_expected_confirmation
+        fail_msg: 'BLOCKED: reset_kafka_host requires exact destructive acknowledgement'
+
+    - name: Discover all Kafka systemd service units
+      ansible.builtin.shell: |
+        set -o pipefail
+        {
+          systemctl list-units --all --type=service --no-legend --plain
+          systemctl list-unit-files --type=service --no-legend --plain
+        } | awk '$1 ~ /^kafka(@.*)?\.service$/ || $1 ~ /^kafka-.*\.service$/ {print $1}' | sort -u
+      args:
+        executable: /bin/bash
+      register: platform_kafka_host_reset_units
+      changed_when: false
+
+    - name: Stop and disable discovered Kafka units
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: "{{ platform_kafka_host_reset_units.stdout_lines }}"
+      failed_when: false
+
+    - name: Wait bounded time for Kafka JVM shutdown
+      ansible.builtin.command:
+        argv: [pgrep, -f, kafka.Kafka]
+      register: platform_kafka_host_reset_processes
+      changed_when: false
+      failed_when: false
+      retries: 15
+      delay: 2
+      until: platform_kafka_host_reset_processes.rc != 0
+
+    - name: Terminate remaining Kafka JVMs after bounded shutdown
+      ansible.builtin.shell: |
+        set -o pipefail
+        for pid in $(pgrep -f 'kafka.Kafka .*server\.properties' || true); do
+          cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+          case "${cmdline}" in
+            *kafka.Kafka*server.properties*) kill -TERM "${pid}" ;;
+          esac
+        done
+      args:
+        executable: /bin/bash
+      when: platform_kafka_host_reset_processes.rc == 0
+      changed_when: true
+
+    - name: Wait after Kafka JVM termination
+      ansible.builtin.pause:
+        seconds: 2
+      when: platform_kafka_host_reset_processes.rc == 0
+
+    - name: Force-stop remaining Kafka JVMs
+      ansible.builtin.shell: |
+        set -o pipefail
+        for pid in $(pgrep -f 'kafka.Kafka .*server\.properties' || true); do
+          cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+          case "${cmdline}" in
+            *kafka.Kafka*server.properties*) kill -KILL "${pid}" ;;
+          esac
+        done
+      args:
+        executable: /bin/bash
+      when: platform_kafka_host_reset_processes.rc == 0
+      changed_when: true
+
+    - name: Verify Kafka JVMs are absent before deleting runtime files
+      ansible.builtin.command:
+        argv: [pgrep, -f, kafka.Kafka]
+      register: platform_kafka_host_reset_final_processes
+      changed_when: false
+      failed_when: platform_kafka_host_reset_final_processes.rc == 0
+
+    - name: Remove Kafka runtime and installed distribution paths
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ platform_kafka_host_reset_paths }}"
+
+    - name: Find Kafka systemd unit files
+      ansible.builtin.find:
+        paths: /etc/systemd/system
+        patterns:
+          - 'kafka*.service'
+        file_type: file
+        recurse: false
+      register: platform_kafka_host_reset_unit_files
+
+    - name: Remove Kafka systemd unit files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ platform_kafka_host_reset_unit_files.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Reload systemd after Kafka host reset
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Clear stale state for discovered Kafka units
+      ansible.builtin.command:
+        argv: [systemctl, reset-failed, "{{ item }}"]
+      loop: "{{ platform_kafka_host_reset_units.stdout_lines }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Verify Kafka runtime paths are absent
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: platform_kafka_host_reset_path_state
+      loop: "{{ platform_kafka_host_reset_paths }}"
+
+    - name: Assert Kafka host reset removed all selected runtime paths
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        fail_msg: "Kafka host reset did not remove {{ item.item }}"
+      loop: "{{ platform_kafka_host_reset_path_state.results }}"
+      loop_control:
+        label: "{{ item.item }}"

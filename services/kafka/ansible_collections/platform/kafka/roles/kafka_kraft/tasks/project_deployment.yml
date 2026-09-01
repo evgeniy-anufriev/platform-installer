@@ -1,0 +1,7 @@
+---
+- name: Project Kafka members owned by each target host
+  ansible.builtin.include_tasks: project_deployment_host.yml
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  loop_control:
+    loop_var: _platform_kafka_project_member_host
+    label: "{{ _platform_kafka_project_member_host }}"

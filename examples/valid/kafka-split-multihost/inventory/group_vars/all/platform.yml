@@ -1,32 +1,4 @@
 platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
-platform_kafka_quorum_mode: dynamic
-platform_kafka_cluster_id: hXLEilPxTe2nBKPRUufZJg
 platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../.runtime/artifacts/kafka/kafka_2.13-4.3.1.tgz"
 platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
-platform_kafka_instances:
-  - {id: controller-1, host: node1, advertised_host: 192.168.56.101, node_id: 1, directory_id: JEXY6aqzQY-32P5TStzaFg, roles: [controller], controller_port: 9093, data_directory: /var/lib/kafka/kafka-split/controller-1, log_directory: /var/log/kafka/kafka-split/controller-1}
-  - {id: controller-2, host: node2, advertised_host: 192.168.56.102, node_id: 2, directory_id: MvDxzVmcRsaTz33bUuRU6A, roles: [controller], controller_port: 9093, data_directory: /var/lib/kafka/kafka-split/controller-2, log_directory: /var/log/kafka/kafka-split/controller-2}
-  - {id: controller-3, host: node3, advertised_host: 192.168.56.103, node_id: 3, directory_id: 07R5amHmR32VDA6jHkGbTA, roles: [controller], controller_port: 9093, data_directory: /var/lib/kafka/kafka-split/controller-3, log_directory: /var/log/kafka/kafka-split/controller-3}
-  - {id: broker-1, host: node1, advertised_host: 192.168.56.101, node_id: 4, roles: [broker], client_port: 9092, data_directory: /var/lib/kafka/kafka-split/broker-1, log_directory: /var/log/kafka/kafka-split/broker-1}
-  - {id: broker-2, host: node2, advertised_host: 192.168.56.102, node_id: 5, roles: [broker], client_port: 9092, data_directory: /var/lib/kafka/kafka-split/broker-2, log_directory: /var/log/kafka/kafka-split/broker-2}
-  - {id: broker-3, host: node3, advertised_host: 192.168.56.103, node_id: 6, roles: [broker], client_port: 9092, data_directory: /var/lib/kafka/kafka-split/broker-3, log_directory: /var/log/kafka/kafka-split/broker-3}
-platform_project:
-  serviceDeployments:
-    kafka-main:
-      serviceType: kafka
-      definitionVersion: "1.0.0-alpha.1"
-      mode: kraft-distributed
-      configuration: {clientPort: 9092, controllerPort: 9093, quorumMode: dynamic}
-      members:
-        controller-1: {host: node1, roles: [controller], configuration: {nodeId: 1, directoryId: JEXY6aqzQY-32P5TStzaFg}}
-        controller-2: {host: node2, roles: [controller], configuration: {nodeId: 2, directoryId: MvDxzVmcRsaTz33bUuRU6A}}
-        controller-3: {host: node3, roles: [controller], configuration: {nodeId: 3, directoryId: 07R5amHmR32VDA6jHkGbTA}}
-        broker-1: {host: node1, roles: [broker], configuration: {nodeId: 4}}
-        broker-2: {host: node2, roles: [broker], configuration: {nodeId: 5}}
-        broker-3: {host: node3, roles: [broker], configuration: {nodeId: 6}}
-  endpointGroups: {}
-  endpointBindings: {}
-  certificateProfiles: {}
-  certificateScopes: {}
-  secretRequirements: {}

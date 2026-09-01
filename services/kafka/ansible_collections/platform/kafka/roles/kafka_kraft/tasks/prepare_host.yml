@@ -37,3 +37,11 @@
     group: "{{ platform_kafka_group }}"
     system: true
     create_home: false
+
+- name: Prepare writable Kafka distribution log directory
+  ansible.builtin.file:
+    path: "/opt/{{ platform_kafka_archive_directory }}/logs"
+    state: directory
+    owner: "{{ platform_kafka_user }}"
+    group: "{{ platform_kafka_group }}"
+    mode: '0750'

@@ -1,4 +1,5 @@
----
+- import_playbook: discover.yml
+
 - name: Verify Kafka KRaft members
   hosts: platform_targets
   become: true

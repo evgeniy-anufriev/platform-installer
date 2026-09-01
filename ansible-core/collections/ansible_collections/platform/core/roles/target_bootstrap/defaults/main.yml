@@ -1,6 +1,6 @@
 ---
 platform_bootstrap_user: platform-automation
 platform_bootstrap_public_key: ""
-platform_bootstrap_public_key_file: ""
+platform_bootstrap_public_key_file: "{{ platform_execution_ssh_key_path | default('') }}"
 platform_bootstrap_sudoers_content: ""
 platform_bootstrap_skip_self: false

@@ -1,0 +1,225 @@
+---
+- name: Derive deployment-owned Kafka cleanup resources
+  ansible.builtin.set_fact:
+    _platform_kafka_clear_owned_units: "{{ _platform_kafka_local_instances | map(attribute='systemd_unit_name') | list | unique }}"
+    _platform_kafka_clear_owned_config_files: >-
+      {{ _platform_kafka_local_instances | map(attribute='config_directory')
+         | map('regex_replace', '$', '/server.properties') | list | unique }}
+    _platform_kafka_clear_listener_ports: >-
+      {{ _platform_kafka_local_instances | map(attribute='listener_ports') | flatten | map('int') | list | unique | sort }}
+    _platform_kafka_clear_dedicated_unit_files: >-
+      {{ _platform_kafka_local_instances | map(attribute='systemd_unit_destination') | list | unique
+         | reject('equalto', '/etc/systemd/system/kafka@.service') | list }}
+
+- name: Validate Kafka clear paths before mutation
+  ansible.builtin.assert:
+    that:
+      - item.data_directory | string not in ['/', '/var', '/var/lib', '/var/lib/kafka']
+      - item.log_directory | string not in ['/', '/var', '/var/log', '/var/log/kafka']
+      - item.config_directory | string not in ['/', '/etc', '/etc/kafka']
+      - item.data_directory | string != platform_kafka_install_directory
+      - item.log_directory | string != platform_kafka_install_directory
+      - item.config_directory | string != platform_kafka_install_directory
+      - item.data_directory | string is match('^/.+/.+')
+      - item.log_directory | string is match('^/.+/.+')
+      - item.config_directory | string is match('^/.+/.+')
+      - "'..' not in (item.data_directory | string)"
+      - "'..' not in (item.log_directory | string)"
+      - "'..' not in (item.config_directory | string)"
+    fail_msg: 'BLOCKED: Kafka clean_install path is unsafe or ambiguous'
+  loop: "{{ _platform_kafka_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Stop selected Kafka member units before clear
+  ansible.builtin.systemd:
+    name: "{{ item.systemd_unit_name }}"
+    state: stopped
+    enabled: false
+  failed_when: false
+  loop: "{{ _platform_kafka_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Discover Kafka JVMs owning selected listener ports
+  ansible.builtin.shell: |
+    set -o pipefail
+    for port in {{ _platform_kafka_clear_listener_ports | join(' ') }}; do
+      ss -H -ltnp "sport = :${port}" 2>/dev/null || true
+    done | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -un | while read -r pid; do
+      cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+      case "${cmdline}" in
+        *kafka.Kafka*server.properties*) ;;
+        *) continue ;;
+      esac
+      config="$(printf '%s\n' "${cmdline}" | sed -n 's#.* \(/[^ ]*server\.properties\).*#\1#p')"
+      unit="$(sed -n 's#.*system.slice/\([^/]*\.service\).*#\1#p' "/proc/${pid}/cgroup" 2>/dev/null | head -n1)"
+      printf '%s|%s|%s\n' "${pid}" "${unit}" "${config}"
+    done
+  args:
+    executable: /bin/bash
+  register: platform_kafka_clear_conflicting_processes
+  changed_when: false
+  failed_when: platform_kafka_clear_conflicting_processes.rc != 0
+
+- name: Stop attributable conflicting Kafka units before clear
+  ansible.builtin.systemd:
+    name: "{{ item.split('|')[1] }}"
+    state: stopped
+  loop: "{{ platform_kafka_clear_conflicting_processes.stdout_lines }}"
+  loop_control:
+    label: "{{ item.split('|')[1] | default('orphan') }}:{{ item.split('|')[2] | default('unknown') }}"
+  when:
+    - item.split('|') | length == 3
+    - item.split('|')[1] | length > 0
+    - item.split('|')[1] not in _platform_kafka_clear_owned_units
+  failed_when: false
+
+- name: Wait bounded time for selected and conflicting Kafka processes to stop
+  ansible.builtin.shell: |
+    set -o pipefail
+    found=0
+    for config in {{ _platform_kafka_clear_owned_config_files | map('quote') | join(' ') }}; do
+      if pgrep -f "kafka.Kafka .*${config}" >/dev/null 2>&1; then found=1; fi
+    done
+    for port in {{ _platform_kafka_clear_listener_ports | join(' ') }}; do
+      if ss -H -ltnp "sport = :${port}" 2>/dev/null | grep -q 'kafka'; then found=1; fi
+    done
+    exit "${found}"
+  args:
+    executable: /bin/bash
+  register: platform_kafka_clear_bounded_stop
+  changed_when: false
+  failed_when: false
+  retries: "{{ platform_kafka_clear_stop_retries }}"
+  delay: "{{ platform_kafka_clear_stop_delay }}"
+  until: platform_kafka_clear_bounded_stop.rc == 0
+
+- name: Terminate only attributable Kafka JVMs remaining after bounded stop
+  ansible.builtin.command:
+    argv: [kill, -TERM, "{{ item.split('|')[0] }}"]
+  loop: "{{ platform_kafka_clear_conflicting_processes.stdout_lines }}"
+  loop_control:
+    label: "{{ item.split('|')[0] }}:{{ item.split('|')[2] | default('unknown') }}"
+  when:
+    - platform_kafka_clear_bounded_stop.rc != 0
+    - item.split('|') | length == 3
+    - item.split('|')[2] in _platform_kafka_clear_owned_config_files
+  failed_when: false
+
+- name: Wait after attributable Kafka JVM termination
+  ansible.builtin.pause:
+    seconds: 2
+  when: platform_kafka_clear_bounded_stop.rc != 0
+
+- name: Force-stop only attributable Kafka JVMs that ignored termination
+  ansible.builtin.command:
+    argv: [kill, -KILL, "{{ item.split('|')[0] }}"]
+  loop: "{{ platform_kafka_clear_conflicting_processes.stdout_lines }}"
+  loop_control:
+    label: "{{ item.split('|')[0] }}:{{ item.split('|')[2] | default('unknown') }}"
+  when:
+    - platform_kafka_clear_bounded_stop.rc != 0
+    - item.split('|') | length == 3
+    - item.split('|')[2] in _platform_kafka_clear_owned_config_files
+  failed_when: false
+
+- name: Verify selected Kafka member units are stopped
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ item.systemd_unit_name }}"]
+  register: platform_kafka_clear_unit_state
+  changed_when: false
+  failed_when: false
+  loop: "{{ _platform_kafka_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Reject selected Kafka members still running
+  ansible.builtin.assert:
+    that: item.rc != 0 or item.stdout | trim in ['inactive', 'failed', 'unknown']
+    fail_msg: 'BLOCKED: Kafka member remained active before clean_install deletion'
+  loop: "{{ platform_kafka_clear_unit_state.results }}"
+
+- name: Verify selected Kafka listener ports are free before deletion
+  ansible.builtin.command:
+    argv: [ss, -H, -ltn, "sport = :{{ item }}"]
+  register: platform_kafka_clear_listener_state
+  changed_when: false
+  failed_when: false
+  loop: "{{ _platform_kafka_clear_listener_ports }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Reject occupied Kafka listener ports after bounded cleanup
+  ansible.builtin.assert:
+    that: item.stdout | trim | length == 0
+    fail_msg: "BLOCKED: listener port {{ item.item }} remains occupied after attributable Kafka cleanup"
+  loop: "{{ platform_kafka_clear_listener_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect selected Kafka deployment paths before clear
+  ansible.builtin.stat:
+    path: "{{ item.1 }}"
+    follow: false
+  register: platform_kafka_clear_path_state
+  loop: >-
+    {{ _platform_kafka_local_instances | subelements('clear_paths', skip_missing=True) }}
+  loop_control:
+    label: "{{ item.0.id }}:{{ item.1 }}"
+
+- name: Reject paths not owned by the Kafka service account
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or item.stat.pw_name == platform_kafka_user
+      - not item.stat.exists or item.stat.gr_name == platform_kafka_group
+    fail_msg: 'BLOCKED: Kafka clean_install cannot prove ownership of a target path'
+  loop: "{{ platform_kafka_clear_path_state.results }}"
+  loop_control:
+    label: "{{ item.item.0.id }}:{{ item.item.1 }}"
+
+- name: Inspect Kafka processes for selected member configuration paths
+  ansible.builtin.command:
+    argv: [pgrep, -af, "{{ item.config_directory }}/server.properties"]
+  register: platform_kafka_clear_process_state
+  changed_when: false
+  failed_when: false
+  loop: "{{ _platform_kafka_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Reject Kafka processes still using selected member paths
+  ansible.builtin.assert:
+    that: item.rc != 0
+    fail_msg: 'BLOCKED: Kafka process still references a selected member configuration'
+  loop: "{{ platform_kafka_clear_process_state.results }}"
+  loop_control:
+    label: "{{ item.item.id }}"
+
+- name: Remove only selected Kafka deployment member state
+  ansible.builtin.file:
+    path: "{{ item.1 }}"
+    state: absent
+  loop: >-
+    {{ _platform_kafka_local_instances | subelements('clear_paths', skip_missing=True) }}
+  loop_control:
+    label: "{{ item.0.id }}:{{ item.1 }}"
+
+- name: Remove only deployment-owned dedicated Kafka unit files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ _platform_kafka_clear_dedicated_unit_files }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Reload systemd after deployment-owned unit cleanup
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Clear stale state for selected Kafka units
+  ansible.builtin.command:
+    argv: [systemctl, reset-failed, "{{ item }}"]
+  loop: "{{ _platform_kafka_clear_owned_units }}"
+  changed_when: false
+  failed_when: false
