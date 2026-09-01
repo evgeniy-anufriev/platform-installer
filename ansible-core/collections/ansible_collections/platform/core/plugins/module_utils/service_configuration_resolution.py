@@ -357,6 +357,14 @@ def resolve_service_configuration(
                     "Logical configuration property must map to one role variable",
                 ))
         schema = configuration_schemas.get(service_type)
+        configuration_is_closed = isinstance(schema, dict) and schema.get("additionalProperties") is False
+        if configuration_is_closed:
+            for logical in sorted(set(overrides).difference(mapping)):
+                findings.append(_finding(
+                    "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN",
+                    "%s.%s" % (field_prefix, logical),
+                    "Configuration property is not declared by the service schema",
+                ))
         mapped_role_variables = {
             entry.get("roleVariable")
             for entry in mapping.values()
@@ -380,7 +388,7 @@ def resolve_service_configuration(
                 "%s.%s" % (field_prefix, logical),
             )
             for logical, value in sorted(overrides.items())
-            if logical not in mapping
+            if logical not in mapping and not configuration_is_closed
         )
         opaque_variables.extend(document_opaque_variables)
 
@@ -522,15 +530,22 @@ def resolve_service_configuration(
             for logical, value in sorted(member_configuration.items()):
                 entry = mapping.get(logical)
                 if not isinstance(entry, dict) or not entry.get("roleVariable"):
-                    member_opaque_variables.append(_opaque_variable(
-                        logical,
-                        value,
-                        "MEMBER_CONFIGURATION",
-                        "serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical),
-                    ))
+                    if configuration_is_closed:
+                        findings.append(_finding(
+                            "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN",
+                            "serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical),
+                            "Configuration property is not declared by the service schema",
+                        ))
+                    else:
+                        member_opaque_variables.append(_opaque_variable(
+                            logical,
+                            value,
+                            "MEMBER_CONFIGURATION",
+                            "serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical),
+                        ))
                 elif "member" not in _mapping_scopes(entry):
                     findings.append(_finding(
-                        "MEMBER_SETTING_SCOPE_UNSUPPORTED",
+                        "MEMBER_SCOPE_SETTING_NOT_ALLOWED",
                         "serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical),
                         "Configuration setting does not allow member scope",
                         {"setting": logical, "allowedScopes": _mapping_scopes(entry)},

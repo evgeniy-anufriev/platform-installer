@@ -1,7 +1,7 @@
 {
   "$id": "https://platform.installer/schemas/services/kafka/configuration-v1alpha1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "advancedConfig": {
       "additionalProperties": true,

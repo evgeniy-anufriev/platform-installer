@@ -17,6 +17,15 @@ SPEC.loader.exec_module(VALIDATION)
 def catalog():
     definition = {
         "metadata": {"id": "kafka", "version": "1"},
+        "configuration": {
+            "additionalProperties": False,
+            "settings": {
+                "clientPort": {"kind": "MANAGED", "roleVariable": "platform_kafka_client_port", "type": "integer", "scopes": ["deployment", "member"], "validation": {"minimum": 1, "maximum": 65535}},
+                "quorumMode": {"kind": "MANAGED", "roleVariable": "platform_kafka_quorum_mode", "type": "string", "scopes": ["deployment"], "validation": {"enum": ["dynamic", "static"]}},
+                "advancedConfig": {"kind": "ADVANCED", "roleVariable": "platform_kafka_advanced_config", "type": "object", "scopes": ["deployment"], "validation": {"additionalProperties": True}},
+            },
+        },
+        "x-reservedAdvancedProperties": ["listeners", "node.id"],
         "modes": {
             "kraft-standalone": {
                 "memberRoles": ["broker", "controller"],
@@ -162,6 +171,40 @@ class ProjectValidationTests(unittest.TestCase):
             manifest("one"), topology, {"node-1": {"desiredHostname": "node-1"}}, catalog(), ["node-1"]
         )
         self.assertNotEqual(first["projectFingerprint"], fourth["projectFingerprint"])
+
+    def test_unknown_managed_configuration_is_blocked_with_suggestion(self):
+        topology = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone",
+            "configuration": {"clietPort": 9092},
+            "members": {"broker-1": {"host": "node-1", "roles": ["broker", "controller"]}},
+        }}}
+        result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), ["node-1"])
+        finding = next(item for item in result["findings"] if item["code"] == "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN")
+        self.assertEqual("clientPort", finding["safeDetails"]["suggestedProperty"])
+        self.assertEqual("kafka-main", finding["safeDetails"]["deploymentId"])
+
+    def test_advanced_reserved_setting_and_forbidden_member_scope_are_blocked(self):
+        topology = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone",
+            "configuration": {"advancedConfig": {"listeners": "PLAINTEXT://:9092"}},
+            "members": {"broker-1": {
+                "host": "node-1", "roles": ["broker", "controller"],
+                "configuration": {"quorumMode": "dynamic"},
+            }},
+        }}}
+        result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), ["node-1"])
+        self.assertTrue({"ADVANCED_SETTING_RESERVED", "MEMBER_SCOPE_SETTING_NOT_ALLOWED"}.issubset(
+            {item["code"] for item in result["findings"]}
+        ))
+
+    def test_arbitrary_advanced_setting_and_opaque_host_variables_are_accepted(self):
+        topology = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone",
+            "configuration": {"advancedConfig": {"num.network.threads": 8}},
+            "members": {"broker-1": {"host": "node-1", "roles": ["broker", "controller"]}},
+        }}}
+        result = VALIDATION.validate_project(manifest(), topology, {"node-1": {"company_environment": "prod"}}, catalog(), ["node-1"])
+        self.assertEqual("PASS", result["status"])
 
     def test_manifest_identity_and_catalog_are_required(self):
         result = VALIDATION.validate_project({}, {"serviceDeployments": {}}, {}, catalog(), [])

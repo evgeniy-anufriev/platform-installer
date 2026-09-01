@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:14f53d2d65562ce6b07466d45f011816a0b1909da2669683bd25c604483fa534
+digest: sha256:0c1673d134fbc54e52007964c66a0fd9123681c505dc644e3f9c6aa09b1a9e23
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -65,7 +65,7 @@ definitions:
     configurationSchema:
       $ref: ../../services/kafka/configuration.schema.json
     configuration:
-      additionalProperties: true
+      additionalProperties: false
       settings:
         clientPort:
           kind: MANAGED
@@ -163,6 +163,17 @@ definitions:
           ui:
             label: Advanced Kafka properties
             order: 90
+    x-reservedAdvancedProperties:
+    - node.id
+    - process.roles
+    - listeners
+    - advertised.listeners
+    - controller.listener.names
+    - controller.quorum.voters
+    - controller.quorum.bootstrap.servers
+    - log.dirs
+    - listener.security.protocol.map
+    - inter.broker.listener.name
     roleEntrypoints:
       apply:
         fqcn: platform.kafka.kafka_kraft
@@ -180,7 +191,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: deferred
-    x-definitionDigest: sha256:e5f138fb429ac62c6a70ba230d6198197cf3f9e4465255a85c1772a8efbb28b2
+    x-definitionDigest: sha256:f5a451c29881b5abb561e1d903b078b4f07c470073547a370343f9cec721bf07
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1

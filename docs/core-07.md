@@ -31,6 +31,10 @@ PKI derives requests from the same Ansible-native topology. Manual Kafka
 `platform_kafka_instances` and manual PKI request/plan inputs remain standalone
 public contracts and do not require project metadata or the managed resolver.
 
+CORE-07A adds a read-only authoring validation gate before managed Kafka
+identity materialization. See [CORE-07A](core-07a.md) for namespace ownership,
+closed managed configuration and advanced-setting safety.
+
 ## Compatibility and safety
 
 - Desired state duplicated in compatibility sources must be semantically

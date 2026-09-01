@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tempfile
+from difflib import get_close_matches
 
 
 RESULT_API_VERSION = "platform.installer/validation-result/v1alpha1"
@@ -59,6 +60,121 @@ def _finding(code, field, message, details=None):
 def _catalog_definitions(service_catalog):
     definitions = service_catalog.get("definitions", service_catalog)
     return definitions if isinstance(definitions, dict) else {}
+
+
+def _configuration_finding(code, field, message, service_type, deployment_id, **details):
+    safe_details = {"service": service_type, "deploymentId": deployment_id}
+    safe_details.update(details)
+    return _finding(code, field, message, safe_details)
+
+
+def _suggest_property(value, candidates):
+    matches = get_close_matches(value, sorted(candidates), n=1, cutoff=0.75)
+    return matches[0] if matches else None
+
+
+def _matches_configuration_type(value, expected):
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "null":
+        return value is None
+    return True
+
+
+def _validate_configuration_value(value, setting, field, service_type, deployment_id):
+    """Validate literal managed input from a published service setting."""
+    if isinstance(value, str) and ("{{" in value or "{%" in value or "{#" in value):
+        return []
+    expected = setting.get("type")
+    validation = setting.get("validation", {}) if isinstance(setting.get("validation", {}), dict) else {}
+    findings = []
+    if expected and not _matches_configuration_type(value, expected):
+        return [_configuration_finding(
+            "SERVICE_CONFIGURATION_TYPE_INVALID", field,
+            "Configuration property does not match the service schema type",
+            service_type, deployment_id, expected=[expected], property=field.rsplit(".", 1)[-1],
+        )]
+    if "enum" in validation and value not in validation["enum"]:
+        findings.append(_configuration_finding(
+            "SERVICE_CONFIGURATION_ENUM_INVALID", field,
+            "Configuration property is not one of the values allowed by the service schema",
+            service_type, deployment_id, property=field.rsplit(".", 1)[-1],
+        ))
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in validation and value < validation["minimum"]:
+            findings.append(_configuration_finding("SERVICE_CONFIGURATION_MINIMUM_INVALID", field,
+                "Configuration property is below the service schema minimum", service_type, deployment_id,
+                property=field.rsplit(".", 1)[-1], minimum=validation["minimum"]))
+        if "maximum" in validation and value > validation["maximum"]:
+            findings.append(_configuration_finding("SERVICE_CONFIGURATION_MAXIMUM_INVALID", field,
+                "Configuration property is above the service schema maximum", service_type, deployment_id,
+                property=field.rsplit(".", 1)[-1], maximum=validation["maximum"]))
+    if isinstance(value, str) and "minLength" in validation and len(value) < validation["minLength"]:
+        findings.append(_configuration_finding("SERVICE_CONFIGURATION_MIN_LENGTH_INVALID", field,
+            "Configuration string is shorter than the service schema minimum", service_type, deployment_id,
+            property=field.rsplit(".", 1)[-1], minLength=validation["minLength"]))
+    return findings
+
+
+def _validate_managed_configuration(definition, configuration, field_prefix, scope, service_type, deployment_id, source_namespace):
+    """Validate only service-owned configuration namespaces; ordinary vars stay opaque."""
+    findings = []
+    configuration = configuration if configuration is not None else {}
+    if not isinstance(configuration, dict):
+        return [_configuration_finding("SERVICE_CONFIGURATION_INVALID", field_prefix,
+            "Service configuration must be an object", service_type, deployment_id,
+            sourceNamespace=source_namespace)]
+    if not isinstance(definition, dict) or not isinstance(definition.get("configuration"), dict):
+        return []
+    contract = definition.get("configuration", {}) if isinstance(definition, dict) else {}
+    settings = contract.get("settings") if isinstance(contract, dict) else None
+    if not isinstance(settings, dict):
+        if configuration:
+            return [_configuration_finding("SERVICE_CONFIGURATION_SETTINGS_REQUIRED", "catalog.definitions.%s.configuration.settings" % service_type,
+                "Service package must declare configuration settings", service_type, deployment_id,
+                sourceNamespace="service catalog")]
+        return []
+    for logical, value in sorted(configuration.items()):
+        setting = settings.get(logical)
+        field = "%s.%s" % (field_prefix, logical)
+        if not isinstance(setting, dict):
+            details = {"sourceNamespace": source_namespace, "property": logical}
+            suggested = _suggest_property(logical, settings)
+            if suggested:
+                details["suggestedProperty"] = suggested
+            findings.append(_configuration_finding("SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", field,
+                "Configuration property is not declared by the service schema", service_type, deployment_id, **details))
+            continue
+        scopes = setting.get("scopes", [])
+        if scope not in scopes:
+            findings.append(_configuration_finding("MEMBER_SCOPE_SETTING_NOT_ALLOWED", field,
+                "Configuration property is not allowed at this scope", service_type, deployment_id,
+                sourceNamespace=source_namespace, property=logical, scope=scope, allowedScopes=scopes))
+            continue
+        if setting.get("kind") == "ADVANCED":
+            if not isinstance(value, dict):
+                findings.append(_configuration_finding("SERVICE_CONFIGURATION_TYPE_INVALID", field,
+                    "Advanced configuration must be an object", service_type, deployment_id,
+                    sourceNamespace=source_namespace, property=logical, expected=["object"]))
+                continue
+            reserved = definition.get("x-reservedAdvancedProperties", []) if isinstance(definition, dict) else []
+            for property_name in sorted(set(value).intersection(reserved if isinstance(reserved, list) else [])):
+                findings.append(_configuration_finding("ADVANCED_SETTING_RESERVED", "%s.%s" % (field, property_name),
+                    "Advanced configuration property is controlled by the service role", service_type, deployment_id,
+                    sourceNamespace=source_namespace, property=property_name))
+            continue
+        findings.extend(_validate_configuration_value(value, setting, field, service_type, deployment_id))
+    return findings
 
 
 def _supported_modes(definition):
@@ -402,6 +518,15 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                         {"serviceType": service_type, "supportedModes": sorted(modes)},
                     )
                 )
+            findings.extend(_validate_managed_configuration(
+                definition,
+                deployment.get("configuration", {}),
+                prefix + ".configuration",
+                "deployment",
+                service_type,
+                deployment_id,
+                "platform_desired_state.serviceDeployments",
+            ))
 
         members = deployment.get("members", {})
         if not isinstance(members, dict):
@@ -462,6 +587,16 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                             {"role": role, "supportedRoles": sorted(supported_roles)},
                         )
                     )
+            if isinstance(member, dict) and isinstance(definition, dict):
+                findings.extend(_validate_managed_configuration(
+                    definition,
+                    member.get("configuration", {}),
+                    prefix + ".members.%s.configuration" % member_id,
+                    "member",
+                    service_type,
+                    deployment_id,
+                    "inventory.platform_deployments" if placements is not None else "platform_desired_state",
+                ))
         placement = mode_definition.get("placement", {}) if isinstance(mode_definition, dict) else {}
         member_count = len(members)
         minimum_members = placement.get("minMembers")

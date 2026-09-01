@@ -42,7 +42,7 @@ dependencies: []
 configurationSchema:
   $ref: configuration.schema.json
 configuration:
-  additionalProperties: true
+  additionalProperties: false
   settings:
     clientPort:
       kind: MANAGED
@@ -100,6 +100,17 @@ configuration:
       scopes: [deployment]
       validation: {additionalProperties: true}
       ui: {label: Advanced Kafka properties, order: 90}
+x-reservedAdvancedProperties:
+  - node.id
+  - process.roles
+  - listeners
+  - advertised.listeners
+  - controller.listener.names
+  - controller.quorum.voters
+  - controller.quorum.bootstrap.servers
+  - log.dirs
+  - listener.security.protocol.map
+  - inter.broker.listener.name
 roleEntrypoints:
   apply:
     fqcn: platform.kafka.kafka_kraft

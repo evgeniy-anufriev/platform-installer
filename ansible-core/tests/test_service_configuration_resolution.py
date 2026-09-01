@@ -150,7 +150,7 @@ class ServiceConfigurationResolutionTests(unittest.TestCase):
         value = topology(member_configuration={"logRetentionHours": 1})
         result = self.resolve(value)
         self.assertEqual("BLOCKED", result["status"])
-        finding = next(item for item in result["findings"] if item["code"] == "MEMBER_SETTING_SCOPE_UNSUPPORTED")
+        finding = next(item for item in result["findings"] if item["code"] == "MEMBER_SCOPE_SETTING_NOT_ALLOWED")
         self.assertEqual("serviceDeployments.kafka-main.members.member-a.configuration.logRetentionHours", finding["field"])
 
     def test_three_members_on_one_host_are_independent(self):
@@ -191,8 +191,8 @@ class ServiceConfigurationResolutionTests(unittest.TestCase):
         self.assertEqual("DEFERRED", value["state"])
         self.assertEqual("RUNTIME_DEFERRED", value["source"])
         unknown = self.resolve(topology({"unknown": "{{ value | default(1) }}"}))
-        self.assertEqual("PASS", unknown["status"])
-        self.assertEqual("unknown", unknown["services"]["kafka-main"]["opaqueVariables"][0]["name"])
+        self.assertEqual("BLOCKED", unknown["status"])
+        self.assertIn("SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", [item["code"] for item in unknown["findings"]])
 
     def test_static_reference_missing_and_cycle_are_diagnosed(self):
         missing = self.resolve(topology(), {"platform_kafka_client_port": "{{ missing_port }}", "platform_kafka_data_directory": "/var/lib/kafka"})
@@ -224,15 +224,12 @@ class ServiceConfigurationResolutionTests(unittest.TestCase):
         self.assertNotEqual(first["services"]["kafka-main"]["inputs"]["topologyFingerprint"], second["services"]["kafka-main"]["inputs"]["topologyFingerprint"])
         self.assertEqual(first["configurationFingerprint"], second["configurationFingerprint"])
 
-    def test_unknown_values_are_opaque_and_preserve_origin(self):
+    def test_unknown_managed_values_are_blocked_when_schema_is_closed(self):
         result = self.resolve(topology({"unknown": 1}))
-        self.assertEqual("PASS", result["status"])
-        opaque = result["services"]["kafka-main"]["opaqueVariables"]
-        self.assertEqual("unknown", opaque[0]["name"])
-        self.assertEqual("DEPLOYMENT_CONFIGURATION", opaque[0]["origin"]["source"])
-        self.assertEqual("serviceDeployments.kafka-main.configuration.unknown", opaque[0]["origin"]["path"])
+        self.assertEqual("BLOCKED", result["status"])
+        self.assertIn("SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", [item["code"] for item in result["findings"]])
 
-    def test_unknown_member_and_role_values_are_opaque(self):
+    def test_unknown_member_values_are_blocked_but_role_defaults_remain_opaque(self):
         project = topology(member_configuration={"customRoleVariable": "{{ runtime_value }}"})
         project["serviceDeployments"]["kafka-main"]["configuration"] = {"customDeployment": True}
         result = self.resolve(project, {
@@ -241,13 +238,11 @@ class ServiceConfigurationResolutionTests(unittest.TestCase):
             "platform_kafka_log_retention_hours": 168,
             "platform_kafka_extra": "opaque",
         })
-        self.assertEqual("PASS", result["status"])
+        self.assertEqual("BLOCKED", result["status"])
         service = result["services"]["kafka-main"]
         sources = {item["origin"]["source"] for item in service["opaqueVariables"]}
-        self.assertEqual({"ROLE_DEFAULT", "DEPLOYMENT_CONFIGURATION"}, sources)
-        member_opaque = service["members"]["member-a"]["opaqueVariables"][0]
-        self.assertEqual("MEMBER_CONFIGURATION", member_opaque["origin"]["source"])
-        self.assertEqual("{{ runtime_value }}", member_opaque["expression"])
+        self.assertEqual({"ROLE_DEFAULT"}, sources)
+        self.assertIn("SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", [item["code"] for item in result["findings"]])
 
     def test_host_context_is_opaque_and_not_member_configuration(self):
         result = self.resolve(topology(), host_contexts={"node-a": {"platform_data_root": "/data"}})

@@ -115,6 +115,10 @@ projection are proven through the standalone execution path without requiring
   Managed Kafka identity materialization writes only
   `platform-state.yml`, reloads from disk and validates again before service
   mutation; unrelated inventory/group/host variables remain byte-preserved.
+- CORE-07A authoring safety baseline: managed Kafka apply validates desired
+  state before identity discovery/materialization; Kafka managed configuration
+  is closed while explicit `advancedConfig` remains the controlled native
+  property namespace. `hash_behaviour = merge` remains required Ansible policy.
 - Managed PKI request resolution now consumes the same Ansible-native topology
   without requiring `project.yml`; standalone manual Kafka and PKI inputs remain
   supported public contracts.
@@ -211,6 +215,8 @@ projection are proven through the standalone execution path without requiring
   hosts. Failure/recovery scenarios were not repeated.
 - CORE-07 managed PKI no-project acceptance passed. Apply, repeat apply and
   verify returned `failed=0`; repeat apply and verify returned `changed=0`.
+- CORE-07A focused RED OS validation: Core suite (107), Kafka contract suite
+  (22), managed-configuration tests and catalog reproducibility passed.
 
 ## Not implemented
 
@@ -227,7 +233,7 @@ projection are proven through the standalone execution path without requiring
 
 ## Next gate
 
-CORE-01 through CORE-07, PKI-01, SERVICE-01A through SERVICE-01D, EXEC-01 and
+CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D, EXEC-01 and
 the generic Kafka role lifecycle refactor are complete. SERVICE-02A (Kafka
 named listeners and SSL consumption) remains gated by an explicit owner
 request.
