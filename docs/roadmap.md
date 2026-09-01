@@ -299,6 +299,18 @@ The bounded legacy `platform_project` adapter and manual standalone
 canonical stores. Centralized EXEC-01 fast acceptance for SERVICE-01A through
 SERVICE-01D passed with repeat apply and verify at `changed=0`.
 
+### PKI-01: Certificate and Java-store materialization
+
+Status: IMPLEMENTED. PKI-01 adds topology-derived managed certificate requests
+with default HOST scope, MANAGED CA materialization on the Execution Node, PEM
+and dedicated PKCS12 deployment to targets, and read-only verification.
+Certificate/private-key/password values remain runtime state; canonical
+projects retain only intent and secret references. Reconcile blocks changed
+request or authority identity with `CERTIFICATE_REISSUE_REQUIRED`.
+
+Kafka TLS, JKS, mTLS, imported/external CA, renewal and rotation remain
+explicitly deferred to later milestones.
+
 ### CONTRACT-01: V2 contract release candidate
 
 Deliverables:

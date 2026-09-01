@@ -1,0 +1,19 @@
+---
+- name: Resolve managed PKI verification projection on the Execution Node
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Resolve managed PKI verification plan using role defaults
+      ansible.builtin.include_role:
+        name: platform.core.pki_materialize
+        tasks_from: resolve.yml
+      vars:
+        platform_pki_resolve_managed: "{{ platform_pki_materialization_plans is not defined or platform_pki_materialization_plans | length == 0 }}"
+
+- name: Verify managed PKI material on selected targets
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.core.pki_verify

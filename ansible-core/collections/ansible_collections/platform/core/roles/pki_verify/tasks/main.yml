@@ -1,0 +1,11 @@
+---
+- name: Select PKI verification plans for target host
+  ansible.builtin.set_fact:
+    _platform_pki_verify_plans: "{{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)) | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+
+- name: Verify target-owned PKI material read-only
+  ansible.builtin.include_tasks: plan.yml
+  loop: "{{ _platform_pki_verify_plans | sort(attribute='id') | list }}"
+  loop_control:
+    loop_var: platform_pki_plan
+    label: "{{ platform_pki_plan.id }}"

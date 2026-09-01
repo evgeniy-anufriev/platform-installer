@@ -1,0 +1,15 @@
+---
+- name: Derive effective PKI project identity from Execution Node projection
+  ansible.builtin.set_fact:
+    _platform_pki_effective_project_id: "{{ platform_pki_project_id if platform_pki_project_id | length > 0 else hostvars['localhost'].platform_pki_project_id | default('') }}"
+
+- name: Select PKI materialization plans for target host
+  ansible.builtin.set_fact:
+    _platform_pki_local_plans: "{{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)) | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+
+- name: Deploy target-owned PKI material atomically
+  ansible.builtin.include_tasks: plan.yml
+  loop: "{{ _platform_pki_local_plans | sort(attribute='id') | list }}"
+  loop_control:
+    loop_var: platform_pki_plan
+    label: "{{ platform_pki_plan.id }}"

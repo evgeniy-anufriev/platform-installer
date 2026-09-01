@@ -19,6 +19,10 @@ project/
 
 The contract covers the directory as a whole. `project.yml` carries metadata and locks; inventory declares desired hosts; platform topology and policy live in an ordinary group variable document; service and host overrides use normal Ansible variable precedence within the restrictions defined by the contract.
 
+The project execution configuration must keep `hash_behaviour = merge`.
+This is a required Platform Installer convention: partial map values in
+`group_vars` and `host_vars` recursively overlay role defaults.
+
 ## Root outline
 
 `project.yml` is the only owner of identity and contract/lock versions:

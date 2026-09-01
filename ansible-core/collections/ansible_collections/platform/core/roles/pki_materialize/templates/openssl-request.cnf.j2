@@ -1,0 +1,24 @@
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = {{ platform_pki_request.commonName }}
+{% for name, value in platform_pki_request.subject | dictsort if value %}
+{{ name }} = {{ value }}
+{% endfor %}
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = {{ platform_pki_request.usages | join(',') }}
+subjectAltName = @alt_names
+
+[alt_names]
+{% for name in platform_pki_request.dnsNames %}
+DNS.{{ loop.index }} = {{ name }}
+{% endfor %}
+{% for address in platform_pki_request.ipAddresses %}
+IP.{{ loop.index }} = {{ address }}
+{% endfor %}

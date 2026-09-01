@@ -107,6 +107,12 @@ are proven through the standalone Ansible execution path.
 - Explicit deployment-scoped Kafka clean-install and separately acknowledged
   administrative/QA host reset operations; neither is an automatic reconcile
   or identity-mismatch fallback.
+- PKI-01 standalone foundation: canonical MANAGED certificate authority,
+  certificate and TLS profiles; topology-derived HOST/MEMBER/DEPLOYMENT
+  requests; Execution Node PEM and dedicated PKCS12 materialization; atomic
+  target deployment; read-only verification; deterministic request and
+  materialization fingerprints. Changed initialized identity is blocked with
+  `CERTIFICATE_REISSUE_REQUIRED`.
 
 ## Validation evidence
 
@@ -177,6 +183,10 @@ are proven through the standalone Ansible execution path.
 - CORE-06 centralized FAST acceptance passed for SERVICE-01A, SERVICE-01B,
   SERVICE-01C and SERVICE-01D: apply and verify passed, and repeat apply plus
   verify returned `changed=0`. Standalone manual Kafka input remained valid.
+- PKI-01 RED OS acceptance: topology-derived managed PKI apply created a
+  managed CA, PEM and dedicated PKCS12 key/trust stores on node1; target verify
+  and repeat apply returned `changed=0`. A changed standalone request was
+  blocked with `CERTIFICATE_REISSUE_REQUIRED` before certificate mutation.
 
 ## Not implemented
 
@@ -189,9 +199,11 @@ are proven through the standalone Ansible execution path.
   transaction primitive.
 - Desktop or web UI.
 - Generic Kafka listener/endpoint modeling and stateful transition workflows.
+- Kafka TLS consumption of PKI-01 material.
 
 ## Next gate
 
-CORE-01 through CORE-06, SERVICE-01A through SERVICE-01D, EXEC-01 and the
-generic Kafka role lifecycle refactor are complete. The next milestone remains
-gated by an explicit owner request; no subsequent implementation has started.
+CORE-01 through CORE-06, PKI-01, SERVICE-01A through SERVICE-01D, EXEC-01 and
+the generic Kafka role lifecycle refactor are complete. SERVICE-02A (Kafka
+named listeners and SSL consumption) remains gated by an explicit owner
+request.

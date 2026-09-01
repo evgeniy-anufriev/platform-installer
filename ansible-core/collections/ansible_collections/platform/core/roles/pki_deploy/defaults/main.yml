@@ -1,0 +1,6 @@
+---
+platform_pki_project_id: ""
+platform_pki_materialization_plans: []
+platform_pki_state_root: "{{ platform_execution_state_root | default('/var/lib/platform-installer/execution') }}/pki"
+platform_pki_owner: root
+platform_pki_group: root

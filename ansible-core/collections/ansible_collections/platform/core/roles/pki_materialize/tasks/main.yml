@@ -1,0 +1,31 @@
+---
+- name: Resolve managed PKI inputs using normal role variable precedence
+  ansible.builtin.include_tasks: resolve.yml
+
+- name: Validate PKI materialization runtime contract
+  ansible.builtin.assert:
+    that:
+      - platform_pki_project_id | length > 0
+      - platform_pki_requests is iterable
+      - platform_pki_materialization_plans is iterable
+      - platform_pki_secret_files is mapping
+    fail_msg: PKI_MATERIALIZATION_RUNTIME_INVALID
+
+- name: Prepare protected PKI execution roots
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0700'
+  loop:
+    - "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/authorities"
+    - "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/requests"
+    - "{{ platform_pki_runtime_root }}"
+
+- name: Materialize resolved PKI certificate requests
+  ansible.builtin.include_tasks: request.yml
+  loop: "{{ platform_pki_requests | sort(attribute='id') | list }}"
+  loop_control:
+    loop_var: platform_pki_request
+    label: "{{ platform_pki_request.id }}"

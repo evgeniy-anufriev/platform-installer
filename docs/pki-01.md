@@ -1,0 +1,71 @@
+# PKI-01 — Certificate and Java-store materialization
+
+PKI-01 provides a standalone Ansible certificate foundation. It does not
+enable Kafka TLS, change any Kafka role, or introduce a generic service
+listener runtime model.
+
+## Desired and runtime boundaries
+
+`project.yml.desiredState` may declare managed `certificateAuthorities`,
+`certificateProfiles`, and `tlsProfiles`. A deployment or inventory member
+opts in through the ordinary `configuration.tlsProfile` reference. The default
+scope is `HOST`; `MEMBER` and `DEPLOYMENT` are explicit alternatives.
+
+Normal managed users do not provide key algorithm, key size, validity, usages,
+or SAN lists. `platform.core.pki_materialize` role defaults are the sole
+canonical source for policy: HOST scope, RSA-3072, 3650-day CA, 365-day leaf,
+`serverAuth`, and placed-host DNS/IP SANs. These are ordinary role defaults,
+so `group_vars`, `host_vars`, play vars and extra vars retain normal Ansible
+precedence. Platform Installer's required `ansible.cfg` sets
+`hash_behaviour = merge`, so a partial policy map in `group_vars` or
+`host_vars` recursively overlays the role baseline. Schema values are
+descriptive only; the resolver receives the effective role-variable mapping
+explicitly and has no competing product defaults. C/ST/L/O/OU are optional advanced leaf-subject fields and
+default to empty; the derived common name remains the only default DN value.
+Profile fields are optional advanced policy overrides. Explicit certificate
+scopes remain a contract-level advanced input; manual standalone callers may
+provide resolved request/plan data directly.
+
+The resolver returns only `certificateRequestFingerprint` and
+`materializationFingerprint` plus identity, path and secret *references*.
+Private keys, certificate bytes, passwords and password-file contents are
+never part of desired state, plans, fingerprints, facts or diagnostics.
+
+## Materialization lifecycle
+
+`pki-apply.yml` resolves managed topology bindings unless callers supplied the
+public manual `platform_pki_requests` and
+`platform_pki_materialization_plans` inputs. The Execution Node creates the
+managed CA, leaf PEM and dedicated PKCS12 key/trust stores below its persistent
+execution state. Target deployment copies only request-owned material with
+atomic Ansible copy operations and restrictive permissions.
+
+Store passwords are identified persistently only by the TLS profile's stable
+`storePasswordSecretRef` (for example, a provider reference). At invocation,
+the provider maps that reference through `platform_pki_secret_files[secretRef]`
+to a pre-existing `0600` runtime file. This file is materialization transport,
+not password state: deleting it does not change a generated PKCS12 store, and
+a later consumer such as SERVICE-02A must resolve the same SecretRef again.
+Values never enter project data, inventory, plans, fingerprints, logs or argv.
+Sensitive OpenSSL/keytool/copy tasks use `no_log`.
+
+Reconcile never replaces an initialized certificate identity. A changed
+certificate or authority fingerprint returns `CERTIFICATE_REISSUE_REQUIRED`.
+The MANAGED CA private key and marker are persistent Execution Node state under
+`platform_execution_state_root` (default
+`/var/lib/platform-installer/execution/pki`), never the ephemeral private
+workspace. A missing previously-created CA key is partial state and blocks;
+the role never regenerates it. Partial authority/request state returns a
+blocking diagnostic. Automatic renewal, rotation and reissue are intentionally
+outside PKI-01. The certificate profile `usages` collection already supports
+`serverAuth`, `clientAuth`, or both; PKI-01's default remains `serverAuth`.
+
+`pki-verify.yml` only resolves the plan, checks target-owned files,
+fingerprints and certificate chains, and reports `changed=0`.
+
+## Deferred integration
+
+PKI-01 supports only `MANAGED` authorities, PEM, dedicated PKCS12 stores and
+server-auth certificates. Imported/external CA, JKS, mTLS, global JVM cacerts,
+renewal and rotation are deferred. Kafka becomes a PKI consumer only in the
+separate SERVICE-02A listener/SSL milestone.

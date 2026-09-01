@@ -1,0 +1,36 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: pki-host-scope
+  name: PKI host scope fixture
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:14f53d2d65562ce6b07466d45f011816a0b1909da2669683bd25c604483fa534
+  services:
+    kafka:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:e5f138fb429ac62c6a70ba230d6198197cf3f9e4465255a85c1772a8efbb28b2
+desiredState:
+  certificateAuthorities:
+    platform-ca:
+      mode: MANAGED
+      commonName: Platform test CA
+  certificateProfiles:
+    infrastructure:
+      authorityRef: platform-ca
+      sanPolicy: {}
+  tlsProfiles:
+    infrastructure-tls:
+      certificateProfileRef: infrastructure
+      storePasswordSecretRef: runtime:pki-store-password
+  serviceDeployments:
+    kafka-main:
+      serviceType: kafka
+      definitionVersion: 1.0.0-alpha.1
+      mode: kraft-standalone
+      configuration:
+        tlsProfile: infrastructure-tls

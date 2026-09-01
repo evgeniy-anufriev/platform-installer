@@ -19,7 +19,9 @@ IDENTIFIER_MAP_FIELDS = {
     "dependencies",
     "endpointGroups",
     "endpointBindings",
+    "certificateAuthorities",
     "certificateProfiles",
+    "tlsProfiles",
     "certificateScopes",
     "secretRequirements",
 }
@@ -267,6 +269,27 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
             )
         )
         deployments = {}
+
+    authorities = topology.get("certificateAuthorities", {})
+    profiles = topology.get("certificateProfiles", {})
+    tls_profiles = topology.get("tlsProfiles", {})
+    if not isinstance(authorities, dict):
+        findings.append(_finding("CERTIFICATE_AUTHORITIES_INVALID", "certificateAuthorities", "Certificate authorities must be an object"))
+        authorities = {}
+    if not isinstance(profiles, dict):
+        findings.append(_finding("CERTIFICATE_PROFILES_INVALID", "certificateProfiles", "Certificate profiles must be an object"))
+        profiles = {}
+    if not isinstance(tls_profiles, dict):
+        findings.append(_finding("TLS_PROFILES_INVALID", "tlsProfiles", "TLS profiles must be an object"))
+        tls_profiles = {}
+    for profile_id, profile in sorted(profiles.items()):
+        authority_ref = profile.get("authorityRef") if isinstance(profile, dict) else None
+        if authority_ref not in authorities:
+            findings.append(_finding("CERTIFICATE_AUTHORITY_NOT_FOUND", "certificateProfiles.%s.authorityRef" % profile_id, "Certificate profile references an unknown certificate authority"))
+    for tls_profile_id, tls_profile in sorted(tls_profiles.items()):
+        profile_ref = tls_profile.get("certificateProfileRef") if isinstance(tls_profile, dict) else None
+        if profile_ref not in profiles:
+            findings.append(_finding("CERTIFICATE_PROFILE_NOT_FOUND", "tlsProfiles.%s.certificateProfileRef" % tls_profile_id, "TLS profile references an unknown certificate profile"))
 
     definitions = _catalog_definitions(service_catalog)
     for deployment_id in sorted(deployments):

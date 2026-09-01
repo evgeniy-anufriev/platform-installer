@@ -218,6 +218,21 @@ class ProjectValidationTests(unittest.TestCase):
             [item["code"] for item in result["findings"]],
         )
 
+    def test_pki_authority_and_tls_profile_references_are_validated_without_secret_leakage(self):
+        topology = {
+            "serviceDeployments": {},
+            "certificateAuthorities": {"platform-ca": {"mode": "MANAGED", "commonName": "Platform CA"}},
+            "certificateProfiles": {"infrastructure": {"authorityRef": "platform-ca", "sanPolicy": {}}},
+            "tlsProfiles": {"server": {"certificateProfileRef": "infrastructure", "storePasswordSecretRef": "runtime:store-password"}},
+        }
+        result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), [])
+        self.assertEqual("PASS", result["status"])
+        self.assertNotIn("runtime:store-password", json.dumps(result["findings"]))
+
+        topology["tlsProfiles"]["server"]["certificateProfileRef"] = "missing"
+        blocked = VALIDATION.validate_project(manifest(), topology, {}, catalog(), [])
+        self.assertIn("CERTIFICATE_PROFILE_NOT_FOUND", [item["code"] for item in blocked["findings"]])
+
     def test_platform_host_omission_is_safe_but_private_key_is_blocked(self):
         topology = {"serviceDeployments": {}}
         omitted = VALIDATION.validate_project(

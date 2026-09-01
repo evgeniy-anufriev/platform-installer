@@ -1,0 +1,27 @@
+---
+- name: Inspect deployed PKI files read-only
+  ansible.builtin.stat:
+    path: "{{ platform_pki_plan.targetDirectory }}/{{ item }}"
+  loop: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
+  register: platform_pki_deployed_files
+
+- name: Require complete deployed PKI material
+  ansible.builtin.assert:
+    that: "{{ platform_pki_deployed_files.results | map(attribute='stat.exists') | list | min }}"
+    fail_msg: PKI_TARGET_MATERIAL_INCOMPLETE
+
+- name: Verify deployed certificate chain read-only
+  ansible.builtin.command:
+    argv: [openssl, verify, -CAfile, "{{ platform_pki_plan.targetDirectory }}/ca-chain.pem", "{{ platform_pki_plan.targetDirectory }}/certificate.pem"]
+  changed_when: false
+
+- name: Read deployed materialization fingerprint
+  ansible.builtin.command:
+    argv: [cat, "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"]
+  changed_when: false
+  register: platform_pki_target_fingerprint
+
+- name: Require expected deployed materialization fingerprint
+  ansible.builtin.assert:
+    that: "(platform_pki_target_fingerprint.stdout | trim) == platform_pki_plan.materializationFingerprint"
+    fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH

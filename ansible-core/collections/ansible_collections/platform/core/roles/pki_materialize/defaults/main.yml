@@ -1,0 +1,35 @@
+---
+platform_pki_project_id: ""
+platform_pki_requests: []
+platform_pki_materialization_plans: []
+platform_pki_resolve_managed: "{{ platform_pki_requests | length == 0 }}"
+platform_pki_secret_files: {}
+# This is the single product-default source for PKI policy.  The resolver
+# receives this mapping explicitly; schema defaults remain descriptive only.
+platform_pki_policy_defaults:
+  authorityValidityDays: 3650
+  leafValidityDays: 365
+  keyAlgorithm: RSA
+  keySize: 3072
+  usages: [serverAuth]
+  scope: HOST
+  targetRoot: /etc/platform-installer/pki
+  sanPolicy:
+    includeHostDns: true
+    includeHostIp: true
+    includeEndpointFqdns: true
+    includeEndpointWildcard: false
+    includeEndpointVip: false
+  subject:
+    C: ""
+    ST: ""
+    L: ""
+    O: ""
+    OU: ""
+platform_pki_project_path: "{{ inventory_dir ~ '/../project.yml' }}"
+platform_pki_inventory_path: "{{ inventory_dir ~ '/hosts.yml' }}"
+platform_pki_target_root: "{{ platform_pki_policy_defaults.targetRoot }}"
+platform_pki_state_root: "{{ platform_execution_state_root | default('/var/lib/platform-installer/execution') }}/pki"
+platform_pki_runtime_root: "{{ platform_execution_private_workspace | default('/var/tmp/platform-installer/private') }}/pki"
+platform_pki_owner: "{{ platform_execution_technical_user | default(lookup('ansible.builtin.env', 'USER'), true) }}"
+platform_pki_group: "{{ platform_execution_technical_group | default(platform_pki_owner, true) }}"

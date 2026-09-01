@@ -23,10 +23,22 @@
       "additionalProperties": { "$ref": "#/$defs/endpointBinding" },
       "default": {}
     },
+    "certificateAuthorities": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/certificateAuthority" },
+      "default": {}
+    },
     "certificateProfiles": {
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/identifier" },
       "additionalProperties": { "$ref": "#/$defs/certificateProfile" },
+      "default": {}
+    },
+    "tlsProfiles": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/tlsProfile" },
       "default": {}
     },
     "certificateScopes": {
@@ -166,8 +178,42 @@
         "displayName": { "type": "string", "minLength": 1 },
         "authorityRef": { "$ref": "#/$defs/identifier" },
         "keyAlgorithm": { "enum": ["RSA", "EC"] },
+        "keySize": { "type": "integer", "minimum": 2048 },
         "validityDays": { "type": "integer", "minimum": 1 },
-        "sanPolicy": { "$ref": "#/$defs/sanPolicy" }
+        "usages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["serverAuth", "clientAuth"] }
+        },
+        "sanPolicy": { "$ref": "#/$defs/sanPolicy" },
+        "subject": { "$ref": "#/$defs/subjectDn" }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "certificateAuthority": {
+      "type": "object",
+      "required": ["mode", "commonName"],
+      "properties": {
+        "mode": { "const": "MANAGED" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "commonName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "validityDays": { "type": "integer", "minimum": 1 }
+      },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "tlsProfile": {
+      "type": "object",
+      "required": ["certificateProfileRef", "storePasswordSecretRef"],
+      "properties": {
+        "certificateProfileRef": { "$ref": "#/$defs/identifier" },
+        "scope": { "enum": ["HOST", "MEMBER", "DEPLOYMENT"] },
+        "storePasswordSecretRef": {
+          "type": "string",
+          "minLength": 3,
+          "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+        }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
       "additionalProperties": false
@@ -175,11 +221,22 @@
     "sanPolicy": {
       "type": "object",
       "properties": {
-        "includeHostDns": { "type": "boolean", "default": false },
-        "includeHostIp": { "type": "boolean", "default": false },
-        "includeEndpointFqdns": { "type": "boolean", "default": false },
-        "includeEndpointWildcard": { "type": "boolean", "default": false },
-        "includeEndpointVip": { "type": "boolean", "default": false }
+        "includeHostDns": { "type": "boolean" },
+        "includeHostIp": { "type": "boolean" },
+        "includeEndpointFqdns": { "type": "boolean" },
+        "includeEndpointWildcard": { "type": "boolean" },
+        "includeEndpointVip": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "subjectDn": {
+      "type": "object",
+      "properties": {
+        "C": { "type": "string", "maxLength": 2 },
+        "ST": { "type": "string", "maxLength": 128 },
+        "L": { "type": "string", "maxLength": 128 },
+        "O": { "type": "string", "maxLength": 128 },
+        "OU": { "type": "string", "maxLength": 128 }
       },
       "additionalProperties": false
     },
@@ -189,12 +246,26 @@
       "properties": {
         "displayName": { "type": "string", "minLength": 1 },
         "profile": { "$ref": "#/$defs/identifier" },
+        "scope": { "enum": ["HOST", "MEMBER", "DEPLOYMENT"] },
         "sources": {
           "type": "object",
           "properties": {
             "endpointBindings": { "$ref": "#/$defs/idList" },
             "serviceDeployments": { "$ref": "#/$defs/idList" },
             "hosts": { "$ref": "#/$defs/idList" },
+            "members": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "required": ["deploymentId", "memberId"],
+                "properties": {
+                  "deploymentId": { "$ref": "#/$defs/identifier" },
+                  "memberId": { "$ref": "#/$defs/identifier" }
+                },
+                "additionalProperties": false
+              }
+            },
             "explicitDnsNames": {
               "type": "array",
               "uniqueItems": true,

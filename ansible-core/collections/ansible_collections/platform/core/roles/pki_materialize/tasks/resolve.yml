@@ -1,0 +1,15 @@
+---
+- name: Resolve topology-derived managed PKI requests
+  platform.core.resolve_pki_requests:
+    project_path: "{{ platform_pki_project_path }}"
+    inventory_path: "{{ platform_pki_inventory_path }}"
+    pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
+  register: platform_pki_managed_resolution
+  when: platform_pki_resolve_managed | bool
+
+- name: Publish managed PKI request and plan projection
+  ansible.builtin.set_fact:
+    platform_pki_project_id: "{{ platform_pki_managed_resolution.pki.requests[0].projectId | default('project') }}"
+    platform_pki_requests: "{{ platform_pki_managed_resolution.pki.requests }}"
+    platform_pki_materialization_plans: "{{ platform_pki_managed_resolution.pki.materializationPlans }}"
+  when: platform_pki_resolve_managed | bool

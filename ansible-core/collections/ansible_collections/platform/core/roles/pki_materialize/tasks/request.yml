@@ -1,0 +1,236 @@
+---
+- name: Derive request-owned PKI paths
+  ansible.builtin.set_fact:
+    _platform_pki_authority_dir: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/authorities/{{ platform_pki_request.authorityId }}"
+    _platform_pki_request_dir: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/requests/{{ platform_pki_request.id }}"
+    _platform_pki_request_runtime_dir: "{{ platform_pki_runtime_root }}/{{ platform_pki_request.id }}"
+    _platform_pki_request_plans: "{{ platform_pki_materialization_plans | selectattr('requestId', 'equalto', platform_pki_request.id) | list }}"
+
+- name: Validate manual PKI request identity inputs
+  ansible.builtin.assert:
+    that:
+      - platform_pki_request.keyAlgorithm in ['RSA', 'EC']
+      - platform_pki_request.keySize | int >= 2048
+      - platform_pki_request.commonName is match('^[^\\r\\n]+$')
+      - platform_pki_request.authorityCommonName is match('^[^\\r\\n]+$')
+    fail_msg: PKI_REQUEST_RUNTIME_INVALID
+
+- name: Require runtime-only store password reference
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_request_plans | length > 0
+      - _platform_pki_request_plans[0].storePasswordSecretRef in platform_pki_secret_files
+      - platform_pki_secret_files[_platform_pki_request_plans[0].storePasswordSecretRef] | length > 0
+    fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
+  no_log: true
+
+- name: Set selected PKI store password file
+  ansible.builtin.set_fact:
+    _platform_pki_password_file: "{{ platform_pki_secret_files[_platform_pki_request_plans[0].storePasswordSecretRef] }}"
+  no_log: true
+
+- name: Inspect runtime-only PKI store password file
+  ansible.builtin.stat:
+    path: "{{ _platform_pki_password_file }}"
+  register: platform_pki_password_file_stat
+  no_log: true
+
+- name: Require protected runtime-only PKI store password file
+  ansible.builtin.assert:
+    that:
+      - platform_pki_password_file_stat.stat.exists
+      - platform_pki_password_file_stat.stat.isreg
+      - platform_pki_password_file_stat.stat.mode == '0600'
+    fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
+  no_log: true
+
+- name: Inspect existing PKI request fingerprint marker
+  ansible.builtin.stat:
+    path: "{{ _platform_pki_request_dir }}/request-fingerprint"
+  register: platform_pki_request_marker
+
+- name: Inspect persistent PKI request material consistency
+  ansible.builtin.stat:
+    path: "{{ _platform_pki_request_dir }}/{{ item }}"
+  loop: [leaf.key, leaf.crt, keystore.p12, truststore.p12]
+  register: platform_pki_request_files
+
+- name: Reject partial PKI request state
+  ansible.builtin.assert:
+    that:
+      - >-
+        (not platform_pki_request_marker.stat.exists and
+         not (platform_pki_request_files.results | map(attribute='stat.exists') | select | list | length)) or
+        (platform_pki_request_marker.stat.exists and
+         (platform_pki_request_files.results | map(attribute='stat.exists') | select | list | length) == 4)
+    fail_msg: PKI_REQUEST_STATE_INCOMPLETE
+
+- name: Read existing PKI request fingerprint marker
+  ansible.builtin.command:
+    argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
+  register: platform_pki_existing_request_fingerprint
+  changed_when: false
+  when: platform_pki_request_marker.stat.exists
+
+- name: Reject certificate request reissue during reconcile
+  ansible.builtin.assert:
+    that:
+      - >-
+        not platform_pki_request_marker.stat.exists or
+        (platform_pki_existing_request_fingerprint.stdout | trim) == platform_pki_request.certificateRequestFingerprint
+    fail_msg: CERTIFICATE_REISSUE_REQUIRED
+
+- name: Inspect authority material consistency
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ _platform_pki_authority_dir }}/ca.key"
+    - "{{ _platform_pki_authority_dir }}/ca.crt"
+  register: platform_pki_authority_files
+
+- name: Inspect managed certificate authority fingerprint marker
+  ansible.builtin.stat:
+    path: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
+  register: platform_pki_authority_marker
+
+- name: Read managed certificate authority fingerprint marker
+  ansible.builtin.command:
+    argv: [cat, "{{ _platform_pki_authority_dir }}/authority-fingerprint"]
+  register: platform_pki_existing_authority_fingerprint
+  changed_when: false
+  when: platform_pki_authority_marker.stat.exists
+
+- name: Reject partial managed certificate authority state
+  ansible.builtin.assert:
+    that:
+      - >-
+        (not platform_pki_authority_marker.stat.exists and
+         not (platform_pki_authority_files.results | map(attribute='stat.exists') | select | list | length)) or
+        (platform_pki_authority_marker.stat.exists and
+         (platform_pki_authority_files.results | map(attribute='stat.exists') | select | list | length) == 2)
+    fail_msg: PKI_AUTHORITY_STATE_INCOMPLETE
+
+- name: Reject managed certificate authority policy change during reconcile
+  ansible.builtin.assert:
+    that:
+      - >-
+        not platform_pki_authority_marker.stat.exists or
+        (platform_pki_existing_authority_fingerprint.stdout | trim) == platform_pki_request.authorityFingerprint
+    fail_msg: CERTIFICATE_REISSUE_REQUIRED
+
+- name: Prepare persistent managed authority and request directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0700'
+  loop:
+    - "{{ _platform_pki_authority_dir }}"
+    - "{{ _platform_pki_request_dir }}"
+    - "{{ _platform_pki_request_runtime_dir }}"
+
+- name: Create managed certificate authority key once
+  ansible.builtin.command:
+    argv: [openssl, genpkey, -algorithm, RSA, -pkeyopt, rsa_keygen_bits:3072, -out, "{{ _platform_pki_authority_dir }}/ca.key"]
+  args:
+    creates: "{{ _platform_pki_authority_dir }}/ca.key"
+  no_log: true
+
+- name: Create managed certificate authority certificate once
+  ansible.builtin.command:
+    argv: [openssl, req, -x509, -new, -key, "{{ _platform_pki_authority_dir }}/ca.key", -sha256, -days, "{{ platform_pki_request.authorityValidityDays }}", -subj, "/CN={{ platform_pki_request.authorityCommonName }}", -out, "{{ _platform_pki_authority_dir }}/ca.crt"]
+  args:
+    creates: "{{ _platform_pki_authority_dir }}/ca.crt"
+  no_log: true
+
+- name: Record immutable managed certificate authority fingerprint
+  ansible.builtin.copy:
+    content: "{{ platform_pki_request.authorityFingerprint }}\n"
+    dest: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0600'
+
+- name: Render deterministic request OpenSSL configuration
+  ansible.builtin.template:
+    src: openssl-request.cnf.j2
+    dest: "{{ _platform_pki_request_runtime_dir }}/request.cnf"
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0600'
+
+- name: Create RSA request private key once
+  ansible.builtin.command:
+    argv: [openssl, genpkey, -algorithm, RSA, -pkeyopt, "rsa_keygen_bits:{{ platform_pki_request.keySize }}", -out, "{{ _platform_pki_request_dir }}/leaf.key"]
+  args:
+    creates: "{{ _platform_pki_request_dir }}/leaf.key"
+  no_log: true
+  when: platform_pki_request.keyAlgorithm == 'RSA'
+
+- name: Create EC request private key once
+  ansible.builtin.command:
+    argv: [openssl, genpkey, -algorithm, EC, -pkeyopt, ec_paramgen_curve:prime256v1, -out, "{{ _platform_pki_request_dir }}/leaf.key"]
+  args:
+    creates: "{{ _platform_pki_request_dir }}/leaf.key"
+  no_log: true
+  when: platform_pki_request.keyAlgorithm == 'EC'
+
+- name: Enforce persistent private key permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0600'
+  loop:
+    - "{{ _platform_pki_authority_dir }}/ca.key"
+    - "{{ _platform_pki_request_dir }}/leaf.key"
+  no_log: true
+
+- name: Create request certificate signing request once
+  ansible.builtin.command:
+    argv: [openssl, req, -new, -key, "{{ _platform_pki_request_dir }}/leaf.key", -out, "{{ _platform_pki_request_runtime_dir }}/leaf.csr", -config, "{{ _platform_pki_request_runtime_dir }}/request.cnf"]
+  args:
+    creates: "{{ _platform_pki_request_runtime_dir }}/leaf.csr"
+  no_log: true
+
+- name: Sign request certificate once
+  ansible.builtin.command:
+    argv: [openssl, x509, -req, -in, "{{ _platform_pki_request_runtime_dir }}/leaf.csr", -CA, "{{ _platform_pki_authority_dir }}/ca.crt", -CAkey, "{{ _platform_pki_authority_dir }}/ca.key", -CAcreateserial, -days, "{{ platform_pki_request.validityDays }}", -extfile, "{{ _platform_pki_request_runtime_dir }}/request.cnf", -extensions, v3_req, -out, "{{ _platform_pki_request_dir }}/leaf.crt"]
+  args:
+    creates: "{{ _platform_pki_request_dir }}/leaf.crt"
+  no_log: true
+
+- name: Record immutable request fingerprint after materialization
+  ansible.builtin.copy:
+    content: "{{ platform_pki_request.certificateRequestFingerprint }}\n"
+    dest: "{{ _platform_pki_request_dir }}/request-fingerprint"
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0600'
+
+- name: Build PKCS12 keystore atomically in runtime workspace
+  ansible.builtin.command:
+    argv: [openssl, pkcs12, -export, -name, "{{ _platform_pki_request_plans[0].keyAlias }}", -inkey, "{{ _platform_pki_request_dir }}/leaf.key", -in, "{{ _platform_pki_request_dir }}/leaf.crt", -certfile, "{{ _platform_pki_authority_dir }}/ca.crt", -out, "{{ _platform_pki_request_dir }}/keystore.p12", -passout, "file:{{ _platform_pki_password_file }}"]
+  args:
+    creates: "{{ _platform_pki_request_dir }}/keystore.p12"
+  no_log: true
+
+- name: Build PKCS12 truststore once
+  ansible.builtin.command:
+    argv: [keytool, -importcert, -noprompt, -storetype, PKCS12, -alias, "{{ _platform_pki_request_plans[0].trustAlias }}", -file, "{{ _platform_pki_authority_dir }}/ca.crt", -keystore, "{{ _platform_pki_request_dir }}/truststore.p12", "-storepass:file", "{{ _platform_pki_password_file }}"]
+  args:
+    creates: "{{ _platform_pki_request_dir }}/truststore.p12"
+  no_log: true
+
+- name: Verify managed certificate chain read-only
+  ansible.builtin.command:
+    argv: [openssl, verify, -CAfile, "{{ _platform_pki_authority_dir }}/ca.crt", "{{ _platform_pki_request_dir }}/leaf.crt"]
+  changed_when: false
+
+- name: Verify dedicated PKCS12 key and trust stores read-only
+  ansible.builtin.command:
+    argv: [keytool, -list, -storetype, PKCS12, -keystore, "{{ _platform_pki_request_dir }}/{{ item }}", "-storepass:file", "{{ _platform_pki_password_file }}"]
+  loop: [keystore.p12, truststore.p12]
+  changed_when: false
+  no_log: true

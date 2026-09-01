@@ -101,6 +101,10 @@ project/
 
 This multi-file layout is one versioned project contract. It avoids a proprietary launcher and does not make the role contract depend on a monolithic Installer DTO.
 
+The repository `ansible.cfg` is part of the standalone execution contract.
+It requires `hash_behaviour = merge` so inventory policy maps can recursively
+overlay role defaults; execution environments must use this configuration.
+
 Core playbooks validate the project and produce an ephemeral resolved workspace:
 
 ```text
