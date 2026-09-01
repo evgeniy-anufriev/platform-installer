@@ -16,12 +16,41 @@
 - name: Build role-aware member listener projection
   ansible.builtin.set_fact:
     _platform_kafka_member_advanced_config: "{{ platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})) }}"
+    _platform_kafka_member_named_listeners: >-
+      {% set selected = [] %}
+      {% for pair in (kafka_member.listeners | default({}) | dict2items | sort(attribute='key')) %}
+      {% set listener = pair.value | combine({'name': pair.key}) %}
+      {% if (listener.purpose == 'controller' and 'controller' in kafka_member.roles) or (listener.purpose in ['client', 'interBroker'] and 'broker' in kafka_member.roles) %}
+      {% set _ = selected.append(listener) %}
+      {% endif %}
+      {% endfor %}
+      {{ selected | to_json }}
+
+- name: Convert named listener projection to a native list
+  ansible.builtin.set_fact:
+    _platform_kafka_member_named_listeners: "{{ _platform_kafka_member_named_listeners | from_json }}"
+  when:
+    - kafka_member.listeners | default({}) | length > 0
+    - _platform_kafka_member_named_listeners is string
+
+- name: Validate named listener role requirements and member-local ports
+  ansible.builtin.assert:
+    that:
+      - "'controller' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | list | length > 0)"
+      - "'broker' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'interBroker') | list | length > 0)"
+      - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SSL') | list | length) == 0 or (kafka_member.tls_profile | default('') | length > 0)"
+      - "(_platform_kafka_member_named_listeners | map(attribute='port') | list | unique | length) == (_platform_kafka_member_named_listeners | length)"
+    fail_msg: 'BLOCKED: named Kafka listeners are invalid for this member role or collide on ports'
+  when: kafka_member.listeners | default({}) | length > 0
+
+- name: Build effective named listener strings
+  ansible.builtin.set_fact:
     _platform_kafka_member_listeners: >-
-      {{ ((['PLAINTEXT://0.0.0.0:' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else [])
-          + (['CONTROLLER://0.0.0.0:' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}
+      {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}://{{ listener.bindAddress | default('0.0.0.0') }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}{{ ((['PLAINTEXT://0.0.0.0:' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else []) + (['CONTROLLER://0.0.0.0:' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}{% endif %}
+    _platform_kafka_member_security_map: >-
+      {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}:{{ listener.securityProtocol }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT{% endif %}
     _platform_kafka_member_advertised_listeners: >-
-      {{ ((['PLAINTEXT://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else [])
-          + (['CONTROLLER://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}
+      {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}://{{ listener.advertisedAddress | default(kafka_member.advertised_host) }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}{{ ((['PLAINTEXT://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else []) + (['CONTROLLER://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}{% endif %}
 
 - name: Build common member effective configuration
   ansible.builtin.set_fact:
@@ -32,17 +61,27 @@
              'node.id': kafka_member.node_id | int,
              'listeners': _platform_kafka_member_listeners,
              'advertised.listeners': _platform_kafka_member_advertised_listeners,
-             'listener.security.protocol.map': 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT',
-             'controller.listener.names': 'CONTROLLER',
+             'listener.security.protocol.map': _platform_kafka_member_security_map,
+             'controller.listener.names': (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | map(attribute='name') | join(',') if kafka_member.listeners | default({}) | length > 0 else 'CONTROLLER'),
              'log.dirs': kafka_member.data_directory
            }) }}
   when: not (platform_kafka_verify_only | bool)
+
+- name: Validate PKI-01 readiness for SSL listeners
+  ansible.builtin.include_tasks: validate_ssl_listener.yml
+  loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SSL') | list }}"
+  loop_control:
+    loop_var: kafka_ssl_listener
+    label: "{{ kafka_member.id }}:{{ kafka_ssl_listener.name }}"
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - kafka_member.listeners | default({}) | length > 0
 
 - name: Add broker effective configuration
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
-           'inter.broker.listener.name': 'PLAINTEXT',
+           'inter.broker.listener.name': ((_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'interBroker') | map(attribute='name') | list | first) if kafka_member.listeners | default({}) | length > 0 else 'PLAINTEXT'),
            'log.retention.hours': kafka_member.log_retention_hours | default(platform_kafka_log_retention_hours)
          }) }}
   when:
@@ -76,6 +115,7 @@
     that: >-
       ((_platform_kafka_member_advanced_config.keys() | list |
        intersect(_platform_kafka_reserved_config_keys)) | length) == 0
+      and (_platform_kafka_member_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.ssl\\.') | list | length) == 0
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; member advanced configuration contains reserved Kafka keys'
   when: not (platform_kafka_verify_only | bool)
 

@@ -50,3 +50,11 @@
     state: started
     timeout: 5
   loop: "{{ kafka_member.listener_ports }}"
+
+- name: Verify SSL listeners with a real TLS handshake
+  ansible.builtin.include_tasks: verify_ssl_listener.yml
+  loop: "{{ kafka_member.listeners | default({}) | dict2items | map(attribute='value') | selectattr('securityProtocol', 'equalto', 'SSL') | list }}"
+  loop_control:
+    loop_var: kafka_ssl_listener
+    label: "{{ kafka_member.id }}:{{ kafka_ssl_listener.name | default('SSL') }}"
+  when: kafka_member.listeners | default({}) | length > 0

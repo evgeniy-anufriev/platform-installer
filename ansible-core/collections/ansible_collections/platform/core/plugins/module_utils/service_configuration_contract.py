@@ -132,7 +132,8 @@ def generated_schema(definition):
         schema["unevaluatedProperties"] = configuration["unevaluatedProperties"]
     for logical in sorted(settings):
         entry = settings[logical]
-        property_schema = {"type": entry["type"]}
+        property_schema = copy.deepcopy(entry.get("schema", {})) if isinstance(entry.get("schema"), dict) else {"type": entry["type"]}
+        property_schema.setdefault("type", entry["type"])
         property_schema.update(copy.deepcopy(entry.get("validation", {})))
         schema["properties"][logical] = property_schema
     return schema

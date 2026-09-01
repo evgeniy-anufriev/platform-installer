@@ -4,8 +4,10 @@ __metaclass__ = type
 
 try:
     from .project_validation import canonical_digest
+    from .kafka_listener_resolution import listener_runtime_properties
 except ImportError:
     from project_validation import canonical_digest
+    from kafka_listener_resolution import listener_runtime_properties
 
 
 def project_kafka_runtime(resolved_topology, resolved_configuration, host_addresses=None):
@@ -53,6 +55,13 @@ def project_kafka_runtime(resolved_topology, resolved_configuration, host_addres
             for logical, output_name in (("clientPort", "client_port"), ("controllerPort", "controller_port")):
                 if logical in effective:
                     instance[output_name] = effective[logical]
+            listener_projection = listener_runtime_properties(effective, instance)
+            if listener_projection["status"] == "PASS":
+                instance["listeners"] = listener_projection["listeners"]
+                instance["listener_properties"] = listener_projection["properties"]
+                instance["listener_fingerprint"] = listener_projection["listenerFingerprint"]
+            else:
+                instance["listener_findings"] = listener_projection["findings"]
             instances.append(instance)
         projection = {
             "clusterId": (deployment.get("identity", {}) if isinstance(deployment.get("identity"), dict) else {}).get("clusterId"),

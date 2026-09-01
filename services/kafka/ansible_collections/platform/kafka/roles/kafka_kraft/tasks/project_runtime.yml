@@ -47,12 +47,12 @@
 - name: Project deployment-scoped Kafka identity and quorum settings
   ansible.builtin.set_fact:
     platform_kafka_cluster_id: >-
-      {{ _platform_kafka_generated_deployment_state.get('identity', {}).get('clusterId', '')
+          {{ _platform_kafka_generated_deployment_state.get('identity', {}).get('clusterId', '')
           | default(_platform_kafka_managed_deployment.value.get('identity', {}).get('clusterId', ''), true)
-          | default(platform_kafka_cluster_id, true) }}
+          | default('', true) }}
     platform_kafka_quorum_mode: >-
       {{ (_platform_kafka_managed_deployment.value.configuration.quorumMode
-          | default(platform_kafka_quorum_mode, true)) }}
+          | default('kraft', true)) }}
 
 - name: Project each Kafka deployment
   ansible.builtin.include_tasks: project_deployment.yml

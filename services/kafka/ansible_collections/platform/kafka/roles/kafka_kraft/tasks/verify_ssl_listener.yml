@@ -1,0 +1,38 @@
+---
+- name: Resolve deployed PKI-01 material for SSL verification
+  ansible.builtin.set_fact:
+    _platform_kafka_verify_ssl_plans: >-
+      {{ (platform_pki_materialization_plans
+          | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+          | selectattr('hostId', 'equalto', inventory_hostname)
+          | selectattr('tlsProfileId', 'equalto', kafka_member.tls_profile)
+          | list) }}
+
+- name: Require deployed PKI-01 material for SSL verification
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_verify_ssl_plans | length == 1
+      - _platform_kafka_verify_ssl_plans[0].targetDirectory is defined
+    fail_msg: 'BLOCKED: PKI-01 materialization is unavailable for SSL verification'
+
+- name: Perform real TLS handshake for Kafka listener
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - s_client
+      - -connect
+      - "127.0.0.1:{{ kafka_ssl_listener.port }}"
+      - -CAfile
+      - "{{ _platform_kafka_verify_ssl_plans[0].targetDirectory }}/ca-chain.pem"
+      - -verify_return_error
+      - -brief
+    stdin: ''
+  changed_when: false
+  register: platform_kafka_ssl_handshake
+  no_log: true
+
+- name: Assert Kafka SSL handshake succeeded
+  ansible.builtin.assert:
+    that:
+      - platform_kafka_ssl_handshake.rc == 0
+    fail_msg: Kafka SSL listener did not complete certificate validation

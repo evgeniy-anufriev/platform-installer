@@ -12,12 +12,63 @@
       "minimum": 1,
       "type": "integer"
     },
+    "configDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
     "controllerPort": {
       "maximum": 65535,
       "minimum": 1,
       "type": "integer"
     },
     "dataDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "listeners": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "advertisedAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "bindAddress": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "purpose": {
+            "enum": [
+              "client",
+              "interBroker",
+              "controller"
+            ],
+            "type": "string"
+          },
+          "securityProtocol": {
+            "enum": [
+              "PLAINTEXT",
+              "SSL"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "securityProtocol",
+          "port"
+        ],
+        "type": "object"
+      },
+      "minProperties": 1,
+      "type": "object"
+    },
+    "logDirectory": {
       "minLength": 1,
       "type": "string"
     },
@@ -38,6 +89,10 @@
       "type": "string"
     },
     "runtimePathNamespace": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "tlsProfile": {
       "minLength": 1,
       "type": "string"
     }

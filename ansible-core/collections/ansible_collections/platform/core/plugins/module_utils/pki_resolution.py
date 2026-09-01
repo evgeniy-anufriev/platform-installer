@@ -93,7 +93,10 @@ def _consumer_records(topology):
                     "hostId": member.get("host"),
                     "tlsProfileRef": tls_profile,
                 })
-    return records
+    unique = {}
+    for record in records:
+        unique[(record["deploymentId"], record["memberId"], record.get("hostId"), record["tlsProfileRef"])] = record
+    return [unique[key] for key in sorted(unique)]
 
 
 def _scope_key(scope, consumer):
@@ -144,7 +147,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None)
         if scope not in ("HOST", "MEMBER", "DEPLOYMENT"):
             findings.append(_finding("CERTIFICATE_SCOPE_INVALID", field, "TLS profile scope must be HOST, MEMBER or DEPLOYMENT"))
             continue
-        grouped.setdefault(_scope_key(scope, consumer), {"scope": scope, "tlsProfile": tls_profile, "profileRef": profile_ref, "authorityRef": authority_ref, "consumers": []})["consumers"].append(consumer)
+        grouped.setdefault(_scope_key(scope, consumer), {"scope": scope, "tlsProfile": tls_profile, "tlsProfileId": consumer["tlsProfileRef"], "profileRef": profile_ref, "authorityRef": authority_ref, "consumers": []})["consumers"].append(consumer)
     if findings:
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
 
@@ -192,6 +195,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None)
             plan = {
                 "id": "%s--%s" % (scope_id, host_id),
                 "requestId": scope_id,
+                "tlsProfileId": group["tlsProfileId"],
                 "authorityId": group["authorityRef"],
                 "hostId": host_id,
                 "targetDirectory": target_root,

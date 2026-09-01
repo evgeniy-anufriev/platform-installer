@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:0c1673d134fbc54e52007964c66a0fd9123681c505dc644e3f9c6aa09b1a9e23
+digest: sha256:c57f38ce3c91e323e33d84661516fbfc6d30fe9fbd888d21c1600b87948ad136
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -106,6 +106,62 @@ definitions:
           ui:
             label: Controller port
             order: 20
+        tlsProfile:
+          kind: MANAGED
+          roleVariable: platform_kafka_tls_profile
+          type: string
+          scopes:
+          - deployment
+          - member
+          validation:
+            minLength: 1
+          ui:
+            label: Kafka TLS profile
+            order: 22
+        listeners:
+          kind: MANAGED
+          roleVariable: platform_kafka_listeners
+          type: object
+          scopes:
+          - deployment
+          - member
+          validation:
+            minProperties: 1
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              required:
+              - purpose
+              - securityProtocol
+              - port
+              properties:
+                purpose:
+                  type: string
+                  enum:
+                  - client
+                  - interBroker
+                  - controller
+                securityProtocol:
+                  type: string
+                  enum:
+                  - PLAINTEXT
+                  - SSL
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                bindAddress:
+                  type: string
+                  minLength: 1
+                advertisedAddress:
+                  type: string
+                  minLength: 1
+          ui:
+            label: Named Kafka listeners
+            order: 15
         nodeId:
           kind: MANAGED
           roleVariable: platform_kafka_node_id
@@ -141,6 +197,30 @@ definitions:
           ui:
             label: Runtime path namespace
             order: 31
+        logDirectory:
+          kind: MANAGED
+          roleVariable: platform_kafka_log_directory
+          type: string
+          scopes:
+          - deployment
+          - member
+          validation:
+            minLength: 1
+          ui:
+            label: Kafka log directory
+            order: 32
+        configDirectory:
+          kind: MANAGED
+          roleVariable: platform_kafka_config_directory
+          type: string
+          scopes:
+          - deployment
+          - member
+          validation:
+            minLength: 1
+          ui:
+            label: Kafka config directory
+            order: 33
         logRetentionHours:
           kind: MANAGED
           roleVariable: platform_kafka_log_retention_hours
@@ -174,6 +254,8 @@ definitions:
     - log.dirs
     - listener.security.protocol.map
     - inter.broker.listener.name
+    - listener.name.*.ssl.keystore.location
+    - listener.name.*.ssl.truststore.location
     roleEntrypoints:
       apply:
         fqcn: platform.kafka.kafka_kraft
@@ -190,8 +272,8 @@ definitions:
     x-initialSecurityScope:
       sasl: unsupported
       mtls: deferred
-      customListeners: deferred
-    x-definitionDigest: sha256:f5a451c29881b5abb561e1d903b078b4f07c470073547a370343f9cec721bf07
+      customListeners: implemented-service-02a
+    x-definitionDigest: sha256:f8566e488def0c7459a850268746d49e55323189d3004732d20d13c0868e4523
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1

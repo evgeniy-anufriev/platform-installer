@@ -12,9 +12,19 @@
     _platform_kafka_normalized_unit_destination: "{{ _platform_kafka_normalized_compatibility_unit.destination | default('/etc/systemd/system/' ~ platform_kafka_service_name ~ '@.service') }}"
     _platform_kafka_normalized_environment_pattern: "{{ _platform_kafka_normalized_compatibility_unit.environment_pattern | default(platform_kafka_config_directory ~ '/%i/systemd.env') }}"
     _platform_kafka_normalized_description: "{{ _platform_kafka_normalized_compatibility_unit.description | default('Apache Kafka 4.3.1 KRaft member %i') }}"
+    _platform_kafka_normalized_listeners: "{{ kafka_input_member.listeners | default({}) }}"
+    _platform_kafka_normalized_client_port: "{{ kafka_input_member.client_port | default((kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'in', ['client', 'interBroker']) | map(attribute='value.port') | list | first), true) }}"
+    _platform_kafka_normalized_controller_port: "{{ kafka_input_member.controller_port | default((kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | map(attribute='value.port') | list | first), true) }}"
     _platform_kafka_normalized_listener_ports: >-
-      {{ ([kafka_input_member.client_port | int] if 'broker' in _platform_kafka_normalized_roles else [])
-         + ([kafka_input_member.controller_port | int] if 'controller' in _platform_kafka_normalized_roles else []) }}
+      {{ ((kafka_input_member.listeners | default({}) | dict2items
+            | selectattr('value.purpose', 'in', (['client', 'interBroker'] if 'broker' in _platform_kafka_normalized_roles else ['__none__']))
+            | map(attribute='value.port') | map('int') | list)
+          + (kafka_input_member.listeners | default({}) | dict2items
+            | selectattr('value.purpose', 'equalto', 'controller')
+            | map(attribute='value.port') | map('int') | list)
+          if (kafka_input_member.listeners | default({}) | length > 0)
+          else (([kafka_input_member.client_port | int] if 'broker' in _platform_kafka_normalized_roles else [])
+                + ([kafka_input_member.controller_port | int] if 'controller' in _platform_kafka_normalized_roles else []))) | unique | sort }}
 
 - name: Assemble normalized Kafka member
   ansible.builtin.set_fact:
@@ -23,6 +33,10 @@
            'id': kafka_input_member.id | string,
            'node_id': kafka_input_member.node_id | int,
            'roles': _platform_kafka_normalized_roles,
+           'listeners': _platform_kafka_normalized_listeners,
+           'tls_profile': (kafka_input_member.tls_profile | default(platform_kafka_tls_profile)),
+           'client_port': _platform_kafka_normalized_client_port,
+           'controller_port': _platform_kafka_normalized_controller_port,
            'config_directory': _platform_kafka_normalized_config_directory,
            'runtime_directory': _platform_kafka_normalized_runtime_directory,
            'systemd_unit_name': _platform_kafka_normalized_unit_name,

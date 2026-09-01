@@ -10,6 +10,23 @@ platform_kafka_group: kafka
 platform_kafka_java_package: java-21-openjdk-headless
 platform_kafka_client_port: 9092
 platform_kafka_controller_port: 9093
+platform_kafka_tls_profile: infrastructure-tls
+# Named listeners are the Kafka service baseline. Deployment and member
+# configuration may override this mapping only for non-default listener ports
+# or topology.
+platform_kafka_listeners:
+  PLAINTEXT:
+    purpose: client
+    securityProtocol: PLAINTEXT
+    port: 9092
+  SSL:
+    purpose: interBroker
+    securityProtocol: SSL
+    port: 9094
+  CONTROLLER:
+    purpose: controller
+    securityProtocol: SSL
+    port: 9093
 platform_kafka_log_retention_hours: 168
 platform_kafka_advanced_config: {}
 platform_kafka_service_name: kafka
@@ -22,5 +39,10 @@ platform_kafka_log_directory: /var/log/kafka
 platform_kafka_quorum_mode: dynamic
 platform_kafka_clean_install: false
 platform_kafka_confirm_destructive_reset: ''
+platform_pki_materialization_plans: []
+# Runtime-only mapping SecretRef -> password-file path used by PKI-01.
+# Kafka consumer material is copied to platform_kafka_pki_directory instead.
+platform_pki_secret_files: {}
+platform_kafka_pki_directory: ''
 platform_kafka_clear_stop_retries: 15
 platform_kafka_clear_stop_delay: 2

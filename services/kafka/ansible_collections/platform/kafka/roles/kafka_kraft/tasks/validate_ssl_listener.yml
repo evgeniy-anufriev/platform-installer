@@ -1,0 +1,89 @@
+---
+- name: Resolve PKI-01 materialization for SSL listener
+  ansible.builtin.set_fact:
+    _platform_kafka_ssl_plans: >-
+      {{ (platform_pki_materialization_plans
+          | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+          | selectattr('hostId', 'equalto', inventory_hostname)
+          | selectattr('tlsProfileId', 'equalto', kafka_member.tls_profile)
+          | list) }}
+
+- name: Require one ready PKI-01 materialization for SSL listener
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_ssl_plans | length == 1
+      - _platform_kafka_ssl_plans[0].storePasswordSecretRef is defined
+      - _platform_kafka_ssl_plans[0].storePasswordSecretRef in (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))
+      - (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))[_platform_kafka_ssl_plans[0].storePasswordSecretRef] | length > 0
+    fail_msg: 'BLOCKED: PKI-01 materialization or runtime store SecretRef is unavailable for SSL Kafka listener'
+
+- name: Check PKI-01 stores before Kafka mutation
+  ansible.builtin.stat:
+    path: "{{ _platform_kafka_ssl_plans[0].targetDirectory }}/{{ item }}"
+  loop: [keystore.p12, truststore.p12, materialization-fingerprint]
+  register: platform_kafka_ssl_store_state
+
+- name: Require complete PKI-01 stores before Kafka mutation
+  ansible.builtin.assert:
+    that: "platform_kafka_ssl_store_state.results | map(attribute='stat.exists') | list | min"
+    fail_msg: 'BLOCKED: PKI-01 target stores are incomplete for SSL Kafka listener'
+
+- name: Prepare Kafka-owned PKI consumer directory
+  ansible.builtin.set_fact:
+    _platform_kafka_ssl_consumer_directory: >-
+      {{ platform_kafka_pki_directory
+         if (platform_kafka_pki_directory | default('', true) | length > 0)
+         else (kafka_member.config_directory ~ '/pki') }}
+
+- name: Create Kafka-owned PKI consumer directory
+  ansible.builtin.file:
+    path: "{{ _platform_kafka_ssl_consumer_directory }}"
+    state: directory
+    owner: "{{ platform_kafka_user }}"
+    group: "{{ platform_kafka_group }}"
+    mode: '0700'
+
+- name: Resolve runtime-only PKI store password file
+  ansible.builtin.set_fact:
+    _platform_kafka_ssl_password_file: >-
+      {{ (platform_pki_secret_files
+          | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[_platform_kafka_ssl_plans[0].storePasswordSecretRef] }}
+
+- name: Copy runtime-only PKI store password file to Kafka consumer directory
+  ansible.builtin.copy:
+    src: "{{ _platform_kafka_ssl_password_file }}"
+    dest: "{{ _platform_kafka_ssl_consumer_directory }}/store-password"
+    owner: "{{ platform_kafka_user }}"
+    group: "{{ platform_kafka_group }}"
+    mode: '0600'
+  no_log: true
+
+- name: Copy PKI material into Kafka-owned consumer directory
+  ansible.builtin.copy:
+    src: "{{ _platform_kafka_ssl_plans[0].targetDirectory }}/{{ item.name }}"
+    dest: "{{ _platform_kafka_ssl_consumer_directory }}/{{ item.name }}"
+    remote_src: true
+    owner: "{{ platform_kafka_user }}"
+    group: "{{ platform_kafka_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: ca-chain.pem, mode: '0600'}
+    - {name: certificate.pem, mode: '0600'}
+    - {name: private-key.pem, mode: '0600'}
+    - {name: keystore.p12, mode: '0600'}
+    - {name: truststore.p12, mode: '0600'}
+    - {name: materialization-fingerprint, mode: '0600'}
+  no_log: true
+
+- name: Add listener-scoped PKCS12 properties without exposing secret values
+  ansible.builtin.set_fact:
+    kafka_effective_config: >-
+      {{ kafka_effective_config | combine({
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.location'): _platform_kafka_ssl_consumer_directory ~ '/keystore.p12',
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type'): 'PKCS12',
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim),
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.location'): _platform_kafka_ssl_consumer_directory ~ '/truststore.p12',
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type'): 'PKCS12',
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim)
+      }) }}
+  no_log: true

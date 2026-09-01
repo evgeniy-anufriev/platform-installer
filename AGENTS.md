@@ -8,10 +8,16 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 
 ## Current phase
 
-The repository is implementing CORE-01. Only standalone Ansible Core,
-published contracts, service-package skeletons, fixtures and their tests are
-in scope. Do not begin CORE-02, a production service, backend or frontend
-without the corresponding milestone request.
+CORE-01 through CORE-07A, PKI-01, EXEC-01 and SERVICE-01A through SERVICE-01D
+are complete, including the focused generic Kafka role lifecycle refactor.
+The next gated milestone is SERVICE-02A: Kafka named listeners and SSL
+consumption. Do not begin SERVICE-02A, a new production service, backend or
+frontend without the corresponding milestone request.
+
+Until that request is made, preserve the established standalone Ansible Core
+contracts, Ansible-native desired-state ownership, managed Kafka/PKI
+projections and execution-node boundaries. Treat resolved topology,
+configuration, runtime projections, plans, facts and results as derived state.
 
 ## Boundaries
 
@@ -22,6 +28,11 @@ without the corresponding milestone request.
 - Go may orchestrate Ansible Core but must not reimplement service or topology rules.
 - UI is an editor and projection of the portable contract, not another source of truth.
 - Service capabilities are declared by versioned service packages, not hard-coded into React.
+- `project.yml` is optional compatibility metadata for the established
+  Ansible-native path; inventory, `group_vars`, `host_vars`, role defaults and
+  ordinary documented role variables remain authoritative as applicable.
+- Managed Kafka and PKI projections are runtime-only; do not introduce a
+  competing persistent desired-state model.
 
 ## State separation
 
@@ -71,6 +82,10 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
+The current next-gate decision is recorded in `CURRENT_STATE.md`: SERVICE-02A
+remains explicitly gated by an owner request. Kafka TLS consumption must not
+be inferred from the completed PKI-01 foundation.
+
 ## Test Credentials
 
 Local integration-test credentials may exist under `.runtime/secrets/`.
@@ -97,6 +112,18 @@ The Windows development workstation is not the canonical runtime for Python/Ansi
 - Never modify target hosts during read-only Core tests.
 - RED OS is the primary current Core QA environment.
 - ALT Linux validation is required only for ALT-specific milestone behavior or when explicitly requested.
+
+### Established RED OS EXEC-01 connection
+
+For the configured RED OS QA target at `192.168.56.101`, always connect as
+`platform-automation` using the persistent execution identity
+`.runtime/platform-exec-key-20260901` with `IdentitiesOnly=yes`. SSH key login
+is the established transport. The target policy grants
+`platform-automation ALL=(ALL) NOPASSWD: ALL`; use `sudo -n`/Ansible
+`become: true` and do not use password-based sudo or the `admin` login for
+EXEC-01 QA. Do not add or persist any credential values here. If the policy
+is absent, diagnose or restore it only through the existing EXEC-01 bootstrap
+mechanism.
 
 ## Local Test Artifacts
 

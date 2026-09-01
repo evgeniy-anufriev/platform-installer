@@ -65,6 +65,16 @@ class PkiResolutionTests(unittest.TestCase):
         self.assertEqual([], out["requests"])
         self.assertEqual("TLS_PROFILE_NOT_FOUND", out["findings"][0]["code"])
 
+    def test_service_tls_profile_is_used_for_ssl_listeners(self):
+        topology = self.topology()
+        deployment = topology["serviceDeployments"]["service-a"]
+        deployment["configuration"]["listeners"] = {
+            "CLIENT_SSL": {"purpose": "client", "securityProtocol": "SSL", "port": 9092}
+        }
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {"ansible_host": "192.0.2.11"}, "node2": {"ansible_host": "192.0.2.12"}}, self.defaults)
+        self.assertEqual("PASS", out["status"])
+        self.assertEqual("platform-tls", out["materializationPlans"][0]["tlsProfileId"])
+
     def test_request_change_has_a_new_fingerprint(self):
         hosts = {"node1": {"ansible_host": "192.0.2.11"}, "node2": {"ansible_host": "192.0.2.12"}}
         first = pki.resolve_certificate_requests("p", self.topology(), hosts, self.defaults)["requests"][0]

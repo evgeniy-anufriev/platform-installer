@@ -29,6 +29,8 @@
         roles: [broker, controller]
         client_port: "{{ platform_kafka_client_port }}"
         controller_port: "{{ platform_kafka_controller_port }}"
+        listeners: "{{ platform_kafka_listeners | default(omit) }}"
+        tls_profile: "{{ platform_kafka_tls_profile }}"
         data_directory: "{{ platform_kafka_data_directory }}"
         log_directory: "{{ platform_kafka_log_directory }}/{{ platform_kafka_service_name }}"
         config_directory: "{{ platform_kafka_config_directory }}"
@@ -97,10 +99,8 @@
 - name: Validate role-aware Kafka member inputs
   ansible.builtin.assert:
     that:
-      - "'broker' not in item.roles or item.client_port is defined"
-      - "'broker' not in item.roles or (item.client_port | string) is match('^[0-9]+$')"
-      - "'controller' not in item.roles or item.controller_port is defined"
-      - "'controller' not in item.roles or (item.controller_port | string) is match('^[0-9]+$')"
+      - "'broker' not in item.roles or item.client_port is defined or (item.listeners | default({}) | dict2items | selectattr('value.purpose', 'in', ['client', 'interBroker']) | list | length > 0)"
+      - "'controller' not in item.roles or item.controller_port is defined or (item.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | list | length > 0)"
       - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in item.roles or item.directory_id is defined
       - platform_kafka_quorum_mode != 'dynamic' or 'controller' not in item.roles or item.directory_id is not defined or (item.directory_id | string) is match('^[A-Za-z0-9_-]{22}$')
     fail_msg: Kafka listener and dynamic controller identity inputs must match member roles
@@ -162,6 +162,7 @@
     that: >-
       (platform_kafka_advanced_config.keys() | list |
        intersect(_platform_kafka_reserved_config_keys) | length) == 0
+      and (platform_kafka_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.ssl\\.') | list | length) == 0
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; reserved Kafka keys are controlled by the role'
 
 - name: Require approved offline Kafka artifact

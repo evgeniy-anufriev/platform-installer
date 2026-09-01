@@ -8,6 +8,9 @@ Ansible-native desired-state ownership and deterministic managed Kafka/PKI
 projection are proven through the standalone execution path without requiring
 `project.yml`.
 
+SERVICE-02A is owner-requested and IN PROGRESS. It is not accepted or marked
+DONE until the remaining RED OS acceptance and regression gates pass.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -46,10 +49,11 @@ projection are proven through the standalone execution path without requiring
   targets or required Ansible user input.
 - Managed service projections are runtime-only. Kafka continues to consume its
   public manual `platform_kafka_instances` input in standalone mode.
-- Kafka `clientPort` and `controllerPort` remain simplified PLAINTEXT
-  compatibility settings for SERVICE-01A through SERVICE-01D. Their projection
-  is Kafka package responsibility, not a Generic Core endpoint contract;
-  multi-listener TLS/SASL modeling is explicitly deferred.
+- Kafka `clientPort` and `controllerPort` remain bounded PLAINTEXT compatibility
+  inputs. SERVICE-02A introduces Kafka-package-owned named listeners; their
+  default model supplies PLAINTEXT and SSL endpoints, while SASL remains out of
+  scope. A Kafka deployment/member selects one `tlsProfile` for all of its SSL
+  listeners; no listener owns a separate certificate profile.
 
 ## Implemented
 
@@ -131,6 +135,14 @@ projection are proven through the standalone execution path without requiring
   target deployment; read-only verification; deterministic request and
   materialization fingerprints. Changed initialized identity is blocked with
   `CERTIFICATE_REISSUE_REQUIRED`.
+
+## In progress
+
+- SERVICE-02A: named Kafka listeners with PLAINTEXT and SSL defaults;
+  service/member-scoped `tlsProfile`; PKI-01 materialization-plan consumption;
+  Kafka-owned copied PEM/PKCS12/password runtime material; and listener-scoped
+  Kafka SSL properties. The representative RED OS fixture overrides only its
+  isolated listener ports.
 
 ## Validation evidence
 
@@ -217,6 +229,12 @@ projection are proven through the standalone execution path without requiring
   verify returned `failed=0`; repeat apply and verify returned `changed=0`.
 - CORE-07A focused RED OS validation: Core suite (107), Kafka contract suite
   (22), managed-configuration tests and catalog reproducibility passed.
+- SERVICE-02A focused RED OS validation: 11 focused listener/PKI tests,
+  generated configuration schema and fixture catalog reproducibility, and
+  Kafka apply syntax check passed. The isolated fixture bound PLAINTEXT, SSL
+  and controller listeners and completed an SSL handshake with CA verification.
+  Full verify remains blocked by the existing Kafka 4.3.1 broker-registration
+  output regex, not by listener startup or PKI material access.
 
 ## Not implemented
 
@@ -228,12 +246,15 @@ projection are proven through the standalone execution path without requiring
 - Generic backend/project persistence beyond the scoped Kafka identity
   transaction primitive.
 - Desktop or web UI.
-- Generic Kafka listener/endpoint modeling and stateful transition workflows.
-- Kafka TLS consumption of PKI-01 material.
+- Generic endpoint modeling and stateful listener-transition workflows.
+- Imported/external CA materialization, JKS, mTLS, global JVM cacerts,
+  renewal and rotation.
+- SERVICE-02A full acceptance, centralized distributed SSL acceptance and
+  SERVICE-01 regression after the listener-default change.
 
 ## Next gate
 
-CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D, EXEC-01 and
-the generic Kafka role lifecycle refactor are complete. SERVICE-02A (Kafka
-named listeners and SSL consumption) remains gated by an explicit owner
-request.
+CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D,
+EXEC-01 and the generic Kafka role lifecycle refactor are complete. SERVICE-02A
+(Kafka named listeners and SSL consumption) is owner-requested and active; it
+remains incomplete until its acceptance and regression gates pass.

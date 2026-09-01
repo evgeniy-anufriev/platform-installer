@@ -69,3 +69,15 @@ PKI-01 supports only `MANAGED` authorities, PEM, dedicated PKCS12 stores and
 server-auth certificates. Imported/external CA, JKS, mTLS, global JVM cacerts,
 renewal and rotation are deferred. Kafka becomes a PKI consumer only in the
 separate SERVICE-02A listener/SSL milestone.
+
+### TODO: imported or external CA material
+
+Add a versioned `IMPORTED` authority/certificate contract for certificates
+issued by an external CA. Desired state must contain only stable references:
+the external trust bundle, leaf certificate, private key, PKCS12 stores and
+their passwords must arrive through runtime-only SecretRefs, never inventory
+or project files. PKI materialization must validate and deploy those inputs as
+consumer-owned PKCS12 material; a Kafka deployment then selects one
+`configuration.tlsProfile`, which every SSL listener on that service/member
+uses. This work must preserve the existing `MANAGED` authority contract and
+must not add plaintext secrets to plans, fingerprints or logs.

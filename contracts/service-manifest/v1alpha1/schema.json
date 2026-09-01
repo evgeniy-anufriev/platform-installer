@@ -239,6 +239,7 @@
           "uniqueItems": true
         },
         "validation": { "type": "object" },
+        "schema": { "type": "object" },
         "ui": {
           "type": "object",
           "properties": {

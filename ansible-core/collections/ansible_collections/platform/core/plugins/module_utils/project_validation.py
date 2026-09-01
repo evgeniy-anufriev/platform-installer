@@ -168,7 +168,13 @@ def _validate_managed_configuration(definition, configuration, field_prefix, sco
                     sourceNamespace=source_namespace, property=logical, expected=["object"]))
                 continue
             reserved = definition.get("x-reservedAdvancedProperties", []) if isinstance(definition, dict) else []
-            for property_name in sorted(set(value).intersection(reserved if isinstance(reserved, list) else [])):
+            reserved_names = set(reserved if isinstance(reserved, list) else [])
+            if service_type == "kafka":
+                reserved_names.update(
+                    property_name for property_name in value
+                    if isinstance(property_name, str) and re.match(r"^listener\.name\..*\.ssl\.", property_name)
+                )
+            for property_name in sorted(set(value).intersection(reserved_names)):
                 findings.append(_configuration_finding("ADVANCED_SETTING_RESERVED", "%s.%s" % (field, property_name),
                     "Advanced configuration property is controlled by the service role", service_type, deployment_id,
                     sourceNamespace=source_namespace, property=property_name))
