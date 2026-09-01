@@ -1,11 +1,7 @@
 ---
-- name: Set member verification paths
-  ansible.builtin.set_fact:
-    _platform_kafka_verify_config_dir: "{{ kafka_member.config_directory }}"
-    _platform_kafka_verify_service: "{{ kafka_member.systemd_unit_name }}"
-
 - name: Verify Kafka member systemd state
-  ansible.builtin.command: systemctl is-active {{ _platform_kafka_verify_service }}
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ kafka_member.systemd_unit_name }}"]
   changed_when: false
   register: platform_kafka_member_service_state
 
@@ -15,7 +11,8 @@
     fail_msg: Kafka member systemd instance is not active
 
 - name: Read Kafka member main process
-  ansible.builtin.command: systemctl show -p MainPID --value {{ _platform_kafka_verify_service }}
+  ansible.builtin.command:
+    argv: [systemctl, show, -p, MainPID, --value, "{{ kafka_member.systemd_unit_name }}"]
   changed_when: false
   register: platform_kafka_member_main_pid
 
@@ -26,7 +23,7 @@
 
 - name: Verify Kafka member configuration path
   ansible.builtin.stat:
-    path: "{{ _platform_kafka_verify_config_dir }}/server.properties"
+    path: "{{ kafka_member.config_directory }}/server.properties"
   register: platform_kafka_verify_config
 
 - name: Assert Kafka member configuration exists

@@ -1,10 +1,4 @@
 ---
-- name: Set member-derived Kafka paths
-  ansible.builtin.set_fact:
-    _platform_kafka_member_config_dir: "{{ kafka_member.config_directory }}"
-    _platform_kafka_member_config_file: "{{ kafka_member.config_directory }}/server.properties"
-    _platform_kafka_member_runtime_dir: "{{ kafka_member.runtime_directory }}"
-
 - name: Create isolated member directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -13,8 +7,8 @@
     group: "{{ platform_kafka_group }}"
     mode: '0750'
   loop:
-    - "{{ _platform_kafka_member_config_dir }}"
-    - "{{ _platform_kafka_member_runtime_dir }}"
+    - "{{ kafka_member.config_directory }}"
+    - "{{ kafka_member.runtime_directory }}"
     - "{{ kafka_member.data_directory }}"
     - "{{ kafka_member.log_directory }}"
   when: not (platform_kafka_verify_only | bool)
@@ -108,7 +102,7 @@
 - name: Render deterministic member server.properties
   ansible.builtin.template:
     src: server.properties.j2
-    dest: "{{ _platform_kafka_member_config_file }}"
+    dest: "{{ kafka_member.config_directory }}/server.properties"
     owner: "{{ platform_kafka_user }}"
     group: "{{ platform_kafka_group }}"
     mode: '0640'
@@ -135,85 +129,45 @@
     fail_msg: Existing Kafka member storage identity mismatch; refusing destructive repair
   when: platform_kafka_member_metadata.stat.exists
 
-- name: Format uninitialized dynamic initial-controller storage exactly once
-  become_user: "{{ platform_kafka_user }}"
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
-      - format
-      - --cluster-id
-      - "{{ platform_kafka_cluster_id }}"
-      - --config
-      - "{{ _platform_kafka_member_config_file }}"
-      - --initial-controllers
-      - "{{ _platform_kafka_initial_controllers | trim }}"
+- name: Derive Kafka storage format strategy
+  ansible.builtin.set_fact:
+    _platform_kafka_storage_format_strategy: >-
+      {{ 'INITIAL_CONTROLLERS'
+         if (platform_kafka_quorum_mode == 'dynamic'
+             and 'controller' in kafka_member.roles
+             and kafka_member.directory_id is defined)
+         else ('STANDALONE_COMPATIBILITY'
+               if (platform_kafka_quorum_mode == 'dynamic'
+                   and 'controller' in kafka_member.roles
+                   and _platform_kafka_controller_instances | length == 1
+                   and kafka_member.directory_id is not defined)
+               else 'NO_INITIAL_CONTROLLERS') }}
   when:
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
-    - platform_kafka_quorum_mode == 'dynamic'
-    - "'controller' in kafka_member.roles"
-    - kafka_member.directory_id is defined
-  changed_when: true
 
-- name: Format uninitialized static quorum storage exactly once
+- name: Format uninitialized Kafka storage exactly once
   become_user: "{{ platform_kafka_user }}"
   ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
-      - format
-      - --cluster-id
-      - "{{ platform_kafka_cluster_id }}"
-      - --config
-      - "{{ _platform_kafka_member_config_file }}"
-      - --no-initial-controllers
+    argv: >-
+      {{ [platform_kafka_install_directory ~ '/bin/kafka-storage.sh',
+          'format',
+          '--cluster-id', platform_kafka_cluster_id,
+          '--config', kafka_member.config_directory ~ '/server.properties']
+         + (['--initial-controllers', _platform_kafka_initial_controllers | trim]
+            if _platform_kafka_storage_format_strategy == 'INITIAL_CONTROLLERS'
+            else (['--standalone']
+                  if _platform_kafka_storage_format_strategy == 'STANDALONE_COMPATIBILITY'
+                  else ['--no-initial-controllers'])) }}
   when:
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
-    - platform_kafka_quorum_mode == 'static'
-  changed_when: true
-
-- name: Format uninitialized dynamic non-controller storage exactly once
-  become_user: "{{ platform_kafka_user }}"
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
-      - format
-      - --cluster-id
-      - "{{ platform_kafka_cluster_id }}"
-      - --config
-      - "{{ _platform_kafka_member_config_file }}"
-      - --no-initial-controllers
-  when:
-    - not (platform_kafka_verify_only | bool)
-    - not platform_kafka_member_metadata.stat.exists
-    - platform_kafka_quorum_mode == 'dynamic'
-    - "'controller' not in kafka_member.roles"
-  changed_when: true
-
-- name: Format uninitialized single-controller dynamic storage exactly once
-  become_user: "{{ platform_kafka_user }}"
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-storage.sh"
-      - format
-      - --cluster-id
-      - "{{ platform_kafka_cluster_id }}"
-      - --config
-      - "{{ _platform_kafka_member_config_file }}"
-      - --standalone
-  when:
-    - not (platform_kafka_verify_only | bool)
-    - not platform_kafka_member_metadata.stat.exists
-    - platform_kafka_quorum_mode == 'dynamic'
-    - _platform_kafka_controller_instances | length == 1
-    - "'controller' in kafka_member.roles"
-    - kafka_member.directory_id is not defined
   changed_when: true
 
 - name: Write systemd instance environment
   ansible.builtin.copy:
-    content: "KAFKA_CONFIG_FILE={{ _platform_kafka_member_config_file }}\n"
-    dest: "{{ _platform_kafka_member_runtime_dir }}/systemd.env"
+    content: "KAFKA_CONFIG_FILE={{ kafka_member.config_directory }}/server.properties\n"
+    dest: "{{ kafka_member.runtime_directory }}/systemd.env"
     owner: root
     group: root
     mode: '0644'
@@ -228,7 +182,6 @@
     group: root
     mode: '0644'
   register: platform_kafka_systemd_template
-  notify: Reload systemd
   when: not (platform_kafka_verify_only | bool)
 
 - name: Reload systemd before starting member instances

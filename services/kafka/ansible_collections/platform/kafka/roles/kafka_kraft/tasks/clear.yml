@@ -1,4 +1,20 @@
 ---
+- name: Derive selected Kafka deployment identity for cleanup
+  ansible.builtin.set_fact:
+    _platform_kafka_cleanup_deployment_ids: >-
+      {{ _platform_kafka_instances | map(attribute='deployment_id')
+         | select('defined') | list | unique }}
+
+- name: Require exact Kafka clean-install acknowledgement
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_cleanup_deployment_ids | length <= 1
+      - >-
+        (_platform_kafka_cleanup_deployment_ids | first
+         | default(platform_kafka_service_name))
+        == platform_kafka_confirm_destructive_reset
+    fail_msg: 'BLOCKED: clean_install acknowledgement must match exactly one Kafka deployment'
+
 - name: Derive deployment-owned Kafka cleanup resources
   ansible.builtin.set_fact:
     _platform_kafka_clear_owned_units: "{{ _platform_kafka_local_instances | map(attribute='systemd_unit_name') | list | unique }}"

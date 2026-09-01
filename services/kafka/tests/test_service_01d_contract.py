@@ -49,7 +49,8 @@ class Service01DContractTests(unittest.TestCase):
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("for member in _platform_kafka_controller_instances", main)
         self.assertIn("_platform_kafka_broker_bootstrap_servers", main)
-        self.assertIn("Format uninitialized dynamic non-controller storage exactly once", member)
+        self.assertIn("Format uninitialized Kafka storage exactly once", member)
+        self.assertIn("NO_INITIAL_CONTROLLERS", member)
         self.assertIn("--no-initial-controllers", member)
         self.assertIn("Validate role-specific effective Kafka configuration", member)
 

@@ -51,11 +51,16 @@ class Service01BContractTests(unittest.TestCase):
     def test_member_role_uses_controller_count_and_member_role_for_format_strategy(self):
         source = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("controller.quorum.voters", source)
+        self.assertIn("Derive Kafka storage format strategy", source)
+        self.assertIn("Format uninitialized Kafka storage exactly once", source)
+        self.assertIn("INITIAL_CONTROLLERS", source)
+        self.assertIn("NO_INITIAL_CONTROLLERS", source)
+        self.assertIn("STANDALONE_COMPATIBILITY", source)
         self.assertIn("--initial-controllers", source)
         self.assertIn("--no-initial-controllers", source)
         self.assertIn("--standalone", source)
         self.assertIn("kafka_member.directory_id is defined", source)
-        self.assertIn("'controller' not in kafka_member.roles", source)
+        self.assertEqual(1, source.count("kafka-storage.sh"))
 
     def test_quorum_and_effective_config_are_role_aware(self):
         main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
@@ -113,7 +118,13 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("platform_kafka_confirm_destructive_reset: ''", defaults)
         self.assertIn("include_tasks: clear.yml", main)
         self.assertIn("platform_kafka_clean_install | bool", main)
-        self.assertIn("platform_kafka_confirm_destructive_reset", main)
+        self.assertNotIn("platform_kafka_confirm_destructive_reset", main)
+        self.assertIn("Require exact Kafka clean-install acknowledgement", clear)
+        self.assertIn("platform_kafka_confirm_destructive_reset", clear)
+        self.assertLess(
+            main.index("Clear selected Kafka deployment explicitly when requested"),
+            main.index("Prepare Kafka host prerequisites once"),
+        )
         self.assertIn("Remove only selected Kafka deployment member state", clear)
         self.assertIn("systemctl, is-active", clear)
         self.assertIn("'/var/lib/kafka'", clear)
@@ -128,8 +139,20 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("Clear stale state for selected Kafka units", clear)
         self.assertIn("reject('equalto', '/etc/systemd/system/kafka@.service')", clear)
         self.assertNotIn("state: absent\n  loop: \"{{ [platform_kafka_install_directory]", clear)
-        self.assertIn("Format uninitialized dynamic initial-controller storage exactly once", member)
+        self.assertIn("Format uninitialized Kafka storage exactly once", member)
         self.assertNotIn("platform_kafka_operation", main + defaults + clear)
+
+    def test_member_tasks_avoid_path_and_handler_duplication(self):
+        member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
+        verify_member = (ROLE / "tasks" / "verify_member.yml").read_text(encoding="utf-8")
+        handlers = ROLE / "handlers" / "main.yml"
+        self.assertNotIn("Set member-derived Kafka paths", member)
+        self.assertNotIn("_platform_kafka_member_config_file", member)
+        self.assertNotIn("_platform_kafka_member_runtime_dir", member)
+        self.assertNotIn("Set member verification paths", verify_member)
+        self.assertNotIn("_platform_kafka_verify_service", verify_member)
+        self.assertNotIn("notify: Reload systemd", member)
+        self.assertFalse(handlers.exists())
 
     def test_host_reset_is_separate_guarded_qa_operation(self):
         reset = (SERVICE / "playbooks" / "reset_kafka_host.yml").read_text(encoding="utf-8")

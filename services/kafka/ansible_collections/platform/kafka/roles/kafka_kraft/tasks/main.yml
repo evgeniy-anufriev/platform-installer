@@ -89,17 +89,6 @@
     _platform_kafka_broker_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'broker') | list }}"
     _platform_kafka_local_instances: "{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Derive Kafka deployment identity for optional cleanup
-  ansible.builtin.set_fact:
-    _platform_kafka_cleanup_deployment_ids: "{{ _platform_kafka_instances | map(attribute='deployment_id') | select('defined') | list | unique }}"
-
-- name: Validate optional Kafka clean-install acknowledgement
-  ansible.builtin.assert:
-    that:
-      - not (platform_kafka_clean_install | bool) or (_platform_kafka_cleanup_deployment_ids | length <= 1)
-      - not (platform_kafka_clean_install | bool) or (_platform_kafka_cleanup_deployment_ids | first | default(platform_kafka_service_name)) == platform_kafka_confirm_destructive_reset
-    fail_msg: 'BLOCKED: clean_install acknowledgement must match exactly one Kafka deployment'
-
 - name: Derive local Kafka role member sets
   ansible.builtin.set_fact:
     _platform_kafka_local_controller_instances: "{{ _platform_kafka_local_instances | selectattr('roles', 'contains', 'controller') | list }}"
@@ -214,17 +203,17 @@
     _platform_kafka_broker_bootstrap_servers: >-
       {% for member in _platform_kafka_broker_instances %}{{ member.advertised_host }}:{{ member.client_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
-- name: Prepare Kafka host prerequisites once
-  ansible.builtin.include_tasks: prepare_host.yml
-  when:
-    - not (platform_kafka_verify_only | bool)
-    - _platform_kafka_local_instances | length > 0
-
 - name: Clear selected Kafka deployment explicitly when requested
   ansible.builtin.include_tasks: clear.yml
   when:
     - not (platform_kafka_verify_only | bool)
     - platform_kafka_clean_install | bool
+    - _platform_kafka_local_instances | length > 0
+
+- name: Prepare Kafka host prerequisites once
+  ansible.builtin.include_tasks: prepare_host.yml
+  when:
+    - not (platform_kafka_verify_only | bool)
     - _platform_kafka_local_instances | length > 0
 
 - name: Apply local Kafka members in deterministic node order
