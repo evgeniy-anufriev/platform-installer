@@ -7,19 +7,9 @@
       "additionalProperties": true,
       "type": "object"
     },
-    "clientPort": {
-      "maximum": 65535,
-      "minimum": 1,
-      "type": "integer"
-    },
     "configDirectory": {
       "minLength": 1,
       "type": "string"
-    },
-    "controllerPort": {
-      "maximum": 65535,
-      "minimum": 1,
-      "type": "integer"
     },
     "dataDirectory": {
       "minLength": 1,

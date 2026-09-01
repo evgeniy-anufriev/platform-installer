@@ -5,7 +5,7 @@ platform_kafka_instances:
     roles: [controller]
     host: node1
     advertised_host: 192.0.2.11
-    controller_port: 9093
+    listeners: {CONTROLLER: {purpose: controller, securityProtocol: SSL, port: 9093}}
     data_directory: /var/lib/kafka/split/controller-1
     log_directory: /var/log/kafka/split/controller-1
   - id: controller-2
@@ -13,7 +13,7 @@ platform_kafka_instances:
     roles: [controller]
     host: node2
     advertised_host: 192.0.2.12
-    controller_port: 9093
+    listeners: {CONTROLLER: {purpose: controller, securityProtocol: SSL, port: 9093}}
     data_directory: /var/lib/kafka/split/controller-2
     log_directory: /var/log/kafka/split/controller-2
   - id: controller-3
@@ -21,7 +21,7 @@ platform_kafka_instances:
     roles: [controller]
     host: node3
     advertised_host: 192.0.2.13
-    controller_port: 9093
+    listeners: {CONTROLLER: {purpose: controller, securityProtocol: SSL, port: 9093}}
     data_directory: /var/lib/kafka/split/controller-3
     log_directory: /var/log/kafka/split/controller-3
   - id: broker-1
@@ -29,6 +29,6 @@ platform_kafka_instances:
     roles: [broker]
     host: node1
     advertised_host: 192.0.2.11
-    client_port: 9092
+    listeners: {PLAINTEXT: {purpose: client, securityProtocol: PLAINTEXT, port: 9092}, SSL: {purpose: interBroker, securityProtocol: SSL, port: 9094}}
     data_directory: /var/lib/kafka/split/broker-1
     log_directory: /var/log/kafka/split/broker-1

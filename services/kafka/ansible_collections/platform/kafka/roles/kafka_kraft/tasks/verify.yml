@@ -6,22 +6,35 @@
     loop_var: kafka_member
     label: "{{ kafka_member.id }}"
 
-- name: Query Kafka quorum status read-only
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh"
-      - --bootstrap-controller
-      - >-
-        {{ ((_platform_kafka_local_controller_instances | first)
-             if _platform_kafka_local_controller_instances | length > 0
-             else (_platform_kafka_controller_instances | first)).advertised_host }}:{{ ((_platform_kafka_local_controller_instances | first)
-             if _platform_kafka_local_controller_instances | length > 0
-             else (_platform_kafka_controller_instances | first)).controller_port }}
-      - describe
-      - --status
+- name: Select Kafka controller used for read-only quorum diagnostics
+  ansible.builtin.set_fact:
+    _platform_kafka_verify_controller: >-
+      {{ (_platform_kafka_local_controller_instances | first)
+         if _platform_kafka_local_controller_instances | length > 0
+         else (_platform_kafka_controller_instances | first) }}
+  changed_when: false
+
+- name: Query Kafka SSL controller quorum status read-only
+  ansible.builtin.shell: |
+    set -o pipefail
+    config="{{ _platform_kafka_verify_controller.config_directory }}/server.properties"
+    truststore_password="$(sed -n 's/^listener\.name\.controller\.ssl\.truststore\.password=//p' "${config}" | head -n1)"
+    test -n "${truststore_password}"
+    exec 3< <(printf '%s\n' \
+      'security.protocol=SSL' \
+      "ssl.truststore.location={{ _platform_kafka_verify_controller.config_directory }}/pki/truststore.p12" \
+      "ssl.truststore.password=${truststore_password}" \
+      'ssl.truststore.type=PKCS12' \
+      'ssl.endpoint.identification.algorithm=')
+    "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh" \
+      --bootstrap-controller "{{ _platform_kafka_verify_controller.advertised_host }}:{{ _platform_kafka_verify_controller.controller_listener_port }}" \
+      --command-config /dev/fd/3 describe --status
+  args:
+    executable: /bin/bash
   changed_when: false
   register: platform_kafka_quorum_status
   failed_when: platform_kafka_quorum_status.rc != 0
+  no_log: true
 
 - name: Assert Kafka controller quorum leader and membership
   ansible.builtin.assert:
@@ -49,18 +62,24 @@
   register: platform_kafka_broker_api_versions
   failed_when: platform_kafka_broker_api_versions.rc != 0
 
+- name: Select unfenced Kafka broker diagnostic headers read-only
+  ansible.builtin.set_fact:
+    _platform_kafka_unfenced_broker_headers: >-
+      {{ platform_kafka_broker_api_versions.stdout_lines
+         | select('search', 'isFenced:\s*false\)\s*->\s*\(')
+         | list }}
+  changed_when: false
+
 - name: Assert Kafka brokers are registered and unfenced
   ansible.builtin.assert:
     that:
+      - _platform_kafka_unfenced_broker_headers | length == _platform_kafka_broker_instances | length
       - >-
-        (platform_kafka_broker_api_versions.stdout |
-         regex_findall('\(id:\s*[0-9]+.*isFenced:\s*false\)') | length)
-        == (_platform_kafka_broker_instances | length)
-      - >-
-        platform_kafka_broker_api_versions.stdout is search(
-        (item.advertised_host | regex_escape) ~ ':' ~ (item.client_port | string) ~
-        '\s+\(id:\s*' ~ (item.node_id | string) ~ '\s+.*isFenced:\s*false\)')
-    fail_msg: Kafka broker is absent from the cluster or remains fenced
+        (_platform_kafka_unfenced_broker_headers
+         | select('search', '^\s*' ~ (item.advertised_host | regex_escape) ~ ':' ~ (item.client_listener_port | string) ~
+           '\s+\(id:\s*' ~ (item.node_id | string) ~ '.*isFenced:\s*false\)\s*->\s*\(')
+         | list | length) == 1
+    fail_msg: Kafka broker diagnostic does not contain exactly the expected registered, unfenced members
   loop: "{{ _platform_kafka_broker_instances }}"
   loop_control:
     label: "{{ item.id }}"

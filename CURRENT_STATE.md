@@ -8,8 +8,9 @@ Ansible-native desired-state ownership and deterministic managed Kafka/PKI
 projection are proven through the standalone execution path without requiring
 `project.yml`.
 
-SERVICE-02A is owner-requested and IN PROGRESS. It is not accepted or marked
-DONE until the remaining RED OS acceptance and regression gates pass.
+SERVICE-02A is DONE. Named Kafka listeners, service-wide TLS profile
+consumption, PKI-01 read-only verify reconstruction and SSL consumer
+prerequisites are accepted through the standalone Ansible path.
 
 ## Established direction
 
@@ -49,6 +50,9 @@ DONE until the remaining RED OS acceptance and regression gates pass.
   targets or required Ansible user input.
 - Managed service projections are runtime-only. Kafka continues to consume its
   public manual `platform_kafka_instances` input in standalone mode.
+- QA state invariant: stable PKI identities and fingerprints persist, while PKI
+  materialization plans remain derived; every independent Ansible execution
+  reconstructs those plans through read-only resolution.
 - Kafka `clientPort` and `controllerPort` remain bounded PLAINTEXT compatibility
   inputs. SERVICE-02A introduces Kafka-package-owned named listeners; their
   default model supplies PLAINTEXT and SSL endpoints, while SASL remains out of
@@ -233,8 +237,14 @@ DONE until the remaining RED OS acceptance and regression gates pass.
   generated configuration schema and fixture catalog reproducibility, and
   Kafka apply syntax check passed. The isolated fixture bound PLAINTEXT, SSL
   and controller listeners and completed an SSL handshake with CA verification.
-  Full verify remains blocked by the existing Kafka 4.3.1 broker-registration
-  output regex, not by listener startup or PKI material access.
+- SERVICE-02A FAST regression completed on RED OS with deterministic
+  profile-lifetime roots: SERVICE-01A, 01B, 01C and 01D initial apply passed;
+  separate verify returned `changed=0 failed=0`; repeat apply returned
+  `changed=0 failed=0` for every profile. Core suite (113) and Kafka focused
+  suite (22) passed, catalog and syntax checks were reproducible, and
+  `sudo unshare -n true` passed. The regression also fixed the real SSL
+  handshake EOF/timeout defect and split KRaft broker/controller listener
+  projection contract without changing identity or PKI lifecycle semantics.
 
 ## Not implemented
 
@@ -249,12 +259,10 @@ DONE until the remaining RED OS acceptance and regression gates pass.
 - Generic endpoint modeling and stateful listener-transition workflows.
 - Imported/external CA materialization, JKS, mTLS, global JVM cacerts,
   renewal and rotation.
-- SERVICE-02A full acceptance, centralized distributed SSL acceptance and
-  SERVICE-01 regression after the listener-default change.
 
 ## Next gate
 
 CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D,
-EXEC-01 and the generic Kafka role lifecycle refactor are complete. SERVICE-02A
-(Kafka named listeners and SSL consumption) is owner-requested and active; it
-remains incomplete until its acceptance and regression gates pass.
+EXEC-01, the generic Kafka role lifecycle refactor and SERVICE-02A (Kafka
+named listeners and SSL consumption) are complete. Do not start the next
+milestone in this turn.

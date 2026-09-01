@@ -35,8 +35,7 @@ class Service01DContractTests(unittest.TestCase):
             if placement[host].get("platform_deployments", {}).get("kafka-main", {}).get("members")
         })
         self.assertEqual({1, 2, 3, 4, 5, 6}, {member["configuration"]["nodeId"] for member in members})
-        self.assertTrue(all("clientPort" not in member.get("configuration", {}) for member in controllers))
-        self.assertTrue(all("controllerPort" not in member.get("configuration", {}) for member in brokers))
+        self.assertTrue(all(not {"clientPort", "controllerPort"}.intersection(member.get("configuration", {})) for member in members))
         generated = self.generated_variables["platform_generated_state"]["serviceDeployments"]["kafka-main"]["members"]
         self.assertNotIn("platform_generated_state", self.variables)
         self.assertTrue(all("directoryId" in generated[member["id"]]["identity"] for member in controllers))
@@ -64,6 +63,7 @@ class Service01DContractTests(unittest.TestCase):
         self.assertIn("Assert Kafka controller quorum leader and membership", verify)
         self.assertIn("LeaderId", verify)
         self.assertIn("kafka-broker-api-versions.sh", verify)
+        self.assertIn("Select unfenced Kafka broker diagnostic headers read-only", verify)
         self.assertIn("Assert Kafka brokers are registered and unfenced", verify)
 
     def test_acceptance_runner_persists_recoverable_lifecycle_state(self):

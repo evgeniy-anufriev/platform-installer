@@ -8,8 +8,6 @@ platform_kafka_data_directory: /var/lib/kafka
 platform_kafka_user: kafka
 platform_kafka_group: kafka
 platform_kafka_java_package: java-21-openjdk-headless
-platform_kafka_client_port: 9092
-platform_kafka_controller_port: 9093
 platform_kafka_tls_profile: infrastructure-tls
 # Named listeners are the Kafka service baseline. Deployment and member
 # configuration may override this mapping only for non-default listener ports

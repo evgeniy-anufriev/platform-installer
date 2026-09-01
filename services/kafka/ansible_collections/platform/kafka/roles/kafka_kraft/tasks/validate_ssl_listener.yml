@@ -49,15 +49,6 @@
       {{ (platform_pki_secret_files
           | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[_platform_kafka_ssl_plans[0].storePasswordSecretRef] }}
 
-- name: Copy runtime-only PKI store password file to Kafka consumer directory
-  ansible.builtin.copy:
-    src: "{{ _platform_kafka_ssl_password_file }}"
-    dest: "{{ _platform_kafka_ssl_consumer_directory }}/store-password"
-    owner: "{{ platform_kafka_user }}"
-    group: "{{ platform_kafka_group }}"
-    mode: '0600'
-  no_log: true
-
 - name: Copy PKI material into Kafka-owned consumer directory
   ansible.builtin.copy:
     src: "{{ _platform_kafka_ssl_plans[0].targetDirectory }}/{{ item.name }}"

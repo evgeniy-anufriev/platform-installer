@@ -52,9 +52,6 @@ def project_kafka_runtime(resolved_topology, resolved_configuration, host_addres
             member_identity = member.get("identity", {}) if isinstance(member.get("identity"), dict) else {}
             if "directoryId" in member_identity:
                 instance["directory_id"] = member_identity["directoryId"]
-            for logical, output_name in (("clientPort", "client_port"), ("controllerPort", "controller_port")):
-                if logical in effective:
-                    instance[output_name] = effective[logical]
             listener_projection = listener_runtime_properties(effective, instance)
             if listener_projection["status"] == "PASS":
                 instance["listeners"] = listener_projection["listeners"]

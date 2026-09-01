@@ -9,7 +9,9 @@
         name: platform.core.pki_materialize
         tasks_from: resolve.yml
       vars:
-        platform_pki_resolve_managed: "{{ platform_pki_materialization_plans is not defined or platform_pki_materialization_plans | length == 0 }}"
+        # PKI materialization plans are derived runtime state. Reconstruct
+        # them for every independent verify process; never persist or apply.
+        platform_pki_resolve_managed: true
 
 - name: Verify managed PKI material on selected targets
   hosts: platform_targets

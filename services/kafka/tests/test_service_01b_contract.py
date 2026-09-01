@@ -99,7 +99,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("controller.quorum.voters", static)
         self.assertNotIn("combine({'controller.quorum.bootstrap.servers'", static)
 
-    def test_split_role_static_fixture_uses_only_role_specific_ports(self):
+    def test_split_role_static_fixture_uses_named_role_specific_listeners(self):
         fixture_path = SERVICE / "tests" / "fixtures" / "split-role-static.yml"
         with fixture_path.open(encoding="utf-8") as stream:
             fixture = yaml.safe_load(stream)
@@ -109,8 +109,8 @@ class Service01BContractTests(unittest.TestCase):
         self.assertEqual("static", fixture["platform_kafka_quorum_mode"])
         self.assertEqual(3, len(controllers))
         self.assertEqual(1, len(brokers))
-        self.assertTrue(all("client_port" not in member for member in controllers))
-        self.assertTrue(all("controller_port" not in member for member in brokers))
+        self.assertTrue(all(set(member["listeners"]) == {"CONTROLLER"} for member in controllers))
+        self.assertTrue(all(set(member["listeners"]) == {"PLAINTEXT", "SSL"} for member in brokers))
 
     def test_member_identity_is_not_an_inventory_host(self):
         source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")

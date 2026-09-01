@@ -9,8 +9,6 @@
       'node_id': (item.value.configuration.nodeId),
       'directory_id': (((platform_generated_state | default({})).get('serviceDeployments', {})).get(_platform_kafka_project_deployment.key, {}).get('members', {}).get(item.key, {}).get('identity', {}).get('directoryId', item.value.identity.directoryId | default(omit))),
       'roles': (item.value.roles | sort),
-      'client_port': (item.value.configuration.clientPort | default(_platform_kafka_project_deployment.value.configuration.clientPort | default(platform_kafka_client_port))),
-      'controller_port': (item.value.configuration.controllerPort | default(_platform_kafka_project_deployment.value.configuration.controllerPort | default(platform_kafka_controller_port))),
       'listeners': (item.value.configuration.listeners | default(_platform_kafka_project_deployment.value.configuration.listeners | default(platform_kafka_listeners))),
       'tls_profile': (item.value.configuration.tlsProfile | default(_platform_kafka_project_deployment.value.configuration.tlsProfile | default(platform_kafka_tls_profile))),
       'data_directory': (item.value.configuration.dataDirectory | default(_platform_kafka_project_deployment.value.configuration.dataDirectory | default(platform_kafka_data_directory ~ '/' ~ (_platform_kafka_project_deployment.value.configuration.runtimePathNamespace | default(_platform_kafka_project_deployment.key)) ~ '/' ~ item.key))),

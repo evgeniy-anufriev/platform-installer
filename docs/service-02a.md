@@ -1,6 +1,6 @@
 # SERVICE-02A - Kafka named listeners and SSL consumer prerequisites
 
-Status: IN PROGRESS.
+Status: DONE.
 
 SERVICE-02A extends the Kafka service package with a named listener contract.
 The supported protocols are `PLAINTEXT` and `SSL`; SASL is out of scope.
@@ -23,10 +23,9 @@ listeners:
     port: 9093
 ```
 
-The service role projects listeners according to logical member roles. Existing
-`clientPort` and `controllerPort` inputs remain a bounded PLAINTEXT adapter and
-are not persisted beside named listeners. Supplying both models is accepted
-only when deterministic equivalence is proven.
+The service role projects listeners according to logical member roles. Named
+listeners are the only supported port contract; legacy `clientPort` and
+`controllerPort` settings are not part of SERVICE-02A.
 
 Kafka role defaults provide `PLAINTEXT` on `9092`, `SSL` on `9094`, and the
 SSL `CONTROLLER` listener on `9093`. Thus every broker receives both
@@ -44,6 +43,12 @@ consumes PKI-01 materialization plans and the existing
 password state. Missing or incomplete PKI material blocks before Kafka
 configuration or service mutation.
 
+QA state invariant:
+
+> Stable PKI identities/fingerprints persist; PKI materialization plans do not.
+> Every independent Ansible execution reconstructs derived PKI plans through
+> read-only resolution.
+
 `platform_pki_secret_files` remains the runtime-only SecretRef-to-password-file
 mapping required by PKI-01; it is not repurposed as a destination directory.
 Before Kafka configuration is rendered and the member is started, the
@@ -56,6 +61,11 @@ Listener properties are managed/reserved. `advancedConfig` cannot override
 listener, quorum or listener-scoped SSL properties. Generated state remains
 limited to identities, fingerprints, locks and reconciliation metadata.
 
-The implementation is not complete until focused contract tests, standalone
-and centralized RED OS SSL acceptance, existing SERVICE-01A-01D regression,
-offline/security checks and documentation evidence pass.
+Acceptance evidence: focused Kafka contract tests `22 OK`, full Core suite
+`113 OK`, generated catalog reproducibility, Kafka apply/verify syntax checks,
+and privileged `sudo unshare -n` passed on RED OS. The isolated SSL FAST matrix
+passed for SERVICE-01A through SERVICE-01D: each profile completed initial
+apply, a separate read-only PKI/Kafka verify with `changed=0 failed=0`, and a
+repeat apply with `changed=0 failed=0`. No reset or reformat was performed
+between verify and repeat. Runtime-only roots and logs were profile-isolated;
+secrets were not emitted.

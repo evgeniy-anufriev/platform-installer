@@ -20,7 +20,7 @@
       {% set selected = [] %}
       {% for pair in (kafka_member.listeners | default({}) | dict2items | sort(attribute='key')) %}
       {% set listener = pair.value | combine({'name': pair.key}) %}
-      {% if (listener.purpose == 'controller' and 'controller' in kafka_member.roles) or (listener.purpose in ['client', 'interBroker'] and 'broker' in kafka_member.roles) %}
+      {% if listener.purpose == 'controller' or (listener.purpose in ['client', 'interBroker'] and 'broker' in kafka_member.roles) %}
       {% set _ = selected.append(listener) %}
       {% endif %}
       {% endfor %}
@@ -32,6 +32,14 @@
   when:
     - kafka_member.listeners | default({}) | length > 0
     - _platform_kafka_member_named_listeners is string
+
+- name: Select listeners bound by this Kafka member
+  ansible.builtin.set_fact:
+    _platform_kafka_member_bound_listeners: >-
+      {{ _platform_kafka_member_named_listeners
+         | rejectattr('purpose', 'equalto', 'controller')
+         | list if 'controller' not in kafka_member.roles
+         else _platform_kafka_member_named_listeners }}
 
 - name: Validate named listener role requirements and member-local ports
   ansible.builtin.assert:
@@ -46,11 +54,11 @@
 - name: Build effective named listener strings
   ansible.builtin.set_fact:
     _platform_kafka_member_listeners: >-
-      {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}://{{ listener.bindAddress | default('0.0.0.0') }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}{{ ((['PLAINTEXT://0.0.0.0:' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else []) + (['CONTROLLER://0.0.0.0:' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}{% endif %}
+      {% for listener in _platform_kafka_member_bound_listeners %}{{ listener.name }}://{{ listener.bindAddress | default('0.0.0.0') }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_member_security_map: >-
       {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}:{{ listener.securityProtocol }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT{% endif %}
     _platform_kafka_member_advertised_listeners: >-
-      {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}://{{ listener.advertisedAddress | default(kafka_member.advertised_host) }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}{{ ((['PLAINTEXT://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.client_port | string)] if 'broker' in kafka_member.roles else []) + (['CONTROLLER://' ~ kafka_member.advertised_host ~ ':' ~ (kafka_member.controller_port | string)] if 'controller' in kafka_member.roles else [])) | join(',') }}{% endif %}
+      {% for listener in _platform_kafka_member_bound_listeners %}{{ listener.name }}://{{ listener.advertisedAddress | default(kafka_member.advertised_host) }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 - name: Build common member effective configuration
   ansible.builtin.set_fact:
@@ -126,8 +134,6 @@
       - "'broker' in kafka_member.roles or 'log.retention.hours' not in kafka_effective_config"
       - "'broker' in kafka_member.roles or 'PLAINTEXT://' not in kafka_effective_config['listeners']"
       - "'broker' in kafka_member.roles or 'PLAINTEXT://' not in kafka_effective_config['advertised.listeners']"
-      - "'controller' in kafka_member.roles or 'CONTROLLER://' not in kafka_effective_config['listeners']"
-      - "'controller' in kafka_member.roles or 'CONTROLLER://' not in kafka_effective_config['advertised.listeners']"
       - "'controller' in kafka_member.roles or (kafka_member.node_id | string) not in (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | list)"
     fail_msg: Kafka effective configuration contains behavior from an unassigned member role
   when: not (platform_kafka_verify_only | bool)
@@ -138,6 +144,7 @@
     fail_msg: Kafka effective configuration contains an unsupported value type
   loop: "{{ kafka_effective_config | dict2items | sort(attribute='key') }}"
   when: not (platform_kafka_verify_only | bool)
+  no_log: true
 
 - name: Render deterministic member server.properties
   ansible.builtin.template:

@@ -27,8 +27,6 @@
       - id: "{{ platform_kafka_service_name }}"
         node_id: "{{ platform_kafka_node_id }}"
         roles: [broker, controller]
-        client_port: "{{ platform_kafka_client_port }}"
-        controller_port: "{{ platform_kafka_controller_port }}"
         listeners: "{{ platform_kafka_listeners | default(omit) }}"
         tls_profile: "{{ platform_kafka_tls_profile }}"
         data_directory: "{{ platform_kafka_data_directory }}"
@@ -99,8 +97,8 @@
 - name: Validate role-aware Kafka member inputs
   ansible.builtin.assert:
     that:
-      - "'broker' not in item.roles or item.client_port is defined or (item.listeners | default({}) | dict2items | selectattr('value.purpose', 'in', ['client', 'interBroker']) | list | length > 0)"
-      - "'controller' not in item.roles or item.controller_port is defined or (item.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | list | length > 0)"
+      - "'broker' not in item.roles or (item.listeners | default({}) | dict2items | selectattr('value.purpose', 'in', ['client', 'interBroker']) | list | length > 0)"
+      - "'controller' not in item.roles or (item.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | list | length > 0)"
       - platform_kafka_quorum_mode != 'dynamic' or _platform_kafka_controller_instances | length == 1 or 'controller' not in item.roles or item.directory_id is defined
       - platform_kafka_quorum_mode != 'dynamic' or 'controller' not in item.roles or item.directory_id is not defined or (item.directory_id | string) is match('^[A-Za-z0-9_-]{22}$')
     fail_msg: Kafka listener and dynamic controller identity inputs must match member roles
@@ -196,13 +194,13 @@
 - name: Build deterministic controller-only quorum projections
   ansible.builtin.set_fact:
     _platform_kafka_controller_bootstrap_servers: >-
-      {% for member in _platform_kafka_controller_instances %}{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.advertised_host }}:{{ member.controller_listener_port }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_initial_controllers: >-
-      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_listener_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_static_quorum_voters: >-
-      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_listener_port }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_broker_bootstrap_servers: >-
-      {% for member in _platform_kafka_broker_instances %}{{ member.advertised_host }}:{{ member.client_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_broker_instances %}{{ member.advertised_host }}:{{ member.client_listener_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 - name: Clear selected Kafka deployment explicitly when requested
   ansible.builtin.include_tasks: clear.yml

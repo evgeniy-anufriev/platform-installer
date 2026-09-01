@@ -10,7 +10,7 @@ Required inputs are `platform_kafka_cluster_id`,
 distributed operation, `platform_kafka_instances` contains the full deployment
 member list. Every member declares `id`, `node_id`, `roles`, `host`,
 `advertised_host` and isolated data/log paths. Broker members require
-`client_port`; controller members require `controller_port`. Dynamic initial
+an explicit named listener map. Dynamic initial
 controllers also require stable `directory_id` values. The legacy
 single-instance variables are only a compatibility adapter into the same
 normalized member model. Existing initialized storage is never reformatted

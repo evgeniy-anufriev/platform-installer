@@ -347,6 +347,19 @@ Not ready when:
 - generated state is stored as desired configuration;
 - service upgrades are not reproducible.
 
+### SERVICE-02A: Kafka named listeners and SSL consumer prerequisites
+
+Status: DONE. Kafka now uses explicit named `PLAINTEXT`, `SSL` and
+role-appropriate `CONTROLLER` listeners with one service-wide TLS profile.
+Legacy `clientPort` and `controllerPort` settings were removed. Kafka consumes
+PKI-01 materialization read-only and copies required material into its
+Kafka-owned directory without persisting passwords.
+
+RED OS FAST acceptance passed for SERVICE-01A through SERVICE-01D with
+profile-lifetime isolation: initial apply, separate verify and repeat apply
+all passed; verify and repeat returned `changed=0 failed=0`. Core (113), Kafka
+(22), catalog, syntax, offline and diff gates passed.
+
 ## Phase E — Go backend adapter
 
 ### BACKEND-01: Core process adapter

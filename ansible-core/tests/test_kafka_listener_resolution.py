@@ -39,15 +39,19 @@ class KafkaListenerResolutionTests(unittest.TestCase):
         result = resolution.project_member_listeners(config, {"roles": ["controller"], "advertised_host": "node1"})
         self.assertEqual(["CONTROLLER"], [item["name"] for item in result["listeners"]])
 
-    def test_ssl_listener_uses_service_profile_and_legacy_ports_are_supported(self):
+    def test_broker_only_receives_controller_listener_for_kraft_quorum(self):
+        config = {"listeners": {
+            "PLAINTEXT": {"purpose": "client", "securityProtocol": "PLAINTEXT", "port": 9092},
+            "SSL": {"purpose": "interBroker", "securityProtocol": "SSL", "port": 9094},
+            "CONTROLLER": {"purpose": "controller", "securityProtocol": "SSL", "port": 9095},
+        }}
+        result = resolution.project_member_listeners(config, {"roles": ["broker"], "advertised_host": "node1"})
+        self.assertEqual(["CONTROLLER", "PLAINTEXT", "SSL"], [item["name"] for item in result["listeners"]])
+
+    def test_ssl_listener_requires_named_configuration(self):
         named = resolution.normalize_listeners({"listeners": {"CLIENT": {"purpose": "client", "securityProtocol": "SSL", "port": 9092}}}, self.member)
         self.assertEqual("PASS", named["status"])
-        legacy = resolution.normalize_listeners({}, dict(self.member, client_port=9092, controller_port=9093))
-        self.assertEqual("PASS", legacy["status"])
-        self.assertEqual("PLAINTEXT", legacy["listeners"]["CLIENT"]["securityProtocol"])
-
-    def test_named_and_legacy_conflict_is_blocked(self):
-        result = resolution.normalize_listeners({"clientPort": 9092, "listeners": {"CLIENT": {"purpose": "client", "securityProtocol": "PLAINTEXT", "port": 9192}}}, dict(self.member, client_port=9092))
+        result = resolution.normalize_listeners({}, self.member)
         self.assertEqual("BLOCKED", result["status"])
 
     def test_role_defaults_provide_plaintext_and_ssl_listeners(self):

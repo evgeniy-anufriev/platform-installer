@@ -25,28 +25,12 @@ def _address(listener, member):
     return bind, advertised
 
 
-def _legacy_listeners(member):
-    listeners = {}
-    if "broker" in member.get("roles", []) and member.get("client_port") is not None:
-        listeners["CLIENT"] = {
-            "name": "CLIENT", "purpose": "client", "securityProtocol": "PLAINTEXT",
-            "port": member["client_port"]
-        }
-    if "controller" in member.get("roles", []) and member.get("controller_port") is not None:
-        listeners["CONTROLLER"] = {
-            "name": "CONTROLLER", "purpose": "controller", "securityProtocol": "PLAINTEXT",
-            "port": member["controller_port"]
-        }
-    return listeners
-
-
 def normalize_listeners(configuration, member, path="configuration.listeners"):
     """Normalize named listeners without reading Ansible variables or precedence."""
     configuration = configuration if isinstance(configuration, dict) else {}
     named = configuration.get("listeners")
-    legacy = _legacy_listeners(member)
     if named is None:
-        return {"status": "PASS", "findings": [], "listeners": legacy, "source": "legacy"}
+        return {"status": "BLOCKED", "findings": [_finding("LISTENERS_REQUIRED", path, "Kafka requires an explicit named listener map")], "listeners": {}}
     if not isinstance(named, dict) or not named:
         return {"status": "BLOCKED", "findings": [_finding("LISTENERS_INVALID", path, "listeners must be a non-empty object")], "listeners": {}}
 
@@ -73,12 +57,6 @@ def normalize_listeners(configuration, member, path="configuration.listeners"):
             findings.append(_finding("LISTENER_PORT_INVALID", item_path + ".port", "Listener port must be an integer from 1 through 65535"))
         listeners[name] = listener
 
-    if named and ("clientPort" in configuration or "controllerPort" in configuration):
-        legacy_equivalent = legacy
-        comparable = {key: {field: value for field, value in val.items() if field in ("name", "purpose", "securityProtocol", "port")} for key, val in listeners.items()}
-        expected = {key: {field: value for field, value in val.items() if field in ("name", "purpose", "securityProtocol", "port")} for key, val in legacy_equivalent.items()}
-        if comparable != expected:
-            findings.append(_finding("LEGACY_NAMED_LISTENER_CONFLICT", path, "Legacy ports and named listeners are two conflicting desired-state sources"))
     if findings:
         return {"status": "BLOCKED", "findings": findings, "listeners": {}}
     ports = {}
@@ -101,8 +79,9 @@ def project_member_listeners(configuration, member):
     for name, listener in normalized["listeners"].items():
         purpose = listener["purpose"]
         roles = member.get("roles", [])
-        if purpose == "controller" and "controller" not in roles:
-            continue
+        # KRaft brokers also need the controller listener to reach the
+        # controller quorum; controller-only members still exclude broker
+        # listeners below.
         if purpose in ("client", "interBroker") and "broker" not in roles:
             continue
         bind, advertised = _address(listener, member)
@@ -130,8 +109,6 @@ def listener_runtime_properties(configuration, member):
     inter_broker = [item["name"] for item in listeners if item["purpose"] == "interBroker"]
     if "controller" in member.get("roles", []) and not controller:
         return {"status": "BLOCKED", "findings": [_finding("CONTROLLER_LISTENER_REQUIRED", "configuration.listeners", "Controller member requires a controller listener")], "properties": {}}
-    if "broker" in member.get("roles", []) and not inter_broker and projected["source"] == "legacy":
-        inter_broker = [item["name"] for item in listeners if item["name"] == "CLIENT"]
     if "broker" in member.get("roles", []) and not inter_broker:
         return {"status": "BLOCKED", "findings": [_finding("INTER_BROKER_LISTENER_REQUIRED", "configuration.listeners", "Broker member requires an interBroker listener")], "properties": {}}
     if controller:
