@@ -185,7 +185,7 @@ current selected run. Neither page displays runtime secret values.
 | --- | --- |
 | Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |
 | Preparation | Execution Node selection/configuration entry point, desired prerequisites, observed readiness, planned preparation and result; it never changes service placement |
-| Services | catalog-driven deployment list, schema-driven editor entry point, effective values/origins and configuration/topology findings; it does not duplicate generic placement editing from Topology |
+| Services | service-independent deployment overview: selected deployment identity, mode, assigned roles and generic validation findings. Its only detail action is **Open service settings**, which opens the schema-driven service editor; this page does not render service-specific settings or terminology and does not duplicate placement editing from Topology |
 | Certificates | PKI-01 intent, calculated SAN/identity preview and read-only material state; it never exposes private keys, store passwords or raw runtime paths |
 | Execution | active run progress, explicit confirmation state, safe task events and final PLAY RECAP; it is read-only for the active execution and does not parse/redact callback text in the frontend |
 
