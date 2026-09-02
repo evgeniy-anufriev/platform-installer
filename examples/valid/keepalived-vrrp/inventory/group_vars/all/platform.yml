@@ -1,0 +1,22 @@
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_desired_state:
+  endpointGroups:
+    asutp:
+      address:
+        domain: asutp.scada.local
+        wildcard: true
+  serviceDeployments:
+    keepalived-asutp:
+      serviceType: keepalived
+      definitionVersion: 1.0.0-alpha.1
+      mode: vrrp-unicast
+      endpointGroupRef: asutp
+      virtualRouterId: 51
+      virtualAddresses:
+        - {address: 192.168.56.111, interface: enp0s8}
+        - {address: 192.168.56.112, interface: enp0s8}
+      configuration:
+        advancedConfig:
+          instance:
+            garp_master_delay: 1
+            garp_master_repeat: 2

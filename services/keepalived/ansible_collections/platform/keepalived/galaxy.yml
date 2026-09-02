@@ -1,0 +1,9 @@
+namespace: platform
+name: keepalived
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer maintainers]
+description: Keepalived VRRP role for Platform Installer V2
+license: [Apache-2.0]
+tags: [keepalived, vrrp, network]
+repository: https://platform-installer.local

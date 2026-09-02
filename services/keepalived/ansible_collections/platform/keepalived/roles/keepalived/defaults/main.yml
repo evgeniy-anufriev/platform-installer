@@ -1,0 +1,12 @@
+platform_keepalived_package: keepalived
+platform_keepalived_service_name: keepalived
+platform_keepalived_binary: /usr/sbin/keepalived
+platform_keepalived_config_file: /etc/keepalived/keepalived.conf
+platform_keepalived_candidate_file: /etc/keepalived/keepalived.conf.platform-candidate
+platform_keepalived_haproxy_check_path: /usr/libexec/platform-keepalived/check-haproxy-ready
+platform_keepalived_verify_only: false
+platform_keepalived_haproxy_health_check:
+  interval: 2
+  timeout: 1
+  fall: 3
+  rise: 2

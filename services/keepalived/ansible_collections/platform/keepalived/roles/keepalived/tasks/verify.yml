@@ -1,0 +1,28 @@
+---
+- name: Verify Keepalived service state read-only
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ platform_keepalived_service_name }}"]
+  register: platform_keepalived_service_state
+  changed_when: false
+
+- name: Assert Keepalived service is active
+  ansible.builtin.assert:
+    that: platform_keepalived_service_state.stdout | trim == 'active'
+    fail_msg: KEEPALIVED_SERVICE_NOT_ACTIVE
+
+- name: Query local IPv4 ownership read-only
+  ansible.builtin.command:
+    argv: [ip, -o, -4, addr, show]
+  register: platform_keepalived_ipv4_addresses
+  changed_when: false
+
+- name: Initialize local Keepalived ownership evidence
+  ansible.builtin.set_fact:
+    platform_keepalived_local_ownership: {}
+
+- name: Verify every local Keepalived deployment has all-or-none VIP ownership
+  ansible.builtin.include_tasks: verify_deployment.yml
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | list }}"
+  loop_control:
+    loop_var: platform_keepalived_deployment
+    label: "{{ platform_keepalived_deployment.key }}"

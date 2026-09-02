@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:7e3ff13d6c469e2f517650415385f29ad70b80cfd2a1c5fc96713ef7962c541e
+digest: sha256:2811cedccc0883d8a6b62d209d7dee63b07c8c34ee295cd87c7bed497460174f
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -494,6 +494,129 @@ definitions:
     compatibilityRef: ../../services/postgresql/compatibility.yml
     x-definitionDigest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda
     x-sourceManifest: services/postgresql/service.yml
+  keepalived:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: keepalived
+      version: 1.0.0-alpha.1
+      displayName: Keepalived
+      description: IPv4 unicast VRRP ownership for one deployment-owned virtual address set
+      category: network
+    modes:
+      vrrp-unicast:
+        displayName: Unicast VRRP
+        description: Two or more inventory hosts participate in one deployment-owned VRRP election domain
+        memberRoles: []
+        placement:
+          explicit: true
+          hostScoped: true
+          minMembers: 2
+          distinctHosts: true
+        x-maturity: implemented-net-02
+    capabilities:
+    - service.keepalived.vip
+    endpointProvider: {}
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/keepalived/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        advertInterval:
+          kind: MANAGED
+          roleVariable: platform_keepalived_advert_interval
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 60
+          ui:
+            label: Advert interval
+            section: VRRP
+            order: 30
+        haproxyHealthCheck:
+          kind: MANAGED
+          roleVariable: platform_keepalived_haproxy_health_check
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: false
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              interval:
+                type: integer
+                minimum: 1
+                maximum: 60
+              timeout:
+                type: integer
+                minimum: 1
+                maximum: 60
+              fall:
+                type: integer
+                minimum: 1
+                maximum: 20
+              rise:
+                type: integer
+                minimum: 1
+                maximum: 20
+          ui:
+            label: Future HAProxy health check
+            section: Integration
+            order: 40
+        advancedConfig:
+          kind: ADVANCED
+          roleVariable: platform_keepalived_advanced_config
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: false
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              instance:
+                type: object
+                additionalProperties: false
+                properties:
+                  garp_master_delay:
+                    type: integer
+                    minimum: 0
+                    maximum: 60
+                  garp_master_repeat:
+                    type: integer
+                    minimum: 1
+                    maximum: 20
+          ui:
+            label: Advanced Keepalived settings
+            section: Advanced
+            order: 90
+    x-reservedAdvancedProperties:
+    - state
+    - nopreempt
+    - virtual_router_id
+    - virtual_ipaddress
+    - interface
+    - priority
+    - unicast_src_ip
+    - unicast_peer
+    - track_script
+    roleEntrypoints:
+      apply:
+        fqcn: platform.keepalived.keepalived
+        variablesPrefix: platform_keepalived_
+      verify:
+        fqcn: platform.keepalived.keepalived
+        variablesPrefix: platform_keepalived_
+    artifacts: []
+    compatibilityRef: ../../services/keepalived/compatibility.yml
+    x-definitionDigest: sha256:2bebe08e88124e5082b6a4d30743c9f17ccbd31ba48341c4e5c9e1ebdb084254
+    x-sourceManifest: services/keepalived/service.yml
   etcd:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest

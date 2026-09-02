@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-import ipaddress
 import re
 
 try:
@@ -37,13 +36,6 @@ def _definitions(catalog):
     return values if isinstance(values, dict) else {}
 
 
-def _valid_ipv4(value):
-    try:
-        return isinstance(value, str) and isinstance(ipaddress.ip_address(value), ipaddress.IPv4Address)
-    except ValueError:
-        return False
-
-
 def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None):
     """Derive generic client endpoint identity from desired topology.
 
@@ -66,12 +58,9 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
             findings.append(_finding("ENDPOINT_GROUP_NOT_FOUND", prefix + ".endpointGroup", "Endpoint group reference is not defined"))
             continue
         address = group.get("address") if isinstance(group.get("address"), dict) else {}
-        domain, vip = address.get("domain"), address.get("vip")
+        domain = address.get("domain")
         if not isinstance(domain, str) or not DNS_DOMAIN.match(domain):
             findings.append(_finding("ENDPOINT_GROUP_DOMAIN_INVALID", "endpointGroups.%s.address.domain" % group_id, "Endpoint group domain must be a lowercase fully qualified DNS suffix"))
-            continue
-        if not _valid_ipv4(vip):
-            findings.append(_finding("ENDPOINT_GROUP_VIP_INVALID", "endpointGroups.%s.address.vip" % group_id, "Endpoint group VIP must be an IPv4 address"))
             continue
         if not isinstance(deployment_id, str) or not DNS_LABEL.match(deployment_id):
             findings.append(_finding("ENDPOINT_DEPLOYMENT_ID_NOT_DNS_LABEL", prefix, "Endpoint-enabled service deployment id must be a lowercase DNS label"))
@@ -88,10 +77,8 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
             "serviceType": service_type,
             "endpointGroupId": group_id,
             "fqdn": fqdn,
-            "address": vip,
             "sanDnsNames": [fqdn],
             "wildcardDnsNames": (["*.%s" % domain] if address.get("wildcard") is True else []),
-            "sanIpAddresses": [vip],
         }
         record["endpointFingerprint"] = canonical_digest(record)
         endpoints[deployment_id] = record

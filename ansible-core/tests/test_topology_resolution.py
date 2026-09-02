@@ -86,6 +86,28 @@ def manifest(project_id="project-a", fixture_catalog=None):
     }
 
 
+def keepalived_catalog():
+    fixture_catalog = catalog()
+    definition = {
+        "apiVersion": "platform.installer/service-manifest/v1alpha1",
+        "kind": "ServiceManifest",
+        "metadata": {"id": "keepalived", "version": "1"},
+        "endpointProvider": {},
+        "modes": {"vrrp-unicast": {
+            "displayName": "Unicast VRRP", "memberRoles": [],
+            "placement": {"explicit": True, "hostScoped": True, "minMembers": 2, "distinctHosts": True},
+        }},
+        "configuration": {"additionalProperties": False, "settings": {}},
+        "configurationSchema": {"$ref": "configuration.schema.json"},
+        "roleEntrypoints": {},
+    }
+    definition["x-definitionDigest"] = VALIDATION.canonical_digest(definition)
+    fixture_catalog["definitions"] = {"keepalived": definition}
+    unsigned = {"apiVersion": fixture_catalog["apiVersion"], "kind": fixture_catalog["kind"], "definitions": fixture_catalog["definitions"]}
+    fixture_catalog["digest"] = VALIDATION.canonical_digest(unsigned)
+    return fixture_catalog
+
+
 def topology(reverse=False):
     members = {
         "member-b": {"host": "node-b", "roles": ["controller", "broker"]},
@@ -216,6 +238,25 @@ class TopologyResolutionTests(unittest.TestCase):
         )
         self.assertEqual("BLOCKED", result["status"])
         self.assertIn("PERSISTED_MEMBERS_NOT_ALLOWED", [item["code"] for item in result["findings"]])
+
+    def test_host_scoped_placement_has_no_logical_members_and_affects_fingerprint(self):
+        fixture_catalog = keepalived_catalog()
+        fixture_manifest = manifest()
+        fixture_manifest["catalogLock"]["digest"] = fixture_catalog["digest"]
+        fixture_manifest["catalogLock"]["services"] = {"keepalived": {"definitionVersion": "1", "digest": fixture_catalog["definitions"]["keepalived"]["x-definitionDigest"]}}
+        desired = {"endpointGroups": {"asutp": {"address": {"domain": "asutp.scada.local", "wildcard": True}}}, "serviceDeployments": {"keepalived-asutp": {
+            "serviceType": "keepalived", "definitionVersion": "1", "mode": "vrrp-unicast",
+            "endpointGroupRef": "asutp", "virtualRouterId": 51,
+            "virtualAddresses": [{"address": "192.168.56.111", "interface": "enp0s8"}],
+        }}}
+        first_inventory = {"node-a": {"keepalived-asutp": {"priority": 150}}, "node-b": {"keepalived-asutp": {"priority": 100}}}
+        second_inventory = copy.deepcopy(first_inventory)
+        second_inventory["node-a"]["keepalived-asutp"]["priority"] = 100
+        first = RESOLUTION.resolve_topology(fixture_manifest, {}, ["node-a", "node-b"], fixture_catalog, inventory_deployments_by_host=first_inventory, ansible_desired_state=desired)
+        second = RESOLUTION.resolve_topology(fixture_manifest, {}, ["node-a", "node-b"], fixture_catalog, inventory_deployments_by_host=second_inventory, ansible_desired_state=desired)
+        self.assertEqual("PASS", first["status"], first["findings"])
+        self.assertNotIn("members", first["resolvedTopology"]["serviceDeployments"]["keepalived-asutp"])
+        self.assertNotEqual(first["topologyFingerprint"], second["topologyFingerprint"])
 
 if __name__ == "__main__":
     unittest.main()

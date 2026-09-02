@@ -239,7 +239,7 @@ def _secret_value_fields(value, path="", identifier_map=False):
     return fields
 
 
-def validate_project(manifest, topology, desired_hosts, service_catalog, inventory_hosts, placements=None):
+def validate_project(manifest, topology, desired_hosts, service_catalog, inventory_hosts, placements=None, host_scoped_deployments=None):
     manifest = manifest if isinstance(manifest, dict) else {}
     topology = topology if isinstance(topology, dict) else {}
     service_catalog = service_catalog if isinstance(service_catalog, dict) else {}
@@ -417,6 +417,7 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
     if not isinstance(endpoint_groups, dict):
         findings.append(_finding("ENDPOINT_GROUPS_INVALID", "endpointGroups", "Endpoint groups must be an object keyed by endpoint group id"))
         endpoint_groups = {}
+    virtual_address_owner = {}
     for deployment_id in sorted(deployments):
         deployment = deployments[deployment_id]
         prefix = "serviceDeployments.%s" % deployment_id
@@ -452,6 +453,30 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                     findings.append(_finding("ENDPOINT_GROUP_NOT_FOUND", prefix + ".endpointGroup", "Endpoint group reference is not defined"))
                 elif not isinstance(definition.get("endpoint"), dict):
                     findings.append(_configuration_finding("ENDPOINT_SERVICE_UNSUPPORTED", prefix + ".endpointGroup", "Service package does not support a generic client endpoint", service_type, deployment_id))
+            endpoint_group_ref = deployment.get("endpointGroupRef")
+            endpoint_provider = isinstance(definition.get("endpointProvider"), dict)
+            provider_fields = ("endpointGroupRef", "virtualRouterId", "virtualAddresses")
+            if endpoint_provider:
+                for field_name in provider_fields:
+                    if field_name not in deployment:
+                        findings.append(_finding("ENDPOINT_PROVIDER_FIELD_REQUIRED", prefix + "." + field_name, "Endpoint provider deployment requires " + field_name))
+            if endpoint_group_ref is not None:
+                if endpoint_group_ref not in endpoint_groups:
+                    findings.append(_finding("ENDPOINT_GROUP_NOT_FOUND", prefix + ".endpointGroupRef", "Endpoint group reference is not defined"))
+                elif not endpoint_provider:
+                    findings.append(_configuration_finding("ENDPOINT_PROVIDER_UNSUPPORTED", prefix + ".endpointGroupRef", "Service package does not provide endpoint-group addresses", service_type, deployment_id))
+            elif any(field_name in deployment for field_name in provider_fields):
+                findings.append(_configuration_finding("ENDPOINT_PROVIDER_UNSUPPORTED", prefix, "Service package does not provide endpoint-group addresses", service_type, deployment_id))
+            virtual_addresses = deployment.get("virtualAddresses", [])
+            if endpoint_provider and isinstance(virtual_addresses, list):
+                for index, virtual_address in enumerate(virtual_addresses):
+                    address = virtual_address.get("address") if isinstance(virtual_address, dict) else None
+                    if isinstance(address, str):
+                        previous = virtual_address_owner.get(address)
+                        if previous is not None:
+                            findings.append(_finding("VIRTUAL_ADDRESS_DUPLICATE", prefix + ".virtualAddresses.%d.address" % index, "A virtual address may belong to only one endpoint-provider deployment", {"address": address, "otherDeploymentId": previous}))
+                        else:
+                            virtual_address_owner[address] = deployment_id
             service_lock = catalog_services.get(service_type)
             if not isinstance(service_lock, dict):
                 findings.append(
@@ -543,6 +568,33 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                 "platform_desired_state.serviceDeployments",
             ))
 
+        mode_definition = {}
+        if isinstance(definition, dict) and isinstance(definition.get("modes"), dict):
+            mode_definition = definition["modes"].get(deployment.get("mode"), {})
+        placement = mode_definition.get("placement", {}) if isinstance(mode_definition, dict) else {}
+        host_scoped = placement.get("hostScoped") is True
+        host_participants = (host_scoped_deployments or {}).get(deployment_id, {}) if host_scoped else {}
+        if host_scoped:
+            if "members" in deployment:
+                findings.append(_finding("HOST_SCOPED_MEMBERS_FORBIDDEN", prefix + ".members", "Host-scoped services use inventory host placement and must not define logical members"))
+            if not isinstance(host_participants, dict):
+                findings.append(_finding("HOST_SCOPED_PLACEMENT_INVALID", prefix, "Host-scoped placement must be an inventory host map"))
+                host_participants = {}
+            for host_id, configuration in sorted(host_participants.items()):
+                if host_id not in inventory_host_set:
+                    findings.append(_finding("MEMBER_HOST_NOT_FOUND", "platform_deployments.%s.%s" % (host_id, deployment_id), "Host-scoped placement must reference a declared inventory host", {"host": host_id}))
+                if not isinstance(configuration, dict):
+                    findings.append(_finding("HOST_SCOPED_PLACEMENT_INVALID", "platform_deployments.%s.%s" % (host_id, deployment_id), "Host-scoped deployment configuration must be an object"))
+            member_count = len(host_participants)
+            minimum_members = placement.get("minMembers")
+            maximum_members = placement.get("maxMembers")
+            if isinstance(minimum_members, int) and member_count < minimum_members:
+                findings.append(_finding("SERVICE_MEMBER_COUNT_BELOW_MINIMUM", prefix, "Service deployment has fewer participating hosts than the selected mode requires", {"actual": member_count, "minimum": minimum_members}))
+            if isinstance(maximum_members, int) and member_count > maximum_members:
+                findings.append(_finding("SERVICE_MEMBER_COUNT_ABOVE_MAXIMUM", prefix, "Service deployment has more participating hosts than the selected mode permits", {"actual": member_count, "maximum": maximum_members}))
+            continue
+        if deployment_id in (host_scoped_deployments or {}):
+            findings.append(_finding("HOST_SCOPED_PLACEMENT_UNSUPPORTED", prefix, "Selected service mode does not support host-scoped inventory placement"))
         members = deployment.get("members", {})
         if not isinstance(members, dict):
             findings.append(
@@ -553,9 +605,6 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                 )
             )
             continue
-        mode_definition = {}
-        if isinstance(definition, dict) and isinstance(definition.get("modes"), dict):
-            mode_definition = definition["modes"].get(deployment.get("mode"), {})
         supported_roles = set(mode_definition.get("memberRoles", [])) if isinstance(mode_definition, dict) else set()
         placed_hosts = []
         for member_id in sorted(members):

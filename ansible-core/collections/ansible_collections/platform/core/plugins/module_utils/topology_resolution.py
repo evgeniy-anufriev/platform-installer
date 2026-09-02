@@ -111,11 +111,18 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
         effective_manifest = synthesize_ansible_manifest(desired_state, service_catalog)
     placements = None
     placement_findings = []
+    host_scoped_deployments = {}
     if inventory_deployments_by_host is not None:
         inventory_members, inventory_findings = canonical_inventory_members(
             inventory_deployments_by_host, inventory_hosts
         )
         deployments = desired_state.get("serviceDeployments", {})
+        for host_id, host_deployments in sorted((inventory_deployments_by_host or {}).items()):
+            if not isinstance(host_deployments, dict):
+                continue
+            for deployment_id, host_configuration in sorted(host_deployments.items()):
+                if isinstance(host_configuration, dict) and "members" not in host_configuration:
+                    host_scoped_deployments.setdefault(deployment_id, {})[host_id] = dict(host_configuration)
         for deployment_id, deployment in (sorted(deployments.items()) if isinstance(deployments, dict) else []):
             if isinstance(deployment, dict) and "members" in deployment:
                 placement_findings.append({
@@ -132,7 +139,18 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
                     "category": "project-state", "field": "platform_deployments.%s.%s" % (inventory_members[(deployment_id, member_id)]["host"], deployment_id),
                     "safeMessage": "Inventory member references an unknown deployment",
                 })
+        for deployment_id in sorted(host_scoped_deployments):
+            if deployment_id not in deployments:
+                placement_findings.append({
+                    "apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
+                    "code": "INVENTORY_DEPLOYMENT_NOT_FOUND", "status": "BLOCKED",
+                    "category": "project-state", "field": "platform_deployments.%s" % deployment_id,
+                    "safeMessage": "Inventory host-scoped deployment references an unknown deployment",
+                })
         desired_state = topology_with_inventory_members(desired_state, inventory_members)
+        for deployment_id in host_scoped_deployments:
+            if isinstance(desired_state.get("serviceDeployments", {}).get(deployment_id), dict):
+                desired_state["serviceDeployments"][deployment_id].pop("members", None)
         placements = {key: member["host"] for key, member in inventory_members.items()}
         placement_findings.extend(inventory_findings)
     elif placement_by_host is not None:
@@ -170,6 +188,7 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
         service_catalog=service_catalog,
         inventory_hosts=inventory_hosts,
         placements=placements,
+        host_scoped_deployments=host_scoped_deployments,
     )
     findings = validation["findings"] + [item for item in state_findings if item["status"] == "BLOCKED"] + placement_findings
     if findings:
@@ -182,6 +201,13 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
     definition_digests = _used_definition_digests(desired_state, service_catalog)
     fingerprint_input = {
         "resolvedTopology": resolved,
+        "hostScopedDeployments": {
+            deployment_id: {
+                host_id: host_scoped_deployments[deployment_id][host_id]
+                for host_id in sorted(host_scoped_deployments[deployment_id])
+            }
+            for deployment_id in sorted(host_scoped_deployments)
+        },
         "serviceDefinitionDigests": definition_digests,
     }
     return {

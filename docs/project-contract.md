@@ -127,15 +127,17 @@ The first production version should prefer explicit placement. Automatic placeme
 
 NET-01 has one desired endpoint assignment: an endpoint-capable service
 deployment may set `endpointGroup`. `endpointGroups.<id>.address` owns one DNS
-suffix, wildcard intent and IPv4 VIP. The resolved FQDN is deterministic:
+suffix and wildcard intent. The resolved FQDN is deterministic:
 `<serviceDeploymentId>.<endpointGroup.address.domain>`. There is no
 `endpointBindings`, alias, listener reference, port override or manually
 authored FQDN. Endpoint-enabled deployment IDs must be valid lowercase DNS
 labels.
 
-`ResolvedServiceEndpoints` is a read-only projection. It contains FQDN and VIP
-identity for PKI and future network providers, but is not desired or generated
-state. Transport ports and routing are deferred to NET-03. Kafka is not a
+`ResolvedServiceEndpoints` is a read-only DNS identity projection. A
+Keepalived endpoint-provider deployment owns virtual addresses for its
+`endpointGroupRef`; PKI may include those addresses when `includeEndpointVip`
+is enabled. Neither projection nor EndpointGroup owns a VIP. Transport ports
+and routing are deferred to NET-03. Kafka is not a
 generic NET-01 endpoint consumer because its client reachability is governed
 by package-owned named and advertised listeners.
 

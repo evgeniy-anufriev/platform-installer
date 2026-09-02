@@ -17,6 +17,7 @@ OUTPUT = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
 SOURCES = (
     ("kafka", REPOSITORY / "services" / "kafka" / "service.yml"),
     ("postgresql", REPOSITORY / "services" / "postgresql" / "service.yml"),
+    ("keepalived", REPOSITORY / "services" / "keepalived" / "service.yml"),
     ("etcd", REPOSITORY / "examples" / "catalog" / "manifests" / "etcd.yml"),
 )
 PROJECT_MANIFEST_GLOBS = (

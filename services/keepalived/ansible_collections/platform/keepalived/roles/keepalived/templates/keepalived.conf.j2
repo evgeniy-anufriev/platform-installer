@@ -1,0 +1,30 @@
+! Managed by Platform Installer V2 NET-02. Do not edit.
+global_defs {
+  enable_script_security
+}
+
+{% for deployment in platform_desired_state.serviceDeployments | dict2items | sort(attribute='key') if deployment.value.serviceType | default('') == 'keepalived' and deployment.key in (platform_deployments | default({})) %}
+vrrp_instance platform_{{ deployment.key | replace('-', '_') | replace('.', '_') }} {
+  state BACKUP
+  interface {{ deployment.value.virtualAddresses[0].interface }}
+  virtual_router_id {{ deployment.value.virtualRouterId }}
+  priority {{ platform_deployments[deployment.key].priority }}
+  advert_int {{ deployment.value.configuration.advertInterval | default(1) }}
+  nopreempt
+  unicast_src_ip {{ ansible_host | default(inventory_hostname) }}
+  unicast_peer {
+{% for host in groups['platform_targets'] | default([]) | sort if host != inventory_hostname and deployment.key in (hostvars[host].platform_deployments | default({})) %}
+    {{ hostvars[host].ansible_host | default(host) }}
+{% endfor %}
+  }
+  virtual_ipaddress {
+{% for virtual_address in deployment.value.virtualAddresses %}
+    {{ virtual_address.address }}/32 dev {{ virtual_address.interface }}
+{% endfor %}
+  }
+{% for key, value in deployment.value.configuration.advancedConfig.instance | default({}) | dictsort %}
+  {{ key }} {{ value }}
+{% endfor %}
+}
+
+{% endfor %}

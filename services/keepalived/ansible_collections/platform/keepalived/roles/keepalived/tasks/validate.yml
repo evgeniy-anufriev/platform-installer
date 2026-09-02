@@ -1,0 +1,31 @@
+---
+- name: Require desired state and host-scoped deployment placement
+  ansible.builtin.assert:
+    that:
+      - platform_desired_state is mapping
+      - platform_desired_state.serviceDeployments | default({}) is mapping
+      - platform_deployments | default({}) is mapping
+    fail_msg: KEEPALIVED_DESIRED_STATE_INVALID
+
+- name: Validate local Keepalived deployment invariants
+  ansible.builtin.assert:
+    that:
+      - item.key is string
+      - item.value.endpointGroupRef | default('') is string
+      - item.value.endpointGroupRef | default('') in (platform_desired_state.endpointGroups | default({}))
+      - platform_desired_state.endpointGroups | default({}) is mapping
+      - item.value.virtualRouterId | default(0) | int >= 1
+      - item.value.virtualRouterId | default(0) | int <= 255
+      - item.value.virtualAddresses | default([]) is iterable
+      - item.value.virtualAddresses | default([]) is not string
+      - item.value.virtualAddresses | default([]) | length >= 1
+      - item.value.virtualAddresses | map(attribute='address') | select('match', '^[0-9]{1,3}(?:[.][0-9]{1,3}){3}$') | list | length == (item.value.virtualAddresses | length)
+      - item.value.virtualAddresses | map(attribute='interface') | select('match', '^[A-Za-z0-9_.:-]+$') | list | length == (item.value.virtualAddresses | length)
+      - platform_deployments[item.key].priority | default(0) | int >= 1
+      - platform_deployments[item.key].priority | default(0) | int <= 254
+      - item.value.configuration.advancedConfig | default({}) | dict2items | map(attribute='key') | difference(['instance']) | length == 0
+      - item.value.configuration.advancedConfig.instance | default({}) | dict2items | map(attribute='key') | difference(['garp_master_delay', 'garp_master_repeat']) | length == 0
+    fail_msg: KEEPALIVED_DEPLOYMENT_INVALID
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | list }}"
+  loop_control:
+    label: "{{ item.key }}"

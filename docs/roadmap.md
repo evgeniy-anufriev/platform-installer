@@ -393,11 +393,20 @@ revision boundary; React or Wails must not assume those responsibilities.
 ### NET-01: Endpoint Groups and Resolved Service Endpoints
 
 Status: DONE. NET-01 establishes the Ansible-native endpoint group contract,
-direct `serviceDeployment.endpointGroup` assignment, and read-only FQDN/VIP
+direct `serviceDeployment.endpointGroup` assignment, and read-only FQDN
 resolution. It deliberately excludes transport ports and all routing semantics;
 those belong to NET-03 HAProxy. PostgreSQL is the first opt-in package, Kafka
 remains outside generic endpoint semantics, and PKI-01 consumes the projection
 only according to existing SAN policy.
+
+### NET-02: Keepalived / VRRP / Stable VIP Ownership
+
+Status: DONE. One host-scoped Keepalived deployment owns one VRRP instance,
+one VRID, one endpoint group reference and one-or-more virtual addresses.
+Three-node RED OS acceptance proved native validation, all-or-none multi-VIP
+ownership, automatic failover, natural rejoin with `nopreempt`, and repeat
+apply/verify idempotence. HAProxy helper materialization is inactive; NET-03
+alone may introduce `vrrp_script` or `track_script` semantics.
 
 ## Phase E — Go backend adapter
 

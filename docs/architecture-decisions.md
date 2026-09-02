@@ -31,8 +31,9 @@ Status: Accepted.
 Service deployment, mode, members, roles, placements, dependencies and direct
 `serviceDeployment.endpointGroup` assignments are explicit Ansible variables.
 Resolved execution groups and runtime variables are derived. Endpoint groups
-own client-facing domain/wildcard/VIP intent; resolved FQDN/VIP values are
-read-only projections, never generated desired state.
+own client-facing domain/wildcard intent; provider deployments own virtual
+addresses. Resolved FQDN identity and runtime ownership are read-only
+projections, never generated desired state.
 
 ## ADR-005: Service catalog belongs to versioned service packages
 

@@ -1,0 +1,77 @@
+---
+- name: Validate Keepalived role inputs
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Install approved Keepalived package from configured system repositories
+  ansible.builtin.package:
+    name: "{{ platform_keepalived_package }}"
+    state: present
+  when: not (platform_keepalived_verify_only | bool)
+
+- name: Create Keepalived HAProxy readiness primitive directory
+  ansible.builtin.file:
+    path: "{{ platform_keepalived_haproxy_check_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: not (platform_keepalived_verify_only | bool)
+
+- name: Install dormant package-owned HAProxy readiness primitive
+  ansible.builtin.template:
+    src: check-haproxy-ready.sh.j2
+    dest: "{{ platform_keepalived_haproxy_check_path }}"
+    owner: root
+    group: root
+    mode: '0750'
+  when: not (platform_keepalived_verify_only | bool)
+
+- name: Render Keepalived candidate configuration
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: "{{ platform_keepalived_candidate_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+  register: platform_keepalived_candidate
+  when: not (platform_keepalived_verify_only | bool)
+
+- name: Validate changed Keepalived candidate with native tooling
+  ansible.builtin.command:
+    argv: ["{{ platform_keepalived_binary }}", --config-test, "--use-file={{ platform_keepalived_candidate_file }}"]
+  changed_when: false
+  when:
+    - not (platform_keepalived_verify_only | bool)
+    - platform_keepalived_candidate.changed
+
+- name: Install validated Keepalived configuration atomically
+  ansible.builtin.copy:
+    src: "{{ platform_keepalived_candidate_file }}"
+    dest: "{{ platform_keepalived_config_file }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0600'
+  register: platform_keepalived_config
+  when: not (platform_keepalived_verify_only | bool)
+
+- name: Enable and start Keepalived
+  ansible.builtin.systemd_service:
+    name: "{{ platform_keepalived_service_name }}"
+    enabled: true
+    state: started
+  register: platform_keepalived_service
+  when: not (platform_keepalived_verify_only | bool)
+
+- name: Reload Keepalived after validated configuration change
+  ansible.builtin.systemd_service:
+    name: "{{ platform_keepalived_service_name }}"
+    state: reloaded
+  when:
+    - not (platform_keepalived_verify_only | bool)
+    - platform_keepalived_config.changed
+    - not (platform_keepalived_service.changed | default(false))
+
+- name: Verify Keepalived runtime ownership read-only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_keepalived_verify_only | bool

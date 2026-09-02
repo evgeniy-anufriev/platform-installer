@@ -155,7 +155,16 @@ def canonical_inventory_members(deployments_by_host, inventory_hosts):
             continue
         for deployment_id in sorted(deployments):
             deployment = deployments[deployment_id]
-            members = deployment.get("members") if isinstance(deployment, dict) else None
+            if not isinstance(deployment, dict):
+                findings.append(finding("INVENTORY_DEPLOYMENT_INVALID", "%s.%s" % (field_prefix, deployment_id),
+                                        "Inventory deployment must be an object"))
+                continue
+            # A deployment without members is a host-scoped placement.  Its
+            # service manifest decides whether that shape is valid; preserving
+            # it here avoids inventing logical member ids for host-native roles.
+            if "members" not in deployment:
+                continue
+            members = deployment.get("members")
             member_prefix = "%s.%s.members" % (field_prefix, deployment_id)
             if not isinstance(members, dict):
                 findings.append(finding("INVENTORY_MEMBERS_INVALID", member_prefix,

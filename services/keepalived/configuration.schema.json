@@ -1,0 +1,62 @@
+{
+  "$id": "https://platform.installer/schemas/services/keepalived/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "advancedConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "instance": {
+          "additionalProperties": false,
+          "properties": {
+            "garp_master_delay": {
+              "maximum": 60,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "garp_master_repeat": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "advertInterval": {
+      "maximum": 60,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "haproxyHealthCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "fall": {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "interval": {
+          "maximum": 60,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "rise": {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "timeout": {
+          "maximum": 60,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "Keepalived desired configuration",
+  "type": "object"
+}

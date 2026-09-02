@@ -118,7 +118,7 @@ class ProjectValidationTests(unittest.TestCase):
         topology = {"serviceDeployments": {"kafka-main": {
             "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone", "endpointGroup": "dmz",
             "members": {"broker-1": {"host": "node-1", "roles": ["broker", "controller"]}},
-        }}, "endpointGroups": {"dmz": {"address": {"domain": "dmz.scada.local", "wildcard": True, "vip": "192.168.6.111"}}}}
+        }}, "endpointGroups": {"dmz": {"address": {"domain": "dmz.scada.local", "wildcard": True}}}}
         result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), ["node-1"])
         self.assertIn("ENDPOINT_SERVICE_UNSUPPORTED", [item["code"] for item in result["findings"]])
 

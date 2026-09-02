@@ -1,0 +1,16 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: keepalived-vrrp
+  name: Keepalived host-scoped VRRP fixture
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:2811cedccc0883d8a6b62d209d7dee63b07c8c34ee295cd87c7bed497460174f
+  services:
+    keepalived:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:2bebe08e88124e5082b6a4d30743c9f17ccbd31ba48341c4e5c9e1ebdb084254

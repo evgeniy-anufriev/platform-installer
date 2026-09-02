@@ -1,0 +1,8 @@
+---
+- name: Apply Keepalived VRRP
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.keepalived.keepalived
+      platform_keepalived_verify_only: false

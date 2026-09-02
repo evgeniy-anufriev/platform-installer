@@ -48,7 +48,17 @@ class ActionModule(ActionBase):
             inventory_members, inventory_findings = canonical_inventory_members(
                 inventory_deployments, args["inventory_hosts"]
             )
+            host_scoped_deployments = {}
+            for host_id, host_deployments in sorted(inventory_deployments.items()):
+                if not isinstance(host_deployments, dict):
+                    continue
+                for deployment_id, host_configuration in sorted(host_deployments.items()):
+                    if isinstance(host_configuration, dict) and "members" not in host_configuration:
+                        host_scoped_deployments.setdefault(deployment_id, {})[host_id] = dict(host_configuration)
             topology = topology_with_inventory_members(topology, inventory_members)
+            for deployment_id in host_scoped_deployments:
+                if isinstance(topology.get("serviceDeployments", {}).get(deployment_id), dict):
+                    topology["serviceDeployments"][deployment_id].pop("members", None)
             placements = {key: member["host"] for key, member in inventory_members.items()}
             placement_findings.extend(inventory_findings)
             deployments = schema_topology.get("serviceDeployments", {})
@@ -78,6 +88,7 @@ class ActionModule(ActionBase):
             service_catalog=args["service_catalog"],
             inventory_hosts=args["inventory_hosts"],
             placements=placements if use_placements else None,
+            host_scoped_deployments=host_scoped_deployments if use_inventory_members else None,
         )
         if use_placements:
             result["findings"].extend(placement_findings)

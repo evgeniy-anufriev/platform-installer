@@ -12,10 +12,16 @@ SERVICE-02A is DONE. Named Kafka listeners, service-wide TLS profile
 consumption, PKI-01 read-only verify reconstruction and SSL consumer
 prerequisites are accepted through the standalone Ansible path.
 
-NET-01 is DONE. Endpoint groups own one client-facing DNS domain, wildcard
-intent and IPv4 VIP; an endpoint-capable deployment assigns its group directly
-and Core derives a read-only deterministic FQDN/VIP projection. Transport
-ports and routing remain deferred to NET-03 HAProxy.
+NET-01 is DONE. Endpoint groups own one client-facing DNS domain and wildcard
+intent; an endpoint-capable deployment assigns its group directly and Core
+derives a read-only deterministic FQDN projection. Keepalived provider
+deployments own virtual addresses; transport ports and routing remain deferred
+to NET-03 HAProxy.
+
+NET-02 is DONE. One host-scoped Keepalived deployment owns one unicast VRRP
+instance, VRID, endpoint-group reference and one-or-more virtual addresses.
+Three-node RED OS acceptance proved all-or-none VIP ownership, automatic
+failover, rejoin without failback and idempotent apply/verify.
 
 ## Established direction
 
@@ -63,10 +69,11 @@ ports and routing remain deferred to NET-03 HAProxy.
   default model supplies PLAINTEXT and SSL endpoints, while SASL remains out of
   scope. A Kafka deployment/member selects one `tlsProfile` for all of its SSL
   listeners; no listener owns a separate certificate profile.
-- EndpointGroup is the sole desired-state owner of a client-facing
-  domain/wildcard/VIP. `ResolvedServiceEndpoints` is derived-only, is not
-  persisted to generated state, and supplies PKI SAN identity only through the
-  existing profile policy. Kafka has no generic NET-01 endpoint.
+- EndpointGroup owns only a client-facing domain/wildcard namespace.
+  `ResolvedServiceEndpoints` is derived-only, DNS-only and is not persisted to
+  generated state. A provider deployment owns virtual addresses; PKI adds them
+  to SAN only through `includeEndpointVip`. Kafka has no generic NET-01
+  endpoint.
 
 ## Implemented
 
@@ -151,8 +158,13 @@ ports and routing remain deferred to NET-03 HAProxy.
 - NET-01 endpoint foundation: the rejected `endpointBindings` alpha entity was
   removed; endpoint-capable service deployments select one endpoint group;
   PostgreSQL opts in through its service manifest; pure resolution yields a
-  deterministic FQDN/VIP projection and feeds PKI-01 SAN derivation without
+  deterministic FQDN projection and feeds PKI-01 SAN derivation without
   generated-state writes, target contact or certificate lifecycle changes.
+- NET-02 Keepalived: host-scoped inventory priority, one deployment per VRRP
+  election domain, deployment-owned multi-VIP addresses, native candidate
+  validation and read-only all-or-none ownership verification. Three RED OS
+  nodes proved failover/rejoin/no-failback; the installed HAProxy helper has no
+  active `vrrp_script` or `track_script` dependency.
 
 ## Completed
 
@@ -281,8 +293,8 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-POSTGRES-01 and NET-01 are DONE. NET-02 Keepalived, NET-03 HAProxy and NET-04
-BIND/DNS require separate explicit milestone requests. A future production
+POSTGRES-01, NET-01 and NET-02 are DONE. NET-03 HAProxy and NET-04 BIND/DNS
+require separate explicit milestone requests. A future production
 UI-01 remains dependent on a minimal backend read/write, revision and run
 boundary; it must continue to edit and execute the same standard Ansible
 project.

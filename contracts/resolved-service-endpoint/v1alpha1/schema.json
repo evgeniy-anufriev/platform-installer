@@ -20,16 +20,14 @@
     "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "endpoint": {
       "type": "object",
-      "required": ["serviceDeploymentId", "serviceType", "endpointGroupId", "fqdn", "address", "sanDnsNames", "sanIpAddresses", "endpointFingerprint"],
+      "required": ["serviceDeploymentId", "serviceType", "endpointGroupId", "fqdn", "sanDnsNames", "endpointFingerprint"],
       "properties": {
         "serviceDeploymentId": { "type": "string" },
         "serviceType": { "type": "string" },
         "endpointGroupId": { "type": "string" },
         "fqdn": { "type": "string" },
-        "address": { "type": "string", "format": "ipv4" },
         "sanDnsNames": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
         "wildcardDnsNames": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "sanIpAddresses": { "type": "array", "uniqueItems": true, "items": { "type": "string", "format": "ipv4" } },
         "endpointFingerprint": { "$ref": "#/$defs/digest" }
       },
       "additionalProperties": false

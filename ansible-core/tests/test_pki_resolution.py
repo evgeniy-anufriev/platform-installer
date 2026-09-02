@@ -31,10 +31,14 @@ class PkiResolutionTests(unittest.TestCase):
             "certificateProfiles": {"infrastructure": {"authorityRef": "platform-ca", "sanPolicy": {}}},
             "tlsProfiles": {"platform-tls": {"certificateProfileRef": "infrastructure", "storePasswordSecretRef": "runtime:pki-password", "scope": scope}},
             "serviceDeployments": {
-                "service-a": {"configuration": {"tlsProfile": "platform-tls"}, "members": {
+                "service-a": {"endpointGroup": "asutp", "configuration": {"tlsProfile": "platform-tls"}, "members": {
                     "member-1": {"host": "node1", "roles": ["server"]},
                     "member-2": {"host": "node2", "roles": ["server"]},
-                }}
+                }},
+                "keepalived-asutp": {"endpointGroupRef": "asutp", "virtualAddresses": [
+                    {"address": "192.0.2.70", "interface": "eth0"},
+                    {"address": "192.0.2.71", "interface": "eth1"},
+                ]},
             },
         }
 
@@ -98,14 +102,14 @@ class PkiResolutionTests(unittest.TestCase):
             "includeEndpointVip": True,
         }
         endpoints = {"endpoints": {"service-a": {
+            "endpointGroupId": "asutp",
             "sanDnsNames": ["service-a.asutp.scada.local"],
             "wildcardDnsNames": ["*.asutp.scada.local"],
-            "sanIpAddresses": ["192.168.6.112"],
         }}}
         out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}}, self.defaults, endpoints)
         request = out["requests"][0]
         self.assertEqual(["*.asutp.scada.local", "service-a.asutp.scada.local"], request["dnsNames"])
-        self.assertEqual(["192.168.6.112"], request["ipAddresses"])
+        self.assertEqual(["192.0.2.70", "192.0.2.71"], request["ipAddresses"])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # NET-01: Endpoint Groups and Resolved Service Endpoints
 
-NET-01 introduces one canonical client-facing address namespace per endpoint
+NET-01 introduces one canonical client-facing DNS namespace per endpoint
 group. It is a pure Core resolution and PKI identity milestone; it does not
 install, bind, publish or fail over any network service.
 
@@ -10,7 +10,6 @@ install, bind, publish or fail over any network service.
 
 - lowercase DNS suffix (`domain`);
 - wildcard intent (`wildcard`);
-- IPv4 VIP (`vip`).
 
 An endpoint-capable deployment assigns that group directly:
 
@@ -21,7 +20,6 @@ platform_desired_state:
       address:
         domain: asutp.scada.local
         wildcard: true
-        vip: 192.168.6.112
   serviceDeployments:
     postgres-main:
       serviceType: postgresql
@@ -41,7 +39,6 @@ The read-only `ResolvedServiceEndpoints/v1alpha1` projection resolves:
 ```text
 postgres-main + asutp.scada.local
   -> postgres-main.asutp.scada.local
-  -> 192.168.6.112
 ```
 
 The projection is deterministic, has a fingerprint, performs no target
@@ -54,20 +51,24 @@ transport interpretation.
 
 ## PKI
 
-The PKI resolver consumes the resolved projection read-only. Concrete FQDN,
-optional wildcard DNS name and VIP are added only when the selected existing
-`sanPolicy` permits the corresponding type. A changed request fingerprint uses
+The PKI resolver consumes the resolved projection read-only. Concrete FQDN and
+optional wildcard DNS name are added only when the selected existing
+`sanPolicy` permits the corresponding type. When `includeEndpointVip` is true,
+the resolver additionally reads virtual addresses from an endpoint-provider
+deployment referencing the same group; the DNS-only endpoint projection never
+becomes an address owner. A changed request fingerprint uses
 the established `CERTIFICATE_REISSUE_REQUIRED` lifecycle; NET-01 never rotates
 or materializes certificates on its own.
 
 ## Provider boundaries
 
-NET-02 Keepalived references an endpoint group and derives its VIP; it must
-not own a second VIP field. NET-03 HAProxy derives a future bind address from
-the group. Transport ports, frontend/backend routing, PostgreSQL writable
+NET-02 Keepalived references an endpoint group and owns one VRRP instance with
+one or more virtual addresses. EndpointGroup never owns a VIP. NET-03 HAProxy
+will consume a provider/deployment address rather than derive one from the
+group. Transport ports, frontend/backend routing, PostgreSQL writable
 member selection and all HAProxy checks are deferred to NET-03. NET-04 BIND
-will publish the resolved FQDN/VIP and consume wildcard intent; it will not
-become an endpoint owner.
+will publish the resolved FQDN with the provider-owned address and consume
+wildcard intent; it will not become an endpoint owner.
 
 ## Explicitly deferred
 
@@ -75,5 +76,5 @@ become an endpoint owner.
 - HAProxy, client ports, frontend/backend configuration and routing;
 - PostgreSQL primary discovery;
 - BIND, zones, records and DNS TTL;
-- multiple VIPs, IPv6 runtime acceptance, aliases and custom FQDNs;
+- IPv6 runtime acceptance, aliases and custom FQDNs;
 - UI implementation.

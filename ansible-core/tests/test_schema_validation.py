@@ -111,7 +111,7 @@ class Draft202012EngineTests(unittest.TestCase):
                 },
             },
             "endpointGroups": {
-                "asutp": {"address": {"domain": "asutp.scada.local", "wildcard": True, "vip": "192.168.6.112"}},
+                "asutp": {"address": {"domain": "asutp.scada.local", "wildcard": True}},
             },
         }
         validator = ENGINE.SchemaValidator(contracts)
