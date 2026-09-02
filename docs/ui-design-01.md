@@ -199,6 +199,12 @@ The editor is driven by the service manifest and generated configuration
 schema, never by a React service catalog. It has a service/deployment tree on
 the left and a schema-driven deployment editor on the right:
 
+The generic **Services** local page opens this editor through **Open service
+settings** and provides a visible return to Services. The editor is a distinct
+detail screen, not an expanded middle pane of the generic overview. Its
+sections, fields, validation and help are declared by the selected service
+package; consequently service-specific terms belong here only.
+
 - managed settings use manifest type, validation, scopes and `ui.label/order`;
 - advanced settings use a separate native-property editor;
 - manifest `x-reservedAdvancedProperties` is displayed as protected and is
