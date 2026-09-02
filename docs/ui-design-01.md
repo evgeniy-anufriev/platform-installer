@@ -55,12 +55,27 @@ The page has five compact regions in this order:
 
 1. Project breadcrumb, page title and aggregate state.
 2. Execution Node strip: selected node, address, Ansible/Python capability,
-   offline payload, disk capacity and a recheck action.
+   offline payload, disk capacity and an **Configure and prepare** action.
 3. Workflow: Validate → Plan → Execute → Result.
 4. Readiness and actionable findings. Each finding contains plain-language
    impact, technical code in Advanced view, and an explicit destination.
 5. A plan preview grouped by Servers, Services and Certificates, with one
-   stage-appropriate primary action.
+   page-level **Generate plan** action on Summary.
+
+The Summary action is disabled until the selected Execution Node has completed
+its required preparation successfully. Its disabled explanation links to the
+Execution Node strip; it is not duplicated inside an individual service or
+node card. A subsequent topology/configuration change invalidates the plan,
+but does not silently claim that node preparation still applies when its
+observed capability fingerprint has changed.
+
+**Configure and prepare Execution Node** opens a modal workflow with: mode
+(local Installer, selected project server or external Linux host), selected
+host/transport metadata, current-session credential reference, non-secret
+readiness checks (SSH/elevation, Python/Ansible, payload, workspace and disk)
+and the planned preparation/result. Checking is read-only; preparation is an
+explicit action. The dialog neither stores a password/key nor substitutes the
+Execution Node for a topology placement.
 
 The UI distinguishes desired state, observed state, finding, proposed action
 and execution result. A green TCP check is not presented as Kafka health;
@@ -168,8 +183,8 @@ current selected run. Neither page displays runtime secret values.
 
 | Local page | Primary content |
 | --- | --- |
-| Summary | Execution Node strip, readiness, findings and plan preview |
-| Preparation | desired prerequisites, observed readiness, planned preparation and result |
+| Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |
+| Preparation | desired prerequisites, observed readiness, planned preparation and result; opened from Execution Node configuration as needed |
 | Services | catalog-driven deployment editor and effective values |
 | Certificates | PKI-01 intent, calculated SAN/identity preview and read-only material state |
 | Execution | active run progress, confirmation, safe events and final recap |
