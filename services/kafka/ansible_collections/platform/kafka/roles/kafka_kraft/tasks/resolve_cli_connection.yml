@@ -1,0 +1,49 @@
+---
+- name: Select Kafka CLI listener by semantic purpose
+  ansible.builtin.set_fact:
+    _platform_kafka_cli_listener_matches: >-
+      {{ kafka_cli_member.listener_endpoints
+         | selectattr('purpose', 'equalto', kafka_cli_purpose)
+         | list }}
+  changed_when: false
+
+- name: Require one Kafka CLI listener for the requested purpose
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_cli_listener_matches | length == 1
+    fail_msg: >-
+      BLOCKED: Kafka member {{ kafka_cli_member.id }} has no unique CLI listener
+      for purpose {{ kafka_cli_purpose }}
+
+- name: Build Kafka CLI connection projection without secret values
+  ansible.builtin.set_fact:
+    _platform_kafka_cli_connection: >-
+      {{ {
+           'deploymentId': kafka_cli_member.deployment_id | default(''),
+           'memberId': kafka_cli_member.id,
+           'listenerName': _platform_kafka_cli_listener_matches[0].name,
+           'purpose': _platform_kafka_cli_listener_matches[0].purpose,
+           'bootstrapHost': _platform_kafka_cli_listener_matches[0].bootstrap_host,
+           'bootstrapPort': _platform_kafka_cli_listener_matches[0].bootstrap_port,
+           'securityProtocol': _platform_kafka_cli_listener_matches[0].security_protocol
+         } }}
+  changed_when: false
+
+- name: Resolve Kafka TLS runtime projection for SSL CLI connection
+  ansible.builtin.include_tasks: resolve_tls_runtime.yml
+  vars:
+    kafka_tls_member: "{{ kafka_cli_member }}"
+  when: _platform_kafka_cli_connection.securityProtocol == 'SSL'
+
+- name: Add TLS projection to Kafka CLI connection without secret values
+  ansible.builtin.set_fact:
+    _platform_kafka_cli_connection: >-
+      {{ _platform_kafka_cli_connection | combine({
+           'tls': {
+             'truststorePath': _platform_kafka_tls_runtime.truststorePath,
+             'truststoreType': _platform_kafka_tls_runtime.storeType,
+             'storePasswordSecretRef': _platform_kafka_tls_runtime.storePasswordSecretRef
+           }
+         }) }}
+  changed_when: false
+  when: _platform_kafka_cli_connection.securityProtocol == 'SSL'

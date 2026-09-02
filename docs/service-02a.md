@@ -37,6 +37,16 @@ only when extra listeners or non-default ports are needed.
 listener on that effective Kafka scope consumes the same profile; individual
 listeners do not select certificates.
 
+Kafka CLI diagnostics consume a secret-free `KafkaCliConnection` runtime
+projection selected by listener `purpose`, not listener name. It contains the
+projected bootstrap endpoint and protocol; SSL adds the projected truststore
+path/type and `storePasswordSecretRef`. The password itself is resolved only
+while an ephemeral command-config is rendered, then the file is removed.
+`server.properties` is observed state only and is not used as a configuration
+or secret source for verification. Kafka's secure endpoint-identification
+default is preserved: diagnostics do not inject an empty override, and TLS
+handshakes verify the resolved advertised hostname or IP SAN.
+
 PKI-01 remains the only certificate and PKCS12 materialization owner. Kafka
 consumes PKI-01 materialization plans and the existing
 `storePasswordSecretRef`; it does not create authorities, certificates or
@@ -69,3 +79,9 @@ apply, a separate read-only PKI/Kafka verify with `changed=0 failed=0`, and a
 repeat apply with `changed=0 failed=0`. No reset or reformat was performed
 between verify and repeat. Runtime-only roots and logs were profile-isolated;
 secrets were not emitted.
+
+The follow-up projection refactor passed focused contract tests (`25 OK`) and
+RED OS 01D read-only verify plus repeat apply (`changed=0 failed=0`). A
+temporary expected-state probe renamed the controller listener to `RAFT_SSL`
+without changing the running Kafka cluster; quorum verification still passed,
+proving the diagnostic selects `purpose: controller`, not a listener name.

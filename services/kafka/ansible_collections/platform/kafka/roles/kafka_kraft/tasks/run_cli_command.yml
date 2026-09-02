@@ -1,0 +1,57 @@
+---
+- name: Require supported projected Kafka CLI protocol
+  ansible.builtin.assert:
+    that:
+      - kafka_cli_connection.securityProtocol in ['PLAINTEXT', 'SSL']
+    fail_msg: 'BLOCKED: Kafka CLI connection uses an unsupported security protocol'
+
+- name: Create ephemeral Kafka CLI command configuration
+  ansible.builtin.tempfile:
+    state: file
+    prefix: platform-kafka-cli-
+    suffix: .properties
+  register: _platform_kafka_cli_command_config
+  changed_when: false
+
+- block:
+    - name: Render projected PLAINTEXT Kafka CLI command configuration
+      ansible.builtin.copy:
+        content: "security.protocol={{ kafka_cli_connection.securityProtocol }}\n"
+        dest: "{{ _platform_kafka_cli_command_config.path }}"
+        mode: '0600'
+      changed_when: false
+      when: kafka_cli_connection.securityProtocol == 'PLAINTEXT'
+
+    - name: Resolve runtime SecretRef immediately before SSL Kafka CLI execution
+      ansible.builtin.set_fact:
+        _platform_kafka_cli_password_file: >-
+          {{ (platform_pki_secret_files
+              | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[kafka_cli_connection.tls.storePasswordSecretRef] }}
+      no_log: true
+      when: kafka_cli_connection.securityProtocol == 'SSL'
+
+    - name: Render projected SSL Kafka CLI command configuration
+      ansible.builtin.copy:
+        content: |-
+          security.protocol={{ kafka_cli_connection.securityProtocol }}
+          ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
+          ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
+          ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim }}
+        dest: "{{ _platform_kafka_cli_command_config.path }}"
+        mode: '0600'
+      changed_when: false
+      no_log: true
+      when: kafka_cli_connection.securityProtocol == 'SSL'
+
+    - name: Execute projected Kafka CLI command read-only
+      ansible.builtin.command:
+        argv: "{{ kafka_cli_command_prefix + ['--command-config', _platform_kafka_cli_command_config.path] + kafka_cli_command_suffix }}"
+      changed_when: false
+      register: platform_kafka_cli_command_result
+      failed_when: false
+  always:
+    - name: Remove ephemeral Kafka CLI command configuration
+      ansible.builtin.file:
+        path: "{{ _platform_kafka_cli_command_config.path }}"
+        state: absent
+      changed_when: false

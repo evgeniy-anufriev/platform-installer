@@ -194,13 +194,11 @@
 - name: Build deterministic controller-only quorum projections
   ansible.builtin.set_fact:
     _platform_kafka_controller_bootstrap_servers: >-
-      {% for member in _platform_kafka_controller_instances %}{{ member.advertised_host }}:{{ member.controller_listener_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.controller_endpoint.bootstrap_host }}:{{ member.controller_endpoint.bootstrap_port }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_initial_controllers: >-
-      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_listener_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.controller_endpoint.bootstrap_host }}:{{ member.controller_endpoint.bootstrap_port }}:{{ member.directory_id | default('') }}{% if not loop.last %},{% endif %}{% endfor %}
     _platform_kafka_static_quorum_voters: >-
-      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.advertised_host }}:{{ member.controller_listener_port }}{% if not loop.last %},{% endif %}{% endfor %}
-    _platform_kafka_broker_bootstrap_servers: >-
-      {% for member in _platform_kafka_broker_instances %}{{ member.advertised_host }}:{{ member.client_listener_port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for member in _platform_kafka_controller_instances %}{{ member.node_id }}@{{ member.controller_endpoint.bootstrap_host }}:{{ member.controller_endpoint.bootstrap_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 - name: Clear selected Kafka deployment explicitly when requested
   ansible.builtin.include_tasks: clear.yml

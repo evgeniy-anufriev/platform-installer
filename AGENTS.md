@@ -54,6 +54,10 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
   explicit task sequence over custom Python modules/plugins. Introduce a new
   abstraction only when the built-ins cannot express the required behavior
   safely and the added contract is justified by reuse or complexity.
+- Roles and tasks may contain hardcoded product invariants, but must not
+  hardcode effective configuration. Dynamic endpoints, listener names,
+  protocols, paths, identities and security policy must come from the resolved
+  runtime projection shared by apply, verify and diagnostics.
 - Update decisions and roadmap when a boundary changes.
 - Use focused subagents for independent architecture review, implementation or QA when requested.
 - Keep V1 unchanged unless the user explicitly requests a V1 change.

@@ -1,0 +1,39 @@
+---
+- name: Resolve PKI-01 plan for Kafka TLS runtime projection
+  ansible.builtin.set_fact:
+    _platform_kafka_tls_runtime_plans: >-
+      {{ (platform_pki_materialization_plans
+          | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+          | selectattr('hostId', 'equalto', kafka_tls_member.host)
+          | selectattr('tlsProfileId', 'equalto', kafka_tls_member.tls_profile)
+          | list) }}
+  changed_when: false
+
+- name: Require Kafka TLS runtime projection inputs
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_tls_runtime_plans | length == 1
+      - _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef is defined
+      - _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef in (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))
+      - (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))[_platform_kafka_tls_runtime_plans[0].storePasswordSecretRef] | length > 0
+      - platform_kafka_store_type | string | length > 0
+    fail_msg: 'BLOCKED: PKI-01 materialization or runtime store SecretRef is unavailable for Kafka TLS'
+
+- name: Build Kafka TLS runtime projection without secret values
+  ansible.builtin.set_fact:
+    _platform_kafka_tls_runtime: >-
+      {{ {
+           'targetDirectory': _platform_kafka_tls_runtime_plans[0].targetDirectory,
+           'consumerDirectory': (platform_kafka_pki_directory
+             if (platform_kafka_pki_directory | default('', true) | length > 0)
+             else (kafka_tls_member.config_directory ~ '/pki')),
+           'keystorePath': ((platform_kafka_pki_directory
+             if (platform_kafka_pki_directory | default('', true) | length > 0)
+             else (kafka_tls_member.config_directory ~ '/pki')) ~ '/keystore.p12'),
+           'truststorePath': ((platform_kafka_pki_directory
+             if (platform_kafka_pki_directory | default('', true) | length > 0)
+             else (kafka_tls_member.config_directory ~ '/pki')) ~ '/truststore.p12'),
+           'storeType': platform_kafka_store_type,
+           'storePasswordSecretRef': _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef
+         } }}
+  changed_when: false

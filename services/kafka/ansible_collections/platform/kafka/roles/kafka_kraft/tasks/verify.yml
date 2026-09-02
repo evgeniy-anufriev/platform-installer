@@ -14,61 +14,84 @@
          else (_platform_kafka_controller_instances | first) }}
   changed_when: false
 
-- name: Query Kafka SSL controller quorum status read-only
-  ansible.builtin.shell: |
-    set -o pipefail
-    config="{{ _platform_kafka_verify_controller.config_directory }}/server.properties"
-    truststore_password="$(sed -n 's/^listener\.name\.controller\.ssl\.truststore\.password=//p' "${config}" | head -n1)"
-    test -n "${truststore_password}"
-    exec 3< <(printf '%s\n' \
-      'security.protocol=SSL' \
-      "ssl.truststore.location={{ _platform_kafka_verify_controller.config_directory }}/pki/truststore.p12" \
-      "ssl.truststore.password=${truststore_password}" \
-      'ssl.truststore.type=PKCS12' \
-      'ssl.endpoint.identification.algorithm=')
-    "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh" \
-      --bootstrap-controller "{{ _platform_kafka_verify_controller.advertised_host }}:{{ _platform_kafka_verify_controller.controller_listener_port }}" \
-      --command-config /dev/fd/3 describe --status
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: platform_kafka_quorum_status
-  failed_when: platform_kafka_quorum_status.rc != 0
-  no_log: true
+- name: Resolve controller quorum Kafka CLI connection from runtime projection
+  ansible.builtin.include_tasks: resolve_cli_connection.yml
+  vars:
+    kafka_cli_member: "{{ _platform_kafka_verify_controller }}"
+    kafka_cli_purpose: controller
+  when: inventory_hostname == _platform_kafka_verify_controller.host
+
+- name: Query Kafka controller quorum status through projected CLI connection
+  ansible.builtin.include_tasks: run_cli_command.yml
+  vars:
+    kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
+    kafka_cli_command_prefix:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh"
+      - --bootstrap-controller
+      - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
+    kafka_cli_command_suffix: [describe, --status]
+  when: inventory_hostname == _platform_kafka_verify_controller.host
+
+- name: Require projected controller quorum diagnostic command to succeed
+  ansible.builtin.assert:
+    that: platform_kafka_cli_command_result.rc == 0
+    fail_msg: Kafka controller quorum diagnostic command failed
+  when: inventory_hostname == _platform_kafka_verify_controller.host
 
 - name: Assert Kafka controller quorum leader and membership
   ansible.builtin.assert:
     that:
       - >-
-        platform_kafka_quorum_status.stdout is search(
+        platform_kafka_cli_command_result.stdout is search(
         'LeaderId:\s*(' ~
         (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | join('|')) ~
         ')(?:\s|$)')
       - >-
-        platform_kafka_quorum_status.stdout is search(
+        platform_kafka_cli_command_result.stdout is search(
         '"id":\s*' ~ (item.node_id | string) ~ ',')
     fail_msg: Kafka controller quorum does not represent exactly the expected controller members
   loop: "{{ _platform_kafka_controller_instances }}"
   loop_control:
     label: "{{ item.id }}"
+  when: inventory_hostname == _platform_kafka_verify_controller.host
 
-- name: Query Kafka broker registrations read-only
-  ansible.builtin.command:
-    argv:
+- name: Select Kafka broker used for read-only registration diagnostics
+  ansible.builtin.set_fact:
+    _platform_kafka_verify_broker: "{{ _platform_kafka_broker_instances | first }}"
+  changed_when: false
+
+- name: Resolve broker registration Kafka CLI connection from runtime projection
+  ansible.builtin.include_tasks: resolve_cli_connection.yml
+  vars:
+    kafka_cli_member: "{{ _platform_kafka_verify_broker }}"
+    kafka_cli_purpose: client
+  when: inventory_hostname == _platform_kafka_verify_broker.host
+
+- name: Query Kafka broker registrations through projected CLI connection
+  ansible.builtin.include_tasks: run_cli_command.yml
+  vars:
+    kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
+    kafka_cli_command_prefix:
       - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
       - --bootstrap-server
-      - "{{ _platform_kafka_broker_bootstrap_servers | trim }}"
-  changed_when: false
-  register: platform_kafka_broker_api_versions
-  failed_when: platform_kafka_broker_api_versions.rc != 0
+      - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
+    kafka_cli_command_suffix: []
+  when: inventory_hostname == _platform_kafka_verify_broker.host
+
+- name: Require projected broker registration diagnostic command to succeed
+  ansible.builtin.assert:
+    that: platform_kafka_cli_command_result.rc == 0
+    fail_msg: Kafka broker registration diagnostic command failed
+  when: inventory_hostname == _platform_kafka_verify_broker.host
 
 - name: Select unfenced Kafka broker diagnostic headers read-only
   ansible.builtin.set_fact:
     _platform_kafka_unfenced_broker_headers: >-
-      {{ platform_kafka_broker_api_versions.stdout_lines
+      {{ platform_kafka_cli_command_result.stdout_lines
          | select('search', 'isFenced:\s*false\)\s*->\s*\(')
          | list }}
   changed_when: false
+  when: inventory_hostname == _platform_kafka_verify_broker.host
 
 - name: Assert Kafka brokers are registered and unfenced
   ansible.builtin.assert:
@@ -76,10 +99,11 @@
       - _platform_kafka_unfenced_broker_headers | length == _platform_kafka_broker_instances | length
       - >-
         (_platform_kafka_unfenced_broker_headers
-         | select('search', '^\s*' ~ (item.advertised_host | regex_escape) ~ ':' ~ (item.client_listener_port | string) ~
+         | select('search', '^\s*' ~ (item.client_endpoint.bootstrap_host | regex_escape) ~ ':' ~ (item.client_endpoint.bootstrap_port | string) ~
            '\s+\(id:\s*' ~ (item.node_id | string) ~ '.*isFenced:\s*false\)\s*->\s*\(')
          | list | length) == 1
     fail_msg: Kafka broker diagnostic does not contain exactly the expected registered, unfenced members
   loop: "{{ _platform_kafka_broker_instances }}"
   loop_control:
     label: "{{ item.id }}"
+  when: inventory_hostname == _platform_kafka_verify_broker.host

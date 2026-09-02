@@ -26,6 +26,37 @@
           if (kafka_input_member.listeners | default({}) | length > 0)
           else []) | unique | sort }}
 
+- name: Build normalized Kafka listener endpoint projection
+  ansible.builtin.set_fact:
+    _platform_kafka_normalized_listener_endpoints: >-
+      {% set endpoints = [] %}
+      {% for pair in (kafka_input_member.listeners | default({}) | dict2items | sort(attribute='key')) %}
+      {% set listener = pair.value | combine({'name': pair.key}) %}
+      {% if (listener.purpose == 'controller' and 'controller' in _platform_kafka_normalized_roles) or (listener.purpose in ['client', 'interBroker'] and 'broker' in _platform_kafka_normalized_roles) %}
+      {% set _ = endpoints.append({
+        'name': listener.name,
+        'purpose': listener.purpose,
+        'security_protocol': listener.securityProtocol,
+        'bootstrap_host': listener.advertisedAddress | default(kafka_input_member.advertised_host),
+        'bootstrap_port': listener.port | int
+      }) %}
+      {% endif %}
+      {% endfor %}
+      {{ endpoints | to_json }}
+
+- name: Convert normalized Kafka listener endpoint projection to a native list
+  ansible.builtin.set_fact:
+    _platform_kafka_normalized_listener_endpoints: "{{ _platform_kafka_normalized_listener_endpoints | from_json }}"
+
+- name: Select normalized Kafka controller and client endpoints
+  ansible.builtin.set_fact:
+    _platform_kafka_normalized_controller_endpoint: >-
+      {{ _platform_kafka_normalized_listener_endpoints
+         | selectattr('purpose', 'equalto', 'controller') | list | first | default({}, true) }}
+    _platform_kafka_normalized_client_endpoint: >-
+      {{ _platform_kafka_normalized_listener_endpoints
+         | selectattr('purpose', 'equalto', 'client') | list | first | default({}, true) }}
+
 - name: Assemble normalized Kafka member
   ansible.builtin.set_fact:
     _platform_kafka_normalized_member: >-
@@ -34,6 +65,9 @@
            'node_id': kafka_input_member.node_id | int,
            'roles': _platform_kafka_normalized_roles,
            'listeners': _platform_kafka_normalized_listeners,
+           'listener_endpoints': _platform_kafka_normalized_listener_endpoints,
+           'controller_endpoint': _platform_kafka_normalized_controller_endpoint,
+           'client_endpoint': _platform_kafka_normalized_client_endpoint,
            'client_listener_port': _platform_kafka_normalized_client_listener_port,
            'controller_listener_port': _platform_kafka_normalized_controller_listener_port,
            'tls_profile': (kafka_input_member.tls_profile | default(platform_kafka_tls_profile)),

@@ -86,6 +86,42 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("Add static quorum projection when explicitly selected", member)
         self.assertIn("--bootstrap-controller", verify)
 
+    def test_kafka_cli_diagnostics_consume_runtime_projection(self):
+        verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        resolve = (ROLE / "tasks" / "resolve_cli_connection.yml").read_text(encoding="utf-8")
+        runtime = (ROLE / "tasks" / "resolve_tls_runtime.yml").read_text(encoding="utf-8")
+        runner = (ROLE / "tasks" / "run_cli_command.yml").read_text(encoding="utf-8")
+        self.assertIn("resolve_cli_connection.yml", verify)
+        self.assertIn("run_cli_command.yml", verify)
+        self.assertNotIn("server.properties", verify)
+        self.assertNotIn("sed -n", verify)
+        self.assertNotIn("security.protocol=SSL", verify)
+        self.assertNotIn("ssl.endpoint.identification.algorithm=", verify)
+        self.assertIn("kafka_cli_purpose", resolve)
+        self.assertNotIn("CONTROLLER", resolve)
+        self.assertIn("bootstrapHost", resolve)
+        self.assertIn("bootstrapPort", resolve)
+        self.assertIn("storePasswordSecretRef", runtime)
+        self.assertNotIn("ssl.truststore.password", resolve + runtime)
+        self.assertIn("security.protocol={{ kafka_cli_connection.securityProtocol }}", runner)
+        self.assertIn("truststorePath", runner)
+        self.assertIn("truststoreType", runner)
+        self.assertIn("Remove ephemeral Kafka CLI command configuration", runner)
+
+    def test_listener_endpoint_projection_is_name_independent(self):
+        normalize = (ROLE / "tasks" / "normalize_member.yml").read_text(encoding="utf-8")
+        self.assertIn("listener_endpoints", normalize)
+        self.assertIn("listener.purpose == 'controller'", normalize)
+        self.assertIn("listener.advertisedAddress", normalize)
+        self.assertNotIn("CONTROLLER", normalize)
+        self.assertNotIn("9093", normalize)
+
+    def test_tls_handshake_keeps_hostname_verification_enabled(self):
+        handshake = (ROLE / "tasks" / "verify_ssl_listener.yml").read_text(encoding="utf-8")
+        self.assertIn("-verify_hostname", handshake)
+        self.assertIn("-verify_ip", handshake)
+        self.assertNotIn("endpoint.identification.algorithm=", handshake)
+
     def test_dynamic_and_static_config_projections_are_mutually_exclusive(self):
         with (ROLE / "tasks" / "member.yml").open(encoding="utf-8") as stream:
             tasks = {task["name"]: task for task in yaml.safe_load(stream)}
