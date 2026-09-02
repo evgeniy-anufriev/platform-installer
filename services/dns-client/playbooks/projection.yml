@@ -1,0 +1,56 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- name: Resolve DNS client runtime projection without generated state
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load published service catalog for DNS client projection
+      ansible.builtin.include_vars:
+        file: "{{ platform_service_catalog_path }}"
+        name: _platform_dns_client_catalog_file
+
+    - name: Collect canonical DNS client inventory projections
+      ansible.builtin.set_fact:
+        _platform_dns_client_inventory_hosts: >-
+          {{ _platform_dns_client_inventory_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
+        _platform_dns_client_inventory_deployments: >-
+          {{ _platform_dns_client_inventory_deployments | default({}) | combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      no_log: true
+
+    - name: Resolve existing authoritative DNS projection
+      platform.core.resolve_dns_zones:
+        desired_state: "{{ platform_desired_state }}"
+        service_catalog: "{{ _platform_dns_client_catalog_file.platform_service_catalog | default(_platform_dns_client_catalog_file, true) }}"
+        inventory_hosts: "{{ _platform_dns_client_inventory_hosts }}"
+        inventory_deployments: "{{ _platform_dns_client_inventory_deployments }}"
+      register: _platform_dns_client_dns
+
+    - name: Resolve endpoint identities for DNS client verification
+      platform.core.resolve_service_endpoints:
+        desired_state: "{{ platform_desired_state }}"
+        service_catalog: "{{ _platform_dns_client_catalog_file.platform_service_catalog | default(_platform_dns_client_catalog_file, true) }}"
+      register: _platform_dns_client_endpoints
+
+    - name: Initialize DNS client runtime projection
+      ansible.builtin.set_fact:
+        platform_dns_client_runtime_projection: {clients: {}}
+
+    - name: Publish deterministic DNS client runtime projection
+      ansible.builtin.set_fact:
+        platform_dns_client_runtime_projection: >-
+          {{ platform_dns_client_runtime_projection | combine({'clients': {
+               item.key: {
+                 'dnsServerRef': item.value.configuration.dnsServerRef,
+                 'managedZone': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].zone,
+                 'servers': (([_platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary] + _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].secondaries) | map(attribute='address') | list),
+                 'hostRecord': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary.fqdn,
+                 'endpointRecord': (_platform_dns_client_endpoints.resolved_service_endpoints.endpoints | dict2items | map(attribute='value.fqdn') | first | default('')),
+                 'wildcardRecord': (_platform_dns_client_endpoints.resolved_service_endpoints.endpoints | dict2items | map(attribute='value.wildcardDnsNames') | select | map('first') | first | default(''))
+               }
+             }}, recursive=True) }}
+      loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'dns-client') | list }}"
+      loop_control:
+        label: "{{ item.key }}"

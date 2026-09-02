@@ -1,0 +1,4 @@
+# Managed by Platform Installer V2 NET-03.1. Do not edit.
+[Resolve]
+DNS={{ platform_dns_client_local.servers | join(' ') }}
+Domains=~{{ platform_dns_client_local.managedZone }}

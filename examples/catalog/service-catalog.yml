@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:e5425a0ced1d2c6a76412bca74da8bfd40ec43f06fa9a501118f1184c2b655eb
+digest: sha256:ac76ee22c8b59e68d6f3b686644b1d3b31e5b44b8a8c9aa218999acccfd2bf6e
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -719,6 +719,58 @@ definitions:
     compatibilityRef: ../../services/bind/compatibility.yml
     x-definitionDigest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611
     x-sourceManifest: services/bind/service.yml
+  dns-client:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: dns-client
+      version: 1.0.0-alpha.1
+      displayName: DNS client
+      description: Split-DNS client adapter consuming one authoritative BIND deployment
+      category: network
+    modes:
+      host-resolver:
+        displayName: Host resolver
+        description: Inventory hosts consume one derived authoritative DNS deployment through a safe local
+          resolver adapter
+        memberRoles: []
+        placement:
+          explicit: true
+          hostScoped: true
+          minMembers: 1
+          distinctHosts: false
+        x-maturity: implemented-net-03-1
+    capabilities:
+    - service.dns-client.split-dns
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/dns-client/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        dnsServerRef:
+          kind: MANAGED
+          roleVariable: platform_dns_client_server_ref
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+          ui:
+            label: Authoritative DNS deployment
+            section: Split DNS
+            order: 10
+    roleEntrypoints:
+      apply:
+        fqcn: platform.dns_client.dns_client
+        variablesPrefix: platform_dns_client_
+      verify:
+        fqcn: platform.dns_client.dns_client
+        variablesPrefix: platform_dns_client_
+    artifacts: []
+    compatibilityRef: ../../services/dns-client/compatibility.yml
+    x-definitionDigest: sha256:a313a05fadd9dc701f226a91ee942c5a8e04e9768202ba6d644d26ee0a2f1590
+    x-sourceManifest: services/dns-client/service.yml
   etcd:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest

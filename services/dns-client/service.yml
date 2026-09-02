@@ -1,0 +1,27 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: dns-client
+  version: "1.0.0-alpha.1"
+  displayName: DNS client
+  description: Split-DNS client adapter consuming one authoritative BIND deployment
+  category: network
+modes:
+  host-resolver:
+    displayName: Host resolver
+    description: Inventory hosts consume one derived authoritative DNS deployment through a safe local resolver adapter
+    memberRoles: []
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: false}
+    x-maturity: implemented-net-03-1
+capabilities: [service.dns-client.split-dns]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    dnsServerRef: {kind: MANAGED, roleVariable: platform_dns_client_server_ref, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: Authoritative DNS deployment, section: Split DNS, order: 10}}
+roleEntrypoints:
+  apply: {fqcn: platform.dns_client.dns_client, variablesPrefix: platform_dns_client_}
+  verify: {fqcn: platform.dns_client.dns_client, variablesPrefix: platform_dns_client_}
+artifacts: []
+compatibilityRef: compatibility.yml

@@ -8,6 +8,10 @@ platform_desired_state:
       serviceType: bind
       mode: authoritative-primary-secondary
       configuration: {zone: scada.local, defaultTtl: 300}
+    dns-clients:
+      serviceType: dns-client
+      mode: host-resolver
+      configuration: {dnsServerRef: dns-main}
     keepalived-asutp:
       serviceType: keepalived
       mode: vrrp-unicast

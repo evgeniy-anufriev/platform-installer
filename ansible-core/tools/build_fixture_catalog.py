@@ -19,6 +19,7 @@ SOURCES = (
     ("postgresql", REPOSITORY / "services" / "postgresql" / "service.yml"),
     ("keepalived", REPOSITORY / "services" / "keepalived" / "service.yml"),
     ("bind", REPOSITORY / "services" / "bind" / "service.yml"),
+    ("dns-client", REPOSITORY / "services" / "dns-client" / "service.yml"),
     ("etcd", REPOSITORY / "examples" / "catalog" / "manifests" / "etcd.yml"),
 )
 PROJECT_MANIFEST_GLOBS = (

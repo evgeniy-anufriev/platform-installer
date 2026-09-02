@@ -1,0 +1,60 @@
+---
+- name: Inspect systemd-resolved unit existence
+  ansible.builtin.command:
+    argv: [systemctl, show, systemd-resolved.service, --property=LoadState, --value]
+  register: _platform_dns_client_resolved_unit
+  changed_when: false
+  failed_when: false
+
+- name: Inspect NetworkManager unit existence
+  ansible.builtin.command:
+    argv: [systemctl, show, NetworkManager.service, --property=LoadState, --value]
+  register: _platform_dns_client_nm_unit
+  changed_when: false
+  failed_when: false
+
+- name: Inspect resolver configuration ownership
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: _platform_dns_client_resolv_conf
+
+- name: Read resolver configuration link without mutation
+  ansible.builtin.command:
+    argv: [readlink, /etc/resolv.conf]
+  register: _platform_dns_client_resolv_link
+  changed_when: false
+  failed_when: false
+  when: _platform_dns_client_resolv_conf.stat.islnk | default(false)
+
+- name: Select deterministic DNS client backend
+  ansible.builtin.set_fact:
+    platform_dns_client_backend: >-
+      {{ 'systemd-resolved' if _platform_dns_client_resolved_unit.stdout | trim == 'loaded'
+         else ('NetworkManager' if _platform_dns_client_nm_unit.stdout | trim == 'loaded' else '') }}
+
+- name: Require a supported DNS client backend
+  ansible.builtin.assert:
+    that: platform_dns_client_backend | length > 0
+    fail_msg: DNS_CLIENT_BACKEND_UNSUPPORTED
+
+- name: Require safe resolved ownership of resolv.conf
+  ansible.builtin.assert:
+    that:
+      - _platform_dns_client_resolv_conf.stat.islnk | default(false)
+      - _platform_dns_client_resolv_link.stdout | trim in ['../run/systemd/resolve/stub-resolv.conf', '../run/systemd/resolve/resolv.conf', '/run/systemd/resolve/stub-resolv.conf', '/run/systemd/resolve/resolv.conf']
+    fail_msg: DNS_CLIENT_RESOLV_CONF_CONFLICT
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Inspect NetworkManager split DNS configuration
+  ansible.builtin.slurp:
+    src: /etc/NetworkManager/NetworkManager.conf
+  register: _platform_dns_client_nm_config
+  failed_when: false
+  when: platform_dns_client_backend == 'NetworkManager'
+
+- name: Determine NetworkManager split DNS capability
+  ansible.builtin.set_fact:
+    platform_dns_client_nm_split_supported: >-
+      {{ _platform_dns_client_nm_config.content | default('') | b64decode is search('(?m)^\\s*dns\\s*=\\s*dnsmasq\\s*$') }}
+  when: platform_dns_client_backend == 'NetworkManager'

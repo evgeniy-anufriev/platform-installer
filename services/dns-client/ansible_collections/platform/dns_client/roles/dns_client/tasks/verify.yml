@@ -1,0 +1,71 @@
+---
+- name: Verify systemd-resolved is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, --quiet, systemd-resolved.service]
+  changed_when: false
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Inspect effective systemd-resolved state read-only
+  ansible.builtin.command:
+    argv: [resolvectl, status]
+  register: _platform_dns_client_resolvectl_status
+  changed_when: false
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Read Platform systemd-resolved drop-in without mutation
+  ansible.builtin.slurp:
+    src: /etc/systemd/resolved.conf.d/platform-installer.conf
+  register: _platform_dns_client_resolved_dropin
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Verify Platform systemd-resolved drop-in matches derived projection
+  ansible.builtin.assert:
+    that:
+      - "('DNS=' ~ (platform_dns_client_local.servers | join(' '))) in (_platform_dns_client_resolved_dropin.content | b64decode)"
+      - "('Domains=~' ~ platform_dns_client_local.managedZone) in (_platform_dns_client_resolved_dropin.content | b64decode)"
+      - "'FallbackDNS=' not in (_platform_dns_client_resolved_dropin.content | b64decode)"
+    fail_msg: DNS_CLIENT_RESOLVED_DROPIN_INVALID
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Verify effective split DNS servers and route domain
+  ansible.builtin.assert:
+    that:
+      - item in _platform_dns_client_resolvectl_status.stdout
+      - ('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_resolvectl_status.stdout
+    fail_msg: DNS_CLIENT_RESOLVED_EFFECTIVE_STATE_INVALID
+  loop: "{{ platform_dns_client_local.servers }}"
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Inspect NetworkManager split DNS profile read-only
+  ansible.builtin.command:
+    argv: [nmcli, -g, ipv4.dns,ipv4.dns-search,ipv4.ignore-auto-dns, connection, show, "{{ platform_dns_client_nm_connection | default('') }}"]
+  register: _platform_dns_client_nm_verify
+  changed_when: false
+  when: platform_dns_client_backend == 'NetworkManager'
+
+- name: Verify NetworkManager split DNS profile is effective
+  ansible.builtin.assert:
+    that:
+      - item in _platform_dns_client_nm_verify.stdout
+      - ('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_nm_verify.stdout
+      - 'no' in _platform_dns_client_nm_verify.stdout
+    fail_msg: DNS_CLIENT_NM_EFFECTIVE_STATE_INVALID
+  loop: "{{ platform_dns_client_local.servers }}"
+  when: platform_dns_client_backend == 'NetworkManager'
+
+- name: Resolve managed project host through normal system resolver
+  ansible.builtin.command:
+    argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
+  changed_when: false
+
+- name: Resolve managed endpoint through normal system resolver
+  ansible.builtin.command:
+    argv: [getent, hosts, "{{ platform_dns_client_local.endpointRecord }}"]
+  changed_when: false
+  when: platform_dns_client_local.endpointRecord | length > 0
+
+- name: Resolve managed wildcard through normal system resolver
+  ansible.builtin.command:
+    argv: [getent, hosts, "{{ platform_dns_client_local.wildcardRecord | regex_replace('^\\*\\.', 'net031-wildcard-test.') }}"]
+  changed_when: false
+  when: platform_dns_client_local.wildcardRecord | length > 0

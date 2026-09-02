@@ -1,0 +1,8 @@
+apiVersion: platform.installer/service-compatibility/v1alpha1
+kind: ServiceCompatibility
+metadata: {id: dns-client, version: "1.0.0-alpha.1"}
+platforms:
+  redos:
+    packages: []
+    adapters: [systemd-resolved, NetworkManager]
+    testedVersion: "8.0"

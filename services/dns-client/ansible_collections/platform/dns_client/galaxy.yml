@@ -1,0 +1,8 @@
+namespace: platform
+name: dns_client
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer V2]
+description: NET-03.1 split DNS client adapters
+license: [MIT]
+tags: [dns, split-dns, systemd-resolved, networkmanager]

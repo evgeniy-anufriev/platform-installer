@@ -1,0 +1,13 @@
+{
+  "$id": "https://platform.installer/schemas/services/dns-client/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "dnsServerRef": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "DNS client desired configuration",
+  "type": "object"
+}

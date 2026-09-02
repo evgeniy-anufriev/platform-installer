@@ -29,6 +29,11 @@ Three-node RED OS acceptance proved complete candidate/activation barriers,
 native zone transfer, exact-once fingerprint/serial lifecycle, primary outage
 continuity, recovery and idempotent verify/repeat apply.
 
+NET-03.1 is DONE. The separate host-scoped dns-client package derives split
+DNS inputs from one logical BIND deployment reference. Three-node RED OS
+acceptance proved systemd-resolved route-only DNS, safe resolv.conf ownership,
+normal resolver redundancy and post-recovery idempotence.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -84,6 +89,9 @@ continuity, recovery and idempotent verify/repeat apply.
   Each apply materializes them once, then provides the same runtime projection
   to all BIND role tasks.  Primary zones are Ansible-managed; secondary zones
   arrive only through native BIND transfer.
+- DNS clients are a separate host-scoped service package. `dnsServerRef` is
+  the sole logical client-to-BIND link; server addresses and managed route
+  domains are derived at runtime and NET-03.1 has no generated state.
 
 ## Implemented
 
@@ -179,6 +187,10 @@ continuity, recovery and idempotent verify/repeat apply.
   candidate and activation barriers, native secondary transfer, read-only
   verification and a generated fingerprint/serial lifecycle.  The bounded
   native configuration surface is `advancedConfig.options.minimal-responses`.
+- NET-03.1 DNS client: systemd-resolved is selected whenever its unit exists;
+  otherwise NetworkManager is considered only with a proven split-DNS backend.
+  The role owns a resolved drop-in only, never replaces `/etc/resolv.conf`, and
+  blocks unsafe ownership or global-DNS fallback.
 
 ## Completed
 
@@ -190,6 +202,10 @@ continuity, recovery and idempotent verify/repeat apply.
   wildcard authoritative answers, native secondary transfer, exact-once serial
   increment on logical zone change, service continuity during primary outage,
   recovery, and post-recovery `changed=0 failed=0` verify/repeat apply.
+- NET-03.1 is DONE. Three-node DNS-client acceptance proved the derived
+  primary-plus-secondary route-only server list, normal system resolution of
+  host/endpoint/wildcard records, unrelated resolution preservation, fallback
+  with one remaining BIND server, recovery and `changed=0 failed=0`.
 
 ## Validation evidence
 
@@ -288,6 +304,12 @@ continuity, recovery and idempotent verify/repeat apply.
   `sudo unshare -n true` passed. The regression also fixed the real SSL
   handshake EOF/timeout defect and split KRaft broker/controller listener
   projection contract without changing identity or PKI lifecycle semantics.
+- NET-03.1 RED OS acceptance: systemd-resolved apply configured the derived
+  `~scada.local` route on node1/node2/node3; separate verify, repeat apply,
+  primary failure, one-secondary-remaining failure, recovery, post-recovery
+  verify and post-recovery apply all passed. Core (137), focused service
+  contracts (63), generated catalog/schema, target-free validation and
+  privileged offline checks passed.
 
 ## Not implemented
 
@@ -311,8 +333,8 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-POSTGRES-01, NET-01, NET-02 and NET-03 are DONE. DNS transport routing and
-HAProxy require a separate explicit milestone request. A future production
+POSTGRES-01, NET-01, NET-02, NET-03 and NET-03.1 are DONE. NET-04 HAProxy is
+the next explicit network milestone. A future production
 UI-01 remains dependent on a minimal backend read/write, revision and run
 boundary; it must continue to edit and execute the same standard Ansible
 project.

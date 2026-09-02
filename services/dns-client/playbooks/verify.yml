@@ -1,0 +1,10 @@
+---
+- import_playbook: projection.yml
+
+- name: Verify split DNS client adapters
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.dns_client.dns_client
+      platform_dns_client_phase: verify

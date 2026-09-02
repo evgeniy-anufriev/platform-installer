@@ -1,0 +1,37 @@
+---
+- name: Validate derived systemd-resolved split DNS inputs
+  ansible.builtin.assert:
+    that:
+      - platform_dns_client_local.servers | default([]) | length >= 2
+      - platform_dns_client_local.managedZone | default('') | length > 0
+      - platform_dns_client_local.managedZone is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$')
+    fail_msg: DNS_CLIENT_RESOLVED_INPUT_INVALID
+
+- name: Create Platform systemd-resolved drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Render Platform split DNS systemd-resolved drop-in
+  ansible.builtin.template:
+    src: platform-installer.conf.j2
+    dest: /etc/systemd/resolved.conf.d/platform-installer.conf
+    owner: root
+    group: root
+    mode: '0644'
+  register: _platform_dns_client_resolved_dropin
+
+- name: Ensure systemd-resolved is enabled and active
+  ansible.builtin.systemd_service:
+    name: systemd-resolved.service
+    enabled: true
+    state: started
+
+- name: Restart systemd-resolved after changed Platform drop-in
+  ansible.builtin.systemd_service:
+    name: systemd-resolved.service
+    state: restarted
+  when: _platform_dns_client_resolved_dropin.changed

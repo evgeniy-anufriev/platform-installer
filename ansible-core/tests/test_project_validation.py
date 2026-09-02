@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 
@@ -9,6 +10,7 @@ MODULE_PATH = os.path.join(
     os.path.dirname(__file__), "..", "collections", "ansible_collections", "platform",
     "core", "plugins", "module_utils", "project_validation.py",
 )
+sys.path.insert(0, os.path.dirname(MODULE_PATH))
 SPEC = importlib.util.spec_from_file_location("project_validation", MODULE_PATH)
 VALIDATION = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATION)
@@ -84,6 +86,52 @@ def manifest(project_id="valid-project"):
 
 
 class ProjectValidationTests(unittest.TestCase):
+    def test_dns_client_reference_is_target_free_and_requires_valid_bind_projection(self):
+        bind = {
+            "metadata": {"id": "bind", "version": "1"},
+            "configuration": {"additionalProperties": False, "settings": {
+                "zone": {"kind": "MANAGED", "roleVariable": "platform_bind_zone", "type": "string", "scopes": ["deployment"], "validation": {"minLength": 3}},
+                "defaultTtl": {"kind": "MANAGED", "roleVariable": "platform_bind_ttl", "type": "integer", "scopes": ["deployment"], "validation": {"minimum": 1}},
+            }},
+            "modes": {"authoritative-primary-secondary": {"placement": {"hostScoped": True, "minMembers": 2, "distinctHosts": True}}},
+        }
+        client = {
+            "metadata": {"id": "dns-client", "version": "1"},
+            "configuration": {"additionalProperties": False, "settings": {
+                "dnsServerRef": {"kind": "MANAGED", "roleVariable": "platform_dns_client_server_ref", "type": "string", "scopes": ["deployment"], "validation": {"minLength": 1}},
+            }},
+            "modes": {"host-resolver": {"placement": {"hostScoped": True, "minMembers": 1, "distinctHosts": False}}},
+        }
+        definitions = {}
+        for service_type, definition in (("bind", bind), ("dns-client", client)):
+            definition["x-definitionDigest"] = VALIDATION.canonical_digest(definition)
+            definition["x-sourceManifest"] = "services/%s/service.yml" % service_type
+            definitions[service_type] = definition
+        unsigned = {"apiVersion": "platform.installer/catalog/v1alpha1", "kind": "ServiceCatalog", "definitions": definitions}
+        service_catalog = dict(unsigned, digest=VALIDATION.canonical_digest(unsigned))
+        manifest_value = {
+            "apiVersion": "platform.installer/v2alpha1", "kind": "PlatformProject", "metadata": {"id": "dns-client"},
+            "desiredStateContract": "platform.installer/project-desired-state/v2alpha1",
+            "catalogLock": {"apiVersion": "platform.installer/catalog/v1alpha1", "digest": service_catalog["digest"], "services": {
+                key: {"definitionVersion": "1", "digest": value["x-definitionDigest"]} for key, value in definitions.items()
+            }},
+            "artifactLock": {"apiVersion": "platform.installer/artifacts/v1alpha1", "digest": "sha256:" + "3" * 64},
+        }
+        topology = {"serviceDeployments": {
+            "dns-main": {"serviceType": "bind", "mode": "authoritative-primary-secondary", "configuration": {"zone": "scada.local", "defaultTtl": 300}},
+            "dns-clients": {"serviceType": "dns-client", "mode": "host-resolver", "configuration": {"dnsServerRef": "dns-main"}},
+        }}
+        placement = {
+            "dns-main": {"node1": {"roles": ["primary"]}, "node2": {"roles": ["secondary"]}},
+            "dns-clients": {"node1": {}, "node2": {}},
+        }
+        addresses = {"node1": {"ansible_host": "192.0.2.1"}, "node2": {"ansible_host": "192.0.2.2"}}
+        result = VALIDATION.validate_project(manifest_value, topology, {}, service_catalog, ["node1", "node2"], host_scoped_deployments=placement, inventory_host_addresses=addresses)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        topology["serviceDeployments"]["dns-clients"]["configuration"]["dnsServerRef"] = "missing"
+        result = VALIDATION.validate_project(manifest_value, topology, {}, service_catalog, ["node1", "node2"], host_scoped_deployments=placement, inventory_host_addresses=addresses)
+        self.assertIn("DNS_CLIENT_SERVER_NOT_FOUND", [item["code"] for item in result["findings"]])
+
     def test_definition_version_is_catalog_owned_and_optional_in_desired_state(self):
         topology = {"serviceDeployments": {"kafka-main": {
             "serviceType": "kafka", "mode": "kraft-standalone",

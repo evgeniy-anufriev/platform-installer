@@ -731,7 +731,11 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
         item for item in deployments.values()
         if isinstance(item, dict) and item.get("serviceType") == "bind"
     ]
-    if bind_deployments:
+    dns_client_deployments = [
+        (deployment_id, item) for deployment_id, item in deployments.items()
+        if isinstance(item, dict) and item.get("serviceType") == "dns-client"
+    ]
+    if bind_deployments or dns_client_deployments:
         try:
             from .dns_resolution import resolve_dns_zones
         except ImportError:
@@ -746,6 +750,29 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
             topology, service_catalog, inventory_host_addresses or {}, dns_inventory_deployments
         )
         findings.extend(dns_result["findings"])
+        for deployment_id, deployment in sorted(dns_client_deployments):
+            prefix = "serviceDeployments.%s.configuration.dnsServerRef" % deployment_id
+            configuration = deployment.get("configuration", {})
+            reference = configuration.get("dnsServerRef") if isinstance(configuration, dict) else None
+            referenced = deployments.get(reference) if isinstance(reference, str) else None
+            if not isinstance(referenced, dict):
+                findings.append(_finding(
+                    "DNS_CLIENT_SERVER_NOT_FOUND", prefix,
+                    "DNS client must reference an existing authoritative DNS deployment",
+                    {"dnsServerRef": reference} if isinstance(reference, str) else None,
+                ))
+            elif referenced.get("serviceType") != "bind":
+                findings.append(_finding(
+                    "DNS_CLIENT_SERVER_TYPE_INVALID", prefix,
+                    "DNS client dnsServerRef must reference a BIND deployment",
+                    {"dnsServerRef": reference, "serviceType": referenced.get("serviceType")},
+                ))
+            elif reference not in dns_result["zones"]:
+                findings.append(_finding(
+                    "DNS_CLIENT_SERVER_RESOLUTION_BLOCKED", prefix,
+                    "Referenced BIND deployment has no valid authoritative DNS projection",
+                    {"dnsServerRef": reference},
+                ))
 
     findings.sort(key=lambda item: (item["field"], item["code"]))
     blocked = len(findings)

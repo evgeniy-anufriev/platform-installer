@@ -418,6 +418,21 @@ nodes, exact-once serial increment on a logical zone change, primary outage
 continuity, natural primary restoration, and post-recovery verify/repeat
 idempotence.  DNS routing and HAProxy are deliberately deferred.
 
+### NET-03.1: DNS Client / Split DNS Runtime Adapters
+
+Status: DONE. A separate host-scoped `dns-client` package consumes one logical
+`dnsServerRef` and derives its primary-plus-secondary addresses and route-only
+zone from the existing Core DNS projection.  Three-node RED OS acceptance
+proved systemd-resolved split DNS, safe resolv.conf ownership, normal resolver
+host/endpoint/wildcard lookups, unrelated DNS preservation, primary and
+single-remaining-server fallback, recovery, and idempotent apply/verify.
+NetworkManager fallback has focused coverage and blocks safely unless a
+supported per-domain DNS backend is present.
+
+### NET-04: HAProxy
+
+Status: NEXT. HAProxy routing is explicitly deferred from NET-03 and NET-03.1.
+
 ## Phase E — Go backend adapter
 
 ### BACKEND-01: Core process adapter
