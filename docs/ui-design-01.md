@@ -170,6 +170,11 @@ deployment-scoped configuration edits its bound `group_vars` document. The
 technical deployment ID is stable; rename is unavailable until an explicit
 cross-file transition is designed.
 
+**Configure service** in the By services view is a second navigation entry to
+the same schema-driven **Service settings** detail screen opened from
+Installation → Services. It does not create a topology-specific configuration
+editor or a parallel save path.
+
 Containers remain a future application-runtime capability, not a global
 navigation item in the current desktop shell. When introduced, they must stay
 separate from infrastructure services.
