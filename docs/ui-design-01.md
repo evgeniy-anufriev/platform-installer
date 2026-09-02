@@ -26,24 +26,26 @@ read-only in normal UI flows.
 ## 2. Navigation and application shell
 
 After a project is opened, **Installation** is the default operational page.
-The application has exactly five global pages:
+Global navigation is a persistent vertical sidebar. Its primary items are:
 
 | Page | Responsibility |
 | --- | --- |
-| Project | project location, compatible Core/catalog/payload, execution environment and project health |
+| Projects | project selection, path, compatible Core/catalog/payload and project health |
+| Servers | topology and entry-point configuration |
 | Installation | readiness, plan, current workflow and direct remediation |
-| Topology | physical hosts, deployments, members, roles and placement |
-| Containers | reserved application-container entry point; no infrastructure-service settings |
 | Logs | historical runs, audit and sanitized diagnostics |
+| Help | offline help and troubleshooting entry point |
+| About | version and compatibility information |
+| Settings | application-local settings; never portable desired state |
 
 Installation has local navigation: **Summary**, **Preparation**, **Services**,
-**Certificates**, **Execution**. Topology is deliberately not duplicated
-there. Findings and service rows link contextually to the global Topology
-page.
+**Certificates**, **Execution**. Topology is deliberately not duplicated there.
+Findings and service rows link contextually to **Servers**.
 
 The practical desktop minimum is **1024 × 720 px**. At narrower widths the
-top-level navigation and local tabs scroll horizontally, split panes become
-stacked, and tables retain horizontal scrolling rather than hiding data.
+sidebar collapses to icons with accessible labels, local tabs scroll
+horizontally, split panes become stacked, and tables retain horizontal
+scrolling rather than hiding data.
 
 ## 3. Installation as the project home
 
@@ -64,19 +66,25 @@ Kafka status remains a result of the corresponding verification entrypoint.
 
 ## 4. Global pages
 
-### Project
+### Projects
 
 Project shows display name, optional technical ID, opened path, inventory
 source, `ansible.cfg`, Core/catalog/payload compatibility, execution-node
 binding and health. Advanced mode shows document origins and compatibility
 details. It does not contain service settings or placement editing.
 
-### Topology
+### Servers: topology and entry points
 
-Topology is one model with two projections:
+Servers owns a Topology screen with a header-level **Add service instance**
+action and **Save topology** action. It has three local tabs:
 
-- **By services:** deployment → member → roles → physical host.
-- **By servers:** host → all logical members from every deployment.
+- **By services:** three panes — service-instance list; selected instance
+  placement and settings; configuration validation and concise summary.
+- **By servers:** three panes — server picker; roles and services on the
+  selected server; server summary/readiness.
+- **Entry points:** settings for explicitly declared ingress/entry points.
+  This is not a listener-name or Kafka-only screen; it is a generic placement
+  and policy view over a future versioned entry-point contract.
 
 It supports zero to many deployments of every manifest service. A host can own
 multiple members, including several members of one Kafka deployment or members
@@ -89,12 +97,9 @@ deployment-scoped configuration edits its bound `group_vars` document. The
 technical deployment ID is stable; rename is unavailable until an explicit
 cross-file transition is designed.
 
-### Containers
-
-Containers is a future, separate application-runtime page. Its future model
-is application project → instance → image, ports, environment, volumes,
-replicas, health and placement. It neither configures nor visualizes
-infrastructure services as containers.
+Containers remain a future application-runtime capability, not a global
+navigation item in the current desktop shell. When introduced, they must stay
+separate from infrastructure services.
 
 ### Logs
 
@@ -304,8 +309,8 @@ it validates that service metadata and generic topology are not Kafka-shaped.
 Production UI then requires a minimal backend read/write and run adapter before
 React/Wails work; UI-01 cannot safely precede that backend boundary.
 
-Recommended UI-01 scope: open existing project read-only, Project and
-Topology views, catalog-driven managed-setting display, effective source and
+Recommended UI-01 scope: open an existing project read-only, Projects and
+Servers (Topology/Entry points) views, catalog-driven managed-setting display, effective source and
 findings navigation, draft/preview/save for a small supported literal subset,
 and optimistic external-change detection. Execution, secret entry and rich PKI
 editing follow only with their backend contracts.
