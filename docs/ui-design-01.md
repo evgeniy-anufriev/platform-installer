@@ -56,7 +56,9 @@ The page has five compact regions in this order:
 1. Project breadcrumb, page title and aggregate state.
 2. Execution Node strip: selected node, address, Ansible/Python capability,
    offline payload, disk capacity and an **Configure and prepare** action.
-3. Workflow: Validate → Plan → Execute → Result.
+3. A persistent stage strip: Validate → Plan → Execute → Result. It remains
+   visible on every Installation local page and highlights the current stage;
+   local-page navigation does not imply a workflow transition.
 4. Readiness and actionable findings. Each finding contains plain-language
    impact, technical code in Advanced view, and an explicit destination.
 5. A plan preview grouped by Servers, Services and Certificates, with one
