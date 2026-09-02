@@ -157,9 +157,12 @@ action and **Save topology** action. It has three local tabs:
   settings.
 - **By servers:** three panes — server picker; roles and services on the
   selected server; server summary/readiness.
-- **Entry points:** a visibly deferred placeholder for explicitly declared
-  ingress/entry points until a versioned endpoint contract exists. It is not a
-  listener-name or Kafka-only screen.
+- **Entry points:** derives one row per endpoint-capable deployment with an
+  `endpointGroup`: service, group, resolved FQDN and VIP. Editing assignment
+  writes `serviceDeployment.endpointGroup`; editing a group writes only its
+  domain, wildcard and VIP. It does not edit endpoint bindings, aliases,
+  listener names, ports or Kafka endpoints. Transport/routing UI is deferred
+  with NET-03.
 
 It supports zero to many deployments of every manifest service. A host can own
 multiple members, including several members of one Kafka deployment or members

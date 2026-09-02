@@ -12,6 +12,11 @@ SERVICE-02A is DONE. Named Kafka listeners, service-wide TLS profile
 consumption, PKI-01 read-only verify reconstruction and SSL consumer
 prerequisites are accepted through the standalone Ansible path.
 
+NET-01 is DONE. Endpoint groups own one client-facing DNS domain, wildcard
+intent and IPv4 VIP; an endpoint-capable deployment assigns its group directly
+and Core derives a read-only deterministic FQDN/VIP projection. Transport
+ports and routing remain deferred to NET-03 HAProxy.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -19,7 +24,7 @@ prerequisites are accepted through the standalone Ansible path.
 - Standard inventory, `group_vars`, `host_vars` and role defaults are the
   canonical user-owned desired-state source.
 - Topology remains a first-class part of desired state.
-- Service deployments, placements, endpoint bindings and certificate scopes are explicit.
+- Service deployments, placements, direct endpoint-group assignments and certificate scopes are explicit.
 - Go backend and UI are deferred until the standalone contract is proven by a production service.
 - Standard `ansible-playbook` with normal inventory, `group_vars` and `host_vars` is the initial standalone interface.
 - Kafka KRaft is split into single-node `SERVICE-01A`, same-host distributed
@@ -58,6 +63,10 @@ prerequisites are accepted through the standalone Ansible path.
   default model supplies PLAINTEXT and SSL endpoints, while SASL remains out of
   scope. A Kafka deployment/member selects one `tlsProfile` for all of its SSL
   listeners; no listener owns a separate certificate profile.
+- EndpointGroup is the sole desired-state owner of a client-facing
+  domain/wildcard/VIP. `ResolvedServiceEndpoints` is derived-only, is not
+  persisted to generated state, and supplies PKI SAN identity only through the
+  existing profile policy. Kafka has no generic NET-01 endpoint.
 
 ## Implemented
 
@@ -139,6 +148,11 @@ prerequisites are accepted through the standalone Ansible path.
   target deployment; read-only verification; deterministic request and
   materialization fingerprints. Changed initialized identity is blocked with
   `CERTIFICATE_REISSUE_REQUIRED`.
+- NET-01 endpoint foundation: the rejected `endpointBindings` alpha entity was
+  removed; endpoint-capable service deployments select one endpoint group;
+  PostgreSQL opts in through its service manifest; pure resolution yields a
+  deterministic FQDN/VIP projection and feeds PKI-01 SAN derivation without
+  generated-state writes, target contact or certificate lifecycle changes.
 
 ## Completed
 
@@ -255,7 +269,8 @@ prerequisites are accepted through the standalone Ansible path.
 - Generic backend/project persistence beyond the scoped Kafka identity
   transaction primitive.
 - Desktop or web UI.
-- Generic endpoint modeling and stateful listener-transition workflows.
+- Transport ports, stateful listener-transition workflows and generic endpoint
+  routing; these are deferred to NET-03 HAProxy.
 - Imported/external CA materialization, JKS, mTLS, global JVM cacerts,
   renewal and rotation.
 
@@ -266,6 +281,8 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-POSTGRES-01 is DONE. A future production UI-01 remains dependent on a minimal backend read/write,
-revision and run boundary; it must continue to edit and execute the same
-standard Ansible project.
+POSTGRES-01 and NET-01 are DONE. NET-02 Keepalived, NET-03 HAProxy and NET-04
+BIND/DNS require separate explicit milestone requests. A future production
+UI-01 remains dependent on a minimal backend read/write, revision and run
+boundary; it must continue to edit and execute the same standard Ansible
+project.

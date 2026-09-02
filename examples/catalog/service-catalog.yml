@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:db89037ccd209139edf38198b15e8127fae59f6cfec6d89c3421143493b30ba8
+digest: sha256:7e3ff13d6c469e2f517650415385f29ad70b80cfd2a1c5fc96713ef7962c541e
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -305,6 +305,7 @@ definitions:
         defaultPort: 5432
         tlsCapable: true
         scope: deployment
+    endpoint: {}
     capabilities:
     - service.postgresql.client
     dependencies: []
@@ -491,7 +492,7 @@ definitions:
         variablesPrefix: platform_postgresql_
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:9a05e85b48c1fa248a91ff7552e1d8f71e903e01bfa95f48f1678ea17090f5d8
+    x-definitionDigest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda
     x-sourceManifest: services/postgresql/service.yml
   etcd:
     apiVersion: platform.installer/service-manifest/v1alpha1

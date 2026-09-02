@@ -32,6 +32,7 @@
       "additionalProperties": { "$ref": "#/$defs/listener" },
       "default": {}
     },
+    "endpoint": { "$ref": "#/$defs/genericEndpoint" },
     "capabilities": {
       "type": "array",
       "uniqueItems": true,
@@ -182,6 +183,12 @@
         "scope": { "enum": ["member", "deployment"] }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "genericEndpoint": {
+      "type": "object",
+      "description": "Opt-in to NET-01 logical endpoint resolution. Transport and routing are deferred to NET-03.",
+      "properties": {},
       "additionalProperties": false
     },
     "dependencyKind": {

@@ -23,7 +23,6 @@ platform_project:
         postgres-2: {host: db-node2, roles: [database]}
         postgres-3: {host: db-node3, roles: [database]}
   endpointGroups: {}
-  endpointBindings: {}
   certificateProfiles: {}
   certificateScopes: {}
   secretRequirements: {}

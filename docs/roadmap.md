@@ -390,6 +390,15 @@ security audits passed.
 Production UI-01 remains dependent on a minimal backend read/write, run and
 revision boundary; React or Wails must not assume those responsibilities.
 
+### NET-01: Endpoint Groups and Resolved Service Endpoints
+
+Status: DONE. NET-01 establishes the Ansible-native endpoint group contract,
+direct `serviceDeployment.endpointGroup` assignment, and read-only FQDN/VIP
+resolution. It deliberately excludes transport ports and all routing semantics;
+those belong to NET-03 HAProxy. PostgreSQL is the first opt-in package, Kafka
+remains outside generic endpoint semantics, and PKI-01 consumes the projection
+only according to existing SAN policy.
+
 ## Phase E — Go backend adapter
 
 ### BACKEND-01: Core process adapter
@@ -449,7 +458,7 @@ Deliverables:
 - service catalog driven by Core manifests;
 - multiple deployments per service type;
 - explicit member placement and dependency editing;
-- endpoint binding editor;
+- endpoint group and deployment-assignment editor;
 - validation projection.
 
 Ready when:

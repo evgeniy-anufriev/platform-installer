@@ -101,6 +101,24 @@ class Draft202012EngineTests(unittest.TestCase):
         self.assertTrue(findings)
         self.assertTrue(all(item["code"] == "SCHEMA_VALIDATION_FAILED" for item in findings))
 
+    def test_desired_state_accepts_group_assignment_and_rejects_endpoint_bindings(self):
+        contracts = Path(__file__).resolve().parents[2] / "contracts"
+        schema = contracts / "project" / "v2alpha1" / "desired-state.schema.json"
+        document = {
+            "serviceDeployments": {
+                "postgres-main": {
+                    "serviceType": "postgresql", "definitionVersion": "1", "mode": "standalone", "endpointGroup": "asutp",
+                },
+            },
+            "endpointGroups": {
+                "asutp": {"address": {"domain": "asutp.scada.local", "wildcard": True, "vip": "192.168.6.112"}},
+            },
+        }
+        validator = ENGINE.SchemaValidator(contracts)
+        self.assertEqual([], validator.validate(document, schema))
+        document["endpointBindings"] = {}
+        self.assertTrue(validator.validate(document, schema))
+
 
 if __name__ == "__main__":
     unittest.main()

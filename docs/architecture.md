@@ -111,7 +111,7 @@ Topology is not reduced to inventory. The project explicitly models:
 - members and their placement on hosts;
 - member roles;
 - dependencies between deployments;
-- endpoint groups and endpoint bindings;
+- endpoint groups and direct deployment endpoint assignments;
 - network and certificate policies.
 
 Examples supported by the same model:

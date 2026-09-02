@@ -107,7 +107,18 @@ def _scope_key(scope, consumer):
     return "%s--%s" % (consumer["tlsProfileRef"], consumer["hostId"])
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None):
+def _endpoint_values(resolved_service_endpoints, deployment_ids, policy):
+    projection = resolved_service_endpoints if isinstance(resolved_service_endpoints, dict) else {}
+    endpoints = projection.get("endpoints", {}) if isinstance(projection.get("endpoints"), dict) else {}
+    selected = [endpoints[key] for key in sorted(endpoints) if key in deployment_ids and isinstance(endpoints[key], dict)]
+    return {
+        "dnsNames": _string_list(name for endpoint in selected for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
+        "wildcardDnsNames": _string_list(name for endpoint in selected for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
+        "ipAddresses": _string_list(address for endpoint in selected for address in endpoint.get("sanIpAddresses", [])) if policy["includeEndpointVip"] else [],
+    }
+
+
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -160,6 +171,9 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None)
         identities = [_host_identity(host_id, host_vars) for host_id in hosts]
         dns_names = _string_list(name for identity in identities for name in identity["dnsNames"]) if profile["sanPolicy"]["includeHostDns"] else []
         ip_addresses = _string_list(address for identity in identities for address in identity["ipAddresses"]) if profile["sanPolicy"]["includeHostIp"] else []
+        endpoint_values = _endpoint_values(resolved_service_endpoints, set(value["deploymentId"] for value in consumers), profile["sanPolicy"])
+        dns_names = _string_list(dns_names + endpoint_values["dnsNames"] + endpoint_values["wildcardDnsNames"])
+        ip_addresses = _string_list(ip_addresses + endpoint_values["ipAddresses"])
         request = {
             "id": scope_id,
             "projectId": project_id,

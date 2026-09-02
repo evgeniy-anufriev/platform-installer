@@ -17,12 +17,6 @@
       "additionalProperties": { "$ref": "#/$defs/endpointGroup" },
       "default": {}
     },
-    "endpointBindings": {
-      "type": "object",
-      "propertyNames": { "$ref": "#/$defs/identifier" },
-      "additionalProperties": { "$ref": "#/$defs/endpointBinding" },
-      "default": {}
-    },
     "certificateAuthorities": {
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/identifier" },
@@ -99,6 +93,9 @@
           "propertyNames": { "$ref": "#/$defs/identifier" },
           "additionalProperties": { "$ref": "#/$defs/dependency" },
           "default": {}
+        },
+        "endpointGroup": {
+          "$ref": "#/$defs/identifier"
         }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
@@ -133,39 +130,17 @@
     },
     "endpointGroup": {
       "type": "object",
+      "required": ["address"],
       "properties": {
-        "baseDomain": { "type": "string", "minLength": 1 },
-        "additionalDomains": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 },
-          "default": []
-        },
-        "wildcard": { "type": "boolean", "default": false },
-        "vip": { "$ref": "#/$defs/ipAddress" },
-        "address": { "type": "string", "minLength": 1 },
-        "networkProfile": { "$ref": "#/$defs/identifier" }
-      },
-      "anyOf": [
-        { "required": ["baseDomain"] },
-        { "required": ["vip"] },
-        { "required": ["address"] }
-      ],
-      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
-      "additionalProperties": false
-    },
-    "endpointBinding": {
-      "type": "object",
-      "required": ["serviceDeployment", "listener", "endpointGroup", "alias"],
-      "properties": {
-        "serviceDeployment": { "$ref": "#/$defs/identifier" },
-        "listener": { "$ref": "#/$defs/identifier" },
-        "endpointGroup": { "$ref": "#/$defs/identifier" },
-        "alias": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 63,
-          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$"
+        "address": {
+          "type": "object",
+          "required": ["domain", "wildcard", "vip"],
+          "properties": {
+            "domain": { "type": "string", "minLength": 1 },
+            "wildcard": { "type": "boolean" },
+            "vip": { "type": "string", "format": "ipv4" }
+          },
+          "additionalProperties": false
         }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
@@ -250,7 +225,6 @@
         "sources": {
           "type": "object",
           "properties": {
-            "endpointBindings": { "$ref": "#/$defs/idList" },
             "serviceDeployments": { "$ref": "#/$defs/idList" },
             "hosts": { "$ref": "#/$defs/idList" },
             "members": {

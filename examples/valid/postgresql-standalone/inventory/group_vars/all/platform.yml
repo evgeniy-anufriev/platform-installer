@@ -10,7 +10,6 @@ platform_project:
       members:
         database-1: {host: db-node1, roles: [database]}
   endpointGroups: {}
-  endpointBindings: {}
   certificateProfiles: {}
   certificateScopes: {}
   secretRequirements: {}

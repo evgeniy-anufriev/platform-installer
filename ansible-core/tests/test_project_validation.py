@@ -114,6 +114,30 @@ class ProjectValidationTests(unittest.TestCase):
         result = VALIDATION.validate_project(manifest("unknown"), topology, {}, catalog(), ["node-1"])
         self.assertIn("SERVICE_DEFINITION_NOT_FOUND", [item["code"] for item in result["findings"]])
 
+    def test_endpoint_group_reference_requires_an_endpoint_capable_package(self):
+        topology = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone", "endpointGroup": "dmz",
+            "members": {"broker-1": {"host": "node-1", "roles": ["broker", "controller"]}},
+        }}, "endpointGroups": {"dmz": {"address": {"domain": "dmz.scada.local", "wildcard": True, "vip": "192.168.6.111"}}}}
+        result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), ["node-1"])
+        self.assertIn("ENDPOINT_SERVICE_UNSUPPORTED", [item["code"] for item in result["findings"]])
+
+    def test_endpoint_group_reference_must_exist(self):
+        selected = catalog()
+        selected["definitions"]["kafka"]["endpoint"] = {}
+        selected["definitions"]["kafka"]["x-definitionDigest"] = VALIDATION.canonical_digest({key: value for key, value in selected["definitions"]["kafka"].items() if key not in ("x-definitionDigest", "x-sourceManifest")})
+        unsigned = {"apiVersion": selected["apiVersion"], "kind": selected["kind"], "definitions": selected["definitions"]}
+        selected["digest"] = VALIDATION.canonical_digest(unsigned)
+        selected_manifest = manifest()
+        selected_manifest["catalogLock"]["digest"] = selected["digest"]
+        selected_manifest["catalogLock"]["services"]["kafka"]["digest"] = selected["definitions"]["kafka"]["x-definitionDigest"]
+        topology = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone", "endpointGroup": "missing",
+            "members": {"broker-1": {"host": "node-1", "roles": ["broker", "controller"]}},
+        }}}
+        result = VALIDATION.validate_project(selected_manifest, topology, {}, selected, ["node-1"])
+        self.assertIn("ENDPOINT_GROUP_NOT_FOUND", [item["code"] for item in result["findings"]])
+
     def test_result_is_deterministic_and_does_not_copy_inventory_secrets(self):
         invalid_manifest = manifest("invalid")
         invalid_manifest["apiVersion"] = "wrong/version"

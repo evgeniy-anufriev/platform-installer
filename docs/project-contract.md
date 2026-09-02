@@ -78,7 +78,7 @@ Stable project keys are meaningful within a project and independent of local dat
 - `serviceDeployment` identifies one desired deployment, such as `accounting-db`.
 - `member` identifies a member within that deployment, such as `database-1`.
 - `host` identifies an intended target host.
-- endpoint binding and certificate scope have their own stable identities.
+- endpoint group and certificate scope have their own stable identities.
 
 This supports multiple independent deployments of one type without duplicating service definitions.
 
@@ -125,14 +125,19 @@ The first production version should prefer explicit placement. Automatic placeme
 
 ## Endpoints
 
-An endpoint binding references:
+NET-01 has one desired endpoint assignment: an endpoint-capable service
+deployment may set `endpointGroup`. `endpointGroups.<id>.address` owns one DNS
+suffix, wildcard intent and IPv4 VIP. The resolved FQDN is deterministic:
+`<serviceDeploymentId>.<endpointGroup.address.domain>`. There is no
+`endpointBindings`, alias, listener reference, port override or manually
+authored FQDN. Endpoint-enabled deployment IDs must be valid lowercase DNS
+labels.
 
-- a service deployment;
-- a declared listener from its service manifest;
-- an endpoint group;
-- an alias.
-
-The endpoint group supplies domains, wildcard policy, VIP/address and network profile. Concrete endpoint FQDNs are derived from alias plus every applicable domain. Service IDs are metadata and never become DNS names implicitly.
+`ResolvedServiceEndpoints` is a read-only projection. It contains FQDN and VIP
+identity for PKI and future network providers, but is not desired or generated
+state. Transport ports and routing are deferred to NET-03. Kafka is not a
+generic NET-01 endpoint consumer because its client reachability is governed
+by package-owned named and advertised listeners.
 
 ## Certificates
 

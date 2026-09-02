@@ -34,6 +34,7 @@ modes:
     x-maturity: deferred
 listeners:
   client: {protocol: tcp, defaultPort: 5432, tlsCapable: true, scope: deployment}
+endpoint: {}
 capabilities: [service.postgresql.client]
 dependencies: []
 configurationSchema: {$ref: configuration.schema.json}

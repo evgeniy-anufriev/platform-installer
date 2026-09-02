@@ -3,7 +3,6 @@ platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-cat
 platform_project:
   serviceDeployments: {}
   endpointGroups: {}
-  endpointBindings: {}
   certificateProfiles: {}
   certificateScopes: {}
   secretRequirements: {}

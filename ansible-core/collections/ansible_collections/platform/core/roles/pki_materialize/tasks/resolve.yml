@@ -4,6 +4,50 @@
     _platform_pki_inventory_hosts: {}
   when: platform_pki_resolve_managed | bool
 
+- name: Identify Ansible-native endpoint assignments
+  ansible.builtin.set_fact:
+    _platform_pki_endpoint_deployments: >-
+      {{ ((platform_desired_state | default({})).serviceDeployments | default({}) | dict2items
+          | selectattr('value.endpointGroup', 'defined') | list) }}
+  when: platform_pki_resolve_managed | bool
+
+- name: Require the published service catalog for endpoint-aware PKI resolution
+  ansible.builtin.assert:
+    that:
+      - platform_service_catalog_path is defined
+      - platform_service_catalog_path | length > 0
+    fail_msg: >-
+      platform_service_catalog_path is required when a service deployment selects endpointGroup
+  when:
+    - platform_pki_resolve_managed | bool
+    - _platform_pki_endpoint_deployments | default([]) | length > 0
+
+- name: Load published catalog for endpoint-aware PKI resolution
+  ansible.builtin.include_vars:
+    file: "{{ platform_service_catalog_path }}"
+    name: _platform_pki_endpoint_catalog_file
+  when:
+    - platform_pki_resolve_managed | bool
+    - _platform_pki_endpoint_deployments | default([]) | length > 0
+
+- name: Resolve endpoint identity for managed PKI SAN derivation
+  platform.core.resolve_service_endpoints:
+    desired_state: "{{ platform_desired_state }}"
+    service_catalog: >-
+      {{ _platform_pki_endpoint_catalog_file.platform_service_catalog |
+         default(_platform_pki_endpoint_catalog_file, true) }}
+  register: _platform_pki_endpoint_resolution
+  when:
+    - platform_pki_resolve_managed | bool
+    - _platform_pki_endpoint_deployments | default([]) | length > 0
+
+- name: Publish endpoint identity projection for managed PKI SAN derivation
+  ansible.builtin.set_fact:
+    platform_pki_resolved_service_endpoints: "{{ _platform_pki_endpoint_resolution.resolved_service_endpoints }}"
+  when:
+    - _platform_pki_endpoint_resolution is defined
+    - not (_platform_pki_endpoint_resolution.skipped | default(false))
+
 - name: Collect PKI placement and service-address inputs
   ansible.builtin.set_fact:
     _platform_pki_inventory_hosts: >-
@@ -23,6 +67,7 @@
     inventory_hosts: "{{ _platform_pki_inventory_hosts | default({}) }}"
     project_id: "{{ platform_project_id | default((inventory_dir | dirname | basename), true) }}"
     pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
+    resolved_service_endpoints: "{{ platform_pki_resolved_service_endpoints | default({}) }}"
   register: platform_pki_managed_resolution
   when: platform_pki_resolve_managed | bool
 

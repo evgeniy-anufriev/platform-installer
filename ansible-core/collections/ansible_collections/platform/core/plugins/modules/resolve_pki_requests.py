@@ -27,6 +27,7 @@ def main():
         "inventory_hosts": {"type": "dict", "required": False, "default": {}},
         "project_id": {"type": "str", "required": False, "default": "ansible-project"},
         "pki_defaults": {"type": "dict", "required": True},
+        "resolved_service_endpoints": {"type": "dict", "required": False, "default": {}},
     }, supports_check_mode=True)
     try:
         if module.params["desired_state"]:
@@ -46,7 +47,7 @@ def main():
         if findings:
             result = {"status": "BLOCKED", "findings": findings}
         else:
-            result = resolve_certificate_requests(project_id, topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"])
+            result = resolve_certificate_requests(project_id, topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"], module.params["resolved_service_endpoints"])
     except Exception as error:
         module.fail_json(msg="PKI request resolution failed", error_code="PKI_RESOLUTION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":

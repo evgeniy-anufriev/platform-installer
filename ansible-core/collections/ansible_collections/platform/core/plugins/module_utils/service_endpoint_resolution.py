@@ -1,0 +1,116 @@
+from __future__ import absolute_import, division, print_function
+
+__metaclass__ = type
+
+import ipaddress
+import re
+
+try:
+    from .project_validation import canonical_digest
+except ImportError:
+    from project_validation import canonical_digest
+
+
+API_VERSION = "platform.installer/resolved-service-endpoint/v1alpha1"
+DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+DNS_DOMAIN = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def _finding(code, field, message, details=None):
+    result = {
+        "apiVersion": "platform.installer/finding/v1alpha1",
+        "kind": "Finding",
+        "code": code,
+        "status": "BLOCKED",
+        "category": "service-endpoint-resolution",
+        "field": field,
+        "safeMessage": message,
+    }
+    if details:
+        result["safeDetails"] = details
+    return result
+
+
+def _definitions(catalog):
+    catalog = catalog if isinstance(catalog, dict) else {}
+    values = catalog.get("definitions", catalog)
+    return values if isinstance(values, dict) else {}
+
+
+def _valid_ipv4(value):
+    try:
+        return isinstance(value, str) and isinstance(ipaddress.ip_address(value), ipaddress.IPv4Address)
+    except ValueError:
+        return False
+
+
+def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None):
+    """Derive generic client endpoint identity from desired topology.
+
+    Transport ports and routing are deliberately deferred to NET-03. This function
+    has no filesystem, inventory, target, generated-state or secret access.
+    """
+    topology = topology if isinstance(topology, dict) else {}
+    deployments = topology.get("serviceDeployments", {}) if isinstance(topology.get("serviceDeployments"), dict) else {}
+    groups = topology.get("endpointGroups", {}) if isinstance(topology.get("endpointGroups"), dict) else {}
+    definitions = _definitions(service_catalog)
+    findings, endpoints = [], {}
+
+    for deployment_id, deployment in sorted(deployments.items()):
+        if not isinstance(deployment, dict) or "endpointGroup" not in deployment:
+            continue
+        prefix = "serviceDeployments.%s" % deployment_id
+        group_id = deployment.get("endpointGroup")
+        group = groups.get(group_id)
+        if not isinstance(group, dict):
+            findings.append(_finding("ENDPOINT_GROUP_NOT_FOUND", prefix + ".endpointGroup", "Endpoint group reference is not defined"))
+            continue
+        address = group.get("address") if isinstance(group.get("address"), dict) else {}
+        domain, vip = address.get("domain"), address.get("vip")
+        if not isinstance(domain, str) or not DNS_DOMAIN.match(domain):
+            findings.append(_finding("ENDPOINT_GROUP_DOMAIN_INVALID", "endpointGroups.%s.address.domain" % group_id, "Endpoint group domain must be a lowercase fully qualified DNS suffix"))
+            continue
+        if not _valid_ipv4(vip):
+            findings.append(_finding("ENDPOINT_GROUP_VIP_INVALID", "endpointGroups.%s.address.vip" % group_id, "Endpoint group VIP must be an IPv4 address"))
+            continue
+        if not isinstance(deployment_id, str) or not DNS_LABEL.match(deployment_id):
+            findings.append(_finding("ENDPOINT_DEPLOYMENT_ID_NOT_DNS_LABEL", prefix, "Endpoint-enabled service deployment id must be a lowercase DNS label"))
+            continue
+        service_type = deployment.get("serviceType")
+        definition = definitions.get(service_type)
+        endpoint = definition.get("endpoint") if isinstance(definition, dict) else None
+        if not isinstance(endpoint, dict):
+            findings.append(_finding("ENDPOINT_SERVICE_UNSUPPORTED", prefix + ".endpointGroup", "Service package does not support a generic client endpoint", {"serviceType": service_type}))
+            continue
+        fqdn = "%s.%s" % (deployment_id, domain)
+        record = {
+            "serviceDeploymentId": deployment_id,
+            "serviceType": service_type,
+            "endpointGroupId": group_id,
+            "fqdn": fqdn,
+            "address": vip,
+            "sanDnsNames": [fqdn],
+            "wildcardDnsNames": (["*.%s" % domain] if address.get("wildcard") is True else []),
+            "sanIpAddresses": [vip],
+        }
+        record["endpointFingerprint"] = canonical_digest(record)
+        endpoints[deployment_id] = record
+
+    fqdn_owner = {}
+    for deployment_id, endpoint in sorted(endpoints.items()):
+        fqdn = endpoint["fqdn"]
+        if fqdn in fqdn_owner:
+            findings.append(_finding("ENDPOINT_FQDN_COLLISION", "serviceDeployments.%s.endpointGroup" % deployment_id, "Resolved endpoint FQDN collides with another service deployment", {"fqdn": fqdn, "otherDeploymentId": fqdn_owner[fqdn]}))
+        else:
+            fqdn_owner[fqdn] = deployment_id
+    if findings:
+        endpoints = {}
+    fingerprint = canonical_digest({"endpoints": endpoints})
+    return {
+        "apiVersion": API_VERSION,
+        "kind": "ResolvedServiceEndpoints",
+        "endpoints": endpoints,
+        "endpointFingerprint": fingerprint,
+        "findings": sorted(findings, key=lambda item: (item["field"], item["code"])),
+        "status": "BLOCKED" if findings else "PASS",
+    }

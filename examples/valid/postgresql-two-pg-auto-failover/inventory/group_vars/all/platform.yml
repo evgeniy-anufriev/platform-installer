@@ -21,7 +21,6 @@ platform_project:
         database-1: {host: db-node3, roles: [database]}
         database-2: {host: db-node4, roles: [database]}
   endpointGroups: {}
-  endpointBindings: {}
   certificateProfiles: {}
   certificateScopes: {}
   secretRequirements: {}

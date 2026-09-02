@@ -28,7 +28,11 @@ machine metadata, never a required user-authored desired-state document.
 
 Status: Accepted.
 
-Service deployment, mode, members, roles, placements, dependencies and endpoint bindings are explicit Ansible variables. Resolved execution groups and runtime variables are derived.
+Service deployment, mode, members, roles, placements, dependencies and direct
+`serviceDeployment.endpointGroup` assignments are explicit Ansible variables.
+Resolved execution groups and runtime variables are derived. Endpoint groups
+own client-facing domain/wildcard/VIP intent; resolved FQDN/VIP values are
+read-only projections, never generated desired state.
 
 ## ADR-005: Service catalog belongs to versioned service packages
 

@@ -88,6 +88,25 @@ class PkiResolutionTests(unittest.TestCase):
         self.assertEqual("BLOCKED", out["status"])
         self.assertEqual("PKI_DEFAULTS_INVALID", out["findings"][0]["code"])
 
+    def test_endpoint_sans_are_selected_by_existing_profile_policy(self):
+        topology = self.topology("DEPLOYMENT")
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
+            "includeHostDns": False,
+            "includeHostIp": False,
+            "includeEndpointFqdns": True,
+            "includeEndpointWildcard": True,
+            "includeEndpointVip": True,
+        }
+        endpoints = {"endpoints": {"service-a": {
+            "sanDnsNames": ["service-a.asutp.scada.local"],
+            "wildcardDnsNames": ["*.asutp.scada.local"],
+            "sanIpAddresses": ["192.168.6.112"],
+        }}}
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}}, self.defaults, endpoints)
+        request = out["requests"][0]
+        self.assertEqual(["*.asutp.scada.local", "service-a.asutp.scada.local"], request["dnsNames"])
+        self.assertEqual(["192.168.6.112"], request["ipAddresses"])
+
 
 if __name__ == "__main__":
     unittest.main()

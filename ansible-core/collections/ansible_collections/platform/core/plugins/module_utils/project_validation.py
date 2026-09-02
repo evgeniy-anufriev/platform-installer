@@ -19,7 +19,6 @@ IDENTIFIER_MAP_FIELDS = {
     "members",
     "dependencies",
     "endpointGroups",
-    "endpointBindings",
     "certificateAuthorities",
     "certificateProfiles",
     "tlsProfiles",
@@ -414,6 +413,10 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
             findings.append(_finding("CERTIFICATE_PROFILE_NOT_FOUND", "tlsProfiles.%s.certificateProfileRef" % tls_profile_id, "TLS profile references an unknown certificate profile"))
 
     definitions = _catalog_definitions(service_catalog)
+    endpoint_groups = topology.get("endpointGroups", {})
+    if not isinstance(endpoint_groups, dict):
+        findings.append(_finding("ENDPOINT_GROUPS_INVALID", "endpointGroups", "Endpoint groups must be an object keyed by endpoint group id"))
+        endpoint_groups = {}
     for deployment_id in sorted(deployments):
         deployment = deployments[deployment_id]
         prefix = "serviceDeployments.%s" % deployment_id
@@ -443,6 +446,12 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                 )
             )
         else:
+            endpoint_group = deployment.get("endpointGroup")
+            if endpoint_group is not None:
+                if endpoint_group not in endpoint_groups:
+                    findings.append(_finding("ENDPOINT_GROUP_NOT_FOUND", prefix + ".endpointGroup", "Endpoint group reference is not defined"))
+                elif not isinstance(definition.get("endpoint"), dict):
+                    findings.append(_configuration_finding("ENDPOINT_SERVICE_UNSUPPORTED", prefix + ".endpointGroup", "Service package does not support a generic client endpoint", service_type, deployment_id))
             service_lock = catalog_services.get(service_type)
             if not isinstance(service_lock, dict):
                 findings.append(

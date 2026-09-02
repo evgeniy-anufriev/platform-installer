@@ -3,6 +3,7 @@ platform_pki_project_id: ""
 platform_pki_requests: []
 platform_pki_materialization_plans: []
 platform_pki_resolve_managed: "{{ platform_pki_requests | length == 0 }}"
+platform_pki_resolved_service_endpoints: {}
 platform_pki_secret_files: {}
 # This is the single product-default source for PKI policy.  The resolver
 # receives this mapping explicitly; schema defaults remain descriptive only.
