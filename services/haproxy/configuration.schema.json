@@ -1,0 +1,29 @@
+{
+  "$id": "https://platform.installer/schemas/services/haproxy/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "advancedConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "global": {
+          "additionalProperties": false,
+          "properties": {
+            "maxconn": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "HAProxy desired configuration",
+  "type": "object"
+}

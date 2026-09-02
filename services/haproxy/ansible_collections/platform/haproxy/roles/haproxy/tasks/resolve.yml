@@ -1,0 +1,39 @@
+---
+- name: Load published service catalog for HAProxy projection
+  ansible.builtin.include_vars:
+    file: "{{ platform_service_catalog_path }}"
+    name: _platform_haproxy_catalog_file
+  run_once: true
+
+- name: Collect safe inventory projection for HAProxy
+  ansible.builtin.set_fact:
+    _platform_haproxy_hosts: "{{ _platform_haproxy_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}"
+    _platform_haproxy_placements: "{{ _platform_haproxy_placements | default({}) | combine({item: (hostvars[item].platform_deployments | default({}))}) }}"
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  run_once: true
+  no_log: true
+
+- name: Resolve generic endpoint projection for HAProxy
+  platform.core.resolve_service_endpoints:
+    desired_state: "{{ platform_desired_state }}"
+    service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
+    inventory_deployments: "{{ _platform_haproxy_placements }}"
+  register: _platform_haproxy_endpoints
+  run_once: true
+
+- name: Resolve deterministic HAProxy external backends
+  platform.core.resolve_haproxy_backends:
+    desired_state: "{{ platform_desired_state }}"
+    service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
+    inventory_hosts: "{{ _platform_haproxy_hosts }}"
+    inventory_deployments: "{{ _platform_haproxy_placements }}"
+    resolved_service_endpoints: "{{ _platform_haproxy_endpoints.resolved_service_endpoints }}"
+    backend_defaults: {}
+  register: _platform_haproxy_backends
+  run_once: true
+
+- name: Publish HAProxy runtime projection
+  ansible.builtin.set_fact:
+    platform_haproxy_runtime_projection:
+      endpoints: "{{ hostvars[ansible_play_hosts_all | first]._platform_haproxy_endpoints.resolved_service_endpoints }}"
+      backends: "{{ hostvars[ansible_play_hosts_all | first]._platform_haproxy_backends.resolved_haproxy_backends }}"

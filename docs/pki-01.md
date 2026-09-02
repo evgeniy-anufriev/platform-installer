@@ -49,15 +49,20 @@ a later consumer such as SERVICE-02A must resolve the same SecretRef again.
 Values never enter project data, inventory, plans, fingerprints, logs or argv.
 Sensitive OpenSSL/keytool/copy tasks use `no_log`.
 
-Reconcile never replaces an initialized certificate identity. A changed
+Ordinary reconcile never replaces an initialized certificate identity. A changed
 certificate or authority fingerprint returns `CERTIFICATE_REISSUE_REQUIRED`.
 The MANAGED CA private key and marker are persistent Execution Node state under
 `platform_execution_state_root` (default
 `/var/lib/platform-installer/execution/pki`), never the ephemeral private
 workspace. A missing previously-created CA key is partial state and blocks;
 the role never regenerates it. Partial authority/request state returns a
-blocking diagnostic. Automatic renewal, rotation and reissue are intentionally
-outside PKI-01. The certificate profile `usages` collection already supports
+blocking diagnostic. Automatic renewal and CA rotation remain outside PKI-01.
+An explicit leaf-certificate reissue is available only through
+`ansible-core/playbooks/pki-reissue.yml` with a non-empty runtime
+`platform_pki_reissue_request_ids` list. It records a recovery marker,
+preserves old request material in protected Execution Node state, rekeys and
+reissues only the selected request, then clears the marker after recording the
+new identity. The certificate profile `usages` collection already supports
 `serverAuth`, `clientAuth`, or both; PKI-01's default remains `serverAuth`.
 
 `pki-verify.yml` only resolves the plan, checks target-owned files,

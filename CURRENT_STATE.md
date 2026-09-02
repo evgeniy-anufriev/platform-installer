@@ -34,6 +34,13 @@ DNS inputs from one logical BIND deployment reference. Three-node RED OS
 acceptance proved systemd-resolved route-only DNS, safe resolv.conf ownership,
 normal resolver redundancy and post-recovery idempotence.
 
+NET-04 is DONE. Host-scoped HAProxy provides HTTPS `public` routing on `*:443`,
+deployment and opt-in host endpoints, normalized Host routing, and package-owned
+stats backends. Three-node RED OS acceptance proved TLS endpoint verification,
+runtime multi-node pooling, non-VIP-owner HAProxy failure isolation, recovery,
+and idempotent verify/repeat apply. Keepalived HAProxy tracking remains deferred
+to NET-04.1.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -92,6 +99,10 @@ normal resolver redundancy and post-recovery idempotence.
 - DNS clients are a separate host-scoped service package. `dnsServerRef` is
   the sole logical client-to-BIND link; server addresses and managed route
   domains are derived at runtime and NET-03.1 has no generated state.
+- HAProxy publication is a typed relationship from a target service deployment
+  to one HAProxy deployment. Its reusable backend settings are normalized after
+  layered merge; deployment and explicit `hostEndpoint: true` routes share the
+  existing DNS/VIP namespace. Keepalived health tracking is not active.
 
 ## Implemented
 
@@ -173,6 +184,11 @@ normal resolver redundancy and post-recovery idempotence.
   target deployment; read-only verification; deterministic request and
   materialization fingerprints. Changed initialized identity is blocked with
   `CERTIFICATE_REISSUE_REQUIRED`.
+- PKI explicit leaf reissue: `pki-reissue.yml` requires a non-empty runtime
+  selection of exact request IDs. Ordinary apply still blocks changed request
+  identity; the explicit operation preserves prior request material in
+  protected Execution Node state, rekeys and reissues selected leaves, supports
+  marker-based recovery and keeps CA identity changes blocked.
 - NET-01 endpoint foundation: the rejected `endpointBindings` alpha entity was
   removed; endpoint-capable service deployments select one endpoint group;
   PostgreSQL opts in through its service manifest; pure resolution yields a
@@ -191,6 +207,11 @@ normal resolver redundancy and post-recovery idempotence.
   otherwise NetworkManager is considered only with a proven split-DNS backend.
   The role owns a resolved drop-in only, never replaces `/etc/resolv.conf`, and
   blocks unsafe ownership or global-DNS fallback.
+- NET-04 HAProxy: complete candidate/activation barriers preserve the exact
+  validated graph. The package provides fixed HTTPS `public` routing and
+  local TLS stats backends, reloads on active-graph or TLS-bundle changes, and
+  treats candidate workspace assembly as ephemeral rather than desired-state
+  change.
 
 ## Completed
 
@@ -310,6 +331,17 @@ normal resolver redundancy and post-recovery idempotence.
   verify and post-recovery apply all passed. Core (137), focused service
   contracts (63), generated catalog/schema, target-free validation and
   privileged offline checks passed.
+- NET-04 RED OS acceptance: Barrier A/B and candidate-to-active graph equality
+  passed on node1/node2/node3. TLS hostname verification passed for deployment
+  and all configured host endpoints; normalized Host with and without `:443`
+  selected the same backend and unknown Host returned `503`. Runtime socket
+  counters proved all three pooled HAProxy participants served requests. A
+  non-VIP-owner HAProxy stop returned `503` only for its host endpoint while
+  pooled and other host endpoints remained healthy; recovery restored all.
+  Separate verify, repeat apply, post-recovery verify and post-recovery repeat
+  apply all returned `changed=0 failed=0` on localhost and every target.
+  An explicit selected leaf reissue added the endpoint wildcard SAN, deployed
+  it to all HAProxy participants and returned to a clean ordinary repeat apply.
 
 ## Not implemented
 
@@ -321,8 +353,7 @@ normal resolver redundancy and post-recovery idempotence.
 - Generic backend/project persistence beyond the scoped Kafka identity
   transaction primitive.
 - Desktop or web UI.
-- Transport ports, stateful listener-transition workflows and generic endpoint
-  routing; these are deferred to a future HAProxy milestone.
+- Stateful listener-transition workflows; these remain deferred.
 - Imported/external CA materialization, JKS, mTLS, global JVM cacerts,
   renewal and rotation.
 
@@ -333,8 +364,8 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-POSTGRES-01, NET-01, NET-02, NET-03 and NET-03.1 are DONE. NET-04 HAProxy is
-the next explicit network milestone. A future production
+POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1 and NET-04 are DONE. NET-04.1
+Keepalived HAProxy health tracking remains deferred and has not begun. A future production
 UI-01 remains dependent on a minimal backend read/write, revision and run
 boundary; it must continue to edit and execute the same standard Ansible
 project.

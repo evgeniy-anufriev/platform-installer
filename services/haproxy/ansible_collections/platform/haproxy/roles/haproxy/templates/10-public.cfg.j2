@@ -1,0 +1,14 @@
+frontend public
+    bind *:{{ platform_haproxy_public_port }} ssl crt {{ platform_haproxy_pki_directory }}/haproxy.pem
+    mode http
+    http-request set-var(txn.route_host) req.hdr(host),lower,regsub(:[0-9]+$,)
+{% set endpoint_domains = [] %}
+{% for endpoint in platform_haproxy_runtime_projection.endpoints.endpoints.values() %}
+{% set _ = endpoint_domains.append(endpoint.fqdn.split('.', 1)[1]) %}
+{% endfor %}
+    acl platform_endpoint_domain var(txn.route_host) -m end -i{% for domain in endpoint_domains | unique | sort %} .{{ domain }}{% endfor %}{{ '\n' }}
+{% for group in platform_haproxy_runtime_projection.endpoints.endpoints.values() | map(attribute='endpointGroupId') | unique | sort %}
+    acl {{ group }} var(txn.route_host) -m end -i .{{ (platform_haproxy_runtime_projection.endpoints.endpoints.values() | selectattr('endpointGroupId', 'equalto', group) | first).fqdn.split('.', 1)[1] }}
+    use_backend %[var(txn.route_host),field(1,'.')]-{{ group }} if {{ group }}
+{% endfor %}
+    http-request return status 503 unless platform_endpoint_domain

@@ -1,0 +1,30 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: haproxy
+  version: "1.0.0-alpha.1"
+  displayName: HAProxy
+  description: Host-scoped HTTPS host routing with package-owned statistics
+  category: network
+modes:
+  https-host-routing:
+    displayName: HTTPS host routing
+    description: One public HTTPS frontend on each explicitly placed host
+    memberRoles: []
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+    x-maturity: implemented-net-04
+endpoint: {}
+capabilities: [service.haproxy.https-routing]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    tlsProfile: {kind: MANAGED, roleVariable: platform_haproxy_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 10}}
+    advancedConfig: {kind: ADVANCED, roleVariable: platform_haproxy_advanced_config, type: object, scopes: [deployment], validation: {additionalProperties: false}, schema: {type: object, additionalProperties: false, properties: {global: {type: object, additionalProperties: false, properties: {maxconn: {type: integer, minimum: 1}}}}}, ui: {label: Advanced HAProxy settings, section: Advanced, order: 90}}
+x-reservedAdvancedProperties: [frontend, backend, bind, crt, stats, default_backend, use_backend]
+roleEntrypoints:
+  apply: {fqcn: platform.haproxy.haproxy, variablesPrefix: platform_haproxy_}
+  verify: {fqcn: platform.haproxy.haproxy, variablesPrefix: platform_haproxy_}
+artifacts: []
+compatibilityRef: compatibility.yml

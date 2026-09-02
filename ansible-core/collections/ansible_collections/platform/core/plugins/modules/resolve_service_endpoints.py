@@ -10,12 +10,14 @@ def main():
         argument_spec={
             "desired_state": {"type": "dict", "required": True},
             "service_catalog": {"type": "dict", "required": True},
+            "inventory_deployments": {"type": "dict", "required": False, "default": {}},
         },
         supports_check_mode=True,
     )
     result = resolve_service_endpoints(
         module.params["desired_state"],
         module.params["service_catalog"],
+        inventory_deployments=module.params["inventory_deployments"],
     )
     if result["status"] != "PASS":
         module.fail_json(

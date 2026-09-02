@@ -1,0 +1,22 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: haproxy-routing
+  name: HAProxy HTTPS routing fixture
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:8f63190ca4db3e48fad0283fbf51cd66b9bdfe01e0554e71b19a09d0f97356f8
+  services:
+    haproxy:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:00edc97368e0c93469002276b74e2f58bb43e9b68c5769ca56c25f5854c12a22
+    postgresql:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda
+    keepalived:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:2bebe08e88124e5082b6a4d30743c9f17ccbd31ba48341c4e5c9e1ebdb084254

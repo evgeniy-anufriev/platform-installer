@@ -30,12 +30,22 @@
     - platform_pki_resolve_managed | bool
     - _platform_pki_endpoint_deployments | default([]) | length > 0
 
+- name: Collect endpoint placement inputs before endpoint resolution
+  ansible.builtin.set_fact:
+    _platform_pki_inventory_deployments: >-
+      {{ _platform_pki_inventory_deployments | default({}) |
+         combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  when: platform_pki_resolve_managed | bool
+  no_log: true
+
 - name: Resolve endpoint identity for managed PKI SAN derivation
   platform.core.resolve_service_endpoints:
     desired_state: "{{ platform_desired_state }}"
     service_catalog: >-
       {{ _platform_pki_endpoint_catalog_file.platform_service_catalog |
          default(_platform_pki_endpoint_catalog_file, true) }}
+    inventory_deployments: "{{ _platform_pki_inventory_deployments | default({}) }}"
   register: _platform_pki_endpoint_resolution
   when:
     - platform_pki_resolve_managed | bool

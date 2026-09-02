@@ -111,6 +111,40 @@ class PkiResolutionTests(unittest.TestCase):
         self.assertEqual(["*.asutp.scada.local", "service-a.asutp.scada.local"], request["dnsNames"])
         self.assertEqual(["192.0.2.70", "192.0.2.71"], request["ipAddresses"])
 
+    def test_deployment_scope_covers_all_host_endpoints_on_shared_tls_entrypoint(self):
+        topology = self.topology("DEPLOYMENT")
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
+            "includeHostDns": False,
+            "includeHostIp": False,
+            "includeEndpointFqdns": True,
+            "includeEndpointWildcard": False,
+            "includeEndpointVip": False,
+        }
+        endpoints = {
+            "endpoints": {"service-a": {"sanDnsNames": ["service-a.asutp.scada.local"]}},
+            "hostEndpoints": {
+                "service-a--node1": {
+                    "serviceDeploymentId": "service-a", "hostId": "node1",
+                    "sanDnsNames": ["service-a-node1.asutp.scada.local"],
+                },
+                "service-a--node2": {
+                    "serviceDeploymentId": "service-a", "hostId": "node2",
+                    "sanDnsNames": ["service-a-node2.asutp.scada.local"],
+                },
+            },
+        }
+        out = pki.resolve_certificate_requests(
+            "p", topology, {"node1": {}, "node2": {}}, self.defaults, endpoints
+        )
+        self.assertEqual(
+            [
+                "service-a-node1.asutp.scada.local",
+                "service-a-node2.asutp.scada.local",
+                "service-a.asutp.scada.local",
+            ],
+            out["requests"][0]["dnsNames"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

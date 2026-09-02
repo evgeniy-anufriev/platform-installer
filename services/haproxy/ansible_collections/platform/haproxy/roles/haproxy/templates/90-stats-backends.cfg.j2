@@ -1,0 +1,26 @@
+{% set endpoints = platform_haproxy_runtime_projection.endpoints %}
+{% set deployments = platform_desired_state.serviceDeployments %}
+{% for deployment_id, endpoint in endpoints.endpoints | dictsort %}
+{% if deployments[deployment_id].serviceType == 'haproxy' and deployment_id in platform_deployments %}
+backend {{ deployment_id }}-{{ endpoint.endpointGroupId }}
+    balance {{ platform_haproxy_stats_backend_defaults.balance }}
+    default-server{% if platform_haproxy_stats_backend_defaults.ssl %} ssl verify {{ platform_haproxy_stats_backend_defaults.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% endif %}{% if platform_haproxy_stats_backend_defaults.check %} check fall {{ platform_haproxy_stats_backend_defaults.fall }} rise {{ platform_haproxy_stats_backend_defaults.rise }}{% endif %}{{ '\n' }}
+{% for host in groups['platform_targets'] | sort if deployment_id in (hostvars[host].platform_deployments | default({})) %}
+    server {{ host }} {{ hostvars[host].ansible_host | default(host) }}:{{ platform_haproxy_internal_stats_port }}
+{% endfor %}
+{% for host_key, host_endpoint in endpoints.hostEndpoints | dictsort if host_endpoint.serviceDeploymentId == deployment_id %}
+backend {{ deployment_id }}-{{ host_endpoint.hostId }}-{{ host_endpoint.endpointGroupId }}
+    balance {{ platform_haproxy_stats_backend_defaults.balance }}
+    default-server{% if platform_haproxy_stats_backend_defaults.ssl %} ssl verify {{ platform_haproxy_stats_backend_defaults.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% endif %}{% if platform_haproxy_stats_backend_defaults.check %} check fall {{ platform_haproxy_stats_backend_defaults.fall }} rise {{ platform_haproxy_stats_backend_defaults.rise }}{% endif %}{{ '\n' }}
+    server {{ host_endpoint.hostId }} {{ hostvars[host_endpoint.hostId].ansible_host | default(host_endpoint.hostId) }}:{{ platform_haproxy_internal_stats_port }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for backend in platform_haproxy_runtime_projection.backends.backends | dict2items | selectattr('key', 'in', platform_deployments) | map(attribute='value') | flatten | sort(attribute='backendName') %}
+backend {{ backend.backendName }}
+    balance {{ backend.settings.balance }}
+    default-server{% if backend.settings.ssl %} ssl verify {{ backend.settings.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% endif %}{% if backend.settings.check %} check fall {{ backend.settings.fall }} rise {{ backend.settings.rise }}{% endif %}{{ '\n' }}
+{% for target in backend.targets %}
+    server {{ target.serverName }} {{ target.address }}:{{ target.port }}
+{% endfor %}
+{% endfor %}

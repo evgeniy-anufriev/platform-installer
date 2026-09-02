@@ -84,6 +84,15 @@
         "mode": { "$ref": "#/$defs/identifier" },
         "identity": { "type": "object", "default": {} },
         "configuration": { "type": "object", "default": {} },
+        "haproxy": {
+          "type": "object",
+          "required": ["deploymentRef"],
+          "properties": {
+            "deploymentRef": { "$ref": "#/$defs/identifier" },
+            "backend": { "$ref": "#/$defs/haproxyBackendSettingsPartial" }
+          },
+          "additionalProperties": false
+        },
         "members": {
           "description": "Legacy platform_project compatibility input only; canonical project.yml desiredState must not persist members.",
           "type": "object",
@@ -135,6 +144,18 @@
         "configuration": { "type": "object", "default": {} }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "haproxyBackendSettingsPartial": {
+      "type": "object",
+      "properties": {
+        "balance": { "enum": ["roundrobin", "leastconn", "source"] },
+        "check": { "type": "boolean" },
+        "fall": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "rise": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "ssl": { "type": "boolean" },
+        "sslVerify": { "enum": ["required", "none"] }
+      },
       "additionalProperties": false
     },
     "dependency": {

@@ -73,7 +73,7 @@ def _profile_defaults(profile, defaults):
     }
 
 
-def _consumer_records(topology):
+def _consumer_records(topology, inventory_deployments=None):
     records = []
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology, dict) else {}
     for deployment_id, deployment in sorted(deployments.items()):
@@ -93,6 +93,19 @@ def _consumer_records(topology):
                     "hostId": member.get("host"),
                     "tlsProfileRef": tls_profile,
                 })
+        # Host-scoped services use inventory placement instead of logical
+        # members.  Preserve the same generic tlsProfile contract.
+        for host_id, placements in sorted((inventory_deployments or {}).items()):
+            placement = placements.get(deployment_id) if isinstance(placements, dict) else None
+            if not isinstance(placement, dict):
+                continue
+            placement_config = placement.get("configuration", {}) if isinstance(placement.get("configuration"), dict) else {}
+            tls_profile = placement_config.get("tlsProfile", deployment_config.get("tlsProfile"))
+            if isinstance(tls_profile, str) and tls_profile:
+                records.append({
+                    "deploymentId": deployment_id, "memberId": "host--%s" % host_id,
+                    "hostId": host_id, "tlsProfileRef": tls_profile,
+                })
     unique = {}
     for record in records:
         unique[(record["deploymentId"], record["memberId"], record.get("hostId"), record["tlsProfileRef"])] = record
@@ -107,10 +120,14 @@ def _scope_key(scope, consumer):
     return "%s--%s" % (consumer["tlsProfileRef"], consumer["hostId"])
 
 
-def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy):
+def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None):
     projection = resolved_service_endpoints if isinstance(resolved_service_endpoints, dict) else {}
     endpoints = projection.get("endpoints", {}) if isinstance(projection.get("endpoints"), dict) else {}
     selected = [endpoints[key] for key in sorted(endpoints) if key in deployment_ids and isinstance(endpoints[key], dict)]
+    host_endpoints = projection.get("hostEndpoints", {}) if isinstance(projection.get("hostEndpoints"), dict) else {}
+    selected_host = [value for value in host_endpoints.values() if isinstance(value, dict)
+                     and value.get("serviceDeploymentId") in deployment_ids
+                     and (host_id is None or value.get("hostId") == host_id)]
     endpoint_groups = set(
         endpoint.get("endpointGroupId")
         for endpoint in selected
@@ -130,13 +147,13 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
                     if isinstance(address, dict) and _looks_like_ip(address.get("address"))
                 )
     return {
-        "dnsNames": _string_list(name for endpoint in selected for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
-        "wildcardDnsNames": _string_list(name for endpoint in selected for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
+        "dnsNames": _string_list(name for endpoint in selected + selected_host for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
+        "wildcardDnsNames": _string_list(name for endpoint in selected + selected_host for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
         "ipAddresses": _string_list(provider_addresses),
     }
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None):
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -153,7 +170,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     tls_profiles = desired.get("tlsProfiles", {}) if isinstance(desired.get("tlsProfiles"), dict) else {}
     findings = []
     grouped = {}
-    for consumer in _consumer_records(desired):
+    for consumer in _consumer_records(desired, inventory_deployments):
         tls_profile = tls_profiles.get(consumer["tlsProfileRef"])
         field = "serviceDeployments.%s.members.%s.configuration.tlsProfile" % (consumer["deploymentId"], consumer["memberId"])
         if not isinstance(tls_profile, dict):
@@ -189,7 +206,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         identities = [_host_identity(host_id, host_vars) for host_id in hosts]
         dns_names = _string_list(name for identity in identities for name in identity["dnsNames"]) if profile["sanPolicy"]["includeHostDns"] else []
         ip_addresses = _string_list(address for identity in identities for address in identity["ipAddresses"]) if profile["sanPolicy"]["includeHostIp"] else []
-        endpoint_values = _endpoint_values(desired, resolved_service_endpoints, set(value["deploymentId"] for value in consumers), profile["sanPolicy"])
+        endpoint_values = _endpoint_values(desired, resolved_service_endpoints, set(value["deploymentId"] for value in consumers), profile["sanPolicy"], hosts[0] if len(hosts) == 1 else None)
         dns_names = _string_list(dns_names + endpoint_values["dnsNames"] + endpoint_values["wildcardDnsNames"])
         ip_addresses = _string_list(ip_addresses + endpoint_values["ipAddresses"])
         request = {

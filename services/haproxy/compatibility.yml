@@ -1,0 +1,8 @@
+apiVersion: platform.installer/service-compatibility/v1alpha1
+kind: ServiceCompatibility
+metadata: {id: haproxy, version: "1.0.0-alpha.1"}
+platforms:
+  redos:
+    packages: [haproxy]
+    service: haproxy
+    testedVersion: 2.8

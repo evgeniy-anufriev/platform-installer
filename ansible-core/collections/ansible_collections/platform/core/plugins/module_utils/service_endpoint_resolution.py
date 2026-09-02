@@ -36,7 +36,7 @@ def _definitions(catalog):
     return values if isinstance(values, dict) else {}
 
 
-def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None):
+def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None, inventory_deployments=None):
     """Derive generic client endpoint identity from desired topology.
 
     Transport ports and routing are deliberately deferred to NET-03. This function
@@ -46,7 +46,8 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology.get("serviceDeployments"), dict) else {}
     groups = topology.get("endpointGroups", {}) if isinstance(topology.get("endpointGroups"), dict) else {}
     definitions = _definitions(service_catalog)
-    findings, endpoints = [], {}
+    findings, endpoints, host_endpoints = [], {}, {}
+    inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
 
     for deployment_id, deployment in sorted(deployments.items()):
         if not isinstance(deployment, dict) or "endpointGroup" not in deployment:
@@ -73,6 +74,7 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
             continue
         fqdn = "%s.%s" % (deployment_id, domain)
         record = {
+            "scope": "deployment",
             "serviceDeploymentId": deployment_id,
             "serviceType": service_type,
             "endpointGroupId": group_id,
@@ -83,6 +85,37 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
         record["endpointFingerprint"] = canonical_digest(record)
         endpoints[deployment_id] = record
 
+        # A host endpoint is an inventory opt-in, never a second desired-state
+        # entity.  It is intentionally generic so DNS, PKI and future services
+        # consume one endpoint projection rather than service-specific logic.
+        for host_id, placements in sorted(inventory_deployments.items()):
+            placement = placements.get(deployment_id) if isinstance(placements, dict) else None
+            field = "platform_deployments.%s.%s.hostEndpoint" % (host_id, deployment_id)
+            if not isinstance(placement, dict) or "hostEndpoint" not in placement:
+                continue
+            if not isinstance(placement.get("hostEndpoint"), bool):
+                findings.append(_finding("HOST_ENDPOINT_INVALID", field, "hostEndpoint must be a boolean"))
+                continue
+            if not placement["hostEndpoint"]:
+                continue
+            if not isinstance(host_id, str) or not DNS_LABEL.match(host_id):
+                findings.append(_finding("HOST_ENDPOINT_HOST_ID_NOT_DNS_LABEL", field, "Host id used for hostEndpoint must be a lowercase DNS label"))
+                continue
+            if address.get("wildcard") is not True:
+                findings.append(_finding("HOST_ENDPOINT_WILDCARD_REQUIRED", field, "hostEndpoint requires an endpoint group with wildcard DNS enabled"))
+                continue
+            host_fqdn = "%s-%s.%s" % (deployment_id, host_id, domain)
+            key = "%s--%s" % (deployment_id, host_id)
+            host_record = {
+                "scope": "host", "serviceDeploymentId": deployment_id,
+                "serviceType": service_type, "hostId": host_id,
+                "endpointGroupId": group_id, "fqdn": host_fqdn,
+                "sanDnsNames": [host_fqdn],
+                "wildcardDnsNames": ["*.%s" % domain],
+            }
+            host_record["endpointFingerprint"] = canonical_digest(host_record)
+            host_endpoints[key] = host_record
+
     fqdn_owner = {}
     for deployment_id, endpoint in sorted(endpoints.items()):
         fqdn = endpoint["fqdn"]
@@ -90,13 +123,20 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
             findings.append(_finding("ENDPOINT_FQDN_COLLISION", "serviceDeployments.%s.endpointGroup" % deployment_id, "Resolved endpoint FQDN collides with another service deployment", {"fqdn": fqdn, "otherDeploymentId": fqdn_owner[fqdn]}))
         else:
             fqdn_owner[fqdn] = deployment_id
+    for key, endpoint in sorted(host_endpoints.items()):
+        fqdn = endpoint["fqdn"]
+        if fqdn in fqdn_owner:
+            findings.append(_finding("HOST_ENDPOINT_FQDN_COLLISION", "platform_deployments.%s.%s.hostEndpoint" % (endpoint["hostId"], endpoint["serviceDeploymentId"]), "Resolved host endpoint FQDN collides with another endpoint", {"fqdn": fqdn, "otherEndpoint": fqdn_owner[fqdn]}))
+        else:
+            fqdn_owner[fqdn] = key
     if findings:
-        endpoints = {}
-    fingerprint = canonical_digest({"endpoints": endpoints})
+        endpoints, host_endpoints = {}, {}
+    fingerprint = canonical_digest({"endpoints": endpoints, "hostEndpoints": host_endpoints})
     return {
         "apiVersion": API_VERSION,
         "kind": "ResolvedServiceEndpoints",
         "endpoints": endpoints,
+        "hostEndpoints": host_endpoints,
         "endpointFingerprint": fingerprint,
         "findings": sorted(findings, key=lambda item: (item["field"], item["code"])),
         "status": "BLOCKED" if findings else "PASS",

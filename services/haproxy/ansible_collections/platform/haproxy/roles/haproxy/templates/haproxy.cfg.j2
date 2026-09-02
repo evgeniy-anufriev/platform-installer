@@ -1,0 +1,12 @@
+global
+{% for log in platform_haproxy_global.log | sort(attribute='address') %}
+    log {{ log.address }} {{ log.facility }}{% if log.level | default('') | length > 0 %} {{ log.level }}{% endif %}{{ '\n' }}
+{% endfor %}
+    maxconn {{ platform_haproxy_global.maxconn }}
+    stats socket {{ platform_haproxy_runtime_socket_path }} level operator mode 0660 user haproxy group haproxy
+
+defaults
+    mode {{ platform_haproxy_defaults.mode }}
+    timeout connect {{ platform_haproxy_defaults.timeout_connect }}
+    timeout client {{ platform_haproxy_defaults.timeout_client }}
+    timeout server {{ platform_haproxy_defaults.timeout_server }}

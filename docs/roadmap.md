@@ -306,8 +306,10 @@ Status: IMPLEMENTED. PKI-01 adds topology-derived managed certificate requests
 with default HOST scope, MANAGED CA materialization on the Execution Node, PEM
 and dedicated PKCS12 deployment to targets, and read-only verification.
 Certificate/private-key/password values remain runtime state; canonical
-projects retain only intent and secret references. Reconcile blocks changed
-request or authority identity with `CERTIFICATE_REISSUE_REQUIRED`.
+projects retain only intent and secret references. Ordinary reconcile blocks
+changed request or authority identity with `CERTIFICATE_REISSUE_REQUIRED`.
+An explicit selected leaf reissue preserves prior request material in protected
+Execution Node state; authority rotation remains deferred.
 
 Kafka TLS, JKS, mTLS, imported/external CA, renewal and rotation remain
 explicitly deferred to later milestones.
@@ -431,7 +433,13 @@ supported per-domain DNS backend is present.
 
 ### NET-04: HAProxy
 
-Status: NEXT. HAProxy routing is explicitly deferred from NET-03 and NET-03.1.
+Status: DONE. The host-scoped HAProxy package provides fixed HTTPS `public`
+routing on `*:443`, deployment and explicit host endpoints, normalized Host
+routing and package-owned TLS stats backends. Three-node RED OS acceptance
+proved candidate/activation barriers, hostname-verified TLS, real pooled
+multi-node backend use, non-VIP-owner failure isolation, recovery, and clean
+verify/repeat apply. Keepalived `vrrp_script` and `track_script` integration is
+deferred to NET-04.1.
 
 ## Phase E — Go backend adapter
 

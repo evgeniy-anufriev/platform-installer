@@ -1,0 +1,35 @@
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_desired_state:
+  endpointGroups:
+    asutp:
+      address: {domain: asutp.scada.local, wildcard: true}
+  certificateAuthorities:
+    platform-ca: {mode: MANAGED, commonName: Platform test CA}
+  certificateProfiles:
+    infrastructure:
+      authorityRef: platform-ca
+      sanPolicy:
+        includeEndpointWildcard: true
+  tlsProfiles:
+    platform-tls: {certificateProfileRef: infrastructure, scope: DEPLOYMENT, storePasswordSecretRef: runtime:pki-store-password}
+  serviceDeployments:
+    keepalived-asutp:
+      serviceType: keepalived
+      mode: vrrp-unicast
+      endpointGroupRef: asutp
+      virtualRouterId: 51
+      virtualAddresses: [{address: 192.168.56.111, interface: enp0s8}]
+      configuration: {}
+    haproxy:
+      serviceType: haproxy
+      mode: https-host-routing
+      endpointGroup: asutp
+      configuration: {tlsProfile: platform-tls}
+    postgres-main:
+      serviceType: postgresql
+      mode: standalone
+      endpointGroup: asutp
+      configuration: {port: 5432}
+      haproxy:
+        deploymentRef: haproxy
+        backend: {balance: leastconn, ssl: false, check: false}

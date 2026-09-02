@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:ac76ee22c8b59e68d6f3b686644b1d3b31e5b44b8a8c9aa218999acccfd2bf6e
+digest: sha256:8f63190ca4db3e48fad0283fbf51cd66b9bdfe01e0554e71b19a09d0f97356f8
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -771,6 +771,89 @@ definitions:
     compatibilityRef: ../../services/dns-client/compatibility.yml
     x-definitionDigest: sha256:a313a05fadd9dc701f226a91ee942c5a8e04e9768202ba6d644d26ee0a2f1590
     x-sourceManifest: services/dns-client/service.yml
+  haproxy:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: haproxy
+      version: 1.0.0-alpha.1
+      displayName: HAProxy
+      description: Host-scoped HTTPS host routing with package-owned statistics
+      category: network
+    modes:
+      https-host-routing:
+        displayName: HTTPS host routing
+        description: One public HTTPS frontend on each explicitly placed host
+        memberRoles: []
+        placement:
+          explicit: true
+          hostScoped: true
+          minMembers: 1
+          distinctHosts: true
+        x-maturity: implemented-net-04
+    endpoint: {}
+    capabilities:
+    - service.haproxy.https-routing
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/haproxy/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        tlsProfile:
+          kind: MANAGED
+          roleVariable: platform_haproxy_tls_profile
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+          ui:
+            label: TLS profile
+            section: TLS
+            order: 10
+        advancedConfig:
+          kind: ADVANCED
+          roleVariable: platform_haproxy_advanced_config
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: false
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              global:
+                type: object
+                additionalProperties: false
+                properties:
+                  maxconn:
+                    type: integer
+                    minimum: 1
+          ui:
+            label: Advanced HAProxy settings
+            section: Advanced
+            order: 90
+    x-reservedAdvancedProperties:
+    - frontend
+    - backend
+    - bind
+    - crt
+    - stats
+    - default_backend
+    - use_backend
+    roleEntrypoints:
+      apply:
+        fqcn: platform.haproxy.haproxy
+        variablesPrefix: platform_haproxy_
+      verify:
+        fqcn: platform.haproxy.haproxy
+        variablesPrefix: platform_haproxy_
+    artifacts: []
+    compatibilityRef: ../../services/haproxy/compatibility.yml
+    x-definitionDigest: sha256:00edc97368e0c93469002276b74e2f58bb43e9b68c5769ca56c25f5854c12a22
+    x-sourceManifest: services/haproxy/service.yml
   etcd:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest

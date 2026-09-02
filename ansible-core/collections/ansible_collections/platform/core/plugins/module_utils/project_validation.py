@@ -774,6 +774,31 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                     {"dnsServerRef": reference},
                 ))
 
+    # NET-04 is target-free: endpoint and relation semantics are derived only
+    # from canonical desired state plus declared inventory placement.
+    try:
+        from .service_endpoint_resolution import resolve_service_endpoints
+        from .haproxy_resolution import resolve_haproxy_backends
+    except ImportError:
+        from service_endpoint_resolution import resolve_service_endpoints
+        from haproxy_resolution import resolve_haproxy_backends
+    endpoint_inventory = {}
+    for deployment_id, participants in (host_scoped_deployments or {}).items():
+        if isinstance(participants, dict):
+            for host_id, participant in participants.items():
+                endpoint_inventory.setdefault(host_id, {})[deployment_id] = participant
+    endpoint_result = resolve_service_endpoints(topology, service_catalog, inventory_deployments=endpoint_inventory)
+    findings.extend(endpoint_result["findings"])
+    if any(isinstance(item, dict) and item.get("serviceType") == "haproxy" for item in deployments.values()):
+        backend_result = resolve_haproxy_backends(topology, service_catalog, inventory_host_addresses or {}, endpoint_inventory, endpoint_result, {})
+        findings.extend(backend_result["findings"])
+        for host_id, placement in sorted(endpoint_inventory.items()):
+            haproxy_count = sum(1 for deployment_id in placement
+                                if isinstance(deployments.get(deployment_id), dict)
+                                and deployments[deployment_id].get("serviceType") == "haproxy")
+            if haproxy_count > 1:
+                findings.append(_finding("HAPROXY_FRONTEND_PORT_COLLISION", "platform_deployments.%s" % host_id, "At most one HAProxy deployment may bind the fixed public port on a host"))
+
     findings.sort(key=lambda item: (item["field"], item["code"]))
     blocked = len(findings)
     return {

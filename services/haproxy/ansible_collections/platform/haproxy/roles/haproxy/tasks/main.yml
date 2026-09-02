@@ -1,0 +1,33 @@
+---
+- name: Require valid HAProxy phase and canonical desired state
+  ansible.builtin.assert:
+    that:
+      - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
+      - platform_desired_state is mapping
+      - platform_deployments | default({}) is mapping
+    fail_msg: HAPROXY_DESIRED_STATE_INVALID
+
+- name: End HAProxy role on hosts without HAProxy placement
+  ansible.builtin.meta: end_role
+  when: >-
+    (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') |
+     selectattr('key', 'in', platform_deployments | default({})) | list | length) == 0
+
+- name: Resolve HAProxy runtime projection from canonical state
+  ansible.builtin.include_tasks: resolve.yml
+
+- name: Prepare and validate complete HAProxy candidate
+  ansible.builtin.include_tasks: prepare.yml
+  when: platform_haproxy_phase == 'prepare'
+
+- name: Activate exact validated HAProxy candidate
+  ansible.builtin.include_tasks: activate.yml
+  when: platform_haproxy_phase == 'activate'
+
+- name: Start HAProxy after the active-validation barrier
+  ansible.builtin.include_tasks: start.yml
+  when: platform_haproxy_phase == 'start'
+
+- name: Verify HAProxy read-only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_haproxy_phase == 'verify'

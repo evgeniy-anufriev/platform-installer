@@ -1,0 +1,27 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+- name: Prepare and validate HAProxy candidates
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.haproxy.haproxy
+      platform_haproxy_phase: prepare
+- name: Activate HAProxy only after cluster candidate barrier
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.haproxy.haproxy
+      platform_haproxy_phase: activate
+- name: Start HAProxy only after active configuration validation
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.haproxy.haproxy
+      platform_haproxy_phase: start

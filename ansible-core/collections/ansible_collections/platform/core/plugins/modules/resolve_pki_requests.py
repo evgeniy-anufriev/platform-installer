@@ -47,7 +47,7 @@ def main():
         if findings:
             result = {"status": "BLOCKED", "findings": findings}
         else:
-            result = resolve_certificate_requests(project_id, topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"], module.params["resolved_service_endpoints"])
+            result = resolve_certificate_requests(project_id, topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"], module.params["resolved_service_endpoints"], by_host)
     except Exception as error:
         module.fail_json(msg="PKI request resolution failed", error_code="PKI_RESOLUTION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":

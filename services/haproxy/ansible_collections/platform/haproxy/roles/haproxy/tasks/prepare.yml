@@ -1,0 +1,135 @@
+---
+- name: Install HAProxy from configured system repositories
+  ansible.builtin.package:
+    name: "{{ platform_haproxy_package }}"
+    state: present
+
+- name: Reset only the temporary HAProxy candidate graph
+  ansible.builtin.file:
+    path: "{{ platform_haproxy_candidate_directory }}"
+    state: absent
+  changed_when: false
+
+- name: Create persistent Platform HAProxy directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
+
+- name: Create temporary HAProxy candidate workspace
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
+  changed_when: false
+
+- name: Select resolved PKI plan for local HAProxy host
+  ansible.builtin.set_fact:
+    _platform_haproxy_pki_plan: >-
+      {{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+          | selectattr('hostId', 'equalto', inventory_hostname) | selectattr('tlsProfileId', 'equalto', platform_haproxy_tls_profile) | list | first) }}
+
+- name: Require HAProxy PKI materialization
+  ansible.builtin.assert:
+    that: _platform_haproxy_pki_plan.targetDirectory is defined
+    fail_msg: HAPROXY_PKI_PLAN_REQUIRED
+
+- name: Deploy HAProxy TLS PEM inputs
+  ansible.builtin.copy:
+    src: "{{ _platform_haproxy_pki_plan.targetDirectory }}/{{ item.name }}"
+    dest: "{{ platform_haproxy_pki_directory }}/{{ item.bundle }}"
+    remote_src: true
+    owner: root
+    group: haproxy
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: certificate.pem, bundle: '01-certificate.pem', mode: '0640'}
+    - {name: ca-chain.pem, bundle: '02-ca-chain.pem', mode: '0640'}
+    - {name: private-key.pem, bundle: '03-private-key.pem', mode: '0640'}
+  no_log: true
+
+- name: Discover unrelated HAProxy conf.d files for complete candidate validation
+  ansible.builtin.find:
+    paths: "{{ platform_haproxy_conf_directory }}"
+    file_type: file
+    recurse: false
+    excludes: [10-public.cfg, 20-local-stats.cfg, 90-stats-backends.cfg]
+  register: _platform_haproxy_third_party_fragments
+
+- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+  loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
+  changed_when: false
+
+- name: Build HAProxy PEM bundle atomically without logging key data
+  ansible.builtin.assemble:
+    src: "{{ platform_haproxy_pki_directory }}"
+    dest: "{{ platform_haproxy_pki_directory }}/haproxy.pem"
+    regexp: '^(01-certificate|02-ca-chain|03-private-key)[.]pem$'
+    owner: root
+    group: haproxy
+    mode: '0640'
+  no_log: true
+  register: _platform_haproxy_pem_bundle
+
+- name: Record whether HAProxy TLS material changed
+  ansible.builtin.set_fact:
+    platform_haproxy_tls_material_changed: "{{ _platform_haproxy_pem_bundle.changed }}"
+
+- name: Publish participating HAProxy addresses
+  ansible.builtin.set_fact:
+    platform_haproxy_participant_addresses: >-
+      {{ groups['platform_targets'] | default([]) | map('extract', hostvars, 'ansible_host') | list }}
+
+- name: Render full Platform HAProxy candidate
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: '0640'
+  loop:
+    - {src: haproxy.cfg.j2, dest: haproxy.cfg}
+    - {src: 10-public.cfg.j2, dest: conf.d/10-public.cfg}
+    - {src: 20-local-stats.cfg.j2, dest: conf.d/20-local-stats.cfg}
+    - {src: 90-stats-backends.cfg.j2, dest: conf.d/90-stats-backends.cfg}
+  changed_when: false
+
+- name: Validate structured global HAProxy log settings
+  ansible.builtin.assert:
+    that:
+      - platform_haproxy_global.log is sequence
+      - platform_haproxy_global.log | length > 0
+      - item.address is defined and item.address is string and item.address | length > 0
+      - item.facility is defined and item.facility in ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'auth2', 'ftp', 'ntp', 'audit', 'alert', 'cron2', 'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
+      - item.level is not defined or item.level in ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug']
+    fail_msg: HAPROXY_GLOBAL_LOG_INVALID
+  loop: "{{ platform_haproxy_global.log }}"
+
+- name: Calculate deterministic candidate graph digest
+  ansible.builtin.shell: >-
+    { sha256sum haproxy.cfg; cd conf.d; find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
+    sed 's#  \./#  conf.d/#' | sort |
+    sha256sum | awk '{print $1}'
+  args:
+    chdir: "{{ platform_haproxy_candidate_directory }}"
+    executable: /bin/bash
+  changed_when: false
+  register: _platform_haproxy_candidate_graph_digest
+
+- name: Validate complete HAProxy candidate graph before cluster activation
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_candidate_directory }}/haproxy.cfg", '-f', "{{ platform_haproxy_candidate_directory }}/conf.d"]
+  changed_when: false

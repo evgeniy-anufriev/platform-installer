@@ -9,6 +9,9 @@
       - platform_pki_requests is iterable
       - platform_pki_materialization_plans is iterable
       - platform_pki_secret_files is mapping
+      - platform_pki_reissue_request_ids is sequence
+      - platform_pki_reissue_request_ids is not string
+      - platform_pki_reissue_request_ids | difference(platform_pki_requests | map(attribute='id') | list) | length == 0
     fail_msg: PKI_MATERIALIZATION_RUNTIME_INVALID
 
 - name: Prepare protected PKI execution roots
