@@ -75,6 +75,45 @@ source, `ansible.cfg`, Core/catalog/payload compatibility, execution-node
 binding and health. Advanced mode shows document origins and compatibility
 details. It does not contain service settings or placement editing.
 
+It also owns the portable-project transfer workflow: **Import project** and
+**Export project**. These actions are project lifecycle operations, not a
+replacement for normal Git/Ansible workflows.
+
+#### Export modes
+
+The export dialog has two explicit modes:
+
+| Mode | Carries | Removes or replaces |
+| --- | --- | --- |
+| **Full configuration** | canonical desired project documents: server inventory and transport metadata, service deployments and settings, explicit member placement/topology, endpoint/PKI intent, compatible catalog lock and artifact lock | facts, reachability/elevation results, generated state, plans, run history/logs, runtime workspaces and secret values |
+| **Template** | the same service, configuration, topology and intent shape | concrete servers and execution-node selection are replaced with deterministic, first-class slots `SERVER-1`, `SERVER-2`, …; every placement formerly using one server refers to its one corresponding slot |
+
+Secret references may be represented as opaque metadata only when the portable
+project contract supports them; password values, private-key material, token
+values and PKI private keys are never exported. The exported form is a
+versioned portable project bundle; its exact container representation and
+template-slot schema are an Ansible Core contract, not a UI-defined DTO.
+
+#### Import flow
+
+Import is preview-first and creates a new project directory. It never merges
+or overwrites an already opened project. The preview shows the format/schema
+and Core/catalog compatibility, export mode, counts of service deployments and
+role placements, and any safe findings. For a template it presents every slot
+with three choices: bind it to an existing server, add a desired server through
+the standard Servers form, or leave it unresolved. One binding rewrites every
+placement referencing that slot. Unresolved slots are allowed to preserve a
+reviewable topology, but become `ACTION_REQUIRED` and block plan/apply until
+they are resolved.
+
+After a full import, servers may retain safe desired transport metadata and
+opaque credential references. The UI requires the operator to bind an
+unavailable runtime credential through the current-session secret broker; it
+does not prompt to copy a credential into the imported project. The backend
+validates the imported bundle and target document revisions before creating the
+new directory, preserves supported unknown extension fields, and surfaces an
+explicit incompatibility rather than silently migrating semantics.
+
 ### Servers
 
 Servers is the physical-host page: inventory, transport metadata, readiness and
