@@ -49,6 +49,15 @@ sidebar collapses to icons with accessible labels, local tabs scroll
 horizontally, split panes become stacked, and tables retain horizontal
 scrolling rather than hiding data.
 
+### Visual language
+
+The reference mockup uses a Transneft-inspired corporate treatment: a deep
+blue navigation field, white content surfaces, a clear working blue for
+primary actions and a restrained red accent. The small navigation mark is an
+original geometric pipeline motif, not a reproduction of the Transneft
+trademark. Status colours remain semantic and do not use the red accent merely
+for decoration.
+
 ## 3. Installation as the project home
 
 The page has five compact regions in this order:
