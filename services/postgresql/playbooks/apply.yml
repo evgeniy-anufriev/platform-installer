@@ -1,0 +1,11 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+
+- name: Apply PostgreSQL
+  hosts: platform_targets
+  serial: 1
+  become: true
+  gather_facts: true
+  roles:
+    - role: platform.postgresql.postgresql
+      platform_postgresql_verify_only: false

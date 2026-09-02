@@ -1,0 +1,9 @@
+namespace: platform
+name: postgresql
+version: 0.1.0
+readme: README.md
+authors: [Platform Installer maintainers]
+description: Standalone PostgreSQL service collection for Platform Installer V2
+license: [Proprietary]
+tags: [postgresql, pg_auto_failover, offline]
+dependencies: {}

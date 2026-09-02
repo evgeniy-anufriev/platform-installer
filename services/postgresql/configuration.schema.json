@@ -1,0 +1,87 @@
+{
+  "$id": "https://platform.installer/schemas/services/postgresql/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adminSuperuser": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "username": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "username",
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "advancedConfig": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "configDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "dataDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "healthcheckCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "monitorCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "replicationCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "PostgreSQL desired configuration",
+  "type": "object"
+}

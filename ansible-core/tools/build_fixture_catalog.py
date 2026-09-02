@@ -16,7 +16,7 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 OUTPUT = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
 SOURCES = (
     ("kafka", REPOSITORY / "services" / "kafka" / "service.yml"),
-    ("postgresql", REPOSITORY / "examples" / "catalog" / "manifests" / "postgresql.yml"),
+    ("postgresql", REPOSITORY / "services" / "postgresql" / "service.yml"),
     ("etcd", REPOSITORY / "examples" / "catalog" / "manifests" / "etcd.yml"),
 )
 PROJECT_MANIFEST_GLOBS = (

@@ -1,0 +1,106 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: postgresql
+  version: "1.0.0-alpha.1"
+  displayName: PostgreSQL
+  description: PostgreSQL 16 with standalone and pg_auto_failover modes
+  category: database
+modes:
+  standalone:
+    displayName: Standalone
+    description: One PostgreSQL data member
+    memberRoles: [database]
+    placement: {explicit: true, minMembers: 1, maxMembers: 1, distinctHosts: false}
+    x-maturity: implemented-postgres-01a
+  pg_auto_failover:
+    displayName: pg_auto_failover
+    description: One monitor and two PostgreSQL data members
+    memberRoles: [monitor, database]
+    placement:
+      explicit: true
+      minMembers: 3
+      maxMembers: 3
+      distinctHosts: true
+      roleCardinality:
+        monitor: {minimum: 1, maximum: 1}
+        database: {minimum: 2, maximum: 2}
+    x-maturity: implemented-postgres-01b
+  patroni:
+    displayName: Patroni
+    description: Deferred compatibility fixture; not implemented by POSTGRES-01
+    memberRoles: [database]
+    placement: {explicit: true, minMembers: 3, distinctHosts: true}
+    x-maturity: deferred
+listeners:
+  client: {protocol: tcp, defaultPort: 5432, tlsCapable: true, scope: deployment}
+capabilities: [service.postgresql.client]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    port: {kind: MANAGED, roleVariable: platform_postgresql_port, type: integer, scopes: [deployment, member], validation: {minimum: 1, maximum: 65535}, ui: {label: PostgreSQL port, section: Network, order: 10}}
+    dataDirectory: {kind: MANAGED, roleVariable: platform_postgresql_data_directory, type: string, scopes: [deployment, member], validation: {minLength: 1}, ui: {label: Data directory, section: Storage, order: 20}}
+    configDirectory: {kind: MANAGED, roleVariable: platform_postgresql_config_directory, type: string, scopes: [deployment, member], validation: {minLength: 1}, ui: {label: Config directory, section: Storage, order: 21}}
+    tlsProfile: {kind: MANAGED, roleVariable: platform_postgresql_tls_profile, type: string, scopes: [deployment, member], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 30}}
+    adminSuperuser:
+      kind: MANAGED
+      roleVariable: platform_postgresql_admin_superuser
+      type: object
+      scopes: [deployment]
+      validation: {required: [username, passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [username, passwordSecretRef]
+        properties:
+          username: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,62}$'}
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: Administrator, section: Administrator, order: 40}
+    monitorCredential:
+      kind: MANAGED
+      roleVariable: platform_postgresql_monitor_credential
+      type: object
+      scopes: [deployment]
+      validation: {required: [passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [passwordSecretRef]
+        properties:
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: Monitor credential, section: High Availability, order: 50}
+    replicationCredential:
+      kind: MANAGED
+      roleVariable: platform_postgresql_replication_credential
+      type: object
+      scopes: [deployment]
+      validation: {required: [passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [passwordSecretRef]
+        properties:
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: Replication credential, section: High Availability, order: 51}
+    healthcheckCredential:
+      kind: MANAGED
+      roleVariable: platform_postgresql_healthcheck_credential
+      type: object
+      scopes: [deployment]
+      validation: {required: [passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [passwordSecretRef]
+        properties:
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: Monitor healthcheck credential, section: High Availability, order: 52}
+    advancedConfig: {kind: ADVANCED, roleVariable: platform_postgresql_advanced_config, type: object, scopes: [deployment], validation: {additionalProperties: true}, ui: {label: Advanced PostgreSQL settings, section: Advanced, order: 90}}
+x-reservedAdvancedProperties: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
+roleEntrypoints:
+  apply: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+  verify: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+artifacts: []
+compatibilityRef: compatibility.yml

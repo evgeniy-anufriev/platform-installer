@@ -1,0 +1,169 @@
+---
+- name: Select the current pg_auto_failover member from explicit topology
+  ansible.builtin.set_fact:
+    _platform_postgresql_member: >-
+      {{ platform_postgresql_instances
+         | selectattr('host', 'equalto', inventory_hostname)
+         | list | first }}
+    _platform_postgresql_monitor: >-
+      {{ platform_postgresql_instances
+         | selectattr('roles', 'contains', 'monitor')
+         | list | first }}
+
+- name: Resolve explicit pg_auto_failover member ports
+  ansible.builtin.set_fact:
+    _platform_postgresql_member_port: "{{ _platform_postgresql_member.port | default(platform_postgresql_port) }}"
+    _platform_postgresql_monitor_port: "{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}"
+    _platform_postgresql_monitor_uri: "postgres://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.hostname }}:{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}/pg_auto_failover"
+
+- name: Require one current pg_auto_failover member
+  ansible.builtin.assert:
+    that:
+      - _platform_postgresql_member is mapping
+      - _platform_postgresql_member.hostname is defined
+      - _platform_postgresql_monitor is mapping
+      - _platform_postgresql_monitor.hostname is defined
+    fail_msg: POSTGRES_AUTO_FAILOVER_MEMBER_TOPOLOGY_REQUIRED
+
+- name: Install pg_auto_failover runtime password file
+  ansible.builtin.copy:
+    content: |
+      {{ _platform_postgresql_monitor.hostname }}:{{ _platform_postgresql_monitor_port }}:pg_auto_failover:{{ platform_postgresql_monitor_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_monitor_credential.passwordSecretRef]) | trim }}
+      {% if 'monitor' in _platform_postgresql_member.roles %}{% for member in platform_postgresql_instances | selectattr('roles', 'contains', 'database') %}{{ member.hostname }}:{{ member.port | default(platform_postgresql_port) }}:postgres:{{ platform_postgresql_healthcheck_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_healthcheck_credential.passwordSecretRef]) | trim }}
+      {% endfor %}{% endif %}
+      {% for member in platform_postgresql_instances | selectattr('roles', 'contains', 'database') %}{{ member.hostname }}:{{ member.port | default(platform_postgresql_port) }}:*:{{ platform_postgresql_replication_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_replication_credential.passwordSecretRef]) | trim }}
+      {% endfor %}
+    dest: "{{ platform_postgresql_pgpass_file }}"
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0600'
+  no_log: true
+
+- name: Persist pg_autoctl environment for the PostgreSQL login shell
+  ansible.builtin.blockinfile:
+    path: "{{ platform_postgresql_user_home }}/.bash_profile"
+    create: true
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0600'
+    marker: "# {mark} PLATFORM POSTGRESQL PG_AUTOCTL ENVIRONMENT"
+    block: |
+      export PGDATA="{{ platform_postgresql_data_directory }}"
+      export PGPASSFILE="{{ platform_postgresql_pgpass_file }}"
+
+- name: Discover pg_auto_failover controller configuration
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/.config/pg_autoctl{{ platform_postgresql_data_directory }}/pg_autoctl.cfg"
+  register: platform_postgresql_pg_autoctl_config
+
+- name: Discover pg_auto_failover data initialization state
+  ansible.builtin.stat:
+    path: "{{ platform_postgresql_data_directory }}/PG_VERSION"
+  register: platform_postgresql_pg_autoctl_pg_version
+
+- name: Read existing pg_autoctl monitor URI
+  ansible.builtin.command:
+    argv:
+      - pg_autoctl
+      - config
+      - get
+      - --pgdata
+      - "{{ platform_postgresql_data_directory }}"
+      - pg_autoctl.monitor
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_pg_autoctl_monitor_uri
+  changed_when: false
+  when:
+    - platform_postgresql_pg_autoctl_config.stat.exists
+    - platform_postgresql_pg_autoctl_pg_version.stat.exists
+    - "'database' in _platform_postgresql_member.roles"
+
+- name: Reconcile pg_autoctl monitor identity for existing data members
+  ansible.builtin.command:
+    argv:
+      - pg_autoctl
+      - config
+      - set
+      - --pgdata
+      - "{{ platform_postgresql_data_directory }}"
+      - pg_autoctl.monitor
+      - "{{ _platform_postgresql_monitor_uri }}"
+  become_user: "{{ platform_postgresql_user }}"
+  environment:
+    PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  when:
+    - platform_postgresql_pg_autoctl_config.stat.exists
+    - platform_postgresql_pg_autoctl_pg_version.stat.exists
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_pg_autoctl_monitor_uri.stdout | trim != _platform_postgresql_monitor_uri
+
+- name: Create pg_auto_failover monitor
+  ansible.builtin.command:
+    argv:
+      - pg_autoctl
+      - create
+      - monitor
+      - --pgctl
+      - /usr/bin/pg_ctl
+      - --pgdata
+      - "{{ platform_postgresql_data_directory }}"
+      - --pgport
+      - "{{ _platform_postgresql_member_port }}"
+      - --hostname
+      - "{{ _platform_postgresql_member.hostname }}"
+      - --auth
+      - "{{ platform_postgresql_failover_auth }}"
+      - --ssl-mode=verify-full
+      - --ssl-ca-file
+      - "{{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - --server-cert
+      - "{{ _platform_postgresql_tls_directory }}/certificate.pem"
+      - --server-key
+      - "{{ _platform_postgresql_tls_directory }}/private-key.pem"
+  become_user: "{{ platform_postgresql_user }}"
+  environment:
+    PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  when:
+    - not platform_postgresql_pg_autoctl_pg_version.stat.exists
+    - "'monitor' in _platform_postgresql_member.roles"
+  register: platform_postgresql_pg_autoctl_create_monitor
+  changed_when: true
+
+- name: Create pg_auto_failover data member registration
+  ansible.builtin.command:
+    argv:
+      - pg_autoctl
+      - create
+      - postgres
+      - --pgctl
+      - /usr/bin/pg_ctl
+      - --pgdata
+      - "{{ platform_postgresql_data_directory }}"
+      - --pgport
+      - "{{ _platform_postgresql_member_port }}"
+      - --hostname
+      - "{{ _platform_postgresql_member.hostname }}"
+      - --username
+      - "{{ platform_postgresql_user }}"
+      - --auth
+      - "{{ platform_postgresql_failover_auth }}"
+      - --ssl-mode=verify-full
+      - --ssl-ca-file
+      - "{{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - --server-cert
+      - "{{ _platform_postgresql_tls_directory }}/certificate.pem"
+      - --server-key
+      - "{{ _platform_postgresql_tls_directory }}/private-key.pem"
+      - --monitor
+      - "{{ _platform_postgresql_monitor_uri }}"
+  become_user: "{{ platform_postgresql_user }}"
+  environment:
+    PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  when:
+    - not platform_postgresql_pg_autoctl_pg_version.stat.exists
+    - "'database' in _platform_postgresql_member.roles"
+  register: platform_postgresql_pg_autoctl_create_postgres
+  retries: 20
+  delay: 3
+  until: platform_postgresql_pg_autoctl_create_postgres.rc == 0
+  changed_when: true

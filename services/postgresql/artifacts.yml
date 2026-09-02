@@ -1,0 +1,13 @@
+apiVersion: platform.installer/artifacts/v1alpha1
+service: postgresql
+artifacts: []
+packageSource:
+  kind: system-repository
+  distribution: RED OS
+  packages:
+    - postgresql-16.14-1.red80
+    - postgresql-server-16.14-1.red80
+    - postgresql-contrib-16.14-1.red80
+    - pg_auto_failover-2.2-1
+  offlineBundle: deferred
+status: approved-system-repository-acceptance

@@ -1,0 +1,24 @@
+{# This is a Platform-owned include fragment. initdb-owned postgresql.conf is preserved. #}
+{% set managed = {
+  'port': _platform_postgresql_effective_port,
+  'listen_addresses': '*',
+  'ssl': 'on',
+  'hba_file': platform_postgresql_config_directory ~ '/pg_hba.conf',
+  'ssl_ca_file': _platform_postgresql_tls_directory ~ '/ca-chain.pem',
+  'ssl_cert_file': _platform_postgresql_tls_directory ~ '/certificate.pem',
+  'ssl_key_file': _platform_postgresql_tls_directory ~ '/private-key.pem'
+} %}
+{% for key, value in managed | dictsort %}
+{% if value is string %}
+{{ key }} = '{{ value | replace("'", "''") }}'
+{% else %}
+{{ key }} = {{ value }}
+{% endif %}
+{% endfor %}
+{% for key, value in platform_postgresql_advanced_config | dictsort %}
+{% if value is string %}
+{{ key }} = '{{ value | replace("'", "''") }}'
+{% else %}
+{{ key }} = {{ value }}
+{% endif %}
+{% endfor %}

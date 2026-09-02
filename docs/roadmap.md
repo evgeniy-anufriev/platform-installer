@@ -377,10 +377,18 @@ Deliverables:
 - YAML/Jinja preservation boundaries, SecretRef and generated-state rules;
 - static conceptual mockups.
 
-The next standalone product-service milestone should be POSTGRES-01 to prove
-the generic topology/editor contract outside Kafka. Production UI-01 remains
-dependent on a minimal backend read/write, run and revision boundary; React or
-Wails must not assume those responsibilities.
+### POSTGRES-01: PostgreSQL standalone and pg_auto_failover
+
+Status: DONE. PostgreSQL standalone and two-data-member
+pg_auto_failover deployments use include-based dynamic configuration,
+topology-scoped TLS/HBA policy and runtime-only credentials. RED OS acceptance
+proved initial apply, separate verify, repeat apply, TLS enforcement,
+automatic failover, data preservation, natural rejoin and post-rejoin
+idempotence. Final focused/Core, generated-artifact, syntax, offline and
+security audits passed.
+
+Production UI-01 remains dependent on a minimal backend read/write, run and
+revision boundary; React or Wails must not assume those responsibilities.
 
 ## Phase E — Go backend adapter
 

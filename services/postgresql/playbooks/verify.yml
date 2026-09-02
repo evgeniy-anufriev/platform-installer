@@ -1,0 +1,10 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
+
+- name: Verify PostgreSQL read-only
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.postgresql.postgresql
+      platform_postgresql_verify_only: true

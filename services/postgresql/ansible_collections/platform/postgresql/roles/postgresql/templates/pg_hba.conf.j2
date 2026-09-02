@@ -1,0 +1,19 @@
+# Platform-managed local bootstrap access.
+local all {{ platform_postgresql_user }} peer
+local all {{ platform_postgresql_admin_superuser.username }} peer
+{% if platform_postgresql_mode == 'pg_auto_failover' %}
+local pg_auto_failover autoctl_node trust
+{% endif %}
+host all {{ platform_postgresql_admin_superuser.username }} 127.0.0.1/32 scram-sha-256
+host all {{ platform_postgresql_admin_superuser.username }} ::1/128 scram-sha-256
+{% if platform_postgresql_mode == 'pg_auto_failover' %}
+# HA traffic is TLS-only; no plaintext host rule is permitted.
+{% for monitor in platform_postgresql_instances | selectattr('roles', 'contains', 'monitor') %}
+hostssl postgres {{ platform_postgresql_healthcheck_credential.username }} {{ monitor.address }}/32 {{ platform_postgresql_failover_auth }}
+{% endfor %}
+{% for member in platform_postgresql_instances %}
+hostssl pg_auto_failover {{ platform_postgresql_monitor_credential.username }} {{ member.address }}/32 {{ platform_postgresql_failover_auth }}
+hostssl replication {{ platform_postgresql_replication_credential.username }} {{ member.address }}/32 {{ platform_postgresql_failover_auth }}
+hostssl postgres {{ platform_postgresql_replication_credential.username }} {{ member.address }}/32 {{ platform_postgresql_failover_auth }}
+{% endfor %}
+{% endif %}

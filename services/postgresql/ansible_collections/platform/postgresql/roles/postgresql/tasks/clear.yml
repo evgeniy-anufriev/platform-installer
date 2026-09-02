@@ -1,0 +1,182 @@
+---
+- name: Require exact PostgreSQL clean-install acknowledgement
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_confirm_destructive_reset == platform_postgresql_service_name
+    fail_msg: 'BLOCKED: PostgreSQL clean_install requires exact service-name acknowledgement'
+
+- name: Derive PostgreSQL deployment-owned cleanup paths
+  ansible.builtin.set_fact:
+    _platform_postgresql_clear_paths:
+      - "{{ platform_postgresql_data_directory }}"
+      - "{{ platform_postgresql_config_directory }}"
+      - "{{ platform_postgresql_log_directory }}"
+      - "{{ platform_postgresql_pg_autoctl_config_root }}{{ platform_postgresql_data_directory }}"
+      - "{{ platform_postgresql_pg_autoctl_state_root }}{{ platform_postgresql_data_directory }}"
+      - /var/lib/pgsql/.pgpass
+    _platform_postgresql_clear_unit: "/etc/systemd/system/{{ platform_postgresql_service_name }}.service"
+
+- name: Validate PostgreSQL clear paths before mutation
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item.startswith('/')
+      - item not in ['/', '/var', '/var/lib', '/var/log', '/etc', '/etc/systemd/system']
+      - "'..' not in item"
+      - item != platform_postgresql_data_directory or item | length > 1
+      - item != platform_postgresql_config_directory or item | length > 1
+      - item != platform_postgresql_log_directory or item | length > 1
+    fail_msg: 'BLOCKED: PostgreSQL clean_install path is unsafe or ambiguous'
+  loop: "{{ _platform_postgresql_clear_paths }}"
+
+- name: Stop and disable the selected PostgreSQL unit
+  ansible.builtin.systemd_service:
+    name: "{{ platform_postgresql_service_name }}.service"
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Wait bounded time for PostgreSQL processes using the selected data path
+  ansible.builtin.shell: |
+    set -o pipefail
+    found=0
+    for proc in /proc/[0-9]*; do
+      pid="${proc##*/}"
+      cmdline="$(tr '\0' ' ' < "${proc}/cmdline" 2>/dev/null || true)"
+      case "${cmdline}" in
+        /usr/bin/postgres*|postgres*|/usr/bin/pg_autoctl*|pg_autoctl*)
+          case "${cmdline}" in
+            *"{{ platform_postgresql_data_directory }}"*) found=1 ;;
+          esac
+          ;;
+      esac
+    done
+    exit "${found}"
+  args:
+    executable: /bin/bash
+  register: platform_postgresql_clear_processes
+  changed_when: false
+  failed_when: false
+  retries: "{{ platform_postgresql_clear_stop_retries }}"
+  delay: "{{ platform_postgresql_clear_stop_delay }}"
+  until: platform_postgresql_clear_processes.rc == 0
+
+- name: Terminate attributable PostgreSQL processes after bounded stop
+  ansible.builtin.shell: |
+    set -o pipefail
+    for proc in /proc/[0-9]*; do
+      pid="${proc##*/}"
+      cmdline="$(tr '\0' ' ' < "${proc}/cmdline" 2>/dev/null || true)"
+      case "${cmdline}" in
+        /usr/bin/postgres*|postgres*|/usr/bin/pg_autoctl*|pg_autoctl*)
+          case "${cmdline}" in
+            *"{{ platform_postgresql_data_directory }}"*) kill -TERM "${pid}" 2>/dev/null || true ;;
+          esac
+          ;;
+      esac
+    done
+  args:
+    executable: /bin/bash
+  when: platform_postgresql_clear_processes.rc != 0
+  changed_when: true
+
+- name: Wait after PostgreSQL process termination
+  ansible.builtin.pause:
+    seconds: 2
+  when: platform_postgresql_clear_processes.rc != 0
+
+- name: Force-stop attributable PostgreSQL processes that ignored termination
+  ansible.builtin.shell: |
+    set -o pipefail
+    for proc in /proc/[0-9]*; do
+      pid="${proc##*/}"
+      cmdline="$(tr '\0' ' ' < "${proc}/cmdline" 2>/dev/null || true)"
+      case "${cmdline}" in
+        /usr/bin/postgres*|postgres*|/usr/bin/pg_autoctl*|pg_autoctl*)
+          case "${cmdline}" in
+            *"{{ platform_postgresql_data_directory }}"*) kill -KILL "${pid}" 2>/dev/null || true ;;
+          esac
+          ;;
+      esac
+    done
+  args:
+    executable: /bin/bash
+  when: platform_postgresql_clear_processes.rc != 0
+  changed_when: true
+
+- name: Verify PostgreSQL processes are absent before deleting runtime files
+  ansible.builtin.shell: |
+    set -o pipefail
+    for proc in /proc/[0-9]*; do
+      cmdline="$(tr '\0' ' ' < "${proc}/cmdline" 2>/dev/null || true)"
+      case "${cmdline}" in
+        /usr/bin/postgres*|postgres*|/usr/bin/pg_autoctl*|pg_autoctl*)
+          case "${cmdline}" in
+            *"{{ platform_postgresql_data_directory }}"*) exit 1 ;;
+          esac
+          ;;
+      esac
+    done
+    exit 0
+  args:
+    executable: /bin/bash
+  changed_when: false
+  failed_when: false
+  register: platform_postgresql_clear_final_processes
+
+- name: Reject PostgreSQL processes remaining before clear
+  ansible.builtin.assert:
+    that: platform_postgresql_clear_final_processes.rc == 0
+    fail_msg: 'BLOCKED: PostgreSQL process still references the selected data directory'
+
+- name: Inspect PostgreSQL deployment-owned paths before clear
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  register: platform_postgresql_clear_path_state
+  loop: "{{ _platform_postgresql_clear_paths }}"
+
+- name: Reject paths not owned by the PostgreSQL service account
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or item.stat.pw_name == platform_postgresql_user
+      - not item.stat.exists or item.stat.gr_name == platform_postgresql_group
+    fail_msg: 'BLOCKED: PostgreSQL clean_install cannot prove ownership of a target path'
+  loop: "{{ platform_postgresql_clear_path_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Remove only selected PostgreSQL deployment state
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ _platform_postgresql_clear_paths }}"
+
+- name: Remove selected PostgreSQL systemd unit
+  ansible.builtin.file:
+    path: "{{ _platform_postgresql_clear_unit }}"
+    state: absent
+
+- name: Reload systemd after PostgreSQL deployment cleanup
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Clear stale state for the selected PostgreSQL unit
+  ansible.builtin.command:
+    argv: [systemctl, reset-failed, "{{ platform_postgresql_service_name }}.service"]
+  changed_when: false
+  failed_when: false
+
+- name: Verify PostgreSQL deployment-owned paths are absent
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: platform_postgresql_clear_final_state
+  loop: "{{ _platform_postgresql_clear_paths }}"
+
+- name: Assert PostgreSQL clean_install removed selected runtime paths
+  ansible.builtin.assert:
+    that: not item.stat.exists
+    fail_msg: "PostgreSQL clean_install did not remove {{ item.item }}"
+  loop: "{{ platform_postgresql_clear_final_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"

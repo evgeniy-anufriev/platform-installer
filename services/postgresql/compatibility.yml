@@ -1,0 +1,13 @@
+apiVersion: platform.installer/compatibility/v1alpha1
+service: postgresql
+combinations:
+  - os: redos
+    osVersion: "8.0"
+    architecture: x86_64
+    postgresql: "16.14-1.red80"
+    pg_auto_failover: "2.2-1"
+    source: system-repository
+    status: accepted-by-postgres-01
+  - os: altlinux
+    status: deferred
+status: requires-postgres-01-runtime-evidence

@@ -1,0 +1,39 @@
+platform_postgresql_version: "16.14"
+platform_postgresql_pg_auto_failover_version: "2.2"
+platform_postgresql_mode: standalone
+platform_postgresql_port: 5432
+platform_postgresql_user: postgres
+platform_postgresql_group: postgres
+platform_postgresql_user_home: /var/lib/pgsql
+platform_postgresql_data_directory: /var/lib/platform/postgresql
+platform_postgresql_config_directory: /etc/platform/postgresql
+platform_postgresql_log_directory: /var/log/platform/postgresql
+platform_postgresql_tls_profile: infrastructure-tls
+platform_postgresql_admin_superuser:
+  username: platform_admin
+  passwordSecretRef: ''
+platform_postgresql_monitor_credential:
+  username: autoctl_node
+  passwordSecretRef: ''
+platform_postgresql_replication_credential:
+  username: pgautofailover_replicator
+  passwordSecretRef: ''
+platform_postgresql_healthcheck_credential:
+  username: pgautofailover_monitor
+  passwordSecretRef: ''
+platform_postgresql_failover_auth: scram-sha-256
+platform_postgresql_advanced_config: {}
+platform_postgresql_instances: []
+platform_postgresql_secret_files: {}
+platform_postgresql_pki_materialization_plans: []
+platform_postgresql_verify_only: false
+platform_postgresql_install_from_system_repo: true
+platform_postgresql_service_name: postgresql
+platform_postgresql_clean_install: false
+platform_postgresql_clear_only: false
+platform_postgresql_confirm_destructive_reset: ''
+platform_postgresql_clear_stop_retries: 15
+platform_postgresql_clear_stop_delay: 2
+platform_postgresql_pg_autoctl_config_root: /var/lib/pgsql/.config/pg_autoctl
+platform_postgresql_pg_autoctl_state_root: /var/lib/pgsql/.local/share/pg_autoctl
+platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"

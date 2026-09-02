@@ -1,0 +1,20 @@
+[Unit]
+Description=Platform PostgreSQL {{ platform_postgresql_service_name }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ platform_postgresql_user }}
+Group={{ platform_postgresql_group }}
+Environment=PGPASSFILE={{ platform_postgresql_pgpass_file }}
+{% set platform_postgresql_exec_start = '/usr/bin/pg_autoctl run --pgdata ' ~ platform_postgresql_data_directory if platform_postgresql_mode == 'pg_auto_failover' else '/usr/bin/postgres -D ' ~ platform_postgresql_data_directory %}
+ExecStart={{ platform_postgresql_exec_start }}
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+Restart=on-failure
+TimeoutStartSec=120
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

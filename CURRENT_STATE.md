@@ -140,11 +140,12 @@ prerequisites are accepted through the standalone Ansible path.
   materialization fingerprints. Changed initialized identity is blocked with
   `CERTIFICATE_REISSUE_REQUIRED`.
 
-## In progress
+## Completed
 
-- No production implementation milestone is active. UI-DESIGN-01 is complete
-  as a documentation/static-mockup decision record; POSTGRES-01 is the
-  recommended next standalone service milestone.
+- POSTGRES-01 is DONE. PostgreSQL standalone and pg_auto_failover runtime
+  acceptance passed, including TLS, automatic failover, natural rejoin,
+  post-rejoin verify and repeat apply with `changed=0` and `failed=0` on all
+  participating hosts.
 
 ## Validation evidence
 
@@ -265,7 +266,6 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-The recommended next standalone product-service milestone is POSTGRES-01. A
-future production UI-01 remains dependent on a minimal backend read/write,
+POSTGRES-01 is DONE. A future production UI-01 remains dependent on a minimal backend read/write,
 revision and run boundary; it must continue to edit and execute the same
 standard Ansible project.

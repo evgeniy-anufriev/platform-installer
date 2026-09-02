@@ -1,0 +1,114 @@
+---
+- name: Validate PostgreSQL mode
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_mode in ['standalone', 'pg_auto_failover']
+      - platform_postgresql_advanced_config is mapping
+      - platform_postgresql_admin_superuser is mapping
+      - platform_postgresql_admin_superuser.username is match('^[A-Za-z_][A-Za-z0-9_]{0,62}$')
+      - platform_postgresql_admin_superuser.passwordSecretRef | length > 0
+      - platform_postgresql_admin_superuser.passwordSecretRef in platform_postgresql_secret_files
+      - platform_postgresql_secret_files[platform_postgresql_admin_superuser.passwordSecretRef] | length > 0
+    fail_msg: POSTGRES_CONFIGURATION_INVALID
+
+- name: Validate explicit PostgreSQL member list when supplied
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_instances is iterable
+      - platform_postgresql_instances is not string
+      - item is mapping
+      - item.id is defined
+      - item.host is defined
+      - platform_postgresql_mode != 'pg_auto_failover' or item.hostname is defined
+      - platform_postgresql_mode != 'pg_auto_failover' or item.address is defined
+      - item.roles is defined
+      - item.roles is iterable
+      - item.roles is not string
+      - item.roles | length == 1
+      - item.roles[0] in ['database', 'monitor']
+      - item.port | default(platform_postgresql_port) | int >= 1
+      - item.port | default(platform_postgresql_port) | int <= 65535
+      - item.data_directory | default(platform_postgresql_data_directory) | string | length > 0
+    fail_msg: POSTGRES_MEMBER_CONFIGURATION_INVALID
+  loop: "{{ platform_postgresql_instances }}"
+  loop_control:
+    label: "{{ item.id | default('unknown') }}"
+  when: platform_postgresql_instances | length > 0
+
+- name: Validate standalone member cardinality
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_instances | length == 1
+      - (platform_postgresql_instances | selectattr('roles', 'contains', 'database') | list | length) == 1
+    fail_msg: POSTGRES_STANDALONE_REQUIRES_ONE_DATABASE_MEMBER
+  when:
+    - platform_postgresql_mode == 'standalone'
+
+- name: Validate pg_auto_failover member cardinality
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_instances | length == 3
+      - (platform_postgresql_instances | selectattr('roles', 'contains', 'monitor') | list | length) == 1
+      - (platform_postgresql_instances | selectattr('roles', 'contains', 'database') | list | length) == 2
+      - (platform_postgresql_instances | map(attribute='host') | list | unique | length) == 3
+    fail_msg: POSTGRES_AUTO_FAILOVER_REQUIRES_ONE_MONITOR_AND_TWO_DISTINCT_DATABASE_HOSTS
+  when:
+    - platform_postgresql_mode == 'pg_auto_failover'
+
+- name: Reject duplicate PostgreSQL ports on one host
+  ansible.builtin.assert:
+    that: >-
+      (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host)
+      | map(attribute='port') | map('default', platform_postgresql_port, true)
+      | map('int') | list | unique | length)
+      == (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host) | list | length)
+    fail_msg: POSTGRES_PORT_COLLISION
+  loop: "{{ platform_postgresql_instances | product(platform_postgresql_instances) | list }}"
+  when:
+    - platform_postgresql_instances | length > 1
+    - item.0.host == item.1.host
+
+- name: Reject duplicate PostgreSQL member paths
+  ansible.builtin.assert:
+    that: >-
+      (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host)
+      | map(attribute='data_directory') | map('default', platform_postgresql_data_directory, true)
+      | list | unique | length)
+      == (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host) | list | length)
+    fail_msg: POSTGRES_DATA_DIRECTORY_COLLISION
+  loop: "{{ platform_postgresql_instances | product(platform_postgresql_instances) | list }}"
+  when:
+    - platform_postgresql_instances | length > 1
+    - item.0.host == item.1.host
+
+- name: Reject Platform-owned PostgreSQL settings in advancedConfig
+  ansible.builtin.assert:
+    that:
+      - item not in platform_postgresql_advanced_config
+    fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
+  loop: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
+
+- name: Require TLS profile for pg_auto_failover
+  ansible.builtin.assert:
+    that: platform_postgresql_tls_profile | length > 0
+    fail_msg: POSTGRES_TLS_PROFILE_REQUIRED
+  when: platform_postgresql_mode == 'pg_auto_failover'
+
+- name: Validate pg_auto_failover authentication mode
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_failover_auth in ['scram-sha-256', 'md5']
+      - platform_postgresql_monitor_credential.username == 'autoctl_node'
+      - platform_postgresql_monitor_credential.passwordSecretRef | length > 0
+      - platform_postgresql_monitor_credential.passwordSecretRef in platform_postgresql_secret_files
+      - platform_postgresql_secret_files[platform_postgresql_monitor_credential.passwordSecretRef] | length > 0
+      - platform_postgresql_replication_credential.username == 'pgautofailover_replicator'
+      - platform_postgresql_replication_credential.passwordSecretRef | length > 0
+      - platform_postgresql_replication_credential.passwordSecretRef in platform_postgresql_secret_files
+      - platform_postgresql_secret_files[platform_postgresql_replication_credential.passwordSecretRef] | length > 0
+      - platform_postgresql_healthcheck_credential.username == 'pgautofailover_monitor'
+      - platform_postgresql_healthcheck_credential.passwordSecretRef | length > 0
+      - platform_postgresql_healthcheck_credential.passwordSecretRef in platform_postgresql_secret_files
+      - platform_postgresql_secret_files[platform_postgresql_healthcheck_credential.passwordSecretRef] | length > 0
+    fail_msg: POSTGRES_AUTO_FAILOVER_AUTH_INVALID
+  when: platform_postgresql_mode == 'pg_auto_failover'

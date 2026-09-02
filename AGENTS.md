@@ -8,11 +8,11 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 
 ## Current phase
 
-CORE-01 through CORE-07A, PKI-01, EXEC-01 and SERVICE-01A through SERVICE-01D
-are complete, including the focused generic Kafka role lifecycle refactor.
-The next gated milestone is SERVICE-02A: Kafka named listeners and SSL
-consumption. Do not begin SERVICE-02A, a new production service, backend or
-frontend without the corresponding milestone request.
+CORE-01 through CORE-07A, PKI-01, EXEC-01, SERVICE-01A through SERVICE-01D,
+SERVICE-02A, UI-DESIGN-01 and POSTGRES-01 are complete. POSTGRES-01 is the
+accepted standalone include-based PostgreSQL and pg_auto_failover baseline.
+Do not begin UI-01 or another production service unless the next milestone is
+explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI
@@ -90,9 +90,10 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current next-gate decision is recorded in `CURRENT_STATE.md`: SERVICE-02A
-remains explicitly gated by an owner request. Kafka TLS consumption must not
-be inferred from the completed PKI-01 foundation.
+The current milestone decision is recorded in `CURRENT_STATE.md`:
+POSTGRES-01 is DONE. PostgreSQL behavior must not be inferred from the
+completed PKI-01 foundation; its role must consume explicit PKI materialization
+plans at runtime.
 
 ## Test Credentials
 

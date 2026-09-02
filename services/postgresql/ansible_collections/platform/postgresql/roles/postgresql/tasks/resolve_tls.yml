@@ -1,0 +1,63 @@
+---
+- name: Select the effective PKI-01 materialization plan
+  ansible.builtin.set_fact:
+    _platform_postgresql_tls_plans: >-
+      {{ (platform_pki_materialization_plans
+          | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+          | selectattr('hostId', 'equalto', inventory_hostname)
+          | selectattr('tlsProfileId', 'equalto', platform_postgresql_tls_profile)
+          | list) }}
+    _platform_postgresql_tls_directory: "{{ platform_postgresql_config_directory }}/pki"
+
+- name: Require a resolved PKI-01 plan for PostgreSQL TLS
+  ansible.builtin.assert:
+    that:
+      - _platform_postgresql_tls_plans | length == 1
+      - _platform_postgresql_tls_plans[0].targetDirectory is defined
+    fail_msg: POSTGRES_PKI_PLAN_REQUIRED
+
+- name: Check PostgreSQL PEM materialization
+  ansible.builtin.stat:
+    path: "{{ _platform_postgresql_tls_plans[0].targetDirectory }}/{{ item }}"
+  loop: [ca-chain.pem, certificate.pem, private-key.pem]
+  register: platform_postgresql_tls_files
+
+- name: Require complete PostgreSQL PEM materialization
+  ansible.builtin.assert:
+    that: platform_postgresql_tls_files.results | map(attribute='stat.exists') | list | min
+    fail_msg: POSTGRES_PKI_MATERIALIZATION_REQUIRED
+
+- name: Create PostgreSQL-owned TLS directory
+  ansible.builtin.file:
+    path: "{{ _platform_postgresql_tls_directory }}"
+    state: directory
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0700'
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Materialize PostgreSQL-owned PEM files from PKI-01 projection
+  ansible.builtin.copy:
+    src: "{{ _platform_postgresql_tls_plans[0].targetDirectory }}/{{ item.name }}"
+    dest: "{{ _platform_postgresql_tls_directory }}/{{ item.name }}"
+    remote_src: true
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: ca-chain.pem, mode: '0644'}
+    - {name: certificate.pem, mode: '0644'}
+    - {name: private-key.pem, mode: '0600'}
+  no_log: true
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Check PostgreSQL-owned TLS files read-only
+  ansible.builtin.stat:
+    path: "{{ _platform_postgresql_tls_directory }}/{{ item }}"
+  loop: [ca-chain.pem, certificate.pem, private-key.pem]
+  register: platform_postgresql_owned_tls_files
+
+- name: Require PostgreSQL-owned TLS files
+  ansible.builtin.assert:
+    that: platform_postgresql_owned_tls_files.results | map(attribute='stat.exists') | list | min
+    fail_msg: POSTGRES_TLS_FILES_NOT_DEPLOYED
