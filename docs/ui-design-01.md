@@ -44,10 +44,10 @@ Installation has local navigation: **Summary**, **Preparation**, **Services**,
 Findings and service rows link contextually to **Topology** or **Servers**,
 depending on whether the action changes placement or physical-host readiness.
 
-The practical desktop minimum is **1024 × 720 px**. At narrower widths the
-sidebar collapses to icons with accessible labels, local tabs scroll
-horizontally, split panes become stacked, and tables retain horizontal
-scrolling rather than hiding data.
+The practical desktop minimum is **1024 × 720 px**. At roughly 1250 px and
+below, three-pane views collapse into a vertical sequence; at narrower widths
+the sidebar collapses to icons with accessible labels, local tabs scroll
+horizontally, and tables retain horizontal scrolling rather than hiding data.
 
 ## 3. Installation as the project home
 
@@ -151,13 +151,15 @@ the project, inventory, logs, diagnostics or application preferences.
 Topology owns a header-level **Add service instance**
 action and **Save topology** action. It has three local tabs:
 
-- **By services:** three panes — service-instance list; selected instance
-  placement and settings; configuration validation and concise summary.
+- **By services:** three panes — deployment list; logical members, roles and
+  host placement for the selected deployment; topology validation and concise
+  deployment summary. Deployment configuration is opened only through Service
+  settings.
 - **By servers:** three panes — server picker; roles and services on the
   selected server; server summary/readiness.
-- **Entry points:** settings for explicitly declared ingress/entry points.
-  This is not a listener-name or Kafka-only screen; it is a generic placement
-  and policy view over a future versioned entry-point contract.
+- **Entry points:** a visibly deferred placeholder for explicitly declared
+  ingress/entry points until a versioned endpoint contract exists. It is not a
+  listener-name or Kafka-only screen.
 
 It supports zero to many deployments of every manifest service. A host can own
 multiple members, including several members of one Kafka deployment or members
@@ -220,10 +222,12 @@ package; consequently service-specific terms belong here only.
   receive the manifest model and cannot create parallel rules.
 
 For Kafka, a listener panel presents named listener identity, purpose,
-protocol, port, bind/advertised address and one deployment/member `tlsProfile`.
-It must not assign certificate profiles per listener. Listener names are data,
-not UI constants; the editor supports any declared name and all SERVICE-02A
-purposes.
+protocol, port and bind/advertised address. Kafka resolves one effective
+`tlsProfile` at deployment/member scope; every SSL listener in that effective
+member configuration consumes that same profile as read-only derived data.
+The UI never assigns a certificate profile or independent `tlsProfile` to one
+listener. A permitted member override changes the effective profile for all of
+that member's SSL listeners. Listener names are data, not UI constants.
 
 ### Metadata sufficient now and gaps
 
