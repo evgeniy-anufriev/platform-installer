@@ -78,7 +78,17 @@ details. It does not contain service settings or placement editing.
 ### Servers
 
 Servers is the physical-host page: inventory, transport metadata, readiness and
-host-local preparation. It does not own deployment placement editing.
+host-local preparation. It provides **Add server**, per-host editing, **Check
+all servers** and **Check configuration** actions. The inventory row shows the
+desired host/transport declaration, while its expanded read-only detail shows
+the last discovered hostname, OS, architecture, capacity, relevant runtime
+capabilities and connection observation. It does not own deployment placement
+editing.
+
+The page may accept a password or private-key path only as a current-session
+runtime credential input. A server record stores transport metadata and, at
+most, a `SecretRef`; it never stores the password or private-key material in
+the project, inventory, logs, diagnostics or application preferences.
 
 ### Topology
 
