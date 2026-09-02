@@ -360,6 +360,27 @@ profile-lifetime isolation: initial apply, separate verify and repeat apply
 all passed; verify and repeat returned `changed=0 failed=0`. Core (113), Kafka
 (22), catalog, syntax, offline and diff gates passed.
 
+### UI-DESIGN-01: Installer interaction architecture
+
+Status: DONE. This documentation/design milestone defines Platform Installer
+as a visual editor and orchestrator for the same Ansible-native project used by
+standalone operators. It adds no Wails/React production code, persistence
+model, Core topology model or UI-owned desired state.
+
+Deliverables:
+
+- five-page global navigation with Installation as the project home;
+- generic deployment/member/host topology UX with service-specific editors;
+- schema-driven service, PKI, findings, execution and source-value UX;
+- Ansible-file ownership, optimistic save and external-change design;
+- YAML/Jinja preservation boundaries, SecretRef and generated-state rules;
+- static conceptual mockups.
+
+The next standalone product-service milestone should be POSTGRES-01 to prove
+the generic topology/editor contract outside Kafka. Production UI-01 remains
+dependent on a minimal backend read/write, run and revision boundary; React or
+Wails must not assume those responsibilities.
+
 ## Phase E — Go backend adapter
 
 ### BACKEND-01: Core process adapter

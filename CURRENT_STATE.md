@@ -142,11 +142,9 @@ prerequisites are accepted through the standalone Ansible path.
 
 ## In progress
 
-- SERVICE-02A: named Kafka listeners with PLAINTEXT and SSL defaults;
-  service/member-scoped `tlsProfile`; PKI-01 materialization-plan consumption;
-  Kafka-owned copied PEM/PKCS12/password runtime material; and listener-scoped
-  Kafka SSL properties. The representative RED OS fixture overrides only its
-  isolated listener ports.
+- No production implementation milestone is active. UI-DESIGN-01 is complete
+  as a documentation/static-mockup decision record; POSTGRES-01 is the
+  recommended next standalone service milestone.
 
 ## Validation evidence
 
@@ -263,6 +261,11 @@ prerequisites are accepted through the standalone Ansible path.
 ## Next gate
 
 CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D,
-EXEC-01, the generic Kafka role lifecycle refactor and SERVICE-02A (Kafka
-named listeners and SSL consumption) are complete. Do not start the next
-milestone in this turn.
+EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
+UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
+only: no Wails/React, UI persistence or second desired-state model exists.
+
+The recommended next standalone product-service milestone is POSTGRES-01. A
+future production UI-01 remains dependent on a minimal backend read/write,
+revision and run boundary; it must continue to edit and execute the same
+standard Ansible project.
