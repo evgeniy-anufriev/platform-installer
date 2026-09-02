@@ -369,7 +369,8 @@ model, Core topology model or UI-owned desired state.
 
 Deliverables:
 
-- five-page global navigation with Installation as the project home;
+- vertical global navigation with Installation as the project home and
+  Topology as a separate page;
 - generic deployment/member/host topology UX with service-specific editors;
 - schema-driven service, PKI, findings, execution and source-value UX;
 - Ansible-file ownership, optimistic save and external-change design;

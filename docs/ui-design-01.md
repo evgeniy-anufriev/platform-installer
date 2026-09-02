@@ -31,7 +31,8 @@ Global navigation is a persistent vertical sidebar. Its primary items are:
 | Page | Responsibility |
 | --- | --- |
 | Projects | project selection, path, compatible Core/catalog/payload and project health |
-| Servers | topology and entry-point configuration |
+| Servers | physical server inventory, transport and readiness |
+| Topology | service instances, placement, roles and entry-point configuration |
 | Installation | readiness, plan, current workflow and direct remediation |
 | Logs | historical runs, audit and sanitized diagnostics |
 | Help | offline help and troubleshooting entry point |
@@ -40,7 +41,8 @@ Global navigation is a persistent vertical sidebar. Its primary items are:
 
 Installation has local navigation: **Summary**, **Preparation**, **Services**,
 **Certificates**, **Execution**. Topology is deliberately not duplicated there.
-Findings and service rows link contextually to **Servers**.
+Findings and service rows link contextually to **Topology** or **Servers**,
+depending on whether the action changes placement or physical-host readiness.
 
 The practical desktop minimum is **1024 × 720 px**. At narrower widths the
 sidebar collapses to icons with accessible labels, local tabs scroll
@@ -73,9 +75,14 @@ source, `ansible.cfg`, Core/catalog/payload compatibility, execution-node
 binding and health. Advanced mode shows document origins and compatibility
 details. It does not contain service settings or placement editing.
 
-### Servers: topology and entry points
+### Servers
 
-Servers owns a Topology screen with a header-level **Add service instance**
+Servers is the physical-host page: inventory, transport metadata, readiness and
+host-local preparation. It does not own deployment placement editing.
+
+### Topology
+
+Topology owns a header-level **Add service instance**
 action and **Save topology** action. It has three local tabs:
 
 - **By services:** three panes — service-instance list; selected instance
@@ -309,8 +316,8 @@ it validates that service metadata and generic topology are not Kafka-shaped.
 Production UI then requires a minimal backend read/write and run adapter before
 React/Wails work; UI-01 cannot safely precede that backend boundary.
 
-Recommended UI-01 scope: open an existing project read-only, Projects and
-Servers (Topology/Entry points) views, catalog-driven managed-setting display, effective source and
+Recommended UI-01 scope: open an existing project read-only, Projects, Servers
+and Topology (including Entry points) views, catalog-driven managed-setting display, effective source and
 findings navigation, draft/preview/save for a small supported literal subset,
 and optimistic external-change detection. Execution, secret entry and rich PKI
 editing follow only with their backend contracts.
