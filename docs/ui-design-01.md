@@ -181,13 +181,13 @@ current selected run. Neither page displays runtime secret values.
 
 ## 5. Installation local pages
 
-| Local page | Primary content |
+| Local page | Primary content and boundary |
 | --- | --- |
 | Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |
-| Preparation | desired prerequisites, observed readiness, planned preparation and result; opened from Execution Node configuration as needed |
-| Services | catalog-driven deployment editor and effective values |
-| Certificates | PKI-01 intent, calculated SAN/identity preview and read-only material state |
-| Execution | active run progress, confirmation, safe events and final recap |
+| Preparation | Execution Node selection/configuration entry point, desired prerequisites, observed readiness, planned preparation and result; it never changes service placement |
+| Services | catalog-driven deployment list, schema-driven editor entry point, effective values/origins and configuration/topology findings; it does not duplicate generic placement editing from Topology |
+| Certificates | PKI-01 intent, calculated SAN/identity preview and read-only material state; it never exposes private keys, store passwords or raw runtime paths |
+| Execution | active run progress, explicit confirmation state, safe task events and final PLAY RECAP; it is read-only for the active execution and does not parse/redact callback text in the frontend |
 
 Preparation hides implementation detail in normal mode. Advanced mode may
 show checks such as SSH/elevation, package source and payload checks, but not
