@@ -1,0 +1,24 @@
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_desired_state:
+  endpointGroups:
+    asutp:
+      address: {domain: asutp.scada.local, wildcard: true}
+  serviceDeployments:
+    dns-main:
+      serviceType: bind
+      mode: authoritative-primary-secondary
+      configuration: {zone: scada.local, defaultTtl: 300}
+    keepalived-asutp:
+      serviceType: keepalived
+      mode: vrrp-unicast
+      endpointGroupRef: asutp
+      virtualRouterId: 51
+      virtualAddresses:
+        - {address: 192.168.56.111, interface: enp0s8}
+        - {address: 192.168.56.112, interface: enp0s8}
+      configuration: {}
+    postgres-main:
+      serviceType: postgresql
+      mode: standalone
+      endpointGroup: asutp
+      configuration: {}

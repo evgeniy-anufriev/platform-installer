@@ -1,0 +1,72 @@
+---
+- name: Install validated Platform BIND options fragment atomically
+  ansible.builtin.copy:
+    src: "{{ platform_bind_options_include_file }}.candidate"
+    dest: "{{ platform_bind_options_include_file }}"
+    remote_src: true
+    owner: root
+    group: named
+    mode: '0640'
+  register: _platform_bind_options_install
+
+- name: Install validated Platform BIND zones fragment atomically
+  ansible.builtin.copy:
+    src: "{{ platform_bind_include_file }}.candidate"
+    dest: "{{ platform_bind_include_file }}"
+    remote_src: true
+    owner: root
+    group: named
+    mode: '0640'
+  register: _platform_bind_zones_install
+
+- name: Install validated primary BIND zone atomically
+  ansible.builtin.copy:
+    src: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"
+    dest: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone"
+    remote_src: true
+    owner: named
+    group: named
+    mode: '0640'
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  register: _platform_bind_zone_install
+  when: platform_deployments[item.key].roles | first == 'primary'
+
+- name: Install exact validated candidate as active BIND main configuration
+  ansible.builtin.copy:
+    src: "{{ platform_bind_candidate_main_config }}"
+    dest: "{{ platform_bind_distribution_config }}"
+    remote_src: true
+    owner: root
+    group: named
+    mode: '0640'
+  register: _platform_bind_main_config_install
+
+- name: Validate active BIND configuration before service lifecycle
+  ansible.builtin.command:
+    argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_distribution_config }}"]
+  changed_when: false
+
+- name: Compare active BIND main configuration with validated candidate
+  ansible.builtin.shell: >-
+    sha256sum "{{ platform_bind_candidate_main_config }}" "{{ platform_bind_distribution_config }}" |
+    awk '{print $1}' | uniq | wc -l | grep -qx 1
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: _platform_bind_active_checksum
+  failed_when: _platform_bind_active_checksum.rc != 0
+
+- name: Validate active primary BIND zone before service lifecycle
+  ansible.builtin.command:
+    argv: ["{{ platform_bind_checkzone_binary }}", "{{ platform_bind_resolved_zones[item.key].zone }}", "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone"]
+  changed_when: false
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  when: platform_deployments[item.key].roles | first == 'primary'
+
+- name: Record whether active BIND artifacts changed
+  ansible.builtin.set_fact:
+    platform_bind_active_artifacts_changed: >-
+      {{ _platform_bind_options_install.changed or
+         _platform_bind_zones_install.changed or
+         _platform_bind_main_config_install.changed or
+         (_platform_bind_zone_install.results | default([]) | selectattr('changed') | list | length > 0) }}

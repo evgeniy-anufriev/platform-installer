@@ -144,6 +144,17 @@ class TopologyResolutionTests(unittest.TestCase):
         second = RESOLUTION.resolve_topology(manifest("project-b"), topology(), ["node-a", "node-b"], catalog())
         self.assertEqual(first["topologyFingerprint"], second["topologyFingerprint"])
 
+    def test_definition_version_is_catalog_metadata_not_topology_identity(self):
+        first_topology = topology()
+        second_topology = topology()
+        first_topology["serviceDeployments"]["kafka-main"].pop("definitionVersion")
+        second_topology["serviceDeployments"]["kafka-main"]["definitionVersion"] = "1"
+        first = RESOLUTION.resolve_topology(manifest(), first_topology, ["node-a", "node-b"], catalog())
+        second = RESOLUTION.resolve_topology(manifest(), second_topology, ["node-a", "node-b"], catalog())
+        self.assertEqual("PASS", first["status"])
+        self.assertEqual("PASS", second["status"])
+        self.assertEqual(first["topologyFingerprint"], second["topologyFingerprint"])
+
     def test_inventory_placement_changes_topology_fingerprint(self):
         desired = topology()
         desired["serviceDeployments"]["kafka-main"].pop("members")

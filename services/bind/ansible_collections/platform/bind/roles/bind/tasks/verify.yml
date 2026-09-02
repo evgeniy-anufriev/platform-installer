@@ -1,0 +1,40 @@
+---
+- name: Verify active BIND configuration with native tooling
+  ansible.builtin.command:
+    argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_distribution_config }}"]
+  changed_when: false
+
+- name: Verify BIND service is active
+  ansible.builtin.systemd_service:
+    name: "{{ platform_bind_service_name }}"
+    state: started
+  check_mode: true
+  register: _platform_bind_service_verify
+  failed_when: _platform_bind_service_verify.status.ActiveState | default('') != 'active'
+
+- name: Query authoritative SOA from local BIND
+  ansible.builtin.command:
+    argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +norecurse, +noall, +answer, +comments]
+  changed_when: false
+  register: _platform_bind_soa_query
+  failed_when: >-
+    _platform_bind_soa_query.rc != 0 or
+    'status: NOERROR' not in _platform_bind_soa_query.stdout or
+    'flags: qr aa' not in _platform_bind_soa_query.stdout
+  loop: "{{ platform_bind_resolved_zones | dict2items | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Query expected project host record from local BIND
+  ansible.builtin.command:
+    argv: [dig, "@127.0.0.1", "{{ item.value.primary.fqdn }}", A, +norecurse, +noall, +answer, +comments]
+  changed_when: false
+  register: _platform_bind_host_query
+  failed_when: >-
+    _platform_bind_host_query.rc != 0 or
+    'status: NOERROR' not in _platform_bind_host_query.stdout or
+    'flags: qr aa' not in _platform_bind_host_query.stdout or
+    item.value.primary.address not in _platform_bind_host_query.stdout
+  loop: "{{ platform_bind_resolved_zones | dict2items | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"

@@ -257,6 +257,10 @@ def resolve_service_configuration(
         desired = desired_deployments.get(deployment_id, {})
         service_type = resolved.get("serviceType")
         definition = definitions.get(service_type, {}) if isinstance(definitions, dict) else {}
+        metadata = definition.get("metadata", {}) if isinstance(definition, dict) else {}
+        service_definition_version = resolved.get("definitionVersion") or (
+            metadata.get("version") if isinstance(metadata, dict) else None
+        )
         mapping, contract_issues, contract_form = canonical_settings(definition)
         contract_issues.extend(validate_settings(mapping) if contract_form == "canonical" else [])
         defaults = role_defaults.get(service_type, {})
@@ -559,13 +563,13 @@ def resolve_service_configuration(
             resolved_member = resolved.get("members", {}).get(member_id, {}) if isinstance(resolved, dict) else {}
             host_id = resolved_member.get("host") if isinstance(resolved_member, dict) else None
             context = {"deploymentId": deployment_id, "memberId": member_id, "hostId": host_id}
-            member_fingerprint = canonical_digest({"serviceType": service_type, "definitionVersion": resolved.get("definitionVersion"), "mode": resolved.get("mode"), "configuration": member_values, "inputs": {"serviceDefinitionDigest": _service_definition_digest(definition), "configurationSchemaDigest": canonical_digest(schema if schema is not None else {}), "roleDefaultsDigest": canonical_digest(_canonical_defaults(defaults, mapping)), "mappingDigest": canonical_digest(_canonical_mapping(mapping))}})
+            member_fingerprint = canonical_digest({"serviceType": service_type, "definitionVersion": service_definition_version, "mode": resolved.get("mode"), "configuration": member_values, "inputs": {"serviceDefinitionDigest": _service_definition_digest(definition), "configurationSchemaDigest": canonical_digest(schema if schema is not None else {}), "roleDefaultsDigest": canonical_digest(_canonical_defaults(defaults, mapping)), "mappingDigest": canonical_digest(_canonical_mapping(mapping))}})
             scoped_members[member_id] = {"variableContext": context, "configuration": member_values, "opaqueVariables": member_opaque_variables, "configurationFingerprint": member_fingerprint, "opaqueVariablesFingerprint": canonical_digest(sorted(member_opaque_variables, key=lambda item: (item["name"], item["origin"]["source"], item["origin"]["path"]))) }
         service["members"] = scoped_members
 
         service.update({
             "serviceType": service_type,
-            "definitionVersion": resolved.get("definitionVersion"),
+            "definitionVersion": service_definition_version,
             "mode": resolved.get("mode"),
         })
         schema_ref = definition.get("configurationSchema", {}).get("$ref") if isinstance(definition.get("configurationSchema"), dict) else None

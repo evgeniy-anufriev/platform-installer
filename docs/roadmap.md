@@ -395,7 +395,7 @@ revision boundary; React or Wails must not assume those responsibilities.
 Status: DONE. NET-01 establishes the Ansible-native endpoint group contract,
 direct `serviceDeployment.endpointGroup` assignment, and read-only FQDN
 resolution. It deliberately excludes transport ports and all routing semantics;
-those belong to NET-03 HAProxy. PostgreSQL is the first opt-in package, Kafka
+those belong to a future HAProxy milestone. PostgreSQL is the first opt-in package, Kafka
 remains outside generic endpoint semantics, and PKI-01 consumes the projection
 only according to existing SAN policy.
 
@@ -405,8 +405,18 @@ Status: DONE. One host-scoped Keepalived deployment owns one VRRP instance,
 one VRID, one endpoint group reference and one-or-more virtual addresses.
 Three-node RED OS acceptance proved native validation, all-or-none multi-VIP
 ownership, automatic failover, natural rejoin with `nopreempt`, and repeat
-apply/verify idempotence. HAProxy helper materialization is inactive; NET-03
-alone may introduce `vrrp_script` or `track_script` semantics.
+apply/verify idempotence. HAProxy helper materialization is inactive; a future
+HAProxy milestone may introduce `vrrp_script` or `track_script` semantics.
+
+### NET-03: Authoritative BIND DNS
+
+Status: DONE. NET-03 derives deterministic project-host, endpoint and wildcard
+DNS records, and maintains machine-owned per-zone fingerprint/serial state.
+Three-node RED OS acceptance proved complete candidate and active barriers,
+native primary-to-secondary BIND transfer, authoritative responses from all
+nodes, exact-once serial increment on a logical zone change, primary outage
+continuity, natural primary restoration, and post-recovery verify/repeat
+idempotence.  DNS routing and HAProxy are deliberately deferred.
 
 ## Phase E — Go backend adapter
 

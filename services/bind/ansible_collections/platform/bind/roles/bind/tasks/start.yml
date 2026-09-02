@@ -1,0 +1,55 @@
+---
+- name: Determine whether BIND is already active
+  ansible.builtin.command:
+    argv: ["systemctl", "is-active", "--quiet", "{{ platform_bind_service_name }}"]
+  changed_when: false
+  failed_when: false
+  register: _platform_bind_service_active
+
+- name: Query locally served BIND SOA before lifecycle reconciliation
+  ansible.builtin.command:
+    argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +short]
+  changed_when: false
+  failed_when: false
+  loop: "{{ platform_bind_resolved_zones | dict2items | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _platform_bind_served_soa
+  when: _platform_bind_service_active.rc == 0
+
+- name: Initialize BIND served serial drift state
+  ansible.builtin.set_fact:
+    platform_bind_runtime_serial_drift: false
+
+- name: Detect BIND served serial drift from active generated state
+  ansible.builtin.set_fact:
+    platform_bind_runtime_serial_drift: true
+  loop: "{{ _platform_bind_served_soa.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when:
+    - _platform_bind_service_active.rc == 0
+    - item.rc == 0
+    - >-
+      not (item.stdout is regex(
+        '^.*\\s' ~
+        (platform_bind_runtime_projection.generatedState.serviceDeployments[item.item.key].dns.currentSerial | string) ~
+        '\\s.*$'
+      ))
+
+- name: Reload active BIND after changed active artifacts
+  ansible.builtin.systemd_service:
+    name: "{{ platform_bind_service_name }}"
+    state: reloaded
+  when:
+    - _platform_bind_service_active.rc == 0
+    - >-
+      (platform_bind_active_artifacts_changed | default(false) | bool) or
+      (platform_bind_runtime_serial_drift | default(false) | bool)
+
+- name: Enable and start inactive BIND after cluster-wide active validation
+  ansible.builtin.systemd_service:
+    name: "{{ platform_bind_service_name }}"
+    enabled: true
+    state: started
+  when: _platform_bind_service_active.rc != 0

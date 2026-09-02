@@ -41,11 +41,14 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: '1'
       mode: kraft-distributed
       configuration:
         quorumMode: dynamic
 ```
+
+`definitionVersion` is catalog-owned metadata and is not configured by the
+user in desired state. Older projects may still contain it for compatibility;
+when present, it is validated against the catalog lock.
 
 Inventory hosts own physical placement and member-scoped desired settings:
 

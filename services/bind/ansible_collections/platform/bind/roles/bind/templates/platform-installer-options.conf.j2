@@ -1,0 +1,10 @@
+// Managed by Platform Installer V2 NET-03. Included only from options {}.
+listen-on port 53 { any; };
+recursion no;
+allow-query { any; };
+allow-recursion { none; };
+allow-query-cache { none; };
+{% set advanced_options = (platform_bind_options_deployment.value.configuration | default({})).get('advancedConfig', {}).get('options', {}) %}
+{% if advanced_options.get('minimal-responses') is not none %}
+minimal-responses {{ 'yes' if advanced_options.get('minimal-responses') else 'no' }};
+{% endif %}

@@ -119,6 +119,12 @@ class Draft202012EngineTests(unittest.TestCase):
         document["endpointBindings"] = {}
         self.assertTrue(validator.validate(document, schema))
 
+    def test_desired_state_does_not_require_user_definition_version(self):
+        contracts = Path(__file__).resolve().parents[2] / "contracts"
+        schema = contracts / "project" / "v2alpha1" / "desired-state.schema.json"
+        document = {"serviceDeployments": {"bind-main": {"serviceType": "bind", "mode": "authoritative-primary-secondary"}}}
+        self.assertEqual([], ENGINE.SchemaValidator(contracts).validate(document, schema))
+
 
 if __name__ == "__main__":
     unittest.main()

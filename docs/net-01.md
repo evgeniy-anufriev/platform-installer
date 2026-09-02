@@ -23,7 +23,6 @@ platform_desired_state:
   serviceDeployments:
     postgres-main:
       serviceType: postgresql
-      definitionVersion: "1.0.0-alpha.1"
       mode: standalone
       endpointGroup: asutp
 ```
@@ -63,12 +62,12 @@ or materializes certificates on its own.
 ## Provider boundaries
 
 NET-02 Keepalived references an endpoint group and owns one VRRP instance with
-one or more virtual addresses. EndpointGroup never owns a VIP. NET-03 HAProxy
-will consume a provider/deployment address rather than derive one from the
-group. Transport ports, frontend/backend routing, PostgreSQL writable
-member selection and all HAProxy checks are deferred to NET-03. NET-04 BIND
-will publish the resolved FQDN with the provider-owned address and consume
-wildcard intent; it will not become an endpoint owner.
+one or more virtual addresses. EndpointGroup never owns a VIP. NET-03 BIND
+publishes the resolved FQDN with provider-owned addresses and consumes
+wildcard intent; it does not become an endpoint owner. A future HAProxy
+milestone will consume a provider/deployment address rather than derive one
+from the group. Transport ports, frontend/backend routing, PostgreSQL writable
+member selection and HAProxy checks remain deferred.
 
 ## Explicitly deferred
 

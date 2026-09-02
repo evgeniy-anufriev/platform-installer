@@ -84,6 +84,13 @@ def manifest(project_id="valid-project"):
 
 
 class ProjectValidationTests(unittest.TestCase):
+    def test_definition_version_is_catalog_owned_and_optional_in_desired_state(self):
+        topology = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "mode": "kraft-standalone",
+            "members": {"broker-1": {"host": "node-1", "roles": ["broker", "controller"]}},
+        }}}
+        result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), ["node-1"])
+        self.assertEqual("PASS", result["status"], result["findings"])
     def test_valid_explicit_placement_passes(self):
         topology = {"serviceDeployments": {"kafka-main": {
             "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone",

@@ -1,0 +1,16 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: bind-authoritative
+  name: BIND authoritative three-node fixture
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:e5425a0ced1d2c6a76412bca74da8bfd40ec43f06fa9a501118f1184c2b655eb
+  services:
+    bind: {definitionVersion: "1.0.0-alpha.1", digest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611}
+    keepalived: {definitionVersion: "1.0.0-alpha.1", digest: sha256:2bebe08e88124e5082b6a4d30743c9f17ccbd31ba48341c4e5c9e1ebdb084254}
+    postgresql: {definitionVersion: "1.0.0-alpha.1", digest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda}

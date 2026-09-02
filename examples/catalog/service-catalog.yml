@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:2811cedccc0883d8a6b62d209d7dee63b07c8c34ee295cd87c7bed497460174f
+digest: sha256:e5425a0ced1d2c6a76412bca74da8bfd40ec43f06fa9a501118f1184c2b655eb
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -617,6 +617,108 @@ definitions:
     compatibilityRef: ../../services/keepalived/compatibility.yml
     x-definitionDigest: sha256:2bebe08e88124e5082b6a4d30743c9f17ccbd31ba48341c4e5c9e1ebdb084254
     x-sourceManifest: services/keepalived/service.yml
+  bind:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: bind
+      version: 1.0.0-alpha.1
+      displayName: BIND
+      description: Authoritative primary-secondary DNS for one Platform-managed forward zone
+      category: network
+    modes:
+      authoritative-primary-secondary:
+        displayName: Authoritative primary-secondary
+        description: One primary and one or more secondary BIND participants placed directly on inventory
+          hosts
+        memberRoles:
+        - primary
+        - secondary
+        placement:
+          explicit: true
+          hostScoped: true
+          minMembers: 2
+          distinctHosts: true
+        x-maturity: implemented-net-03
+    capabilities:
+    - service.bind.authoritative-dns
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/bind/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        zone:
+          kind: MANAGED
+          roleVariable: platform_bind_zone
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 3
+          ui:
+            label: Zone
+            section: Authoritative zone
+            order: 10
+        defaultTtl:
+          kind: MANAGED
+          roleVariable: platform_bind_default_ttl
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 2147483647
+          ui:
+            label: Default TTL
+            section: Authoritative zone
+            order: 20
+        advancedConfig:
+          kind: ADVANCED
+          roleVariable: platform_bind_advanced_config
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: false
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              options:
+                type: object
+                additionalProperties: false
+                properties:
+                  minimal-responses:
+                    type: boolean
+          ui:
+            label: Advanced BIND settings
+            section: Advanced
+            order: 90
+    x-reservedAdvancedProperties:
+    - recursion
+    - allow-recursion
+    - allow-query-cache
+    - allow-update
+    - allow-transfer
+    - notify
+    - also-notify
+    - type
+    - file
+    - primaries
+    - masters
+    - zone
+    roleEntrypoints:
+      apply:
+        fqcn: platform.bind.bind
+        variablesPrefix: platform_bind_
+      verify:
+        fqcn: platform.bind.bind
+        variablesPrefix: platform_bind_
+    artifacts: []
+    compatibilityRef: ../../services/bind/compatibility.yml
+    x-definitionDigest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611
+    x-sourceManifest: services/bind/service.yml
   etcd:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest

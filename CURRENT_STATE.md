@@ -16,12 +16,18 @@ NET-01 is DONE. Endpoint groups own one client-facing DNS domain and wildcard
 intent; an endpoint-capable deployment assigns its group directly and Core
 derives a read-only deterministic FQDN projection. Keepalived provider
 deployments own virtual addresses; transport ports and routing remain deferred
-to NET-03 HAProxy.
+to a future HAProxy milestone.
 
 NET-02 is DONE. One host-scoped Keepalived deployment owns one unicast VRRP
 instance, VRID, endpoint-group reference and one-or-more virtual addresses.
 Three-node RED OS acceptance proved all-or-none VIP ownership, automatic
 failover, rejoin without failback and idempotent apply/verify.
+
+NET-03 is DONE. Authoritative BIND primary-secondary DNS derives canonical
+host, endpoint and wildcard records from the Ansible-native desired state.
+Three-node RED OS acceptance proved complete candidate/activation barriers,
+native zone transfer, exact-once fingerprint/serial lifecycle, primary outage
+continuity, recovery and idempotent verify/repeat apply.
 
 ## Established direction
 
@@ -74,6 +80,10 @@ failover, rejoin without failback and idempotent apply/verify.
   generated state. A provider deployment owns virtual addresses; PKI adds them
   to SAN only through `includeEndpointVip`. Kafka has no generic NET-01
   endpoint.
+- DNS logical content fingerprint and serial are machine-owned generated state.
+  Each apply materializes them once, then provides the same runtime projection
+  to all BIND role tasks.  Primary zones are Ansible-managed; secondary zones
+  arrive only through native BIND transfer.
 
 ## Implemented
 
@@ -165,6 +175,10 @@ failover, rejoin without failback and idempotent apply/verify.
   validation and read-only all-or-none ownership verification. Three RED OS
   nodes proved failover/rejoin/no-failback; the installed HAProxy helper has no
   active `vrrp_script` or `track_script` dependency.
+- NET-03 BIND: deterministic authoritative primary-secondary DNS with complete
+  candidate and activation barriers, native secondary transfer, read-only
+  verification and a generated fingerprint/serial lifecycle.  The bounded
+  native configuration surface is `advancedConfig.options.minimal-responses`.
 
 ## Completed
 
@@ -172,6 +186,10 @@ failover, rejoin without failback and idempotent apply/verify.
   acceptance passed, including TLS, automatic failover, natural rejoin,
   post-rejoin verify and repeat apply with `changed=0` and `failed=0` on all
   participating hosts.
+- NET-03 is DONE. Three-node BIND acceptance proved host, endpoint and
+  wildcard authoritative answers, native secondary transfer, exact-once serial
+  increment on logical zone change, service continuity during primary outage,
+  recovery, and post-recovery `changed=0 failed=0` verify/repeat apply.
 
 ## Validation evidence
 
@@ -282,7 +300,7 @@ failover, rejoin without failback and idempotent apply/verify.
   transaction primitive.
 - Desktop or web UI.
 - Transport ports, stateful listener-transition workflows and generic endpoint
-  routing; these are deferred to NET-03 HAProxy.
+  routing; these are deferred to a future HAProxy milestone.
 - Imported/external CA materialization, JKS, mTLS, global JVM cacerts,
   renewal and rotation.
 
@@ -293,8 +311,8 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-POSTGRES-01, NET-01 and NET-02 are DONE. NET-03 HAProxy and NET-04 BIND/DNS
-require separate explicit milestone requests. A future production
+POSTGRES-01, NET-01, NET-02 and NET-03 are DONE. DNS transport routing and
+HAProxy require a separate explicit milestone request. A future production
 UI-01 remains dependent on a minimal backend read/write, revision and run
 boundary; it must continue to edit and execute the same standard Ansible
 project.

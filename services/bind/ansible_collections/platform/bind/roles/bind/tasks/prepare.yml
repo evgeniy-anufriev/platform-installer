@@ -1,0 +1,187 @@
+---
+- name: Install approved BIND packages from configured system repositories
+  ansible.builtin.package:
+    name: ["{{ platform_bind_package }}", "{{ platform_bind_utils_package }}"]
+    state: present
+
+- name: Create Platform BIND directories for candidate and runtime files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: named
+    group: named
+    mode: '0750'
+  loop:
+    - "{{ platform_bind_primary_zone_directory }}"
+    - "{{ platform_bind_secondary_zone_directory }}"
+
+- name: Select local BIND deployment for options-scope rendering
+  ansible.builtin.set_fact:
+    platform_bind_options_deployment: >-
+      {{ platform_desired_state.serviceDeployments | dict2items |
+         selectattr('value.serviceType', 'equalto', 'bind') |
+         selectattr('key', 'in', platform_deployments) | first }}
+
+- name: Render Platform BIND options candidate
+  ansible.builtin.template:
+    src: platform-installer-options.conf.j2
+    dest: "{{ platform_bind_options_include_file }}.candidate"
+    owner: root
+    group: named
+    mode: '0640'
+  register: _platform_bind_options_candidate
+
+- name: Render BIND zones candidate for each local deployment
+  ansible.builtin.template:
+    src: platform-installer.conf.j2
+    dest: "{{ platform_bind_include_file }}.candidate"
+    owner: root
+    group: named
+    mode: '0640'
+  vars:
+    platform_bind_deployment: "{{ item }}"
+    platform_bind_zone_projection: "{{ platform_bind_resolved_zones[item.key] }}"
+    platform_bind_zone_file: >-
+      {{ platform_bind_primary_zone_directory ~ '/' ~ platform_bind_resolved_zones[item.key].zone ~ '.zone.candidate'
+         if platform_deployments[item.key].roles | first == 'primary'
+         else platform_bind_secondary_zone_directory ~ '/' ~ platform_bind_resolved_zones[item.key].zone ~ '.zone' }}
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  register: _platform_bind_zones_candidate
+
+- name: Render BIND primary candidate zone
+  ansible.builtin.template:
+    src: zone.j2
+    dest: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"
+    owner: named
+    group: named
+    mode: '0640'
+  vars:
+    platform_bind_deployment: "{{ item }}"
+    platform_bind_zone_projection: "{{ platform_bind_resolved_zones[item.key] }}"
+    platform_bind_zone_serial: "{{ platform_bind_runtime_projection.generatedState.serviceDeployments[item.key].dns.currentSerial }}"
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  when: platform_deployments[item.key].roles | first == 'primary'
+  register: _platform_bind_primary_zone_candidate
+
+- name: Inspect active and previous candidate BIND main configurations
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - "{{ platform_bind_distribution_config }}"
+    - "{{ platform_bind_candidate_main_config }}"
+  register: _platform_bind_main_config_stats
+
+- name: Determine whether BIND candidate assembly is required
+  ansible.builtin.set_fact:
+    platform_bind_candidate_rebuild_required: >-
+      {{ _platform_bind_options_candidate.changed or
+         _platform_bind_zones_candidate.changed or
+         (_platform_bind_primary_zone_candidate.results | default([]) | selectattr('changed') | list | length > 0) or
+         not _platform_bind_main_config_stats.results[1].stat.exists or
+         _platform_bind_main_config_stats.results[0].stat.checksum != _platform_bind_main_config_stats.results[1].stat.checksum }}
+
+- name: Copy distribution BIND configuration into a full candidate graph
+  ansible.builtin.copy:
+    src: "{{ platform_bind_distribution_config }}"
+    dest: "{{ platform_bind_candidate_main_config }}"
+    remote_src: true
+    owner: root
+    group: named
+    mode: '0640'
+  when: platform_bind_candidate_rebuild_required
+
+- name: Remove legacy invalid Platform top-level options from candidate
+  ansible.builtin.replace:
+    path: "{{ platform_bind_candidate_main_config }}"
+    regexp: '(?ms)^// BEGIN Platform Installer NET-03 authoritative-only options.*?^// END Platform Installer NET-03 authoritative-only options\n?'
+    replace: ''
+  when: platform_bind_candidate_rebuild_required
+
+- name: Remove Platform and distribution candidate directives replaced by options fragment
+  ansible.builtin.replace:
+    path: "{{ platform_bind_candidate_main_config }}"
+    regexp: '(?m)^[ \t]*(listen-on port 53|allow-query|recursion)[^\n]*\n'
+    replace: ''
+  when: platform_bind_candidate_rebuild_required
+
+- name: Remove prior Platform options include from candidate
+  ansible.builtin.replace:
+    path: "{{ platform_bind_candidate_main_config }}"
+    regexp: '(?m)^[ \t]*include "{{ platform_bind_options_include_file | regex_escape }}(?:[.]candidate)?";[ \t]*\r?\n?'
+    replace: ''
+  when: platform_bind_candidate_rebuild_required
+
+- name: Remove prior Platform zones include from candidate
+  ansible.builtin.replace:
+    path: "{{ platform_bind_candidate_main_config }}"
+    regexp: '(?m)^[ \t]*include "{{ platform_bind_include_file | regex_escape }}(?:[.]candidate)?";[ \t]*\r?\n?'
+    replace: ''
+  when: platform_bind_candidate_rebuild_required
+
+- name: Inspect BIND options anchor in candidate configuration
+  ansible.builtin.slurp:
+    src: "{{ platform_bind_candidate_main_config }}"
+  register: _platform_bind_candidate_main
+  when: platform_bind_candidate_rebuild_required
+
+- name: Require exactly one BIND options anchor before candidate insertion
+  ansible.builtin.assert:
+    that:
+      - (_platform_bind_candidate_main.content | b64decode | regex_findall('(?m)^\\s*options\\s*\\{\\s*$') | length) == 1
+    fail_msg: BIND_OPTIONS_ANCHOR_INVALID
+  when: platform_bind_candidate_rebuild_required
+
+- name: Deterministically inject candidate Platform options inside BIND options context
+  ansible.builtin.replace:
+    path: "{{ platform_bind_candidate_main_config }}"
+    regexp: '(?m)^([ \t]*options[ \t]*\{[ \t]*)$'
+    replace: '\g<1>\n    include "{{ platform_bind_options_include_file }}.candidate";'
+  when: platform_bind_candidate_rebuild_required
+
+- name: Inspect candidate configuration after options include insertion
+  ansible.builtin.slurp:
+    src: "{{ platform_bind_candidate_main_config }}"
+  register: _platform_bind_candidate_with_options
+
+- name: Assert candidate options include is directly inside options context
+  ansible.builtin.assert:
+    that:
+      - (_platform_bind_candidate_with_options.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
+      - >-
+        (_platform_bind_candidate_with_options.content | b64decode |
+        regex_findall('(?ms)^[ \t]*options[ \t]*\{[ \t]*\n[ \t]*include "' ~
+         (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";')) | length == 1
+    fail_msg: BIND_OPTIONS_INCLUDE_CONTEXT_INVALID
+
+- name: Deterministically append candidate Platform zones at top-level BIND context
+  ansible.builtin.replace:
+    path: "{{ platform_bind_candidate_main_config }}"
+    regexp: '(?s)\Z'
+    replace: '\ninclude "{{ platform_bind_include_file }}.candidate";\n'
+  when: platform_bind_candidate_rebuild_required
+
+- name: Inspect complete candidate configuration structure
+  ansible.builtin.slurp:
+    src: "{{ platform_bind_candidate_main_config }}"
+  register: _platform_bind_candidate_complete
+
+- name: Assert complete candidate include structure
+  ansible.builtin.assert:
+    that:
+      - (_platform_bind_candidate_complete.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
+      - (_platform_bind_candidate_complete.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
+      - _platform_bind_candidate_complete.content | b64decode is not regex('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$\\n?\\Z')
+    fail_msg: BIND_CANDIDATE_INCLUDE_STRUCTURE_INVALID
+
+- name: Validate complete BIND candidate configuration graph
+  ansible.builtin.command:
+    argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_candidate_main_config }}"]
+  changed_when: false
+
+- name: Validate BIND primary candidate zone with native tooling
+  ansible.builtin.command:
+    argv: ["{{ platform_bind_checkzone_binary }}", "{{ platform_bind_resolved_zones[item.key].zone }}", "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"]
+  changed_when: false
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  when: platform_deployments[item.key].roles | first == 'primary'

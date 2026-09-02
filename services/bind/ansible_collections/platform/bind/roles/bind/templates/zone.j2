@@ -1,0 +1,16 @@
+$TTL {{ platform_bind_zone_projection.defaultTtl }}
+@ IN SOA {{ platform_bind_zone_projection.mname }}. {{ platform_bind_zone_projection.rname }}. (
+  {{ platform_bind_zone_serial }}  ; serial
+  300                         ; refresh
+  60                          ; retry
+  1209600                     ; expire
+  {{ platform_bind_zone_projection.defaultTtl }} ; negative cache TTL
+)
+{% for nameserver in platform_bind_zone_projection.nameservers %}
+@ IN NS {{ nameserver }}.
+{% endfor %}
+{% for record in platform_bind_zone_projection.records %}
+{% for value in record['values'] %}
+{{ record['owner'] }} {{ platform_bind_zone_projection.defaultTtl }} IN {{ record['type'] }} {{ value }}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,33 @@
+{
+  "$id": "https://platform.installer/schemas/services/bind/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "advancedConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "minimal-responses": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "defaultTtl": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "zone": {
+      "minLength": 3,
+      "type": "string"
+    }
+  },
+  "title": "BIND desired configuration",
+  "type": "object"
+}

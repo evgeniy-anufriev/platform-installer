@@ -39,6 +39,15 @@
               "properties": { "identity": { "$ref": "#/$defs/identity" } },
               "additionalProperties": false
             }
+          },
+          "dns": {
+            "type": "object",
+            "required": ["contentFingerprint", "currentSerial"],
+            "properties": {
+              "contentFingerprint": { "$ref": "#/$defs/digest" },
+              "currentSerial": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false

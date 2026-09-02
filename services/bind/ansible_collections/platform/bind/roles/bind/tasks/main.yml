@@ -1,0 +1,84 @@
+---
+- name: Require managed BIND desired state
+  ansible.builtin.assert:
+    that:
+      - platform_desired_state is mapping
+      - platform_desired_state.serviceDeployments | default({}) is mapping
+      - platform_deployments | default({}) is mapping
+      - platform_bind_phase in ['prepare', 'activate', 'start', 'verify']
+    fail_msg: BIND_DESIRED_STATE_INVALID
+
+- name: Consume controller-projected BIND serial lifecycle state
+  ansible.builtin.set_fact:
+    platform_bind_runtime_projection: "{{ hostvars['localhost'].platform_bind_runtime_projection | default({}) }}"
+
+- name: Require BIND serial runtime projection
+  ansible.builtin.assert:
+    that:
+      - platform_bind_runtime_projection.zones | default({}) is mapping
+      - platform_bind_runtime_projection.generatedState.serviceDeployments | default({}) is mapping
+    fail_msg: BIND_RUNTIME_PROJECTION_INVALID
+
+- name: Load published service catalog for BIND projection
+  ansible.builtin.include_vars:
+    file: "{{ platform_service_catalog_path }}"
+    name: _platform_bind_catalog_file
+  run_once: true
+
+- name: Collect safe project host address projection for BIND
+  ansible.builtin.set_fact:
+    _platform_bind_inventory_hosts: >-
+      {{ _platform_bind_inventory_hosts | default({}) |
+         combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
+    _platform_bind_inventory_deployments: >-
+      {{ _platform_bind_inventory_deployments | default({}) |
+         combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  run_once: true
+  no_log: true
+
+- name: Resolve authoritative DNS zones before target mutation
+  platform.core.resolve_dns_zones:
+    desired_state: "{{ platform_desired_state }}"
+    service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
+    inventory_hosts: "{{ _platform_bind_inventory_hosts }}"
+    inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
+  register: _platform_bind_resolution
+  run_once: true
+
+- name: Publish resolved authoritative DNS zones
+  ansible.builtin.set_fact:
+    platform_bind_resolved_zones: "{{ hostvars[ansible_play_hosts_all | first]._platform_bind_resolution.resolved_dns_zones.zones }}"
+
+- name: Assert local BIND participant belongs to one resolved zone
+  ansible.builtin.assert:
+    that:
+      - item.key in platform_bind_resolved_zones
+      - platform_deployments[item.key].roles | default([]) | length == 1
+      - platform_deployments[item.key].roles | first in ['primary', 'secondary']
+    fail_msg: BIND_PARTICIPANT_PROJECTION_INVALID
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: End BIND role on hosts without BIND participation
+  ansible.builtin.meta: end_role
+  when: >-
+    (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') |
+     selectattr('key', 'in', platform_deployments) | list | length) == 0
+
+- name: Prepare and validate BIND candidates without activation
+  ansible.builtin.include_tasks: prepare.yml
+  when: platform_bind_phase == 'prepare'
+
+- name: Activate previously validated BIND candidates
+  ansible.builtin.include_tasks: activate.yml
+  when: platform_bind_phase == 'activate'
+
+- name: Verify BIND runtime read-only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_bind_phase == 'verify'
+
+- name: Start BIND after active validation barrier
+  ansible.builtin.include_tasks: start.yml
+  when: platform_bind_phase == 'start'

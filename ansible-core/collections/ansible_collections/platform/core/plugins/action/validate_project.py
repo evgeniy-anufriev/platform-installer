@@ -89,6 +89,7 @@ class ActionModule(ActionBase):
             inventory_hosts=args["inventory_hosts"],
             placements=placements if use_placements else None,
             host_scoped_deployments=host_scoped_deployments if use_inventory_members else None,
+            inventory_host_addresses=args.get("inventory_host_addresses", {}),
         )
         if use_placements:
             result["findings"].extend(placement_findings)

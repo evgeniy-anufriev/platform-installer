@@ -73,11 +73,14 @@
     },
     "serviceDeployment": {
       "type": "object",
-      "required": ["serviceType", "definitionVersion", "mode"],
+      "required": ["serviceType", "mode"],
       "properties": {
         "displayName": { "type": "string", "minLength": 1, "maxLength": 256 },
         "serviceType": { "$ref": "#/$defs/identifier" },
-        "definitionVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "definitionVersion": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Deprecated compatibility input. Omit from user desired state; the service catalog and catalog lock own the definition version."
+        },
         "mode": { "$ref": "#/$defs/identifier" },
         "identity": { "type": "object", "default": {} },
         "configuration": { "type": "object", "default": {} },

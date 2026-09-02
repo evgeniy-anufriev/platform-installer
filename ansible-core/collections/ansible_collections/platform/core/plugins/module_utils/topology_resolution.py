@@ -16,7 +16,7 @@ except ImportError:
     from project_state import canonical_inventory_members, canonical_placements, select_desired_state, synthesize_ansible_manifest, topology_with_inventory_members
 
 
-TOPOLOGY_FIELDS = ("serviceType", "definitionVersion", "mode", "identity", "members")
+TOPOLOGY_FIELDS = ("serviceType", "mode", "identity", "members")
 
 
 def _with_placement_hosts(topology, placements):

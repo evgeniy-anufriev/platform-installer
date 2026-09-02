@@ -239,7 +239,7 @@ def _secret_value_fields(value, path="", identifier_map=False):
     return fields
 
 
-def validate_project(manifest, topology, desired_hosts, service_catalog, inventory_hosts, placements=None, host_scoped_deployments=None):
+def validate_project(manifest, topology, desired_hosts, service_catalog, inventory_hosts, placements=None, host_scoped_deployments=None, inventory_host_addresses=None):
     manifest = manifest if isinstance(manifest, dict) else {}
     topology = topology if isinstance(topology, dict) else {}
     service_catalog = service_catalog if isinstance(service_catalog, dict) else {}
@@ -491,9 +491,9 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                 locked_version = service_lock.get("definitionVersion")
                 selected_version = deployment.get("definitionVersion")
                 catalog_version = _definition_version(definition)
-                if not selected_version or selected_version != locked_version or (
+                if selected_version and (selected_version != locked_version or (
                     catalog_version and selected_version != catalog_version
-                ):
+                )):
                     findings.append(
                         _finding(
                             "SERVICE_DEFINITION_VERSION_MISMATCH",
@@ -724,6 +724,28 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
                             {"actual": actual, "maximum": maximum, "role": role},
                         )
                     )
+
+    # NET-03 DNS semantics require only desired/inventory projections.  This
+    # remains controller-only and must never infer addresses from target facts.
+    bind_deployments = [
+        item for item in deployments.values()
+        if isinstance(item, dict) and item.get("serviceType") == "bind"
+    ]
+    if bind_deployments:
+        try:
+            from .dns_resolution import resolve_dns_zones
+        except ImportError:
+            from dns_resolution import resolve_dns_zones
+        dns_inventory_deployments = {}
+        for deployment_id, participants in (host_scoped_deployments or {}).items():
+            if not isinstance(participants, dict):
+                continue
+            for host_id, participant in participants.items():
+                dns_inventory_deployments.setdefault(host_id, {})[deployment_id] = participant
+        dns_result = resolve_dns_zones(
+            topology, service_catalog, inventory_host_addresses or {}, dns_inventory_deployments
+        )
+        findings.extend(dns_result["findings"])
 
     findings.sort(key=lambda item: (item["field"], item["code"]))
     blocked = len(findings)

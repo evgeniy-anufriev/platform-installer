@@ -1,0 +1,8 @@
+---
+- name: Verify authoritative BIND DNS
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.bind.bind
+      platform_bind_phase: verify

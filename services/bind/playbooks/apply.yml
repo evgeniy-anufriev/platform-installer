@@ -1,0 +1,121 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- name: Materialize BIND serial lifecycle state
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load published service catalog for BIND serial resolution
+      ansible.builtin.include_vars:
+        file: "{{ platform_service_catalog_path }}"
+        name: _platform_bind_catalog_file
+
+    - name: Collect safe project host and deployment projections
+      ansible.builtin.set_fact:
+        _platform_bind_inventory_hosts: >-
+          {{ _platform_bind_inventory_hosts | default({}) |
+             combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
+        _platform_bind_inventory_deployments: >-
+          {{ _platform_bind_inventory_deployments | default({}) |
+             combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      no_log: true
+
+    - name: Resolve DNS logical content before serial materialization
+      platform.core.resolve_dns_zones:
+        desired_state: "{{ platform_desired_state }}"
+        service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
+        inventory_hosts: "{{ _platform_bind_inventory_hosts }}"
+        inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
+      register: platform_bind_resolution
+
+    - name: Initialize generated state envelope for BIND serial lifecycle
+      ansible.builtin.set_fact:
+        _platform_bind_next_state: >-
+          {{ {
+               'apiVersion': 'platform.installer/generated-state/v1alpha1',
+               'kind': 'PlatformGeneratedState',
+               'metadata': {'projectId': (platform_project_id | default((inventory_dir | dirname | basename), true))},
+               'serviceDeployments': {}
+             } | combine(platform_generated_state | default({}), recursive=True) }}
+      when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
+
+    - name: Require existing DNS lifecycle state for read-only retry projection
+      ansible.builtin.assert:
+        that:
+          - platform_generated_state.serviceDeployments | default({}) is mapping
+          - item.key in (platform_generated_state.serviceDeployments | default({}))
+          - platform_generated_state.serviceDeployments[item.key].dns.contentFingerprint == item.value.contentFingerprint
+          - platform_generated_state.serviceDeployments[item.key].dns.currentSerial | int >= 1
+        fail_msg: BIND_GENERATED_STATE_REUSE_INVALID
+      loop: "{{ platform_bind_resolution.resolved_dns_zones.zones | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: platform_bind_reuse_existing_generated_state | default(false) | bool
+
+    - name: Materialize deterministic BIND serial entries
+      ansible.builtin.set_fact:
+        _platform_bind_next_state: >-
+          {{ _platform_bind_next_state |
+             combine({'serviceDeployments': {
+               item.key: {'dns': {
+                 'contentFingerprint': item.value.contentFingerprint,
+                 'currentSerial': (
+                   (_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('currentSerial', 0) | int
+                   if (_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('contentFingerprint', '') == item.value.contentFingerprint
+                   else ((_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('currentSerial', 0) | int + 1)
+                 )
+               }}}
+             }, recursive=True) }}
+      loop: "{{ platform_bind_resolution.resolved_dns_zones.zones | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
+
+    - name: Publish BIND runtime projection for this apply
+      ansible.builtin.set_fact:
+        platform_bind_runtime_projection:
+          zones: "{{ platform_bind_resolution.resolved_dns_zones.zones }}"
+          generatedState: >-
+            {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
+               else _platform_bind_next_state }}
+
+    - name: Persist BIND generated serial state atomically
+      ansible.builtin.copy:
+        content: "{{ {'platform_generated_state': _platform_bind_next_state} | to_nice_yaml(indent=2) }}"
+        dest: "{{ platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true) }}"
+        mode: '0600'
+      register: platform_bind_generated_state_write
+      when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
+
+    - name: Refresh inventory after BIND serial materialization
+      ansible.builtin.meta: refresh_inventory
+      when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
+
+- name: Prepare and validate authoritative BIND DNS candidates on all participants
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.bind.bind
+      platform_bind_phase: prepare
+
+- name: Activate authoritative BIND DNS only after cluster-wide candidate validation
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.bind.bind
+      platform_bind_phase: activate
+
+- name: Start authoritative BIND DNS only after cluster-wide active validation
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.bind.bind
+      platform_bind_phase: start

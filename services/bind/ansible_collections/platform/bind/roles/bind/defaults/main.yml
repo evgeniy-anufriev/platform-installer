@@ -1,0 +1,13 @@
+platform_bind_package: bind
+platform_bind_utils_package: bind-utils
+platform_bind_service_name: named
+platform_bind_binary: /usr/sbin/named
+platform_bind_checkconf_binary: /usr/sbin/named-checkconf
+platform_bind_checkzone_binary: /usr/sbin/named-checkzone
+platform_bind_distribution_config: /etc/named.conf
+platform_bind_include_file: /etc/named/platform-installer.conf
+platform_bind_options_include_file: /etc/named/platform-installer-options.conf
+platform_bind_candidate_main_config: /etc/named.conf.platform-candidate
+platform_bind_primary_zone_directory: /var/named/platform-installer
+platform_bind_secondary_zone_directory: /var/named/slaves/platform-installer
+platform_bind_phase: prepare

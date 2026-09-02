@@ -38,6 +38,10 @@ options:
     description: Canonical inventory platform_deployments keyed by target host.
     type: dict
     required: false
+  inventory_host_addresses:
+    description: Safe inventory address projection for host-addressed service validation.
+    type: dict
+    required: false
   artifact_path:
     description: Controller path for the structured validation result.
     type: path
@@ -111,6 +115,7 @@ def main():
             "inventory_hosts": {"type": "list", "elements": "str", "required": True},
             "placement_by_host": {"type": "dict", "required": False, "default": None},
             "inventory_deployments_by_host": {"type": "dict", "required": False, "default": None},
+            "inventory_host_addresses": {"type": "dict", "required": False, "default": {}},
             "artifact_path": {"type": "path", "required": True},
             "contracts_root": {"type": "path", "required": True},
         },
@@ -171,6 +176,7 @@ def main():
         inventory_hosts=module.params["inventory_hosts"],
         placements=placements if use_placements else None,
         host_scoped_deployments=host_scoped_deployments if isinstance(inventory_deployments, dict) else None,
+        inventory_host_addresses=module.params["inventory_host_addresses"],
     )
     if use_placements:
         result["findings"].extend(placement_findings)

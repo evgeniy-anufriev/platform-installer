@@ -1,0 +1,7 @@
+namespace: platform
+name: bind
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer V2]
+description: Platform authoritative BIND DNS role
+license: [Apache-2.0]
