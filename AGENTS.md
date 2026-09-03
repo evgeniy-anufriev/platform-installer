@@ -9,10 +9,11 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 ## Current phase
 
 CORE-01 through CORE-07A, PKI-01, EXEC-01, SERVICE-01A through SERVICE-01D,
-SERVICE-02A, UI-DESIGN-01 and POSTGRES-01 are complete. POSTGRES-01 is the
+SERVICE-02A, UI-DESIGN-01, UI-BE-01 and POSTGRES-01 are complete. POSTGRES-01 is the
 accepted standalone include-based PostgreSQL and pg_auto_failover baseline.
-Do not begin UI-01 or another production service unless the next milestone is
-explicitly requested.
+UI-BE-01 is the accepted frontend/backend architecture and contract boundary;
+it adds no production UI, backend, or writer. Do not begin UI-BE-02, UI-01 or
+another production service unless the next milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI

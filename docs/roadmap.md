@@ -461,6 +461,23 @@ canonical desired state. Acceptance proved deduplication, full-model drift
 repair, desired-state add/remove cleanup, serial `4 → 5`, clean repeats and
 shared-PKI stability.
 
+### UI-BE-01: Installer UI / backend boundary
+
+Status: DONE. The versioned query/semantic-command/execution boundary is
+defined in `docs/ui-be-01.md`. UI read models remain derived projections over
+the same canonical Ansible project. Normal writes use reviewed EditPlans,
+optimistic project/document revisions and a safe Ansible-native writer;
+arbitrary existing projects are read-only by default and Installer-owned
+standard Ansible files are the preferred write target. No production backend,
+UI, YAML writer or speculative contract family was added.
+
+Recommended gated sequence:
+
+- UI-BE-02: read-only ProjectSnapshot and related query adapters;
+- UI-BE-03: safe Ansible-native writer and EditPlan/commit boundary;
+- UI-BE-04: validation, plan, execution, observations and event/history adapter;
+- UI-01: production Wails/React UI over those accepted contracts.
+
 ### BACKEND-01: Core process adapter
 
 Deliverables:

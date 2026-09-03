@@ -133,3 +133,19 @@ Project import/export preserves semantics and declared unknown extensions. Byte-
 Status: Accepted.
 
 Ansible Core, service packages, published contracts, backend and frontend start in one repository with explicit dependency rules. Core and roles remain independently testable, distributable and usable without Installer.
+
+## ADR-020: Installer writes use reviewed Ansible-native edit plans
+
+Status: Accepted by UI-BE-01.
+
+The Installer opens supported standard Ansible projects without converting
+them to another desired-state model. Arbitrary existing projects are read-only
+by default. Write-capable workflows prefer explicitly Installer-owned ordinary
+Ansible inventory/variable files; an existing human-owned file or subtree must
+be explicitly adopted and proven safe before mutation.
+
+Frontend edits are semantic commands that first produce a reviewable EditPlan.
+Commit rechecks a raw-byte-derived project revision and every affected document
+digest, validates staged canonical files through Core, and atomically replaces
+only approved documents. The frontend never saves a rewritten ProjectSnapshot,
+and SQLite never stores an independently editable desired-state copy.

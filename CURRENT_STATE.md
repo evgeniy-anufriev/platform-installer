@@ -52,6 +52,15 @@ when the source is already `changed=0`. Three-node acceptance proved provider
 drift repair, desired-state-only add/remove, serial `4 → 5`, clean repeats,
 shared PKI stability and final Keepalived health/idempotence.
 
+UI-BE-01 is DONE. The accepted Installer boundary is a versioned query,
+semantic-command and execution facade over the same canonical Ansible project.
+ProjectSnapshot and other rich UI models are derived and read-only; normal
+writes require EditPlan review, project/document revision checks and an
+Ansible-native writer boundary. Arbitrary existing projects remain read-only
+by default, while Installer-owned standard Ansible files are the recommended
+write target. No production Go/Wails/React code, YAML writer or second
+desired-state store was added.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -391,11 +400,14 @@ shared PKI stability and final Keepalived health/idempotence.
 ## Next gate
 
 CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D,
-EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
-UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
-only: no Wails/React, UI persistence or second desired-state model exists.
+EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A,
+UI-DESIGN-01 and UI-BE-01 are complete. UI-DESIGN-01 and UI-BE-01 are
+documentation/contract design only: no Wails/React, UI persistence, YAML
+writer or second desired-state model exists.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04 and NET-04.1 are DONE.
-A future production UI-01 remains dependent on a minimal backend read/write, revision and run
-boundary; it must continue to edit and execute the same standard Ansible
-project.
+The next recommended milestone is UI-BE-02, a read-only ProjectSnapshot and
+related query boundary. It must not begin without an explicit request.
+Production UI-01 remains dependent on UI-BE-02 read models, UI-BE-03 safe
+Ansible-native writes and UI-BE-04 validate/plan/execute/events; all must
+continue to read, edit and execute the same standard Ansible project.
