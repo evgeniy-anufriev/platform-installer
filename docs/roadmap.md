@@ -474,8 +474,9 @@ UI, YAML writer or speculative contract family was added.
 Recommended gated sequence:
 
 - UI-BE-02: DONE — read-only ProjectSnapshot and controller query adapter;
-- UI-BE-03: NEXT — safe Ansible-native writer and EditPlan/commit boundary;
-- UI-BE-04: validation, plan, execution, observations and event/history adapter;
+- UI-BE-03: DONE — safe Ansible-native writer and EditPlan/commit boundary;
+- DEVX-01: NEXT — skills, reviewer agents, scoped `AGENTS.md` cleanup and reusable QA workflow;
+- UI-BE-04: AFTER DEVX-01 — validation, plan, execution, observations and event/history adapter;
 - UI-01: production Wails/React UI over those accepted contracts.
 
 ### UI-BE-02: Read-only ProjectSnapshot
@@ -488,7 +489,7 @@ versions, six-service catalog and deployment views, effective configuration
 with honest provenance, heterogeneous topology, endpoint/provider/DNS/HAProxy
 relations, shared PKI identities, partial validation and static readiness.
 Offline RED OS acceptance and the architecture review have zero blockers.
-UI-BE-03 remains explicitly gated.
+UI-BE-03 is complete. UI-BE-04 remains gated on DEVX-01.
 
 ### BACKEND-01: Core process adapter
 

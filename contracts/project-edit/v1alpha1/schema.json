@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-edit/v1alpha1/schema.json",
+  "title": "Platform Installer project edit contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/editCommand" },
+    { "$ref": "#/$defs/editPlan" },
+    { "$ref": "#/$defs/editCommitResult" }
+  ],
+  "$defs": {
+    "operationName": {
+      "enum": [
+        "CreateServiceDeployment", "DeleteServiceDeployment",
+        "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride",
+        "SetServiceEndpointGroup", "ClearServiceEndpointGroup",
+        "SetHAProxyIntegration", "ClearHAProxyIntegration",
+        "CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",
+        "AssignServiceToHost", "RemoveServiceFromHost", "SetPlacementProperty", "Batch"
+      ]
+    },
+    "operation": {
+      "type": "object",
+      "required": ["operation"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/edit-command/v1alpha1" },
+        "kind": { "const": "EditCommand" },
+        "baseProjectRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "operation": { "$ref": "#/$defs/operationName" },
+        "deploymentId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "setting": { "type": "string", "minLength": 1 },
+        "value": true,
+        "endpointGroupId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "haproxyDeploymentId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "hostId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "property": { "type": "string", "minLength": 1 },
+        "deployment": { "type": "object" },
+        "endpointGroup": { "type": "object" },
+        "placement": { "type": "object" },
+        "backend": { "type": "object" },
+        "commands": {
+          "type": "array", "minItems": 1, "maxItems": 16,
+          "items": { "$ref": "#/$defs/operation" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "required": ["apiVersion", "kind", "code", "status", "category", "field", "safeMessage"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/finding/v1alpha1" },
+        "kind": { "const": "Finding" },
+        "code": { "type": "string", "minLength": 1 },
+        "status": { "const": "BLOCKED" },
+        "category": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "safeMessage": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "documentChange": {
+      "type": "object",
+      "required": ["logicalPath", "beforeDigest", "afterDigest"],
+      "properties": {
+        "logicalPath": { "type": "string", "pattern": "^inventory/(group_vars|host_vars)/" },
+        "beforeDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "afterDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "editCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/operation" },
+        {
+          "type": "object",
+          "required": ["apiVersion", "kind", "baseProjectRevision"],
+          "properties": {
+            "apiVersion": { "const": "platform.installer/edit-command/v1alpha1" },
+            "kind": { "const": "EditCommand" },
+            "baseProjectRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "editPlan": {
+      "type": "object",
+      "required": ["apiVersion", "kind", "status", "baseProjectRevision", "semanticChanges", "affectedDocuments", "validation", "reviewDiff", "commitAllowed", "applyRequired"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/edit-plan/v1alpha1" },
+        "kind": { "const": "EditPlan" },
+        "status": { "enum": ["READY", "BLOCKED", "NO_CHANGE"] },
+        "planId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "baseProjectRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "commandSummary": { "type": "object" },
+        "semanticChanges": { "type": "array", "items": { "type": "object" } },
+        "affectedEntities": { "type": "array", "items": { "type": "string" } },
+        "affectedDocuments": { "type": "array", "items": { "$ref": "#/$defs/documentChange" } },
+        "impacts": { "type": "array", "items": { "type": "string" } },
+        "validation": {
+          "type": "object", "required": ["status", "findings"],
+          "properties": {
+            "status": { "enum": ["PASS", "BLOCKED"] },
+            "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+          },
+          "additionalProperties": false
+        },
+        "expectedEffectiveState": { "type": "array", "items": { "type": "object" } },
+        "expectedSnapshotFingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "reviewDiff": { "type": "string", "maxLength": 16420 },
+        "commitAllowed": { "type": "boolean" },
+        "applyRequired": { "type": "boolean" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "timing": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "editCommitResult": {
+      "type": "object",
+      "required": ["apiVersion", "kind", "status", "changed", "applyRequired"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/edit-commit-result/v1alpha1" },
+        "kind": { "const": "EditCommitResult" },
+        "status": { "enum": ["COMMITTED", "COMMITTED_REFRESH_FAILED", "BLOCKED", "DISCARDED"] },
+        "changed": { "type": "boolean" },
+        "finding": { "$ref": "#/$defs/finding" },
+        "oldProjectRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "newProjectRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "affectedDocuments": { "type": "array", "items": { "$ref": "#/$defs/documentChange" } },
+        "snapshot": { "type": "object" },
+        "applyRequired": { "type": "boolean" },
+        "discarded": { "type": "boolean" },
+        "timing": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

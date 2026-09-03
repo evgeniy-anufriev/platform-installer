@@ -11,9 +11,12 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 CORE-01 through CORE-07A, PKI-01, EXEC-01, SERVICE-01A through SERVICE-01D,
 SERVICE-02A, UI-DESIGN-01, UI-BE-01, UI-BE-02 and POSTGRES-01 are complete. POSTGRES-01 is the
 accepted standalone include-based PostgreSQL and pg_auto_failover baseline.
-UI-BE-02 is the accepted controller-only read-only ProjectSnapshot boundary;
-it adds no production UI, writer, or second desired-state store. Do not begin UI-BE-03, UI-01 or
-another production service unless the next milestone is explicitly requested.
+UI-BE-02 is the accepted controller-only read-only ProjectSnapshot boundary.
+UI-BE-03 is the accepted safe Ansible-native writer: Go owns Installer
+application semantics and invokes Core as authoritative staged verifier. It
+adds no production UI, apply/runtime execution or second desired-state store.
+Do not begin UI-BE-04, UI-01 or another production service unless the next
+milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI
@@ -27,6 +30,11 @@ configuration, runtime projections, plans, facts and results as derived state.
 - Resolved execution groups/variables, runtime workspaces, facts, plans and results are derived state. Operator-authored inventory is desired project input.
 - Ansible roles consume ordinary documented variables and remain usable with manual inventory.
 - Go may orchestrate Ansible Core but must not reimplement service or topology rules.
+- Go owns Installer application semantics: edit/session lifecycle, review plans,
+  coordination and filesystem transactions. Python/Ansible owns infrastructure
+  semantics and must not become the owner of Installer UI lifecycle.
+- Go must not recreate Ansible precedence or service/Core rules. Future Wails is
+  a thin transport over the same Go backend.
 - UI is an editor and projection of the portable contract, not another source of truth.
 - Service capabilities are declared by versioned service packages, not hard-coded into React.
 - `project.yml` is optional compatibility metadata for the established
@@ -91,8 +99,8 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current milestone decision is recorded in `CURRENT_STATE.md`: UI-BE-02 is
-DONE and UI-BE-03 remains gated. PostgreSQL behavior must not be inferred from
+The current milestone decision is recorded in `CURRENT_STATE.md`: UI-BE-03 is
+DONE and DEVX-01 is next. PostgreSQL behavior must not be inferred from
 the completed PKI-01 foundation; its role must consume explicit PKI
 materialization plans at runtime.
 

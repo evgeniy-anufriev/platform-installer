@@ -85,7 +85,8 @@ class ActionModule(ActionBase):
             if logical_path == "inventory/hosts.yml":
                 inspect_inventory(parsed.get("all", parsed), logical_path)
             elif logical_path.startswith("inventory/host_vars/") and "platform_deployments" in parsed:
-                host_id = os.path.splitext(os.path.basename(logical_path))[0]
+                parts = logical_path.split("/")
+                host_id = (parts[2] if len(parts) > 3 else os.path.splitext(os.path.basename(logical_path))[0])
                 if host_id in placement_candidates:
                     placement_candidates[host_id].append(logical_path)
             elif logical_path.startswith("inventory/group_vars/") and "platform_deployments" in parsed:
@@ -188,7 +189,7 @@ class ActionModule(ActionBase):
                 materialized, host_addresses, pki_defaults, endpoints, inventory_deployments,
             )
             haproxy = resolve_haproxy_backends(
-                materialized, catalog, host_addresses, inventory_deployments, endpoints, {},
+                materialized, catalog, host_addresses, inventory_deployments, endpoints, {}, configuration,
             )
             owned = self._task.args.get("installer_owned_paths", [])
             documents, revision = project_documents(project_root, owned)

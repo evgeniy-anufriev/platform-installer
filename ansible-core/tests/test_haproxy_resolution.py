@@ -55,6 +55,33 @@ class HAProxyResolutionTests(unittest.TestCase):
         result = HAPROXY.resolve_haproxy_backends(topology, CATALOG, HOSTS, PLACEMENT, endpoints, DEFAULTS)
         self.assertIn("HAPROXY_BACKEND_PORT_UNRESOLVED", [item["code"] for item in result["findings"]])
 
+    def test_resolved_role_default_port_is_used_when_not_explicit(self):
+        topology = {key: value for key, value in TOPOLOGY.items()}
+        topology["serviceDeployments"] = {key: dict(value) for key, value in TOPOLOGY["serviceDeployments"].items()}
+        topology["serviceDeployments"]["postgres-main"]["configuration"] = {}
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, CATALOG, inventory_deployments=PLACEMENT)
+        configuration = {"services": {"postgres-main": {"configuration": {
+            "port": {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": 5432}
+        }}}}
+        result = HAPROXY.resolve_haproxy_backends(
+            topology, CATALOG, HOSTS, PLACEMENT, endpoints, DEFAULTS, configuration
+        )
+        self.assertEqual("PASS", result["status"], result["findings"])
+        self.assertEqual(5432, result["backends"]["haproxy"][0]["targets"][0]["port"])
+
+    def test_unique_deployment_listener_default_port_is_used_before_configuration_resolution(self):
+        topology = {key: value for key, value in TOPOLOGY.items()}
+        topology["serviceDeployments"] = {key: dict(value) for key, value in TOPOLOGY["serviceDeployments"].items()}
+        topology["serviceDeployments"]["postgres-main"]["configuration"] = {}
+        catalog = {"definitions": dict(CATALOG["definitions"])}
+        catalog["definitions"]["postgresql"] = {
+            "endpoint": {}, "listeners": {"client": {"scope": "deployment", "defaultPort": 5432}}
+        }
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, catalog, inventory_deployments=PLACEMENT)
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT, endpoints, DEFAULTS)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        self.assertEqual(5432, result["backends"]["haproxy"][0]["targets"][0]["port"])
+
     def test_removed_relation_is_absent_from_the_rebuilt_full_backend_model(self):
         topology = {key: value for key, value in TOPOLOGY.items()}
         topology["serviceDeployments"] = {key: dict(value) for key, value in TOPOLOGY["serviceDeployments"].items()}

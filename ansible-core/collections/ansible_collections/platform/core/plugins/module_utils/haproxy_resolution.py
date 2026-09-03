@@ -22,6 +22,17 @@ def _definitions(catalog):
     return value if isinstance(value, dict) else {}
 
 
+def _catalog_default_port(definition):
+    listeners = definition.get("listeners", {}) if isinstance(definition, dict) else {}
+    candidates = [
+        value.get("defaultPort")
+        for value in listeners.values()
+        if isinstance(value, dict) and value.get("scope") == "deployment"
+        and isinstance(value.get("defaultPort"), int)
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def normalize_backend_settings(defaults, override, field):
     defaults = defaults if isinstance(defaults, dict) else {}
     override = override if isinstance(override, dict) else {}
@@ -55,7 +66,8 @@ def normalize_backend_settings(defaults, override, field):
     return effective, findings
 
 
-def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments, resolved_endpoints, backend_defaults=None):
+def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments,
+                             resolved_endpoints, backend_defaults=None, resolved_configuration=None):
     topology = topology if isinstance(topology, dict) else {}
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology.get("serviceDeployments"), dict) else {}
     definitions = _definitions(service_catalog)
@@ -88,6 +100,12 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
             findings.append(_finding("HAPROXY_ENDPOINT_GROUP_MISMATCH", field, "HAProxy target and deployment must use the same endpoint group"))
         configuration = target.get("configuration", {}) if isinstance(target.get("configuration"), dict) else {}
         port = configuration.get("port")
+        if not isinstance(port, int):
+            effective = (((resolved_configuration or {}).get("services", {}).get(target_id, {})
+                          .get("configuration", {}).get("port", {})))
+            port = effective.get("value") if isinstance(effective, dict) else None
+        if not isinstance(port, int):
+            port = _catalog_default_port(definition)
         if not isinstance(port, int) or not 1 <= port <= 65535:
             findings.append(_finding("HAPROXY_BACKEND_PORT_UNRESOLVED", "serviceDeployments.%s.configuration.port" % target_id, "HAProxy target requires a valid configuration.port"))
         defaults = (backend_defaults or {}).get(target.get("serviceType"), {})

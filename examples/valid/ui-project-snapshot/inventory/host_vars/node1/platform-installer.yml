@@ -1,0 +1,9 @@
+# Managed by Platform Installer.
+# This is standard Ansible YAML; formatting may be normalized.
+platform_deployments:
+  bind-main: {roles: [primary]}
+  dns-client-main: {}
+  keepalived-a: {priority: 150}
+  haproxy-a: {hostEndpoint: true}
+  kafka-main: {members: {kafka-1: {roles: [broker, controller]}}}
+  postgres-ha: {members: {monitor-1: {roles: [monitor]}}}

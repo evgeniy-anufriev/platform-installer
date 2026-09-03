@@ -136,16 +136,29 @@ Ansible Core, service packages, published contracts, backend and frontend start 
 
 ## ADR-020: Installer writes use reviewed Ansible-native edit plans
 
-Status: Accepted by UI-BE-01.
+Status: Accepted by UI-BE-01; implemented by UI-BE-03.
+
+Go is the Installer application backend. It owns semantic edit commands,
+in-memory review-plan lifecycle, concurrency guards and filesystem
+transactions. Python/Ansible remains the infrastructure authority: it loads
+standard inventory and variables, applies its normal precedence, and builds
+the authoritative validation and ProjectSnapshot projections. Go does not
+reimplement those Core semantics.
 
 The Installer opens supported standard Ansible projects without converting
 them to another desired-state model. Arbitrary existing projects are read-only
-by default. Write-capable workflows prefer explicitly Installer-owned ordinary
-Ansible inventory/variable files; an existing human-owned file or subtree must
-be explicitly adopted and proven safe before mutation.
+by default. The bounded writable layout uses explicitly Installer-owned
+ordinary Ansible documents: `group_vars/all/platform-installer.yml` owns
+`platform_desired_state`, while `host_vars/<host>/platform-installer.yml` owns
+each host's `platform_deployments`. Existing human-owned files and subtrees
+are not mutated without a separate adoption decision.
 
-Frontend edits are semantic commands that first produce a reviewable EditPlan.
-Commit rechecks a raw-byte-derived project revision and every affected document
-digest, validates staged canonical files through Core, and atomically replaces
-only approved documents. The frontend never saves a rewritten ProjectSnapshot,
-and SQLite never stores an independently editable desired-state copy.
+A semantic command produces an opaque, reviewable EditPlan by staging only
+owned documents and proving its effective result with Core ProjectSnapshot.
+Commit rechecks the raw-byte project revision and affected document digests
+under a project writer lock. It journals exact old bytes, performs synced
+atomic replacements, rolls back a failed multi-document write and recovers an
+interrupted journal before a later commit. The terminal state is either the
+entire original document set or the entire approved set. The frontend never
+saves a rewritten ProjectSnapshot, and SQLite never stores an independently
+editable desired-state copy.

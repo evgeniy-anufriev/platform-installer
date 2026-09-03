@@ -7,13 +7,21 @@
     - name: Query the same project twice
       platform.core.project_snapshot:
         service_catalog_path: "{{ platform_service_catalog_path }}"
-        installer_owned_paths: [inventory/group_vars/all/platform.yml, inventory/hosts.yml]
+        installer_owned_paths:
+          - inventory/group_vars/all/platform-installer.yml
+          - inventory/host_vars/node1/platform-installer.yml
+          - inventory/host_vars/node2/platform-installer.yml
+          - inventory/host_vars/node3/platform-installer.yml
       register: first_snapshot
 
     - name: Repeat the query
       platform.core.project_snapshot:
         service_catalog_path: "{{ platform_service_catalog_path }}"
-        installer_owned_paths: [inventory/group_vars/all/platform.yml, inventory/hosts.yml]
+        installer_owned_paths:
+          - inventory/group_vars/all/platform-installer.yml
+          - inventory/host_vars/node1/platform-installer.yml
+          - inventory/host_vars/node2/platform-installer.yml
+          - inventory/host_vars/node3/platform-installer.yml
       register: second_snapshot
 
     - name: Assert snapshot contract and safety
@@ -33,10 +41,10 @@
           - first_snapshot.snapshot.effectiveConfiguration.services | length == 6
           - first_snapshot.snapshot.pki.certificateIdentities | length == 3
           - first_snapshot.snapshot.pki.certificateIdentities[0].consumers | length >= 3
-          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.source == 'DEPLOYMENT_OVERRIDE'
-          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.editPolicy == 'FUTURE_EDITABLE'
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.source == 'ROLE_DEFAULT'
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.editPolicy == 'OVERRIDE'
           - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.dataDirectory.source == 'ROLE_DEFAULT'
-          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.dataDirectory.overrideTarget.intendedDocument == 'inventory/group_vars/all/platform.yml'
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.overrideTarget.intendedDocument == 'inventory/group_vars/all/platform-installer.yml'
           - first_snapshot.snapshot.integrations.haproxyBackends['haproxy-a'][0].targetDeploymentId == 'postgres-ha'
           - first_snapshot.snapshot.integrations.dnsZones['bind-main'].records | length > 0
           - first_snapshot.snapshot.integrations.relations[0].addressProviders[0].deploymentId == 'keepalived-a'

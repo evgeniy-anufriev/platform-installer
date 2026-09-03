@@ -1,0 +1,13 @@
+---
+- name: Build machine-readable Platform project snapshot
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Build deterministic read-only snapshot on the controller
+      platform.core.project_snapshot:
+        project_root: "{{ platform_project_root }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+        installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
+      changed_when: false
+      become: false

@@ -69,6 +69,15 @@ Raw-byte project/document revisions, honest physical provenance, partial
 results and secret exclusion are accepted against a three-host six-service
 fixture, including offline RED OS execution.
 
+UI-BE-03 is DONE. The Go Installer backend accepts a bounded semantic
+`EditCommand`, produces an opaque reviewable `EditPlan`, proves staged native
+Ansible documents through the authoritative controller-only ProjectSnapshot,
+and commits only Installer-owned documents with revision/digest checks and a
+journaled rollback-capable transaction. Go owns edit/session/transaction
+semantics; Python/Ansible retains project loading, precedence and all
+infrastructure authority. No Wails/React, apply/runtime execution, events or
+second desired-state store was added.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -397,7 +406,7 @@ fixture, including offline RED OS execution.
   deployment plan.
 - Generic Core mutation roles.
 - Production services beyond the accepted service slices.
-- Go backend.
+- Desktop or web UI transport over the accepted Go backend.
 - Generic backend/project persistence beyond the scoped Kafka identity
   transaction primitive.
 - Desktop or web UI.
@@ -409,14 +418,13 @@ fixture, including offline RED OS execution.
 
 CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D,
 EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A,
-UI-DESIGN-01, UI-BE-01 and UI-BE-02 are complete. UI-DESIGN-01 and UI-BE-01
-are documentation/contract design; UI-BE-02 adds only the controller-side
-read query. No Wails/React, UI persistence, YAML writer or second desired-state
-model exists.
+UI-DESIGN-01, UI-BE-01, UI-BE-02 and UI-BE-03 are complete. UI-BE-03 adds the
+bounded safe writer but no Wails/React, UI persistence, execution or second
+desired-state model.
 
-POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04 and NET-04.1 are DONE.
-The next recommended milestone is UI-BE-03, the safe Ansible-native writer and
-EditPlan/commit boundary. It must not begin without an explicit request.
-Production UI-01 remains dependent on UI-BE-02 read models, UI-BE-03 safe
-Ansible-native writes and UI-BE-04 validate/plan/execute/events; all must
-continue to read, edit and execute the same standard Ansible project.
+POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1 and UI-BE-03
+are DONE. DEVX-01 is NEXT: skills, reviewer agents, scoped `AGENTS.md`
+cleanup and reusable QA workflow. UI-BE-04 is AFTER DEVX-01 and will add
+validation/plan/execution/events to the same backend. Production UI-01 remains
+dependent on the accepted read, writer and execution boundaries over one
+standard Ansible project.
