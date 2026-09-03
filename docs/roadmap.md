@@ -475,8 +475,8 @@ Recommended gated sequence:
 
 - UI-BE-02: DONE — read-only ProjectSnapshot and controller query adapter;
 - UI-BE-03: DONE — safe Ansible-native writer and EditPlan/commit boundary;
-- DEVX-01: NEXT — skills, reviewer agents, scoped `AGENTS.md` cleanup and reusable QA workflow;
-- UI-BE-04: AFTER DEVX-01 — validation, plan, execution, observations and event/history adapter;
+- DEVX-01: DONE — Go/Core scoped guidance, Codex Skills, reviewer templates and reusable QA workflow;
+- UI-BE-04: NEXT — validation, plan, execution, observations and event/history adapter;
 - UI-01: production Wails/React UI over those accepted contracts.
 
 ### UI-BE-02: Read-only ProjectSnapshot
@@ -489,7 +489,17 @@ versions, six-service catalog and deployment views, effective configuration
 with honest provenance, heterogeneous topology, endpoint/provider/DNS/HAProxy
 relations, shared PKI identities, partial validation and static readiness.
 Offline RED OS acceptance and the architecture review have zero blockers.
-UI-BE-03 is complete. UI-BE-04 remains gated on DEVX-01.
+UI-BE-03 and DEVX-01 are complete. UI-BE-04 is the next gated milestone.
+
+### DEVX-01: Codex engineering harness
+
+Status: DONE. Repository-local Skills now guide Go backend work, Go-to-Core
+adapter changes, safe project-writer changes and milestone QA. Scoped
+instructions preserve the `internal/` application boundary and `ansible-core/`
+infrastructure boundary. Implementer/reviewer roles are documented prompt
+templates because this repository has no executable role-definition mechanism.
+Wails/React guidance is intentionally deferred until concrete UI contracts
+exist.
 
 ### BACKEND-01: Core process adapter
 

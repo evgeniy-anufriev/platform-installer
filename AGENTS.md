@@ -35,6 +35,12 @@ configuration, runtime projections, plans, facts and results as derived state.
   semantics and must not become the owner of Installer UI lifecycle.
 - Go must not recreate Ansible precedence or service/Core rules. Future Wails is
   a thin transport over the same Go backend.
+- React/Wails owns rendering and transport only: it must not parse Ansible YAML
+  or calculate topology, FQDN/VIP/provider, validation or service semantics.
+- Core owns derived `ProjectSnapshot`, endpoint/provider/PKI and deployment
+  semantics. Python must not own Installer edit/session/process/UI lifecycle.
+- No second desired-state persistence exists: SQLite may index runtime state but
+  never becomes `config_json` authority; generated state is machine-owned only.
 - UI is an editor and projection of the portable contract, not another source of truth.
 - Service capabilities are declared by versioned service packages, not hard-coded into React.
 - `project.yml` is optional compatibility metadata for the established

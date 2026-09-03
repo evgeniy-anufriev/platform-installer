@@ -78,6 +78,11 @@ semantics; Python/Ansible retains project loading, precedence and all
 infrastructure authority. No Wails/React, apply/runtime execution, events or
 second desired-state store was added.
 
+DEVX-01 is DONE. The repository now has scoped Go/Core engineering rules,
+repository-local Codex Skills for backend, adapter, writer and QA work,
+documented implementer/reviewer prompt templates and a standardized final QA
+workflow. Future Wails remains a thin deferred transport concern.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -422,9 +427,8 @@ UI-DESIGN-01, UI-BE-01, UI-BE-02 and UI-BE-03 are complete. UI-BE-03 adds the
 bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
-POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1 and UI-BE-03
-are DONE. DEVX-01 is NEXT: skills, reviewer agents, scoped `AGENTS.md`
-cleanup and reusable QA workflow. UI-BE-04 is AFTER DEVX-01 and will add
+POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03
+and DEVX-01 are DONE. UI-BE-04 is NEXT and will add
 validation/plan/execution/events to the same backend. Production UI-01 remains
 dependent on the accepted read, writer and execution boundaries over one
 standard Ansible project.
