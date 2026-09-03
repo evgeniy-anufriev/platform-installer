@@ -46,6 +46,12 @@ OS acceptance proved owner failure causes atomic configured-VIP migration,
 natural recovery without failback, non-owner failure isolation, and idempotent
 verify/repeat apply.
 
+NET-04.2 is DONE. Successful source lifecycles run one read-only,
+deduplicated integration projection, then full-model BIND before HAProxy even
+when the source is already `changed=0`. Three-node acceptance proved provider
+drift repair, desired-state-only add/remove, serial `4 → 5`, clean repeats,
+shared PKI stability and final Keepalived health/idempotence.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.

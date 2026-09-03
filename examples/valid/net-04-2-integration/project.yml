@@ -1,0 +1,17 @@
+apiVersion: platform.installer/v2alpha1
+kind: PlatformProject
+metadata:
+  id: net-04-2-integration
+  name: Service-driven provider reconciliation fixture
+desiredStateContract: platform.installer/project-desired-state/v2alpha1
+artifactLock:
+  apiVersion: platform.installer/artifacts/v1alpha1
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+catalogLock:
+  apiVersion: platform.installer/catalog/v1alpha1
+  digest: sha256:77a8a7fda31b4582ccbaa636771efdddf8f4803a4248e3cf1372b64a381ef4d0
+  services:
+    bind: {definitionVersion: 1.0.0-alpha.1, digest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611}
+    haproxy: {definitionVersion: 1.0.0-alpha.1, digest: sha256:00edc97368e0c93469002276b74e2f58bb43e9b68c5769ca56c25f5854c12a22}
+    keepalived: {definitionVersion: 1.0.0-alpha.1, digest: sha256:ac5b49ab540e2bf719783ed3fa28e36570dc4123d5ef90013f85050598e774cd}
+    postgresql: {definitionVersion: 1.0.0-alpha.1, digest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda}

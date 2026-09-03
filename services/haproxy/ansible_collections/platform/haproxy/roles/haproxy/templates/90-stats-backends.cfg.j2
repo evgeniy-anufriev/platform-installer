@@ -16,11 +16,3 @@ backend {{ deployment_id }}-{{ host_endpoint.hostId }}-{{ host_endpoint.endpoint
 {% endfor %}
 {% endif %}
 {% endfor %}
-{% for backend in platform_haproxy_runtime_projection.backends.backends | dict2items | selectattr('key', 'in', platform_deployments) | map(attribute='value') | flatten | sort(attribute='backendName') %}
-backend {{ backend.backendName }}
-    balance {{ backend.settings.balance }}
-    default-server{% if backend.settings.ssl %} ssl verify {{ backend.settings.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% endif %}{% if backend.settings.check %} check fall {{ backend.settings.fall }} rise {{ backend.settings.rise }}{% endif %}{{ '\n' }}
-{% for target in backend.targets %}
-    server {{ target.serverName }} {{ target.address }}:{{ target.port }}
-{% endfor %}
-{% endfor %}

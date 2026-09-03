@@ -104,7 +104,7 @@
     group: "{{ platform_postgresql_group }}"
     mode: '0600'
   when: not (platform_postgresql_verify_only | bool)
-  notify: Reload PostgreSQL
+  notify: Reload PostgreSQL TLS material
 
 - name: Render PostgreSQL host authentication configuration
   ansible.builtin.template:
@@ -114,7 +114,7 @@
     group: "{{ platform_postgresql_group }}"
     mode: '0600'
   when: not (platform_postgresql_verify_only | bool)
-  notify: Reload PostgreSQL
+  notify: Reload PostgreSQL TLS material
 
 - name: Configure pg_auto_failover lifecycle
   ansible.builtin.include_tasks: pg_auto_failover.yml
@@ -175,6 +175,70 @@
     state: started
   when: not (platform_postgresql_verify_only | bool)
 
+- name: Apply changed PostgreSQL TLS material before TLS credential probes
+  ansible.builtin.meta: flush_handlers
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Derive materialized PostgreSQL TLS leaf fingerprint
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_postgresql_tls_directory }}/certificate.pem", -noout, -fingerprint, -sha256]
+  register: _platform_postgresql_materialized_leaf
+  changed_when: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Derive PostgreSQL network listener leaf fingerprint
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
+    openssl x509 -noout -fingerprint -sha256
+  args:
+    executable: /bin/bash
+  register: _platform_postgresql_serving_leaf_before_reload
+  changed_when: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Reload managed PostgreSQL child only when the serving TLS leaf is stale
+  ansible.builtin.command:
+    argv: [pg_ctl, reload, -D, "{{ platform_postgresql_data_directory }}"]
+  become_user: "{{ platform_postgresql_user }}"
+  register: _platform_postgresql_serving_leaf_reload
+  changed_when: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - _platform_postgresql_materialized_leaf.stdout | trim != _platform_postgresql_serving_leaf_before_reload.stdout | trim
+
+- name: Wait for PostgreSQL after serving TLS leaf reload
+  ansible.builtin.command:
+    argv: [pg_isready, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}"]
+  register: _platform_postgresql_serving_leaf_ready
+  changed_when: false
+  retries: 20
+  delay: 1
+  until: _platform_postgresql_serving_leaf_ready.rc == 0
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - _platform_postgresql_serving_leaf_reload is defined
+    - _platform_postgresql_serving_leaf_reload.changed | default(false)
+
+- name: Recheck PostgreSQL network listener leaf after corrective reload
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
+    openssl x509 -noout -fingerprint -sha256
+  args:
+    executable: /bin/bash
+  register: _platform_postgresql_serving_leaf_after_reload
+  changed_when: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Require PostgreSQL network listener to serve materialized TLS leaf
+  ansible.builtin.assert:
+    that: >-
+      _platform_postgresql_materialized_leaf.stdout | trim ==
+      _platform_postgresql_serving_leaf_after_reload.stdout | default(_platform_postgresql_serving_leaf_before_reload.stdout, true) | trim
+    fail_msg: POSTGRES_TLS_SERVING_CERTIFICATE_MISMATCH
+  when: not (platform_postgresql_verify_only | bool)
+
 - name: Discover whether a pg_auto_failover data member is writable before credential reconciliation
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -Atqc, 'SELECT CASE WHEN pg_is_in_recovery() THEN ''standby'' ELSE ''primary'' END']
@@ -203,6 +267,17 @@
     - not (platform_postgresql_verify_only | bool)
     - platform_postgresql_mode == 'pg_auto_failover'
     - "'monitor' in _platform_postgresql_member.roles"
+
+- name: Block monitor credential reconciliation when TLS verification fails
+  ansible.builtin.assert:
+    that: "'certificate verify failed' not in (platform_postgresql_monitor_credential_login.stderr | default('') | lower)"
+    fail_msg: POSTGRES_MONITOR_CREDENTIAL_TLS_PREREQUISITE_FAILED
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in _platform_postgresql_member.roles"
+    - platform_postgresql_monitor_credential_login.rc | default(0) != 0
 
 - name: Inspect pg_auto_failover monitor credential privileges
   ansible.builtin.command:
@@ -261,6 +336,18 @@
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
 
+- name: Block replication credential reconciliation when TLS verification fails
+  ansible.builtin.assert:
+    that: "'certificate verify failed' not in (platform_postgresql_replication_login.stderr | default('') | lower)"
+    fail_msg: POSTGRES_REPLICATION_CREDENTIAL_TLS_PREREQUISITE_FAILED
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+    - platform_postgresql_replication_login.rc | default(0) != 0
+
 - name: Reconcile pg_auto_failover replication credential on the writable data member
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
@@ -281,6 +368,19 @@
     - platform_postgresql_mode == 'pg_auto_failover'
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
+    - platform_postgresql_replication_login.rc | default(1) != 0
+
+- name: Block monitor healthcheck credential reconciliation when TLS verification fails
+  ansible.builtin.assert:
+    that: "'certificate verify failed' not in (platform_postgresql_healthcheck_login.stderr | default('') | lower)"
+    fail_msg: POSTGRES_HEALTHCHECK_CREDENTIAL_TLS_PREREQUISITE_FAILED
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+    - platform_postgresql_healthcheck_login.rc | default(0) != 0
     - platform_postgresql_replication_login.rc | default(1) != 0
 
 - name: Probe monitor healthcheck credential over TLS

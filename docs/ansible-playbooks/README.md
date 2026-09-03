@@ -20,6 +20,47 @@ ansible-playbook -i examples/valid/<fixture>/inventory/hosts.yml <playbook> \
 Перед apply запускайте `ansible-core/playbooks/validate.yml`: он работает только
 на controller и не подключается к targets.
 
+## Синхронизация исходников для QA на RED OS
+
+Для запуска Core-тестов на RED OS используйте стандартный helper из корня
+репозитория:
+
+```powershell
+$qaWorkspace = .\scripts\qa-sync.ps1 `
+  -TargetHost <qa-host> `
+  -TargetUser <qa-user> `
+  -KeyPath .\.runtime\<qa-key>
+```
+
+Helper применяет только `scp -r`, создаёт уникальный workspace под
+`/var/tmp`, передаёт каталоги `ansible-core`, `services`, `examples` и
+`contracts`, затем проверяет их наличие и обязательный catalog generator.
+Полученный путь используйте как корень QA-запуска. После завершения удалите
+только этот workspace:
+
+```powershell
+.\scripts\qa-sync.ps1 `
+  -Cleanup `
+  -CleanupHost <qa-host> `
+  -CleanupUser <qa-user> `
+  -CleanupKeyPath .\.runtime\<qa-key> `
+  -RemoteWorkspace $qaWorkspace
+```
+
+При необходимости отдельно проверьте уже переданный workspace:
+
+```powershell
+.\scripts\qa-sync-smoke.ps1 `
+  -TargetHost <qa-host> `
+  -TargetUser <qa-user> `
+  -KeyPath .\.runtime\<qa-key> `
+  -RemoteWorkspace $qaWorkspace
+```
+
+Не используйте tar-потоки или архивные конвейеры. Ошибка передачи — это сбой
+QA-инфраструктуры, а не дефект продукта. Синхронизация не затрагивает
+постоянные execution, PKI, generated или service state каталоги.
+
 ## Core playbooks
 
 | Playbook | Назначение |

@@ -145,29 +145,90 @@ class PkiResolutionTests(unittest.TestCase):
             out["requests"][0]["dnsNames"],
         )
 
-    def test_service_type_filter_materializes_only_the_selected_consumers(self):
-        topology = self.topology()
-        topology["serviceDeployments"]["service-b"] = {
+    def test_same_host_tls_identity_is_shared_across_service_consumers(self):
+        topology = self.topology("HOST")
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
+            "includeHostDns": False,
+            "includeHostIp": False,
+            "includeEndpointFqdns": True,
+            "includeEndpointWildcard": False,
+            "includeEndpointVip": False,
+        }
+        topology["serviceDeployments"]["haproxy"] = {
             "serviceType": "haproxy",
+            "endpointGroup": "asutp",
             "configuration": {"tlsProfile": "platform-tls"},
+            "members": {"member-3": {"host": "node1", "roles": ["server"]}},
+        }
+        endpoints = {"endpoints": {
+            "service-a": {"endpointGroupId": "asutp", "sanDnsNames": ["postgres.asutp.scada.local"]},
+            "haproxy": {"endpointGroupId": "asutp", "sanDnsNames": ["haproxy.asutp.scada.local"]},
+        }}
+        out = pki.resolve_certificate_requests(
+            "p", topology,
+            {"node1": {"ansible_host": "192.0.2.11"}, "node2": {"ansible_host": "192.0.2.12"}},
+            self.defaults, endpoints,
+        )
+        self.assertEqual("PASS", out["status"])
+        self.assertEqual(2, len(out["requests"]))
+        node1 = next(request for request in out["requests"] if request["id"] == "platform-tls--node1")
+        self.assertEqual({"service-a", "haproxy"}, {consumer["deploymentId"] for consumer in node1["consumers"]})
+        self.assertEqual(["haproxy.asutp.scada.local", "postgres.asutp.scada.local"], node1["dnsNames"])
+        self.assertEqual(1, len([plan for plan in out["materializationPlans"] if plan["requestId"] == "platform-tls--node1"]))
+
+    def test_pki_wildcard_policy_is_independent_from_dns_wildcard_publication(self):
+        topology = self.topology("DEPLOYMENT")
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
+            "includeHostDns": False,
+            "includeHostIp": False,
+            "includeEndpointFqdns": True,
+            "includeEndpointWildcard": True,
+            "includeEndpointVip": False,
+        }
+        endpoints = {"endpoints": {"service-a": {
+            "endpointGroupId": "asutp", "sanDnsNames": ["service-a.asutp.scada.local"],
+            "wildcardDnsNames": ["*.asutp.scada.local"],
+        }}}
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}}, self.defaults, endpoints)
+        self.assertIn("*.asutp.scada.local", out["requests"][0]["dnsNames"])
+
+    def test_dns_wildcard_does_not_add_a_certificate_wildcard_without_pki_policy(self):
+        topology = self.topology("DEPLOYMENT")
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
+            "includeHostDns": False,
+            "includeHostIp": False,
+            "includeEndpointFqdns": True,
+            "includeEndpointWildcard": False,
+            "includeEndpointVip": False,
+        }
+        endpoints = {"endpoints": {"service-a": {
+            "endpointGroupId": "asutp", "sanDnsNames": ["service-a.asutp.scada.local"],
+            "wildcardDnsNames": ["*.asutp.scada.local"],
+        }}}
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}}, self.defaults, endpoints)
+        self.assertNotIn("*.asutp.scada.local", out["requests"][0]["dnsNames"])
+
+    def test_same_domain_pki_wildcards_are_valid_for_distinct_exact_endpoint_groups(self):
+        topology = self.topology("DEPLOYMENT")
+        topology["serviceDeployments"]["service-b"] = {
+            "serviceType": "postgresql", "configuration": {"tlsProfile": "platform-tls"},
             "members": {"member-3": {"host": "node3", "roles": ["server"]}},
         }
-        out = pki.resolve_certificate_requests(
-            "p", topology, {"node1": {}, "node2": {}, "node3": {}}, self.defaults,
-            service_types=["haproxy"],
-        )
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
+            "includeHostDns": False,
+            "includeHostIp": False,
+            "includeEndpointFqdns": True,
+            "includeEndpointWildcard": True,
+            "includeEndpointVip": False,
+        }
+        endpoints = {"endpoints": {
+            "service-a": {"endpointGroupId": "asutp-a", "sanDnsNames": ["service-a.asutp.scada.local"], "wildcardDnsNames": ["*.asutp.scada.local"]},
+            "service-b": {"endpointGroupId": "asutp-b", "sanDnsNames": ["service-b.asutp.scada.local"], "wildcardDnsNames": ["*.asutp.scada.local"]},
+        }}
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}, "node3": {}}, self.defaults, endpoints)
         self.assertEqual("PASS", out["status"])
-        self.assertEqual(["platform-tls--node3"], [request["id"] for request in out["requests"]])
-
-    def test_service_type_filter_has_a_clean_empty_result_without_tls_consumers(self):
-        out = pki.resolve_certificate_requests(
-            "p", self.topology(), {"node1": {}, "node2": {}}, self.defaults,
-            service_types=["postgresql"],
-        )
-        self.assertEqual("PASS", out["status"])
-        self.assertEqual([], out["requests"])
-        self.assertEqual([], out["materializationPlans"])
-
+        self.assertEqual(2, len(out["requests"]))
+        self.assertTrue(all("*.asutp.scada.local" in request["dnsNames"] for request in out["requests"]))
 
 if __name__ == "__main__":
     unittest.main()

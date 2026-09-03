@@ -118,6 +118,12 @@ The Windows development workstation is not the canonical runtime for Python/Ansi
 - Test commands must use the current working-tree version, not a stale remote copy.
 - Transfer only required repository content to a temporary remote test workspace.
 - Clean temporary remote test workspaces after QA unless preservation is explicitly required for debugging.
+- Use `scripts/qa-sync.ps1` for Windows to RED OS source transfer. It uses
+  `scp -r` to copy only `ansible-core`, `services`, `examples` and `contracts`
+  into a unique `/var/tmp/platform-installer-qa-*` workspace, verifies the
+  source tree, and must be cleaned with the same helper after QA. Do not use
+  tar streaming, `tar | ssh tar`, or ad-hoc archive pipelines. Transfer
+  failures are QA infrastructure failures, not product failures.
 - Never modify target hosts during read-only Core tests.
 - RED OS is the primary current Core QA environment.
 - ALT Linux validation is required only for ALT-specific milestone behavior or when explicitly requested.

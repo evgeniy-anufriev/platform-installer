@@ -20,11 +20,45 @@
   loop: [10-public.cfg, 20-local-stats.cfg, 90-stats-backends.cfg]
   register: _platform_haproxy_fragment_install
 
+- name: Install exact validated managed HAProxy application backend fragments
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
+    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  loop: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
+  register: _platform_haproxy_application_backend_install
+
+- name: Discover stale Platform-managed HAProxy application backend fragments
+  ansible.builtin.find:
+    paths: "{{ platform_haproxy_conf_directory }}"
+    patterns: '30-backend-*.cfg'
+    use_regex: false
+    file_type: file
+    recurse: false
+  register: _platform_haproxy_active_application_backend_files
+
+- name: Remove stale Platform-managed HAProxy application backend fragments
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: >-
+    {{ _platform_haproxy_active_application_backend_files.files |
+       rejectattr('path', 'in', (platform_haproxy_managed_application_backend_files | default([]) |
+       map('regex_replace', '^', platform_haproxy_conf_directory ~ '/') | list)) | list }}
+  loop_control:
+    label: "{{ item.path }}"
+  register: _platform_haproxy_stale_application_backend_remove
+
 - name: Record whether the active HAProxy graph changed
   ansible.builtin.set_fact:
     platform_haproxy_active_artifacts_changed: >-
       {{ _platform_haproxy_main_config_install.changed or
-         (_platform_haproxy_fragment_install.results | selectattr('changed') | list | length > 0) }}
+         (_platform_haproxy_fragment_install.results | selectattr('changed') | list | length > 0) or
+         (_platform_haproxy_application_backend_install.results | default([]) | selectattr('changed') | list | length > 0) or
+         (_platform_haproxy_stale_application_backend_remove.results | default([]) | selectattr('changed') | list | length > 0) }}
 
 - name: Calculate deterministic active HAProxy graph digest
   ansible.builtin.shell: >-

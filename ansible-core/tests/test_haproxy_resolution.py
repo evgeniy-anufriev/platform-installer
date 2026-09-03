@@ -43,6 +43,7 @@ class HAProxyResolutionTests(unittest.TestCase):
         self.assertEqual("PASS", result["status"], result["findings"])
         backend = result["backends"]["haproxy"][0]
         self.assertEqual(5432, backend["targets"][0]["port"])
+        self.assertEqual("30-backend-postgres-main-asutp.cfg", backend["configFileName"])
         self.assertNotIn("sslVerify", backend["settings"])
         self.assertNotIn("fall", backend["settings"])
 
@@ -53,6 +54,14 @@ class HAProxyResolutionTests(unittest.TestCase):
         endpoints = ENDPOINTS.resolve_service_endpoints(topology, CATALOG, inventory_deployments=PLACEMENT)
         result = HAPROXY.resolve_haproxy_backends(topology, CATALOG, HOSTS, PLACEMENT, endpoints, DEFAULTS)
         self.assertIn("HAPROXY_BACKEND_PORT_UNRESOLVED", [item["code"] for item in result["findings"]])
+
+    def test_removed_relation_is_absent_from_the_rebuilt_full_backend_model(self):
+        topology = {key: value for key, value in TOPOLOGY.items()}
+        topology["serviceDeployments"] = {key: dict(value) for key, value in TOPOLOGY["serviceDeployments"].items()}
+        topology["serviceDeployments"]["postgres-main"].pop("haproxy")
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, CATALOG, inventory_deployments=PLACEMENT)
+        result = HAPROXY.resolve_haproxy_backends(topology, CATALOG, HOSTS, PLACEMENT, endpoints, DEFAULTS)
+        self.assertEqual({}, result["backends"])
 
 if __name__ == "__main__":
     unittest.main()

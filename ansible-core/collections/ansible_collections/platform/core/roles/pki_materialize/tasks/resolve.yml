@@ -78,7 +78,6 @@
     project_id: "{{ platform_project_id | default((inventory_dir | dirname | basename), true) }}"
     pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
     resolved_service_endpoints: "{{ platform_pki_resolved_service_endpoints | default({}) }}"
-    service_types: "{{ platform_pki_service_types }}"
   register: platform_pki_managed_resolution
   when: platform_pki_resolve_managed | bool
 

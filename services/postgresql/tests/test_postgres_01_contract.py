@@ -15,6 +15,8 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.hba = (ROLE / "templates/pg_hba.conf.j2").read_text(encoding="utf-8")
+        self.tls = (ROLE / "tasks/resolve_tls.yml").read_text(encoding="utf-8")
+        self.handlers = (ROLE / "handlers/main.yml").read_text(encoding="utf-8")
 
     def test_standalone_retains_platform_initdb(self):
         self.assertIn("Initialize PostgreSQL exactly once", self.main)
@@ -92,6 +94,30 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_replication_credential_reconcile_is_gated_by_a_read_only_probe(self):
         self.assertIn("Probe replication credential over TLS on the writable data member", self.main)
         self.assertIn("platform_postgresql_replication_login.rc | default(1) != 0", self.main)
+
+    def test_tls_material_is_reloaded_by_the_pg_autoctl_owned_postgres_process(self):
+        self.assertIn("notify: Reload PostgreSQL TLS material", self.tls)
+        self.assertIn("pg_ctl, reload, -D", self.handlers)
+        self.assertLess(
+            self.main.index("Apply changed PostgreSQL TLS material before TLS credential probes"),
+            self.main.index("Probe data-to-monitor credential over TLS"),
+        )
+
+    def test_tls_verification_failure_blocks_credential_ddl(self):
+        self.assertIn("Block monitor credential reconciliation when TLS verification fails", self.main)
+        self.assertIn("Block replication credential reconciliation when TLS verification fails", self.main)
+        self.assertIn("Block monitor healthcheck credential reconciliation when TLS verification fails", self.main)
+        self.assertIn("certificate verify failed", self.main)
+
+    def test_serving_certificate_guard_reloads_only_on_a_network_fingerprint_mismatch(self):
+        self.assertIn("Derive PostgreSQL network listener leaf fingerprint", self.main)
+        self.assertIn("Reload managed PostgreSQL child only when the serving TLS leaf is stale", self.main)
+        self.assertIn("pg_ctl, reload, -D", self.main)
+        self.assertIn("POSTGRES_TLS_SERVING_CERTIFICATE_MISMATCH", self.main)
+        self.assertLess(
+            self.main.index("Require PostgreSQL network listener to serve materialized TLS leaf"),
+            self.main.index("Probe data-to-monitor credential over TLS"),
+        )
 
     def test_pg_autoctl_basebackup_has_tls_only_hba_access(self):
         self.assertIn("hostssl replication {{ platform_postgresql_replication_credential.username }}", self.hba)

@@ -109,7 +109,9 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
         if not targets:
             findings.append(_finding("HAPROXY_BACKEND_TARGETS_UNRESOLVED", field, "HAProxy target has no resolved host placements"))
             continue
-        record = {"targetDeploymentId": target_id, "backendName": "%s-%s" % (target_id, target.get("endpointGroup")),
+        endpoint_group_id = target.get("endpointGroup")
+        record = {"targetDeploymentId": target_id, "backendName": "%s-%s" % (target_id, endpoint_group_id),
+                  "configFileName": "30-backend-%s-%s.cfg" % (target_id, endpoint_group_id),
                   "endpoint": endpoint_map.get(target_id, {}), "settings": effective, "targets": targets}
         record["fingerprint"] = canonical_digest(record)
         resolved.setdefault(haproxy_id, []).append(record)

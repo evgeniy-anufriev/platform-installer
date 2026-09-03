@@ -86,9 +86,12 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
     findings, zones = [], {}
 
-    endpoint_projection = resolve_service_endpoints(desired_state, service_catalog)
+    endpoint_projection = resolve_service_endpoints(
+        desired_state, service_catalog, inventory_deployments=inventory_deployments
+    )
     findings.extend(endpoint_projection.get("findings", []))
     endpoints = endpoint_projection.get("endpoints", {}) if endpoint_projection.get("status") == "PASS" else {}
+    host_endpoints = endpoint_projection.get("hostEndpoints", {}) if endpoint_projection.get("status") == "PASS" else {}
 
     # Host records are mandatory for every canonical project host, even when a
     # malformed DNS participant would otherwise short-circuit a zone.
@@ -144,7 +147,9 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
             owner = "%s.%s" % (host_id, zone)
             owners[owner] = {address}
 
-        endpoint_groups = sorted(set(item.get("endpointGroupId") for item in endpoints.values() if isinstance(item, dict)))
+        endpoint_records = dict(endpoints)
+        endpoint_records.update(host_endpoints)
+        endpoint_groups = sorted(set(item.get("endpointGroupId") for item in endpoint_records.values() if isinstance(item, dict)))
         provider_values = {}
         for group_id in endpoint_groups:
             group = groups.get(group_id, {})
@@ -161,7 +166,7 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
                 continue
             provider_values[group_id] = addresses
 
-        for endpoint_id, endpoint in sorted(endpoints.items()):
+        for endpoint_id, endpoint in sorted(endpoint_records.items()):
             group_id = endpoint.get("endpointGroupId")
             addresses = provider_values.get(group_id)
             if not addresses:

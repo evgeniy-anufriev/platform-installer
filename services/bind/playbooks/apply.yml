@@ -6,6 +6,17 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Load persistent generated state for BIND lifecycle reconciliation
+      ansible.builtin.include_vars:
+        file: "{{ platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true) }}"
+        name: _platform_bind_persisted_state_file
+      failed_when: false
+
+    - name: Select persistent generated state for BIND lifecycle reconciliation
+      ansible.builtin.set_fact:
+        _platform_bind_persisted_generated_state: >-
+          {{ _platform_bind_persisted_state_file.platform_generated_state | default(platform_generated_state | default({}), true) }}
+
     - name: Load published service catalog for BIND serial resolution
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
@@ -30,6 +41,14 @@
         inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
       register: platform_bind_resolution
 
+    - name: Recover audited BIND DNS lifecycle metadata into the persistent project root
+      platform.core.recover_dns_lifecycle:
+        generated_state: "{{ _platform_bind_persisted_generated_state }}"
+        zones: "{{ platform_bind_resolution.resolved_dns_zones.zones }}"
+        recovery: "{{ platform_bind_lifecycle_recovery }}"
+      register: _platform_bind_lifecycle_recovery
+      when: platform_bind_lifecycle_recovery | default({}) | length > 0
+
     - name: Initialize generated state envelope for BIND serial lifecycle
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
@@ -38,7 +57,11 @@
                'kind': 'PlatformGeneratedState',
                'metadata': {'projectId': (platform_project_id | default((inventory_dir | dirname | basename), true))},
                'serviceDeployments': {}
-             } | combine(platform_generated_state | default({}), recursive=True) }}
+             } | combine(
+                   (_platform_bind_lifecycle_recovery.recovered_dns_lifecycle.generatedState
+                    if (_platform_bind_lifecycle_recovery is defined and not (_platform_bind_lifecycle_recovery.skipped | default(false)))
+                    else _platform_bind_persisted_generated_state),
+                   recursive=True) }}
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
     - name: Require existing DNS lifecycle state for read-only retry projection
@@ -80,6 +103,13 @@
           generatedState: >-
             {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
                else _platform_bind_next_state }}
+
+    - name: Create persistent generated-state directory for BIND serial lifecycle
+      ansible.builtin.file:
+        path: "{{ (platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true)) | dirname }}"
+        state: directory
+        mode: '0700'
+      when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
     - name: Persist BIND generated serial state atomically
       ansible.builtin.copy:

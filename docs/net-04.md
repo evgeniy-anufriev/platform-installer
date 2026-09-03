@@ -154,17 +154,16 @@ ssl: true
 sslVerify: required  # required | none
 ```
 
-Target service packages may publish sensible HAProxy integration defaults in
-their role defaults. These values are integration metadata, not native
-application settings. The resolver receives package defaults explicitly from
-the existing service-package loading boundary; the pure resolver does not read
-role files itself.
+Backend settings are declared in the target service's
+`serviceDeployment.haproxy.backend`. HAProxy role defaults contain only
+HAProxy/package-owned defaults (for example, the local stats backend), not
+per-service backend defaults. The resolver receives the authored backend
+object explicitly and does not infer service-specific defaults.
 
 Effective precedence is:
 
 ```text
-target service package backend defaults
--> serviceDeployment.haproxy.backend
+serviceDeployment.haproxy.backend
 -> future host/member override, only when explicitly supported
 ```
 
@@ -197,8 +196,7 @@ Core discovers relations from desired state, not from Jinja:
 ```text
 target service deployment
   + serviceDeployment.haproxy.deploymentRef
-  + target service package backend defaults
-  + serviceDeployment.haproxy.backend override
+  + serviceDeployment.haproxy.backend
   + target topology and listener projection
   + resolved deployment/host endpoints
         -> ResolvedHAProxyBackend
@@ -290,7 +288,7 @@ Focused contract tests cover:
 - endpoint-group mismatch;
 - a service without `haproxy` producing no backend;
 - zero-or-one integration cardinality;
-- package defaults plus a partial BackendSettings override;
+- explicit resolver defaults plus a partial BackendSettings override;
 - `ssl: false` clearing inherited `sslVerify`;
 - `check: false` clearing inherited `fall` and `rise`;
 - deterministic relation/backend ordering and fingerprinting;

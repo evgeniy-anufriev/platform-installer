@@ -453,6 +453,14 @@ failure isolation, and clean final verify/repeat apply.
 
 ## Phase E — Go backend adapter
 
+### NET-04.2: Service-driven provider reconciliation
+
+Status: DONE. A successful service lifecycle invokes one deterministic,
+read-only provider projection; BIND reconciles before HAProxy from complete
+canonical desired state. Acceptance proved deduplication, full-model drift
+repair, desired-state add/remove cleanup, serial `4 → 5`, clean repeats and
+shared-PKI stability.
+
 ### BACKEND-01: Core process adapter
 
 Deliverables:

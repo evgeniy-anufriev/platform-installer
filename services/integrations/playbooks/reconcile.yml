@@ -1,0 +1,27 @@
+---
+- name: Resolve provider deployments implied by the completed source lifecycle
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Resolve service-driven provider integrations read-only
+      platform.core.resolve_service_integrations:
+        desired_state: "{{ platform_desired_state }}"
+        source_service_types: "{{ platform_integration_source_service_types | default([]) }}"
+      register: _platform_service_integration_resolution
+
+    - name: Publish execution-local provider integration projection
+      ansible.builtin.set_fact:
+        platform_service_integration_projection: "{{ _platform_service_integration_resolution.resolved_service_integrations.integrations }}"
+
+- import_playbook: ../../bind/playbooks/reconcile.yml
+  when: hostvars['localhost'].platform_service_integration_projection.dnsDeployments | length > 0
+  vars:
+    platform_provider_integration_recursion: false
+    platform_provider_selected_deployments: "{{ hostvars['localhost'].platform_service_integration_projection.dnsDeployments }}"
+
+- import_playbook: ../../haproxy/playbooks/reconcile.yml
+  when: hostvars['localhost'].platform_service_integration_projection.haproxyDeployments | length > 0
+  vars:
+    platform_provider_integration_recursion: false
+    platform_provider_selected_deployments: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyDeployments }}"

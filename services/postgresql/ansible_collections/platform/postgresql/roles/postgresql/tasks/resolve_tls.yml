@@ -49,6 +49,7 @@
     - {name: certificate.pem, mode: '0644'}
     - {name: private-key.pem, mode: '0600'}
   no_log: true
+  notify: Reload PostgreSQL TLS material
   when: not (platform_postgresql_verify_only | bool)
 
 - name: Check PostgreSQL-owned TLS files read-only

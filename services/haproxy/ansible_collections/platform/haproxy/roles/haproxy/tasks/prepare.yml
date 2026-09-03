@@ -59,7 +59,7 @@
     paths: "{{ platform_haproxy_conf_directory }}"
     file_type: file
     recurse: false
-    excludes: [10-public.cfg, 20-local-stats.cfg, 90-stats-backends.cfg]
+    excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
   register: _platform_haproxy_third_party_fragments
 
 - name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
@@ -93,6 +93,17 @@
     platform_haproxy_participant_addresses: >-
       {{ groups['platform_targets'] | default([]) | map('extract', hostvars, 'ansible_host') | list }}
 
+- name: Select complete managed application backend file model
+  ansible.builtin.set_fact:
+    platform_haproxy_application_backends: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+         flatten | sort(attribute='configFileName') }}
+    platform_haproxy_managed_application_backend_files: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+         flatten | map(attribute='configFileName') | sort | list }}
+
 - name: Render full Platform HAProxy candidate
   ansible.builtin.template:
     src: "{{ item.src }}"
@@ -105,6 +116,20 @@
     - {src: 10-public.cfg.j2, dest: conf.d/10-public.cfg}
     - {src: 20-local-stats.cfg.j2, dest: conf.d/20-local-stats.cfg}
     - {src: 90-stats-backends.cfg.j2, dest: conf.d/90-stats-backends.cfg}
+  changed_when: false
+
+- name: Render one managed HAProxy application backend candidate per resolved backend
+  ansible.builtin.template:
+    src: 30-application-backend.cfg.j2
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.configFileName }}"
+    owner: root
+    group: root
+    mode: '0640'
+  loop: "{{ platform_haproxy_application_backends }}"
+  loop_control:
+    label: "{{ item.configFileName }}"
+  vars:
+    platform_haproxy_application_backend: "{{ item }}"
   changed_when: false
 
 - name: Validate structured global HAProxy log settings
