@@ -9,14 +9,14 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 ## Current phase
 
 CORE-01 through CORE-07A, PKI-01, EXEC-01, SERVICE-01A through SERVICE-01D,
-SERVICE-02A, UI-DESIGN-01, UI-BE-01, UI-BE-02 and POSTGRES-01 are complete. POSTGRES-01 is the
+SERVICE-02A, UI-DESIGN-01, UI-BE-01, UI-BE-02, UI-BE-03, DEVX-01 and POSTGRES-01 are complete. POSTGRES-01 is the
 accepted standalone include-based PostgreSQL and pg_auto_failover baseline.
 UI-BE-02 is the accepted controller-only read-only ProjectSnapshot boundary.
 UI-BE-03 is the accepted safe Ansible-native writer: Go owns Installer
 application semantics and invokes Core as authoritative staged verifier. It
 adds no production UI, apply/runtime execution or second desired-state store.
-Do not begin UI-BE-04, UI-01 or another production service unless the next
-milestone is explicitly requested.
+UI-BE-04 is the current explicitly requested milestone. Do not begin UI-01 or
+another production service unless its milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI
@@ -105,8 +105,8 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current milestone decision is recorded in `CURRENT_STATE.md`: UI-BE-03 is
-DONE and DEVX-01 is next. PostgreSQL behavior must not be inferred from
+The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01 is
+DONE and UI-BE-04 is current. PostgreSQL behavior must not be inferred from
 the completed PKI-01 foundation; its role must consume explicit PKI
 materialization plans at runtime.
 
