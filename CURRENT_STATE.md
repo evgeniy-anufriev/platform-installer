@@ -61,6 +61,14 @@ by default, while Installer-owned standard Ansible files are the recommended
 write target. No production Go/Wails/React code, YAML writer or second
 desired-state store was added.
 
+UI-BE-02 is DONE. The controller-only `ProjectSnapshot/v1alpha1` query opens
+the same standard Ansible project with Ansible-resolved inventory variables
+and composes deterministic catalog, topology, configuration, endpoint, DNS,
+HAProxy, PKI, validation and readiness views without target contact or writes.
+Raw-byte project/document revisions, honest physical provenance, partial
+results and secret exclusion are accepted against a three-host six-service
+fixture, including offline RED OS execution.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -401,13 +409,14 @@ desired-state store was added.
 
 CORE-01 through CORE-07, CORE-07A, PKI-01, SERVICE-01A through SERVICE-01D,
 EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A,
-UI-DESIGN-01 and UI-BE-01 are complete. UI-DESIGN-01 and UI-BE-01 are
-documentation/contract design only: no Wails/React, UI persistence, YAML
-writer or second desired-state model exists.
+UI-DESIGN-01, UI-BE-01 and UI-BE-02 are complete. UI-DESIGN-01 and UI-BE-01
+are documentation/contract design; UI-BE-02 adds only the controller-side
+read query. No Wails/React, UI persistence, YAML writer or second desired-state
+model exists.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04 and NET-04.1 are DONE.
-The next recommended milestone is UI-BE-02, a read-only ProjectSnapshot and
-related query boundary. It must not begin without an explicit request.
+The next recommended milestone is UI-BE-03, the safe Ansible-native writer and
+EditPlan/commit boundary. It must not begin without an explicit request.
 Production UI-01 remains dependent on UI-BE-02 read models, UI-BE-03 safe
 Ansible-native writes and UI-BE-04 validate/plan/execute/events; all must
 continue to read, edit and execute the same standard Ansible project.

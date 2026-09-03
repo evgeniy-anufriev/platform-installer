@@ -98,7 +98,9 @@ def _used_definition_digests(topology, service_catalog):
     }
 
 
-def resolve_topology(manifest, topology, inventory_hosts, service_catalog, placement_by_host=None, inventory_deployments_by_host=None, ansible_desired_state=None):
+def resolve_topology(manifest, topology, inventory_hosts, service_catalog, placement_by_host=None,
+                     inventory_deployments_by_host=None, ansible_desired_state=None,
+                     inventory_host_addresses=None):
     """Resolve explicit topology without filesystem, Ansible or host-var knowledge.
 
     CORE-01 remains responsible for project/catalog/reference and manifest
@@ -189,6 +191,7 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
         inventory_hosts=inventory_hosts,
         placements=placements,
         host_scoped_deployments=host_scoped_deployments,
+        inventory_host_addresses=inventory_host_addresses,
     )
     findings = validation["findings"] + [item for item in state_findings if item["status"] == "BLOCKED"] + placement_findings
     if findings:

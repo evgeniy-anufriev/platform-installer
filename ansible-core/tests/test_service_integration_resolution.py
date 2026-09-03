@@ -31,6 +31,12 @@ class ServiceIntegrationResolutionTests(unittest.TestCase):
         self.assertEqual(["bind-main"], result["integrations"]["dnsDeployments"])
         self.assertEqual(["haproxy-main"], result["integrations"]["haproxyDeployments"])
 
+    def test_relations_preserve_source_identity_for_read_only_consumers(self):
+        relations = INTEGRATIONS.service_integration_relations(self.state(), ["postgresql"])
+        self.assertEqual(["postgres-a", "postgres-b"], [item["sourceDeploymentId"] for item in relations])
+        self.assertEqual(["bind-main"], relations[0]["dnsDeploymentIds"])
+        self.assertEqual("haproxy-main", relations[0]["haproxyDeploymentId"])
+
     def test_haproxy_source_does_not_reconcile_itself(self):
         result = INTEGRATIONS.resolve_service_integrations(self.state(), ["haproxy"])
         self.assertEqual(["bind-main"], result["integrations"]["dnsDeployments"])

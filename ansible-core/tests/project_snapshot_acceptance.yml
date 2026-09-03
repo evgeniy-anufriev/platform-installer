@@ -1,0 +1,59 @@
+---
+- name: Verify read-only ProjectSnapshot acceptance
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Query the same project twice
+      platform.core.project_snapshot:
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+        installer_owned_paths: [inventory/group_vars/all/platform.yml, inventory/hosts.yml]
+      register: first_snapshot
+
+    - name: Repeat the query
+      platform.core.project_snapshot:
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+        installer_owned_paths: [inventory/group_vars/all/platform.yml, inventory/hosts.yml]
+      register: second_snapshot
+
+    - name: Assert snapshot contract and safety
+      ansible.builtin.assert:
+        that:
+          - first_snapshot is not changed
+          - second_snapshot is not changed
+          - first_snapshot.snapshot.status == 'PASS'
+          - not first_snapshot.snapshot.partial
+          - first_snapshot.snapshot.snapshotFingerprint == second_snapshot.snapshot.snapshotFingerprint
+          - first_snapshot.snapshot.projectRevision == second_snapshot.snapshot.projectRevision
+          - first_snapshot.snapshot.hosts | length == 3
+          - first_snapshot.snapshot.hosts.node1.platformDeployments['bind-main'].roles == ['primary']
+          - first_snapshot.snapshot.hosts.node1.provenance.editPolicy == 'FUTURE_EDITABLE'
+          - first_snapshot.snapshot.serviceCatalog | length == 6
+          - first_snapshot.snapshot.serviceDeployments | length == 6
+          - first_snapshot.snapshot.effectiveConfiguration.services | length == 6
+          - first_snapshot.snapshot.pki.certificateIdentities | length == 3
+          - first_snapshot.snapshot.pki.certificateIdentities[0].consumers | length >= 3
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.source == 'DEPLOYMENT_OVERRIDE'
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.port.editPolicy == 'FUTURE_EDITABLE'
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.dataDirectory.source == 'ROLE_DEFAULT'
+          - first_snapshot.snapshot.effectiveConfiguration.services['postgres-ha'].configuration.dataDirectory.overrideTarget.intendedDocument == 'inventory/group_vars/all/platform.yml'
+          - first_snapshot.snapshot.integrations.haproxyBackends['haproxy-a'][0].targetDeploymentId == 'postgres-ha'
+          - first_snapshot.snapshot.integrations.dnsZones['bind-main'].records | length > 0
+          - first_snapshot.snapshot.integrations.relations[0].addressProviders[0].deploymentId == 'keepalived-a'
+          - "'materializationPlans' not in (first_snapshot.snapshot | to_json)"
+          - "'runtime:pki-store-password' not in (first_snapshot.snapshot | to_json)"
+      run_once: true
+
+    - name: Prove missing project root is a structured fatal open error
+      platform.core.project_snapshot:
+        project_root: /path/that/does/not/exist
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+      register: missing_project
+      ignore_errors: true
+
+    - name: Assert structured project-open failure
+      ansible.builtin.assert:
+        that:
+          - missing_project is failed
+          - missing_project.error_code == 'PROJECT_SNAPSHOT_INPUT_INVALID'
+          - missing_project.finding.code == 'PROJECT_SNAPSHOT_INPUT_INVALID'

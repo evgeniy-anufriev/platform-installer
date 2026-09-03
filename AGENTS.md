@@ -9,10 +9,10 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 ## Current phase
 
 CORE-01 through CORE-07A, PKI-01, EXEC-01, SERVICE-01A through SERVICE-01D,
-SERVICE-02A, UI-DESIGN-01, UI-BE-01 and POSTGRES-01 are complete. POSTGRES-01 is the
+SERVICE-02A, UI-DESIGN-01, UI-BE-01, UI-BE-02 and POSTGRES-01 are complete. POSTGRES-01 is the
 accepted standalone include-based PostgreSQL and pg_auto_failover baseline.
-UI-BE-01 is the accepted frontend/backend architecture and contract boundary;
-it adds no production UI, backend, or writer. Do not begin UI-BE-02, UI-01 or
+UI-BE-02 is the accepted controller-only read-only ProjectSnapshot boundary;
+it adds no production UI, writer, or second desired-state store. Do not begin UI-BE-03, UI-01 or
 another production service unless the next milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
@@ -91,10 +91,10 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current milestone decision is recorded in `CURRENT_STATE.md`:
-POSTGRES-01 is DONE. PostgreSQL behavior must not be inferred from the
-completed PKI-01 foundation; its role must consume explicit PKI materialization
-plans at runtime.
+The current milestone decision is recorded in `CURRENT_STATE.md`: UI-BE-02 is
+DONE and UI-BE-03 remains gated. PostgreSQL behavior must not be inferred from
+the completed PKI-01 foundation; its role must consume explicit PKI
+materialization plans at runtime.
 
 ## Test Credentials
 

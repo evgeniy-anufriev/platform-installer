@@ -473,10 +473,22 @@ UI, YAML writer or speculative contract family was added.
 
 Recommended gated sequence:
 
-- UI-BE-02: read-only ProjectSnapshot and related query adapters;
-- UI-BE-03: safe Ansible-native writer and EditPlan/commit boundary;
+- UI-BE-02: DONE — read-only ProjectSnapshot and controller query adapter;
+- UI-BE-03: NEXT — safe Ansible-native writer and EditPlan/commit boundary;
 - UI-BE-04: validation, plan, execution, observations and event/history adapter;
 - UI-01: production Wails/React UI over those accepted contracts.
+
+### UI-BE-02: Read-only ProjectSnapshot
+
+Status: DONE. `platform.core.project_snapshot` and the standalone
+`project-snapshot.yml` entrypoint compose a versioned deterministic read model
+from the Ansible-loaded project without writes or target contact. The accepted
+contract includes separate raw-byte project/document revisions and catalog/Core
+versions, six-service catalog and deployment views, effective configuration
+with honest provenance, heterogeneous topology, endpoint/provider/DNS/HAProxy
+relations, shared PKI identities, partial validation and static readiness.
+Offline RED OS acceptance and the architecture review have zero blockers.
+UI-BE-03 remains explicitly gated.
 
 ### BACKEND-01: Core process adapter
 
