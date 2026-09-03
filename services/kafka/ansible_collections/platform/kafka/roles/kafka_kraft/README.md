@@ -1,39 +1,36 @@
 # `platform.kafka.kafka_kraft`
 
-Kafka 4.3.1 KRaft role for one or more broker, controller or combined members.
-It installs only from a caller-supplied offline artifact and does not download
-from the Internet. Logical members remain ordinary role data; one physical
-Ansible host may own zero, one or multiple members.
+Role Kafka 4.3.1 KRaft для broker, controller или combined members. Установка
+возможна только из явно переданного offline artifact; загрузка из Интернета не
+выполняется. Один physical Ansible host может владеть несколькими logical
+members.
 
-Required inputs are `platform_kafka_cluster_id`,
-`platform_kafka_artifact_path` and `platform_kafka_artifact_checksum`. For
-distributed operation, `platform_kafka_instances` contains the full deployment
-member list. Every member declares `id`, `node_id`, `roles`, `host`,
-`advertised_host` and isolated data/log paths. Broker members require
-an explicit named listener map. Dynamic initial
-controllers also require stable `directory_id` values. The legacy
-single-instance variables are only a compatibility adapter into the same
-normalized member model. Existing initialized storage is never reformatted
-when its cluster and node identities match; mismatches fail before mutation.
+Обязательные входы: `platform_kafka_cluster_id`,
+`platform_kafka_artifact_path`, `platform_kafka_artifact_checksum`. В
+distributed mode `platform_kafka_instances` содержит полный список members:
+`id`, `node_id`, `roles`, `host`, `advertised_host` и isolated data/log paths.
+Broker требует named listeners; dynamic initial controller — стабильный
+`directory_id`. Existing initialized storage не форматируется при совпадающих
+cluster/node identities; mismatch останавливает mutation.
 
-Quorum projections contain controller members only. Dynamic and static quorum
-modes are explicit and mutually exclusive. The role derives all, local,
-controller and broker member sets, validates listener/path collisions per
-physical host, prepares each host once and applies its local members in
-deterministic node-id order.
+Quorum состоит только из controller members. Dynamic/static quorum mutually
+exclusive; role детерминированно выводит member sets и проверяет listener/path
+collisions на physical host.
 
-Optional `platform_kafka_advanced_config` contains non-reserved Kafka
-properties. Reserved keys are rejected with `ADVANCED_SETTING_RESERVED` before
-the effective configuration is assembled. `kafka_effective_config` is an
-internal role variable, not part of the public role input contract. The
-serializer accepts strings, numbers and booleans deterministically; other
-types are rejected explicitly until a serialization contract is defined.
+## Запуск и настройка
 
-`platform_kafka_clean_install=true` is an invocation-only destructive reset
-of the selected deployment and requires
-`platform_kafka_confirm_destructive_reset` to equal its deployment ID. The
-cleanup inventories Kafka JVMs and listener owners, stops selected and
-attributable conflicting units, bounds process shutdown, removes only
-member-owned config/data/log paths and dedicated unit files, and preserves the
-shared Kafka distribution, JDK, account, offline payload and `kafka@.service`.
-Normal reconcile never invokes cleanup automatically.
+Используйте `services/kafka/playbooks/apply.yml` и `verify.yml`; `discover.yml`
+и `discover_deployment.yml` — read-only диагностика. Настраиваются approved
+artifact, cluster identity, members, listener ports/topology, service-wide TLS
+profile, retention и non-reserved `platform_kafka_advanced_config`.
+
+Default listeners: `PLAINTEXT`, `SSL`, `CONTROLLER`. Переопределяйте их только
+для topology/additional ports. SSL listeners используют effective
+deployment/member TLS profile, а не собственный profile.
+
+Generated `server.properties`, PKI consumer directory, systemd unit, KRaft
+metadata и identities редактировать нельзя. Listener/security, KRaft identity,
+paths и service-managed properties зарезервированы от advanced configuration.
+`reset_kafka_host.yml` и `platform_kafka_clean_install=true` — только явное
+destructive recovery с точным acknowledgement deployment ID; обычный reconcile
+никогда не запускает cleanup.

@@ -3,6 +3,9 @@
 This directory contains the standalone Ansible Core. It has no dependency on
 the Installer backend or frontend.
 
+Индекс operator playbooks, service examples и правила владения файлами — в
+[docs/ansible-playbooks/README.md](../docs/ansible-playbooks/README.md).
+
 ## Validate a project
 
 From this directory, run:
