@@ -1,0 +1,59 @@
+---
+- name: Inspect HAProxy readiness helper attributes read-only
+  ansible.builtin.stat:
+    path: "{{ platform_keepalived_haproxy_check_path }}"
+  register: platform_keepalived_haproxy_helper_stat
+
+- name: Assert HAProxy readiness helper ownership and mode
+  ansible.builtin.assert:
+    that:
+      - platform_keepalived_haproxy_helper_stat.stat.exists
+      - platform_keepalived_haproxy_helper_stat.stat.pw_name == 'root'
+      - platform_keepalived_haproxy_helper_stat.stat.gr_name == 'root'
+      - platform_keepalived_haproxy_helper_stat.stat.mode == '0750'
+    fail_msg: KEEPALIVED_HAPROXY_HELPER_ATTRIBUTES_INVALID
+
+- name: Read HAProxy readiness helper content
+  ansible.builtin.slurp:
+    src: "{{ platform_keepalived_haproxy_check_path }}"
+  register: platform_keepalived_haproxy_helper_content
+
+- name: Assert HAProxy readiness helper is bounded and local
+  ansible.builtin.assert:
+    that:
+      - platform_keepalived_haproxy_helper_content.content | b64decode is search('systemctl is-active --quiet haproxy')
+      - platform_keepalived_haproxy_helper_content.content | b64decode is search('timeout 2')
+      - platform_keepalived_haproxy_helper_content.content | b64decode is search('socat -T 1')
+      - platform_keepalived_haproxy_helper_content.content | b64decode is search('show info')
+    fail_msg: KEEPALIVED_HAPROXY_HELPER_CONTENT_INVALID
+
+- name: Query HAProxy service state read-only
+  ansible.builtin.command:
+    argv: [systemctl, is-active, haproxy]
+  register: platform_keepalived_haproxy_service_state
+  changed_when: false
+
+- name: Assert HAProxy service is active for tracking
+  ansible.builtin.assert:
+    that: platform_keepalived_haproxy_service_state.stdout | trim == 'active'
+    fail_msg: KEEPALIVED_HAPROXY_SERVICE_NOT_ACTIVE
+
+- name: Run HAProxy readiness helper read-only
+  ansible.builtin.command:
+    argv: ["{{ platform_keepalived_haproxy_check_path }}"]
+  changed_when: false
+
+- name: Read active Keepalived configuration
+  ansible.builtin.slurp:
+    src: "{{ platform_keepalived_config_file }}"
+  register: platform_keepalived_active_config_content
+
+- name: Assert active opt-in HAProxy tracking configuration
+  ansible.builtin.assert:
+    that:
+      - platform_keepalived_active_config_content.content | b64decode is search('vrrp_script platform_haproxy_ready_' ~ (platform_keepalived_tracking_deployment.key | replace('-', '_') | replace('.', '_')))
+      - platform_keepalived_active_config_content.content | b64decode is search('track_script')
+      - platform_keepalived_active_config_content.content | b64decode is search('state BACKUP')
+      - platform_keepalived_active_config_content.content | b64decode is search('nopreempt')
+      - platform_keepalived_active_config_content.content | b64decode is not search('(^|\\s)weight(\\s|$)')
+    fail_msg: KEEPALIVED_HAPROXY_TRACKING_CONFIGURATION_INVALID

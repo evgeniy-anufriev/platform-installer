@@ -5,6 +5,7 @@
       - platform_desired_state is mapping
       - platform_desired_state.serviceDeployments | default({}) is mapping
       - platform_deployments | default({}) is mapping
+      - platform_keepalived_verify_only | bool or platform_keepalived_lifecycle_phase in ['prepare', 'activate', 'reconcile']
     fail_msg: KEEPALIVED_DESIRED_STATE_INVALID
 
 - name: Validate local Keepalived deployment invariants

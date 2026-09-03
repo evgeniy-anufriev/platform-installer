@@ -407,8 +407,8 @@ Status: DONE. One host-scoped Keepalived deployment owns one VRRP instance,
 one VRID, one endpoint group reference and one-or-more virtual addresses.
 Three-node RED OS acceptance proved native validation, all-or-none multi-VIP
 ownership, automatic failover, natural rejoin with `nopreempt`, and repeat
-apply/verify idempotence. HAProxy helper materialization is inactive; a future
-HAProxy milestone may introduce `vrrp_script` or `track_script` semantics.
+apply/verify idempotence. The NET-02 baseline has no active HAProxy dependency;
+NET-04.1 later adds explicit opt-in `vrrp_script`/`track_script` semantics.
 
 ### NET-03: Authoritative BIND DNS
 
@@ -438,8 +438,18 @@ routing on `*:443`, deployment and explicit host endpoints, normalized Host
 routing and package-owned TLS stats backends. Three-node RED OS acceptance
 proved candidate/activation barriers, hostname-verified TLS, real pooled
 multi-node backend use, non-VIP-owner failure isolation, recovery, and clean
-verify/repeat apply. Keepalived `vrrp_script` and `track_script` integration is
-deferred to NET-04.1.
+verify/repeat apply.
+
+### NET-04.1: Keepalived HAProxy health tracking
+
+Status: DONE. Opt-in Keepalived tracking references one colocated HAProxy
+deployment and renders a root-owned bounded admin-socket readiness helper with
+one `vrrp_script` and `track_script`, without weight. A cluster-wide candidate
+and active-validation barrier prevents any service reconcile until every
+participant has validated the exact SHA-256-matched configuration. Three-node
+RED OS acceptance proved owner failure causes atomic configured-VIP migration,
+endpoint continuity, natural backup recovery without failback, non-owner
+failure isolation, and clean final verify/repeat apply.
 
 ## Phase E — Go backend adapter
 

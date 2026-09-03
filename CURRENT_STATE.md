@@ -38,8 +38,13 @@ NET-04 is DONE. Host-scoped HAProxy provides HTTPS `public` routing on `*:443`,
 deployment and opt-in host endpoints, normalized Host routing, and package-owned
 stats backends. Three-node RED OS acceptance proved TLS endpoint verification,
 runtime multi-node pooling, non-VIP-owner HAProxy failure isolation, recovery,
-and idempotent verify/repeat apply. Keepalived HAProxy tracking remains deferred
-to NET-04.1.
+and idempotent verify/repeat apply.
+
+NET-04.1 is DONE. Opt-in Keepalived HAProxy tracking uses a root-owned bounded
+admin-socket helper and cluster-wide candidate/active barriers. Three-node RED
+OS acceptance proved owner failure causes atomic configured-VIP migration,
+natural recovery without failback, non-owner failure isolation, and idempotent
+verify/repeat apply.
 
 ## Established direction
 
@@ -102,7 +107,9 @@ to NET-04.1.
 - HAProxy publication is a typed relationship from a target service deployment
   to one HAProxy deployment. Its reusable backend settings are normalized after
   layered merge; deployment and explicit `hostEndpoint: true` routes share the
-  existing DNS/VIP namespace. Keepalived health tracking is not active.
+  existing DNS/VIP namespace. Keepalived HAProxy tracking is explicit and
+  opt-in per Keepalived deployment; a referenced HAProxy deployment must share
+  its endpoint group and placement.
 
 ## Implemented
 
@@ -197,8 +204,8 @@ to NET-04.1.
 - NET-02 Keepalived: host-scoped inventory priority, one deployment per VRRP
   election domain, deployment-owned multi-VIP addresses, native candidate
   validation and read-only all-or-none ownership verification. Three RED OS
-  nodes proved failover/rejoin/no-failback; the installed HAProxy helper has no
-  active `vrrp_script` or `track_script` dependency.
+  nodes proved failover/rejoin/no-failback; NET-04.1 later adds an explicit
+  opt-in HAProxy `vrrp_script`/`track_script` dependency.
 - NET-03 BIND: deterministic authoritative primary-secondary DNS with complete
   candidate and activation barriers, native secondary transfer, read-only
   verification and a generated fingerprint/serial lifecycle.  The bounded
@@ -212,6 +219,12 @@ to NET-04.1.
   local TLS stats backends, reloads on active-graph or TLS-bundle changes, and
   treats candidate workspace assembly as ephemeral rather than desired-state
   change.
+- NET-04.1 Keepalived HAProxy tracking: the package playbook owns explicit
+  prepare, activate and reconcile phases. Barrier A requires every native
+  candidate validation; Barrier B requires exact candidate-to-active SHA-256
+  equality and every native active validation before any reload. The helper is
+  root-owned `0750`, checks active HAProxy plus its local admin socket, and has
+  no `weight`; tracking failure makes the local VRRP participant ineligible.
 
 ## Completed
 
@@ -342,6 +355,14 @@ to NET-04.1.
   apply all returned `changed=0 failed=0` on localhost and every target.
   An explicit selected leaf reissue added the endpoint wildcard SAN, deployed
   it to all HAProxy participants and returned to a clean ordinary repeat apply.
+- NET-04.1 RED OS acceptance: opt-in tracking candidate and active barriers
+  passed on all three nodes with exact per-node candidate/active checksums.
+  Stopping HAProxy on the semantic owner produced helper failure and VRRP
+  FAULT, then moved all configured VIPs to one healthy backup while the
+  deployment endpoint remained available. Recovery returned the former owner
+  to BACKUP without failback. A non-owner HAProxy failure became FAULT without
+  moving the VIP. Final Keepalived/HAProxy verify and repeat apply returned
+  `changed=0 failed=0` on localhost and all targets.
 
 ## Not implemented
 
@@ -364,8 +385,7 @@ EXEC-01, the generic Kafka role lifecycle refactor, SERVICE-02A and
 UI-DESIGN-01 are complete. UI-DESIGN-01 is documentation and static design
 only: no Wails/React, UI persistence or second desired-state model exists.
 
-POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1 and NET-04 are DONE. NET-04.1
-Keepalived HAProxy health tracking remains deferred and has not begun. A future production
-UI-01 remains dependent on a minimal backend read/write, revision and run
+POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04 and NET-04.1 are DONE.
+A future production UI-01 remains dependent on a minimal backend read/write, revision and run
 boundary; it must continue to edit and execute the same standard Ansible
 project.

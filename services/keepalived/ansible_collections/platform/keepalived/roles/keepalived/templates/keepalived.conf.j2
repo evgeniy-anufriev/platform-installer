@@ -3,6 +3,17 @@ global_defs {
   enable_script_security
 }
 
+{% for deployment in platform_desired_state.serviceDeployments | dict2items | sort(attribute='key') if deployment.value.serviceType | default('') == 'keepalived' and deployment.key in (platform_deployments | default({})) and deployment.value.configuration.haproxyHealthTracking | default({}) %}
+vrrp_script platform_haproxy_ready_{{ deployment.key | replace('-', '_') | replace('.', '_') }} {
+  script "{{ platform_keepalived_haproxy_check_path }}"
+  interval {{ deployment.value.configuration.haproxyHealthCheck.interval | default(platform_keepalived_haproxy_health_check.interval) }}
+  timeout {{ deployment.value.configuration.haproxyHealthCheck.timeout | default(platform_keepalived_haproxy_health_check.timeout) }}
+  fall {{ deployment.value.configuration.haproxyHealthCheck.fall | default(platform_keepalived_haproxy_health_check.fall) }}
+  rise {{ deployment.value.configuration.haproxyHealthCheck.rise | default(platform_keepalived_haproxy_health_check.rise) }}
+  user root
+}
+
+{% endfor %}
 {% for deployment in platform_desired_state.serviceDeployments | dict2items | sort(attribute='key') if deployment.value.serviceType | default('') == 'keepalived' and deployment.key in (platform_deployments | default({})) %}
 vrrp_instance platform_{{ deployment.key | replace('-', '_') | replace('.', '_') }} {
   state BACKUP
@@ -22,6 +33,11 @@ vrrp_instance platform_{{ deployment.key | replace('-', '_') | replace('.', '_')
     {{ virtual_address.address }}/32 dev {{ virtual_address.interface }}
 {% endfor %}
   }
+{% if deployment.value.configuration.haproxyHealthTracking | default({}) %}
+  track_script {
+    platform_haproxy_ready_{{ deployment.key | replace('-', '_') | replace('.', '_') }}
+  }
+{% endif %}
 {% for key, value in deployment.value.configuration.advancedConfig.instance | default({}) | dictsort %}
   {{ key }} {{ value }}
 {% endfor %}

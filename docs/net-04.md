@@ -5,7 +5,8 @@ Status: DONE.
 NET-04 installs a host-scoped HAProxy deployment, terminates HTTPS on the
 fixed `public` frontend at `*:443`, and derives deployment and explicitly
 selected host routes from the existing endpoint, inventory and PKI
-projections. Keepalived health tracking remains deferred to NET-04.1.
+projections. Keepalived health tracking is implemented separately by
+[NET-04.1](net-04-1.md).
 
 ## Integration ownership
 
@@ -331,7 +332,6 @@ is never an implicit ordinary NET-04 reconcile.
 
 ## Deferred
 
-NET-04 does not activate Keepalived `vrrp_script` or `track_script`, does not
-move a VIP when HAProxy fails on the current MASTER, and does not introduce
-multiple HAProxy publishers per target service. These belong to NET-04.1 or a
-later explicitly approved contract milestone.
+NET-04 itself does not activate Keepalived `vrrp_script` or `track_script` and
+does not introduce multiple HAProxy publishers per target service. Opt-in
+HAProxy tracking and owner-failure VIP migration are covered by NET-04.1.

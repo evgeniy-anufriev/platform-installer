@@ -1,0 +1,47 @@
+---
+- name: Install approved Keepalived package from configured system repositories
+  ansible.builtin.package:
+    name: "{{ platform_keepalived_package }}"
+    state: present
+
+- name: Create Keepalived HAProxy readiness primitive directory
+  ansible.builtin.file:
+    path: "{{ platform_keepalived_haproxy_check_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install package-owned HAProxy readiness primitive
+  ansible.builtin.template:
+    src: check-haproxy-ready.sh.j2
+    dest: "{{ platform_keepalived_haproxy_check_path }}"
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Render Keepalived candidate configuration
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: "{{ platform_keepalived_candidate_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Validate Keepalived candidate with native tooling
+  ansible.builtin.command:
+    argv: ["{{ platform_keepalived_binary }}", --config-test, "--use-file={{ platform_keepalived_candidate_file }}"]
+  register: platform_keepalived_candidate_validation
+  changed_when: false
+  failed_when: false
+
+- name: Calculate validated Keepalived candidate checksum
+  ansible.builtin.stat:
+    path: "{{ platform_keepalived_candidate_file }}"
+    checksum_algorithm: sha256
+  register: platform_keepalived_candidate_stat
+
+- name: Record Keepalived candidate validation evidence
+  ansible.builtin.set_fact:
+    platform_keepalived_candidate_checksum: "{{ platform_keepalived_candidate_stat.stat.checksum }}"
+    platform_keepalived_candidate_validation_rc: "{{ platform_keepalived_candidate_validation.rc }}"

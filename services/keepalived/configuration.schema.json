@@ -55,6 +55,19 @@
         }
       },
       "type": "object"
+    },
+    "haproxyHealthTracking": {
+      "additionalProperties": false,
+      "properties": {
+        "serviceDeploymentRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "serviceDeploymentRef"
+      ],
+      "type": "object"
     }
   },
   "title": "Keepalived desired configuration",

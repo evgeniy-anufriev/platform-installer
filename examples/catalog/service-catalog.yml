@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:8f63190ca4db3e48fad0283fbf51cd66b9bdfe01e0554e71b19a09d0f97356f8
+digest: sha256:77a8a7fda31b4582ccbaa636771efdddf8f4803a4248e3cf1372b64a381ef4d0
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -568,6 +568,27 @@ definitions:
             label: Future HAProxy health check
             section: Integration
             order: 40
+        haproxyHealthTracking:
+          kind: MANAGED
+          roleVariable: platform_keepalived_haproxy_health_tracking
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: false
+          schema:
+            type: object
+            additionalProperties: false
+            required:
+            - serviceDeploymentRef
+            properties:
+              serviceDeploymentRef:
+                type: string
+                minLength: 1
+          ui:
+            label: HAProxy health tracking
+            section: Integration
+            order: 50
         advancedConfig:
           kind: ADVANCED
           roleVariable: platform_keepalived_advanced_config
@@ -605,7 +626,10 @@ definitions:
     - priority
     - unicast_src_ip
     - unicast_peer
+    - vrrp_script
     - track_script
+    - script
+    - weight
     roleEntrypoints:
       apply:
         fqcn: platform.keepalived.keepalived
@@ -615,7 +639,7 @@ definitions:
         variablesPrefix: platform_keepalived_
     artifacts: []
     compatibilityRef: ../../services/keepalived/compatibility.yml
-    x-definitionDigest: sha256:2bebe08e88124e5082b6a4d30743c9f17ccbd31ba48341c4e5c9e1ebdb084254
+    x-definitionDigest: sha256:ac5b49ab540e2bf719783ed3fa28e36570dc4123d5ef90013f85050598e774cd
     x-sourceManifest: services/keepalived/service.yml
   bind:
     apiVersion: platform.installer/service-manifest/v1alpha1

@@ -1,8 +1,62 @@
 ---
-- name: Apply Keepalived VRRP
+- name: Phase A - prepare and validate Keepalived candidates
   hosts: platform_targets
   become: true
   gather_facts: false
   roles:
     - role: platform.keepalived.keepalived
       platform_keepalived_verify_only: false
+      platform_keepalived_lifecycle_phase: prepare
+
+- name: Barrier A - release activation only after every candidate passes
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _platform_keepalived_participants: "{{ groups['platform_targets'] | default([]) | sort }}"
+  tasks:
+    - name: Assert every participant produced a passing candidate
+      ansible.builtin.assert:
+        that:
+          - _platform_keepalived_participants | length > 0
+          - hostvars[item].platform_keepalived_candidate_checksum | default('') | length > 0
+          - hostvars[item].platform_keepalived_candidate_validation_rc | default(1) | int == 0
+        fail_msg: "KEEPALIVED_CANDIDATE_BARRIER_FAILED: {{ item }}"
+      loop: "{{ _platform_keepalived_participants }}"
+      loop_control:
+        label: "{{ item }}"
+
+- name: Phase B - install and validate exact Keepalived candidates
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.keepalived.keepalived
+      platform_keepalived_verify_only: false
+      platform_keepalived_lifecycle_phase: activate
+
+- name: Barrier B - release service reconcile only after active validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _platform_keepalived_participants: "{{ groups['platform_targets'] | default([]) | sort }}"
+  tasks:
+    - name: Assert every active configuration matches and validates
+      ansible.builtin.assert:
+        that:
+          - hostvars[item].platform_keepalived_active_checksum | default('') == hostvars[item].platform_keepalived_candidate_checksum | default('__missing__')
+          - hostvars[item].platform_keepalived_active_validation_rc | default(1) | int == 0
+        fail_msg: "KEEPALIVED_ACTIVE_CONFIG_BARRIER_FAILED: {{ item }}"
+      loop: "{{ _platform_keepalived_participants }}"
+      loop_control:
+        label: "{{ item }}"
+
+- name: Phase C - reconcile Keepalived after both cluster barriers
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.keepalived.keepalived
+      platform_keepalived_verify_only: false
+      platform_keepalived_lifecycle_phase: reconcile

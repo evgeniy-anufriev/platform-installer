@@ -9,7 +9,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:8f63190ca4db3e48fad0283fbf51cd66b9bdfe01e0554e71b19a09d0f97356f8
+  digest: sha256:77a8a7fda31b4582ccbaa636771efdddf8f4803a4248e3cf1372b64a381ef4d0
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1

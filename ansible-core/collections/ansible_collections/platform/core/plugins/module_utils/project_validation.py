@@ -799,6 +799,26 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
             if haproxy_count > 1:
                 findings.append(_finding("HAPROXY_FRONTEND_PORT_COLLISION", "platform_deployments.%s" % host_id, "At most one HAProxy deployment may bind the fixed public port on a host"))
 
+    for deployment_id, deployment in sorted(deployments.items()):
+        if not isinstance(deployment, dict) or deployment.get("serviceType") != "keepalived":
+            continue
+        tracking = deployment.get("configuration", {}).get("haproxyHealthTracking") if isinstance(deployment.get("configuration"), dict) else None
+        if not isinstance(tracking, dict):
+            continue
+        reference = tracking.get("serviceDeploymentRef")
+        field = "serviceDeployments.%s.configuration.haproxyHealthTracking.serviceDeploymentRef" % deployment_id
+        referenced = deployments.get(reference)
+        if not isinstance(referenced, dict):
+            findings.append(_finding("HAPROXY_HEALTH_TRACKING_DEPLOYMENT_NOT_FOUND", field, "HAProxy health tracking references an unknown deployment"))
+            continue
+        if referenced.get("serviceType") != "haproxy":
+            findings.append(_finding("HAPROXY_HEALTH_TRACKING_DEPLOYMENT_TYPE_INVALID", field, "HAProxy health tracking must reference an HAProxy deployment"))
+        if not deployment.get("endpointGroupRef") or referenced.get("endpointGroup") != deployment.get("endpointGroupRef"):
+            findings.append(_finding("HAPROXY_HEALTH_TRACKING_ENDPOINT_GROUP_MISMATCH", field, "Keepalived and HAProxy health tracking deployments must share an endpoint group"))
+        for host_id, placement in sorted(endpoint_inventory.items()):
+            if deployment_id in placement and reference not in placement:
+                findings.append(_finding("HAPROXY_HEALTH_TRACKING_PARTICIPANT_MISSING", "platform_deployments.%s.%s" % (host_id, deployment_id), "Every Keepalived participant with HAProxy tracking must also host the referenced HAProxy deployment"))
+
     findings.sort(key=lambda item: (item["field"], item["code"]))
     blocked = len(findings)
     return {

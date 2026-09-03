@@ -36,6 +36,7 @@ configuration:
           fall: {type: integer, minimum: 1, maximum: 20}
           rise: {type: integer, minimum: 1, maximum: 20}
       ui: {label: Future HAProxy health check, section: Integration, order: 40}
+    haproxyHealthTracking: {kind: MANAGED, roleVariable: platform_keepalived_haproxy_health_tracking, type: object, scopes: [deployment], validation: {additionalProperties: false}, schema: {type: object, additionalProperties: false, required: [serviceDeploymentRef], properties: {serviceDeploymentRef: {type: string, minLength: 1}}}, ui: {label: HAProxy health tracking, section: Integration, order: 50}}
     advancedConfig:
       kind: ADVANCED
       roleVariable: platform_keepalived_advanced_config
@@ -53,7 +54,7 @@ configuration:
               garp_master_delay: {type: integer, minimum: 0, maximum: 60}
               garp_master_repeat: {type: integer, minimum: 1, maximum: 20}
       ui: {label: Advanced Keepalived settings, section: Advanced, order: 90}
-x-reservedAdvancedProperties: [state, nopreempt, virtual_router_id, virtual_ipaddress, interface, priority, unicast_src_ip, unicast_peer, track_script]
+x-reservedAdvancedProperties: [state, nopreempt, virtual_router_id, virtual_ipaddress, interface, priority, unicast_src_ip, unicast_peer, vrrp_script, track_script, script, weight]
 roleEntrypoints:
   apply: {fqcn: platform.keepalived.keepalived, variablesPrefix: platform_keepalived_}
   verify: {fqcn: platform.keepalived.keepalived, variablesPrefix: platform_keepalived_}

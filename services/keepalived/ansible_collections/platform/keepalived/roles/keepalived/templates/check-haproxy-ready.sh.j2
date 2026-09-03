@@ -1,3 +1,5 @@
 #!/bin/sh
-# NET-03 activates this fixed local readiness primitive through track_script.
-test -S /run/haproxy/admin.sock
+# NET-04.1: bounded local HAProxy readiness; no network or state mutation.
+set -eu
+systemctl is-active --quiet haproxy
+timeout 2 sh -c 'printf "show info\n" | socat -T 1 - UNIX-CONNECT:/run/haproxy/admin.sock | grep -qm1 "^Name:"'

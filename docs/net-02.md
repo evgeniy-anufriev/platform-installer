@@ -17,8 +17,8 @@ virtual-address set is split, missing, or has anything other than one complete
 owner; active non-owners are the remaining BACKUP participants.
 
 The future HAProxy readiness helper is materialized root-owned with mode 0750,
-but NET-02 renders neither `vrrp_script` nor `track_script`. NET-03 owns any
-HAProxy-triggered failover behavior.
+but NET-02 renders neither `vrrp_script` nor `track_script`. NET-04.1 later
+adds explicit opt-in HAProxy-triggered failover behavior.
 
 ## Acceptance
 

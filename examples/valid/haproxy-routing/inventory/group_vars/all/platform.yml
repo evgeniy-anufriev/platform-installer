@@ -19,7 +19,8 @@ platform_desired_state:
       endpointGroupRef: asutp
       virtualRouterId: 51
       virtualAddresses: [{address: 192.168.56.111, interface: enp0s8}]
-      configuration: {}
+      configuration:
+        haproxyHealthTracking: {serviceDeploymentRef: haproxy}
     haproxy:
       serviceType: haproxy
       mode: https-host-routing
