@@ -83,6 +83,10 @@ repository-local Codex Skills for backend, adapter, writer and QA work,
 documented implementer/reviewer prompt templates and a standardized final QA
 workflow. Future Wails remains a thin deferred transport concern.
 
+EXEC-01A is the current bootstrap/runtime-preparation milestone. It must close
+the pre-Core Execution Node bootstrap boundary; UI-BE-04 remains gated until
+that work is accepted.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.

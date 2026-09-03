@@ -476,7 +476,8 @@ Recommended gated sequence:
 - UI-BE-02: DONE — read-only ProjectSnapshot and controller query adapter;
 - UI-BE-03: DONE — safe Ansible-native writer and EditPlan/commit boundary;
 - DEVX-01: DONE — Go/Core scoped guidance, Codex Skills, reviewer templates and reusable QA workflow;
-- UI-BE-04: NEXT — validation, plan, execution, observations and event/history adapter;
+- EXEC-01A: CURRENT — bootstrap a READY Execution Node before Platform Core exists;
+- UI-BE-04: GATED — validation, plan, execution, observations and event/history adapter after EXEC-01A;
 - UI-01: production Wails/React UI over those accepted contracts.
 
 ### UI-BE-02: Read-only ProjectSnapshot
@@ -489,7 +490,8 @@ versions, six-service catalog and deployment views, effective configuration
 with honest provenance, heterogeneous topology, endpoint/provider/DNS/HAProxy
 relations, shared PKI identities, partial validation and static readiness.
 Offline RED OS acceptance and the architecture review have zero blockers.
-UI-BE-03 and DEVX-01 are complete. UI-BE-04 is the next gated milestone.
+UI-BE-03 and DEVX-01 are complete. EXEC-01A is current; UI-BE-04 remains gated
+until the pre-Core Execution Node bootstrap boundary is accepted.
 
 ### DEVX-01: Codex engineering harness
 
