@@ -73,11 +73,14 @@ def _profile_defaults(profile, defaults):
     }
 
 
-def _consumer_records(topology, inventory_deployments=None):
+def _consumer_records(topology, inventory_deployments=None, service_types=None):
     records = []
+    selected_service_types = set(service_types or [])
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology, dict) else {}
     for deployment_id, deployment in sorted(deployments.items()):
         if not isinstance(deployment, dict):
+            continue
+        if selected_service_types and deployment.get("serviceType") not in selected_service_types:
             continue
         deployment_config = deployment.get("configuration", {}) if isinstance(deployment.get("configuration"), dict) else {}
         members = deployment.get("members", {}) if isinstance(deployment.get("members"), dict) else {}
@@ -153,7 +156,7 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
     }
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None):
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, service_types=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -170,7 +173,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     tls_profiles = desired.get("tlsProfiles", {}) if isinstance(desired.get("tlsProfiles"), dict) else {}
     findings = []
     grouped = {}
-    for consumer in _consumer_records(desired, inventory_deployments):
+    for consumer in _consumer_records(desired, inventory_deployments, service_types):
         tls_profile = tls_profiles.get(consumer["tlsProfileRef"])
         field = "serviceDeployments.%s.members.%s.configuration.tlsProfile" % (consumer["deploymentId"], consumer["memberId"])
         if not isinstance(tls_profile, dict):

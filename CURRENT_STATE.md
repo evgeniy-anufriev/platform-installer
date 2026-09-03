@@ -87,6 +87,10 @@ verify/repeat apply.
 - QA state invariant: stable PKI identities and fingerprints persist, while PKI
   materialization plans remain derived; every independent Ansible execution
   reconstructs those plans through read-only resolution.
+- TLS-capable service apply playbooks run a service-scoped `pki-apply` stage
+  before service mutation. It selects only that service type's effective
+  `tlsProfile` consumers; an empty selection is a PKI no-op. The standalone
+  Core PKI playbook remains intentionally project-wide.
 - Kafka `clientPort` and `controllerPort` remain bounded PLAINTEXT compatibility
   inputs. SERVICE-02A introduces Kafka-package-owned named listeners; their
   default model supplies PLAINTEXT and SSL endpoints, while SASL remains out of

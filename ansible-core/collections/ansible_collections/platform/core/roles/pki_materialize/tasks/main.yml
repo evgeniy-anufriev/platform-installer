@@ -25,6 +25,7 @@
     - "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/authorities"
     - "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/requests"
     - "{{ platform_pki_runtime_root }}"
+  when: platform_pki_requests | length > 0
 
 - name: Materialize resolved PKI certificate requests
   ansible.builtin.include_tasks: request.yml
@@ -32,3 +33,4 @@
   loop_control:
     loop_var: platform_pki_request
     label: "{{ platform_pki_request.id }}"
+  when: platform_pki_requests | length > 0

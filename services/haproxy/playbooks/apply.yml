@@ -1,6 +1,8 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 - import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+  vars:
+    platform_pki_service_types: [haproxy]
 - name: Prepare and validate HAProxy candidates
   hosts: platform_targets
   become: true

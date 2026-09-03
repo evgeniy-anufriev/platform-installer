@@ -31,7 +31,7 @@ class PkiResolutionTests(unittest.TestCase):
             "certificateProfiles": {"infrastructure": {"authorityRef": "platform-ca", "sanPolicy": {}}},
             "tlsProfiles": {"platform-tls": {"certificateProfileRef": "infrastructure", "storePasswordSecretRef": "runtime:pki-password", "scope": scope}},
             "serviceDeployments": {
-                "service-a": {"endpointGroup": "asutp", "configuration": {"tlsProfile": "platform-tls"}, "members": {
+                "service-a": {"serviceType": "kafka", "endpointGroup": "asutp", "configuration": {"tlsProfile": "platform-tls"}, "members": {
                     "member-1": {"host": "node1", "roles": ["server"]},
                     "member-2": {"host": "node2", "roles": ["server"]},
                 }},
@@ -144,6 +144,29 @@ class PkiResolutionTests(unittest.TestCase):
             ],
             out["requests"][0]["dnsNames"],
         )
+
+    def test_service_type_filter_materializes_only_the_selected_consumers(self):
+        topology = self.topology()
+        topology["serviceDeployments"]["service-b"] = {
+            "serviceType": "haproxy",
+            "configuration": {"tlsProfile": "platform-tls"},
+            "members": {"member-3": {"host": "node3", "roles": ["server"]}},
+        }
+        out = pki.resolve_certificate_requests(
+            "p", topology, {"node1": {}, "node2": {}, "node3": {}}, self.defaults,
+            service_types=["haproxy"],
+        )
+        self.assertEqual("PASS", out["status"])
+        self.assertEqual(["platform-tls--node3"], [request["id"] for request in out["requests"]])
+
+    def test_service_type_filter_has_a_clean_empty_result_without_tls_consumers(self):
+        out = pki.resolve_certificate_requests(
+            "p", self.topology(), {"node1": {}, "node2": {}}, self.defaults,
+            service_types=["postgresql"],
+        )
+        self.assertEqual("PASS", out["status"])
+        self.assertEqual([], out["requests"])
+        self.assertEqual([], out["materializationPlans"])
 
 
 if __name__ == "__main__":

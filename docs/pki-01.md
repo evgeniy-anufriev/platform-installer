@@ -68,6 +68,20 @@ new identity. The certificate profile `usages` collection already supports
 `pki-verify.yml` only resolves the plan, checks target-owned files,
 fingerprints and certificate chains, and reports `changed=0`.
 
+## Контракт service apply
+
+Каждый playbook TLS-capable сервиса импортирует `pki-apply.yml` до изменения
+конфигурации или запуска роли сервиса. Playbook передаёт собственный
+`serviceType`, поэтому PKI-резолвер выбирает только deployment этого сервиса с
+effective `configuration.tlsProfile`. Само объявление `certificateProfile` или
+`tlsProfile` ничего не материализует: deployment или member сервиса должен
+явно выбрать `tlsProfile`.
+
+Если у выбранного сервиса нет TLS-потребителей, PKI-резолвер возвращает пустой
+plan и не создаёт PKI-каталоги Execution Node или файлы на targets. Отдельный
+Core `pki-apply.yml` остаётся без фильтра и намеренно reconcile’ит всех
+TLS-потребителей проекта.
+
 ## Deferred integration
 
 PKI-01 supports only `MANAGED` authorities, PEM, dedicated PKCS12 stores and

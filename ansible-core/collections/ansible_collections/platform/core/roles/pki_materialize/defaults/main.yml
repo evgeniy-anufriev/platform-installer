@@ -4,6 +4,10 @@ platform_pki_requests: []
 platform_pki_materialization_plans: []
 platform_pki_reissue_request_ids: []
 platform_pki_resolve_managed: "{{ platform_pki_requests | length == 0 }}"
+# Empty means every TLS consumer, as used by the explicit Core PKI playbooks.
+# A service apply playbook supplies its own service type to keep materialization
+# scoped to that service.
+platform_pki_service_types: []
 platform_pki_resolved_service_endpoints: {}
 platform_pki_secret_files: {}
 # This is the single product-default source for PKI policy.  The resolver
