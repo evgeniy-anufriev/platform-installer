@@ -1,6 +1,7 @@
 # Generated Ansible workspaces and runtime evidence
 .runtime/
 runs/
+bundle/
 
 # Secrets must never be committed
 secrets/

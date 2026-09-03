@@ -83,9 +83,25 @@ repository-local Codex Skills for backend, adapter, writer and QA work,
 documented implementer/reviewer prompt templates and a standardized final QA
 workflow. Future Wails remains a thin deferred transport concern.
 
-EXEC-01A is the current bootstrap/runtime-preparation milestone. It must close
-the pre-Core Execution Node bootstrap boundary; UI-BE-04 remains gated until
-that work is accepted.
+EXEC-01A is DONE. A trusted Linux acquisition environment builds the exact
+Python/Ansible runtime closure, Go verifies and atomically publishes the
+immutable bundle, and Prepare transfers, stages, proves and activates it
+without requiring Python or Platform Core on Windows. Repeated Prepare returns
+`READY` with `Changed:false`.
+
+The production service entrypoint now performs one target repository probe per
+requirement, calls the single existing resolver, supplies an ephemeral
+target-filtered `ResolvedArtifactSource` projection to Ansible and stops before
+transport when any result is `BLOCKED`. Real RED OS acceptance proved Kafka
+`NOT_FOUND -> OFFLINE_BUNDLE -> artifact_delivery -> SHA-256 -> apply/verify`
+with repeat `changed=0`, and three-node Keepalived
+`AVAILABLE_COMPATIBLE -> REPOSITORY -> apply/verify` with repeat `changed=0`
+and no artifact delivery. A separate shared-gate test proved a blocked source
+cannot reach a mutation sentinel.
+
+Operational offline bundles and distribution artifacts now use the project-root
+`bundle/` directory. Kafka's approved local artifact is at
+`bundle/artifacts/kafka/`; `.runtime/` remains runtime-only QA state.
 
 ## Established direction
 
@@ -431,8 +447,8 @@ UI-DESIGN-01, UI-BE-01, UI-BE-02 and UI-BE-03 are complete. UI-BE-03 adds the
 bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
-POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03
-and DEVX-01 are DONE. UI-BE-04 is NEXT and will add
+POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
+DEVX-01 and EXEC-01A are DONE. UI-BE-04 is NEXT and will add
 validation/plan/execution/events to the same backend. Production UI-01 remains
 dependent on the accepted read, writer and execution boundaries over one
 standard Ansible project.

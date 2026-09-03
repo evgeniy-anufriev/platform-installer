@@ -1,0 +1,12 @@
+---
+- name: Read activated Execution runtime capabilities
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Return machine-readable runtime capabilities
+      platform.core.execution_capabilities:
+        runtime_root: "{{ platform_execution_runtime_root }}"
+        bundle_digest: "{{ platform_execution_bundle_digest }}"
+      changed_when: false
+      become: false

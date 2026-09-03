@@ -118,7 +118,7 @@ ansible-playbook -i examples/valid/postgresql-standalone/inventory/hosts.yml \
 Пример `.runtime/inputs/kafka-ssl.yml` (значения секретов здесь отсутствуют):
 
 ```yaml
-platform_kafka_artifact_path: /absolute/path/.runtime/artifacts/kafka/kafka_2.13-4.3.1.tgz
+platform_kafka_artifact_path: /absolute/path/bundle/artifacts/kafka/kafka_2.13-4.3.1.tgz
 platform_kafka_artifact_checksum: sha256:<approved-artifact-digest>
 platform_pki_secret_files:
   runtime:pki-store-password: /absolute/path/.runtime/secrets/kafka-store-password

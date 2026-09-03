@@ -15,9 +15,10 @@ UI-BE-02 is the accepted controller-only read-only ProjectSnapshot boundary.
 UI-BE-03 is the accepted safe Ansible-native writer: Go owns Installer
 application semantics and invokes Core as authoritative staged verifier. It
 adds no production UI, apply/runtime execution or second desired-state store.
-EXEC-01A is the current explicitly requested bootstrap/runtime-preparation
-milestone. UI-BE-04 remains gated until EXEC-01A establishes a READY Execution
-Node from a supported host without Platform Core. Do not begin UI-BE-04, UI-01
+EXEC-01A is complete: it establishes a READY Execution Node from a supported
+host without Platform Core and provides node-scoped repository-first,
+offline-bundle fallback for service execution. UI-BE-04 is NEXT but must not
+begin without an explicit request. Do not begin UI-BE-04, UI-01
 or another production service unless its milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
@@ -28,6 +29,7 @@ configuration, runtime projections, plans, facts and results as derived state.
 ## Boundaries
 
 - Ansible Core must validate, plan, apply and verify a project without Go, Wails, SQLite or the UI.
+- Ansible Core and its Python runtime execute only on the selected Execution Node. The workstation may orchestrate with Go, use SSH/SCP, verify a returned bundle and publish its immutable cache, but is not a Core/Python execution environment.
 - The portable project is the canonical desired state.
 - Resolved execution groups/variables, runtime workspaces, facts, plans and results are derived state. Operator-authored inventory is desired project input.
 - Ansible roles consume ordinary documented variables and remain usable with manual inventory.
@@ -37,6 +39,11 @@ configuration, runtime projections, plans, facts and results as derived state.
   semantics and must not become the owner of Installer UI lifecycle.
 - Go must not recreate Ansible precedence or service/Core rules. Future Wails is
   a thin transport over the same Go backend.
+- Installation source selection is one node-scoped policy: a compatible
+  artifact from that node's configured approved repository wins; otherwise a
+  compatible artifact in the immutable offline bundle is used; otherwise the
+  operation is blocked. DEV may explicitly acquire required closure into a new
+  bundle version; PROD never mutates the distributed bundle.
 - React/Wails owns rendering and transport only: it must not parse Ansible YAML
   or calculate topology, FQDN/VIP/provider, validation or service semantics.
 - Core owns derived `ProjectSnapshot`, endpoint/provider/PKI and deployment
@@ -107,8 +114,8 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01 is
-DONE, EXEC-01A is current and UI-BE-04 is gated. PostgreSQL behavior must not be inferred from
+The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01 and
+EXEC-01A are DONE, and UI-BE-04 is NEXT. PostgreSQL behavior must not be inferred from
 the completed PKI-01 foundation; its role must consume explicit PKI
 materialization plans at runtime.
 
@@ -128,6 +135,7 @@ Local integration-test credentials may exist under `.runtime/secrets/`.
 The Windows development workstation is not the canonical runtime for Python/Ansible Core tests.
 
 - Prefer the configured RED OS test VM when Python or Ansible is unavailable locally.
+- A fresh install target must not build the bundle that bootstraps its own Python/Core. DEV acquisition/build runs on a trusted acquisition environment with an existing Python/Core runtime; the selected install Execution Node only receives and activates the verified result.
 - Missing `python`, `py`, `pytest` or `ansible-playbook` on Windows is not by itself a reason to mark tests `NOT TESTED` when the RED OS QA environment is available.
 - Execute Python/Ansible tests on the RED OS VM through the existing test connection.
 - Use local Windows execution only for checks supported there, such as Git, diff and static-file checks.
@@ -159,9 +167,10 @@ mechanism.
 
 ## Local Test Artifacts
 
-Local binary artifacts used for offline/integration QA live under:
-
-`.runtime/artifacts/<service>/`
+Local distribution artifacts and immutable offline bundles live under the
+project-root `bundle/` directory, with service inputs under
+`bundle/artifacts/<service>/`. Runtime-only QA evidence remains under
+`.runtime/`.
 
 They are local test inputs and must not be committed.
 

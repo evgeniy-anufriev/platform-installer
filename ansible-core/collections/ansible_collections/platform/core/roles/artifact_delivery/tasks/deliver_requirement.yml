@@ -1,0 +1,93 @@
+---
+- name: Validate resolved artifact metadata before target mutation
+  ansible.builtin.assert:
+    that:
+      - platform_artifact_stage_root == '/var/tmp/platform-installer/artifacts'
+      - platform_resolved_artifact_sources[artifact_requirement.id] is defined
+      - platform_resolved_artifact_sources[artifact_requirement.id].source in ['REPOSITORY', 'OFFLINE_BUNDLE']
+      - artifact_requirement.id is match('^[A-Za-z0-9_.-]+$')
+      - >-
+        platform_resolved_artifact_sources[artifact_requirement.id].source == 'REPOSITORY' or
+        platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([]) | length > 0
+      - >-
+        (platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([])) |
+        rejectattr('ref', 'match', '^runtime/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$') | list | length == 0
+      - >-
+        (platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([])) |
+        rejectattr('sha256', 'match', '^sha256:[0-9a-fA-F]{64}$') | list | length == 0
+      - >-
+        (platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([])) |
+        rejectattr('type', 'in', ['package', 'archive', 'file']) | list | length == 0
+    fail_msg: "ARTIFACT_SOURCE_METADATA_INVALID: {{ artifact_requirement.id }}"
+  no_log: true
+
+- name: Create controlled target staging directory
+  ansible.builtin.file:
+    path: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
+
+- name: Copy selected offline artifacts to the target
+  ansible.builtin.copy:
+    src: "{{ platform_execution_runtime_root }}/{{ artifact.ref }}"
+    dest: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([]) }}"
+  loop_control:
+    loop_var: artifact
+    label: "{{ artifact.ref | basename }}"
+  when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
+
+- name: Verify target artifact bytes before service installation
+  ansible.builtin.stat:
+    path: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
+    checksum_algorithm: sha256
+  loop: "{{ platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([]) }}"
+  loop_control:
+    loop_var: artifact
+    label: "{{ artifact.ref | basename }}"
+  register: artifact_stats
+  when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
+  no_log: true
+
+- name: Block before install when target artifact digest is wrong
+  ansible.builtin.assert:
+    that:
+      - artifact_stat.stat.exists
+      - ('sha256:' ~ artifact_stat.stat.checksum) == artifact_stat.artifact.sha256
+    fail_msg: OFFLINE_ARTIFACT_DIGEST_MISMATCH
+  loop: "{{ artifact_stats.results | default([]) }}"
+  loop_control:
+    loop_var: artifact_stat
+  when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
+  no_log: true
+
+- name: Record staged artifact paths for service-specific installers
+  ansible.builtin.set_fact:
+    platform_offline_artifact_paths: >-
+      {{ platform_offline_artifact_paths | combine({artifact_requirement.id:
+         (platform_offline_artifact_paths[artifact_requirement.id] | default([])) +
+         [platform_artifact_stage_root ~ '/' ~ artifact_requirement.id ~ '/' ~ artifact.sha256 | regex_replace('^sha256:', '') ~ '-' ~ (artifact.ref | basename)]}) }}
+  loop: "{{ platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([]) }}"
+  loop_control:
+    loop_var: artifact
+    label: "{{ artifact.ref | basename }}"
+  when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
+
+- name: Collect local RPM closure paths
+  ansible.builtin.set_fact:
+    platform_offline_package_paths: >-
+      {{ platform_offline_package_paths +
+         [platform_artifact_stage_root ~ '/' ~ artifact_requirement.id ~ '/' ~ artifact.sha256 | regex_replace('^sha256:', '') ~ '-' ~ (artifact.ref | basename)] }}
+  loop: "{{ platform_resolved_artifact_sources[artifact_requirement.id].artifacts | default([]) }}"
+  loop_control:
+    loop_var: artifact
+    label: "{{ artifact.ref | basename }}"
+  when:
+    - platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
+    - artifact.type == 'package'

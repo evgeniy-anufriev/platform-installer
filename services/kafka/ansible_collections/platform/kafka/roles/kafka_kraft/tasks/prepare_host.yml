@@ -3,6 +3,9 @@
   ansible.builtin.package:
     name: "{{ platform_kafka_java_package }}"
     state: present
+  when: >-
+    platform_resolved_artifact_sources is not defined or
+    platform_resolved_artifact_sources['kafka-java'].source == 'REPOSITORY'
 
 - name: Verify Java major version
   ansible.builtin.command: java -version
@@ -18,6 +21,7 @@
     dest: /opt
     remote_src: false
     creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
+
 
 - name: Point stable Kafka install path at approved version
   ansible.builtin.file:

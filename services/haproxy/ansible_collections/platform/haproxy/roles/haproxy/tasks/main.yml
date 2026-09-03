@@ -1,4 +1,22 @@
 ---
+- name: Validate resolved HAProxy artifact sources before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: haproxy, name: haproxy}
+  when: platform_resolved_artifact_sources is defined
+
+- name: Deliver selected HAProxy offline artifacts
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: haproxy, name: haproxy}
+  when:
+    - platform_resolved_artifact_sources is defined
+    - platform_haproxy_phase == 'prepare'
+
 - name: Require valid HAProxy phase and canonical desired state
   ansible.builtin.assert:
     that:

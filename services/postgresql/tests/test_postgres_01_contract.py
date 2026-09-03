@@ -22,6 +22,16 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("Initialize PostgreSQL exactly once", self.main)
         self.assertIn("platform_postgresql_mode == 'standalone'", self.main)
 
+    def test_pg_auto_failover_is_not_required_by_standalone(self):
+        gate = self.main[: self.main.index("Validate PostgreSQL service inputs")]
+        self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", gate)
+        package = self.main[
+            self.main.index("Install approved PostgreSQL packages") :
+            self.main.index("Ensure PostgreSQL service account exists")
+        ]
+        self.assertNotIn("pg_auto_failover-", package.split("Install approved pg_auto_failover package")[0])
+        self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", package)
+
     def test_ha_data_members_do_not_run_platform_initdb(self):
         initdb = self.main[self.main.index("Initialize PostgreSQL exactly once") :]
         initdb = initdb[: initdb.index("Resolve PKI-01 PEM projection")]

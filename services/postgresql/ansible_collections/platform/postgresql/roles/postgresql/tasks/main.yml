@@ -1,4 +1,34 @@
 ---
+- name: Validate resolved PostgreSQL artifact sources before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: postgresql-runtime, name: postgresql}
+  when: platform_resolved_artifact_sources is defined
+
+- name: Validate resolved pg_auto_failover source before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: pg-auto-failover, name: pg_auto_failover}
+  when:
+    - platform_resolved_artifact_sources is defined
+    - platform_postgresql_mode == 'pg_auto_failover'
+
+- name: Deliver selected PostgreSQL offline artifacts
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements: >-
+      {{ ([{'id': 'postgresql-runtime', 'name': 'postgresql'}] +
+          ([{'id': 'pg-auto-failover', 'name': 'pg_auto_failover'}]
+           if platform_postgresql_mode == 'pg_auto_failover' else [])) }}
+  when:
+    - platform_resolved_artifact_sources is defined
+    - not (platform_postgresql_verify_only | bool)
+
 - name: Validate PostgreSQL service inputs
   ansible.builtin.include_tasks: validate.yml
 
@@ -36,9 +66,19 @@
       - "postgresql-{{ platform_postgresql_version }}"
       - "postgresql-server-{{ platform_postgresql_version }}"
       - "postgresql-contrib-{{ platform_postgresql_version }}"
-      - "pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}"
     state: present
   when: not (platform_postgresql_verify_only | bool)
+    and (platform_resolved_artifact_sources is not defined or
+         platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY')
+
+- name: Install approved pg_auto_failover package from the configured system repository
+  ansible.builtin.package:
+    name: "pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}"
+    state: present
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
 - name: Ensure PostgreSQL service account exists
   ansible.builtin.user:

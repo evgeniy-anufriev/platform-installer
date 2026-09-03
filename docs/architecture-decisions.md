@@ -162,3 +162,47 @@ interrupted journal before a later commit. The terminal state is either the
 entire original document set or the entire approved set. The frontend never
 saves a rewritten ProjectSnapshot, and SQLite never stores an independently
 editable desired-state copy.
+
+## ADR-021: Pre-Core bootstrap uses a verified offline runtime bundle
+
+Status: Accepted for EXEC-01A.
+
+An Execution Node may not have Python, Ansible or Platform Core when selected.
+Go therefore owns the narrowly scoped pre-Core bootstrap lifecycle: explicit
+SSH host-key trust, inspect, bundle acquisition/transfer, staged activation and
+READY classification. It must not infer project, catalog, topology or service
+semantics.
+
+Core and Python execute only on the selected Execution Node. The workstation is
+limited to Go orchestration, SSH/SCP, verification of a returned bundle and
+atomic publication into the immutable local cache. A fresh install target
+cannot build the bundle that is required to install its own Python/Core; an
+explicit DEV acquisition therefore uses a trusted acquisition environment
+that already has the builder runtime, while the install target remains a
+consumer of the verified result.
+
+The runtime distribution is a separately usable versioned directory beside the
+Installer. Its manifest declares compatibility identity and SHA-256 for every
+component. Go validates that manifest and its root-contained regular files
+before transfer. A local package closure may be explicitly acquired from a
+trusted Execution Node's configured repositories, with per-file verification,
+then atomically published into the local offline bundle. Preparation itself
+never downloads packages or enables repositories.
+
+After activation, Core owns the first capability handshake and all later
+infrastructure lifecycle. The active runtime changes only after staged
+verification; an interrupted or failed update leaves the prior runtime intact.
+## ADR-022: Unified repository-first offline-bundle fallback
+
+Installation resolves each requirement against the configured approved
+repository of the actual install node first, then against the compatible
+content in the Installer's single logical offline bundle. If neither source
+can satisfy the required compatibility, the operation is blocked. The
+repository result of an Execution Node is never reused for a managed target.
+
+DEV may explicitly acquire an exact dependency closure from an approved
+repository through a trusted Linux acquisition environment and publish a new
+immutable bundle atomically. PROD may consume repositories, but never mutates
+the distributed bundle or acquires into it. The same source selection semantics
+apply to Execution Node preparation and service package installation; only the
+acquisition capability differs.

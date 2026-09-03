@@ -1,0 +1,4 @@
+---
+platform_artifact_stage_root: /var/tmp/platform-installer/artifacts
+platform_artifact_package_manager: dnf
+platform_execution_runtime_root: /var/lib/platform-installer/runtime/current

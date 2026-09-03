@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha1/schema.json",
+  "title": "Platform Execution runtime capabilities",
+  "type": "object",
+  "required": ["apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-capabilities/v1alpha1"},
+    "kind": {"const": "ExecutionCapabilities"},
+    "bootstrapProtocol": {"const": "v1alpha1"},
+    "coreVersion": {"type": "string", "minLength": 1},
+    "catalogDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "schemaDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "runtime": {
+      "type": "object",
+      "required": ["bundleVersion", "bundleDigest"],
+      "properties": {
+        "bundleVersion": {"type": "string", "minLength": 1},
+        "bundleDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "supportedOperations": {"type": "array", "items": {"enum": ["validate"]}, "uniqueItems": true}
+  },
+  "additionalProperties": false
+}

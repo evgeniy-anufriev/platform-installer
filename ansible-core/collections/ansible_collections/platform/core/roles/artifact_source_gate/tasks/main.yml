@@ -1,0 +1,15 @@
+---
+- name: Require a resolved source for every service artifact requirement
+  ansible.builtin.assert:
+    that:
+      - platform_resolved_artifact_sources[item.id] is defined
+      - platform_resolved_artifact_sources[item.id].kind == 'ResolvedArtifactSource'
+      - platform_resolved_artifact_sources[item.id].targetNode == inventory_hostname
+      - platform_resolved_artifact_sources[item.id].source in ['REPOSITORY', 'OFFLINE_BUNDLE']
+      - platform_resolved_artifact_sources[item.id].reason is string
+      - >-
+        platform_resolved_artifact_sources[item.id].requirement.name == item.name
+  loop: "{{ platform_artifact_requirements }}"
+  loop_control:
+    label: "{{ item.id }}"
+  no_log: true

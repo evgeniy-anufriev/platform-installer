@@ -1,4 +1,33 @@
 ---
+- name: Validate resolved Kafka artifact sources before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: kafka-java, name: java-21-openjdk-headless}
+      - {id: kafka-binary, name: kafka}
+  when: platform_resolved_artifact_sources is defined
+
+- name: Deliver selected Kafka offline artifacts
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: kafka-java, name: java-21-openjdk-headless}
+      - {id: kafka-binary, name: kafka}
+  when:
+    - platform_resolved_artifact_sources is defined
+    - not (platform_kafka_verify_only | bool)
+
+- name: Select delivered Kafka archive for offline installation
+  ansible.builtin.set_fact:
+    platform_kafka_artifact_path: "{{ platform_offline_artifact_paths['kafka-binary'][0] }}"
+    platform_kafka_artifact_checksum: "{{ platform_resolved_artifact_sources['kafka-binary'].artifacts[0].sha256 }}"
+  when:
+    - platform_resolved_artifact_sources is defined
+    - platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE'
+    - not (platform_kafka_verify_only | bool)
+
 - name: Project managed Kafka members when the public list is absent
   ansible.builtin.include_tasks: project_runtime.yml
   when:
@@ -166,9 +195,11 @@
 - name: Require approved offline Kafka artifact
   ansible.builtin.assert:
     that:
-      - platform_kafka_artifact_path is defined
-      - platform_kafka_artifact_checksum is defined
-      - platform_kafka_artifact_checksum is match('^sha256:[0-9a-fA-F]{64}$')
+      - platform_kafka_artifact_path is defined or
+        (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'REPOSITORY')
+      - platform_kafka_artifact_checksum is defined or
+        (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'REPOSITORY')
+      - platform_kafka_artifact_checksum is not defined or platform_kafka_artifact_checksum is match('^sha256:[0-9a-fA-F]{64}$')
       - platform_kafka_version == '4.3.1'
       - platform_kafka_archive_directory == 'kafka_2.13-4.3.1'
     fail_msg: Kafka 4.3.1 offline artifact path and checksum are required

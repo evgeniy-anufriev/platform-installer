@@ -1,4 +1,24 @@
 ---
+- name: Validate resolved Keepalived artifact sources before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: keepalived, name: keepalived}
+  when: platform_resolved_artifact_sources is defined
+
+- name: Deliver selected Keepalived offline artifacts
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: keepalived, name: keepalived}
+  when:
+    - platform_resolved_artifact_sources is defined
+    - platform_resolved_artifact_sources.keepalived.source == 'OFFLINE_BUNDLE'
+    - not (platform_keepalived_verify_only | bool)
+    - platform_keepalived_lifecycle_phase == 'prepare'
+
 - name: Validate Keepalived role inputs
   ansible.builtin.include_tasks: validate.yml
 

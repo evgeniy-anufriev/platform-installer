@@ -3,6 +3,9 @@
   ansible.builtin.package:
     name: "{{ platform_keepalived_package }}"
     state: present
+  when: >-
+    platform_resolved_artifact_sources is not defined or
+    platform_resolved_artifact_sources.keepalived.source == 'REPOSITORY'
 
 - name: Create Keepalived HAProxy readiness primitive directory
   ansible.builtin.file:

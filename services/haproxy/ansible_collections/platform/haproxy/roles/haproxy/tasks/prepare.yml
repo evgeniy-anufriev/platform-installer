@@ -3,6 +3,9 @@
   ansible.builtin.package:
     name: "{{ platform_haproxy_package }}"
     state: present
+  when: >-
+    platform_resolved_artifact_sources is not defined or
+    platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
 
 - name: Reset only the temporary HAProxy candidate graph
   ansible.builtin.file:

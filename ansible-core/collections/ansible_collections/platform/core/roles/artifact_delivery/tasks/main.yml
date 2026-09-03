@@ -1,0 +1,23 @@
+---
+- name: Initialize offline artifact delivery state
+  ansible.builtin.set_fact:
+    platform_offline_artifact_paths: "{{ platform_offline_artifact_paths | default({}) }}"
+    platform_offline_package_paths: "{{ platform_offline_package_paths | default([]) }}"
+
+- name: Deliver selected artifact requirements from the execution bundle
+  ansible.builtin.include_tasks: deliver_requirement.yml
+  loop: "{{ platform_artifact_delivery_requirements }}"
+  loop_control:
+    loop_var: artifact_requirement
+    label: "{{ artifact_requirement.id }}"
+  when: platform_resolved_artifact_sources is defined
+
+- name: Install the selected local RPM closure without repositories
+  ansible.builtin.dnf:
+    name: "{{ platform_offline_package_paths }}"
+    state: present
+    disablerepo: '*'
+    disable_gpg_check: false
+  when:
+    - platform_offline_package_paths | length > 0
+    - platform_artifact_package_manager | default('dnf') == 'dnf'

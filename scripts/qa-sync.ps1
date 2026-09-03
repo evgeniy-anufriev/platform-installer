@@ -9,6 +9,9 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Sync')]
     [string]$KeyPath,
 
+    [Parameter(ParameterSetName = 'Sync')]
+    [switch]$IncludeGo,
+
     [Parameter(Mandatory = $true, ParameterSetName = 'Cleanup')]
     [switch]$Cleanup,
 
@@ -44,10 +47,21 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $sourceDirectories = @('ansible-core', 'services', 'examples', 'contracts')
+$sourceFiles = @()
+if ($IncludeGo) {
+    $sourceDirectories += @('cmd', 'internal')
+    $sourceFiles += @('go.mod', 'go.sum')
+}
+$sourceEntries = $sourceDirectories + $sourceFiles
 
 foreach ($sourceDirectory in $sourceDirectories) {
     if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
         throw "QA synchronization must be run from the repository root; missing source directory: $sourceDirectory"
+    }
+}
+foreach ($sourceFile in $sourceFiles) {
+    if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+        throw "QA synchronization must be run from the repository root; missing source file: $sourceFile"
     }
 }
 
@@ -105,7 +119,7 @@ $remote = "$TargetUser@$TargetHost`:$workspace/"
 try {
     Invoke-Ssh -HostName $TargetHost -UserName $TargetUser -Identity $KeyPath -Command "umask 077 && mkdir -p '$workspace'"
 
-    & scp -q -o IdentitiesOnly=yes -i $KeyPath -r -- $sourceDirectories $remote
+    & scp -q -o IdentitiesOnly=yes -i $KeyPath -r -- $sourceEntries $remote
     if ($LASTEXITCODE -ne 0) {
         throw "scp -r failed with exit code $LASTEXITCODE"
     }
