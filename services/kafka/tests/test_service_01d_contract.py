@@ -61,11 +61,44 @@ class Service01DContractTests(unittest.TestCase):
 
     def test_verify_requires_controller_membership_and_broker_registration(self):
         verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        ssl_verify = (ROLE / "tasks" / "verify_ssl_listener.yml").read_text(encoding="utf-8")
         self.assertIn("Assert Kafka controller quorum leader and membership", verify)
         self.assertIn("LeaderId", verify)
         self.assertIn("kafka-broker-api-versions.sh", verify)
         self.assertIn("Select unfenced Kafka broker diagnostic headers read-only", verify)
         self.assertIn("Assert Kafka brokers are registered and unfenced", verify)
+        self.assertIn("*[!0-9.]*)", ssl_verify)
+        self.assertIn('"$verification_option" "$verification_host"', ssl_verify)
+        self.assertIn("-cert {{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", ssl_verify)
+        self.assertIn("-key {{ _platform_kafka_tls_runtime.targetDirectory }}/private-key.pem", ssl_verify)
+        self.assertIn("until: platform_kafka_ssl_handshake.rc == 0", ssl_verify)
+
+    def test_verify_reconstructs_the_derived_pki_plan(self):
+        playbook = (SERVICE / "playbooks" / "verify.yml").read_text(encoding="utf-8")
+        self.assertIn("../../../ansible-core/playbooks/pki-verify.yml", playbook)
+
+    def test_apply_restarts_members_when_target_pki_material_changes(self):
+        member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_pki_material_changed | default(false) | bool", member)
+        self.assertIn("platform_kafka_member_pki_changed | default(false) | bool", member)
+        listener = (ROLE / "tasks" / "validate_ssl_listener.yml").read_text(encoding="utf-8")
+        self.assertIn("_platform_kafka_copied_pki_material.changed", listener)
+
+    def test_kafka_tls_requires_server_and_client_auth_certificate_usage(self):
+        runtime = (ROLE / "tasks" / "resolve_tls_runtime.yml").read_text(encoding="utf-8")
+        self.assertIn("'serverAuth' in _platform_kafka_tls_runtime_requests[0].usages", runtime)
+        self.assertIn("'clientAuth' in _platform_kafka_tls_runtime_requests[0].usages", runtime)
+        real_fixture = yaml.safe_load(
+            (ROOT / "examples" / "valid" / "kafka-real-multihost" / "inventory" / "group_vars" / "all" / "platform.yml").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            ["serverAuth", "clientAuth"],
+            real_fixture["platform_desired_state"]["certificateProfiles"]["infrastructure"]["usages"],
+        )
+        self.assertEqual(
+            "DEPLOYMENT",
+            real_fixture["platform_desired_state"]["tlsProfiles"]["infrastructure-tls"]["scope"],
+        )
 
     def test_acceptance_runner_persists_recoverable_lifecycle_state(self):
         runner = (SERVICE / "tests" / "run_service_01d_acceptance.sh").read_text(encoding="utf-8")

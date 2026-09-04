@@ -60,6 +60,30 @@ def copy_tree(source, destination):
             raise ValueError("unsupported source entry: %s" % path)
 
 
+def validate_catalog_layout(root):
+    catalog_path = root / "catalog" / "service-catalog.yml"
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
+    for service_type, definition in definitions.items():
+        references = []
+        schema = definition.get("configurationSchema", {}) if isinstance(definition, dict) else {}
+        if isinstance(schema, dict) and isinstance(schema.get("$ref"), str):
+            references.append(schema["$ref"])
+        if isinstance(definition, dict) and isinstance(definition.get("compatibilityRef"), str):
+            references.append(definition["compatibilityRef"])
+        for reference in references:
+            if reference.startswith("../../services/"):
+                candidate = root / reference[6:]
+            elif reference.startswith("../fixtures/"):
+                candidate = root / "catalog" / reference[3:]
+            else:
+                candidate = (catalog_path.parent / reference).resolve()
+            if root not in candidate.resolve().parents and candidate.resolve() != root:
+                raise ValueError("catalog reference escapes bundle: %s.%s" % (service_type, reference))
+            if not candidate.is_file():
+                raise ValueError("catalog reference is missing from bundle: %s" % reference)
+
+
 def components(root):
     result = []
     files = [path for path in root.rglob("*") if path.is_file()]
@@ -125,6 +149,7 @@ def build(output, runtime, bundle_version, core_version):
         for destination, source in SOURCE_ROOTS:
             copy_tree(source, temporary / destination)
         copy_tree(runtime, temporary / "runtime")
+        validate_catalog_layout(temporary)
         manifest = {
             "apiVersion": "platform.installer/execution-bundle/v1alpha1",
             "kind": "ExecutionRuntimeBundle",

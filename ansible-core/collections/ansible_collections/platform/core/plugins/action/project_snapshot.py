@@ -31,11 +31,36 @@ class ActionModule(ActionBase):
         value = self._loader.load_from_file(path)
         return value if isinstance(value, dict) else {}
 
+    def _catalog_reference(self, root, catalog_path, reference):
+        """Resolve catalog references in both source and published layouts.
+
+        The catalog digest is layout-independent. Published bundles place the
+        generated catalog under ``catalog/`` while service inputs remain under
+        ``services/``; legacy generated refs therefore need the bundle root as
+        their repository anchor rather than the catalog directory.
+        """
+        candidates = [os.path.realpath(os.path.join(os.path.dirname(catalog_path), reference))]
+        if reference.startswith("../../services/"):
+            candidates.append(os.path.realpath(os.path.join(root, reference[6:])))
+        if reference.startswith("../fixtures/"):
+            candidates.append(os.path.realpath(os.path.join(root, "catalog", reference[3:])))
+        for candidate in candidates:
+            if os.path.commonpath((root, candidate)) == root and os.path.isfile(candidate):
+                return candidate
+        raise AnsibleError("Published catalog reference cannot be resolved")
+
     def _repo_root(self, catalog_path, catalog):
         sources = [item.get("x-sourceManifest") for item in catalog.get("definitions", {}).values() if isinstance(item, dict)]
         current = os.path.dirname(os.path.realpath(catalog_path))
         while True:
-            if all(not source or os.path.isfile(os.path.join(current, source)) for source in sources):
+            def source_exists(source):
+                if not source:
+                    return True
+                candidates = [os.path.join(current, source)]
+                if source.startswith("examples/catalog/"):
+                    candidates.append(os.path.join(current, "catalog", source[len("examples/catalog/"):]))
+                return any(os.path.isfile(candidate) for candidate in candidates)
+            if all(source_exists(source) for source in sources):
                 return current
             parent = os.path.dirname(current)
             if parent == current:
@@ -56,9 +81,7 @@ class ActionModule(ActionBase):
                 paths[service_type] = os.path.relpath(path, root).replace("\\", "/")
             schema_ref = (definition.get("configurationSchema", {}) or {}).get("$ref")
             if isinstance(schema_ref, str):
-                schema_path = os.path.realpath(os.path.join(os.path.dirname(catalog_path), schema_ref))
-                if os.path.commonpath((root, schema_path)) != root:
-                    raise AnsibleError("Configuration schema escapes the repository root")
+                schema_path = self._catalog_reference(root, catalog_path, schema_ref)
                 schemas[service_type] = self._load(schema_path)
         return defaults, schemas, paths
 

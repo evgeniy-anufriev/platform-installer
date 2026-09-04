@@ -9,6 +9,7 @@ platform_desired_state:
   certificateProfiles:
     infrastructure:
       authorityRef: platform-ca
+      usages: [serverAuth, clientAuth]
       sanPolicy: {includeEndpointWildcard: true}
   tlsProfiles:
     platform-tls: {certificateProfileRef: infrastructure, scope: HOST, storePasswordSecretRef: runtime:pki-store-password}

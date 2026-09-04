@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:77a8a7fda31b4582ccbaa636771efdddf8f4803a4248e3cf1372b64a381ef4d0
+digest: sha256:e87acc790d389a67ea90da7b785562018cd3450181fa00f4dfa2b38fe9eaeccf
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -239,15 +239,25 @@ definitions:
         variablesPrefix: platform_kafka_
     artifacts:
     - id: kafka-binary
+      name: kafka
       version: 4.3.1
+      os: redos
+      architecture: x86_64
       digest: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
       requiredOffline: true
+    runtimeRequirements:
+    - id: kafka-java
+      name: java-21-openjdk-headless
+      version: ''
+      os: redos
+      architecture: x86_64
+      requiredOffline: false
     compatibilityRef: ../../services/kafka/compatibility.yml
     x-initialSecurityScope:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:dc6d284a8e7814d42ead3055e75f778abb1dff94e389375e5221cf823f9a12cc
+    x-definitionDigest: sha256:bcedc758691a48563dc4e65e372e55d3b8851afe7a37d192b5c48368ebf1c031
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -638,8 +648,15 @@ definitions:
         fqcn: platform.keepalived.keepalived
         variablesPrefix: platform_keepalived_
     artifacts: []
+    runtimeRequirements:
+    - id: keepalived
+      name: keepalived
+      version: ''
+      os: redos
+      architecture: x86_64
+      requiredOffline: false
     compatibilityRef: ../../services/keepalived/compatibility.yml
-    x-definitionDigest: sha256:ac5b49ab540e2bf719783ed3fa28e36570dc4123d5ef90013f85050598e774cd
+    x-definitionDigest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
     x-sourceManifest: services/keepalived/service.yml
   bind:
     apiVersion: platform.installer/service-manifest/v1alpha1

@@ -102,7 +102,7 @@ func main() {
 		builder := executionNodeBundleBuilder{transport: transport}
 		builtRoot, err := builder.BuildOnExecutionNode(context.Background(), node, input, *version, verified.Manifest.CoreVersion)
 		if err != nil {
-			fatal("EXECUTION_ARTIFACT_IMPORT_BUILD_FAILED")
+			fatal("EXECUTION_ARTIFACT_IMPORT_BUILD_FAILED: " + err.Error())
 		}
 		defer os.RemoveAll(builtRoot)
 		built, err := executionbundle.ValidateRoot(builtRoot)

@@ -29,6 +29,7 @@
     - {source: "requests/{{ platform_pki_plan.requestId }}/leaf.key", destination: private-key.pem, mode: '0600'}
     - {source: "requests/{{ platform_pki_plan.requestId }}/keystore.p12", destination: keystore.p12, mode: '0600'}
     - {source: "requests/{{ platform_pki_plan.requestId }}/truststore.p12", destination: truststore.p12, mode: '0600'}
+  register: _platform_pki_deployed_material
   no_log: true
 
 - name: Record non-secret target materialization fingerprint
@@ -38,3 +39,11 @@
     owner: "{{ platform_pki_owner }}"
     group: "{{ platform_pki_group }}"
     mode: '0644'
+  register: _platform_pki_deployed_fingerprint
+
+- name: Publish whether target PKI material changed for service activation
+  ansible.builtin.set_fact:
+    platform_pki_material_changed: >-
+      {{ (platform_pki_material_changed | default(false) | bool) or
+         (_platform_pki_deployed_material.changed | default(false) | bool) or
+         (_platform_pki_deployed_fingerprint.changed | default(false) | bool) }}

@@ -5,7 +5,7 @@ platform_desired_state:
   certificateAuthorities:
     platform-ca: {mode: MANAGED, commonName: Platform Kafka test CA}
   certificateProfiles:
-    infrastructure: {authorityRef: platform-ca, sanPolicy: {}}
+    infrastructure: {authorityRef: platform-ca, usages: [serverAuth, clientAuth], sanPolicy: {}}
   tlsProfiles:
     infrastructure-tls:
       certificateProfileRef: infrastructure

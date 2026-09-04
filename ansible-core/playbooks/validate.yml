@@ -87,7 +87,10 @@
         topology: "{{ platform_project | default({}) }}"
         ansible_desired_state: "{{ platform_desired_state | default({}) }}"
         generated_state: "{{ platform_generated_state | default({}) }}"
-        project_id: "{{ platform_project_id | default((inventory_dir | dirname | basename), true) }}"
+        project_id: >-
+          {{ platform_project_id |
+             default(platform_project_manifest_document.metadata.id |
+                     default((inventory_dir | dirname | basename), true), true) }}
         inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
         inventory_host_addresses: "{{ platform_inventory_host_addresses | default({}) }}"
         desired_hosts: "{{ platform_desired_hosts }}"

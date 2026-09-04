@@ -423,6 +423,16 @@ Keepalived and `BLOCKED` paths remain regression gates.
   bounded ordered subscriptions, replay/reconnect and semantic cancel. Focused
   tests cover expiry, acknowledgement and stale-plan rejection, approval
   reuse, replay, overflow, unsubscribe and cancellation.
-- **UI-BE-04E — GATED:** real Kafka production E2E and full regression.
+- **UI-BE-04E — DONE:** real Kafka production E2E and final regression.
 
-UI-BE-04 overall is not complete. UI-BE-04D requires a separate owner request.
+### UI-BE-04E completion evidence
+
+The production-shaped UI lifecycle test completed two serial Kafka runs with
+terminal `SUCCEEDED` under an explicit 30-minute test timeout. PKI apply,
+Kafka apply and Kafka verify passed in both runs; the direct Kafka regression
+proved repeat apply `changed=0, failed=0`. The deployment-scoped shared TLS
+certificate carries `serverAuth` and `clientAuth` with SANs for all three
+members. RED OS Core/service/race, local Go, catalog/schema and safety gates
+passed.
+
+UI-BE-04 overall is DONE. UI-01 remains a separately gated future milestone.

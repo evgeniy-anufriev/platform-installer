@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     _platform_pki_authority_dir: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/authorities/{{ platform_pki_request.authorityId }}"
     _platform_pki_request_dir: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/requests/{{ platform_pki_request.id }}"
-    _platform_pki_request_runtime_dir: "{{ platform_pki_runtime_root }}/{{ platform_pki_request.id }}"
+    _platform_pki_request_runtime_dir: "{{ platform_pki_runtime_root }}/{{ platform_pki_project_id }}/{{ platform_pki_request.id }}"
     _platform_pki_reissue_marker: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissues/{{ platform_pki_request.id }}.fingerprint"
     _platform_pki_request_plans: "{{ platform_pki_materialization_plans | selectattr('requestId', 'equalto', platform_pki_request.id) | list }}"
 

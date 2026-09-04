@@ -104,6 +104,11 @@
       "items": { "$ref": "#/$defs/artifactRequirement" },
       "default": []
     },
+    "runtimeRequirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/runtimeRequirement" },
+      "default": []
+    },
     "compatibilityRef": { "type": "string", "minLength": 1 },
     "ui": {
       "type": "object",
@@ -228,11 +233,27 @@
       "required": ["id", "version", "digest"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
         "version": { "$ref": "#/$defs/nonEmptyString" },
+        "os": { "$ref": "#/$defs/nonEmptyString" },
+        "architecture": { "$ref": "#/$defs/nonEmptyString" },
         "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "requiredOffline": { "type": "boolean", "default": true }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
+      "additionalProperties": false
+    },
+    "runtimeRequirement": {
+      "type": "object",
+      "required": ["id", "name", "os", "architecture"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "version": { "type": "string" },
+        "os": { "$ref": "#/$defs/nonEmptyString" },
+        "architecture": { "$ref": "#/$defs/nonEmptyString" },
+        "requiredOffline": { "type": "boolean", "default": false }
+      },
       "additionalProperties": false
     },
     "configurationSetting": {

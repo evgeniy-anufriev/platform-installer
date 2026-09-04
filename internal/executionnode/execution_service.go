@@ -2,18 +2,24 @@ package executionnode
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	"platform-installer/internal/artifactsource"
 )
 
 // ExecutionError is a semantic application error.  Transport diagnostics are
 // deliberately not used as an API and are never needed to make lifecycle
 // decisions.
 type ExecutionError struct {
-	Code  string
-	RunID string
+	Code     string
+	RunID    string
+	Findings []Finding
 }
 
 func (e *ExecutionError) Error() string {
@@ -25,6 +31,7 @@ func (e *ExecutionError) Error() string {
 
 const (
 	PlanExpired              = "PLAN_EXPIRED"
+	PlanBlocked              = "PLAN_BLOCKED"
 	PlanStale                = "PLAN_STALE"
 	ApprovalRequired         = "APPROVAL_REQUIRED"
 	AcknowledgementRequired  = "ACKNOWLEDGEMENT_REQUIRED"
@@ -33,15 +40,20 @@ const (
 	ExecutionNodeUnavailable = "EXECUTION_NODE_UNAVAILABLE"
 	OwnershipMismatch        = "OWNERSHIP_MISMATCH"
 	CancelNotAllowed         = "CANCEL_NOT_ALLOWED"
+	ServiceExecutionBlocked  = "SERVICE_EXECUTION_BLOCKED"
 )
 
 type DeploymentPlan struct {
-	ID               string
-	ProjectIdentity  string
-	ProjectRevision  string
-	PlanFingerprint  string
-	Acknowledgements []string
-	RuntimeRelease   map[string]any
+	ID                   string
+	Status               string
+	ProjectIdentity      string
+	ProjectRevision      string
+	PlanFingerprint      string
+	Acknowledgements     []string
+	RuntimeRelease       map[string]any
+	ArtifactRequirements []artifactsource.Requirement
+	Findings             []Finding
+	executionID          string
 }
 
 type PlanRecord struct {
@@ -62,6 +74,21 @@ type ExecutionClient interface {
 	GetExecution(context.Context, Node, string) (ExecutionRun, error)
 	GetEvents(context.Context, Node, string, int) ([]ExecutionEvent, error)
 	CancelExecution(context.Context, Node, string) (ExecutionRun, error)
+}
+
+// ServicePlanRequest contains only operator/project routing and approved
+// bundle candidates. Artifact requirements are read from the fresh Core plan.
+type ServicePlanRequest struct {
+	Service          string
+	Operation        string
+	Target           Node
+	ArtifactTargets  []Node
+	BundleCandidates []artifactsource.Candidate
+	PKISecretFiles   map[string]string
+}
+
+type RuntimeProjectionStager interface {
+	StageRuntimeProjection(context.Context, Node, string, string, string, string, map[string]map[string]artifactsource.Result, map[string]string) error
 }
 
 type session struct {
@@ -86,20 +113,43 @@ func (s *Subscription) Close() {
 }
 
 type ExecutionService struct {
-	startMu      sync.Mutex
-	builder      PlanBuilder
-	client       ExecutionClient
-	now          func() time.Time
-	ttl          time.Duration
-	mu           sync.Mutex
-	plans        map[string]PlanRecord
-	sessions     map[string]*session
-	projects     map[string]string
-	projectRoots map[string]string
+	startMu          sync.Mutex
+	builder          PlanBuilder
+	client           ExecutionClient
+	now              func() time.Time
+	ttl              time.Duration
+	mu               sync.Mutex
+	plans            map[string]PlanRecord
+	sessions         map[string]*session
+	projects         map[string]string
+	projectRoots     map[string]string
+	serviceRequests  map[string]ServicePlanRequest
+	probe            TargetRepositoryProbe
+	projectionStager RuntimeProjectionStager
 }
 
 func NewExecutionService(builder PlanBuilder, client ExecutionClient) *ExecutionService {
-	return &ExecutionService{builder: builder, client: client, now: time.Now, ttl: 15 * time.Minute, plans: map[string]PlanRecord{}, sessions: map[string]*session{}, projects: map[string]string{}, projectRoots: map[string]string{}}
+	return &ExecutionService{builder: builder, client: client, now: time.Now, ttl: 15 * time.Minute, plans: map[string]PlanRecord{}, sessions: map[string]*session{}, projects: map[string]string{}, projectRoots: map[string]string{}, serviceRequests: map[string]ServicePlanRequest{}}
+}
+
+func (s *ExecutionService) ConfigureServiceExecution(probe TargetRepositoryProbe, stager RuntimeProjectionStager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.probe, s.projectionStager = probe, stager
+}
+
+func (s *ExecutionService) CreateServicePlan(ctx context.Context, node Node, request ServicePlanRequest, projectRoot string, runtimeRelease map[string]any) (PlanRecord, error) {
+	if request.Service == "" || request.Target.ID == "" || len(request.ArtifactTargets) == 0 {
+		return PlanRecord{}, errors.New("SERVICE_PLAN_INPUT_INVALID")
+	}
+	record, err := s.CreatePlan(ctx, node, projectRoot, runtimeRelease)
+	if err != nil {
+		return PlanRecord{}, err
+	}
+	s.mu.Lock()
+	s.serviceRequests[record.ID] = cloneServicePlanRequest(request)
+	s.mu.Unlock()
+	return record, nil
 }
 
 func (s *ExecutionService) CreatePlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (PlanRecord, error) {
@@ -110,7 +160,7 @@ func (s *ExecutionService) CreatePlan(ctx context.Context, node Node, projectRoo
 	if err != nil {
 		return PlanRecord{}, err
 	}
-	if plan.ID == "" || plan.ProjectIdentity == "" || plan.ProjectRevision == "" || plan.PlanFingerprint == "" {
+	if plan.ID == "" || plan.ProjectRevision == "" || plan.PlanFingerprint == "" || (plan.Status != "EXECUTABLE" && plan.Status != "BLOCKED") || (plan.Status == "EXECUTABLE" && plan.ProjectIdentity == "") {
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INVALID")
 	}
 	now := s.now().UTC()
@@ -147,6 +197,9 @@ func (s *ExecutionService) ApprovePlan(id string, acknowledgements []string) err
 	if record.Consumed {
 		return &ExecutionError{Code: ApprovalRequired}
 	}
+	if record.Plan.Status != "EXECUTABLE" {
+		return &ExecutionError{Code: PlanBlocked, Findings: append([]Finding(nil), record.Plan.Findings...)}
+	}
 	if !sameStrings(record.Plan.Acknowledgements, acknowledgements) {
 		return &ExecutionError{Code: AcknowledgementRequired}
 	}
@@ -156,6 +209,41 @@ func (s *ExecutionService) ApprovePlan(id string, acknowledgements []string) err
 }
 
 func (s *ExecutionService) Start(ctx context.Context, node Node, planID string) (ExecutionRun, error) {
+	return s.start(ctx, node, planID, nil)
+}
+
+func (s *ExecutionService) StartService(ctx context.Context, node Node, planID string) (ExecutionRun, error) {
+	return s.start(ctx, node, planID, func(fresh DeploymentPlan, request ServicePlanRequest, runID string) error {
+		s.mu.Lock()
+		probe, stager := s.probe, s.projectionStager
+		s.mu.Unlock()
+		if probe == nil || stager == nil || len(fresh.ArtifactRequirements) == 0 {
+			return errors.New("SERVICE_EXECUTION_INPUT_INVALID")
+		}
+		resolved, _, err := NewServiceExecutionService(probe, nil).Resolve(ctx, ServiceExecutionRequest{
+			Service: request.Service, Operation: request.Operation, ProjectRoot: s.projectRoots[planID], Target: request.Target,
+			ArtifactTargets: request.ArtifactTargets, Requirements: fresh.ArtifactRequirements, BundleCandidates: request.BundleCandidates,
+		})
+		if err != nil {
+			return err
+		}
+		for _, projection := range resolved {
+			for _, result := range projection {
+				if result.Source == artifactsource.Blocked {
+					return errors.New(ServiceExecutionBlocked)
+				}
+			}
+		}
+		requirements, err := json.Marshal(fresh.ArtifactRequirements)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(requirements)
+		return stager.StageRuntimeProjection(ctx, node, runID, fresh.ProjectIdentity, fresh.PlanFingerprint, "sha256:"+hex.EncodeToString(sum[:]), resolved, request.PKISecretFiles)
+	})
+}
+
+func (s *ExecutionService) start(ctx context.Context, node Node, planID string, prepare func(DeploymentPlan, ServicePlanRequest, string) error) (ExecutionRun, error) {
 	s.startMu.Lock()
 	defer s.startMu.Unlock()
 	record, err := s.GetPlan(planID)
@@ -164,6 +252,9 @@ func (s *ExecutionService) Start(ctx context.Context, node Node, planID string) 
 	}
 	if !record.Approved || record.Consumed {
 		return ExecutionRun{}, &ExecutionError{Code: ApprovalRequired}
+	}
+	if record.Plan.Status != "EXECUTABLE" {
+		return ExecutionRun{}, &ExecutionError{Code: PlanBlocked, Findings: append([]Finding(nil), record.Plan.Findings...)}
 	}
 	s.mu.Lock()
 	if prior := s.projects[record.Plan.ProjectIdentity]; prior != "" {
@@ -181,6 +272,12 @@ func (s *ExecutionService) Start(ctx context.Context, node Node, planID string) 
 	s.mu.Lock()
 	projectRoot := s.projectRoots[planID]
 	s.mu.Unlock()
+	if projectRoot == "" {
+		return ExecutionRun{}, errors.New("EXECUTION_PLAN_PROJECT_ROOT_MISSING")
+	}
+	if len(record.Plan.RuntimeRelease) == 0 {
+		return ExecutionRun{}, errors.New("EXECUTION_PLAN_RUNTIME_RELEASE_MISSING")
+	}
 	fresh, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease)
 	if err != nil {
 		return ExecutionRun{}, err
@@ -189,7 +286,23 @@ func (s *ExecutionService) Start(ctx context.Context, node Node, planID string) 
 		s.invalidate(planID)
 		return ExecutionRun{}, &ExecutionError{Code: PlanStale}
 	}
-	run, err := s.client.StartExecution(ctx, node, ExecutionStartRequest{RunID: newRunID(), ProjectIdentity: fresh.ProjectIdentity, PlanFingerprint: fresh.PlanFingerprint, RuntimeRelease: fresh.RuntimeRelease})
+	runID := fresh.executionID
+	if runID == "" {
+		runID = newRunID()
+	}
+	if prepare != nil {
+		s.mu.Lock()
+		request, ok := s.serviceRequests[planID]
+		projectRoot := s.projectRoots[planID]
+		s.mu.Unlock()
+		if !ok || projectRoot == "" {
+			return ExecutionRun{}, errors.New("SERVICE_PLAN_NOT_FOUND")
+		}
+		if err := prepare(fresh, request, runID); err != nil {
+			return ExecutionRun{}, err
+		}
+	}
+	run, err := s.client.StartExecution(ctx, node, ExecutionStartRequest{RunID: runID, ProjectIdentity: fresh.ProjectIdentity, PlanFingerprint: fresh.PlanFingerprint, RuntimeRelease: fresh.RuntimeRelease})
 	if err != nil {
 		return ExecutionRun{}, err
 	}
@@ -251,6 +364,13 @@ func (s *ExecutionService) Sync(ctx context.Context, node Node, runID string) (E
 		}
 	}
 	current.mu.Unlock()
+	if run.State == "SUCCEEDED" || run.State == "FAILED" || run.State == "CANCELLED" || run.State == "INTERRUPTED" {
+		s.mu.Lock()
+		if s.projects[current.project] == runID {
+			delete(s.projects, current.project)
+		}
+		s.mu.Unlock()
+	}
 	return run, events, nil
 }
 
@@ -343,13 +463,28 @@ func sameStrings(a, b []string) bool {
 }
 func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
 	p.Acknowledgements = append([]string(nil), p.Acknowledgements...)
+	p.ArtifactRequirements = append([]artifactsource.Requirement(nil), p.ArtifactRequirements...)
+	p.Findings = append([]Finding(nil), p.Findings...)
 	if p.RuntimeRelease != nil {
+		runtimeRelease := p.RuntimeRelease
 		p.RuntimeRelease = map[string]any{}
-		for k, v := range p.RuntimeRelease {
+		for k, v := range runtimeRelease {
 			p.RuntimeRelease[k] = v
 		}
 	}
 	return p
+}
+func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
+	r.ArtifactTargets = append([]Node(nil), r.ArtifactTargets...)
+	r.BundleCandidates = append([]artifactsource.Candidate(nil), r.BundleCandidates...)
+	secretFiles := r.PKISecretFiles
+	if secretFiles != nil {
+		r.PKISecretFiles = make(map[string]string, len(r.PKISecretFiles))
+		for reference, secretPath := range secretFiles {
+			r.PKISecretFiles[reference] = secretPath
+		}
+	}
+	return r
 }
 func clonePlanRecord(p PlanRecord) PlanRecord { p.Plan = cloneDeploymentPlan(p.Plan); return p }
 func newRunID() string                        { return fmt.Sprintf("installer-%d", time.Now().UnixNano()) }

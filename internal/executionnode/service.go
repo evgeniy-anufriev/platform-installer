@@ -77,6 +77,7 @@ type ServiceExecutionRequest struct {
 	ArtifactTargets  []Node
 	Requirements     []artifactsource.Requirement
 	BundleCandidates []artifactsource.Candidate
+	PKISecretFiles   map[string]string
 }
 
 type ServiceExecutionResult struct {
@@ -121,6 +122,27 @@ func (s *ServiceExecutionService) Execute(ctx context.Context, request ServiceEx
 	if s == nil || s.probe == nil || s.runtime == nil || request.Service == "" || request.ProjectRoot == "" || len(request.Requirements) == 0 {
 		return ServiceExecutionResult{}, errors.New("SERVICE_EXECUTION_INPUT_INVALID")
 	}
+	projections, probes, err := s.Resolve(ctx, request)
+	if err != nil {
+		return ServiceExecutionResult{Projection: projections[request.Target.ID], TargetProjections: projections, Probes: probes}, err
+	}
+	for _, projection := range projections {
+		for _, result := range projection {
+			if result.Source == artifactsource.Blocked {
+				return ServiceExecutionResult{Projection: projections[request.Target.ID], TargetProjections: projections, Probes: probes}, errors.New("SERVICE_EXECUTION_BLOCKED")
+			}
+		}
+	}
+	applied, err := s.runtime.ExecuteService(ctx, request, projections)
+	return ServiceExecutionResult{Projection: projections[request.Target.ID], TargetProjections: projections, Probes: probes, Applied: applied}, err
+}
+
+// Resolve performs only the existing read-only probe/resolver/projection
+// phase. It never calls a service runtime or mutates a target.
+func (s *ServiceExecutionService) Resolve(ctx context.Context, request ServiceExecutionRequest) (map[string]map[string]artifactsource.Result, []artifactsource.RepositoryProbeResult, error) {
+	if s == nil || s.probe == nil || request.ProjectRoot == "" || len(request.Requirements) == 0 {
+		return nil, nil, errors.New("SERVICE_EXECUTION_INPUT_INVALID")
+	}
 	targets := request.ArtifactTargets
 	if len(targets) == 0 {
 		targets = []Node{request.Target}
@@ -132,16 +154,10 @@ func (s *ServiceExecutionService) Execute(ctx context.Context, request ServiceEx
 		projections[target.ID] = projection
 		probes = append(probes, targetProbes...)
 		if err != nil {
-			return ServiceExecutionResult{Projection: projections[request.Target.ID], TargetProjections: projections, Probes: probes}, err
-		}
-		for _, result := range projection {
-			if result.Source == artifactsource.Blocked {
-				return ServiceExecutionResult{Projection: projections[request.Target.ID], TargetProjections: projections, Probes: probes}, errors.New("SERVICE_EXECUTION_BLOCKED")
-			}
+			return projections, probes, err
 		}
 	}
-	applied, err := s.runtime.ExecuteService(ctx, request, projections)
-	return ServiceExecutionResult{Projection: projections[request.Target.ID], TargetProjections: projections, Probes: probes, Applied: applied}, err
+	return projections, probes, nil
 }
 
 // Transport is internal and semantic: it does not expose arbitrary remote
@@ -246,6 +262,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 		_ = s.transport.DiscardStagedRuntime(context.Background(), node, stage)
 		return Result{}, err
 	}
+	_ = s.transport.DiscardStagedRuntime(context.Background(), node, stage)
 	result.Changed, result.Runtime = true, runtime
 	if runtime.BundleDigest != bundle.Digest || runtime.Protocol != executionbundle.ProtocolVersion || !runtime.Ansible || !runtime.Capabilities {
 		result.State = Broken

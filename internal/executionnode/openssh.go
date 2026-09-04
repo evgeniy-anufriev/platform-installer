@@ -253,7 +253,7 @@ func (t OpenSSHTransport) DiscardStagedRuntime(ctx context.Context, node Node, s
 // Ansible only gates and executes the already selected source.
 func (t OpenSSHTransport) ExecuteService(ctx context.Context, request ServiceExecutionRequest, projections map[string]map[string]artifactsource.Result) (bool, error) {
 	playbook, serviceCollections, ok := servicePlaybook(request.Service, request.Operation)
-	if !ok || request.ProjectRoot == "" || len(projections) == 0 {
+	if !ok || request.ProjectRoot == "" || len(projections) == 0 || !validRemoteSecretFiles(request.PKISecretFiles) {
 		return false, errors.New("SERVICE_EXECUTION_INPUT_INVALID")
 	}
 	archive, err := createProjectArchive(request.ProjectRoot)
@@ -261,8 +261,18 @@ func (t OpenSSHTransport) ExecuteService(ctx context.Context, request ServiceExe
 		return false, err
 	}
 	defer os.Remove(archive)
-	hash := sha256.Sum256([]byte(request.Target.ID + "\x00" + request.Service))
-	remote := "/var/tmp/platform-installer/service/" + hex.EncodeToString(hash[:8])
+	identity, err := t.Identity.IdentityFile(request.Target.CredentialRef)
+	if err != nil {
+		return false, err
+	}
+	if request.Target.User == "" || request.Target.HostKey.State != "TRUSTED" || request.Target.HostKey.KnownHosts == "" {
+		return false, errors.New("SERVICE_EXECUTION_CONNECTION_POLICY_INVALID")
+	}
+	knownHosts, err := os.ReadFile(request.Target.HostKey.KnownHosts)
+	if err != nil {
+		return false, errors.New("SERVICE_EXECUTION_KNOWN_HOSTS_UNAVAILABLE")
+	}
+	remote := serviceWorkspace(request.Target.ID, request.Service)
 	vars, err := os.CreateTemp("", "platform-service-vars-*.json")
 	if err != nil {
 		return false, err
@@ -273,7 +283,12 @@ func (t OpenSSHTransport) ExecuteService(ctx context.Context, request ServiceExe
 		"platform_resolved_artifact_sources_by_target": projections,
 		"platform_resolved_artifact_sources":           "{{ platform_resolved_artifact_sources_by_target[inventory_hostname] | default({}) }}",
 		"platform_service_catalog_path":                "/var/lib/platform-installer/runtime/current/catalog/service-catalog.yml",
+		"platform_project_manifest_path":               remote + "/project.yml",
 		"platform_validation_artifact":                 remote + "/validation-result.json",
+		"platform_pki_secret_files":                    request.PKISecretFiles,
+		"ansible_user":                                 request.Target.User,
+		"ansible_private_key_file":                     remote + "/identity",
+		"ansible_ssh_common_args":                      "-o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=" + remote + "/known_hosts",
 	})
 	if err != nil {
 		_ = vars.Close()
@@ -286,10 +301,6 @@ func (t OpenSSHTransport) ExecuteService(ctx context.Context, request ServiceExe
 	if err := vars.Close(); err != nil {
 		return false, err
 	}
-	identity, err := t.Identity.IdentityFile(request.Target.CredentialRef)
-	if err != nil {
-		return false, err
-	}
 	cleanup := func() {
 		_, _ = t.ssh(context.Background(), request.Target, "sh", []string{"-s", "--", remote}, []byte("case \"$1\" in /var/tmp/platform-installer/service/*) rm -rf -- \"$1\";; *) exit 64;; esac\n"))
 	}
@@ -297,17 +308,39 @@ func (t OpenSSHTransport) ExecuteService(ctx context.Context, request ServiceExe
 	if _, err := t.ssh(ctx, request.Target, "sh", []string{"-s", "--", remote}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/service/*) ;; *) exit 64;; esac\nrm -rf -- \"$1\"\nmkdir -p -- \"$1\"\n")); err != nil {
 		return false, err
 	}
-	for _, pair := range [][2]string{{archive, remote + "/project.tar"}, {varsPath, remote + "/runtime-vars.json"}} {
+	knownHostsFile, err := os.CreateTemp("", "platform-known-hosts-*")
+	if err != nil {
+		return false, err
+	}
+	knownHostsPath := knownHostsFile.Name()
+	defer os.Remove(knownHostsPath)
+	if err := knownHostsFile.Chmod(0o600); err != nil {
+		_ = knownHostsFile.Close()
+		return false, err
+	}
+	if _, err := knownHostsFile.Write(knownHosts); err != nil {
+		_ = knownHostsFile.Close()
+		return false, err
+	}
+	if err := knownHostsFile.Close(); err != nil {
+		return false, err
+	}
+	for _, pair := range [][2]string{{archive, remote + "/project.tar"}, {varsPath, remote + "/runtime-vars.json"}, {knownHostsPath, remote + "/known_hosts"}, {identity, remote + "/identity"}} {
 		args := append(t.scpBase(request.Target, identity), "-O", "--", pair[0], t.destination(request.Target, pair[1]))
 		if _, err := t.run(ctx, "scp", args, nil); err != nil {
 			return false, err
 		}
 	}
-	script := "set -eu\nroot=/var/lib/platform-installer/runtime/current\nwork=$1\nplaybook=$2\nservice_collections=$3\ncase \"$work\" in /var/tmp/platform-installer/service/*) ;; *) exit 64;; esac\ncase \"$playbook:$service_collections\" in services/kafka/playbooks/apply.yml:services/kafka/ansible_collections|services/kafka/playbooks/verify.yml:services/kafka/ansible_collections|services/keepalived/playbooks/apply.yml:services/keepalived/ansible_collections|services/keepalived/playbooks/verify.yml:services/keepalived/ansible_collections) ;; *) exit 64;; esac\nsudo -n tar -xf \"$work/project.tar\" -C \"$work\"\nsudo -n rm -f -- \"$work/project.tar\"\nsudo -n test -d \"$work/inventory\"\nsudo -n test -f \"$root/$playbook\"\nsudo -n env ANSIBLE_CONFIG=\"$root/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$root/ansible-core/collections:$root/$service_collections\" ansible-playbook -i \"$work/inventory\" \"$root/$playbook\" -e @\"$work/runtime-vars.json\"\nsudo -n rm -f -- \"$work/runtime-vars.json\"\n"
+	script := "set -eu\nroot=/var/lib/platform-installer/runtime/current\nwork=$1\nplaybook=$2\nservice_collections=$3\ncase \"$work\" in /var/tmp/platform-installer/service/*) ;; *) exit 64;; esac\ncase \"$playbook:$service_collections\" in services/kafka/playbooks/apply.yml:services/kafka/ansible_collections|services/kafka/playbooks/verify.yml:services/kafka/ansible_collections|services/keepalived/playbooks/apply.yml:services/keepalived/ansible_collections|services/keepalived/playbooks/verify.yml:services/keepalived/ansible_collections) ;; *) exit 64;; esac\nsudo -n tar -xf \"$work/project.tar\" -C \"$work\"\nsudo -n rm -f -- \"$work/project.tar\"\nsudo -n test -f \"$work/inventory/hosts.yml\"\nsudo -n test -f \"$root/$playbook\"\nsudo -n env ANSIBLE_CONFIG=\"$root/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$root/ansible-core/collections:$root/$service_collections\" ansible-playbook -i \"$work/inventory/hosts.yml\" \"$root/$playbook\" -e @\"$work/runtime-vars.json\"\nsudo -n rm -f -- \"$work/runtime-vars.json\"\n"
 	if _, err := t.ssh(ctx, request.Target, "sh", []string{"-s", "--", remote, playbook, serviceCollections}, []byte(script)); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func serviceWorkspace(targetID, service string) string {
+	hash := sha256.Sum256([]byte(targetID + "\x00" + service))
+	return "/var/tmp/platform-installer/service/run-" + hex.EncodeToString(hash[:8])
 }
 
 func servicePlaybook(service, operation string) (string, string, bool) {

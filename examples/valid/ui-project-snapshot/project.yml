@@ -9,11 +9,23 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:77a8a7fda31b4582ccbaa636771efdddf8f4803a4248e3cf1372b64a381ef4d0
+  digest: sha256:e87acc790d389a67ea90da7b785562018cd3450181fa00f4dfa2b38fe9eaeccf
   services:
-    bind: {definitionVersion: 1.0.0-alpha.1, digest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611}
-    dns-client: {definitionVersion: 1.0.0-alpha.1, digest: sha256:a313a05fadd9dc701f226a91ee942c5a8e04e9768202ba6d644d26ee0a2f1590}
-    haproxy: {definitionVersion: 1.0.0-alpha.1, digest: sha256:00edc97368e0c93469002276b74e2f58bb43e9b68c5769ca56c25f5854c12a22}
-    kafka: {definitionVersion: 1.0.0-alpha.1, digest: sha256:dc6d284a8e7814d42ead3055e75f778abb1dff94e389375e5221cf823f9a12cc}
-    keepalived: {definitionVersion: 1.0.0-alpha.1, digest: sha256:ac5b49ab540e2bf719783ed3fa28e36570dc4123d5ef90013f85050598e774cd}
-    postgresql: {definitionVersion: 1.0.0-alpha.1, digest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda}
+    bind:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611
+    dns-client:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:a313a05fadd9dc701f226a91ee942c5a8e04e9768202ba6d644d26ee0a2f1590
+    haproxy:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:00edc97368e0c93469002276b74e2f58bb43e9b68c5769ca56c25f5854c12a22
+    kafka:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:bcedc758691a48563dc4e65e372e55d3b8851afe7a37d192b5c48368ebf1c031
+    keepalived:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
+    postgresql:
+      definitionVersion: 1.0.0-alpha.1
+      digest: sha256:72e320e5c4710fef4d7d77082d5c5282ecd900fd01a7f449153280705b090eda

@@ -149,9 +149,19 @@ roleEntrypoints:
     variablesPrefix: platform_kafka_
 artifacts:
   - id: kafka-binary
+    name: kafka
     version: "4.3.1"
+    os: redos
+    architecture: x86_64
     digest: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
     requiredOffline: true
+runtimeRequirements:
+  - id: kafka-java
+    name: java-21-openjdk-headless
+    version: ""
+    os: redos
+    architecture: x86_64
+    requiredOffline: false
 compatibilityRef: compatibility.yml
 x-initialSecurityScope:
   sasl: unsupported

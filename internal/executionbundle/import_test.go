@@ -21,3 +21,41 @@ func TestPrepareRuntimeInputRejectsUnsafeOrMismatchedLocalArtifact(t *testing.T)
 		t.Fatal("mismatched artifact was accepted")
 	}
 }
+
+func TestPrepareRuntimeInputReusesOnlyAnIdenticalImmutableRef(t *testing.T) {
+	root := t.TempDir()
+	bundleRoot := filepath.Join(root, "bundle")
+	existing := filepath.Join(bundleRoot, "runtime", "artifacts", "kafka.tgz")
+	if err := os.MkdirAll(filepath.Dir(existing), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(existing, []byte("kafka"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "source.tgz")
+	if err := os.WriteFile(source, []byte("kafka"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := digestPath(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, cleanup, err := PrepareRuntimeInput(Verified{Root: bundleRoot}, source, "runtime/artifacts/kafka.tgz", expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
+	if input == "" {
+		t.Fatal("identical immutable ref did not produce runtime input")
+	}
+	if err := os.WriteFile(source, []byte("different"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	different, err := digestPath(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := PrepareRuntimeInput(Verified{Root: bundleRoot}, source, "runtime/artifacts/kafka.tgz", different); err == nil || err.Error() != "EXECUTION_ARTIFACT_IMPORT_REF_CONFLICT" {
+		t.Fatalf("immutable ref conflict was not rejected: %v", err)
+	}
+}

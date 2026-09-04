@@ -7,17 +7,33 @@
           | selectattr('hostId', 'equalto', kafka_tls_member.host)
           | selectattr('tlsProfileId', 'equalto', kafka_tls_member.tls_profile)
           | list) }}
+    _platform_kafka_tls_runtime_requests: >-
+      {{ (platform_pki_requests
+          | default(hostvars['localhost'].platform_pki_requests | default([]), true)
+          | selectattr('id', 'equalto',
+              (platform_pki_materialization_plans
+               | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+               | selectattr('hostId', 'equalto', kafka_tls_member.host)
+               | selectattr('tlsProfileId', 'equalto', kafka_tls_member.tls_profile)
+               | map(attribute='requestId')
+               | list
+               | first
+               | default('')))
+          | list) }}
   changed_when: false
 
 - name: Require Kafka TLS runtime projection inputs
   ansible.builtin.assert:
     that:
       - _platform_kafka_tls_runtime_plans | length == 1
+      - _platform_kafka_tls_runtime_requests | length == 1
+      - "'serverAuth' in _platform_kafka_tls_runtime_requests[0].usages"
+      - "'clientAuth' in _platform_kafka_tls_runtime_requests[0].usages"
       - _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef is defined
       - _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef in (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))
       - (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))[_platform_kafka_tls_runtime_plans[0].storePasswordSecretRef] | length > 0
       - platform_kafka_store_type | string | length > 0
-    fail_msg: 'BLOCKED: PKI-01 materialization or runtime store SecretRef is unavailable for Kafka TLS'
+    fail_msg: 'BLOCKED: Kafka TLS requires PKI-01 serverAuth and clientAuth material plus a runtime store SecretRef'
 
 - name: Build Kafka TLS runtime projection without secret values
   ansible.builtin.set_fact:

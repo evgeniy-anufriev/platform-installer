@@ -20,6 +20,13 @@ from execution_lifecycle import ACTIVE, Journal, LifecycleError, digest, recover
 OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution")
 
 
+class CoreOperationError(LifecycleError):
+    def __init__(self, code, diagnostic=None):
+        super().__init__(code)
+        self.code = code
+        self.diagnostic = diagnostic if isinstance(diagnostic, dict) else None
+
+
 def reply(payload):
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
 
@@ -107,24 +114,37 @@ def core_operation(value, state_root, runtime_release, operation):
     if not os.path.isdir(release) or os.path.islink(runtime_release):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
     if operation == "ValidateProject":
-        playbook, inventory = "validate.yml", os.path.join(project, "inventory")
-        extra = {"platform_validation_artifact": os.path.join(journal.directory, "validation.json")}
+        playbook, inventory = "validate.yml", os.path.join(project, "inventory", "hosts.yml")
+        extra = {"platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_validation_artifact": os.path.join(journal.directory, "validation.json")}
     else:
-        playbook, inventory = "deployment-plan-machine.yml", "localhost,"
-        extra = {"platform_project_root": project, "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"]}
+        # Core remains target-free (the playbook runs on localhost), but it must
+        # load the staged project inventory so snapshot receives its canonical
+        # desired state, groups and host variables.
+        playbook, inventory = "deployment-plan-machine.yml", os.path.join(project, "inventory", "hosts.yml")
+        extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"]}
+    diagnostic_path = os.path.join(journal.directory, "core-diagnostic.json")
     descriptor, vars_path = tempfile.mkstemp(prefix=".execution-vars-", dir=journal.directory)
     try:
         os.write(descriptor, json.dumps(extra, ensure_ascii=True, sort_keys=True).encode("utf-8")); os.close(descriptor)
         os.chmod(vars_path, 0o600)
-        environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"))
+        environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         command = ["ansible-playbook", "-i", inventory, os.path.join(release, "ansible-core", "playbooks", playbook), "-e", "@" + vars_path]
-        subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=environment)
+        completed = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=environment)
+        if completed.returncode:
+            diagnostic = None
+            if os.path.isfile(diagnostic_path) and not os.path.islink(diagnostic_path):
+                with open(diagnostic_path, "r", encoding="utf-8") as stream:
+                    diagnostic = json.load(stream)
+            code = diagnostic.get("errorCode") if isinstance(diagnostic, dict) else None
+            raise CoreOperationError(code or "CORE_OPERATION_FAILED", diagnostic)
     finally:
         if os.path.exists(vars_path): os.unlink(vars_path)
     if operation == "BuildDeploymentPlan":
         with open(os.path.join(journal.directory, "deployment-plan.json"), "r", encoding="utf-8") as stream:
             plan = json.load(stream)
-        if not os.path.isfile(os.path.join(journal.directory, "manifest.json")):
+        if plan.get("status") == "BLOCKED":
+            return {"deploymentPlan": plan, "executionManifestDigest": None}
+        if plan.get("status") != "EXECUTABLE" or not os.path.isfile(os.path.join(journal.directory, "manifest.json")):
             raise LifecycleError("EXECUTION_MANIFEST_MISSING")
         with open(os.path.join(journal.directory, "manifest.json"), "r", encoding="utf-8") as stream:
             return {"deploymentPlan": plan, "executionManifestDigest": digest(json.load(stream))}
@@ -187,6 +207,12 @@ def main():
 
 if __name__ == "__main__":
     try: main()
+    except CoreOperationError as error:
+        payload = {"apiVersion": "platform.installer/execution-runtime/v1alpha1", "status": "FAILED", "error": error.code}
+        if error.diagnostic:
+            payload["diagnostic"] = error.diagnostic
+        reply(payload)
+        raise SystemExit(2)
     except (OSError, ValueError, LifecycleError, subprocess.CalledProcessError) as error:
         reply({"apiVersion": "platform.installer/execution-runtime/v1alpha1", "status": "FAILED", "error": str(error).split("\n", 1)[0][:256]})
         raise SystemExit(2)

@@ -23,13 +23,16 @@ def _safe_service(value):
 def _command(release, journal, operation):
     kind = operation.get("operation")
     if kind == "PKI_APPLY":
-        return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory"), os.path.join(release, "ansible-core", "playbooks", "pki-apply.yml")]
+        projection = os.path.join(journal.directory, "runtime-projection.json")
+        if not os.path.isfile(projection) or os.path.islink(projection):
+            raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
+        return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-apply.yml"), "-e", "@" + projection]
     if kind in ("SERVICE_APPLY", "SERVICE_VERIFY") and _safe_service(operation.get("serviceType")):
         action = "apply" if kind == "SERVICE_APPLY" else "verify"
         projection = os.path.join(journal.directory, "runtime-projection.json")
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
-        return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory"), os.path.join(release, "services", operation["serviceType"], "playbooks", action + ".yml"), "-e", "@" + projection]
+        return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "services", operation["serviceType"], "playbooks", action + ".yml"), "-e", "@" + projection]
     if kind == "CORE_DELAY" and operation.get("operationId") == "core:delay":
         # A Core-owned, bounded safe fixture used only to prove detached unit
         # and process-group semantics; it is not supplied by a client.
@@ -42,7 +45,34 @@ def _environment(release):
     service_root = os.path.join(release, "services")
     if os.path.isdir(service_root):
         collections.extend(os.path.join(service_root, name, "ansible_collections") for name in sorted(os.listdir(service_root)) if os.path.isdir(os.path.join(service_root, name, "ansible_collections")))
-    return dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections))
+    execution_root = "/var/lib/platform-installer/execution"
+    return dict(os.environ,
+                ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
+                ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections),
+                ANSIBLE_SSH_ARGS=("-o IdentityFile=%s/identities/default/id_ed25519 -o IdentitiesOnly=yes "
+                                  "-o UserKnownHostsFile=%s/known_hosts -o StrictHostKeyChecking=yes" %
+                                  (execution_root, execution_root)))
+
+
+def _validate_runtime_projection(journal, metadata, manifest):
+    service = any(isinstance(operation, dict) and operation.get("operation") in ("SERVICE_APPLY", "SERVICE_VERIFY")
+                  for operation in manifest.get("operations", []))
+    if not service:
+        return
+    projection_path = os.path.join(journal.directory, "runtime-projection.json")
+    if os.path.islink(projection_path) or not os.path.isfile(projection_path):
+        raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
+    with open(projection_path, "r", encoding="utf-8") as stream:
+        projection = json.load(stream)
+    if not isinstance(projection, dict) or projection.get("apiVersion") != "platform.installer/runtime-projection/v1alpha1":
+        raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_INVALID")
+    if (projection.get("platform_execution_run_id") != metadata.get("runId") or
+            projection.get("platform_execution_project_identity") != metadata.get("projectIdentity") or
+            projection.get("platform_execution_plan_fingerprint") != metadata.get("planFingerprint") or
+            not isinstance(projection.get("platform_execution_requirements_fingerprint"), str) or
+            not projection["platform_execution_requirements_fingerprint"].startswith("sha256:") or
+            not isinstance(projection.get("platform_resolved_artifact_sources_by_target"), dict)):
+        raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
 
 
 def _dispatch(release, journal, manifest, stopped):
@@ -50,12 +80,11 @@ def _dispatch(release, journal, manifest, stopped):
     if not isinstance(operations, list) or not operations:
         raise LifecycleError("EXECUTION_MANIFEST_NOT_EXECUTABLE")
     identifiers = set()
-    commands = []
     for operation in operations:
         if not isinstance(operation, dict) or not isinstance(operation.get("operationId"), str) or operation["operationId"] in identifiers:
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
         identifiers.add(operation["operationId"])
-        commands.append((operation, _command(release, journal, operation)))
+    commands = [(operation, _command(release, journal, operation)) for operation in operations]
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
@@ -94,6 +123,7 @@ def main():
             return journal.terminal("FAILED", "EXECUTION_IDENTITY_MISMATCH", "Manifest identity does not match run ownership") and 2
         if not os.path.isdir(args.runtime_release) or os.path.islink(args.runtime_release):
             return journal.terminal("FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
+        _validate_runtime_projection(journal, metadata, manifest)
         journal.transition("RUNNING", "Fixed Core controller started")
     finally:
         os.close(lock)

@@ -68,9 +68,27 @@ def _artifact_requirements(deployments, definitions):
                     "serviceDeployment": deployment_id,
                     "serviceType": service_type,
                     "requirementId": artifact["id"],
+                    "name": artifact.get("name", artifact["id"]),
+                    "os": artifact.get("os", ""),
+                    "architecture": artifact.get("architecture", ""),
                     "version": artifact["version"],
                     "digest": artifact["digest"],
                     "requiredOffline": bool(artifact.get("requiredOffline", True)),
+                })
+        for requirement in definition.get("runtimeRequirements", []) if isinstance(definition, dict) else []:
+            if isinstance(requirement, dict) and all(isinstance(requirement.get(key), str) and requirement[key] for key in ("id", "name", "os", "architecture")):
+                declaration = "%s\x00%s\x00%s\x00%s" % (requirement["id"], requirement["name"], requirement.get("version", ""), requirement["architecture"])
+                requirements.append({
+                    "id": "%s:%s" % (deployment_id, requirement["id"]),
+                    "serviceDeployment": deployment_id,
+                    "serviceType": service_type,
+                    "requirementId": requirement["id"],
+                    "name": requirement["name"],
+                    "version": requirement.get("version", ""),
+                    "os": requirement["os"],
+                    "architecture": requirement["architecture"],
+                    "digest": _digest(declaration),
+                    "requiredOffline": bool(requirement.get("requiredOffline", False)),
                 })
     return requirements
 

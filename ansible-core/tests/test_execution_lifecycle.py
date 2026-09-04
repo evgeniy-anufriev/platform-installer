@@ -18,7 +18,51 @@ def metadata(run_id="run-1", project="project-1"):
     return {"runId": run_id, "projectIdentity": project, "planFingerprint": manifest["planFingerprint"], "manifestDigest": digest(manifest), "runtimeRelease": manifest["runtimeRelease"]["bundleDigest"], "unit": "platform-installer-run-%s.service" % run_id}
 
 
+def subprocess_completed(returncode):
+    return execution_protocol.subprocess.CompletedProcess([], returncode)
+
+
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_core_operation_returns_blocked_plan_without_manifest(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            journal = Journal(root, "run-1")
+            Path(journal.directory, "project", "inventory").mkdir(parents=True)
+            Path(journal.directory, "project", "inventory", "hosts.yml").write_text("all: {}\n", encoding="utf-8")
+            Path(release, "ansible-core", "playbooks").mkdir(parents=True)
+            plan = {"status": "BLOCKED", "findings": [{"code": "PROJECT_VALIDATION_BLOCKED"}]}
+
+            def completed(_command, **kwargs):
+                self.assertEqual("platform.core.deployment_plan_json", kwargs["env"]["ANSIBLE_CALLBACKS_ENABLED"])
+                Path(kwargs["env"]["PLATFORM_DEPLOYMENT_PLAN_OUTPUT"]).write_text(json.dumps(plan), encoding="utf-8")
+                return subprocess_completed(0)
+
+            with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
+                result = execution_protocol.core_operation(
+                    {"runId": "run-1", "runtimeRelease": {}}, root, release, "BuildDeploymentPlan"
+                )
+            self.assertEqual(plan, result["deploymentPlan"])
+            self.assertIsNone(result["executionManifestDigest"])
+
+    def test_core_operation_returns_safe_structured_diagnostic(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            journal = Journal(root, "run-1")
+            Path(journal.directory, "project", "inventory").mkdir(parents=True)
+            Path(journal.directory, "project", "inventory", "hosts.yml").write_text("all: {}\n", encoding="utf-8")
+            Path(release, "ansible-core", "playbooks").mkdir(parents=True)
+            diagnostic = {"errorCode": "PROJECT_SNAPSHOT_INPUT_INVALID", "findings": [{"code": "PROJECT_SNAPSHOT_INPUT_INVALID", "safeMessage": "Project snapshot inputs could not be loaded"}]}
+
+            def failed(_command, **kwargs):
+                Path(kwargs["env"]["PLATFORM_CORE_DIAGNOSTIC_OUTPUT"]).write_text(json.dumps(diagnostic), encoding="utf-8")
+                return subprocess_completed(2)
+
+            with mock.patch.object(execution_protocol.subprocess, "run", side_effect=failed):
+                with self.assertRaises(execution_protocol.CoreOperationError) as caught:
+                    execution_protocol.core_operation(
+                        {"runId": "run-1", "runtimeRelease": {}}, root, release, "BuildDeploymentPlan"
+                    )
+            self.assertEqual("PROJECT_SNAPSHOT_INPUT_INVALID", caught.exception.code)
+            self.assertEqual(diagnostic, caught.exception.diagnostic)
+
     def test_journal_has_monotonic_replay_and_one_terminal_result(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
@@ -78,6 +122,32 @@ class ExecutionLifecycleTests(unittest.TestCase):
             journal = Journal(root, "run-1"); journal.initialize(metadata())
             with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISSING"):
                 execution_controller._dispatch(root, journal, {"operations": [{"operationId": "apply:kafka", "operation": "SERVICE_APPLY", "serviceType": "kafka"}]}, [False])
+
+    def test_controller_uses_prepared_execution_identity_and_known_hosts(self):
+        environment = execution_controller._environment("/runtime/release")
+        self.assertIn("IdentityFile=/var/lib/platform-installer/execution/identities/default/id_ed25519", environment["ANSIBLE_SSH_ARGS"])
+        self.assertIn("UserKnownHostsFile=/var/lib/platform-installer/execution/known_hosts", environment["ANSIBLE_SSH_ARGS"])
+        self.assertIn("StrictHostKeyChecking=yes", environment["ANSIBLE_SSH_ARGS"])
+
+    def test_service_projection_binding_is_verified_before_controller_start(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            projection = {
+                "apiVersion": "platform.installer/runtime-projection/v1alpha1",
+                "platform_execution_run_id": "run-1",
+                "platform_execution_project_identity": "project-1",
+                "platform_execution_plan_fingerprint": metadata()["planFingerprint"],
+                "platform_execution_requirements_fingerprint": "sha256:" + "a" * 64,
+                "platform_resolved_artifact_sources_by_target": {},
+            }
+            Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")
+            manifest = {"operations": [{"operation": "SERVICE_APPLY", "serviceType": "kafka"}]}
+            execution_controller._validate_runtime_projection(journal, metadata(), manifest)
+            projection["platform_execution_run_id"] = "other-run"
+            Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")
+            with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISMATCH"):
+                execution_controller._validate_runtime_projection(journal, metadata(), manifest)
 
     def test_retention_only_removes_verified_terminal_runs(self):
         with tempfile.TemporaryDirectory() as root:

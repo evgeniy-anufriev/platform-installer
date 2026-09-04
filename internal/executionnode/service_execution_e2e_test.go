@@ -3,11 +3,13 @@ package executionnode
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"platform-installer/internal/artifactsource"
+	"platform-installer/internal/executionbundle"
 )
 
 type e2eIdentity struct{ path string }
@@ -17,6 +19,67 @@ func (i e2eIdentity) IdentityFile(string) (string, error) { return i.path, nil }
 type e2eRunner struct {
 	delegate osRunner
 	calls    []recordedCommand
+}
+
+func TestUIBE04EProductionKafkaLifecycleE2E(t *testing.T) {
+	if os.Getenv("PLATFORM_UI_BE04E_E2E") != "1" {
+		t.Skip("set PLATFORM_UI_BE04E_E2E=1 for the real UI-BE-04E lifecycle acceptance")
+	}
+	address, user, identity, knownHosts, project := os.Getenv("PLATFORM_EXEC01A_ADDRESS"), os.Getenv("PLATFORM_EXEC01A_USER"), os.Getenv("PLATFORM_EXEC01A_IDENTITY"), os.Getenv("PLATFORM_EXEC01A_KNOWN_HOSTS"), os.Getenv("PLATFORM_EXEC01A_KAFKA_PROJECT")
+	if address == "" || user == "" || identity == "" || knownHosts == "" || project == "" {
+		t.Fatal("UI_BE_04E_E2E_PREREQUISITE_MISSING")
+	}
+	bundleRoot, err := filepath.Abs(filepath.Join("..", "..", "bundle"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := (executionbundle.Cache{Root: bundleRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := filepath.ToSlash(filepath.Join("runtime", "artifacts", "kafka", "kafka_2.13-4.3.1-ui-be-04e-6.tgz"))
+	node := Node{ID: "node1", Address: address, User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: HostKeyPolicy{State: "TRUSTED", KnownHosts: knownHosts, Fingerprint: "operator-approved"}}
+	targets := []Node{node, {ID: "node2", Address: "192.168.56.102", User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: node.HostKey}, {ID: "node3", Address: "192.168.56.103", User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: node.HostKey}}
+	runner := &e2eRunner{}
+	transport := OpenSSHTransport{Identity: e2eIdentity{path: identity}, Runner: runner}
+	builder := transport
+	client := transport
+	service := NewExecutionService(builder, client)
+	service.ConfigureServiceExecution(transport, transport)
+	runtimeRelease := map[string]any{"bundleDigest": bundle.Digest, "coreVersion": bundle.Manifest.CoreVersion, "catalogDigest": bundle.Manifest.CatalogDigest, "planningProtocol": "v1alpha1"}
+	run := func() ExecutionRun {
+		record, createErr := service.CreateServicePlan(context.Background(), node, ServicePlanRequest{Service: "kafka", Operation: "apply", Target: node, ArtifactTargets: targets, BundleCandidates: []artifactsource.Candidate{{ID: "kafka-4.3.1", Name: "kafka", Version: "4.3.1", OS: "redos", Architecture: "x86_64", Artifacts: []artifactsource.Artifact{{Ref: artifact, SHA256: "sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21", Type: "archive"}}}}, PKISecretFiles: map[string]string{"runtime:pki-store-password": "/var/tmp/postgres-01b/pki-password"}}, project, runtimeRelease)
+		if createErr != nil {
+			t.Fatalf("%v calls=%+v", createErr, runner.calls)
+		}
+		if approveErr := service.ApprovePlan(record.ID, record.Plan.Acknowledgements); approveErr != nil {
+			t.Fatal(approveErr)
+		}
+		started, startErr := service.StartService(context.Background(), node, record.ID)
+		if startErr != nil {
+			t.Fatal(startErr)
+		}
+		for deadline := time.Now().Add(20 * time.Minute); time.Now().Before(deadline); {
+			current, _, syncErr := service.Sync(context.Background(), node, started.RunID)
+			if syncErr != nil {
+				t.Fatal(syncErr)
+			}
+			if current.State == "SUCCEEDED" || current.State == "FAILED" || current.State == "CANCELLED" || current.State == "INTERRUPTED" {
+				return current
+			}
+			time.Sleep(2 * time.Second)
+		}
+		t.Fatal("UI_BE_04E_EXECUTION_TIMEOUT")
+		return ExecutionRun{}
+	}
+	first := run()
+	if first.State != "SUCCEEDED" {
+		t.Fatalf("first run state=%s", first.State)
+	}
+	second := run()
+	if second.State != "SUCCEEDED" {
+		t.Fatalf("repeat run state=%s", second.State)
+	}
 }
 
 func (r *e2eRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
@@ -52,6 +115,12 @@ func TestEXEC01AProductionKafkaE2E(t *testing.T) {
 	service := NewServiceExecutionService(transport, transport)
 	request := ServiceExecutionRequest{
 		Service: "kafka", Operation: "apply", ProjectRoot: project, Target: node,
+		ArtifactTargets: []Node{
+			node,
+			{ID: "node2", Address: "192.168.56.102", User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: node.HostKey},
+			{ID: "node3", Address: "192.168.56.103", User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: node.HostKey},
+		},
+		PKISecretFiles: map[string]string{"runtime:pki-store-password": "/var/tmp/postgres-01b/pki-password"},
 		Requirements: []artifactsource.Requirement{
 			{ID: "kafka-java", Name: "java-21-openjdk-headless", OS: "redos", Architecture: "x86_64"},
 			{ID: "kafka-binary", Name: "kafka", Version: "4.3.1", OS: "redos", Architecture: "x86_64"},
@@ -70,8 +139,13 @@ func TestEXEC01AProductionKafkaE2E(t *testing.T) {
 	if apply.Projection["kafka-binary"].Source != artifactsource.OfflineBundle || apply.Projection["kafka-java"].Source != artifactsource.Repository {
 		t.Fatalf("unexpected projection: %+v", apply.Projection)
 	}
-	if len(apply.Probes) != 2 || apply.Probes[1].Status != artifactsource.NotFound {
+	if len(apply.Probes) != 6 {
 		t.Fatalf("unexpected probes: %+v", apply.Probes)
+	}
+	for _, target := range []string{"node1", "node2", "node3"} {
+		if apply.TargetProjections[target]["kafka-java"].Source != artifactsource.Repository || apply.TargetProjections[target]["kafka-binary"].Source != artifactsource.OfflineBundle {
+			t.Fatalf("unexpected target projection for %s: %+v", target, apply.TargetProjections[target])
+		}
 	}
 	request.Operation = "verify"
 	if _, err := service.Execute(ctx, request); err != nil {

@@ -41,6 +41,17 @@ func PrepareRuntimeInput(bundle Verified, source, relative, expectedSHA string) 
 		cleanup()
 		return "", func() {}, err
 	}
+	if info, statErr := os.Lstat(destination); statErr == nil {
+		existingSHA, digestErr := digestPath(destination)
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || digestErr != nil || existingSHA != expectedSHA {
+			cleanup()
+			return "", func() {}, errors.New("EXECUTION_ARTIFACT_IMPORT_REF_CONFLICT")
+		}
+		return root, cleanup, nil
+	} else if !os.IsNotExist(statErr) {
+		cleanup()
+		return "", func() {}, errors.New("EXECUTION_ARTIFACT_IMPORT_COPY_FAILED")
+	}
 	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		cleanup()

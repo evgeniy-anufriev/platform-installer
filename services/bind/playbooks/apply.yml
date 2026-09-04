@@ -55,7 +55,9 @@
           {{ {
                'apiVersion': 'platform.installer/generated-state/v1alpha1',
                'kind': 'PlatformGeneratedState',
-               'metadata': {'projectId': (platform_project_id | default((inventory_dir | dirname | basename), true))},
+               'metadata': {'projectId': (platform_project_id |
+                                          default(platform_project_manifest_document.metadata.id |
+                                                  default((inventory_dir | dirname | basename), true), true))},
                'serviceDeployments': {}
              } | combine(
                    (_platform_bind_lifecycle_recovery.recovered_dns_lifecycle.generatedState

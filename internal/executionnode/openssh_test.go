@@ -36,3 +36,13 @@ func TestOpenSSHTransportUsesStrictHostKeyCheckingAndNoDownloader(t *testing.T) 
 		t.Fatalf("inspect invoked downloader: %s", call.input)
 	}
 }
+
+func TestServiceWorkspaceHasSchemaSafeFallbackIdentifier(t *testing.T) {
+	workspace := serviceWorkspace("node1", "kafka")
+	if !strings.HasPrefix(workspace, "/var/tmp/platform-installer/service/run-") {
+		t.Fatalf("workspace=%s", workspace)
+	}
+	if workspace != serviceWorkspace("node1", "kafka") || workspace == serviceWorkspace("node2", "kafka") {
+		t.Fatalf("workspace is not deterministic and target-scoped: %s", workspace)
+	}
+}

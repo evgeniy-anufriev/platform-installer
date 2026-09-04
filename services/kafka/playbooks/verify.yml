@@ -1,5 +1,7 @@
 - import_playbook: discover.yml
 
+- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
+
 - name: Verify Kafka KRaft members
   hosts: platform_targets
   become: true

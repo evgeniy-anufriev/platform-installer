@@ -132,8 +132,11 @@ systemd controller. Durable journal/event replay, reconnect, exactly-once
 terminal results, whole-cgroup cancellation, interrupted recovery,
 foreign-unit safety and bounded retention passed RED OS acceptance. UI-BE-04D
 is DONE. Go now owns only public plan approval and session lifecycle over the
-typed Execution Node protocol. UI-BE-04E is NEXT; UI-BE-04 overall remains
-incomplete.
+typed Execution Node protocol. UI-BE-04E is DONE: the production-shaped UI
+lifecycle completed two serial Kafka runs successfully under an explicit
+30-minute test timeout, and the direct Kafka regression proved repeat apply
+`changed=0, failed=0`. UI-BE-04 overall is DONE; UI-01 remains separately
+gated.
 
 ## Established direction
 
@@ -480,7 +483,7 @@ bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
-DEVX-01, EXEC-01A, UI-BE-04A, UI-BE-04B, UI-BE-04C and UI-BE-04D are DONE.
-UI-BE-04E is NEXT. UI-BE-04 overall is not DONE, and
+DEVX-01, EXEC-01A, UI-BE-04B, UI-BE-04C, UI-BE-04D and UI-BE-04E are DONE.
+UI-BE-04 overall is DONE, and
 production UI-01 remains dependent on the accepted execution boundary over one
 standard Ansible project.

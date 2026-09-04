@@ -44,7 +44,14 @@
     - {name: keystore.p12, mode: '0600'}
     - {name: truststore.p12, mode: '0600'}
     - {name: materialization-fingerprint, mode: '0600'}
+  register: _platform_kafka_copied_pki_material
   no_log: true
+
+- name: Aggregate Kafka member PKI change signal
+  ansible.builtin.set_fact:
+    platform_kafka_member_pki_changed: >-
+      {{ (platform_kafka_member_pki_changed | default(false) | bool) or
+         (_platform_kafka_copied_pki_material.changed | default(false) | bool) }}
 
 - name: Add listener-scoped PKCS12 properties without exposing secret values
   ansible.builtin.set_fact:

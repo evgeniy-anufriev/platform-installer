@@ -59,4 +59,11 @@ roleEntrypoints:
   apply: {fqcn: platform.keepalived.keepalived, variablesPrefix: platform_keepalived_}
   verify: {fqcn: platform.keepalived.keepalived, variablesPrefix: platform_keepalived_}
 artifacts: []
+runtimeRequirements:
+  - id: keepalived
+    name: keepalived
+    version: ""
+    os: redos
+    architecture: x86_64
+    requiredOffline: false
 compatibilityRef: compatibility.yml

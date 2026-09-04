@@ -13,6 +13,11 @@
     - "{{ kafka_member.log_directory }}"
   when: not (platform_kafka_verify_only | bool)
 
+- name: Initialize Kafka member PKI change signal
+  ansible.builtin.set_fact:
+    platform_kafka_member_pki_changed: false
+  when: not (platform_kafka_verify_only | bool)
+
 - name: Build role-aware member listener projection
   ansible.builtin.set_fact:
     _platform_kafka_member_advanced_config: "{{ platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})) }}"
@@ -242,7 +247,11 @@
     state: restarted
   when:
     - not (platform_kafka_verify_only | bool)
-    - platform_kafka_member_config.changed or platform_kafka_member_environment.changed
+    - >-
+      platform_kafka_member_config.changed or
+      platform_kafka_member_environment.changed or
+      (platform_kafka_member_pki_changed | default(false) | bool) or
+      (platform_pki_material_changed | default(false) | bool)
 
 - name: Enable and start Kafka member
   ansible.builtin.systemd:

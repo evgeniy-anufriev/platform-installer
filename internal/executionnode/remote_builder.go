@@ -46,7 +46,7 @@ func (t OpenSSHTransport) BuildOnExecutionNode(ctx context.Context, node Node, r
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
 		return "", err
 	}
-	buildScript := "set -eu\nroot=$1; bundle_version=$2; core_version=${3:-0.1.0}\ncase \"$root\" in /var/tmp/platform-installer/acquisition/bundle-build-*) ;; *) exit 64;; esac\ntar -xf \"$root/input.tar\" -C \"$root/source\"\ncommand -v python3 >/dev/null 2>&1\npython3 \"$root/source/ansible-core/tools/build_execution_runtime_bundle.py\" --output \"$root/bundle\" --runtime-input \"$root/source/runtime-input\" --bundle-version \"$bundle_version\" --core-version \"$core_version\"\ntar -cf \"$root/result.tar\" -C \"$root\" bundle\n"
+	buildScript := "set -eu\nroot=$1; bundle_version=$2; core_version=${3:-0.1.0}\ncase \"$root\" in /var/tmp/platform-installer/acquisition/bundle-build-*) ;; *) exit 64;; esac\ntar -xf \"$root/input.tar\" -C \"$root/source\"\nchmod -R u+rwX \"$root/source\"\ncommand -v python3 >/dev/null 2>&1\npython3 \"$root/source/ansible-core/tools/build_execution_runtime_bundle.py\" --output \"$root/bundle\" --runtime-input \"$root/source/runtime-input\" --bundle-version \"$bundle_version\" --core-version \"$core_version\"\ntar -cf \"$root/result.tar\" -C \"$root\" bundle\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remoteRoot, bundleVersion, coreVersion}, []byte(buildScript)); err != nil {
 		return "", fmt.Errorf("EXECUTION_BUNDLE_REMOTE_BUILD_FAILED: %w", err)
 	}
