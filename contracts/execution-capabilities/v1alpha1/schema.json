@@ -20,7 +20,7 @@
       },
       "additionalProperties": false
     },
-    "supportedOperations": {"type": "array", "items": {"enum": ["validate"]}, "uniqueItems": true}
+    "supportedOperations": {"type": "array", "items": {"enum": ["GetCapabilities", "ValidateProject", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"]}, "uniqueItems": true}
   },
   "additionalProperties": false
 }

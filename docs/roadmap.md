@@ -479,7 +479,7 @@ Recommended gated sequence:
 - EXEC-01A: DONE — bootstrap a READY Execution Node before Platform Core exists, with node-scoped repository-first/offline-bundle fallback;
 - UI-BE-04A: DONE — actual execution audit and boundary freeze;
 - UI-BE-04B: DONE — target-free Core DeploymentPlan and private ExecutionManifest;
-- UI-BE-04C: NEXT — fixed Execution Node runtime protocol and durable lifecycle;
+- UI-BE-04C: DONE — fixed Execution Node runtime protocol and durable lifecycle;
 - UI-BE-04D: GATED — Go ExecutionService, approval, sessions and reconnect;
 - UI-BE-04E: GATED — production Kafka E2E and final regression;
 - UI-BE-04 overall: IN PROGRESS — validation, plan, execution and events;
@@ -496,7 +496,8 @@ with honest provenance, heterogeneous topology, endpoint/provider/DNS/HAProxy
 relations, shared PKI identities, partial validation and static readiness.
 Offline RED OS acceptance and the architecture review have zero blockers.
 UI-BE-03, DEVX-01 and EXEC-01A are complete. UI-BE-04A is DONE and
-UI-BE-04B is DONE and UI-BE-04C is NEXT; later UI-BE-04 gates remain closed.
+UI-BE-04B and UI-BE-04C are DONE; UI-BE-04D is NEXT and later UI-BE-04 gates
+remain closed.
 
 ### UI-BE-04A: Execution architecture audit
 
@@ -517,8 +518,19 @@ canonical `project.yml.metadata.id`; a path fallback is blocked for
 Installer-managed mutation. Source selection remains EXEC-01A execution-time
 behavior. Core planning passed normal and network-isolated RED OS acceptance.
 
-UI-BE-04C is the next separately gated milestone. UI-BE-04 overall is not
-complete.
+UI-BE-04C is complete; UI-BE-04D is the next separately gated milestone.
+UI-BE-04 overall is not complete.
+
+### UI-BE-04C: Execution Node runtime protocol
+
+Status: DONE. The activated runtime now exposes only fixed semantic operations
+and runs trusted Core-owned manifest operations through a detached transient
+systemd controller. Run journals are private, digest-bound, replayable and
+bounded; ownership includes run, project, plan, manifest, release and unit
+identity. RED OS acceptance proved disconnect/reconnect, exactly-one terminal
+results, whole-control-group cancellation, interrupted recovery, foreign-unit
+safety and retention. UI-BE-04D remains the next separately gated milestone;
+UI-BE-04 overall is not complete.
 
 ### DEVX-01: Codex engineering harness
 

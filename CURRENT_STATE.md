@@ -123,7 +123,15 @@ Installer-managed mutation; a fallback path identity returns
 `PROJECT_IDENTITY_REQUIRED` and no executable manifest. Artifact requirements,
 not repository/bundle source selection, are planned. The immutable runtime
 release digest is semantic; `runtime/current`, timestamps, paths, facts and
-secrets are not. UI-BE-04C/D/E remain unimplemented.
+secrets are not.
+
+UI-BE-04C is DONE. The Execution Node exposes fixed semantic lifecycle
+operations, stages private digest-bound manifests, dispatches only Core-owned
+trusted operation identities, and runs them through a detached transient
+systemd controller. Durable journal/event replay, reconnect, exactly-once
+terminal results, whole-cgroup cancellation, interrupted recovery,
+foreign-unit safety and bounded retention passed RED OS acceptance. UI-BE-04D
+is NEXT; UI-BE-04 overall remains incomplete.
 
 ## Established direction
 
@@ -470,8 +478,7 @@ bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
-DEVX-01, EXEC-01A, UI-BE-04A and UI-BE-04B are DONE. UI-BE-04C is NEXT and
-will add the fixed Execution Node runtime protocol. UI-BE-04D and UI-BE-04E
-remain gated, UI-BE-04 overall is not DONE, and
+DEVX-01, EXEC-01A, UI-BE-04A, UI-BE-04B and UI-BE-04C are DONE. UI-BE-04D is
+NEXT. UI-BE-04E remains gated, UI-BE-04 overall is not DONE, and
 production UI-01 remains dependent on the accepted execution boundary over one
 standard Ansible project.

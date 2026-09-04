@@ -78,8 +78,8 @@ execution controller.
 | `artifact_source_gate` and `artifact_delivery` | REUSE AS-IS | Service packages consume an already resolved projection. |
 | Capability handshake | EXTEND | Add only fixed versioned semantic operation names and compatibility data. |
 | Project/run staging | EXTEND | Add immutable run-scoped staging bound to project, plan and manifest identities. |
-| Status, events, replay and result | MISSING | Implement on the Execution Node in UI-BE-04C. |
-| Durable process ownership, cancel and recovery | MISSING | Implement with a fixed detached Core controller in UI-BE-04C. |
+| Status, events, replay and result | DONE | Implemented on the Execution Node in UI-BE-04C. |
+| Durable process ownership, cancel and recovery | DONE | Implemented with a fixed detached Core controller in UI-BE-04C. |
 | Core DeploymentPlan and ExecutionManifest | MISSING | Implement target-free in UI-BE-04B. |
 | Go plan approval/session service | MISSING | Implement only after B and C in UI-BE-04D. |
 | Synchronous `ExecuteService` | DEPRECATE FOR UI-BE-04 | Retain for EXEC-01A regression until the generic path is proven; do not copy its service mapping. |
@@ -223,7 +223,7 @@ they do not make the immutable plan nondeterministic.
 
 ## Fixed Execution Node machine protocol
 
-UI-BE-04C will extend the capability handshake with exactly these semantic
+UI-BE-04C extends the capability handshake with exactly these semantic
 operations:
 
 - `GetCapabilities`;
@@ -401,10 +401,16 @@ Keepalived and `BLOCKED` paths remain regression gates.
   Core actions/dependencies and immutable bundle release identity, but excludes
   timestamps and `runtime/current`. The standalone machine entrypoint is
   `ansible-core/playbooks/deployment-plan-machine.yml`.
-- **UI-BE-04C — GATED:** fixed Execution Node protocol, detached controller,
-  journal/events/replay/cancel/recovery/retention.
+- **UI-BE-04C — DONE:** fixed Execution Node protocol, Core-owned trusted
+  manifest dispatch, immutable run ownership, detached controller,
+  journal/events/replay/cancel/recovery and bounded retention. RED OS acceptance
+  proved disconnect/reconnect, terminal replay, whole-cgroup cancellation,
+  duplicate-run rejection, interrupted recovery, foreign-unit safety and
+  transient `--collect`. The controller never accepts a client command,
+  playbook path or argv; source selection remains outside it and service
+  dispatch consumes the existing staged runtime projection.
 - **UI-BE-04D — GATED:** Go PlanStore, approval, stale-plan guard, sessions,
   subscriptions and reconnect client.
 - **UI-BE-04E — GATED:** real Kafka production E2E and full regression.
 
-UI-BE-04 overall is not complete. UI-BE-04C requires a separate owner request.
+UI-BE-04 overall is not complete. UI-BE-04D requires a separate owner request.

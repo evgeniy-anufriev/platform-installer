@@ -171,5 +171,10 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     }
     manifest = None
     if executable:
-        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": [{"actionId": action["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment")} for phase in phases for action in phase["actions"]]}
+        manifest_operations = []
+        for phase in phases:
+            for action in phase["actions"]:
+                deployment = deployments.get(action.get("serviceDeployment"), {})
+                manifest_operations.append({"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None})
+        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations}
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}

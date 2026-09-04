@@ -20,7 +20,7 @@ def build_capabilities(manifest, core_version):
             "bundleVersion": manifest["bundleVersion"],
             "bundleDigest": manifest.get("bundleDigest", ""),
         },
-        "supportedOperations": ["validate"],
+        "supportedOperations": ["GetCapabilities", "ValidateProject", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"],
     }
 
 
