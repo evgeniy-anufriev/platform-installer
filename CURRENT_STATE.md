@@ -131,7 +131,9 @@ trusted operation identities, and runs them through a detached transient
 systemd controller. Durable journal/event replay, reconnect, exactly-once
 terminal results, whole-cgroup cancellation, interrupted recovery,
 foreign-unit safety and bounded retention passed RED OS acceptance. UI-BE-04D
-is NEXT; UI-BE-04 overall remains incomplete.
+is DONE. Go now owns only public plan approval and session lifecycle over the
+typed Execution Node protocol. UI-BE-04E is NEXT; UI-BE-04 overall remains
+incomplete.
 
 ## Established direction
 
@@ -478,7 +480,7 @@ bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
-DEVX-01, EXEC-01A, UI-BE-04A, UI-BE-04B and UI-BE-04C are DONE. UI-BE-04D is
-NEXT. UI-BE-04E remains gated, UI-BE-04 overall is not DONE, and
+DEVX-01, EXEC-01A, UI-BE-04A, UI-BE-04B, UI-BE-04C and UI-BE-04D are DONE.
+UI-BE-04E is NEXT. UI-BE-04 overall is not DONE, and
 production UI-01 remains dependent on the accepted execution boundary over one
 standard Ansible project.

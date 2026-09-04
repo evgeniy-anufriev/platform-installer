@@ -341,7 +341,7 @@ unit. Successful cancellation leaves no owned child process and commits one
 terminal `CANCELLED` result. Later cancellation requests return that terminal
 state without creating another result. SSH disconnect alone never invokes it.
 
-## Future Go ExecutionService
+## UI-BE-04D - Go ExecutionService
 
 UI-BE-04D adds a separate deployment PlanStore and ExecutionService rather
 than overloading UI-BE-03 EditPlans or EXEC-01A preparation plans. Stored plans
@@ -358,6 +358,15 @@ Go owns local session/subscriber state and requests replay/reconnect/cancel.
 The Execution Node journal remains authoritative after workstation failure.
 No SQLite or other store becomes desired-state or execution-semantics
 authority.
+
+The accepted implementation uses a separate public deployment-plan store. It
+keeps plan metadata, public runtime-release identity and acknowledgement codes;
+the private ExecutionManifest is never decoded or retained. Approval is an
+exact-set one-shot. Start rebuilds immediately through the Core adapter,
+compares the complete Core fingerprint, and only then calls semantic
+StartExecution. Sessions use bounded sequence-ordered replay/reconnect and
+semantic cancellation. Slow subscribers are closed deterministically; Go owns
+no polling goroutine or process/systemd implementation.
 
 ## UI-BE-04E acceptance design
 
@@ -409,8 +418,11 @@ Keepalived and `BLOCKED` paths remain regression gates.
   transient `--collect`. The controller never accepts a client command,
   playbook path or argv; source selection remains outside it and service
   dispatch consumes the existing staged runtime projection.
-- **UI-BE-04D — GATED:** Go PlanStore, approval, stale-plan guard, sessions,
-  subscriptions and reconnect client.
+- **UI-BE-04D — DONE:** Go public deployment-plan store, exact one-shot
+  approval, fresh Core fingerprint guard, typed Execution Node lifecycle,
+  bounded ordered subscriptions, replay/reconnect and semantic cancel. Focused
+  tests cover expiry, acknowledgement and stale-plan rejection, approval
+  reuse, replay, overflow, unsubscribe and cancellation.
 - **UI-BE-04E — GATED:** real Kafka production E2E and full regression.
 
 UI-BE-04 overall is not complete. UI-BE-04D requires a separate owner request.
