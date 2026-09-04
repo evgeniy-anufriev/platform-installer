@@ -477,7 +477,12 @@ Recommended gated sequence:
 - UI-BE-03: DONE — safe Ansible-native writer and EditPlan/commit boundary;
 - DEVX-01: DONE — Go/Core scoped guidance, Codex Skills, reviewer templates and reusable QA workflow;
 - EXEC-01A: DONE — bootstrap a READY Execution Node before Platform Core exists, with node-scoped repository-first/offline-bundle fallback;
-- UI-BE-04: NEXT — validation, plan, execution, observations and event/history adapter after EXEC-01A;
+- UI-BE-04A: DONE — actual execution audit and boundary freeze;
+- UI-BE-04B: NEXT — target-free Core DeploymentPlan and private ExecutionManifest;
+- UI-BE-04C: GATED — fixed Execution Node runtime protocol and durable lifecycle;
+- UI-BE-04D: GATED — Go ExecutionService, approval, sessions and reconnect;
+- UI-BE-04E: GATED — production Kafka E2E and final regression;
+- UI-BE-04 overall: IN PROGRESS — validation, plan, execution and events;
 - UI-01: production Wails/React UI over those accepted contracts.
 
 ### UI-BE-02: Read-only ProjectSnapshot
@@ -490,7 +495,21 @@ versions, six-service catalog and deployment views, effective configuration
 with honest provenance, heterogeneous topology, endpoint/provider/DNS/HAProxy
 relations, shared PKI identities, partial validation and static readiness.
 Offline RED OS acceptance and the architecture review have zero blockers.
-UI-BE-03, DEVX-01 and EXEC-01A are complete. UI-BE-04 is NEXT.
+UI-BE-03, DEVX-01 and EXEC-01A are complete. UI-BE-04A is DONE and
+UI-BE-04B is NEXT; later UI-BE-04 gates remain closed.
+
+### UI-BE-04A: Execution architecture audit
+
+Status: DONE. `docs/ui-be-04.md` records the actual EXEC-01A reuse matrix and
+freezes Core ownership of deterministic deployment planning, private execution
+manifests and trusted ordering. The future Execution Node API is a fixed
+semantic protocol with detached controller ownership, bounded journal/events,
+replay, reconnect, cancel and recovery. The current synchronous Kafka and
+Keepalived `ExecuteService` remains only an EXEC-01A regression path. No
+production planning, runtime protocol, session or frontend code was added.
+
+UI-BE-04B is the next separately gated milestone. UI-BE-04 overall is not
+complete.
 
 ### DEVX-01: Codex engineering harness
 
@@ -504,19 +523,22 @@ exist.
 
 ### BACKEND-01: Core process adapter
 
+Status: SUPERSEDED by the explicit UI-BE-04B through UI-BE-04E gates. This
+heading remains as historical roadmap context; `docs/ui-be-04.md` is the
+accepted execution boundary.
+
 Deliverables:
 
-- typed invocation of the published validate/plan/apply/verify playbooks and artifacts;
+- typed semantic invocation of published validate/plan/execution operations and artifacts;
 - normalized event streaming;
-- execution-node transport abstraction;
-- selectable local, project-target and external Linux execution-node adapters,
-  with WSL2 as a development adapter;
+- trusted Linux Execution Node transport;
 - cancellation, timeout and lost-process recovery;
 - contract conformance tests against standalone Core.
 
 Ready when:
 
-- backend launches the same standard Core playbooks operators use directly;
+- backend invokes fixed Core semantic operations and service packages remain
+  independently usable through standard Ansible entrypoints;
 - it contains no service-specific topology rules;
 - active and interrupted runs are recovered correctly;
 - execution mechanisms can be replaced behind one port.

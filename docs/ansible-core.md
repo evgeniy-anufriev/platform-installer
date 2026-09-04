@@ -164,17 +164,19 @@ A later convenience CLI may wrap these commands, but it remains optional and Ans
 
 The immutable plan contains at least:
 
-- contract and Core versions;
-- project fingerprint;
-- catalog and artifact lock fingerprints;
-- facts snapshot references and freshness;
+- contract, Core and planning-protocol versions;
+- stable project identity, project revision and fingerprint;
+- relevant catalog/service-definition and artifact-requirement fingerprints;
 - phases, actions, dependencies and targets;
-- required runtime credentials;
-- expected package sources;
+- required runtime credential references and purposes;
 - reboot requirements;
 - warnings and acknowledgements;
-- compatibility evidence;
 - deterministic plan fingerprint.
+
+Planning is target-contact-free and contains no observed facts, repository
+probe results or selected package source. `REPOSITORY` versus `OFFLINE_BUNDLE`
+is resolved only during execution through the established target-scoped source
+resolver.
 
 No executor may introduce an undeclared mutating action.
 

@@ -459,15 +459,16 @@ alpha contract update, not a frontend workaround.
 `DeploymentPlan/v1alpha1`; it does not define a second plan. It preserves plan
 ID and fingerprints and groups existing phases/actions for Servers, Services,
 PKI, provider reconciles, and Verify. Each action shows targets, dependencies,
-mutation/reboot/package-source classification, reason/summary, required
+mutation/reboot classification, artifact requirements, reason/summary, required
 credentials, acknowledgements, and findings.
 
-A plan can be executed only when its project, catalog, artifact, Core,
-topology/configuration/runtime-projection, and relevant PKI fingerprints still
-match. The UI submits `ExecutePlan { planId, planFingerprint,
-projectRevision, acknowledgements }`. The backend selects and invokes existing
-standalone playbooks and owns provider ordering, CLI construction, runtime
-workspace, cancellation, and recovery.
+A plan can be executed only when a fresh authoritative Core plan has the same
+semantic fingerprint as the approved plan. The UI submits `ExecutePlan {
+planId, planFingerprint, projectRevision, acknowledgements }`. Go owns review,
+one-shot approval, session coordination, reconnect and semantic cancellation
+requests. Core owns provider/action ordering and its private trusted execution
+manifest; Go never selects playbooks or constructs service-specific command
+lines. Source selection and RuntimeProjection remain execution-time concerns.
 
 The current repository publishes validation plus service-specific
 apply/verify/reconcile entrypoints, but a complete generic public plan/apply

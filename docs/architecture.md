@@ -90,16 +90,19 @@ It must not own a hard-coded service catalog, compute inventory, resolve TLS ide
 ```text
 Desired Project
     -> structural and semantic validation
-    -> discovered facts snapshot (separate input)
-    -> resolved immutable plan
+    -> target-free resolved immutable plan
     -> explicit confirmation/fingerprint check
+    -> execution-time observations and artifact source resolution
     -> generated ephemeral workspace
     -> Ansible execution
     -> verification
     -> structured result + sanitized diagnostics
 ```
 
-Each arrow has a versioned contract. Later layers consume these contracts rather than constructing alternate models.
+Each arrow has a versioned contract. Later layers consume these contracts rather
+than constructing alternate models. Discovered facts and runtime observations
+remain separate timestamped state; they are not inputs to the deterministic
+deployment plan.
 
 ## Topology remains central
 

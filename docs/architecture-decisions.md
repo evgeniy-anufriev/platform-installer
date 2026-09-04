@@ -206,3 +206,29 @@ immutable bundle atomically. PROD may consume repositories, but never mutates
 the distributed bundle or acquires into it. The same source selection semantics
 apply to Execution Node preparation and service package installation; only the
 acquisition capability differs.
+
+## ADR-023: Core plans and a fixed Execution Node controller own execution semantics
+
+Status: Accepted by UI-BE-04A; implementation is gated by UI-BE-04B through
+UI-BE-04E.
+
+Platform Core owns the public deterministic `DeploymentPlan`, its semantic
+fingerprint, action ordering and the private trusted `ExecutionManifest`.
+Service packages retain their apply/verify/reconcile lifecycle semantics and
+declare the trusted package entrypoints consumed by Core. Go owns application
+review, one-shot approval, session coordination, replay/reconnect and semantic
+cancel requests, but never derives the private manifest, selects a playbook or
+reimplements service/provider ordering.
+
+Planning is controller-only and target-contact-free. It declares artifact
+requirements but does not probe repositories or select `REPOSITORY` versus
+`OFFLINE_BUNDLE`; the existing EXEC-01A target probe, resolver,
+RuntimeProjection and Ansible gates remain the execution-time authority.
+
+Execution uses a fixed versioned machine protocol and one fixed Core controller
+started in a detached transient systemd unit. The caller cannot submit shell,
+argv, playbook paths or arbitrary commands. Durable ownership binds run,
+project, plan, private manifest, controller journal and unit identities; a PID
+alone is insufficient. Disconnect does not cancel a run. The Execution Node
+enforces one active mutating run per project and owns bounded journal, event
+replay, terminal-result, cancellation and interrupted-run recovery semantics.

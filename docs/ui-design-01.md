@@ -298,16 +298,17 @@ affected object, severity, safe technical detail and a typed navigation target
 such as `service/deployment/setting`, `topology/host` or `certificates/profile`.
 
 An edit invalidates validation and plan snapshots. A plan is executable only
-when its recorded input revision plus relevant topology, configuration,
-runtime-projection and PKI fingerprints still match. The execution flow is:
+when a fresh authoritative Core plan has the exact approved semantic
+fingerprint. The execution flow is:
 
 ```text
 validate → plan → explicit confirmation → execute → result
 ```
 
-The backend owns active runs and event normalization, so navigation does not
-lose a run. Frontend shows phase, host/service state, current task, safe logs,
-retry/cancel capability and final PLAY RECAP. It does not parse callback text.
+The backend owns active runs and structured event delivery, so navigation does
+not lose a run. Frontend shows phase, host/service state, current task, safe
+logs, retry/cancel capability and a structured final recap. It does not parse
+callback text.
 
 ## 10. Ansible ownership and write model
 

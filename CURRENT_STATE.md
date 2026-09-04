@@ -105,6 +105,16 @@ Kafka and future service payloads exist only inside a verified bundle
 under `runtime/artifacts/<service>/`; `.runtime/` remains the runtime-only DEV
 input and QA state.
 
+UI-BE-04A is DONE. The actual execution implementation and published
+plan/event/result contracts were audited without adding production execution
+code. `docs/ui-be-04.md` freezes Core ownership of deterministic
+`DeploymentPlan`, private `ExecutionManifest`, ordering and trusted execution
+semantics; EXEC-01A remains the source-resolution and delivery foundation.
+Future execution uses only fixed semantic Execution Node operations, a detached
+Core controller, durable non-PID-only ownership, bounded journal/event replay,
+reconnect, cancellation and one mutating run per project. The synchronous
+Kafka/Keepalived `ExecuteService` is retained only for EXEC-01A regression.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -450,7 +460,8 @@ bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
-DEVX-01 and EXEC-01A are DONE. UI-BE-04 is NEXT and will add
-validation/plan/execution/events to the same backend. Production UI-01 remains
-dependent on the accepted read, writer and execution boundaries over one
+DEVX-01, EXEC-01A and UI-BE-04A are DONE. UI-BE-04B is NEXT and will add
+target-free Core deployment planning and the private execution manifest.
+UI-BE-04C through UI-BE-04E remain gated, UI-BE-04 overall is not DONE, and
+production UI-01 remains dependent on the accepted execution boundary over one
 standard Ansible project.

@@ -17,9 +17,10 @@ application semantics and invokes Core as authoritative staged verifier. It
 adds no production UI, apply/runtime execution or second desired-state store.
 EXEC-01A is complete: it establishes a READY Execution Node from a supported
 host without Platform Core and provides node-scoped repository-first,
-offline-bundle fallback for service execution. UI-BE-04 is NEXT but must not
-begin without an explicit request. Do not begin UI-BE-04, UI-01
-or another production service unless its milestone is explicitly requested.
+offline-bundle fallback for service execution. UI-BE-04A is complete as a
+documentation-only execution architecture audit. UI-BE-04B is NEXT but must
+not begin without an explicit request. Do not begin UI-BE-04B, UI-01 or another
+production service unless its milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI
@@ -114,10 +115,10 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01 and
-EXEC-01A are DONE, and UI-BE-04 is NEXT. PostgreSQL behavior must not be inferred from
-the completed PKI-01 foundation; its role must consume explicit PKI
-materialization plans at runtime.
+The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01,
+EXEC-01A and UI-BE-04A are DONE, and UI-BE-04B is NEXT. PostgreSQL behavior
+must not be inferred from the completed PKI-01 foundation; its role must
+consume explicit PKI materialization plans at runtime.
 
 ## Test Credentials
 

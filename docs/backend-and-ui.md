@@ -7,15 +7,18 @@ This document defines the layers that will be designed in detail only after the 
 The backend consumes the published Core playbook/artifact protocol through a typed `CoreClient`:
 
 ```text
-ReadCatalog
+GetCapabilities
 ValidateProject  -> playbooks/validate.yml (current CORE-01 filesystem entry point)
-PlanProject      -> deferred; no public playbook exists yet
-ApplyPlan        -> deferred; no public playbook exists yet
-VerifyRun        -> deferred; no public playbook exists yet
-MigrateProject   -> explicit contract migration operation
+BuildDeploymentPlan -> deferred to UI-BE-04B
+StartExecution   -> deferred to UI-BE-04C
+GetExecution     -> deferred to UI-BE-04C
+GetEvents        -> deferred to UI-BE-04C
+CancelExecution  -> deferred to UI-BE-04C
 ```
 
-The adapter maps application operations to the published standard playbooks and versioned artifacts. It does not depend on internal role task names and does not reconstruct Core decisions.
+The adapter sends semantic operations to the selected Execution Node and
+consumes versioned artifacts. It does not accept a generic invocation, depend
+on internal role task names or reconstruct Core decisions.
 
 Recommended ports:
 
@@ -38,12 +41,14 @@ The managed Ansible project directory—`project.yml`, inventory, `group_vars` a
 - execution-environment bindings;
 - discovered facts and their expiry;
 - trusted host keys;
-- immutable plans and fingerprints;
-- runs, jobs, normalized events and output references;
+- disposable local copies of immutable public plans and fingerprints;
+- nonauthoritative run/session indexes and sanitized output references;
 - audit records;
 - non-portable UI preferences.
 
-SQLite must not contain an independently editable copy of topology, endpoints or TLS desired state.
+SQLite must not contain an independently editable copy of topology, endpoints
+or TLS desired state. It is not the execution journal: durable run status,
+events and terminal result remain authoritative on the Execution Node.
 
 Project save is atomic:
 
@@ -57,25 +62,25 @@ Project save is atomic:
 
 ## Execution environment
 
-Execution-node configuration is local Installer state, not portable infrastructure intent. The same exported project can run:
-
-- directly on Linux;
-- from a dedicated remote execution node;
-- through a development WSL2 adapter;
-- through a future container or bundled Linux environment.
-
-The backend interface is based on a Core distribution and invocation, not on domain-specific playbooks:
+Execution-node configuration is local Installer state, not portable
+infrastructure intent. Core/Python execute only on the selected trusted Linux
+Execution Node; the workstation uses Go and SSH/SCP and is not a Core runtime.
+The backend interface is semantic, not a generic Core invocation or a set of
+domain-specific playbooks:
 
 ```text
-PrepareCore(version/digest)
-ValidateCore()
-Start(invocation)
-Cancel(run)
-CollectResult(run)
-Cleanup(run)
+GetCapabilities
+ValidateProject
+BuildDeploymentPlan
+StartExecution
+GetExecution
+GetEvents
+CancelExecution
 ```
 
-Execution-node bootstrap and target-host preparation remain separate workflows.
+There is no remote `RunCommand`, `RunShell`, `RunPlaybook`, `RunAnsible` or
+caller-supplied argv/path operation. Execution-node bootstrap and target-host
+preparation remain separate workflows.
 
 ## Runtime secrets
 
