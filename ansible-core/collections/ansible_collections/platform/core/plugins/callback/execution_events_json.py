@@ -26,10 +26,9 @@ _TOOLS_ROOT = os.path.join(_CORE_ROOT, "tools")
 if _TOOLS_ROOT not in sys.path:
     sys.path.insert(0, _TOOLS_ROOT)
 
-from execution_lifecycle import Journal  # noqa: E402
+from execution_lifecycle import EXECUTION_STATE_ROOT, Journal  # noqa: E402
 
 
-EXECUTION_STATE_ROOT = "/var/lib/platform-installer/execution"
 SAFE_ROLE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$")
 
 

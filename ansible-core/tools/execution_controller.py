@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from execution_lifecycle import Journal, LifecycleError, digest, retain
+from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, digest, retain
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client"))
@@ -18,6 +18,11 @@ SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy
 
 def _safe_service(value):
     return isinstance(value, str) and value in SERVICE_TYPES
+
+
+def _context_value(operation, key):
+    value = operation.get(key)
+    return value if isinstance(value, str) else ""
 
 
 def _command(release, journal, operation):
@@ -40,18 +45,29 @@ def _command(release, journal, operation):
     raise LifecycleError("EXECUTION_OPERATION_UNKNOWN")
 
 
-def _environment(release):
+def _environment(release, journal=None, operation=None):
     collections = [os.path.join(release, "ansible-core", "collections")]
     service_root = os.path.join(release, "services")
     if os.path.isdir(service_root):
         collections.extend(os.path.join(service_root, name, "ansible_collections") for name in sorted(os.listdir(service_root)) if os.path.isdir(os.path.join(service_root, name, "ansible_collections")))
-    execution_root = "/var/lib/platform-installer/execution"
-    return dict(os.environ,
-                ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
-                ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections),
-                ANSIBLE_SSH_ARGS=("-o IdentityFile=%s/identities/default/id_ed25519 -o IdentitiesOnly=yes "
-                                  "-o UserKnownHostsFile=%s/known_hosts -o StrictHostKeyChecking=yes" %
-                                  (execution_root, execution_root)))
+    environment = dict(os.environ)
+    for inherited in ("ANSIBLE_CALLBACK_PLUGINS", "ANSIBLE_CALLBACK_WHITELIST", "ANSIBLE_CALLBACKS_ENABLED", "ANSIBLE_LOAD_CALLBACK_PLUGINS", "ANSIBLE_STDOUT_CALLBACK"):
+        environment.pop(inherited, None)
+    environment.update(
+        ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
+        ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections),
+        ANSIBLE_SSH_ARGS=("-o IdentityFile=%s/identities/default/id_ed25519 -o IdentitiesOnly=yes "
+                          "-o UserKnownHostsFile=%s/known_hosts -o StrictHostKeyChecking=yes" %
+                          (EXECUTION_STATE_ROOT, EXECUTION_STATE_ROOT)))
+    if journal is not None and operation is not None:
+        environment.update({
+            "ANSIBLE_CALLBACKS_ENABLED": "platform.core.execution_events_json",
+            "PLATFORM_EXECUTION_RUN_ID": journal.run_id,
+            "PLATFORM_EXECUTION_PHASE_ID": _context_value(operation, "phaseId"),
+            "PLATFORM_EXECUTION_ACTION_ID": _context_value(operation, "operationId"),
+            "PLATFORM_EXECUTION_SERVICE_DEPLOYMENT": _context_value(operation, "serviceDeployment"),
+        })
+    return environment
 
 
 def _validate_runtime_projection(journal, metadata, manifest):
@@ -89,7 +105,7 @@ def _dispatch(release, journal, manifest, stopped):
         if stopped[0]:
             return "CANCELLED"
         journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_environment(release))
+        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_environment(release, journal, operation))
         while process.poll() is None:
             if stopped[0]:
                 process.terminate()
@@ -97,6 +113,7 @@ def _dispatch(release, journal, manifest, stopped):
                 except subprocess.TimeoutExpired: process.kill()
                 return "CANCELLED"
             time.sleep(0.1)
+        journal.emit_task_observability_diagnostic(phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
         if process.returncode:
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))

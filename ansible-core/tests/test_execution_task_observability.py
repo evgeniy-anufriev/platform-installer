@@ -1,9 +1,11 @@
 import json
 import multiprocessing
 import os
+import shutil
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 
@@ -16,6 +18,7 @@ sys.path.insert(0, str(COLLECTIONS))
 
 import execution_lifecycle
 from execution_lifecycle import Journal, digest
+import execution_controller
 from ansible_collections.platform.core.plugins.callback import execution_events_json
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
@@ -185,6 +188,54 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             marker = json.loads(Path(journal.task_observability_path).read_text(encoding="utf-8"))
             self.assertEqual({"degraded": True, "reason": "TASK_EVENT_WRITE_FAILED"}, marker)
 
+    def test_controller_environment_enables_only_managed_callback_with_semantic_context(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            inherited = {"ANSIBLE_CALLBACK_PLUGINS": "/untrusted", "ANSIBLE_CALLBACK_WHITELIST": "evil", "ANSIBLE_LOAD_CALLBACK_PLUGINS": "1", "ANSIBLE_STDOUT_CALLBACK": "evil"}
+            with mock.patch.dict(os.environ, inherited, clear=False):
+                environment = execution_controller._environment("/runtime/release", journal, {
+                    "phaseId": "apply", "operationId": "apply:kafka-main", "serviceDeployment": None,
+                })
+            self.assertEqual("platform.core.execution_events_json", environment["ANSIBLE_CALLBACKS_ENABLED"])
+            self.assertEqual("run-1", environment["PLATFORM_EXECUTION_RUN_ID"])
+            self.assertEqual("apply", environment["PLATFORM_EXECUTION_PHASE_ID"])
+            self.assertEqual("apply:kafka-main", environment["PLATFORM_EXECUTION_ACTION_ID"])
+            self.assertEqual("", environment["PLATFORM_EXECUTION_SERVICE_DEPLOYMENT"])
+            for removed in inherited:
+                self.assertNotIn(removed, environment)
+
+    def test_controller_normalizes_one_degradation_diagnostic_without_failing_action(self):
+        class _CompletedProcess(object):
+            returncode = 0
+
+            def poll(self):
+                return 0
+
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
+            operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()):
+                self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
+            events = journal.events()
+            diagnostics = [event for event in events if event.get("error", {}).get("code") == "TASK_EVENT_STREAM_TRUNCATED"]
+            self.assertEqual(1, len(diagnostics))
+            self.assertEqual("RUNNING", diagnostics[0]["status"])
+            self.assertEqual("apply:kafka-main", diagnostics[0]["actionId"])
+            self.assertFalse(Path(journal.task_observability_path).exists())
+            self.assertFalse(Path(journal.task_observability_reported_path).exists())
+            self.assertEqual("SUCCESS", events[-1]["status"])
+            self.assert_events_match_contract(events)
+            self.assertIsNone(journal.emit_task_observability_diagnostic(actionId="apply:kafka-main"))
+
+    def test_invalid_degradation_marker_does_not_change_execution_result(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            Path(journal.task_observability_path).write_text("not-json", encoding="utf-8")
+            os.chmod(journal.task_observability_path, 0o600)
+            self.assertIsNone(journal.emit_task_observability_diagnostic(actionId="apply:kafka-main"))
+            self.assertEqual("SUCCEEDED", journal.terminal("SUCCEEDED", "", "done")["state"])
+
     def test_forged_run_id_and_inactive_run_cannot_receive_task_events(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)
@@ -195,6 +246,60 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
                 callback.v2_playbook_on_task_start(_Task(), False)
             self.assertEqual(2, journal.status()["sequence"])
 
+
+@unittest.skipUnless(os.environ.get("PLATFORM_TEST_CANONICAL_EXECUTION_ROOT") == "1", "requires isolated root-owned RED OS acceptance")
+class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
+    def test_real_ansible_callback_streams_multi_host_results_through_controller(self):
+        run_id = "exec-obs-01b-%s" % uuid.uuid4().hex
+        journal = Journal(execution_lifecycle.EXECUTION_STATE_ROOT, run_id)
+        release = tempfile.mkdtemp(prefix="exec-obs-01b-release-", dir="/var/tmp")
+        try:
+            operation = {"operationId": "verify:qa", "phaseId": "verify", "operation": "SERVICE_VERIFY", "serviceType": "kafka", "serviceDeployment": "qa-only"}
+            manifest = {"projectIdentity": "exec-obs-01b-qa", "planFingerprint": "sha256:" + "a" * 64, "runtimeRelease": {"bundleDigest": "sha256:" + "c" * 64}, "operations": [operation]}
+            metadata = {"runId": run_id, "projectIdentity": manifest["projectIdentity"], "planFingerprint": manifest["planFingerprint"], "manifestDigest": digest(manifest), "runtimeRelease": manifest["runtimeRelease"]["bundleDigest"], "unit": "platform-installer-run-%s.service" % run_id}
+            journal.initialize(metadata)
+            manifest_path = Path(journal.directory, "manifest.json")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            os.chmod(manifest_path, 0o600)
+            inventory = Path(journal.directory, "project", "inventory", "hosts.yml")
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("all:\n  hosts:\n    node1: {ansible_connection: local}\n    node2: {ansible_connection: local}\n", encoding="utf-8")
+            projection = Path(journal.directory, "runtime-projection.json")
+            projection.write_text("{}", encoding="utf-8")
+            os.chmod(projection, 0o600)
+            core = Path(release, "ansible-core")
+            core.mkdir(parents=True)
+            (core / "collections").symlink_to(COLLECTIONS, target_is_directory=True)
+            shutil.copy2(Path(__file__).resolve().parents[1] / "ansible.cfg", core / "ansible.cfg")
+            playbook = Path(release, "services", "kafka", "playbooks", "verify.yml")
+            playbook.parent.mkdir(parents=True)
+            playbook.write_text("- hosts: all\n  gather_facts: false\n  tasks:\n    - name: Safe multi-host task\n      ansible.builtin.debug:\n        msg: safe\n    - name: Safe skipped task\n      ansible.builtin.debug:\n        msg: skipped\n      when: false\n", encoding="utf-8")
+            journal.transition("RUNNING", "running")
+            self.assertEqual("SUCCEEDED", execution_controller._dispatch(release, journal, manifest, [False]))
+            journal.terminal("SUCCEEDED", "", "done")
+            events = journal.events()
+            task_events = [event for event in events if event["eventType"].startswith("TASK_")]
+            self.assertTrue(task_events)
+            starts = [event for event in task_events if event["eventType"] == "TASK_STARTED"]
+            completions = [event for event in task_events if event["eventType"] == "TASK_COMPLETED"]
+            self.assertEqual(2, len(starts))
+            self.assertEqual(4, len(completions))
+            self.assertTrue(all("host" not in event for event in starts))
+            multi_host = {}
+            for event in completions:
+                multi_host.setdefault(event["task"]["uuid"], set()).add(event.get("host"))
+            self.assertTrue(any(hosts == {"node1", "node2"} for hosts in multi_host.values()))
+            self.assertIn("SKIPPED", {event["status"] for event in completions})
+            self.assertTrue(all("elapsedMilliseconds" in event for event in completions))
+            validator = SchemaValidator(CONTRACTS)
+            schema = CONTRACTS / "event" / "v1alpha1" / "schema.json"
+            for event in events:
+                self.assertEqual([], validator.validate(event, schema))
+            self.assertEqual("SUCCEEDED", journal.status()["state"])
+        finally:
+            if Path(journal.directory).exists():
+                shutil.rmtree(journal.directory)
+            shutil.rmtree(release)
 
 if __name__ == "__main__":
     unittest.main()

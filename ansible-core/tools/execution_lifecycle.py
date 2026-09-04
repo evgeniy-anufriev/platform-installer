@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 
 API_VERSION = "platform.installer/execution-runtime/v1alpha1"
+EXECUTION_STATE_ROOT = "/var/lib/platform-installer/execution"
 RUN_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 TERMINAL = frozenset(("SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED", "CORRUPT_ORPHANED"))
 ACTIVE = frozenset(("PENDING", "STARTING", "RUNNING"))
@@ -159,6 +160,8 @@ class Journal(object):
     def event_lock_path(self): return os.path.join(self.directory, ".events.lock")
     @property
     def task_observability_path(self): return os.path.join(self.directory, "task-observability.json")
+    @property
+    def task_observability_reported_path(self): return os.path.join(self.directory, ".task-observability.reported")
 
     def lock(self):
         os.makedirs(self.directory, mode=0o700, exist_ok=True)
@@ -339,6 +342,56 @@ class Journal(object):
         if os.path.exists(self.task_observability_path):
             return
         _write(self.task_observability_path, {"degraded": True, "reason": reason})
+
+    def emit_task_observability_diagnostic(self, **context):
+        event_lock = self.event_lock()
+        try:
+            if not os.path.exists(self.task_observability_path):
+                return None
+            try:
+                _assert_private_path(self.task_observability_path)
+                marker = _read(self.task_observability_path)
+            except (OSError, ValueError, LifecycleError):
+                return None
+            reason = marker.get("reason") if isinstance(marker, dict) else ""
+            if not isinstance(marker, dict) or marker.get("degraded") is not True or reason not in TASK_DEGRADATION_REASONS:
+                reason = "TASK_EVENT_INVALID"
+            try:
+                os.replace(self.task_observability_path, self.task_observability_reported_path)
+            except OSError:
+                return None
+            current = self.status()
+            if reason == "TASK_EVENT_LIMIT":
+                message = "Detailed task observability was truncated"
+                code = "TASK_EVENT_STREAM_TRUNCATED"
+                summary = "Detailed task events exceeded the configured run limit"
+            else:
+                message = "Detailed task observability was degraded"
+                code = "TASK_EVENT_STREAM_DEGRADED"
+                summary = "Detailed task events could not be recorded completely"
+            event = {
+                "apiVersion": "platform.installer/event/v1alpha1",
+                "kind": "ExecutionEvent",
+                "runId": self.run_id,
+                "sequence": 0,
+                "timestamp": utcnow(),
+                "eventType": "DIAGNOSTIC",
+                "status": "RUNNING",
+                "safeMessage": message,
+                "error": {"code": code, "summary": summary},
+                "redaction": {"applied": True, "fields": []},
+            }
+            for key in ("phaseId", "actionId", "serviceDeployment"):
+                if isinstance(context.get(key), str) and context[key]:
+                    event[key] = _bounded_text(context[key], MAX_MESSAGE)
+            committed = self._append_event_locked(current, event)
+            try:
+                os.unlink(self.task_observability_reported_path)
+            except OSError:
+                pass
+            return committed
+        finally:
+            os.close(event_lock)
 
     def terminal(self, state, code, summary):
         event_lock = self.event_lock()
