@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"platform-installer/internal/artifactsource"
@@ -42,10 +43,10 @@ func main() {
 	knownHosts := flag.String("known-hosts", "", "trusted known_hosts path")
 	fingerprint := flag.String("fingerprint", "", "operator-approved host fingerprint")
 	bundle := flag.String("bundle", "", "explicit verified bundle root")
-	cacheRoot := flag.String("cache", "bundle", "project-root bundle cache and distribution root")
+	cacheRoot := flag.String("cache", "bundle", "project-root immutable bundle cache")
 	port := flag.Uint("port", 22, "SSH port")
 	version := flag.String("bundle-version", "", "acquisition bundle version")
-	artifact := flag.String("artifact", "", "explicit DEV artifact file")
+	artifact := flag.String("artifact", "", "explicit DEV artifact file outside the bundle cache")
 	artifactRef := flag.String("artifact-ref", "", "bundle-relative runtime artifact reference")
 	artifactSHA := flag.String("artifact-sha256", "", "expected artifact SHA-256")
 	requirementID := flag.String("requirement-id", "", "artifact requirement ID")
@@ -79,6 +80,9 @@ func main() {
 	if *command == "import-artifact" {
 		if *bundle == "" || *cacheRoot == "" || *artifact == "" || *artifactRef == "" || *artifactSHA == "" || *version == "" || *address == "" || *user == "" || *identity == "" || *knownHosts == "" || *fingerprint == "" || *port > 65535 {
 			fatal("EXECUTION_ARTIFACT_IMPORT_INPUT_INVALID")
+		}
+		if insideBundleCache(*artifact, *cacheRoot) {
+			fatal("EXECUTION_ARTIFACT_IMPORT_SOURCE_INVALID")
 		}
 		verified, err := executionbundle.ValidateRoot(*bundle)
 		if err != nil {
@@ -174,6 +178,16 @@ func main() {
 	default:
 		fatal("EXECUTION_NODE_COMMAND_INVALID")
 	}
+}
+
+func insideBundleCache(source, cache string) bool {
+	absoluteSource, sourceErr := filepath.Abs(source)
+	absoluteCache, cacheErr := filepath.Abs(cache)
+	if sourceErr != nil || cacheErr != nil {
+		return true
+	}
+	relative, err := filepath.Rel(absoluteCache, absoluteSource)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator)) && !filepath.IsAbs(relative)
 }
 
 func output(value any)  { encoded, _ := json.Marshal(value); fmt.Println(string(encoded)) }

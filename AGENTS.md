@@ -167,16 +167,18 @@ mechanism.
 
 ## Local Test Artifacts
 
-Local distribution artifacts and immutable offline bundles live under the
-project-root `bundle/` directory, with service inputs under
-`bundle/artifacts/<service>/`. Runtime-only QA evidence remains under
-`.runtime/`.
+Immutable offline bundles live only under the project-root
+`bundle/<digest>/` cache. Their service payloads live inside the verified
+bundle at `runtime/artifacts/<service>/`. A DEV import source is runtime-only
+input under `.runtime/artifacts/<service>/`, never a second subtree of
+`bundle/`.
 
 They are local test inputs and must not be committed.
 
 Do not search Downloads/Desktop or download artifacts automatically during QA
 or production execution when the expected artifact is missing. Report the
 missing expected path instead. A separately authorized DEV acquisition may
-download and verify an official artifact into this local cache; production
-roles and production execution must use only approved local artifacts,
-repositories or payloads and must never download from the Internet.
+download and verify an official artifact into `.runtime/artifacts/`, then
+publish it into a new immutable bundle; production roles and production
+execution must use only approved local artifacts, repositories or payloads and
+must never download from the Internet.

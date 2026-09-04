@@ -24,11 +24,13 @@ bundle may contain execution runtime, Core, service artifacts and OS package
 closures in separate internal namespaces; digest-addressed storage remains an
 implementation detail.
 
-The project-root `bundle/` directory is the operational bundle and
-distribution root. Published immutable bundles are stored by digest beneath
-it, and separately supplied distribution artifacts are kept under
-`bundle/artifacts/<service>/`. These files are local operational inputs and
-are not desired project state or committed credentials.
+The project-root `bundle/` directory is only the immutable bundle cache.
+Published bundles are stored by digest beneath it. Service payloads exist only
+inside a verified bundle at `runtime/artifacts/<service>/`; there is no
+`bundle/artifacts/` staging or distribution subtree. A separately supplied DEV
+source lives outside the cache (normally `.runtime/artifacts/<service>/`) and
+is verified before publishing a new digest. Neither location is desired project
+state or committed credentials.
 
 ```text
 execution-runtime/
@@ -146,8 +148,8 @@ Keepalived.
   imports resolve inside the immutable bundle. Activation capability checks
   passed; repeated Prepare returned `READY`, `Changed:false`.
 - Kafka production E2E: the real target probe returned `NOT_FOUND` for Kafka,
-  the resolver selected the verified Kafka 4.3.1 artifact from
-  `bundle/artifacts/kafka/`, automatic runtime projection and shared gate ran,
+  the resolver selected the verified Kafka 4.3.1 artifact from the published
+  bundle, automatic runtime projection and shared gate ran,
   target SHA-256 verification passed, apply and verify passed, and repeat apply
   returned `changed=0 failed=0`. No Internet download or manual SCP was used.
 - Keepalived production E2E: all three actual targets returned
