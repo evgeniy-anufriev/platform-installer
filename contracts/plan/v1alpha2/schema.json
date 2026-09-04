@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha2/schema.json",
+  "title": "Platform target-free immutable deployment plan",
+  "type": "object",
+  "required": ["apiVersion", "kind", "id", "createdAt", "projectIdentity", "projectRevision", "planner", "runtimeRelease", "fingerprints", "status", "readiness", "artifactRequirements", "phases", "findings"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/plan/v1alpha2"}, "kind": {"const": "DeploymentPlan"},
+    "id": {"type": "string", "minLength": 1}, "createdAt": {"type": "string", "format": "date-time"},
+    "projectIdentity": {"type": ["string", "null"]}, "projectRevision": {"$ref": "#/$defs/digest"},
+    "planner": {"type": "object", "required": ["coreVersion", "planningProtocol"], "properties": {"coreVersion": {"type": "string", "minLength": 1}, "planningProtocol": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "runtimeRelease": {"$ref": "#/$defs/runtimeRelease"}, "fingerprints": {"$ref": "#/$defs/fingerprints"},
+    "status": {"enum": ["EXECUTABLE", "BLOCKED"]}, "readiness": {"enum": ["REQUIRES_PREPARATION", "BLOCKED"]},
+    "artifactRequirements": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "phases": {"type": "array", "items": {"$ref": "#/$defs/phase"}},
+    "requiredCredentials": {"type": "array", "items": {"type": "object", "required": ["requirementRef", "purpose", "hosts"], "properties": {"requirementRef": {"type": "string"}, "purpose": {"type": "string"}, "hosts": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}, "additionalProperties": false}},
+    "acknowledgements": {"type": "array", "items": {"type": "object", "required": ["code", "summary"], "properties": {"code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}, "summary": {"type": "string"}}, "additionalProperties": false}},
+    "findings": {"type": "array", "items": {"$ref": "../../finding/v1alpha1/schema.json"}}
+  }, "additionalProperties": false,
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "runtimeRelease": {"type": "object", "required": ["bundleDigest", "coreVersion", "catalogDigest", "planningProtocol"], "properties": {"bundleDigest": {"$ref": "#/$defs/digest"}, "coreVersion": {"type": "string"}, "catalogDigest": {"$ref": "#/$defs/digest"}, "planningProtocol": {"type": "string"}}, "additionalProperties": false},
+    "fingerprints": {"type": "object", "required": ["project", "catalog", "artifacts", "core", "plan"], "properties": {"project": {"$ref": "#/$defs/digest"}, "catalog": {"$ref": "#/$defs/digest"}, "artifacts": {"$ref": "#/$defs/digest"}, "core": {"$ref": "#/$defs/digest"}, "plan": {"$ref": "#/$defs/digest"}}, "additionalProperties": false},
+    "artifact": {"type": "object", "required": ["id", "serviceDeployment", "serviceType", "requirementId", "version", "digest", "requiredOffline"], "properties": {"id": {"type": "string"}, "serviceDeployment": {"type": "string"}, "serviceType": {"type": "string"}, "requirementId": {"type": "string"}, "version": {"type": "string"}, "digest": {"$ref": "#/$defs/digest"}, "requiredOffline": {"type": "boolean"}}, "additionalProperties": false},
+    "phase": {"type": "object", "required": ["id", "order", "actions"], "properties": {"id": {"type": "string"}, "order": {"type": "integer", "minimum": 0}, "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}}}, "additionalProperties": false},
+    "action": {"type": "object", "required": ["id", "type", "targets", "dependsOn", "mutating", "reboot", "summary"], "properties": {"id": {"type": "string"}, "type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}, "serviceDeployment": {"type": "string"}, "targets": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}, "dependsOn": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}, "mutating": {"type": "boolean"}, "reboot": {"enum": ["NONE", "RECOMMENDED", "REQUIRED"]}, "summary": {"type": "string"}}, "additionalProperties": false}
+  }
+}

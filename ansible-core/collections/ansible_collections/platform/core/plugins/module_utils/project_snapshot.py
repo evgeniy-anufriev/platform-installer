@@ -165,7 +165,7 @@ def _integration_view(desired_state, catalog, endpoint_result, haproxy_result, d
 def build_project_snapshot(project_id, project_name, documents, project_revision, catalog,
                            hosts, desired_state, topology_result, configuration_result,
                            endpoint_result, pki_result, haproxy_result,
-                           dns_result, desired_state_path, role_default_paths, core_version="0.1.0"):
+                           dns_result, desired_state_path, role_default_paths, core_version="0.1.0", identity_source="PROJECT_MANIFEST"):
     ownership = {item["logicalPath"]: item["ownership"] for item in documents}
     results = (topology_result, configuration_result, endpoint_result, pki_result, haproxy_result, dns_result)
     findings = []
@@ -203,7 +203,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
         "kind": "ProjectSnapshot",
         "status": "PARTIAL" if blocked else "PASS",
         "partial": blocked,
-        "project": {"id": project_id, "name": project_name},
+        "project": {"id": project_id, "name": project_name, "identitySource": identity_source},
         "projectRevision": project_revision,
         "catalogRevision": catalog.get("digest"),
         "coreVersion": core_version,

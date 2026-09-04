@@ -1,0 +1,28 @@
+---
+- name: Build target-free machine-readable DeploymentPlan
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Build authoritative target-free project snapshot
+      platform.core.project_snapshot:
+        project_root: "{{ platform_project_root }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+        installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
+      changed_when: false
+      become: false
+      register: platform_plan_snapshot
+
+    - name: Load authoritative service catalog
+      ansible.builtin.include_vars:
+        file: "{{ platform_service_catalog_path }}"
+        name: platform_plan_catalog_file
+      changed_when: false
+
+    - name: Build authoritative public plan
+      platform.core.build_deployment_plan:
+        snapshot: "{{ platform_plan_snapshot.snapshot }}"
+        service_catalog: "{{ platform_plan_catalog_file.platform_service_catalog | default(platform_plan_catalog_file, true) }}"
+        runtime_release: "{{ platform_execution_runtime_release }}"
+      changed_when: false
+      become: false

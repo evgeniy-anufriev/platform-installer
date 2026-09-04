@@ -211,6 +211,7 @@ class ActionModule(ActionBase):
                 metadata.get("name", metadata.get("id", os.path.basename(project_root))),
                 documents, revision, catalog, hosts, desired_state, topology,
                 configuration, endpoints, pki, haproxy, dns, desired_path, role_paths,
+                identity_source="PROJECT_MANIFEST" if metadata.get("id") else "PATH_FALLBACK",
             )
             return {"changed": False, "snapshot": snapshot}
         except (AnsibleError, KeyError, OSError, TypeError, ValueError):

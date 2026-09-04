@@ -18,6 +18,7 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Project validation result | `v1alpha1` | `validation-result/v1alpha1/schema.json` |
 | Resolved service configuration | `v1alpha1` | `resolved-service-configuration/v1alpha1/schema.json` |
 | Resolved plan | `v1alpha1` | `plan/v1alpha1/schema.json` |
+| Target-free deployment plan | `v1alpha2` | `plan/v1alpha2/schema.json` |
 | Normalized execution event | `v1alpha1` | `event/v1alpha1/schema.json` |
 | Execution result | `v1alpha1` | `result/v1alpha1/schema.json` |
 | Execution node selection | `v1alpha1` | `execution/v1alpha1/schema.json` |

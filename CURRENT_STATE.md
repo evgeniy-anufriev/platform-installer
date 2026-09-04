@@ -115,6 +115,16 @@ Core controller, durable non-PID-only ownership, bounded journal/event replay,
 reconnect, cancellation and one mutating run per project. The synchronous
 Kafka/Keepalived `ExecuteService` is retained only for EXEC-01A regression.
 
+UI-BE-04B is DONE. Core now builds the authoritative target-free public
+`DeploymentPlan/v1alpha2` from its own ProjectSnapshot/validation graph and
+the same full service catalog, with a private Core-only ExecutionManifest bound
+to the identical plan fingerprint. `project.yml.metadata.id` is required for
+Installer-managed mutation; a fallback path identity returns
+`PROJECT_IDENTITY_REQUIRED` and no executable manifest. Artifact requirements,
+not repository/bundle source selection, are planned. The immutable runtime
+release digest is semantic; `runtime/current`, timestamps, paths, facts and
+secrets are not. UI-BE-04C/D/E remain unimplemented.
+
 ## Established direction
 
 - V2 is an independent Git repository next to V1.
@@ -460,8 +470,8 @@ bounded safe writer but no Wails/React, UI persistence, execution or second
 desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
-DEVX-01, EXEC-01A and UI-BE-04A are DONE. UI-BE-04B is NEXT and will add
-target-free Core deployment planning and the private execution manifest.
-UI-BE-04C through UI-BE-04E remain gated, UI-BE-04 overall is not DONE, and
+DEVX-01, EXEC-01A, UI-BE-04A and UI-BE-04B are DONE. UI-BE-04C is NEXT and
+will add the fixed Execution Node runtime protocol. UI-BE-04D and UI-BE-04E
+remain gated, UI-BE-04 overall is not DONE, and
 production UI-01 remains dependent on the accepted execution boundary over one
 standard Ansible project.

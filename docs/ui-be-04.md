@@ -389,13 +389,22 @@ Keepalived and `BLOCKED` paths remain regression gates.
 
 - **UI-BE-04A — DONE:** actual implementation audit and boundary freeze; no
   production execution code.
-- **UI-BE-04B — NEXT:** Core target-free DeploymentPlan and private
-  ExecutionManifest, deterministic fingerprint and trusted package lifecycle
-  graph. No Go sessions or detached execution.
+- **UI-BE-04B — DONE:** `platform.core.build_deployment_plan` composes the
+  authoritative target-free ProjectSnapshot with the same full service catalog
+  and immutable runtime-release metadata. It publishes only
+  `DeploymentPlan/v1alpha2`; its private in-memory `ExecutionManifest` is
+  Core-owned and represented publicly only by a digest. The plan uses explicit
+  `EXECUTABLE`/`BLOCKED` status, and no manifest exists for blocked validation
+  or missing `project.yml.metadata.id`. It has no target facts, source result,
+  secret, path, argv or playbook identity. The semantic fingerprint includes
+  canonical project identity/revision, catalog, artifact requirements, ordered
+  Core actions/dependencies and immutable bundle release identity, but excludes
+  timestamps and `runtime/current`. The standalone machine entrypoint is
+  `ansible-core/playbooks/deployment-plan-machine.yml`.
 - **UI-BE-04C — GATED:** fixed Execution Node protocol, detached controller,
   journal/events/replay/cancel/recovery/retention.
 - **UI-BE-04D — GATED:** Go PlanStore, approval, stale-plan guard, sessions,
   subscriptions and reconnect client.
 - **UI-BE-04E — GATED:** real Kafka production E2E and full regression.
 
-UI-BE-04 overall is not complete. UI-BE-04B requires a separate owner request.
+UI-BE-04 overall is not complete. UI-BE-04C requires a separate owner request.
