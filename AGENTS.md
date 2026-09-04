@@ -167,8 +167,9 @@ mechanism.
 
 ## Local Test Artifacts
 
-Immutable offline bundles live only under the project-root
-`bundle/<digest>/` cache. Their service payloads live inside the verified
+The local cache retains only the current immutable offline bundle under
+`bundle/<digest>/`; publishing a replacement prunes the prior local digest.
+Its service payloads live inside the verified
 bundle at `runtime/artifacts/<service>/`. A DEV import source is runtime-only
 input under `.runtime/artifacts/<service>/`, never a second subtree of
 `bundle/`.

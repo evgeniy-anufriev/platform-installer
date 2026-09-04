@@ -3,6 +3,7 @@ package executionbundle
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,5 +32,27 @@ func TestCacheDoesNotExposeStagingOrWrongPlatform(t *testing.T) {
 	}
 	if _, err := cache.Resolve("", Platform{OS: "redos", Version: "8.0", Architecture: "x86_64"}); err == nil || err.Error() != "EXECUTION_NODE_BUNDLE_MISSING" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCacheRetainsOnlyCurrentDigest(t *testing.T) {
+	cache := Cache{Root: filepath.Join(t.TempDir(), "execution-node")}
+	first, err := cache.Publish(writeBundle(t, validManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cache.Publish(writeBundle(t, strings.Replace(validManifest, "bundleVersion: '1'", "bundleVersion: '2'", 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Digest == second.Digest {
+		t.Fatal("test bundles must have distinct digests")
+	}
+	if _, err := os.Stat(filepath.Join(cache.Root, first.Digest[7:])); !os.IsNotExist(err) {
+		t.Fatalf("previous digest remains in cache: %v", err)
+	}
+	entries, err := os.ReadDir(cache.Root)
+	if err != nil || len(entries) != 1 || entries[0].Name() != second.Digest[7:] {
+		t.Fatalf("cache entries=%+v err=%v", entries, err)
 	}
 }

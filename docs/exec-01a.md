@@ -24,8 +24,10 @@ bundle may contain execution runtime, Core, service artifacts and OS package
 closures in separate internal namespaces; digest-addressed storage remains an
 implementation detail.
 
-The project-root `bundle/` directory is only the immutable bundle cache.
-Published bundles are stored by digest beneath it. Service payloads exist only
+The project-root `bundle/` directory is only the immutable bundle cache. It
+retains one current published digest; a verified replacement atomically
+publishes the new digest and prunes the prior local cache entry. Service
+payloads exist only
 inside a verified bundle at `runtime/artifacts/<service>/`; there is no
 `bundle/artifacts/` staging or distribution subtree. A separately supplied DEV
 source lives outside the cache (normally `.runtime/artifacts/<service>/`) and

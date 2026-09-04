@@ -26,6 +26,9 @@ func (c Cache) Publish(bundleRoot string) (Verified, error) {
 	destination := filepath.Join(root, strings.TrimPrefix(verified.Digest, "sha256:"))
 	if existing, statErr := ValidateRoot(destination); statErr == nil {
 		if existing.Digest == verified.Digest {
+			if err := retainOnly(root, filepath.Base(destination)); err != nil {
+				return Verified{}, err
+			}
 			return existing, nil
 		}
 		return Verified{}, errors.New("EXECUTION_BUNDLE_CACHE_CONFLICT")
@@ -48,7 +51,51 @@ func (c Cache) Publish(bundleRoot string) (Verified, error) {
 	if err := os.Rename(staging, destination); err != nil {
 		return Verified{}, fmt.Errorf("publish bundle: %w", err)
 	}
+	if err := retainOnly(root, filepath.Base(destination)); err != nil {
+		return Verified{}, err
+	}
 	return ValidateRoot(destination)
+}
+
+// retainOnly keeps the cache as one verified current bundle. The caller has
+// already verified and atomically published keep; previous digest directories
+// are operational duplicates, not rollback state.
+func retainOnly(root, keep string) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return fmt.Errorf("read bundle cache: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.Name() == keep || !entry.IsDir() {
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return errors.New("EXECUTION_BUNDLE_CACHE_CONFLICT")
+		}
+		if !digestDirectory(entry.Name()) && !strings.HasPrefix(entry.Name(), ".staging-") {
+			continue
+		}
+		target := filepath.Join(root, entry.Name())
+		if !contained(root, target) {
+			return errors.New("EXECUTION_BUNDLE_COMPONENT_PATH_INVALID")
+		}
+		if err := os.RemoveAll(target); err != nil {
+			return fmt.Errorf("prune bundle cache: %w", err)
+		}
+	}
+	return nil
+}
+
+func digestDirectory(name string) bool {
+	if len(name) != 64 {
+		return false
+	}
+	for _, character := range name {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (c Cache) Resolve(override string, platform Platform) (Verified, error) {

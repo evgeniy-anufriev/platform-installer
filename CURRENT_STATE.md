@@ -99,8 +99,9 @@ with repeat `changed=0`, and three-node Keepalived
 and no artifact delivery. A separate shared-gate test proved a blocked source
 cannot reach a mutation sentinel.
 
-Operational offline bundles use only the project-root `bundle/<digest>/`
-cache. Kafka and future service payloads exist only inside a verified bundle
+Operational offline bundles use only the current project-root
+`bundle/<digest>/` cache entry; replacement prunes the prior local digest.
+Kafka and future service payloads exist only inside a verified bundle
 under `runtime/artifacts/<service>/`; `.runtime/` remains the runtime-only DEV
 input and QA state.
 
