@@ -8,32 +8,15 @@ The V1 repository at `../platform-installer` is a reference and requirements sou
 
 ## Current phase
 
-CORE-01 through CORE-07A, PKI-01, EXEC-01, SERVICE-01A through SERVICE-01D,
-SERVICE-02A, UI-DESIGN-01, UI-BE-01, UI-BE-02, UI-BE-03, DEVX-01 and POSTGRES-01 are complete. POSTGRES-01 is the
-accepted standalone include-based PostgreSQL and pg_auto_failover baseline.
-UI-BE-02 is the accepted controller-only read-only ProjectSnapshot boundary.
-UI-BE-03 is the accepted safe Ansible-native writer: Go owns Installer
-application semantics and invokes Core as authoritative staged verifier. It
-adds no production UI, apply/runtime execution or second desired-state store.
-EXEC-01A is complete: it establishes a READY Execution Node from a supported
-host without Platform Core and provides node-scoped repository-first,
-offline-bundle fallback for service execution. UI-BE-04A is complete as a
-documentation-only execution architecture audit. UI-BE-04B is complete: Core
-owns target-free DeploymentPlan/ExecutionManifest construction. UI-BE-04C,
-UI-BE-04D and UI-BE-04E are complete; UI-BE-04 overall is DONE.
-EXEC-OBS-01 is DONE: the managed Ansible callback, paginated events, typed
-RunObserver and Installer-side event mirror/CLI passed real Kafka acceptance.
-See `docs/exec-obs-01.md` for operator commands and evidence. UI-01A is DONE as
-a documentation-only contract freeze. UI-01B is DONE: its Wails/React
-read-only existing-project slice uses only the fixed remote
-`BuildProjectSnapshot` protocol. UI-01C is NEXT; edit/save/session/candidate/
-writer work remains UI-01D. Do not begin UI-01C or another production service
-implicitly.
+`CURRENT_STATE.md` is the authoritative dynamic source for milestone and
+project status. Read it before beginning milestone work and require an explicit
+owner request for the next gated milestone. This file contains durable
+engineering and process instructions, not a second copied milestone ledger.
 
-Until that request is made, preserve the established standalone Ansible Core
-contracts, Ansible-native desired-state ownership, managed Kafka/PKI
-projections and execution-node boundaries. Treat resolved topology,
-configuration, runtime projections, plans, facts and results as derived state.
+Preserve the established standalone Ansible Core contracts, Ansible-native
+desired-state ownership, managed Kafka/PKI projections and execution-node
+boundaries. Treat resolved topology, configuration, runtime projections,
+plans, facts and results as derived state.
 
 ## Boundaries
 
@@ -97,6 +80,22 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
   protocols, paths, identities and security policy must come from the resolved
   runtime projection shared by apply, verify and diagnostics.
 - Update decisions and roadmap when a boundary changes.
+- For milestone architecture plans, delegate to `architecture-reviewer`
+  (`.codex/agents/architecture-reviewer.toml`) before presenting the plan for
+  owner approval. Repeat on the implementation diff before milestone commit.
+  Overengineering review is mandatory in both modes; require zero unresolved
+  blocking findings. Material changes invalidate the affected review findings.
+  Supply milestone, PLAN/DIFF mode, exact revision identity, scope,
+  non-goals, owner decisions, relevant contracts and QA evidence. Do not
+  supply an expected verdict or self-review conclusion. A material change
+  makes the affected review STALE; owner approval is forbidden while a required
+  PLAN review is stale or pending, and commit is forbidden while a required
+  DIFF review is stale or pending. Review does not replace owner authorization
+  or required Core-contract/safety reviews. If the custom role cannot be
+  loaded, give the SAME full reviewer instructions to an independent read-only
+  subagent and disclose that fallback. Self-review never counts as independent
+  review. If no independent reviewer/subagent is available, the gate remains
+  PENDING rather than becoming self-approved.
 - Use focused subagents for independent architecture review, implementation or QA when requested.
 - Keep V1 unchanged unless the user explicitly requests a V1 change.
 
@@ -139,11 +138,10 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
-The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01,
-EXEC-01A, UI-BE-04 overall, EXEC-OBS-01, UI-01A and UI-01B are DONE. UI-01C is
-NEXT and separately gated. PostgreSQL behavior
-must not be inferred from the completed PKI-01 foundation; its role must
-consume explicit PKI materialization plans at runtime.
+`CURRENT_STATE.md` is the dynamic milestone source of truth; this instruction
+file must not copy its current DONE/NEXT ledger. PostgreSQL behavior must not
+be inferred from the completed PKI-01 foundation; its role must consume
+explicit PKI materialization plans at runtime.
 
 ## Test Credentials
 

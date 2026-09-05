@@ -77,9 +77,16 @@ They are procedures, not duplicated architecture documentation.
 
 ## 9. Agent/reviewer roles
 
-The active repository convention supports Skills but has no executable
-repository-local agent-role definition format. The following are documented
-prompt templates, not fake configuration artifacts:
+The repository now includes a project-scoped custom agent:
+[architecture-reviewer](../.codex/agents/architecture-reviewer.toml).
+It reviews plans before owner approval and implementation diffs before
+milestone commit, including mandatory overengineering analysis. Its TOML
+defines read-only behavior and the report contract; model settings inherit
+from the caller. PLAN reviews identify the exact plan revision (git object or
+deterministic SHA-256); DIFF reviews identify the base commit and exact head
+commit or deterministic worktree-diff fingerprint. A material change makes
+the affected review stale and requires re-review. Other roles below remain
+documented prompt templates:
 
 - **go-implementer**: implement one bounded Go backend task with
   `installer-go-backend`; use `core-adapter-contract` when Core interaction
@@ -157,6 +164,22 @@ references. The session Skill registry is initialized at session start, so a
 fresh session will surface newly added names; local frontmatter validation is
 the current-session proof before that refresh. Root, Go and Core instruction paths were checked for additive
 hierarchy; Markdown headings/fences and UTF-8 text were validated locally.
-No executable role-definition mechanism was found, so roles are explicitly
-documented templates. DEVX-01 changes documentation/instructions only and
+At original DEVX-01 acceptance, roles were documented templates. The later
+architecture-reviewer addition uses the supported project-scoped custom agent
+format documented in [Codex subagents](https://developers.openai.com/codex/subagents/).
+Live parent permission overrides may override sandbox defaults, so read-only
+instructions apply independently of the sandbox setting. After adding a role,
+use a fresh session if the current role registry has not refreshed. Example:
+"Use architecture-reviewer in PLAN mode for docs/<milestone>.md; return the
+mandatory overengineering report before owner approval." The review report
+tracks stable finding IDs through OPEN, RESOLVED, OWNER_ACCEPTED and SUPERSEDED;
+OWNER_ACCEPTED is limited to nonblocking owner-controlled tradeoffs and cannot
+waive safety, security, secret-handling or canonical-state invariants. The
+parent supplies facts and evidence, never an expected verdict. CURRENT_STATE.md
+is the dynamic milestone authority; AGENTS.md supplies durable process rules.
+If the custom role is unavailable, the fallback receives the same full
+instructions; if no independent reviewer is available, the gate remains
+pending. The main agent records the returned evidence; the reviewer never
+writes it itself.
+DEVX-01 changes documentation/instructions only and
 requires no RED OS service runtime replay.
