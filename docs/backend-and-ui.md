@@ -1,6 +1,7 @@
 # Backend and UI boundaries
 
-This document defines the layers that will be designed in detail only after the standalone Core contract is stable.
+This document describes the accepted Core/Go boundaries and future UI layers.
+UI-BE-04 and EXEC-OBS-01 are implemented; Wails/React remains separately gated.
 
 ## Go backend as an anti-corruption adapter
 
@@ -9,11 +10,11 @@ The backend consumes the published Core playbook/artifact protocol through a typ
 ```text
 GetCapabilities
 ValidateProject  -> playbooks/validate.yml (current CORE-01 filesystem entry point)
-BuildDeploymentPlan -> deferred to UI-BE-04B
-StartExecution   -> deferred to UI-BE-04C
-GetExecution     -> deferred to UI-BE-04C
-GetEvents        -> deferred to UI-BE-04C
-CancelExecution  -> deferred to UI-BE-04C
+BuildDeploymentPlan -> Core-owned plan/private manifest (UI-BE-04B)
+StartExecution   -> fixed Execution Node lifecycle (UI-BE-04C)
+GetExecution     -> authoritative remote observed state
+GetEvents        -> paginated typed events (EXEC-OBS-01)
+CancelExecution  -> owned controller cancellation
 ```
 
 The adapter sends semantic operations to the selected Execution Node and
@@ -102,7 +103,12 @@ Avoid a single adapter with a method per UI button. Use focused command/query fa
 
 Mutating commands carry `expectedRevision`. Read responses use a consistent envelope containing data, revision, findings and a structured safe error.
 
-Core events flow through one versioned envelope. Raw stdout/stderr remains a separate sanitized diagnostic stream and is never interpreted by React.
+Core events flow through the existing typed ExecutionEvent envelope.
+RunObserver consumes paginated GetEvents and feeds bounded typed subscribers
+and a derived Installer-side runtime mirror. Future Wails transports those
+subscriptions; React never reads the local file, parses Ansible output or
+implements redaction. EXEC-OBS-01 exposes no raw stdout/stderr API.
+See [EXEC-OBS-01](exec-obs-01.md) for CLI, replay and failure semantics.
 
 ## UI project editor
 

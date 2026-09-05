@@ -7,8 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"platform-installer/internal/artifactsource"
@@ -36,7 +38,11 @@ func (b executionNodeBundleBuilder) BuildOnExecutionNode(ctx context.Context, no
 }
 
 func main() {
-	command := flag.String("command", "", "inspect, acquire or prepare")
+	command := flag.String("command", "", "inspect, acquire, prepare or execution-watch")
+	runID := flag.String("run-id", "", "execution-watch: required explicit run ID")
+	nodeID := flag.String("node-id", "", "execution-watch: stable node ID (default external-<address>)")
+	runtimeRoot := flag.String("runtime-root", ".runtime", "execution-watch: Installer runtime root for the local derived event mirror")
+	after := flag.Int("after", 0, "execution-watch: stdout sequence checkpoint; follows until terminal, Ctrl+C detaches only. Exit: 0 succeeded, 1 remote failed/cancelled/interrupted, 2 invalid input, 3 observer/local failure (remote outcome unchanged), 130 detached")
 	address := flag.String("address", "", "Execution Node address")
 	user := flag.String("user", "", "Execution Node user")
 	identity := flag.String("identity", "", "runtime SSH identity path")
@@ -55,6 +61,12 @@ func main() {
 	requirementOS := flag.String("requirement-os", "", "target OS")
 	requirementArchitecture := flag.String("requirement-architecture", "", "target architecture")
 	flag.Parse()
+	if *command == "execution-watch" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		code := executionWatch(ctx, watchOptions{runID: *runID, nodeID: *nodeID, runtimeRoot: *runtimeRoot, after: *after, address: *address, user: *user, identity: *identity, knownHosts: *knownHosts, fingerprint: *fingerprint, port: *port}, os.Stdout, os.Stderr, newWatchBackend)
+		stop()
+		os.Exit(code)
+	}
 	if *command == "validate-bundle" {
 		if *bundle == "" {
 			fatal("EXECUTION_BUNDLE_INPUT_INVALID")

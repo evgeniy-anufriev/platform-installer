@@ -531,6 +531,22 @@ results, whole-control-group cancellation, interrupted recovery, foreign-unit
 safety and retention. UI-BE-04E completed production Kafka E2E and final
 regression; UI-BE-04 overall is DONE.
 
+### EXEC-OBS-01: Ansible task observability and Installer-side event mirror
+
+Status: DONE (2026-09-05). Internal gates 01A through 01D implement the managed
+callback, safe shared journal writer, controller integration, paginated
+GetEvents, complete typed event model, RunObserver and CLI watch. The remote
+journal stays authoritative; local files are runtime-only mirrors and future
+UI consumes typed subscriptions.
+
+Two production Kafka lifecycle runs completed SUCCEEDED, with PKI/apply/verify,
+repeat changed=0, 1,713 task events per run and identical remote/subscriber/local
+streams. Live reconnect and CLI restart, real no_log/failure/degradation,
+Core/service/race/offline/security gates passed; reviews have 0 blocking
+findings. Commands and counts: `docs/exec-obs-01.md`.
+
+Next production UI-01 remains separately authorized. No UI work was started.
+
 ### DEVX-01: Codex engineering harness
 
 Status: DONE. Repository-local Skills now guide Go backend work, Go-to-Core

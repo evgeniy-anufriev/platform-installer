@@ -154,6 +154,14 @@ backend and frontend.
 
 ## Security invariants
 
+Execution detail observability is implemented by EXEC-OBS-01. The managed
+Ansible callback produces safe task events through the same authoritative
+Execution Node journal writer. Paginated GetEvents feeds Go RunObserver,
+which writes a derived local runtime mirror and delivers typed subscriptions.
+Future UI uses those subscriptions. Task-detail degradation and local mirror
+failure do not change deployment outcomes; critical lifecycle integrity
+retains its fail-closed policy. See [EXEC-OBS-01](exec-obs-01.md).
+
 - Plaintext secrets are runtime-only.
 - Project data contains opaque secret references or required-secret declarations.
 - Generated secret files use restrictive permissions and guaranteed cleanup.

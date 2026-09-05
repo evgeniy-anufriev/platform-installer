@@ -1,5 +1,25 @@
 # Current state
 
+## EXEC-OBS-01 completion (2026-09-05)
+
+EXEC-OBS-01A through 01D are DONE. Managed Ansible task events use the existing
+ExecutionEvent contract and authoritative Execution Node journal. Go
+RunObserver provides pagination, replay, bounded typed subscriptions and the
+derived Installer-side `.runtime/executions/<runId>/events.jsonl` mirror.
+CLI `-command execution-watch -run-id <id>` prints the exact node/run/path,
+follows until terminal and detaches on Ctrl+C without cancelling execution.
+
+Real three-node Kafka runs `installer-1788591717613836600` (11m56s) and
+`installer-1788592474776987100` (9m07s) both completed SUCCEEDED with PKI apply,
+Kafka apply/verify, repeat changed=0, and 1,723 events each. Local mirror,
+typed subscriber and remote stream matched. Live client/CLI restart and
+Get-Content -Wait were proven. Real no_log/failure/degradation tests, Core,
+Kafka/PKI, Go/race/vet, reproducibility, offline validation and secret audits
+passed; both reviews have 0 blocking findings. See `docs/exec-obs-01.md` for
+exact commands, test counts, durations and performance measurement limits.
+
+UI-01 remains separately authorized; React/Wails has not been implemented.
+
 ## Phase
 
 CORE-07, CORE-06, EXEC-01, SERVICE-01A through SERVICE-01D centralized
@@ -484,6 +504,6 @@ desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
 DEVX-01, EXEC-01A, UI-BE-04B, UI-BE-04C, UI-BE-04D and UI-BE-04E are DONE.
-UI-BE-04 overall is DONE, and
-production UI-01 remains dependent on the accepted execution boundary over one
-standard Ansible project.
+UI-BE-04 overall and EXEC-OBS-01 are DONE. Production UI-01 remains a
+separately authorized milestone over the accepted project/execution contracts
+and typed RunObserver subscriptions.

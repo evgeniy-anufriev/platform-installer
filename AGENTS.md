@@ -19,8 +19,11 @@ EXEC-01A is complete: it establishes a READY Execution Node from a supported
 host without Platform Core and provides node-scoped repository-first,
 offline-bundle fallback for service execution. UI-BE-04A is complete as a
 documentation-only execution architecture audit. UI-BE-04B is complete: Core
-owns target-free DeploymentPlan/ExecutionManifest construction. UI-BE-04C is
-NEXT but must not begin without an explicit request. Do not begin UI-BE-04C,
+owns target-free DeploymentPlan/ExecutionManifest construction. UI-BE-04C,
+UI-BE-04D and UI-BE-04E are complete; UI-BE-04 overall is DONE.
+EXEC-OBS-01 is DONE: the managed Ansible callback, paginated events, typed
+RunObserver and Installer-side event mirror/CLI passed real Kafka acceptance.
+See `docs/exec-obs-01.md` for operator commands and evidence. Do not begin
 UI-01 or another production service unless its milestone is explicitly requested.
 
 Until that request is made, preserve the established standalone Ansible Core
@@ -117,7 +120,8 @@ reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
 The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01,
-EXEC-01A, UI-BE-04A and UI-BE-04B are DONE, and UI-BE-04C is NEXT. PostgreSQL behavior
+EXEC-01A, UI-BE-04 overall and EXEC-OBS-01 are DONE. UI-01 remains separately
+gated. PostgreSQL behavior
 must not be inferred from the completed PKI-01 foundation; its role must
 consume explicit PKI materialization plans at runtime.
 

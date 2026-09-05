@@ -184,6 +184,22 @@ No executor may introduce an undeclared mutating action.
 
 Ansible callback plugins emit normalized events. Consumers never need to parse decorated stdout.
 
+EXEC-OBS-01 implements the managed `platform.core.execution_events_json`
+aggregate callback. The trusted controller enables it and supplies only
+semantic identities. The shared `execution_lifecycle` writer resolves paths,
+owns cross-process sequence/append/flush and protects critical capacity.
+Task-detail failure is best effort and emits one normalized degradation
+diagnostic per affected action; critical lifecycle integrity remains
+fail-closed. `no_log` task names and all raw module results are excluded.
+
+The Execution Node journal is authoritative. GetEvents returns bounded pages
+to Go RunObserver, which maintains the operator's local Installer mirror and
+typed subscribers. Local mirror errors cannot change the remote run result.
+The existing runtime terminal artifact is `ExecutionResult` with state
+`SUCCEEDED`, `FAILED`, `CANCELLED`, `INTERRUPTED` or `CORRUPT_ORPHANED`; richer published result
+projections below remain distinct from this private lifecycle artifact.
+See [EXEC-OBS-01](exec-obs-01.md) for exact bounds, evidence and operator usage.
+
 Event identity includes:
 
 - schema version;
