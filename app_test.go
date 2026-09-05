@@ -9,6 +9,7 @@ import (
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionbundle"
 	"platform-installer/internal/executionnode"
+	"platform-installer/internal/projectlifecycle"
 )
 
 type snapshotReaderStub struct {
@@ -20,9 +21,21 @@ func (s snapshotReaderStub) BuildSnapshot(context.Context, string) (*coreadapter
 	return s.snapshot, s.err
 }
 
+type lifecycleStub struct {
+	result projectlifecycle.Result
+	err    error
+}
+
+func (s lifecycleStub) CreateProject(context.Context, projectlifecycle.CreateProjectRequest) (projectlifecycle.Result, error) {
+	return s.result, s.err
+}
+func (s lifecycleStub) OpenProject(context.Context, string) (projectlifecycle.Result, error) {
+	return s.result, s.err
+}
+
 func TestAppOpenProjectIsReadOnlyAndRetainsNoErrorState(t *testing.T) {
 	root := t.TempDir()
-	app := NewApp(snapshotReaderStub{snapshot: &coreadapter.Snapshot{Status: "PASS", ProjectRevision: "sha256:revision"}})
+	app := NewApp(snapshotReaderStub{snapshot: &coreadapter.Snapshot{Status: "PASS", ProjectRevision: "sha256:revision"}}, lifecycleStub{result: projectlifecycle.Result{Root: root, Classification: "MANAGED_PROJECT"}})
 	result := app.OpenProject(root)
 	if result.Status != "OPEN" || result.Root == "" || result.Snapshot == nil {
 		t.Fatalf("result=%+v", result)
@@ -33,10 +46,23 @@ func TestAppOpenProjectIsReadOnlyAndRetainsNoErrorState(t *testing.T) {
 }
 
 func TestAppReturnsSafeFailure(t *testing.T) {
-	app := NewApp(snapshotReaderStub{err: errors.New("EXECUTION_NODE_UNAVAILABLE")})
+	app := NewApp(snapshotReaderStub{err: errors.New("EXECUTION_NODE_UNAVAILABLE")}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "MANAGED_PROJECT"}})
 	result := app.OpenProject(t.TempDir())
 	if result.Status != "ERROR" || result.Error == nil || result.Error.Code != "EXECUTION_NODE_UNAVAILABLE" || result.Error.Message == "EXECUTION_NODE_UNAVAILABLE" {
 		t.Fatalf("result=%+v", result)
+	}
+}
+
+func TestAppKeepsEmptyProjectLocalWithoutSnapshotCall(t *testing.T) {
+	project := &projectlifecycle.Project{ID: "project-0123456789abcdef", Name: "Empty"}
+	app := NewApp(snapshotReaderStub{err: errors.New("snapshot must not be called")}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "EMPTY_MANAGED_PROJECT", Project: project}})
+	result := app.OpenProject(t.TempDir())
+	if result.Status != "OPEN" || result.Classification != "EMPTY_MANAGED_PROJECT" || result.Project != project || result.Snapshot != nil {
+		t.Fatalf("result=%+v", result)
+	}
+	created := app.CreateProject(projectlifecycle.CreateProjectRequest{ProjectRoot: t.TempDir(), DisplayName: "Empty", CompatibilitySourceID: "default"})
+	if created.Status != "OPEN" || created.Snapshot != nil {
+		t.Fatalf("created=%+v", created)
 	}
 }
 
@@ -74,7 +100,7 @@ func TestUI01BRemoteOpenAcceptance(t *testing.T) {
 			"planningProtocol": executionbundle.ProtocolVersion,
 		},
 	}
-	result := NewApp(reader).OpenProject(required("UI01B_E2E_PROJECT"))
+	result := NewApp(reader, projectlifecycle.NewService(map[string]string{})).OpenProject(required("UI01B_E2E_PROJECT"))
 	if result.Status != "OPEN" || result.Snapshot == nil || result.Snapshot.Status != "PASS" {
 		t.Fatalf("remote read-only open result=%+v", result)
 	}

@@ -2,8 +2,8 @@
 
 ## UI-01A completion (2026-09-05)
 
-UI-01A and UI-01B are DONE. UI-01 overall remains NOT DONE; UI-01C is NEXT and
-requires an explicit owner request. UI-01B adds only the Wails/React read-only
+UI-01A, UI-01B and UI-01C are DONE. UI-01 overall remains NOT DONE; UI-01D is
+NEXT and requires an explicit owner request. UI-01B adds only the Wails/React read-only
 shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
 edit/session, candidate, save or apply path.
 
@@ -41,8 +41,10 @@ exact commands, test counts, durations and performance measurement limits.
 
 UI-01A is the completed documentation freeze. UI-01B is DONE: its native
 Windows Wails shell opens an existing project read-only through a READY
-Execution Node and Core's fixed target-free ProjectSnapshot operation. UI-01C
-is NEXT; no edit/save or project-creation work has started.
+Execution Node and Core's fixed target-free ProjectSnapshot operation. UI-01C is
+DONE: metadata-only local creation publishes one managed `project.yml`, and
+empty-project reopen remains local without a Core snapshot. UI-01D is NEXT;
+first-save/edit/session work has not started.
 
 ## Phase
 

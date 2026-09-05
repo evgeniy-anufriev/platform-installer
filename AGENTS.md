@@ -202,6 +202,15 @@ input under `.runtime/artifacts/<service>/`, never a second subtree of
 
 They are local test inputs and must not be committed.
 
+## Desktop build process cleanup
+
+When a required Wails rebuild is blocked because the repository's own
+`build/bin/platform-installer-ui.exe` is still running, first identify the
+exact process image path. If it is that exact build output, Codex MAY stop only
+that process to release the binary lock and continue the requested rebuild.
+Never use this rule to stop another application, a differently located binary,
+or an uncertain process.
+
 Do not search Downloads/Desktop or download artifacts automatically during QA
 or production execution when the expected artifact is missing. Report the
 missing expected path instead. A separately authorized DEV acquisition may

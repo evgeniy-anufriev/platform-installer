@@ -545,10 +545,10 @@ streams. Live reconnect and CLI restart, real no_log/failure/degradation,
 Core/service/race/offline/security gates passed; reviews have 0 blocking
 findings. Commands and counts: `docs/exec-obs-01.md`.
 
-UI-01A and UI-01B are DONE. UI-01B provides the production Wails/React
+UI-01A, UI-01B and UI-01C are DONE. UI-01B provides the production Wails/React
 read-only existing-project shell and its one fixed target-free Core snapshot
-operation; UI-01C is NEXT and no edit/save/project-creation implementation has
-started.
+operation. UI-01C adds local metadata-only project creation and empty-project
+reopen; UI-01D is NEXT and owns edit/save/session/candidate work.
 
 ### DEVX-01: Codex engineering harness
 
@@ -625,7 +625,9 @@ UI-01A is DONE (documentation only): [contract preflight](ui-01a.md),
 command, selected Execution Node validation and frontend toolchain decisions are
 closed. UI-01B is DONE: native folder selection, a verified immutable runtime,
 READY Execution Node handshake and Core-authoritative read-only snapshot were
-accepted without canonical-project mutation. UI-01C is NEXT; UI-01 overall is
+accepted without canonical-project mutation. UI-01C is DONE: local
+metadata-only creation, no-replace publication and empty-project reopen were
+accepted without Core/Execution Node contact. UI-01D is NEXT; UI-01 overall is
 NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive

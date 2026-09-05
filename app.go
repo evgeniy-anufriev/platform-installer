@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionnode"
+	"platform-installer/internal/projectlifecycle"
 )
 
 // projectSnapshotReader is intentionally narrower than the future editor
@@ -39,10 +38,13 @@ func (unavailableProjectReader) BuildSnapshot(context.Context, string) (*coreada
 }
 
 type ProjectOpenResult struct {
-	Status   string                `json:"status"`
-	Root     string                `json:"root,omitempty"`
-	Snapshot *coreadapter.Snapshot `json:"snapshot,omitempty"`
-	Error    *ProjectOpenError     `json:"error,omitempty"`
+	Status         string                    `json:"status"`
+	Root           string                    `json:"root,omitempty"`
+	Classification string                    `json:"classification,omitempty"`
+	Project        *projectlifecycle.Project `json:"project,omitempty"`
+	Counts         projectlifecycle.Counts   `json:"counts"`
+	Snapshot       *coreadapter.Snapshot     `json:"snapshot,omitempty"`
+	Error          *ProjectOpenError         `json:"error,omitempty"`
 }
 
 type ProjectOpenError struct {
@@ -55,13 +57,19 @@ type App struct {
 	reader interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	current ProjectOpenResult
+	lifecycle projectLifecycle
+	current   ProjectOpenResult
+}
+
+type projectLifecycle interface {
+	CreateProject(context.Context, projectlifecycle.CreateProjectRequest) (projectlifecycle.Result, error)
+	OpenProject(context.Context, string) (projectlifecycle.Result, error)
 }
 
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
-}) *App {
-	return &App{reader: reader, current: ProjectOpenResult{Status: "NO_PROJECT"}}
+}, lifecycle projectLifecycle) *App {
+	return &App{reader: reader, lifecycle: lifecycle, current: ProjectOpenResult{Status: "NO_PROJECT"}}
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
@@ -80,22 +88,48 @@ func (a *App) ChooseProject() ProjectOpenResult {
 	return a.OpenProject(root)
 }
 
-func (a *App) OpenProject(root string) ProjectOpenResult {
-	absolute, err := filepath.Abs(root)
+func (a *App) ChooseProjectParent() string {
+	if a.ctx == nil {
+		return ""
+	}
+	root, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Выбрать папку для нового проекта"})
 	if err != nil {
-		return a.failure("PROJECT_PATH_INVALID")
+		return ""
 	}
-	info, err := os.Lstat(absolute)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return a.failure("PROJECT_PATH_INVALID")
+	return root
+}
+
+func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) ProjectOpenResult {
+	if a.lifecycle == nil {
+		return a.failure("PROJECT_COMPATIBILITY_SOURCE_UNAVAILABLE")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-	snapshot, err := a.reader.BuildSnapshot(ctx, absolute)
+	result, err := a.lifecycle.CreateProject(context.Background(), request)
 	if err != nil {
 		return a.failure(projectErrorCode(err))
 	}
-	a.current = ProjectOpenResult{Status: "OPEN", Root: absolute, Snapshot: snapshot}
+	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts}
+	return a.current
+}
+
+func (a *App) OpenProject(root string) ProjectOpenResult {
+	if a.lifecycle == nil {
+		return a.failure("PROJECT_OPEN_BLOCKED")
+	}
+	local, err := a.lifecycle.OpenProject(context.Background(), root)
+	if err != nil {
+		return a.failure(projectErrorCode(err))
+	}
+	if local.Classification == "EMPTY_MANAGED_PROJECT" {
+		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts}
+		return a.current
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	snapshot, err := a.reader.BuildSnapshot(ctx, local.Root)
+	if err != nil {
+		return a.failure(projectErrorCode(err))
+	}
+	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot}
 	return a.current
 }
 
@@ -131,6 +165,16 @@ func projectErrorMessage(code string) string {
 		return "Core не смог построить снимок проекта. Проект на диске не изменён."
 	case "PROJECT_PATH_INVALID":
 		return "Не удалось прочитать выбранный путь проекта."
+	case "PROJECT_COMPATIBILITY_SOURCE_UNAVAILABLE":
+		return "Нет проверенного локального compatibility source для создания проекта."
+	case "PROJECT_DESTINATION_EXISTS":
+		return "Папка нового проекта уже существует и не будет изменена."
+	case "PROJECT_PARENT_MISSING", "PROJECT_PARENT_NOT_WRITABLE", "PROJECT_PATH_UNSAFE":
+		return "Нельзя безопасно создать проект в выбранной папке."
+	case "PROJECT_DISPLAY_NAME_INVALID":
+		return "Введите корректное название проекта."
+	case "PROJECT_INPUT_INCOMPLETE", "MANAGED_PROJECT_INVALID", "PROJECT_OPEN_BLOCKED":
+		return "Выбранный проект нельзя безопасно открыть в текущем режиме."
 	default:
 		return "Не удалось открыть проект в режиме только чтения. Проект на диске не изменён."
 	}

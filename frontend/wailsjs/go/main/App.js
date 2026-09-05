@@ -6,8 +6,16 @@ export function ChooseProject() {
   return window['go']['main']['App']['ChooseProject']();
 }
 
+export function ChooseProjectParent() {
+  return window['go']['main']['App']['ChooseProjectParent']();
+}
+
 export function CloseProject() {
   return window['go']['main']['App']['CloseProject']();
+}
+
+export function CreateProject(arg1) {
+  return window['go']['main']['App']['CreateProject'](arg1);
 }
 
 export function CurrentProject() {

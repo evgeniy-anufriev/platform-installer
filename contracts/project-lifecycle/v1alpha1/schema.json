@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-lifecycle/v1alpha1/schema.json",
+  "title": "Installer local project lifecycle",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/createProjectRequest" },
+    { "$ref": "#/$defs/projectOpenResult" }
+  ],
+  "$defs": {
+    "createProjectRequest": {
+      "type": "object",
+      "required": ["projectRoot", "displayName", "compatibilitySourceId"],
+      "properties": {
+        "projectRoot": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "compatibilitySourceId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      },
+      "additionalProperties": false
+    },
+    "projectOpenResult": {
+      "type": "object",
+      "required": ["status", "root", "classification"],
+      "properties": {
+        "status": { "const": "OPEN" },
+        "root": { "type": "string", "minLength": 1 },
+        "classification": { "enum": ["EMPTY_MANAGED_PROJECT", "MANAGED_PROJECT", "EXTERNAL_PROJECT", "PROJECT_INPUT_INCOMPLETE", "MANAGED_PROJECT_INVALID", "PROJECT_OPEN_BLOCKED"] }
+      },
+      "additionalProperties": true
+    }
+  }
+}
