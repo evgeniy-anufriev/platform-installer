@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"platform-installer/internal/artifactsource"
 )
@@ -77,10 +78,11 @@ func validRemoteSecretFiles(values map[string]string) bool {
 }
 
 func validRuntimeToken(value string) bool {
-	if value == "" || !strings.HasPrefix(value, "installer-") {
+	const prefix = "installer-"
+	if len(value) <= len(prefix) || len(value) > 128 || !strings.HasPrefix(value, prefix) {
 		return false
 	}
-	for _, r := range value[len("installer-"):] {
+	for _, r := range value[len(prefix):] {
 		if r < '0' || r > '9' {
 			return false
 		}
@@ -103,12 +105,64 @@ type ExecutionRun struct {
 }
 
 type ExecutionEvent struct {
-	RunID       string `json:"runId"`
-	Sequence    int    `json:"sequence"`
-	EventType   string `json:"eventType"`
-	Status      string `json:"status"`
-	SafeMessage string `json:"safeMessage"`
+	APIVersion        string               `json:"apiVersion"`
+	Kind              string               `json:"kind"`
+	RunID             string               `json:"runId"`
+	Sequence          int                  `json:"sequence"`
+	Timestamp         string               `json:"timestamp"`
+	PlanFingerprint   string               `json:"planFingerprint,omitempty"`
+	EventType         string               `json:"eventType"`
+	Status            string               `json:"status"`
+	PhaseID           string               `json:"phaseId,omitempty"`
+	ActionID          string               `json:"actionId,omitempty"`
+	Host              string               `json:"host,omitempty"`
+	ServiceDeployment string               `json:"serviceDeployment,omitempty"`
+	Task              *ExecutionEventTask  `json:"task,omitempty"`
+	ElapsedMillis     *int                 `json:"elapsedMilliseconds,omitempty"`
+	SafeMessage       string               `json:"safeMessage"`
+	Error             *ExecutionEventError `json:"error,omitempty"`
+	Redaction         ExecutionRedaction   `json:"redaction"`
 }
+
+type ExecutionEventTask struct {
+	Role string `json:"role,omitempty"`
+	Name string `json:"name,omitempty"`
+	UUID string `json:"uuid,omitempty"`
+}
+
+type ExecutionEventError struct {
+	Code          string `json:"code"`
+	Summary       string `json:"summary"`
+	DiagnosticRef string `json:"diagnosticRef,omitempty"`
+}
+
+type ExecutionRedaction struct {
+	Applied bool     `json:"applied"`
+	Fields  []string `json:"fields,omitempty"`
+}
+
+type ExecutionEventPage struct {
+	Events           []ExecutionEvent `json:"events"`
+	NextSequence     int              `json:"nextSequence"`
+	HasMore          bool             `json:"hasMore"`
+	EarliestSequence int              `json:"earliestSequence,omitempty"`
+	HistoryTruncated bool             `json:"historyTruncated,omitempty"`
+}
+
+const ExecutionEventPageLimit = 256
+const maxObservedExecutionEvents = 2048
+
+const maxDecodedExecutionEventBytes = 64 * 1024
+const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
+const maxExecutionEventPageResponseBytes = 2 * 1024 * 1024
+const maxExecutionReleaseProbeBytes = 4 * 1024
+const maxExecutionStateProbeBytes = 64 * 1024
+
+var executionEventTypes = map[string]bool{"RUN_STARTED": true, "PHASE_STARTED": true, "ACTION_STARTED": true, "TASK_STARTED": true, "TASK_COMPLETED": true, "ACTION_COMPLETED": true, "PHASE_COMPLETED": true, "RUN_COMPLETED": true, "DIAGNOSTIC": true}
+var executionEventStatuses = map[string]bool{"PENDING": true, "RUNNING": true, "SUCCESS": true, "CHANGED": true, "SKIPPED": true, "FAILED": true, "CANCELLED": true, "INTERRUPTED": true}
+
+var errExecutionEventsResponseInvalid = errors.New("EXECUTION_EVENTS_RESPONSE_INVALID")
+var errExecutionEventResponseInvalid = errors.New("EXECUTION_EVENT_RESPONSE_INVALID")
 
 func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (DeploymentPlan, error) {
 	if projectRoot == "" || len(runtimeRelease) == 0 {
@@ -186,15 +240,15 @@ func (t OpenSSHTransport) GetExecution(ctx context.Context, node Node, runID str
 	return run, err
 }
 
-func (t OpenSSHTransport) GetEvents(ctx context.Context, node Node, runID string, afterSequence int) ([]ExecutionEvent, error) {
-	if afterSequence < 0 {
-		return nil, errors.New("EXECUTION_EVENTS_INPUT_INVALID")
+func (t OpenSSHTransport) GetEvents(ctx context.Context, node Node, runID string, afterSequence, limit int) (ExecutionEventPage, error) {
+	if afterSequence < 0 || limit < 1 || limit > 512 {
+		return ExecutionEventPage{}, errors.New("EXECUTION_EVENTS_INPUT_INVALID")
 	}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetEvents", "runId": runID, "afterSequence": afterSequence})
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetEvents", "runId": runID, "afterSequence": afterSequence, "limit": limit})
 	if err != nil {
-		return nil, err
+		return ExecutionEventPage{}, err
 	}
-	return decodeEvents(response)
+	return decodeEventPage(response, runID, afterSequence, limit)
 }
 
 func (t OpenSSHTransport) CancelExecution(ctx context.Context, node Node, runID string) (ExecutionRun, error) {
@@ -238,36 +292,156 @@ func decodeRun(response map[string]any) (ExecutionRun, error) {
 	}
 	return run, nil
 }
-func decodeEvents(response map[string]any) ([]ExecutionEvent, error) {
+func decodeEventPage(response map[string]any, runID string, afterSequence, limit int) (ExecutionEventPage, error) {
 	values, ok := response["events"].([]any)
-	if !ok {
-		return nil, errors.New("EXECUTION_EVENTS_RESPONSE_INVALID")
+	if !ok || len(values) > 2048 {
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
 	}
 	result := make([]ExecutionEvent, 0, len(values))
+	earliestRaw, earliestExists := response["earliestSequence"]
+	truncatedRaw, truncatedExists := response["historyTruncated"]
+	earliest, earliestOK := earliestRaw.(float64)
+	truncated, truncatedOK := truncatedRaw.(bool)
+	if earliestExists != truncatedExists || earliestExists && (!earliestOK || !truncatedOK || earliest < 0 || earliest != float64(int(earliest))) {
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+	}
+	earliestPresent := earliestExists
+	truncatedPresent := truncatedExists
+	expectedSequence := afterSequence + 1
+	if truncatedPresent && truncated {
+		if earliest <= float64(expectedSequence) {
+			return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+		}
+		expectedSequence = int(earliest)
+	}
 	for _, raw := range values {
 		value, ok := raw.(map[string]any)
 		if !ok {
-			return nil, errors.New("EXECUTION_EVENT_RESPONSE_INVALID")
+			return ExecutionEventPage{}, errExecutionEventResponseInvalid
+		}
+		for _, key := range []string{"planFingerprint", "phaseId", "actionId", "host", "serviceDeployment"} {
+			if rawValue, present := value[key]; present {
+				text, valid := rawValue.(string)
+				if !valid || text == "" {
+					return ExecutionEventPage{}, errExecutionEventResponseInvalid
+				}
+			}
+		}
+		if rawError, present := value["error"].(map[string]any); present {
+			if rawDiagnostic, exists := rawError["diagnosticRef"]; exists {
+				text, valid := rawDiagnostic.(string)
+				if !valid || text == "" {
+					return ExecutionEventPage{}, errExecutionEventResponseInvalid
+				}
+			}
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil || len(encoded) > maxDecodedExecutionEventBytes {
+			return ExecutionEventPage{}, errExecutionEventResponseInvalid
 		}
 		event := ExecutionEvent{}
-		if v, ok := value["runId"].(string); ok {
-			event.RunID = v
-		}
-		if v, ok := value["sequence"].(float64); ok {
-			event.Sequence = int(v)
-		}
-		if v, ok := value["eventType"].(string); ok {
-			event.EventType = v
-		}
-		if v, ok := value["status"].(string); ok {
-			event.Status = v
-		}
-		if v, ok := value["safeMessage"].(string); ok {
-			event.SafeMessage = v
+		if err := json.Unmarshal(encoded, &event); err != nil || validateExecutionEvent(event, runID) != nil || event.Sequence != expectedSequence {
+			return ExecutionEventPage{}, errExecutionEventResponseInvalid
 		}
 		result = append(result, event)
+		expectedSequence++
 	}
-	return result, nil
+	page := ExecutionEventPage{Events: result, NextSequence: afterSequence}
+	if earliestPresent {
+		page.EarliestSequence = int(earliest)
+		page.HistoryTruncated = truncated
+	}
+	nextRaw, hasNext := response["nextSequence"]
+	moreRaw, hasHasMore := response["hasMore"]
+	if !hasNext && !hasHasMore {
+		if len(result) > 0 {
+			page.NextSequence = result[len(result)-1].Sequence
+		}
+		return page, nil
+	}
+	next, nextOK := nextRaw.(float64)
+	more, moreOK := moreRaw.(bool)
+	if !nextOK || next < 0 || next != float64(int(next)) || !moreOK || len(result) > limit {
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+	}
+	page.NextSequence, page.HasMore = int(next), more
+	if len(result) > 0 && page.NextSequence != result[len(result)-1].Sequence {
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+	}
+	if len(result) == 0 && (page.NextSequence != afterSequence || page.HasMore) {
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+	}
+	if page.HistoryTruncated && len(result) == 0 {
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+	}
+	return page, nil
+}
+
+func validateExecutionEvent(event ExecutionEvent, runID string) error {
+	if event.APIVersion != "platform.installer/event/v1alpha1" || event.Kind != "ExecutionEvent" || event.RunID != runID || event.Sequence < 1 || !executionEventTypes[event.EventType] || !executionEventStatuses[event.Status] || event.SafeMessage == "" || !event.Redaction.Applied {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	if _, err := time.Parse(time.RFC3339, event.Timestamp); err != nil {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	if event.PlanFingerprint != "" && !validSHA256Fingerprint(event.PlanFingerprint) {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	for _, value := range []string{event.SafeMessage, event.PhaseID, event.ActionID, event.Host, event.ServiceDeployment} {
+		if len(value) > 8192 || strings.ContainsAny(value, "\x00\r\n\x1b") {
+			return errors.New("EXECUTION_EVENT_INVALID")
+		}
+	}
+	if event.ElapsedMillis != nil && *event.ElapsedMillis < 0 {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	if event.Task != nil && (len(event.Task.UUID) > 128 || len(event.Task.Role) > 256 || len(event.Task.Name) > 512 || strings.ContainsAny(event.Task.UUID+event.Task.Role+event.Task.Name, "\x00\r\n\x1b")) {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	if (event.EventType == "TASK_STARTED" || event.EventType == "TASK_COMPLETED") && (event.Task == nil || event.Task.UUID == "") {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	if event.Error != nil && (!validEventCode(event.Error.Code) || event.Error.Summary == "" || len(event.Error.Summary) > 2048 || len(event.Error.DiagnosticRef) > 2048 || strings.ContainsAny(event.Error.Summary+event.Error.DiagnosticRef, "\x00\r\n\x1b")) {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	if len(event.Redaction.Fields) > 64 {
+		return errors.New("EXECUTION_EVENT_INVALID")
+	}
+	seenRedactions := map[string]bool{}
+	for _, field := range event.Redaction.Fields {
+		if field == "" || len(field) > 256 || strings.ContainsAny(field, "\x00\r\n\x1b") || seenRedactions[field] {
+			return errors.New("EXECUTION_EVENT_INVALID")
+		}
+		seenRedactions[field] = true
+		if field == "task.name" && event.Task != nil && event.Task.Name != "" {
+			return errors.New("EXECUTION_EVENT_INVALID")
+		}
+	}
+	return nil
+}
+
+func validSHA256Fingerprint(value string) bool {
+	if len(value) != len("sha256:")+64 || !strings.HasPrefix(value, "sha256:") {
+		return false
+	}
+	for _, character := range value[len("sha256:"):] {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validEventCode(value string) bool {
+	if value == "" || len(value) > 128 || value[0] < 'A' || value[0] > 'Z' {
+		return false
+	}
+	for _, character := range value[1:] {
+		if character != '_' && (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
+			return false
+		}
+	}
+	return true
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
@@ -363,7 +537,7 @@ func (t OpenSSHTransport) runtimeProtocol(ctx context.Context, node Node, reques
 	// Resolve the active immutable release on the node, then invoke the fixed
 	// protocol directly. No shell command is assembled from dynamic values.
 	root := "/var/lib/platform-installer/runtime"
-	releaseOutput, err := t.ssh(ctx, node, "sudo", []string{"-n", "readlink", "-f", root + "/current"}, nil)
+	releaseOutput, err := t.sshBounded(ctx, node, "sudo", []string{"-n", "readlink", "-f", root + "/current"}, nil, maxExecutionReleaseProbeBytes)
 	if err != nil {
 		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
@@ -371,7 +545,7 @@ func (t OpenSSHTransport) runtimeProtocol(ctx context.Context, node Node, reques
 	if !strings.HasPrefix(release, root+"/releases/") || strings.ContainsAny(release, " \t\r\n") {
 		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
-	active, err := t.ssh(ctx, node, "sudo", []string{"-n", "cat", root + "/state/active"}, nil)
+	active, err := t.sshBounded(ctx, node, "sudo", []string{"-n", "cat", root + "/state/active"}, nil, maxExecutionStateProbeBytes)
 	if err != nil {
 		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
@@ -380,9 +554,16 @@ func (t OpenSSHTransport) runtimeProtocol(ctx context.Context, node Node, reques
 		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
 	args := []string{"-n", "env", "PYTHONPATH=" + release + "/ansible-core/tools", "python3", release + "/ansible-core/tools/execution_protocol.py", "--runtime-release", release, "--bundle-digest", digest, "--controller", release + "/ansible-core/tools/execution_controller.py"}
-	output, err := t.ssh(ctx, node, "sudo", args, payload)
+	responseLimit := maxExecutionProtocolResponseBytes
+	if request["operation"] == "GetEvents" {
+		responseLimit = maxExecutionEventPageResponseBytes
+	}
+	output, err := t.sshBounded(ctx, node, "sudo", args, payload, responseLimit)
 	var response map[string]any
-	decodeErr := json.Unmarshal(output, &response)
+	decodeErr := errors.New("EXECUTION_PROTOCOL_RESPONSE_INVALID")
+	if len(output) <= maxExecutionProtocolResponseBytes {
+		decodeErr = json.Unmarshal(output, &response)
+	}
 	if decodeErr != nil {
 		if err != nil {
 			return nil, &ExecutionError{Code: ExecutionNodeUnavailable}

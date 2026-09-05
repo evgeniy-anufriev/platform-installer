@@ -27,6 +27,25 @@ type lifecycleClient struct {
 	events          []ExecutionEvent
 }
 
+type syncPageClient struct {
+	pages  map[int]ExecutionEventPage
+	afters []int
+}
+
+func (c *syncPageClient) StartExecution(context.Context, Node, ExecutionStartRequest) (ExecutionRun, error) {
+	return ExecutionRun{}, nil
+}
+func (c *syncPageClient) GetExecution(_ context.Context, _ Node, runID string) (ExecutionRun, error) {
+	return ExecutionRun{RunID: runID, State: "RUNNING", Sequence: maxObservedExecutionEvents + 1}, nil
+}
+func (c *syncPageClient) GetEvents(_ context.Context, _ Node, _ string, after, _ int) (ExecutionEventPage, error) {
+	c.afters = append(c.afters, after)
+	return c.pages[after], nil
+}
+func (c *syncPageClient) CancelExecution(context.Context, Node, string) (ExecutionRun, error) {
+	return ExecutionRun{}, nil
+}
+
 func (c *lifecycleClient) StartExecution(_ context.Context, _ Node, r ExecutionStartRequest) (ExecutionRun, error) {
 	c.starts++
 	return ExecutionRun{RunID: "run-1", State: "RUNNING", Sequence: 0}, nil
@@ -34,8 +53,18 @@ func (c *lifecycleClient) StartExecution(_ context.Context, _ Node, r ExecutionS
 func (c *lifecycleClient) GetExecution(context.Context, Node, string) (ExecutionRun, error) {
 	return ExecutionRun{RunID: "run-1", State: "SUCCEEDED", Sequence: 2}, nil
 }
-func (c *lifecycleClient) GetEvents(context.Context, Node, string, int) ([]ExecutionEvent, error) {
-	return c.events, nil
+func (c *lifecycleClient) GetEvents(_ context.Context, _ Node, _ string, after, _ int) (ExecutionEventPage, error) {
+	events := make([]ExecutionEvent, 0, len(c.events))
+	for _, event := range c.events {
+		if event.Sequence > after {
+			events = append(events, event)
+		}
+	}
+	next := after
+	if len(events) > 0 {
+		next = events[len(events)-1].Sequence
+	}
+	return ExecutionEventPage{Events: events, NextSequence: next}, nil
 }
 func (c *lifecycleClient) CancelExecution(context.Context, Node, string) (ExecutionRun, error) {
 	c.cancels++
@@ -126,6 +155,50 @@ func TestExecutionServiceExpiredPlan(t *testing.T) {
 	clock = clock.Add(time.Hour)
 	if _, err := s.GetPlan(p.ID); err == nil || err.(*ExecutionError).Code != PlanExpired {
 		t.Fatal(err)
+	}
+}
+
+func TestExecutionServiceSyncAdvancesPastExplicitHistoryTruncation(t *testing.T) {
+	runID := "installer-500"
+	event := validEvent(runID, 5)
+	client := &syncPageClient{pages: map[int]ExecutionEventPage{
+		0: {Events: []ExecutionEvent{event}, NextSequence: 5, EarliestSequence: 5, HistoryTruncated: true},
+		5: {NextSequence: 5},
+	}}
+	service := NewExecutionService(&lifecycleBuilder{}, client)
+	service.sessions[runID] = &session{run: ExecutionRun{RunID: runID}, project: "project", subs: map[uint64]*Subscription{}}
+	_, events, err := service.Sync(context.Background(), Node{}, runID)
+	if len(events) != 1 || events[0].Sequence != 5 || err == nil || err.Error() != ObserverHistoryTruncated {
+		t.Fatalf("events=%v err=%v", events, err)
+	}
+	_, events, err = service.Sync(context.Background(), Node{}, runID)
+	if err != nil || len(events) != 0 || len(client.afters) != 2 || client.afters[1] != 5 {
+		t.Fatalf("second events=%v err=%v afters=%v", events, err, client.afters)
+	}
+}
+
+func TestExecutionServiceSyncRejectsMoreThanJournalCapacity(t *testing.T) {
+	runID := "installer-501"
+	pages := map[int]ExecutionEventPage{}
+	after := 0
+	for after < maxObservedExecutionEvents+1 {
+		count := ExecutionEventPageLimit
+		if remaining := maxObservedExecutionEvents + 1 - after; remaining < count {
+			count = remaining
+		}
+		events := eventSeries(runID, after+count)[after:]
+		next := after + count
+		pages[after] = ExecutionEventPage{Events: events, NextSequence: next, HasMore: next < maxObservedExecutionEvents+1}
+		after = next
+	}
+	client := &syncPageClient{pages: pages}
+	service := NewExecutionService(&lifecycleBuilder{}, client)
+	service.sessions[runID] = &session{run: ExecutionRun{RunID: runID}, project: "project", subs: map[uint64]*Subscription{}}
+	if _, _, err := service.Sync(context.Background(), Node{}, runID); err == nil || err.Error() != ObserverIntegrityFailure {
+		t.Fatalf("capacity err=%v", err)
+	}
+	if len(client.afters) > 9 {
+		t.Fatalf("unbounded page drain: %d", len(client.afters))
 	}
 }
 

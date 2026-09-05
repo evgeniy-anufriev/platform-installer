@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+func TestBoundedOutputStopsRetainingAfterLimit(t *testing.T) {
+	output := &boundedOutput{limit: 4}
+	if written, err := output.Write([]byte("abcdef")); err != nil || written != 6 {
+		t.Fatalf("written=%d err=%v", written, err)
+	}
+	if output.String() != "abcd" || !output.overflow {
+		t.Fatalf("output=%q overflow=%v", output.String(), output.overflow)
+	}
+}
+
 type fixedIdentity struct{}
 
 func (fixedIdentity) IdentityFile(string) (string, error) { return "runtime-key", nil }

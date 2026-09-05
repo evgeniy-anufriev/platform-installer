@@ -21,6 +21,9 @@ RUN_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 TERMINAL = frozenset(("SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED", "CORRUPT_ORPHANED"))
 ACTIVE = frozenset(("PENDING", "STARTING", "RUNNING"))
 MAX_EVENTS = 2048
+MAX_EVENT_PAGE = 512
+MAX_EVENT_PAGE_BYTES = 1024 * 1024
+MAX_EVENT_BYTES = 64 * 1024
 CRITICAL_EVENT_RESERVE = 256
 MAX_MESSAGE = 2048
 MAX_TASK_NAME = 512
@@ -420,17 +423,63 @@ class Journal(object):
             os.close(event_lock)
 
     def events(self, after=0):
-        after = int(after)
+        if isinstance(after, bool) or not isinstance(after, int) or after < 0:
+            raise LifecycleError("EXECUTION_EVENTS_INPUT_INVALID")
         result = []
-        if not os.path.exists(self.events_path): return result
-        if os.path.islink(self.events_path): raise LifecycleError("RUN_JOURNAL_SYMLINK")
-        with open(self.events_path, "r", encoding="utf-8") as stream:
-            for line in stream:
-                if not line.endswith("\n"):
-                    break
-                event = json.loads(line)
-                if int(event.get("sequence", -1)) > after: result.append(event)
+        previous = 0
+        for _, event in self._event_records():
+            sequence = event.get("sequence")
+            if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= previous:
+                raise LifecycleError("RUN_EVENT_STREAM_INVALID")
+            previous = sequence
+            if sequence > after: result.append(event)
         return result
+
+    def _event_records(self):
+        if not os.path.lexists(self.events_path):
+            return
+        _assert_private_path(self.events_path)
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(self.events_path, flags)
+        with os.fdopen(descriptor, "rb") as stream:
+            while True:
+                line = stream.readline(MAX_EVENT_BYTES + 1)
+                if not line:
+                    return
+                if len(line) > MAX_EVENT_BYTES:
+                    raise LifecycleError("RUN_EVENT_SIZE_INVALID")
+                if not line.endswith(b"\n"):
+                    return
+                try:
+                    event = json.loads(line.decode("utf-8"))
+                except (UnicodeDecodeError, TypeError, ValueError):
+                    raise LifecycleError("RUN_EVENT_STREAM_INVALID")
+                yield line, event
+
+    def event_page(self, after, limit):
+        if isinstance(after, bool) or not isinstance(after, int) or after < 0 or isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > MAX_EVENT_PAGE:
+            raise LifecycleError("EXECUTION_EVENTS_INPUT_INVALID")
+        result, size, previous, earliest, has_more = [], 0, 0, 0, False
+        if not os.path.lexists(self.events_path):
+            return {"events": result, "nextSequence": after, "hasMore": False, "earliestSequence": 0, "historyTruncated": False}
+        for line, event in self._event_records():
+            sequence = event.get("sequence")
+            if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= previous:
+                raise LifecycleError("RUN_EVENT_STREAM_INVALID")
+            previous = sequence
+            if earliest == 0:
+                earliest = sequence
+            if sequence <= after:
+                continue
+            encoded_size = len(line)
+            if len(result) >= limit or (result and size + encoded_size > MAX_EVENT_PAGE_BYTES):
+                has_more = True
+                break
+            result.append(event)
+            size += encoded_size
+        return {"events": result, "nextSequence": result[-1]["sequence"] if result else after, "hasMore": has_more, "earliestSequence": earliest, "historyTruncated": earliest > after + 1}
 
 
 def recover(root, unit_active):

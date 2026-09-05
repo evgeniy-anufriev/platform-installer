@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 import unittest
 import uuid
 from pathlib import Path
@@ -19,6 +20,7 @@ sys.path.insert(0, str(COLLECTIONS))
 import execution_lifecycle
 from execution_lifecycle import Journal, digest
 import execution_controller
+import execution_protocol
 from ansible_collections.platform.core.plugins.callback import execution_events_json
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
@@ -123,6 +125,76 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             event = journal.task_event("TASK_STARTED", "RUNNING", "task-1")
             self.assertEqual(2, event["sequence"])
             self.assertEqual([1, 2], [item["sequence"] for item in journal.events()])
+
+    def test_event_page_is_bounded_ordered_and_legacy_read_remains_compatible(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            for index in range(5):
+                journal.task_event("TASK_COMPLETED", "SUCCESS", "task-%d" % index, host="node1")
+            first = journal.event_page(0, 2)
+            second = journal.event_page(first["nextSequence"], 2)
+            final = journal.event_page(second["nextSequence"], 2)
+            self.assertEqual([1, 2], [event["sequence"] for event in first["events"]])
+            self.assertEqual([3, 4], [event["sequence"] for event in second["events"]])
+            self.assertEqual([5, 6], [event["sequence"] for event in final["events"]])
+            self.assertTrue(first["hasMore"])
+            self.assertTrue(second["hasMore"])
+            self.assertFalse(final["hasMore"])
+            self.assertEqual([1, 2, 3, 4, 5, 6], [event["sequence"] for event in journal.events(0)])
+            legacy = execution_protocol.events({"runId": "run-1", "afterSequence": 0}, root)
+            paged = execution_protocol.events({"runId": "run-1", "afterSequence": 0, "limit": 2}, root)
+            self.assertEqual(6, len(legacy["events"]))
+            self.assertFalse(legacy["hasMore"])
+            self.assertEqual([1, 2], [event["sequence"] for event in paged["events"]])
+            self.assertTrue(paged["hasMore"])
+
+    def test_event_page_rejects_invalid_limits_and_corrupt_sequence(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            for invalid in (0, 513, True, "2"):
+                with self.assertRaises(execution_lifecycle.LifecycleError):
+                    journal.event_page(0, invalid)
+                with self.assertRaises(execution_lifecycle.LifecycleError):
+                    execution_protocol.events({"runId": "run-1", "afterSequence": 0, "limit": invalid}, root)
+            for invalid_after in (-1, True, "0"):
+                with self.assertRaises(execution_lifecycle.LifecycleError):
+                    journal.event_page(invalid_after, 10)
+            with open(journal.events_path, "a", encoding="utf-8") as stream:
+                stream.write(json.dumps({"sequence": 1}) + "\n")
+            with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "STREAM_INVALID"):
+                journal.event_page(0, 10)
+
+    def test_event_page_never_returns_partial_lines_while_writer_appends(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            worker = threading.Thread(target=_write_task_events, args=(root, "run-1", "node1", 40))
+            worker.start()
+            while worker.is_alive():
+                page = journal.event_page(0, 512)
+                sequences = [event["sequence"] for event in page["events"]]
+                self.assertEqual(sorted(set(sequences)), sequences)
+            worker.join()
+            final = journal.event_page(0, 512)
+            self.assertEqual(list(range(1, 42)), [event["sequence"] for event in final["events"]])
+
+    def test_get_events_rejects_symlinked_remote_journal(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            journal = _active_journal(root)
+            target = Path(outside) / "events.jsonl"
+            target.write_text("outside\n", encoding="utf-8")
+            os.unlink(journal.events_path)
+            Path(journal.events_path).symlink_to(target)
+            with self.assertRaises(execution_lifecycle.LifecycleError):
+                execution_protocol.events({"runId": "run-1", "afterSequence": 0, "limit": 10}, root)
+            self.assertEqual("outside\n", target.read_text(encoding="utf-8"))
+
+    def test_event_page_rejects_oversized_line_before_json_decode(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            with open(journal.events_path, "wb") as stream:
+                stream.write(b'{"sequence":1,"value":"' + b"x" * execution_lifecycle.MAX_EVENT_BYTES)
+            with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "SIZE_INVALID"):
+                journal.event_page(0, 10)
 
     def test_callback_redacts_no_log_and_never_persists_result_payload(self):
         with tempfile.TemporaryDirectory() as root:

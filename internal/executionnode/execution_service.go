@@ -72,7 +72,7 @@ type PlanBuilder interface {
 type ExecutionClient interface {
 	StartExecution(context.Context, Node, ExecutionStartRequest) (ExecutionRun, error)
 	GetExecution(context.Context, Node, string) (ExecutionRun, error)
-	GetEvents(context.Context, Node, string, int) ([]ExecutionEvent, error)
+	GetEvents(context.Context, Node, string, int, int) (ExecutionEventPage, error)
 	CancelExecution(context.Context, Node, string) (ExecutionRun, error)
 }
 
@@ -343,9 +343,22 @@ func (s *ExecutionService) Sync(ctx context.Context, node Node, runID string) (E
 	current.mu.Lock()
 	after := current.lastSequence
 	current.mu.Unlock()
-	events, err := s.client.GetEvents(ctx, node, runID, after)
-	if err != nil {
-		return run, nil, err
+	events := []ExecutionEvent{}
+	historyTruncated := false
+	for {
+		page, pageErr := s.client.GetEvents(ctx, node, runID, after, ExecutionEventPageLimit)
+		if pageErr != nil {
+			return run, nil, pageErr
+		}
+		if len(events)+len(page.Events) > maxObservedExecutionEvents {
+			return run, nil, &ObserverError{Code: ObserverIntegrityFailure}
+		}
+		historyTruncated = historyTruncated || page.HistoryTruncated
+		events = append(events, page.Events...)
+		after = page.NextSequence
+		if !page.HasMore {
+			break
+		}
 	}
 	current.mu.Lock()
 	current.run = run
@@ -370,6 +383,9 @@ func (s *ExecutionService) Sync(ctx context.Context, node Node, runID string) (E
 			delete(s.projects, current.project)
 		}
 		s.mu.Unlock()
+	}
+	if historyTruncated {
+		return run, events, &ObserverError{Code: ObserverHistoryTruncated}
 	}
 	return run, events, nil
 }

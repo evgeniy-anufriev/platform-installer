@@ -31,12 +31,51 @@ type commandRunner interface {
 	Run(context.Context, string, []string, []byte) ([]byte, error)
 }
 
+type boundedCommandRunner interface {
+	RunBounded(context.Context, string, []string, []byte, int) ([]byte, error)
+}
+
 type osRunner struct{}
 
 func (osRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
 	command.Stdin = bytes.NewReader(input)
 	return command.CombinedOutput()
+}
+
+func (osRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	command := exec.CommandContext(ctx, name, args...)
+	command.Stdin = bytes.NewReader(input)
+	output := &boundedOutput{limit: limit}
+	command.Stdout = output
+	command.Stderr = output
+	err := command.Run()
+	if output.overflow {
+		return output.Bytes(), errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
+	}
+	return output.Bytes(), err
+}
+
+type boundedOutput struct {
+	bytes.Buffer
+	limit    int
+	overflow bool
+}
+
+func (b *boundedOutput) Write(value []byte) (int, error) {
+	original := len(value)
+	remaining := b.limit - b.Len()
+	if remaining > 0 {
+		if remaining < len(value) {
+			_, _ = b.Buffer.Write(value[:remaining])
+		} else {
+			_, _ = b.Buffer.Write(value)
+		}
+	}
+	if original > remaining {
+		b.overflow = true
+	}
+	return original, nil
 }
 
 // OpenSSHTransport is the one product transport for the pre-Core boundary.
@@ -478,6 +517,16 @@ func (t OpenSSHTransport) ssh(ctx context.Context, node Node, program string, ar
 	full = append(full, args...)
 	return t.run(ctx, "ssh", full, input)
 }
+
+func (t OpenSSHTransport) sshBounded(ctx context.Context, node Node, program string, args []string, input []byte, limit int) ([]byte, error) {
+	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	if err != nil {
+		return nil, err
+	}
+	full := append(t.base(node, identity), node.User+"@"+node.Address, program)
+	full = append(full, args...)
+	return t.runBounded(ctx, "ssh", full, input, limit)
+}
 func (t OpenSSHTransport) base(node Node, identity string) []string {
 	return []string{"-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=" + node.HostKey.KnownHosts, "-i", identity, "-p", fmt.Sprint(node.Port)}
 }
@@ -507,6 +556,28 @@ func (t OpenSSHTransport) run(ctx context.Context, name string, args []string, i
 		if detail != "" {
 			return nil, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s:%s", name, detail)
 		}
+		return nil, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s", name)
+	}
+	return out, nil
+}
+
+func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	runner := t.Runner
+	if runner == nil {
+		runner = osRunner{}
+	}
+	var out []byte
+	var err error
+	if bounded, ok := runner.(boundedCommandRunner); ok {
+		out, err = bounded.RunBounded(ctx, name, args, input, limit)
+	} else {
+		out, err = runner.Run(ctx, name, args, input)
+		if len(out) > limit {
+			out = out[:limit]
+			err = errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
+		}
+	}
+	if err != nil {
 		return nil, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s", name)
 	}
 	return out, nil

@@ -164,7 +164,17 @@ def get(value, state_root):
 
 def events(value, state_root):
     journal = Journal(state_root, value["runId"])
-    return {"run": journal.status(), "events": journal.events(value.get("afterSequence", 0))}
+    owned(journal)
+    after = value.get("afterSequence", 0)
+    if isinstance(after, bool) or not isinstance(after, int) or after < 0:
+        raise LifecycleError("EXECUTION_EVENTS_INPUT_INVALID")
+    limit = value.get("limit")
+    if limit is None:
+        selected = journal.events(after)
+        return {"run": journal.status(), "events": selected, "nextSequence": selected[-1]["sequence"] if selected else after, "hasMore": False}
+    page = journal.event_page(after, limit)
+    page["run"] = journal.status()
+    return page
 
 
 def cancel(value, state_root):
