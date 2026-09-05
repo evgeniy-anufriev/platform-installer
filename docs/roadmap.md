@@ -545,7 +545,8 @@ streams. Live reconnect and CLI restart, real no_log/failure/degradation,
 Core/service/race/offline/security gates passed; reviews have 0 blocking
 findings. Commands and counts: `docs/exec-obs-01.md`.
 
-Next production UI-01 remains separately authorized. No UI work was started.
+Documentation-only UI-01A is now DONE. UI-01B remains separately authorized;
+no production Wails/React implementation has started.
 
 ### DEVX-01: Codex engineering harness
 
@@ -611,6 +612,21 @@ Not ready when:
 
 ### UI-01: Project, hosts and topology editor
 
+Implementation breakdown: [UI-01A–UI-01J](ui-01.md). Contracts → shell
+→ empty project → first-write/review → servers → topology → PKI profiles →
+service settings → portable export → native acceptance. Every milestone starts
+with a mockup/contract check. Each stage requires an explicit owner start.
+
+UI-01A is DONE (documentation only): [contract preflight](ui-01a.md),
+[accepted freeze](ui-01a-contract-freeze.md), [reviews](ui-01a-review.md) and
+[QA](ui-01a-qa.md). Empty-project, first-write/inventory ownership, typed
+command, selected Execution Node validation and frontend toolchain decisions are
+closed. UI-01B is NEXT and separately authorized; UI-01 overall is NOT DONE.
+
+Accepted design input: [metadata-only project creation and progressive
+editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
+backend requirements must be implemented and proven in their owning milestones.
+
 Deliverables:
 
 - project lifecycle;
@@ -622,7 +638,8 @@ Deliverables:
 
 Ready when:
 
-- standalone, Patroni and multiple independent cluster scenarios are expressible;
+- standalone PostgreSQL, the accepted pg_auto_failover baseline and multiple
+  independent cluster scenarios are expressible;
 - a customer can omit an available service entirely;
 - no implicit Kafka/PostgreSQL instance is created;
 - exported project matches the editor state and runs standalone.
@@ -634,6 +651,10 @@ Not ready when:
 - raw internal IDs or translation keys appear in normal UI.
 
 ### UI-02: Installation workflow
+
+Local pages: Summary → Preparation → Plan → Execution → Result. Plan shows
+Core actions/dependencies and target hosts; Result shows observed per-action
+outcomes and verify for a specific run, without rerunning verification on view.
 
 Deliverables:
 

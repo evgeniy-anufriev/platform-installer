@@ -13,6 +13,18 @@
     .installation-view[hidden]{display:none}.install-title{margin:0 0 16px;font-size:18px}.run-log{max-height:245px;overflow:auto}
     .workflow-strip{display:grid;grid-template-columns:repeat(4,1fr);margin:0 0 18px;border:1px solid light-dark(#d8e2ef,#35445a);border-radius:7px;overflow:hidden;background:light-dark(#fff,#152131)}.workflow-step{display:flex;gap:8px;align-items:start;padding:9px 12px;border-right:1px solid light-dark(#e2e9f1,#35445a)}.workflow-step:last-child{border-right:0}.workflow-number{display:grid;place-items:center;flex:0 0 15px;width:15px;height:15px;border-radius:999px;background:light-dark(#9aaabc,#6e819a);color:#fff;font-size:10px;font-weight:700}.workflow-step b{display:block;font-size:11px}.workflow-step small{display:block;font-size:9px}.workflow-step[aria-current="step"] .workflow-number{background:#176fc1}@media(max-width:900px){.workflow-strip{grid-template-columns:1fr 1fr}.workflow-step:nth-child(2){border-right:0}.workflow-step:nth-child(-n+2){border-bottom:1px solid light-dark(#e2e9f1,#35445a)}}
     .summary-node{margin-bottom:14px}.summary-node .body{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;gap:10px;align-items:center}.summary-node small{display:block}.summary-pair{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:14px}.plan-preview{margin-top:14px}.plan-tabs{display:flex;gap:14px;padding:0 13px;border-bottom:1px solid light-dark(#e4ebf2,#35445a);font-weight:600}.plan-tabs span:first-child{color:#2173b9;border-bottom:2px solid #2173b9;padding-bottom:8px}@media(max-width:1250px){.triple{grid-template-columns:1fr}.summary-node .body{grid-template-columns:repeat(3,minmax(0,1fr)) auto}}@media(max-width:700px){.summary-node .body,.summary-pair{grid-template-columns:1fr}}
+    .app{max-width:1440px;grid-template-columns:220px minmax(0,1fr)}
+    .triple{grid-template-columns:220px minmax(0,1fr)}
+    .triple>article:last-child{grid-column:1/-1}
+    .project-context{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:16px;margin-bottom:24px;border-bottom:1px solid light-dark(#d8e2ef,#35445a)}
+    .project-context small{display:block;overflow-wrap:anywhere}.project-context .btn{white-space:nowrap}
+    .neutral{background:light-dark(#edf2f8,#223148);color:inherit}
+    details{margin-top:16px}summary{cursor:pointer;font-weight:600;padding:10px 0}
+    .task-table{width:100%;border-collapse:collapse}.task-table th,.task-table td{text-align:left;padding:10px;border-bottom:1px solid light-dark(#d8e2ef,#35445a)}
+    .flow-form{display:grid;gap:14px;max-width:620px;margin:18px 0}.flow-form[hidden]{display:none}
+    .flow-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+    @media(max-width:1050px){.triple{grid-template-columns:1fr}.project-context{align-items:start;flex-wrap:wrap}}
+    @media(max-width:900px){.app{grid-template-columns:150px minmax(0,1fr)}.global button{font-size:13px;height:auto}.content{padding:18px}}
   </style>
 </head>
 <body>
@@ -23,6 +35,8 @@
         <button type="button" data-page="projects">Проекты</button>
         <button type="button" data-page="servers">Серверы</button>
         <button type="button" data-page="topology">Топология</button>
+        <button type="button" data-page="certificates">Сертификаты</button>
+        <button type="button" data-page="service-configuration">Сервисы</button>
         <button type="button" data-page="installation" aria-current="page">Установка</button>
         <button type="button" data-page="logs">Журналы</button>
         <button type="button" class="lower" data-page="help">Справка</button>
@@ -31,6 +45,7 @@
       </nav>
     </aside>
     <main class="content">
+      <header class="project-context"><div><b id="context-name">Производственный контур</b><small id="context-path">~/projects/production · Демонстрационный проект</small></div><div><span id="edit-state" role="status">Нет несохранённых изменений</span><br><small>Макет · без записи файлов и запуска на серверах</small></div><button class="btn" id="review-changes" type="button" disabled>Просмотреть изменения</button></header>
       <section class="page" id="projects" hidden><div class="crumb">Проекты</div><div class="project-head"><div><h1>Проекты</h1><p class="muted">Открыть, создать, импортировать или безопасно экспортировать Ansible project</p></div><div class="project-actions"><button class="btn" type="button" data-open-dialog="import-dialog">Импорт проекта</button><button class="btn" type="button" data-open-dialog="export-dialog">Экспорт проекта</button><button class="btn main">Открыть проект</button></div></div><div class="card transfer-card"><h2>Производственный контур</h2><div class="body"><div class="row">Путь <b>~/projects/production</b></div><div class="row">Inventory <b>inventory/hosts.yml</b></div><div class="row">Catalog lock <b>kafka 4.3.1</b></div><div class="row">Совместимость <b class="ok">PASS</b></div><p class="muted">Экспорт переносит только portable desired state. Факты, логи, generated state и секреты исключаются.</p></div></div></section>
       <section class="page" id="servers" hidden>
         <div class="crumb">Проект</div>
@@ -78,10 +93,134 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
       <form class="dialog wide"><h2 id="execution-node-dialog-title">Настройка и подготовка Execution Node</h2><div class="form"><label>Режим<select><option>Сервер проекта</option><option>Этот компьютер</option><option>Внешний Linux-хост</option></select></label><label>Узел исполнения<select><option>redos-node1 · 192.168.56.101</option></select></label><label>Транспорт<input value="SSH · admin:22" readonly></label><label>Учётные данные текущего сеанса<select><option>runtime SecretRef · доступен</option></select></label></div><div class="check-list" id="execution-checks"><div class="row">SSH и elevation <b class="warn">не проверено</b></div><div class="row">Python и Ansible <b class="warn">не проверено</b></div><div class="row">Offline payload <b class="warn">не проверено</b></div><div class="row">Workspace и свободное место <b class="warn">не проверено</b></div></div><div class="notice">Проверка read-only. Подготовка выполняется только после явного подтверждения и не изменяет топологию проекта.</div><div class="footer"><button class="btn" type="button" data-check-execution-node>Проверить узел</button><button class="btn main" type="button" data-prepare-execution-node disabled>Подготовить</button><button class="btn" type="button" data-close-dialog="execution-node-dialog">Закрыть</button></div></form>
     </div>
   </div>
+  <!-- Design proposal only: this form never writes a project or contacts hosts. -->
+  <div class="modal" id="create-project-dialog" role="dialog" aria-modal="true" aria-labelledby="create-project-title" hidden>
+    <form class="dialog" id="create-project-form">
+      <h2 id="create-project-title">Создать проект</h2>
+      <label for="new-project-name">Название проекта</label>
+      <input id="new-project-name" required maxlength="100" placeholder="Например, Производственный контур">
+      <p><label for="new-project-folder">Новая папка проекта на Installer machine</label>
+      <input id="new-project-folder" required placeholder="C:\Projects\production"></p>
+      <div class="notice">Начнём с метаданных проекта. Inventory, host_vars и group_vars не создаются. Серверы, сервисы и размещение вы добавите самостоятельно.</div>
+      <p class="muted">Интерактивный макет: папка не создаётся, проверки файловой системы и вызовы backend не выполняются.</p>
+      <div class="footer"><button class="btn" type="button" id="cancel-create-project">Отмена</button><button class="btn main" type="submit">Создать проект</button></div>
+    </form>
+  </div>
   <script>
     const root = document.getElementById('ui-design-01');
+    const servicePage = document.createElement('section');
+    servicePage.id = 'service-configuration';
+    servicePage.className = 'page';
+    servicePage.hidden = true;
+    servicePage.innerHTML = '<div class="crumb">Проект</div><h1>Сервисы</h1><p class="muted">Экземпляры сервисов и их настройки. Размещение — в Топологии.</p>';
+    root.querySelector('main').append(servicePage);
+    servicePage.append(root.querySelector('#installation-services'), root.querySelector('#installation-service-settings'));
+    root.querySelector('#installation-services').hidden = false;
+    root.querySelector('[data-installation="services"]').remove();
+    const certificatePage = document.createElement('section');
+    certificatePage.id = 'certificates';
+    certificatePage.className = 'page';
+    certificatePage.hidden = true;
+    certificatePage.innerHTML = '<div class="crumb">Проект</div><h1>Сертификаты</h1><p class="muted">PKI-профили для сервисов. Выпуск и применение выполняются на этапе установки.</p>';
+    root.querySelector('main').append(certificatePage);
+    const certificateView = root.querySelector('#installation-certificates');
+    certificateView.hidden = false;
+    certificatePage.append(certificateView);
+    certificateView.querySelector('.install-title').remove();
+    root.querySelector('[data-installation="certificates"]').remove();
+    root.querySelector('label[for="session-credential"]').textContent = 'Учётные данные сеанса · для всех серверов';
+    root.querySelector('#session-credential').insertAdjacentHTML('afterend', '<small>Единый технический пользователь, пароль или ключ и права на всех серверах. Данные действуют в текущем сеансе и не записываются в проект.</small>');
     const pages = [...root.querySelectorAll('.page')];
+    let emptyProject = null;
+    const createDialog = document.getElementById('create-project-dialog');
+    const createButton = document.createElement('button');
+    createButton.type = 'button';
+    createButton.className = 'btn main';
+    createButton.textContent = 'Создать проект';
+    root.querySelector('#projects .project-actions .main').classList.remove('main');
+    root.querySelector('#projects .project-actions').prepend(createButton);
+    createButton.addEventListener('click', () => {
+      createDialog.hidden = false;
+      document.getElementById('new-project-name').focus();
+    });
+    const closeCreate = () => { createDialog.hidden = true; createButton.focus(); };
+    document.getElementById('cancel-create-project').addEventListener('click', closeCreate);
+    createDialog.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); closeCreate(); }
+      if (event.key === 'Tab') {
+        const controls = [...createDialog.querySelectorAll('input,button')];
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    });
+    const emptyView = document.createElement('section');
+    emptyView.className = 'page';
+    emptyView.hidden = true;
+    emptyView.innerHTML = `<div class="crumb">Новый проект · дизайн-предложение</div>
+      <h1 tabindex="-1" id="empty-title"></h1><p id="empty-project-identity"></p>
+      <div class="notice">Проект ещё не настроен · Проверка Core не выполнялась · Запуск недоступен</div>
+      <article class="card" style="margin-top:18px"><h2 id="empty-heading"></h2><div class="body">
+      <p id="empty-description"></p><div class="row">Inventory <b>Не создан</b></div>
+      <div class="row">host_vars / group_vars <b>Не созданы</b></div>
+      <p>Серверов: 0 · Deployments: 0 · Выполнений: 0</p>
+      <div class="project-actions"><button class="btn" data-empty-page="servers">Серверы</button>
+      <button class="btn" data-empty-page="topology">Топология</button>
+      <button class="btn" data-empty-page="service-configuration">Сервисы</button></div>
+      <p class="muted">Здесь показаны пустые состояния. Редактирование и сохранение объектов — следующий сценарий проектирования.</p>
+      <button class="btn" disabled>Сформировать план</button></div></article>
+      <p><button class="link" id="return-demo">Вернуться к заполненному демонстрационному проекту</button></p>`;
+    root.querySelector('main').append(emptyView);
+    const emptyScreens = {
+      projects: ['Проект', 'Начните с серверов или топологии', 'Добавьте реальные серверы, выберите сервисы и назначьте размещение. Порядок заполнения свободный; неполные формы ещё не являются сохранённой конфигурацией.'],
+      servers: ['Серверы', 'Серверов пока нет', 'Добавление сервера задаёт inventory identity и SSH-параметры. Проверка подключения — отдельное действие, не условие ввода адреса.'],
+      topology: ['Топология', 'Размещений пока нет', 'Выберите deployment и его members, затем назначьте серверы. Не создаём Kafka, PostgreSQL или фиктивные hosts автоматически.'],
+      certificates: ['Сертификаты', 'PKI-профили', 'Определите профиль перед выбором его в настройках сервиса. Для сервиса без TLS этот шаг можно пропустить.'],
+      'service-configuration': ['Сервисы', 'Сервисы ещё не выбраны', 'Выбор из каталога и настройки существующего deployment используют одну модель с Топологией. Неполный ввод остаётся несохранённым до проверки.'],
+      installation: ['Установка', 'Проект не готов к планированию', 'Нужны сохранённая конфигурация, выбранный READY Execution Node и проверка Core. Подготовленный узел сам по себе не делает проект готовым.'],
+      logs: ['Журналы', 'Выполнений пока нет', 'После запуска здесь появятся runId, Execution Node и подробные события Ansible tasks.']
+    };
+    const showEmptyPage = page => {
+      const screen = emptyScreens[page];
+      if (!screen) { emptyView.hidden = true; return false; }
+      pages.forEach(item => item.hidden = true);
+      emptyView.hidden = false;
+      root.querySelector('#empty-title').textContent = screen[0];
+      root.querySelector('#empty-project-identity').textContent = `${emptyProject.name} · ${emptyProject.folder} · Макет, не сохранено на диск`;
+      root.querySelector('#empty-heading').textContent = screen[1];
+      root.querySelector('#empty-description').textContent = screen[2];
+      root.querySelectorAll('[data-page]').forEach(item => {
+        if (item.dataset.page === page) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+      });
+      root.querySelector('#empty-title').focus();
+      renderFlow(page);
+      return true;
+    };
+    emptyView.querySelectorAll('[data-empty-page]').forEach(button => button.addEventListener('click', () => showEmptyPage(button.dataset.emptyPage)));
+    emptyView.querySelector('#return-demo').addEventListener('click', () => {
+      if (draftDirty && !window.confirm('Вернуться к примеру и отбросить несохранённые изменения макета?')) return;
+      emptyProject = null;
+      draftDirty = false;
+      updateContext();
+      emptyView.hidden = true;
+      root.querySelector('[data-page="projects"]').click();
+    });
+    document.getElementById('create-project-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const name = document.getElementById('new-project-name');
+      const folder = document.getElementById('new-project-folder');
+      if (!name.value.trim() || !folder.value.trim()) return;
+      emptyProject = { name: name.value.trim(), folder: folder.value.trim() };
+      draft = { host: '', address: '', deployment: '', service: 'Kafka', placement: '', profile: '', tlsProfile: '' };
+      draftDirty = false;
+      draftSaved = false;
+      updateContext();
+      createDialog.hidden = true;
+      showEmptyPage('projects');
+    });
     root.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => {
+      if (emptyProject && showEmptyPage(button.dataset.page)) return;
       pages.forEach(page => page.hidden = page.id !== button.dataset.page);
       root.querySelectorAll('[data-page]').forEach(item => {
         if (item === button) item.setAttribute('aria-current', 'page');
@@ -94,7 +233,37 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
       views.forEach(view => view.hidden = view.id !== id);
       root.querySelectorAll('[data-topology]').forEach(item => item.setAttribute('aria-selected', String(item === button)));
     }));
-    const installationViews = [...root.querySelectorAll('.installation-view')];
+    const installationRoot = root.querySelector('#installation');
+    const planTab = document.createElement('button');
+    planTab.type = 'button'; planTab.dataset.installation = 'plan';
+    planTab.textContent = 'План'; planTab.setAttribute('aria-selected', 'false');
+    root.querySelector('[data-installation="execution"]').before(planTab);
+    const resultTab = document.createElement('button');
+    resultTab.type = 'button'; resultTab.dataset.installation = 'result';
+    resultTab.textContent = 'Результат'; resultTab.setAttribute('aria-selected', 'false');
+    root.querySelector('[data-installation="execution"]').after(resultTab);
+    installationRoot.insertAdjacentHTML('beforeend', `<section class="installation-view" id="installation-plan" hidden>
+      <h2 class="install-title">План</h2><p class="muted">Демонстрационный план demo-plan-001 · не рассчитан Core</p>
+      <article class="card"><div class="body"><div class="row"><span>Execution Node: node1</span><span>Целевые серверы: node1, node2, node3</span></div>
+      <p>Порядок действий и зависимости. Здесь показано намерение, не результат выполнения.</p>
+      <div class="server-table"><table class="task-table"><thead><tr><th>Этап</th><th>Действие</th><th>Где</th><th>Зависит от</th></tr></thead><tbody>
+      <tr><td>1</td><td>PKI · подготовка TLS-материалов</td><td>Execution Node / целевые hosts по плану</td><td>Проверка проекта</td></tr>
+      <tr><td>2</td><td>Kafka / kafka-main · apply</td><td>node1, node2, node3</td><td>PKI</td></tr>
+      <tr><td>3</td><td>Kafka / kafka-main · verify</td><td>node1, node2, node3</td><td>Kafka apply</td></tr>
+      </tbody></table></div><details><summary>Перед подтверждением</summary><p>В production: planId, revision проекта, точные targets, зависимости и предупреждения из Core. При изменении конфигурации план устаревает и требует пересоздания.</p></details>
+      <p><button class="btn" disabled>Подтвердить план и выполнить</button></p><small>Недоступно в макете. Не запускает серверы и не заменяет сохранение конфигурации.</small></div></article></section>
+      <section class="installation-view" id="installation-result" hidden><h2 class="install-title">Результат</h2>
+      <p class="muted">Отдельный пример завершённого запуска · demo-result-001 · план demo-plan-001</p>
+      <article class="card"><div class="body"><div class="head"><div><b class="warn">Завершено с ошибкой проверки</b><p>2 этапа успешны · 1 с ошибкой · 0 пропущено</p></div><span>Длительность: 9 мин 07 с</span></div>
+      <div class="row"><span>Execution Node: node1</span><span>Targets: node1, node2, node3</span></div>
+      <div class="server-table"><table class="task-table"><thead><tr><th>Этап плана</th><th>Результат</th><th>Серверы</th><th>Длительность</th></tr></thead><tbody>
+      <tr><td>PKI apply</td><td>Успешно</td><td>node1, node2, node3</td><td>1 мин 12 с</td></tr>
+      <tr><td>Kafka apply</td><td>Успешно</td><td>node1, node2, node3</td><td>5 мин 40 с</td></tr>
+      <tr><td>Kafka verify</td><td class="warn">Ошибка</td><td>node2: проверка не пройдена</td><td>2 мин 15 с</td></tr>
+      </tbody></table></div><details><summary>Подробности проверки</summary><p>Пример безопасной диагностики: node2 не достиг ожидаемой готовности. Успешный apply не означает успешный verify. Реальные findings, host results и recap поступят от backend.</p></details>
+      <p class="muted">Результат наблюдаемого запуска, а не новая проверка. Открытие вкладки не запускает verify повторно. Для активного запуска итог ещё не определён; потеря связи с observer не означает FAILED.</p>
+      </div></article></section>`);
+    const installationViews = [...installationRoot.querySelectorAll('.installation-view')];
     const summaryPlanAction = root.querySelector('#summary-plan-action');
     const workflowStages = [...root.querySelectorAll('.workflow-step')];
     const setWorkflowStage = id => workflowStages.forEach(stage => {
@@ -107,21 +276,23 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
       root.querySelectorAll('[data-installation]').forEach(item => item.setAttribute('aria-selected', String(item === button)));
       summaryPlanAction.hidden = button.dataset.installation !== 'summary';
     }));
-    const openServiceSettings = () => {
-      pages.forEach(page => page.hidden = page.id !== 'installation');
+    let serviceReturn = 'service-configuration';
+    const openServiceSettings = event => {
+      serviceReturn = event.currentTarget.closest('#topology') ? 'topology' : 'service-configuration';
+      pages.forEach(page => page.hidden = page.id !== 'service-configuration');
       root.querySelectorAll('[data-page]').forEach(item => {
-        if (item.dataset.page === 'installation') item.setAttribute('aria-current', 'page');
+        if (item.dataset.page === 'service-configuration') item.setAttribute('aria-current', 'page');
         else item.removeAttribute('aria-current');
       });
-      installationViews.forEach(view => view.hidden = view.id !== 'installation-service-settings');
-      root.querySelectorAll('[data-installation]').forEach(item => item.setAttribute('aria-selected', 'false'));
-      summaryPlanAction.hidden = true;
+      root.querySelector('#installation-services').hidden = true;
+      root.querySelector('#installation-service-settings').hidden = false;
+      root.querySelector('[data-back-to-services]').textContent = serviceReturn === 'topology' ? '← К выбранному сервису в Топологии' : '← Сервисы';
     };
     root.querySelectorAll('[data-open-service-settings]').forEach(button => button.addEventListener('click', openServiceSettings));
     root.querySelectorAll('[data-back-to-services]').forEach(button => button.addEventListener('click', () => {
-      installationViews.forEach(view => view.hidden = view.id !== 'installation-services');
-      root.querySelectorAll('[data-installation]').forEach(item => item.setAttribute('aria-selected', String(item.dataset.installation === 'services')));
-      summaryPlanAction.hidden = true;
+      root.querySelector('#installation-services').hidden = false;
+      root.querySelector('#installation-service-settings').hidden = true;
+      root.querySelector(`[data-page="${serviceReturn}"]`).click();
     }));
     const serverDialog = root.querySelector('#server-dialog');
     root.querySelectorAll('[data-open-server-dialog]').forEach(button => button.addEventListener('click', () => {
@@ -167,7 +338,95 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
     });
     root.querySelector('#create-plan').addEventListener('click', () => {
       setWorkflowStage('workflow-plan');
+      root.querySelector('[data-installation="plan"]').click();
     });
+    // Shared mockup-only draft. No YAML, storage, backend or target execution.
+    let draft = { host: '', address: '', deployment: '', service: 'Kafka', placement: '', profile: '', tlsProfile: '' };
+    let draftDirty = false, draftSaved = false, flowPage = 'projects';
+    const updateContext = () => {
+      root.querySelector('#context-name').textContent = emptyProject ? emptyProject.name : 'Производственный контур';
+      root.querySelector('#context-path').textContent = emptyProject ? emptyProject.folder : '~/projects/production · Демонстрационный проект';
+      root.querySelector('#edit-state').textContent = draftDirty ? 'Есть несохранённые изменения' : draftSaved && emptyProject ? 'Сохранено в макете · Не применено' : 'Нет несохранённых изменений';
+      root.querySelector('#review-changes').disabled = !draftDirty;
+    };
+    const flowPanel = document.createElement('article');
+    flowPanel.className = 'card';
+    flowPanel.style.marginTop = '18px';
+    flowPanel.innerHTML = `<div class="body">
+      <p id="flow-summary"></p>
+      <div class="flow-actions"><button class="btn" data-flow="servers">1. Серверы</button><button class="btn" data-flow="topology">2. Топология</button><button class="btn" data-flow="certificates">3. Сертификаты</button><button class="btn" data-flow="service-configuration">4. Сервисы</button></div>
+      <form class="flow-form" id="host-form" hidden><label>Имя сервера<input name="host" required placeholder="node1"></label><label>Адрес<input name="address" required placeholder="192.168.56.101"></label><small>Учётные данные — единые для всех серверов текущего сеанса.</small><button class="btn main" type="submit">Продолжить к топологии</button></form>
+      <form class="flow-form" id="placement-form" hidden><label>Тип сервиса<select name="service"><option>Kafka</option><option>PostgreSQL</option></select></label><label>Имя экземпляра<input name="deployment" required placeholder="kafka-main"></label><label>Сервер для экземпляра<select name="placement"><option value="">Не назначен</option></select></label><small>Упрощённый пример назначения, не валидированная топология. Реальные modes, members и роли задаются каталогом.</small><button class="link" type="button" id="flow-edit-service">Редактировать выбранный сервис →</button><button class="btn main" type="submit">Продолжить к сертификатам</button></form>
+      <form class="flow-form" id="certificate-form" hidden><label>Имя PKI-профиля<input name="profile" placeholder="infrastructure-tls"></label><small>В этом макете задаётся только имя. В production — CA, scope и usages из PKI contract; SAN вычисляет Core. Сертификат здесь не выпускается.</small><button class="btn main" type="submit">Продолжить к сервисам</button><button class="link" type="button" data-flow="service-configuration">Пропустить для сервиса без TLS</button></form>
+      <form class="flow-form" id="service-form" hidden><p id="selected-deployment"></p><label>PKI-профиль<select name="tlsProfile"><option value="">Без TLS (пример)</option></select></label><button class="link" type="button" data-flow="certificates">Настроить профили сертификатов →</button><small>Редактируется тот же экземпляр, что в Топологии. Остальные настройки определяются схемой сервиса.</small><button class="link" type="button" data-flow="topology">← Вернуться к размещению</button><button class="btn main" type="submit">Просмотреть изменения</button></form>
+      <div class="flow-actions"><button class="btn" id="flow-review" type="button">Просмотреть изменения</button><button class="btn" disabled>Применить на серверах</button></div>
+      <p class="muted">Формы сохраняют ввод при переходах. Запись файлов, Core validation и применение здесь не выполняются.</p>
+    </div>`;
+    emptyView.querySelector('article').after(flowPanel);
+    const renderFlow = page => {
+      flowPage = page;
+      emptyView.querySelector('article').hidden = true;
+      flowPanel.hidden = !['projects', 'servers', 'topology', 'certificates', 'service-configuration', 'installation'].includes(page);
+      emptyView.querySelector('.notice').classList.add('neutral');
+      emptyView.querySelector('.notice').textContent = draftDirty ? 'Есть несохранённые изменения · Core не проверял конфигурацию' : draftSaved ? 'Сохранено только в макете · На серверах не применено' : 'Пустой проект · Inventory и variable-файлы ещё не созданы';
+      flowPanel.querySelector('#flow-summary').textContent = `Сервер: ${draft.host || 'не добавлен'} · Сервис: ${draft.deployment || 'не выбран'} · Размещение: ${draft.placement || 'не назначено'}`;
+      flowPanel.querySelector('#selected-deployment').textContent = `Настройки: ${draft.service} / ${draft.deployment || 'сначала создайте экземпляр в Топологии'}`;
+      for (const [id, target] of [['host-form', 'servers'], ['placement-form', 'topology'], ['certificate-form', 'certificates'], ['service-form', 'service-configuration']]) {
+        flowPanel.querySelector('#' + id).hidden = page !== target;
+      }
+      flowPanel.querySelectorAll('input[name], select[name]').forEach(input => {
+        if (input.name === 'placement') {
+          input.replaceChildren(new Option('Не назначен', ''));
+          if (draft.host) input.add(new Option(draft.host, draft.host));
+        }
+        if (input.name === 'tlsProfile') {
+          input.replaceChildren(new Option('Без TLS (пример)', ''));
+          if (draft.profile.trim()) input.add(new Option(draft.profile.trim(), draft.profile.trim()));
+          if (draft.tlsProfile && draft.tlsProfile !== draft.profile.trim()) input.add(new Option(draft.tlsProfile + ' — профиль отсутствует', draft.tlsProfile));
+        }
+        input.value = draft[input.name];
+      });
+      flowPanel.querySelector('#flow-review').disabled = !draftDirty;
+    };
+    flowPanel.querySelectorAll('[data-flow]').forEach(button => button.addEventListener('click', () => showEmptyPage(button.dataset.flow)));
+    flowPanel.querySelectorAll('input[name], select[name]').forEach(input => input.addEventListener('input', () => {
+      draft[input.name] = input.value;
+      if (input.name === 'host') draft.placement = '';
+      draftDirty = true;
+      updateContext();
+      flowPanel.querySelector('#flow-review').disabled = false;
+    }));
+    flowPanel.querySelector('#host-form').addEventListener('submit', event => { event.preventDefault(); showEmptyPage('topology'); });
+    flowPanel.querySelector('#placement-form').addEventListener('submit', event => { event.preventDefault(); showEmptyPage('certificates'); });
+    flowPanel.querySelector('#certificate-form').addEventListener('submit', event => { event.preventDefault(); showEmptyPage('service-configuration'); });
+    flowPanel.querySelector('#flow-edit-service').addEventListener('click', () => showEmptyPage('service-configuration'));
+    root.insertAdjacentHTML('beforeend', `<div class="modal" id="review-dialog" role="dialog" aria-modal="true" aria-labelledby="review-title" hidden><div class="dialog"><h2 id="review-title">Изменения конфигурации</h2><p id="review-summary"></p><p class="muted">Предполагаемые области записи: inventory — сервер; managed group_vars — экземпляр и настройки; host_vars — размещение. Точный diff вернёт backend.</p><div class="notice neutral">Демонстрация review. Проверка Core не выполнялась. Кнопка ниже меняет только состояние макета, не файлы проекта.</div><div class="footer"><button class="btn" id="close-review">Вернуться к редактированию</button><button class="btn main" id="save-demo">Сохранить в макете</button></div></div></div>`);
+    const reviewDialog = root.querySelector('#review-dialog');
+    const reviewDraft = () => {
+      root.querySelector('#review-summary').textContent = emptyProject ? `Сервер: ${draft.host || 'не задан'} (${draft.address || 'адрес не задан'}). Экземпляр: ${draft.deployment || 'не задан'} (${draft.service}). Размещение: ${draft.placement || 'не назначено'}.` : 'Изменены настройки демонстрационного проекта. Применение на серверах не выполняется.';
+      if (emptyProject) root.querySelector('#review-summary').textContent += ` PKI-профиль: ${draft.profile || 'не задан'}; ссылка сервиса: ${draft.tlsProfile || 'без TLS'}.`;
+      root.querySelector('#save-demo').disabled = emptyProject ? ![draft.host, draft.address, draft.deployment, draft.placement].every(value => value.trim()) || Boolean(draft.tlsProfile && draft.tlsProfile !== draft.profile.trim()) : false;
+      reviewDialog.hidden = false;
+      root.querySelector('#close-review').focus();
+    };
+    root.querySelector('#review-changes').addEventListener('click', reviewDraft);
+    flowPanel.querySelector('#flow-review').addEventListener('click', reviewDraft);
+    flowPanel.querySelector('#service-form').addEventListener('submit', event => { event.preventDefault(); reviewDraft(); });
+    root.querySelector('#close-review').addEventListener('click', () => { reviewDialog.hidden = true; root.querySelector('#review-changes').focus(); });
+    root.querySelector('#save-demo').addEventListener('click', () => {
+      draftDirty = false; draftSaved = true;
+      updateContext(); reviewDialog.hidden = true;
+      if (emptyProject) showEmptyPage('projects');
+    });
+    window.addEventListener('beforeunload', event => { if (draftDirty) { event.preventDefault(); event.returnValue = ''; } });
+    servicePage.querySelectorAll('input,select').forEach(input => input.addEventListener('input', () => { draftDirty = true; updateContext(); }));
+    root.querySelectorAll('#installation-service-settings .head > .btn, #topology > .head .btn.main').forEach(button => {
+      button.textContent = 'Просмотреть изменения';
+      button.addEventListener('click', reviewDraft);
+    });
+    root.querySelector('#installation-execution').innerHTML = `<h2 class="install-title">Выполнение</h2><p class="muted">Демонстрационный запуск · не связан с реальными серверами</p><article class="card"><div class="body"><div class="head"><div><b>Kafka · Применение конфигурации</b><p>Выполняется · 4 мин 32 с</p></div><span class="chip">События поступают</span></div><div class="row"><span>Запуск <code>demo-run-001</code></span><span>Execution Node · node1</span></div><p>Текущая задача: ожидание готовности сервиса · node2 · 18 с</p><small>PKI: завершено · Kafka apply: выполняется · Verify: ожидает</small><details><summary>Подробные задачи Ansible</summary><div class="server-table"><table class="task-table"><thead><tr><th>Задача</th><th>Сервер</th><th>Статус</th><th>Время</th></tr></thead><tbody><tr><td>Подготовка конфигурации</td><td>—</td><td>Старт задачи</td><td>—</td></tr><tr><td>Подготовка конфигурации</td><td>node1</td><td>Без изменений</td><td>2 с</td></tr><tr><td>Ожидание готовности сервиса</td><td>node2</td><td>Выполняется</td><td>18 с</td></tr><tr><td>Скрытая задача</td><td>node3</td><td>Успешно</td><td>1 с</td></tr></tbody></table></div><p class="muted">Host у старта задачи может отсутствовать. Секретные значения не показываются. Длительности здесь — примеры.</p></details><details><summary>Технические сведения</summary><p>Источник UI: типизированная подписка RunObserver через backend.</p><p>Локальная копия для оператора: <code>.runtime/executions/demo-run-001/events.jsonl</code></p></details></div></article>`;
+    // Start the design review at the project entry point, not a simulated run.
+    root.querySelector('[data-page="projects"]').click();
   </script>
 </body>
 </html>

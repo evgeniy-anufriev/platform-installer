@@ -23,8 +23,9 @@ owns target-free DeploymentPlan/ExecutionManifest construction. UI-BE-04C,
 UI-BE-04D and UI-BE-04E are complete; UI-BE-04 overall is DONE.
 EXEC-OBS-01 is DONE: the managed Ansible callback, paginated events, typed
 RunObserver and Installer-side event mirror/CLI passed real Kafka acceptance.
-See `docs/exec-obs-01.md` for operator commands and evidence. Do not begin
-UI-01 or another production service unless its milestone is explicitly requested.
+See `docs/exec-obs-01.md` for operator commands and evidence. UI-01A is DONE as
+a documentation-only contract freeze. UI-01B is NEXT but must not begin without
+an explicit owner request. Do not begin another production service implicitly.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI
@@ -78,6 +79,11 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 ## Change discipline
 
 - Read the relevant canonical document before editing.
+- Before each UI milestone (including its backend sub-milestones), review
+  `docs/ui-design-01-mockups.html`, `docs/ui-design-01.md` and the milestone plan.
+  Record the relevant screens/flows and any contract discrepancies before coding;
+  resolve material discrepancies with the owner instead of silently diverging.
+  Repeat the mockup check at acceptance. Demo values/statuses are not Core rules.
 - Prefer one contract over parallel DTOs.
 - Avoid overengineering: prefer built-in Ansible tasks, filters and a small
   explicit task sequence over custom Python modules/plugins. Introduce a new
@@ -120,8 +126,8 @@ reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
 The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01,
-EXEC-01A, UI-BE-04 overall and EXEC-OBS-01 are DONE. UI-01 remains separately
-gated. PostgreSQL behavior
+EXEC-01A, UI-BE-04 overall, EXEC-OBS-01 and documentation-only UI-01A are DONE.
+UI-01B is NEXT and separately gated. PostgreSQL behavior
 must not be inferred from the completed PKI-01 foundation; its role must
 consume explicit PKI materialization plans at runtime.
 

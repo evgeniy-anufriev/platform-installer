@@ -1,5 +1,25 @@
 # Current state
 
+## UI-01A completion (2026-09-05)
+
+UI-01A is DONE as a documentation/contract milestone. UI-01 overall remains NOT
+DONE; UI-01B is NEXT and requires an explicit owner request. No Wails/React
+scaffold, production UI method, Core change or writer change was introduced.
+
+The accepted freeze is `docs/ui-01a-contract-freeze.md`; toolchain, mockup
+reconciliation, reviews and QA are recorded in the adjacent `ui-01a-*`
+documents. It fixes the one-file empty project (`project.yml` only), exact lock
+provenance, first-save ownership, complete-candidate Core proof on the selected
+READY Execution Node, project-edit v1alpha2 evolution, missing server/topology/
+PKI commands, and runtime-only session credentials. Core-contract and safety
+reviews both report 0 blocking findings.
+
+The implementation sequence remains `docs/ui-01.md` (UI-01B through UI-01J).
+Every milestone requires pre-start and acceptance mockup/contract checks.
+Editor order is Servers → Topology → Certificates (PKI intent) → Service
+settings. UI-02 execution/task-stream UI and target secret lease transport
+remain separate.
+
 ## EXEC-OBS-01 completion (2026-09-05)
 
 EXEC-OBS-01A through 01D are DONE. Managed Ansible task events use the existing
@@ -18,7 +38,8 @@ Kafka/PKI, Go/race/vet, reproducibility, offline validation and secret audits
 passed; both reviews have 0 blocking findings. See `docs/exec-obs-01.md` for
 exact commands, test counts, durations and performance measurement limits.
 
-UI-01 remains separately authorized; React/Wails has not been implemented.
+UI-01A is the completed documentation freeze; UI-01B remains separately
+authorized. React/Wails has not been implemented.
 
 ## Phase
 
@@ -155,8 +176,8 @@ is DONE. Go now owns only public plan approval and session lifecycle over the
 typed Execution Node protocol. UI-BE-04E is DONE: the production-shaped UI
 lifecycle completed two serial Kafka runs successfully under an explicit
 30-minute test timeout, and the direct Kafka regression proved repeat apply
-`changed=0, failed=0`. UI-BE-04 overall is DONE; UI-01 remains separately
-gated.
+`changed=0, failed=0`. UI-BE-04 overall is DONE; documentation-only UI-01A is
+DONE and UI-01B remains separately gated.
 
 ## Established direction
 
@@ -504,6 +525,6 @@ desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
 DEVX-01, EXEC-01A, UI-BE-04B, UI-BE-04C, UI-BE-04D and UI-BE-04E are DONE.
-UI-BE-04 overall and EXEC-OBS-01 are DONE. Production UI-01 remains a
-separately authorized milestone over the accepted project/execution contracts
-and typed RunObserver subscriptions.
+UI-BE-04 overall, EXEC-OBS-01 and documentation-only UI-01A are DONE. UI-01B is
+the next separately authorized milestone over the accepted project/execution
+contracts and typed RunObserver subscriptions. UI-01 overall is not done.

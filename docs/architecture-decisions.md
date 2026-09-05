@@ -232,3 +232,64 @@ project, plan, private manifest, controller journal and unit identities; a PID
 alone is insufficient. Disconnect does not cancel a run. The Execution Node
 enforces one active mutating run per project and owns bounded journal, event
 replay, terminal-result, cancellation and interrupted-run recovery semantics.
+
+## ADR-024: Managed empty projects and complete-candidate first save
+
+Status: Accepted by UI-01A.
+
+Creating a project publishes only a schema-valid `project.yml`. It contains a
+generated stable identity, display name, desired-state contract, complete
+catalog/artifact locks from one verified local immutable bundle, and the
+lifecycle-immutable `platform.installer/managed-project: v1alpha1` consent
+label. It creates no
+inventory, variable files, implicit hosts or service deployments. The marker
+distinguishes an intentionally empty managed project from an incomplete
+external project; empty lifecycle status itself is derived and not persisted.
+
+For this UI creation profile, artifact lock digest is the verified SHA-256 of
+the bundle `manifest.yaml`, catalog lock digest is that manifest's catalog
+digest, and service locks come from the matching catalog. The UI submits only
+an opaque verified compatibility-source handle. This mapping is versioned as
+`ProjectCompatibilitySource/v1alpha1`; it does not settle general CONTRACT-01
+migration rules.
+
+The first save builds one complete temporary candidate containing fixed
+Installer-owned `ansible.cfg`, `inventory/hosts.yml`, managed group_vars and
+only required managed host_vars. Core validates the whole candidate with normal
+Ansible loading before an EditPlan can be committed. Planning changes zero
+canonical bytes. Commit rechecks project revision, existing document digests,
+planned absence, path ownership and symlink/reparse safety, then publishes all
+documents through the journaled atomic transaction.
+
+The fixed inventory has every declared server in `all.hosts` and
+`platform_targets`, no implicit localhost, and no runtime user or credential.
+The fixed project configuration selects that inventory and preserves the
+required merge, host-key-checking and interpreter policies without embedding
+workstation/runtime paths or privilege-escalation policy.
+
+Whole-file ownership of inventory and ansible.cfg is granted only by the
+managed-project marker and only when those paths do not already exist.
+Arbitrary/external projects remain read-only for inventory; adoption is a
+separate future decision. Unknown files and user-owned YAML are preserved.
+
+First save uses `project-edit/v1alpha2`, whose document preconditions represent
+both PRESENT+digest and ABSENT explicitly and whose path allow-list includes
+only the fixed managed project files. Project lifecycle, edit sessions and
+remote snapshot request are separately versioned typed application contracts;
+none exposes raw YAML, paths to Core, shell or generic SSH.
+
+Editor navigation and transient drafts do not require a current execution run,
+repository probe, RuntimeProjection or target facts. Because Python/Core do not
+run on the workstation, fresh configured-project interpretation and every
+review/commit use a fixed target-contact-free ProjectSnapshot operation on the
+operator-selected READY Execution Node. Unavailability blocks proof/save while
+retaining the draft; it never becomes PASS. Runtime credentials remain outside
+canonical project state. Execution progress reaches future React only through
+typed Go/RunObserver subscriptions.
+
+UI mutation remains disabled until the writer has OS-specific Windows reparse
+checks, safe runtime journal/recovery paths, bounded canonical-only candidate
+archives and strict runtime secret-reference values. Target credentials use one
+write-only, expiring session lease shared across targets; transporting its
+secret to an Execution Node is a separate fixed runtime operation and is never
+part of project save.

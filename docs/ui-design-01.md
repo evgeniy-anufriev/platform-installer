@@ -6,6 +6,19 @@ or a second project model.
 
 Static reference views are in [ui-design-01-mockups.html](ui-design-01-mockups.html).
 
+The 2026-09-05 [project creation design](ui-project-creation-design.md) extends
+the reference with a metadata-only new-project entry and empty states. UI-01A
+accepted its exact lifecycle and ownership boundaries in the
+[contract freeze](ui-01a-contract-freeze.md); no production implementation was
+added by that decision.
+
+Owner-approved mockup refinement (2026-09-05) supersedes the older navigation
+below: Topology precedes global Certificates and Services pages; Services
+shares its editor with the Topology entry;
+the project header carries name/path/edit state. One session credential applies
+to all target servers. Execution details are collapsed by default. The HTML
+includes an explicitly simulated create/edit/review/save flow, never disk writes.
+
 ## 1. Product principle
 
 Platform Installer is a visual editor and orchestrator for the same standard
@@ -33,14 +46,17 @@ Global navigation is a persistent vertical sidebar. Its primary items are:
 | Projects | project selection, path, compatible Core/catalog/payload and project health |
 | Servers | physical server inventory, transport and readiness |
 | Topology | service instances, placement, roles and entry-point configuration |
+| Certificates | PKI profile intent, Core-derived consumers/SAN preview; no runtime issuance |
+| Services | settings of the same topology deployments, including PKI profile references |
 | Installation | readiness, plan, current workflow and direct remediation |
 | Logs | historical runs, audit and sanitized diagnostics |
 | Help | offline help and troubleshooting entry point |
 | About | version and compatibility information |
 | Settings | application-local settings; never portable desired state |
 
-Installation has local navigation: **Summary**, **Preparation**, **Services**,
-**Certificates**, **Execution**. Topology is deliberately not duplicated there.
+Installation has local navigation: **Summary**, **Preparation**, **Plan**,
+**Execution**, **Result**. Topology, Certificates and Services are global pages, in that
+order; topology creates instances and placement before profile/settings editing.
 Findings and service rows link contextually to **Topology** or **Servers**,
 depending on whether the action changes placement or physical-host readiness.
 
@@ -177,7 +193,7 @@ cross-file transition is designed.
 
 **Configure service** in the By services view is a second navigation entry to
 the same schema-driven **Service settings** detail screen opened from
-Installation → Services. It does not create a topology-specific configuration
+the global Services page. It does not create a topology-specific configuration
 editor or a parallel save path.
 
 Containers remain a future application-runtime capability, not a global
@@ -197,9 +213,9 @@ current selected run. Neither page displays runtime secret values.
 | --- | --- |
 | Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |
 | Preparation | Execution Node selection/configuration entry point, desired prerequisites, observed readiness, planned preparation and result; it never changes service placement |
-| Services | service-independent deployment overview: selected deployment identity, mode, assigned roles and generic validation findings. Its only detail action is **Open service settings**, which opens the schema-driven service editor; this page does not render service-specific settings or terminology and does not duplicate placement editing from Topology |
-| Certificates | PKI-01 intent, calculated SAN/identity preview and read-only material state; it never exposes private keys, store passwords or raw runtime paths |
+| Plan | Core-owned action order, dependencies, deployments and exact target hosts, with Execution Node shown separately. Empty, stale and blocked plans are explicit; editing configuration invalidates approval. Generate remains on Summary; approval/start belongs to UI-02, not editor save. No per-task dry-run changes are invented before execution. |
 | Execution | active run progress, explicit confirmation state, safe task events and final PLAY RECAP; it is read-only for the active execution and does not parse/redact callback text in the frontend |
+| Result | Observed outcome for a specific runId/planId: successful, failed, skipped and unfinished actions, host-level results where reported, timings and verify outcome. Viewing does not rerun verify. Active runs have no final result; observer disconnect is not execution failure. |
 
 Preparation hides implementation detail in normal mode. Advanced mode may
 show checks such as SSH/elevation, package source and payload checks, but not
@@ -211,7 +227,7 @@ The editor is driven by the service manifest and generated configuration
 schema, never by a React service catalog. It has a service/deployment tree on
 the left and a schema-driven deployment editor on the right:
 
-The generic **Services** local page opens this editor through **Open service
+The global **Services** page opens this editor through **Open service
 settings** and provides a visible return to Services. The editor is a distinct
 detail screen, not an expanded middle pane of the generic overview. Its
 sections, fields, validation and help are declared by the selected service
