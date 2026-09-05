@@ -23,6 +23,27 @@ def subprocess_completed(returncode):
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_snapshot_uses_fixed_controller_playbook_and_removes_request_staging(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            Path(release, "catalog").mkdir()
+            journal = Journal(root, "run-1")
+            Path(journal.directory, "project", "inventory").mkdir(parents=True)
+            Path(journal.directory, "project", "inventory", "hosts.yml").write_text("all: {hosts: {}}\n", encoding="utf-8")
+            Path(journal.directory, "project", "project.yml").write_text("apiVersion: platform.installer/project/v2alpha1\n", encoding="utf-8")
+            snapshot = {"projectRevision": "sha256:" + "a" * 64, "status": "PASS"}
+
+            def completed(command, **kwargs):
+                self.assertIn("project-snapshot.yml", command[-3])
+                self.assertEqual("platform.core.project_snapshot_json", kwargs["env"]["ANSIBLE_CALLBACKS_ENABLED"])
+                self.assertEqual([], json.loads(Path(command[-1][1:]).read_text(encoding="utf-8"))["platform_installer_owned_paths"])
+                Path(kwargs["env"]["PLATFORM_PROJECT_SNAPSHOT_OUTPUT"]).write_text(json.dumps(snapshot), encoding="utf-8")
+                return subprocess_completed(0)
+
+            with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
+                result = execution_protocol.snapshot({"runId": "run-1", "runtimeRelease": {}}, root, release)
+            self.assertEqual(snapshot, result["projectSnapshot"])
+            self.assertFalse(Path(journal.directory).exists())
+
     def test_core_operation_returns_blocked_plan_without_manifest(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
             journal = Journal(root, "run-1")

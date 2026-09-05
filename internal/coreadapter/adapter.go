@@ -21,6 +21,7 @@ type Document struct {
 type Snapshot struct {
 	Status                 string                    `json:"status"`
 	Partial                bool                      `json:"partial"`
+	Project                map[string]any            `json:"project"`
 	ProjectRevision        string                    `json:"projectRevision"`
 	SnapshotFingerprint    string                    `json:"snapshotFingerprint"`
 	Documents              []Document                `json:"documents"`
@@ -34,6 +35,7 @@ type Snapshot struct {
 	Integrations           map[string]any            `json:"integrations"`
 	PKI                    map[string]any            `json:"pki"`
 	Validation             map[string]any            `json:"validation"`
+	Readiness              map[string]any            `json:"readiness"`
 	Findings               []map[string]any          `json:"findings"`
 	Raw                    json.RawMessage           `json:"-"`
 }

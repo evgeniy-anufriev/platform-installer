@@ -3,6 +3,8 @@ package executionnode
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -85,6 +87,44 @@ func TestRuntimeProtocolIsTypedAndNeverCarriesClientCommandMaterial(t *testing.T
 	if !strings.Contains(string(call.input), "StartExecution") {
 		t.Fatalf("semantic request missing: %s", call.input)
 	}
+}
+
+func TestBuildProjectSnapshotUsesFixedSemanticRequestAndBoundedResponse(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := &snapshotProtocolRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	snapshot, err := transport.BuildProjectSnapshot(context.Background(), testNode(), root, map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64)})
+	if err != nil || snapshot.ProjectRevision == "" {
+		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
+	}
+	request := runner.protocolRequest
+	if !strings.Contains(request, `"operation":"BuildProjectSnapshot"`) || strings.Contains(request, "playbook") || strings.Contains(request, "installerOwnedPaths") {
+		t.Fatalf("unsafe snapshot request: %s", request)
+	}
+	if got := runner.limits[len(runner.limits)-1]; got != maxProjectSnapshotResponseBytes {
+		t.Fatalf("response limit=%d", got)
+	}
+}
+
+type snapshotProtocolRunner struct {
+	protocolRunner
+	protocolRequest string
+}
+
+func (r *snapshotProtocolRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
+	if strings.Contains(string(input), `"operation":"BuildProjectSnapshot"`) {
+		r.protocolRequest = string(input)
+		return []byte(`{"projectSnapshot":{"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"PASS"}}`), nil
+	}
+	return r.protocolRunner.Run(ctx, name, args, input)
+}
+
+func (r *snapshotProtocolRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	r.limits = append(r.limits, limit)
+	return r.Run(ctx, name, args, input)
 }
 
 func TestGetEventsSendsBoundedPaginationRequest(t *testing.T) {

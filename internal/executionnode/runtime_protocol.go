@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"platform-installer/internal/artifactsource"
+	"platform-installer/internal/coreadapter"
 )
 
 func (t OpenSSHTransport) StageRuntimeProjection(ctx context.Context, node Node, runID, projectIdentity, planFingerprint, requirementsFingerprint string, projections map[string]map[string]artifactsource.Result, pkiSecretFiles map[string]string) error {
@@ -155,6 +156,7 @@ const maxObservedExecutionEvents = 2048
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
 const maxExecutionEventPageResponseBytes = 2 * 1024 * 1024
+const maxProjectSnapshotResponseBytes = 2 * 1024 * 1024
 const maxExecutionReleaseProbeBytes = 4 * 1024
 const maxExecutionStateProbeBytes = 64 * 1024
 
@@ -185,6 +187,40 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 		plan.executionID = runID
 	}
 	return plan, err
+}
+
+// BuildProjectSnapshot is a read-only, controller-only Core query. Its project
+// staging is owned by this one request and the Execution Node removes it after
+// replying; it never creates an execution manifest or lifecycle run.
+func (t OpenSSHTransport) BuildProjectSnapshot(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (*coreadapter.Snapshot, error) {
+	if projectRoot == "" || len(runtimeRelease) == 0 {
+		return nil, errors.New("PROJECT_SNAPSHOT_INPUT_INVALID")
+	}
+	runID := newRunID()
+	if err := t.stagePlanProject(ctx, node, projectRoot, runID); err != nil {
+		return nil, err
+	}
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{
+		"apiVersion": "platform.installer/execution-runtime/v1alpha1",
+		"operation":  "BuildProjectSnapshot", "runId": runID,
+		"runtimeRelease": runtimeRelease,
+	})
+	if err != nil {
+		return nil, err
+	}
+	value, ok := response["projectSnapshot"]
+	if !ok {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
+	data, err := json.Marshal(value)
+	if err != nil || len(data) > maxProjectSnapshotResponseBytes {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
+	snapshot, err := coreadapter.DecodeSnapshot(data)
+	if err != nil || snapshot.ProjectRevision == "" {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
+	return snapshot, nil
 }
 
 func (t OpenSSHTransport) stagePlanProject(ctx context.Context, node Node, projectRoot, runID string) error {
@@ -557,6 +593,8 @@ func (t OpenSSHTransport) runtimeProtocol(ctx context.Context, node Node, reques
 	responseLimit := maxExecutionProtocolResponseBytes
 	if request["operation"] == "GetEvents" {
 		responseLimit = maxExecutionEventPageResponseBytes
+	} else if request["operation"] == "BuildProjectSnapshot" {
+		responseLimit = maxProjectSnapshotResponseBytes
 	}
 	output, err := t.sshBounded(ctx, node, "sudo", args, payload, responseLimit)
 	var response map[string]any

@@ -545,8 +545,10 @@ streams. Live reconnect and CLI restart, real no_log/failure/degradation,
 Core/service/race/offline/security gates passed; reviews have 0 blocking
 findings. Commands and counts: `docs/exec-obs-01.md`.
 
-Documentation-only UI-01A is now DONE. UI-01B remains separately authorized;
-no production Wails/React implementation has started.
+UI-01A and UI-01B are DONE. UI-01B provides the production Wails/React
+read-only existing-project shell and its one fixed target-free Core snapshot
+operation; UI-01C is NEXT and no edit/save/project-creation implementation has
+started.
 
 ### DEVX-01: Codex engineering harness
 
@@ -621,7 +623,10 @@ UI-01A is DONE (documentation only): [contract preflight](ui-01a.md),
 [accepted freeze](ui-01a-contract-freeze.md), [reviews](ui-01a-review.md) and
 [QA](ui-01a-qa.md). Empty-project, first-write/inventory ownership, typed
 command, selected Execution Node validation and frontend toolchain decisions are
-closed. UI-01B is NEXT and separately authorized; UI-01 overall is NOT DONE.
+closed. UI-01B is DONE: native folder selection, a verified immutable runtime,
+READY Execution Node handshake and Core-authoritative read-only snapshot were
+accepted without canonical-project mutation. UI-01C is NEXT; UI-01 overall is
+NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

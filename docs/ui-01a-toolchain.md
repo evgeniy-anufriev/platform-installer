@@ -9,7 +9,7 @@ UI-01B and must be checked again against security advisories then.
 | Component | Supported/pinned policy | Reason |
 | --- | --- | --- |
 | Wails | v2.15.0 CLI and Go module, exact | Current stable v2 docs and installed doctor; generated bindings and embedded frontend |
-| Go | module minimum 1.24; CI baseline latest 1.24 patch; newer supported after gates | Existing `go.mod` remains authority; workstation Go 1.26.7 is accepted, not a new module minimum |
+| Go | module minimum 1.25.0; CI baseline latest 1.25 patch; newer supported after gates | Wails v2.15.0 itself requires Go 1.25.0; workstation Go 1.26.7 is accepted |
 | Node.js | 24 LTS; `>=24.19.0 <25` | LTS line, satisfies Vite/Vitest/ESLint; no Current/EOL line |
 | npm | 11.17.0 exact through `packageManager`; committed `package-lock.json` | Already available; one package manager and deterministic `npm ci` |
 | React / React DOM | 19.2.8 exact | Current stable React 19.2 patch at audit |

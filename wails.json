@@ -1,0 +1,10 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Platform Installer",
+  "outputfilename": "platform-installer-ui",
+  "frontend:install": "npm.cmd ci",
+  "frontend:build": "npm.cmd run build",
+  "frontend:dev:install": "npm.cmd ci",
+  "frontend:dev:serverUrl": "auto",
+  "frontend:dev:command": "npm.cmd run dev"
+}

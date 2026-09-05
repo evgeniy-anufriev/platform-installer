@@ -38,6 +38,7 @@ bin/
 
 # Frontend dependencies
 node_modules/
+frontend/package.json.md5
 
 # OS/editor metadata
 .DS_Store

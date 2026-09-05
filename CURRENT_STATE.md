@@ -2,9 +2,10 @@
 
 ## UI-01A completion (2026-09-05)
 
-UI-01A is DONE as a documentation/contract milestone. UI-01 overall remains NOT
-DONE; UI-01B is NEXT and requires an explicit owner request. No Wails/React
-scaffold, production UI method, Core change or writer change was introduced.
+UI-01A and UI-01B are DONE. UI-01 overall remains NOT DONE; UI-01C is NEXT and
+requires an explicit owner request. UI-01B adds only the Wails/React read-only
+shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
+edit/session, candidate, save or apply path.
 
 The accepted freeze is `docs/ui-01a-contract-freeze.md`; toolchain, mockup
 reconciliation, reviews and QA are recorded in the adjacent `ui-01a-*`
@@ -38,8 +39,10 @@ Kafka/PKI, Go/race/vet, reproducibility, offline validation and secret audits
 passed; both reviews have 0 blocking findings. See `docs/exec-obs-01.md` for
 exact commands, test counts, durations and performance measurement limits.
 
-UI-01A is the completed documentation freeze; UI-01B remains separately
-authorized. React/Wails has not been implemented.
+UI-01A is the completed documentation freeze. UI-01B is DONE: its native
+Windows Wails shell opens an existing project read-only through a READY
+Execution Node and Core's fixed target-free ProjectSnapshot operation. UI-01C
+is NEXT; no edit/save or project-creation work has started.
 
 ## Phase
 

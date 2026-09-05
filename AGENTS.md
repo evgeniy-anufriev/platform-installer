@@ -24,8 +24,11 @@ UI-BE-04D and UI-BE-04E are complete; UI-BE-04 overall is DONE.
 EXEC-OBS-01 is DONE: the managed Ansible callback, paginated events, typed
 RunObserver and Installer-side event mirror/CLI passed real Kafka acceptance.
 See `docs/exec-obs-01.md` for operator commands and evidence. UI-01A is DONE as
-a documentation-only contract freeze. UI-01B is NEXT but must not begin without
-an explicit owner request. Do not begin another production service implicitly.
+a documentation-only contract freeze. UI-01B is DONE: its Wails/React
+read-only existing-project slice uses only the fixed remote
+`BuildProjectSnapshot` protocol. UI-01C is NEXT; edit/save/session/candidate/
+writer work remains UI-01D. Do not begin UI-01C or another production service
+implicitly.
 
 Until that request is made, preserve the established standalone Ansible Core
 contracts, Ansible-native desired-state ownership, managed Kafka/PKI
@@ -137,8 +140,8 @@ reproducible. Its source of truth is the catalog manifests plus
 `ansible-core/tools/build_fixture_catalog.py`.
 
 The current milestone decision is recorded in `CURRENT_STATE.md`: DEVX-01,
-EXEC-01A, UI-BE-04 overall, EXEC-OBS-01 and documentation-only UI-01A are DONE.
-UI-01B is NEXT and separately gated. PostgreSQL behavior
+EXEC-01A, UI-BE-04 overall, EXEC-OBS-01, UI-01A and UI-01B are DONE. UI-01C is
+NEXT and separately gated. PostgreSQL behavior
 must not be inferred from the completed PKI-01 foundation; its role must
 consume explicit PKI materialization plans at runtime.
 

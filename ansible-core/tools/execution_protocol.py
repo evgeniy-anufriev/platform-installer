@@ -10,6 +10,7 @@ import argparse
 import fcntl
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,7 +18,7 @@ import tempfile
 from execution_lifecycle import ACTIVE, Journal, LifecycleError, digest, recover, validate_ownership
 
 
-OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution")
+OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution")
 
 
 class CoreOperationError(LifecycleError):
@@ -116,6 +117,9 @@ def core_operation(value, state_root, runtime_release, operation):
     if operation == "ValidateProject":
         playbook, inventory = "validate.yml", os.path.join(project, "inventory", "hosts.yml")
         extra = {"platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_validation_artifact": os.path.join(journal.directory, "validation.json")}
+    elif operation == "BuildProjectSnapshot":
+        playbook, inventory = "project-snapshot.yml", os.path.join(project, "inventory", "hosts.yml")
+        extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_installer_owned_paths": []}
     else:
         # Core remains target-free (the playbook runs on localhost), but it must
         # load the staged project inventory so snapshot receives its canonical
@@ -127,10 +131,20 @@ def core_operation(value, state_root, runtime_release, operation):
     try:
         os.write(descriptor, json.dumps(extra, ensure_ascii=True, sort_keys=True).encode("utf-8")); os.close(descriptor)
         os.chmod(vars_path, 0o600)
-        environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
+        if operation == "BuildProjectSnapshot":
+            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json", PLATFORM_PROJECT_SNAPSHOT_OUTPUT=os.path.join(journal.directory, "project-snapshot.json"))
+        else:
+            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         command = ["ansible-playbook", "-i", inventory, os.path.join(release, "ansible-core", "playbooks", playbook), "-e", "@" + vars_path]
         completed = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=environment)
         if completed.returncode:
+            if operation == "BuildProjectSnapshot":
+                snapshot_path = os.path.join(journal.directory, "project-snapshot.json")
+                if os.path.isfile(snapshot_path) and not os.path.islink(snapshot_path):
+                    with open(snapshot_path, "r", encoding="utf-8") as stream:
+                        snapshot_error = json.load(stream)
+                    if isinstance(snapshot_error, dict) and isinstance(snapshot_error.get("adapterError"), dict):
+                        raise CoreOperationError(snapshot_error["adapterError"].get("code") or "PROJECT_SNAPSHOT_FAILED", {"findings": [snapshot_error["adapterError"]]})
             diagnostic = None
             if os.path.isfile(diagnostic_path) and not os.path.islink(diagnostic_path):
                 with open(diagnostic_path, "r", encoding="utf-8") as stream:
@@ -139,6 +153,17 @@ def core_operation(value, state_root, runtime_release, operation):
             raise CoreOperationError(code or "CORE_OPERATION_FAILED", diagnostic)
     finally:
         if os.path.exists(vars_path): os.unlink(vars_path)
+    if operation == "BuildProjectSnapshot":
+        snapshot_path = os.path.join(journal.directory, "project-snapshot.json")
+        if not os.path.isfile(snapshot_path) or os.path.islink(snapshot_path):
+            raise LifecycleError("PROJECT_SNAPSHOT_RESPONSE_MISSING")
+        with open(snapshot_path, "r", encoding="utf-8") as stream:
+            snapshot = json.load(stream)
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("adapterError"), dict):
+            raise CoreOperationError(snapshot["adapterError"].get("code") or "PROJECT_SNAPSHOT_FAILED", {"findings": [snapshot["adapterError"]]})
+        if not isinstance(snapshot, dict) or not snapshot.get("projectRevision"):
+            raise LifecycleError("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+        return {"projectSnapshot": snapshot}
     if operation == "BuildDeploymentPlan":
         with open(os.path.join(journal.directory, "deployment-plan.json"), "r", encoding="utf-8") as stream:
             plan = json.load(stream)
@@ -149,6 +174,16 @@ def core_operation(value, state_root, runtime_release, operation):
         with open(os.path.join(journal.directory, "manifest.json"), "r", encoding="utf-8") as stream:
             return {"deploymentPlan": plan, "executionManifestDigest": digest(json.load(stream))}
     return {"validation": "PASS"}
+
+
+def snapshot(value, state_root, runtime_release):
+    """Return a Core snapshot and remove the request-owned staging directory."""
+    journal = Journal(state_root, value["runId"])
+    try:
+        return core_operation(value, state_root, runtime_release, "BuildProjectSnapshot")
+    finally:
+        if os.path.isdir(journal.directory) and not os.path.islink(journal.directory):
+            shutil.rmtree(journal.directory)
 
 
 def get(value, state_root):
@@ -208,6 +243,7 @@ def main():
     operation = value["operation"]
     if operation == "GetCapabilities": return reply({"supportedOperations": list(OPERATIONS)})
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
+    if operation == "BuildProjectSnapshot": return reply(snapshot(value, args.state_root, args.runtime_release))
     if operation == "StartExecution": return reply(start(value, args.state_root, args.runtime_release, args.controller, args.bundle_digest))
     if operation == "GetExecution": return reply(get(value, args.state_root))
     if operation == "GetEvents": return reply(events(value, args.state_root))

@@ -18,7 +18,7 @@ class ExecutionCapabilitiesTests(unittest.TestCase):
             "bundleDigest": "sha256:" + "c" * 64,
         }, "0.1.0")
         self.assertEqual("ExecutionCapabilities", result["kind"])
-        self.assertEqual(["GetCapabilities", "ValidateProject", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"], result["supportedOperations"])
+        self.assertEqual(["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"], result["supportedOperations"])
         self.assertNotIn("secrets", str(result).lower())
 
     def test_incomplete_runtime_identity_is_blocked(self):

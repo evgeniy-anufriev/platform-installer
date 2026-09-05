@@ -334,10 +334,13 @@ call repository probe, source
 resolution, RuntimeProjection, deployment planning or execution lifecycle.
 
 The existing local `coreadapter.CommandAdapter` is retained for standalone RED
-OS tests. UI-01D adds a second implementation over a fixed structured remote
-`BuildProjectSnapshot` operation returning the same snapshot contract. It is
-not a generic command/SSH API. Request includes project candidate, approved
-owned logical paths and contract versions; diagnostics are bounded and safe.
+OS tests. UI-01B adds a second implementation over a fixed structured remote
+`BuildProjectSnapshot` operation returning the same snapshot contract for an
+existing project only. It is not a generic command/SSH API: the request carries
+no command, candidate, owned-path classification or mutation intent; the node
+uses an empty owned-path set and removes request staging after the response.
+Diagnostics are bounded and safe. UI-01D alone adds candidates, ownership,
+review, commit and rollback.
 
 Behavior without a usable validation binding:
 
