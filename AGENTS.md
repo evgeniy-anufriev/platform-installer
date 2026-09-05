@@ -111,6 +111,17 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
 - Always start with `AGENTS.md` and `CURRENT_STATE.md`.
 - Read only architecture and contract documentation relevant to the task.
 - Prefer targeted searches and symbols before opening full files.
+- `vendor/**` is third-party/generated dependency content. Do not recursively
+  enumerate, grep/search, review, summarize, inspect or edit `vendor/**` in
+  ordinary repository passes. Repository-wide searches MUST explicitly exclude
+  it, for example: `rg <pattern> -g '!vendor/**'`. Do not run recursive
+  `Get-ChildItem` or `find` through `vendor/**` without a narrow reason.
+  Build and test tools may use `vendor/**` automatically. A single known file
+  under `vendor/**` MAY be read only when the user explicitly requests
+  dependency-source research or a concrete build/runtime failure requires that
+  narrow inspection; even then, never perform a full recursive vendor scan.
+  Exclude `vendor/**` from architecture, security, TODO, secret and
+  code-quality scans.
 - Do not inspect `ansible-core/**/_vendor/**` by default; inspect vendored tests
   or benchmarks only for dependency validation or vendor maintenance.
 - Do not read all fixtures when one representative fixture and targeted search
