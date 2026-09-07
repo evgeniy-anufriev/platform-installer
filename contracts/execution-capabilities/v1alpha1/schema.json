@@ -20,7 +20,8 @@
       },
       "additionalProperties": false
     },
-    "supportedOperations": {"type": "array", "items": {"enum": ["GetCapabilities", "ValidateProject", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"]}, "uniqueItems": true}
+    "supportedOperations": {"type": "array", "items": {"enum": ["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"]}, "uniqueItems": true},
+    "projectSnapshotRequestVersions": {"type": "array", "items": {"const": "platform.installer/project-snapshot-request/v1alpha1"}, "uniqueItems": true}
   },
   "additionalProperties": false
 }

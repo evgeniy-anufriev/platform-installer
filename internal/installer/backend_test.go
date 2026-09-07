@@ -348,13 +348,11 @@ func TestShadowingPathSymlinkAndProjectLock(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	lock := runtimePath(root, "project-writer.lock")
-	if err := os.MkdirAll(filepath.Dir(lock), 0o700); err != nil {
+	releaseLock, err := acquireWriterLock(t.Context(), root, 0)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(lock, []byte("busy"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	defer releaseLock()
 	backend.lockWait = 10 * time.Millisecond
 	adapter.shadow = false
 	revision = revisionForTest(t, adapter, root)
@@ -424,9 +422,11 @@ func TestMultiDocumentTransactionSuccessAndRollback(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("transaction artifacts remain: %#v", entries)
 	}
-	if _, err := os.Stat(runtimePath(root, "project-writer.lock")); !os.IsNotExist(err) {
-		t.Fatal("writer lock remains")
+	secondRelease, err := acquireWriterLock(t.Context(), root, 0)
+	if err != nil {
+		t.Fatalf("writer lock was not released: %v", err)
 	}
+	secondRelease()
 	result = backend.CommitEditPlan(context.Background(), plan.PlanID)
 	if result.Status != "COMMITTED" {
 		t.Fatalf("transaction retry failed: %#v", result)
@@ -483,18 +483,36 @@ func TestRecoverInterruptedTransaction(t *testing.T) {
 	defer cleanup()
 	path := filepath.Join(root, filepath.FromSlash(desiredDocument))
 	original, _ := os.ReadFile(path)
-	directory := runtimePath(root, "edit-transactions", "orphan")
+	_, beforeDigest, beforeIdentity, err := inspectWriterFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeSecurity := mustCaptureCanonicalSecurity(t, path)
+	identifier := strings.Repeat("a", 32)
+	directory := runtimePath(root, "edit-transactions", identifier)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(directory, "000.before"), original, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("partial"), 0o600); err != nil {
+	partial := []byte("partial")
+	temporaryPath := filepath.Join(filepath.Dir(path), ".crash-output")
+	if err := os.WriteFile(temporaryPath, partial, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	journal := transactionJournal{TransactionID: "orphan", Phase: "REPLACING", Replacing: 0,
-		Documents: []transactionDocument{{LogicalPath: desiredDocument, Existed: true, Mode: 0o600, Backup: "000.before"}}}
+	mustApplyCanonicalSecurity(t, temporaryPath, beforeSecurity)
+	_, _, outputIdentity, err := inspectWriterFile(temporaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicReplace(temporaryPath, path); err != nil {
+		t.Fatal(err)
+	}
+	journal := transactionJournal{TransactionID: identifier, Phase: "REPLACING", Replacing: 0, Published: 0,
+		Documents: []transactionDocument{{LogicalPath: desiredDocument, Existed: true, Mode: 0o600,
+			Backup: "000.before", Temporary: ".platform-installer-" + identifier + "-000.tmp",
+			BeforeDigest: beforeDigest, BeforeIdentity: beforeIdentity, BeforeSecurity: beforeSecurity, AfterDigest: digestBytes(partial), OutputIdentity: outputIdentity}}}
 	content, _ := json.Marshal(journal)
 	if err := os.WriteFile(filepath.Join(directory, "journal.json"), content, 0o600); err != nil {
 		t.Fatal(err)

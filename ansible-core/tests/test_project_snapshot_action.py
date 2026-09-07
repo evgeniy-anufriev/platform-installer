@@ -11,6 +11,25 @@ from ansible_collections.platform.core.plugins.action.project_snapshot import Ac
 
 
 class ProjectSnapshotActionTests(unittest.TestCase):
+    def test_provenance_does_not_parse_ansible_config_as_yaml(self):
+        action = object.__new__(ActionModule)
+        loaded = []
+
+        def load(path, required=False):
+            del required
+            loaded.append(path)
+            return {"platform_desired_state": {"serviceDeployments": {}}}
+
+        action._load = load
+        documents = [
+            {"logicalPath": "ansible.cfg", "revisionIncluded": True},
+            {"logicalPath": "inventory/group_vars/all/platform-installer.yml", "revisionIncluded": True},
+        ]
+        desired, placements = action._provenance_sources("/project", documents, ["node1"])
+        self.assertEqual("inventory/group_vars/all/platform-installer.yml", desired)
+        self.assertEqual({"node1": None}, placements)
+        self.assertEqual(["/project/inventory/group_vars/all/platform-installer.yml"], loaded)
+
     def test_published_catalog_service_reference_resolves_inside_bundle(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

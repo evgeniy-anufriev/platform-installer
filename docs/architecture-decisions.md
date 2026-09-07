@@ -293,3 +293,32 @@ archives and strict runtime secret-reference values. Target credentials use one
 write-only, expiring session lease shared across targets; transporting its
 secret to an Execution Node is a separate fixed runtime operation and is never
 part of project save.
+
+## ADR-025: Execution Node is global application context
+
+Status: Accepted by the UI architecture update, 2026-09-05.
+
+Execution Node selection, readiness, capability, bootstrap and activation are
+Installer application/runtime context. They are not portable desired state and
+must not be written to `project.yml`, `inventory/hosts.yml`, `group_vars` or
+`host_vars` as an Installer-only role. A project may be opened on another
+workstation and use another Execution Node. Supported local Linux still uses
+the same Execution Node semantic interface; it is not a workstation bypass.
+
+The global shell shows the current Execution Node state on every project page.
+Servers owns a persistent bottom Execution Node panel, while the ordinary
+target-server list scrolls independently. Selection is deterministic: explicit
+user choice, eligible local Linux, first eligible project server once, then
+`NOT_CONFIGURED`. Later sorting, filtering, additions or removal do not silently
+switch a previously selected node; replacement is explicit.
+
+Before the first READY node, Project and Servers remain available and Services,
+Topology, Certificates and Installation remain visible but locked. Temporary
+loss of a previously prepared node retains the current page and transient edit
+session, but blocks Review, Save/Commit, DeploymentPlan and Installation. It
+does not discard draft state or claim validation success.
+
+Servers/application lifecycle owns selection, host-key trust, bootstrap,
+runtime preparation and activation through EXEC-01A. Installation owns only
+the deployment lifecycle and requires READY, saved canonical state, no unsaved
+changes and authoritative non-stale Core validation for the current revision.

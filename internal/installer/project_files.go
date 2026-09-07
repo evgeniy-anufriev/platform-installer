@@ -31,15 +31,31 @@ func cleanRoot(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resolved, err := filepath.EvalSymlinks(absolute)
-	if err != nil {
-		return "", blocked("PROJECT_PATH_INVALID", "Project root cannot be resolved", "projectRoot")
+	absolute = filepath.Clean(absolute)
+	if err := assertSafeExistingAncestors(absolute); err != nil {
+		return "", err
 	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.IsDir() {
+	info, err := os.Lstat(absolute)
+	if err != nil || !info.IsDir() || pathEntryUnsafe(info) {
 		return "", blocked("PROJECT_PATH_INVALID", "Project root is not a directory", "projectRoot")
 	}
-	return filepath.Clean(resolved), nil
+	return absolute, nil
+}
+
+func assertSafeExistingAncestors(path string) error {
+	for current := filepath.Clean(path); ; current = filepath.Dir(current) {
+		info, err := os.Lstat(current)
+		if err != nil {
+			return blocked("PROJECT_PATH_INVALID", "Project path cannot be inspected", "projectRoot")
+		}
+		if pathEntryUnsafe(info) {
+			return blocked("PATH_UNSAFE", "Project path contains a symlink or reparse point", "projectRoot")
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil
+		}
+	}
 }
 
 func logicalPath(path string) string { return filepath.ToSlash(path) }
@@ -68,7 +84,7 @@ func safeProjectPath(root, logical string, allowMissing bool) (string, error) {
 			}
 			return "", blocked("WRITE_OWNERSHIP_REQUIRED", "Installer-owned document does not exist", "document")
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if pathEntryUnsafe(info) {
 			return "", blocked("PATH_UNSAFE", "Managed document path contains a symlink or reparse point", "document.logicalPath")
 		}
 		if index < len(parts)-1 && !info.IsDir() {
@@ -142,12 +158,23 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 	return documents, digestBytes(revisionInput), nil
 }
 
+// ProjectRevision returns the canonical raw-byte revision used to bind an edit
+// session. It does not parse or mutate project content.
+func ProjectRevision(root string) (string, error) {
+	clean, err := cleanRoot(root)
+	if err != nil {
+		return "", err
+	}
+	_, revision, err := collectProjectDocuments(clean)
+	return revision, err
+}
+
 func managedHostDocument(hostID string) string {
 	return "inventory/host_vars/" + hostID + "/platform-installer.yml"
 }
 
 func discoverOwnedPaths(root string) ([]string, error) {
-	paths := []string{desiredDocument}
+	paths := []string{"ansible.cfg", "inventory/hosts.yml", desiredDocument}
 	hostRoot := filepath.Join(root, "inventory", "host_vars")
 	entries, err := os.ReadDir(hostRoot)
 	if err != nil && !os.IsNotExist(err) {
@@ -171,7 +198,11 @@ func discoverOwnedPaths(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if strings.HasPrefix(string(content), string(managedHeader)) {
+		ownedHeader := managedHeader
+		if logical == "ansible.cfg" {
+			ownedHeader = managedConfigHeader
+		}
+		if strings.HasPrefix(string(content), string(ownedHeader)) {
 			owned = append(owned, logical)
 		}
 	}
@@ -197,16 +228,16 @@ func copyProject(source string) (string, func(), error) {
 		if relative == ".git" || relative == ".runtime" {
 			return filepath.SkipDir
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if pathEntryUnsafe(info) {
 			return blocked("PATH_UNSAFE", "Staged projects must not contain symlinks", "project")
 		}
 		target := filepath.Join(destination, relative)
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
 		}
 		input, err := os.Open(path)
 		if err != nil {

@@ -6,10 +6,15 @@ package executionnode
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -150,6 +155,33 @@ type ExecutionEventPage struct {
 	HistoryTruncated bool             `json:"historyTruncated,omitempty"`
 }
 
+type CandidateProjectSnapshotRequest struct {
+	RequestID                  string
+	ProjectIdentity            string
+	CandidateProjectRevision   string
+	ArtifactLockDigest         string
+	CatalogLockDigest          string
+	InstallerOwnedLogicalPaths []string
+}
+
+var candidateOwnedPathPattern = regexp.MustCompile(`^(ansible\.cfg|inventory/hosts\.yml|inventory/group_vars/all/platform-installer\.yml|inventory/host_vars/[a-z0-9][a-z0-9-]{0,62}/platform-installer\.yml)$`)
+var candidateIdentityPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
+
+func validLowerHex(value string, size int) bool {
+	if len(value) != size {
+		return false
+	}
+	for _, item := range value {
+		if (item < '0' || item > '9') && (item < 'a' || item > 'f') {
+			return false
+		}
+	}
+	return true
+}
+func validSHA256(value string) bool {
+	return strings.HasPrefix(value, "sha256:") && validLowerHex(strings.TrimPrefix(value, "sha256:"), 64)
+}
+
 const ExecutionEventPageLimit = 256
 const maxObservedExecutionEvents = 2048
 
@@ -170,8 +202,11 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	if projectRoot == "" || len(runtimeRelease) == 0 {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
 	}
-	runID := newRunID()
-	if err := t.stagePlanProject(ctx, node, projectRoot, runID); err != nil {
+	runID, err := newRunID()
+	if err != nil {
+		return DeploymentPlan{}, err
+	}
+	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "plan"); err != nil {
 		return DeploymentPlan{}, err
 	}
 	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildDeploymentPlan", "runId": runID, "project": "/var/lib/platform-installer/execution/runs/" + runID + "/project", "runtimeRelease": runtimeRelease})
@@ -196,8 +231,11 @@ func (t OpenSSHTransport) BuildProjectSnapshot(ctx context.Context, node Node, p
 	if projectRoot == "" || len(runtimeRelease) == 0 {
 		return nil, errors.New("PROJECT_SNAPSHOT_INPUT_INVALID")
 	}
-	runID := newRunID()
-	if err := t.stagePlanProject(ctx, node, projectRoot, runID); err != nil {
+	runID, err := newRunID()
+	if err != nil {
+		return nil, err
+	}
+	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "snapshot"); err != nil {
 		return nil, err
 	}
 	response, err := t.runtimeProtocol(ctx, node, map[string]any{
@@ -223,29 +261,188 @@ func (t OpenSSHTransport) BuildProjectSnapshot(ctx context.Context, node Node, p
 	return snapshot, nil
 }
 
-func (t OpenSSHTransport) stagePlanProject(ctx context.Context, node Node, projectRoot, runID string) error {
+// BuildCandidateProjectSnapshot proves a complete transient candidate through
+// a separately negotiated fixed request. Older read-only snapshot runtimes are
+// never treated as candidate-capable.
+func (t OpenSSHTransport) BuildCandidateProjectSnapshot(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, request CandidateProjectSnapshotRequest) (*coreadapter.Snapshot, error) {
+	if request.RequestID == "" {
+		value := make([]byte, 16)
+		if _, err := rand.Read(value); err != nil {
+			return nil, err
+		}
+		request.RequestID = hex.EncodeToString(value)
+	}
+	ownedSeen := make(map[string]bool)
+	ownedValid := len(request.InstallerOwnedLogicalPaths) <= 1026
+	for _, logical := range request.InstallerOwnedLogicalPaths {
+		if !candidateOwnedPathPattern.MatchString(logical) || ownedSeen[logical] {
+			ownedValid = false
+		}
+		ownedSeen[logical] = true
+	}
+	if projectRoot == "" || len(runtimeRelease) == 0 || !validLowerHex(request.RequestID, 32) || !candidateIdentityPattern.MatchString(request.ProjectIdentity) || !validSHA256(request.CandidateProjectRevision) || !validSHA256(request.ArtifactLockDigest) || !validSHA256(request.CatalogLockDigest) || !ownedValid {
+		return nil, errors.New("PROJECT_SNAPSHOT_INPUT_INVALID")
+	}
+	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
+	if err != nil {
+		return nil, err
+	}
+	if !candidateSnapshotCapabilitySupported(capabilities) {
+		return nil, errors.New("PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED")
+	}
+	runID, err := newRunID()
+	if err != nil {
+		return nil, err
+	}
+	archiveDigest, err := t.stageCandidateProject(ctx, node, projectRoot, runID, request.RequestID)
+	if err != nil {
+		return nil, err
+	}
+	defer t.cleanupSnapshotStaging(node, runID, request.RequestID, archiveDigest)
+	payload := map[string]any{
+		"apiVersion": "platform.installer/project-snapshot-request/v1alpha1", "kind": "BuildProjectSnapshotRequest",
+		"requestId": request.RequestID, "projectIdentity": request.ProjectIdentity,
+		"candidateProjectRevision": request.CandidateProjectRevision, "projectArchiveDigest": archiveDigest,
+		"artifactLockDigest": request.ArtifactLockDigest, "catalogLockDigest": request.CatalogLockDigest,
+		"installerOwnedLogicalPaths": request.InstallerOwnedLogicalPaths,
+		"projectContract":            "v2alpha1", "snapshotContract": "v1alpha1", "editContract": "v1alpha2",
+	}
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildProjectSnapshot", "runId": runID, "runtimeRelease": runtimeRelease, "snapshotRequest": payload})
+	if err != nil {
+		return nil, err
+	}
+	value, ok := response["projectSnapshot"]
+	if !ok {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
+	data, err := json.Marshal(value)
+	if err != nil || len(data) > maxProjectSnapshotResponseBytes {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
+	snapshot, err := coreadapter.DecodeSnapshot(data)
+	if err != nil || snapshot.ProjectRevision != request.CandidateProjectRevision {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
+	return snapshot, nil
+}
+
+func (t OpenSSHTransport) CheckCandidateProjectSnapshotCapability(ctx context.Context, node Node, expectedRuntime map[string]any) error {
+	expectedDigest, _ := expectedRuntime["bundleDigest"].(string)
+	if !validSHA256(expectedDigest) {
+		return errors.New("PROJECT_SNAPSHOT_INPUT_INVALID")
+	}
+	active, err := t.sshBounded(ctx, node, "sudo", []string{"-n", "cat", "/var/lib/platform-installer/runtime/state/active"}, nil, maxExecutionStateProbeBytes)
+	if err != nil {
+		return &ExecutionError{Code: ExecutionNodeUnavailable}
+	}
+	if parseFacts(string(active))["BUNDLE_DIGEST"] != expectedDigest {
+		return errors.New("EXECUTION_RUNTIME_RELEASE_CHANGED")
+	}
+	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
+	if err != nil {
+		return err
+	}
+	if candidateSnapshotCapabilitySupported(capabilities) {
+		return nil
+	}
+	return errors.New("PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED")
+}
+
+func candidateSnapshotCapabilitySupported(capabilities map[string]any) bool {
+	contains := func(value any, expected string) bool {
+		items, ok := value.([]any)
+		if !ok {
+			return false
+		}
+		for _, item := range items {
+			if item == expected {
+				return true
+			}
+		}
+		return false
+	}
+	return contains(capabilities["supportedOperations"], "BuildProjectSnapshot") &&
+		contains(capabilities["projectSnapshotRequestVersions"], "platform.installer/project-snapshot-request/v1alpha1")
+}
+
+func (t OpenSSHTransport) cleanupSnapshotStaging(node Node, runID, requestID, archiveDigest string) {
+	if !validRuntimeToken(runID) || !validLowerHex(requestID, 32) || !validSHA256(archiveDigest) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	script := "set -eu\ncase \"$1:$2:$3\" in installer-*:[0-9a-f][0-9a-f]*:sha256:*) ;; *) exit 64;; esac\nruntime=$(sudo -n readlink -f /var/lib/platform-installer/runtime/current)\ncase \"$runtime\" in /var/lib/platform-installer/runtime/releases/*) ;; *) exit 64;; esac\nsudo -n env PYTHONPATH=\"$runtime/ansible-core/tools\" python3 \"$runtime/ansible-core/tools/execution_protocol.py\" --runtime-release \"$runtime\" --controller \"$runtime/ansible-core/tools/execution_controller.py\" --cleanup-snapshot-run-id \"$1\" --cleanup-request-id \"$2\" --cleanup-archive-digest \"$3\" >/dev/null\ntemporary=/var/tmp/platform-installer/execution-plan/$1\ncase \"$temporary\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nrm -rf -- \"$temporary\"\n"
+	_, _ = t.ssh(ctx, node, "sh", []string{"-s", "--", runID, requestID, archiveDigest}, []byte(script))
+}
+
+func (t OpenSSHTransport) cleanupSnapshotUpload(node Node, runID string) {
+	if !validRuntimeToken(runID) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	script := "set -eu\ncase \"$1\" in installer-*) ;; *) exit 64;; esac\ntemporary=/var/tmp/platform-installer/execution-plan/$1\ncase \"$temporary\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nrm -rf -- \"$temporary\"\n"
+	_, _ = t.ssh(ctx, node, "sh", []string{"-s", "--", runID}, []byte(script))
+}
+
+func (t OpenSSHTransport) stagePlanProject(ctx context.Context, node Node, projectRoot, runID, purpose string) error {
 	archive, err := createProjectArchive(projectRoot)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(archive)
+	_, err = t.stageProjectArchive(ctx, node, archive, runID, purpose, "")
+	return err
+}
+
+func (t OpenSSHTransport) stageCandidateProject(ctx context.Context, node Node, projectRoot, runID, requestID string) (string, error) {
+	archive, err := createCandidateProjectArchive(projectRoot)
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(archive)
+	return t.stageProjectArchive(ctx, node, archive, runID, "candidate", requestID)
+}
+
+func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, archive, runID, purpose, requestID string) (string, error) {
+	archiveFile, err := os.Open(archive)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.New()
+	_, copyErr := io.Copy(digest, archiveFile)
+	closeErr := archiveFile.Close()
+	if copyErr != nil {
+		return "", copyErr
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	archiveDigest := "sha256:" + hex.EncodeToString(digest.Sum(nil))
 	identity, err := t.Identity.IdentityFile(node.CredentialRef)
 	if err != nil {
-		return err
+		return "", err
 	}
 	remote := "/var/tmp/platform-installer/execution-plan/" + runID
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nsudo -n rm -rf -- \"$1\"\nmkdir -p -- \"$1\"\n")); err != nil {
-		return &ExecutionError{Code: ExecutionNodeUnavailable}
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\numask 077\nmkdir -- \"$1\"\n")); err != nil {
+		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
+	owned := true
+	defer func() {
+		if owned {
+			t.cleanupSnapshotUpload(node, runID)
+		}
+	}()
 	args := append(t.scpBase(node, identity), "-O", "--", archive, t.destination(node, remote+"/project.tar"))
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
-		return &ExecutionError{Code: ExecutionNodeUnavailable}
+		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
-	script := "set -eu\nrun=$1; archive=$2\ncase \"$run\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\ncase \"$archive\" in \"$run/project.tar\") ;; *) exit 64;; esac\nsudo -n install -d -m 0700 /var/lib/platform-installer/execution/runs/$3/project\nsudo -n tar -xf \"$archive\" -C /var/lib/platform-installer/execution/runs/$3/project\nsudo -n rm -f -- \"$archive\"\nrm -rf -- \"$run\"\n"
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote, remote + "/project.tar", runID}, []byte(script)); err != nil {
-		return &ExecutionError{Code: ExecutionNodeUnavailable}
+	script := "set -eu\nrun=$1; archive=$2; run_id=$3; expected=$4; purpose=$5; request_id=$6\ncase \"$run\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\ncase \"$archive\" in \"$run/project.tar\") ;; *) exit 64;; esac\ncase \"$purpose\" in plan|snapshot|candidate) ;; *) exit 64;; esac\nactual=sha256:$(sha256sum \"$archive\" | awk '{print $1}')\n[ \"$actual\" = \"$expected\" ]\nif [ \"$purpose\" = candidate ]; then\n  runtime=$(sudo -n readlink -f /var/lib/platform-installer/runtime/current)\n  case \"$runtime\" in /var/lib/platform-installer/runtime/releases/*) ;; *) exit 64;; esac\n  sudo -n env PYTHONPATH=\"$runtime/ansible-core/tools\" python3 \"$runtime/ansible-core/tools/execution_protocol.py\" --runtime-release \"$runtime\" --controller \"$runtime/ansible-core/tools/execution_controller.py\" --stage-candidate-archive \"$archive\" --stage-run-id \"$run_id\" --stage-request-id \"$request_id\" --expected-archive-digest \"$expected\" >/dev/null\nelse\n  sudo -n install -d -m 0700 /var/lib/platform-installer/execution/runs/$run_id/project\n  sudo -n sh -c 'umask 077; printf \"%s\\n\" \"$1\" > \"$2\"' -- \"$actual\" /var/lib/platform-installer/execution/runs/$run_id/project-archive.digest\n  sudo -n tar -xf \"$archive\" -C /var/lib/platform-installer/execution/runs/$run_id/project\n  if [ \"$purpose\" = snapshot ]; then\n    sudo -n sh -c 'umask 077; printf \"{\\\"kind\\\":\\\"readonly\\\",\\\"runId\\\":\\\"%s\\\"}\\n\" \"$1\" > \"$2\"' -- \"$run_id\" /var/lib/platform-installer/execution/runs/$run_id/.snapshot-owner.json\n  fi\nfi\nsudo -n rm -f -- \"$archive\"\nrm -rf -- \"$run\"\n"
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote, remote + "/project.tar", runID, archiveDigest, purpose, requestID}, []byte(script)); err != nil {
+		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
-	return nil
+	owned = false
+	return archiveDigest, nil
 }
 
 func (t OpenSSHTransport) StartExecution(ctx context.Context, node Node, request ExecutionStartRequest) (ExecutionRun, error) {

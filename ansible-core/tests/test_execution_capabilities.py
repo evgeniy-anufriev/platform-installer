@@ -19,6 +19,7 @@ class ExecutionCapabilitiesTests(unittest.TestCase):
         }, "0.1.0")
         self.assertEqual("ExecutionCapabilities", result["kind"])
         self.assertEqual(["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"], result["supportedOperations"])
+        self.assertEqual(["platform.installer/project-snapshot-request/v1alpha1"], result["projectSnapshotRequestVersions"])
         self.assertNotIn("secrets", str(result).lower())
 
     def test_incomplete_runtime_identity_is_blocked(self):

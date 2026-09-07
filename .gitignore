@@ -3,6 +3,9 @@
 runs/
 bundle/
 
+# Local user-created project workspaces
+Projects/
+
 # Secrets must never be committed
 secrets/
 *.vault-password

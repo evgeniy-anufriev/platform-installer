@@ -548,7 +548,8 @@ findings. Commands and counts: `docs/exec-obs-01.md`.
 UI-01A, UI-01B and UI-01C are DONE. UI-01B provides the production Wails/React
 read-only existing-project shell and its one fixed target-free Core snapshot
 operation. UI-01C adds local metadata-only project creation and empty-project
-reopen; UI-01D is NEXT and owns edit/save/session/candidate work.
+reopen; UI-01D implementation/acceptance is complete and owner-accepted
+without final revision-bound review. UI-01E is not started.
 
 ### DEVX-01: Codex engineering harness
 
@@ -627,8 +628,12 @@ closed. UI-01B is DONE: native folder selection, a verified immutable runtime,
 READY Execution Node handshake and Core-authoritative read-only snapshot were
 accepted without canonical-project mutation. UI-01C is DONE: local
 metadata-only creation, no-replace publication and empty-project reopen were
-accepted without Core/Execution Node contact. UI-01D is NEXT; UI-01 overall is
-NOT DONE.
+accepted without Core/Execution Node contact. UI-01D implementation and
+acceptance are complete: the bounded transient session, complete-candidate
+remote Core proof, guarded first write and narrow Windows review/save shell
+passed its executable gates and was owner-accepted without final
+revision-bound review. UI-01E is not started; UI-01
+overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
@@ -659,15 +664,18 @@ Not ready when:
 
 ### UI-02: Installation workflow
 
-Local pages: Summary → Preparation → Plan → Execution → Result. Plan shows
-Core actions/dependencies and target hosts; Result shows observed per-action
-outcomes and verify for a specific run, without rerunning verification on view.
+Local pages: Summary → Plan → Execution → Result. Execution Node selection and
+preparation are owned by the Servers/application lifecycle and existing EXEC-01A
+contracts; Installation consumes a READY node and a saved, current,
+authoritatively Core-validated project revision. Plan shows Core
+actions/dependencies and target hosts; Result shows observed per-action outcomes
+and verify for a specific run, without rerunning verification on view.
 
 Deliverables:
 
 - readiness, plan, confirmation, execution and result views;
-- execution-node configuration/preparation;
 - certificate configuration and derived preview;
+- readiness prerequisite summary linked to Servers, without node preparation;
 - structured progress, cancellation and diagnostics;
 - offline help.
 

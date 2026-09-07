@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionnode"
+	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
 )
 
@@ -17,6 +19,12 @@ import (
 type projectSnapshotReader interface {
 	BuildProjectSnapshot(context.Context, executionnode.Node, string, map[string]any) (*coreadapter.Snapshot, error)
 }
+
+type candidateProjectSnapshotReader interface {
+	BuildCandidateProjectSnapshot(context.Context, executionnode.Node, string, map[string]any, executionnode.CandidateProjectSnapshotRequest) (*coreadapter.Snapshot, error)
+}
+
+type candidateReadyReader interface{ CheckCandidateReady(context.Context) error }
 
 type projectReader struct {
 	transport      projectSnapshotReader
@@ -29,6 +37,42 @@ func (r projectReader) BuildSnapshot(ctx context.Context, root string) (*coreada
 		return nil, errors.New("EXECUTION_NODE_NOT_CONFIGURED")
 	}
 	return r.transport.BuildProjectSnapshot(ctx, r.node, root, r.runtimeRelease)
+}
+
+func (r projectReader) BuildCandidateSnapshot(ctx context.Context, root string, owned []string, project *projectlifecycle.Project) (*coreadapter.Snapshot, error) {
+	transport, ok := r.transport.(candidateProjectSnapshotReader)
+	if !ok || project == nil {
+		return nil, errors.New("PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED")
+	}
+	revision, err := installer.ProjectRevision(root)
+	if err != nil {
+		return nil, err
+	}
+	return transport.BuildCandidateProjectSnapshot(ctx, r.node, root, r.runtimeRelease, executionnode.CandidateProjectSnapshotRequest{
+		ProjectIdentity: project.ID, CandidateProjectRevision: revision, ArtifactLockDigest: project.Source.BundleDigest,
+		CatalogLockDigest: project.Source.CatalogDigest, InstallerOwnedLogicalPaths: owned,
+	})
+}
+
+func (r projectReader) CheckCandidateReady(ctx context.Context) error {
+	checker, ok := r.transport.(interface {
+		CheckCandidateProjectSnapshotCapability(context.Context, executionnode.Node, map[string]any) error
+	})
+	if !ok || r.node.ID == "" || len(r.runtimeRelease) == 0 {
+		return errors.New("EXECUTION_NODE_NOT_CONFIGURED")
+	}
+	return checker.CheckCandidateProjectSnapshotCapability(ctx, r.node, r.runtimeRelease)
+}
+
+type candidateCoreAdapter struct {
+	reader interface {
+		BuildCandidateSnapshot(context.Context, string, []string, *projectlifecycle.Project) (*coreadapter.Snapshot, error)
+	}
+	project *projectlifecycle.Project
+}
+
+func (a candidateCoreAdapter) BuildSnapshot(ctx context.Context, root string, owned []string) (*coreadapter.Snapshot, error) {
+	return a.reader.BuildCandidateSnapshot(ctx, root, owned, a.project)
 }
 
 type unavailableProjectReader struct{}
@@ -57,8 +101,12 @@ type App struct {
 	reader interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	lifecycle projectLifecycle
-	current   ProjectOpenResult
+	lifecycle     projectLifecycle
+	current       ProjectOpenResult
+	sessions      *installer.EditSessionStore
+	editor        *installer.Backend
+	activeSession string
+	editMu        sync.Mutex
 }
 
 type projectLifecycle interface {
@@ -69,7 +117,7 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle) *App {
-	return &App{reader: reader, lifecycle: lifecycle, current: ProjectOpenResult{Status: "NO_PROJECT"}}
+	return &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}}
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
@@ -83,7 +131,7 @@ func (a *App) ChooseProject() ProjectOpenResult {
 		return a.failure("PROJECT_SELECTION_FAILED")
 	}
 	if root == "" {
-		return a.current
+		return a.CurrentProject()
 	}
 	return a.OpenProject(root)
 }
@@ -100,6 +148,12 @@ func (a *App) ChooseProjectParent() string {
 }
 
 func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) ProjectOpenResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.activeSession != "" {
+		return a.failure("EDIT_SESSION_ACTIVE")
+	}
 	if a.lifecycle == nil {
 		return a.failure("PROJECT_COMPATIBILITY_SOURCE_UNAVAILABLE")
 	}
@@ -112,6 +166,12 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 }
 
 func (a *App) OpenProject(root string) ProjectOpenResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.activeSession != "" {
+		return a.failure("EDIT_SESSION_ACTIVE")
+	}
 	if a.lifecycle == nil {
 		return a.failure("PROJECT_OPEN_BLOCKED")
 	}
@@ -134,11 +194,167 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 }
 
 func (a *App) CloseProject() ProjectOpenResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.activeSession != "" {
+		return a.failure("EDIT_SESSION_ACTIVE")
+	}
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
 }
 
-func (a *App) CurrentProject() ProjectOpenResult { return a.current }
+type EditOperationResult struct {
+	Status  string                      `json:"status"`
+	Session *installer.EditSession      `json:"session,omitempty"`
+	Plan    *installer.EditPlan         `json:"plan,omitempty"`
+	Commit  *installer.EditCommitResult `json:"commit,omitempty"`
+	Error   *ProjectOpenError           `json:"error,omitempty"`
+}
+
+func (a *App) editFailure(err error) EditOperationResult {
+	code := projectErrorCode(err)
+	return EditOperationResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+}
+
+func (a *App) StartEditSession() EditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.current.Status != "OPEN" || a.current.Project == nil {
+		return a.editFailure(errors.New("PROJECT_NOT_OPEN"))
+	}
+	reader, ok := a.reader.(interface {
+		BuildCandidateSnapshot(context.Context, string, []string, *projectlifecycle.Project) (*coreadapter.Snapshot, error)
+	})
+	if !ok {
+		return a.editFailure(errors.New("PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED"))
+	}
+	revision := ""
+	if a.current.Snapshot != nil {
+		revision = a.current.Snapshot.ProjectRevision
+	} else {
+		var err error
+		revision, err = installer.ProjectRevision(a.current.Root)
+		if err != nil {
+			return a.editFailure(err)
+		}
+	}
+	a.editor = installer.NewBackend(candidateCoreAdapter{reader: reader, project: a.current.Project})
+	session, err := a.sessions.Start(a.current.Project.ID, a.current.Root, a.current.Classification, revision)
+	if err != nil {
+		return a.editFailure(err)
+	}
+	a.activeSession = session.SessionID
+	return EditOperationResult{Status: "EDITING", Session: &session}
+}
+
+func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand) EditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if sessionID == "" || sessionID != a.activeSession {
+		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+	}
+	if command.Operation != "CreateServer" {
+		return a.editFailure(errors.New("EDIT_OPERATION_NOT_AVAILABLE"))
+	}
+	session, err := a.sessions.Append(sessionID, command, a.editor)
+	if err != nil {
+		return a.editFailure(err)
+	}
+	return EditOperationResult{Status: "EDITING", Session: &session}
+}
+
+func (a *App) ReviewEditSession(sessionID string) EditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.editor == nil || sessionID == "" || sessionID != a.activeSession {
+		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+	}
+	ctx, cancel := a.operationContext(2 * time.Minute)
+	defer cancel()
+	plan, err := a.sessions.Review(ctx, a.editor, sessionID)
+	if err != nil {
+		return a.editFailure(err)
+	}
+	return EditOperationResult{Status: plan.Status, Plan: plan}
+}
+
+func (a *App) CommitEditPlan(sessionID, planID string) EditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.editor == nil || sessionID == "" || sessionID != a.activeSession {
+		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+	}
+	if _, err := a.sessions.BeginCommit(sessionID, planID); err != nil {
+		return a.editFailure(err)
+	}
+	ctx, cancel := a.operationContext(2 * time.Minute)
+	defer cancel()
+	ready, ok := a.reader.(candidateReadyReader)
+	if !ok {
+		a.sessions.FinishCommit(sessionID, planID, false)
+		return a.editFailure(errors.New("EXECUTION_NODE_NOT_CONFIGURED"))
+	}
+	if err := ready.CheckCandidateReady(ctx); err != nil {
+		a.sessions.FinishCommit(sessionID, planID, false)
+		return a.editFailure(err)
+	}
+	result := a.editor.CommitEditPlanV2(ctx, planID)
+	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
+		if !a.sessions.FinishCommit(sessionID, planID, true) {
+			return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+		}
+		a.activeSession = ""
+		a.editor = nil
+		if snapshot, ok := result.Snapshot.(*coreadapter.Snapshot); ok {
+			a.current.Snapshot = snapshot
+			a.current.Classification = projectlifecycle.ClassificationManaged
+		}
+	}
+	if result.Status != "COMMITTED" && result.Status != "COMMITTED_REFRESH_FAILED" {
+		a.sessions.FinishCommit(sessionID, planID, false)
+	}
+	return EditOperationResult{Status: result.Status, Commit: &result}
+}
+
+func (a *App) DiscardEditSession(sessionID string) EditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	wasActive := sessionID != "" && sessionID == a.activeSession
+	a.reconcileEditSessionLocked()
+	if wasActive && a.activeSession == "" {
+		return EditOperationResult{Status: "DISCARDED"}
+	}
+	if a.editor == nil || !a.sessions.Discard(sessionID, a.editor) {
+		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+	}
+	a.activeSession, a.editor = "", nil
+	return EditOperationResult{Status: "DISCARDED"}
+}
+
+func (a *App) reconcileEditSessionLocked() {
+	if a.activeSession != "" && !a.sessions.Active(a.activeSession) {
+		a.activeSession, a.editor = "", nil
+	}
+}
+
+func (a *App) operationContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	base := a.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	return context.WithTimeout(base, timeout)
+}
+
+func (a *App) CurrentProject() ProjectOpenResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	return a.current
+}
 
 func (a *App) failure(code string) ProjectOpenResult {
 	return ProjectOpenResult{Status: "ERROR", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
@@ -173,6 +389,20 @@ func projectErrorMessage(code string) string {
 		return "Нельзя безопасно создать проект в выбранной папке."
 	case "PROJECT_DISPLAY_NAME_INVALID":
 		return "Введите корректное название проекта."
+	case "PROJECT_NOT_OPEN":
+		return "Сначала откройте проект."
+	case "EDIT_SESSION_ACTIVE":
+		return "Сначала сохраните или отмените несохранённые изменения."
+	case "EDIT_SESSION_EXPIRED":
+		return "Черновик отсутствует или истёк. Начните редактирование заново."
+	case "EDIT_SESSION_BUSY":
+		return "Проверка черновика уже выполняется."
+	case "EDIT_OPERATION_NOT_AVAILABLE":
+		return "Эта операция ещё не доступна в текущем UI milestone."
+	case "PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED":
+		return "Активный Execution Node не поддерживает проверку edit candidate."
+	case "WRITE_OWNERSHIP_REQUIRED", "WRITE_NOT_ALLOWED", "DOCUMENT_CHANGED", "PROJECT_CHANGED":
+		return "Сохранение заблокировано: проект или владение документами изменилось."
 	case "PROJECT_INPUT_INCOMPLETE", "MANAGED_PROJECT_INVALID", "PROJECT_OPEN_BLOCKED":
 		return "Выбранный проект нельзя безопасно открыть в текущем режиме."
 	default:

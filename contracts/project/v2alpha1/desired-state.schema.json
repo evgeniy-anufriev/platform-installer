@@ -227,7 +227,7 @@
         "storePasswordSecretRef": {
           "type": "string",
           "minLength": 3,
-          "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+          "pattern": "^runtime:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
         }
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },

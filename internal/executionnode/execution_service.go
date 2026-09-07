@@ -2,11 +2,13 @@ package executionnode
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -288,7 +290,10 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	}
 	runID := fresh.executionID
 	if runID == "" {
-		runID = newRunID()
+		runID, err = newRunID()
+		if err != nil {
+			return ExecutionRun{}, err
+		}
 	}
 	if prepare != nil {
 		s.mu.Lock()
@@ -503,4 +508,10 @@ func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
 	return r
 }
 func clonePlanRecord(p PlanRecord) PlanRecord { p.Plan = cloneDeploymentPlan(p.Plan); return p }
-func newRunID() string                        { return fmt.Sprintf("installer-%d", time.Now().UnixNano()) }
+func newRunID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	return "installer-" + new(big.Int).SetBytes(value).String(), nil
+}

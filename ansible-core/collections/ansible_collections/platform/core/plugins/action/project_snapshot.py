@@ -102,6 +102,8 @@ class ActionModule(ActionBase):
             logical_path = document["logicalPath"]
             if not document["revisionIncluded"]:
                 continue
+            if os.path.splitext(logical_path)[1].lower() not in (".yml", ".yaml", ".json"):
+                continue
             parsed = self._load(os.path.join(project_root, *logical_path.split("/")), required=False)
             if "platform_desired_state" in parsed:
                 desired_candidates.append(logical_path)

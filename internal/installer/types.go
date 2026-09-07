@@ -1,30 +1,83 @@
 package installer
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
-	EditCommandAPIVersion = "platform.installer/edit-command/v1alpha1"
-	EditPlanAPIVersion    = "platform.installer/edit-plan/v1alpha1"
-	EditResultAPIVersion  = "platform.installer/edit-commit-result/v1alpha1"
+	EditCommandAPIVersion   = "platform.installer/edit-command/v1alpha1"
+	EditCommandAPIVersionV2 = "platform.installer/edit-command/v1alpha2"
+	EditPlanAPIVersion      = "platform.installer/edit-plan/v1alpha1"
+	EditPlanAPIVersionV2    = "platform.installer/edit-plan/v1alpha2"
+	EditResultAPIVersion    = "platform.installer/edit-commit-result/v1alpha1"
+	EditResultAPIVersionV2  = "platform.installer/edit-commit-result/v1alpha2"
+	EditSessionAPIVersion   = "platform.installer/edit-session/v1alpha1"
 )
 
 type EditCommand struct {
-	APIVersion          string         `json:"apiVersion,omitempty"`
-	Kind                string         `json:"kind,omitempty"`
-	BaseProjectRevision string         `json:"baseProjectRevision,omitempty"`
-	Operation           string         `json:"operation"`
-	DeploymentID        string         `json:"deploymentId,omitempty"`
-	Setting             string         `json:"setting,omitempty"`
-	Value               any            `json:"value,omitempty"`
-	EndpointGroupID     string         `json:"endpointGroupId,omitempty"`
-	HAProxyDeploymentID string         `json:"haproxyDeploymentId,omitempty"`
-	HostID              string         `json:"hostId,omitempty"`
-	Property            string         `json:"property,omitempty"`
-	Deployment          map[string]any `json:"deployment,omitempty"`
-	EndpointGroup       map[string]any `json:"endpointGroup,omitempty"`
-	Placement           map[string]any `json:"placement,omitempty"`
-	Backend             map[string]any `json:"backend,omitempty"`
-	Commands            []EditCommand  `json:"commands,omitempty"`
+	APIVersion          string            `json:"apiVersion,omitempty"`
+	Kind                string            `json:"kind,omitempty"`
+	BaseProjectRevision string            `json:"baseProjectRevision,omitempty"`
+	Operation           string            `json:"operation"`
+	DeploymentID        string            `json:"deploymentId,omitempty"`
+	Setting             string            `json:"setting,omitempty"`
+	Value               any               `json:"value,omitempty"`
+	EndpointGroupID     string            `json:"endpointGroupId,omitempty"`
+	HAProxyDeploymentID string            `json:"haproxyDeploymentId,omitempty"`
+	HostID              string            `json:"hostId,omitempty"`
+	Address             string            `json:"address,omitempty"`
+	SSHPort             int               `json:"sshPort,omitempty"`
+	ClearSSHPort        bool              `json:"clearSSHPort,omitempty"`
+	ServiceType         string            `json:"serviceType,omitempty"`
+	Mode                string            `json:"mode,omitempty"`
+	EntityID            string            `json:"entityId,omitempty"`
+	Entity              map[string]any    `json:"entity,omitempty"`
+	Members             []PlacementMember `json:"members,omitempty"`
+	Property            string            `json:"property,omitempty"`
+	Deployment          map[string]any    `json:"deployment,omitempty"`
+	EndpointGroup       map[string]any    `json:"endpointGroup,omitempty"`
+	Placement           map[string]any    `json:"placement,omitempty"`
+	Backend             map[string]any    `json:"backend,omitempty"`
+	Commands            []EditCommand     `json:"commands,omitempty"`
+	unknownFields       []string
+	presentFields       map[string]bool
+}
+
+func (command *EditCommand) UnmarshalJSON(content []byte) error {
+	type commandAlias EditCommand
+	var decoded commandAlias
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(content, &fields); err != nil {
+		return err
+	}
+	*command = EditCommand(decoded)
+	command.presentFields = make(map[string]bool, len(fields))
+	known := map[string]bool{
+		"apiVersion": true, "kind": true, "baseProjectRevision": true, "operation": true,
+		"deploymentId": true, "setting": true, "value": true, "endpointGroupId": true,
+		"haproxyDeploymentId": true, "hostId": true, "address": true, "sshPort": true,
+		"clearSSHPort": true, "serviceType": true, "mode": true, "entityId": true,
+		"entity": true, "members": true, "property": true, "deployment": true,
+		"endpointGroup": true, "placement": true, "backend": true, "commands": true,
+	}
+	for field := range fields {
+		command.presentFields[field] = true
+		if !known[field] {
+			command.unknownFields = append(command.unknownFields, field)
+		}
+	}
+	return nil
+}
+
+type PlacementMember struct {
+	MemberID      string         `json:"memberId"`
+	HostID        string         `json:"hostId"`
+	Roles         []string       `json:"roles"`
+	Configuration map[string]any `json:"configuration,omitempty"`
 }
 
 type Finding struct {
@@ -43,9 +96,16 @@ type Validation struct {
 }
 
 type DocumentChange struct {
-	LogicalPath  string `json:"logicalPath"`
-	BeforeDigest string `json:"beforeDigest"`
-	AfterDigest  string `json:"afterDigest"`
+	LogicalPath  string         `json:"logicalPath"`
+	BeforeDigest string         `json:"beforeDigest,omitempty"`
+	AfterDigest  string         `json:"afterDigest,omitempty"`
+	Before       *DocumentState `json:"before,omitempty"`
+	After        *DocumentState `json:"after,omitempty"`
+}
+
+type DocumentState struct {
+	State  string `json:"state"`
+	Digest string `json:"digest,omitempty"`
 }
 
 type SemanticChange struct {
@@ -100,6 +160,21 @@ type EditCommitResult struct {
 	ApplyRequired      bool             `json:"applyRequired"`
 	Discarded          bool             `json:"discarded,omitempty"`
 	Timing             CommitTiming     `json:"timing"`
+}
+
+type EditSession struct {
+	APIVersion            string    `json:"apiVersion"`
+	Kind                  string    `json:"kind"`
+	SessionID             string    `json:"sessionId"`
+	ProjectContextID      string    `json:"projectContextId"`
+	ProjectRoot           string    `json:"-"`
+	ProjectClassification string    `json:"-"`
+	BaseProjectRevision   string    `json:"baseProjectRevision"`
+	Status                string    `json:"status"`
+	CommandCount          int       `json:"commandCount"`
+	EncodedBytes          int       `json:"encodedBytes"`
+	ExpiresAt             time.Time `json:"expiresAt"`
+	ReviewedPlanID        string    `json:"reviewedPlanId,omitempty"`
 }
 
 type writerError struct {

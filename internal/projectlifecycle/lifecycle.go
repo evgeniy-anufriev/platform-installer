@@ -22,8 +22,10 @@ import (
 
 const (
 	DefaultCompatibilitySourceID = "default"
-	classificationEmpty          = "EMPTY_MANAGED_PROJECT"
-	classificationManaged        = "MANAGED_PROJECT"
+	ClassificationEmpty          = "EMPTY_MANAGED_PROJECT"
+	ClassificationManaged        = "MANAGED_PROJECT"
+	classificationEmpty          = ClassificationEmpty
+	classificationManaged        = ClassificationManaged
 	classificationExternal       = "EXTERNAL_PROJECT"
 	classificationIncomplete     = "PROJECT_INPUT_INCOMPLETE"
 	classificationInvalid        = "MANAGED_PROJECT_INVALID"
@@ -31,6 +33,13 @@ const (
 	managedProjectLabel          = "platform.installer/managed-project"
 	managedProjectMarker         = "v1alpha1"
 )
+
+// FirstSaveEligible revalidates the portable managed-project marker and lock
+// envelope without relying on process-local creation state.
+func FirstSaveEligible(root string) bool {
+	result, err := NewService(nil).OpenProject(context.Background(), root)
+	return err == nil && result.Classification == ClassificationEmpty
+}
 
 type CreateProjectRequest struct {
 	ProjectRoot           string `json:"projectRoot"`

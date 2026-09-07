@@ -49,12 +49,23 @@ func blockedPlan(command EditCommand, revision string, err error) *EditPlan {
 	if typed, ok := err.(*writerError); ok {
 		finding = typed.finding()
 	}
-	return &EditPlan{APIVersion: EditPlanAPIVersion, Kind: "EditPlan", Status: "BLOCKED",
+	version := EditPlanAPIVersion
+	if command.APIVersion == EditCommandAPIVersionV2 {
+		version = EditPlanAPIVersionV2
+	}
+	return &EditPlan{APIVersion: version, Kind: "EditPlan", Status: "BLOCKED",
 		BaseProjectRevision: revision, CommandSummary: commandSummary(command),
 		SemanticChanges: []SemanticChange{}, AffectedEntities: []string{},
 		AffectedDocuments: []DocumentChange{}, Impacts: []string{},
 		Validation: Validation{Status: "BLOCKED", Findings: []Finding{finding}},
 		ReviewDiff: "", CommitAllowed: false, ApplyRequired: false}
+}
+
+func planVersion(command EditCommand) string {
+	if command.APIVersion == EditCommandAPIVersionV2 {
+		return EditPlanAPIVersionV2
+	}
+	return EditPlanAPIVersion
 }
 
 func blockedCorePlan(command EditCommand, revision string, snapshot *coreadapter.Snapshot) *EditPlan {
@@ -151,12 +162,16 @@ func mergeImpacts(groups ...[]string) []string {
 }
 
 func (b *Backend) PlanEdit(ctx context.Context, projectRoot string, command EditCommand) (*EditPlan, error) {
+	return b.planEdit(ctx, projectRoot, command, false)
+}
+
+func (b *Backend) planEdit(ctx context.Context, projectRoot string, command EditCommand, allowV2Batch bool) (*EditPlan, error) {
 	started := b.now()
 	root, err := cleanRoot(projectRoot)
 	if err != nil {
 		return blockedPlan(command, command.BaseProjectRevision, err), nil
 	}
-	if err := validateCommand(command); err != nil {
+	if err := validateCommandWithInternalBatch(command, allowV2Batch); err != nil {
 		return blockedPlan(command, command.BaseProjectRevision, err), nil
 	}
 	owned, err := discoverOwnedPaths(root)
@@ -184,7 +199,7 @@ func (b *Backend) PlanEdit(ctx context.Context, projectRoot string, command Edit
 		return blockedPlan(command, snapshot.ProjectRevision, err), nil
 	}
 	if len(expectations) == 0 {
-		return &EditPlan{APIVersion: EditPlanAPIVersion, Kind: "EditPlan", Status: "NO_CHANGE",
+		return &EditPlan{APIVersion: planVersion(command), Kind: "EditPlan", Status: "NO_CHANGE",
 			BaseProjectRevision: snapshot.ProjectRevision, CommandSummary: commandSummary(command),
 			SemanticChanges: []SemanticChange{}, AffectedEntities: []string{},
 			AffectedDocuments: []DocumentChange{}, Impacts: []string{},
@@ -218,12 +233,17 @@ func (b *Backend) PlanEdit(ctx context.Context, projectRoot string, command Edit
 		}
 		storedDocuments = append(storedDocuments, storedDocument{LogicalPath: logical,
 			Before: append([]byte(nil), before...), After: after, Existed: true})
-		documentChanges = append(documentChanges, DocumentChange{LogicalPath: logical,
-			BeforeDigest: digestBytes(before), AfterDigest: digestBytes(after)})
+		change := DocumentChange{LogicalPath: logical, BeforeDigest: digestBytes(before), AfterDigest: digestBytes(after)}
+		if command.APIVersion == EditCommandAPIVersionV2 {
+			change.Before = &DocumentState{State: "PRESENT", Digest: digestBytes(before)}
+			change.After = &DocumentState{State: "PRESENT", Digest: digestBytes(after)}
+			change.BeforeDigest, change.AfterDigest = "", ""
+		}
+		documentChanges = append(documentChanges, change)
 		diffParts = append(diffParts, boundedDiff(logical, before, after))
 	}
 	if len(storedDocuments) == 0 {
-		return &EditPlan{APIVersion: EditPlanAPIVersion, Kind: "EditPlan", Status: "NO_CHANGE",
+		return &EditPlan{APIVersion: planVersion(command), Kind: "EditPlan", Status: "NO_CHANGE",
 			BaseProjectRevision: snapshot.ProjectRevision, CommandSummary: commandSummary(command),
 			SemanticChanges: []SemanticChange{}, AffectedEntities: []string{},
 			AffectedDocuments: []DocumentChange{}, Impacts: []string{},
@@ -266,7 +286,7 @@ func (b *Backend) PlanEdit(ctx context.Context, projectRoot string, command Edit
 			blocked("EDIT_SHADOWED", "Authoritative Core resolution did not make the requested edit effective", "command")), nil
 	}
 	impacts = mergeImpacts(impacts, coreDerivedImpacts(snapshot, staged))
-	plan := EditPlan{APIVersion: EditPlanAPIVersion, Kind: "EditPlan", Status: "READY",
+	plan := EditPlan{APIVersion: planVersion(command), Kind: "EditPlan", Status: "READY",
 		BaseProjectRevision: snapshot.ProjectRevision, CommandSummary: commandSummary(command),
 		SemanticChanges: changes, AffectedEntities: affectedEntities(changes),
 		AffectedDocuments: documentChanges, Impacts: impacts,
@@ -284,6 +304,23 @@ func (b *Backend) PlanEdit(ctx context.Context, projectRoot string, command Edit
 	plan.Timing = PlanTiming{Application: b.now().Sub(started) - initialSnapshotDuration - stagedSnapshotDuration,
 		InitialSnapshot: initialSnapshotDuration, StagedSnapshot: stagedSnapshotDuration}
 	return &plan, nil
+}
+
+func (b *Backend) planCommands(ctx context.Context, projectRoot, classification, revision string, commands []EditCommand) (*EditPlan, error) {
+	if len(commands) == 0 {
+		return blockedPlan(EditCommand{}, revision, blocked("EDIT_SESSION_EMPTY", "Edit session contains no commands", "session")), nil
+	}
+	if isEmptyManagedClassification(classification) {
+		return b.planFirstWrite(ctx, projectRoot, revision, commands)
+	}
+	if len(commands) > 16 {
+		return blockedPlan(commands[0], revision, blocked("EDIT_SESSION_COMMANDS_UNSUPPORTED", "This edit set must be split until full-model reconciliation is available", "session")), nil
+	}
+	command := commands[0]
+	if len(commands) > 1 {
+		command = EditCommand{APIVersion: commands[0].APIVersion, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "Batch", Commands: commands}
+	}
+	return b.planEdit(ctx, projectRoot, command, true)
 }
 
 func (b *Backend) DiscardEditPlan(planID string) EditCommitResult {

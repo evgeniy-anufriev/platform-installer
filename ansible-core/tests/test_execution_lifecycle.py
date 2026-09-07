@@ -1,6 +1,9 @@
+import hashlib
+import io
 import json
 import sys
 from pathlib import Path
+import tarfile
 import tempfile
 import threading
 import unittest
@@ -23,6 +26,101 @@ def subprocess_completed(returncode):
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_protocol_rejects_malformed_candidate_request_as_typed_json(self):
+        script = str(TOOLS / "execution_protocol.py")
+        bundle_digest = "sha256:" + "a" * 64
+        valid = {
+            "apiVersion": execution_protocol.SNAPSHOT_REQUEST_VERSION,
+            "kind": "BuildProjectSnapshotRequest",
+            "requestId": "0" * 32,
+            "projectIdentity": "project-1",
+            "candidateProjectRevision": "sha256:" + "b" * 64,
+            "projectArchiveDigest": "sha256:" + "c" * 64,
+            "artifactLockDigest": bundle_digest,
+            "catalogLockDigest": "sha256:" + "d" * 64,
+            "installerOwnedLogicalPaths": [],
+            "projectContract": "v2alpha1",
+            "snapshotContract": "v1alpha1",
+            "editContract": "v1alpha2",
+        }
+        malformed_requests = ["not-an-object", [], {}]
+        for field, value in (("requestId", 0), ("requestId", "g" * 32), ("projectIdentity", "-invalid"),
+                             ("candidateProjectRevision", 0), ("projectArchiveDigest", "sha256:short"),
+                             ("installerOwnedLogicalPaths", [0])):
+            malformed_requests.append(dict(valid, **{field: value}))
+        for malformed in malformed_requests:
+            with self.subTest(snapshot_request=malformed), tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+                request_value = {
+                    "apiVersion": "platform.installer/execution-runtime/v1alpha1",
+                    "operation": "BuildProjectSnapshot",
+                    "runId": "installer-malformed-request",
+                    "runtimeRelease": {"bundleDigest": bundle_digest},
+                    "snapshotRequest": malformed,
+                }
+                completed = execution_protocol.subprocess.run(
+                    [sys.executable, script, "--state-root", root, "--runtime-release", release,
+                     "--controller", str(Path(release, "unused-controller.py")), "--bundle-digest", bundle_digest],
+                    input=json.dumps(request_value), text=True, capture_output=True, check=False,
+                )
+                self.assertEqual(2, completed.returncode)
+                self.assertEqual("", completed.stderr)
+                self.assertEqual("PROJECT_SNAPSHOT_REQUEST_INVALID", json.loads(completed.stdout)["error"])
+
+    def _candidate_project_protocol_error(self, project_content):
+        script = str(TOOLS / "execution_protocol.py")
+        bundle_digest = "sha256:" + "a" * 64
+        catalog_digest = "sha256:" + "d" * 64
+        archive_digest = "sha256:" + "c" * 64
+        request_id = "0" * 32
+        run_id = "installer-malformed-project"
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            journal = Journal(root, run_id)
+            project = Path(journal.directory, "project")
+            Path(project, "inventory").mkdir(parents=True)
+            Path(project, "inventory", "hosts.yml").write_text("all: {hosts: {}}\n", encoding="utf-8")
+            Path(project, "ansible.cfg").write_bytes(execution_protocol.APPROVED_CANDIDATE_ANSIBLE_CONFIG)
+            Path(project, "project.yml").write_bytes(project_content)
+            Path(journal.directory, "project-archive.digest").write_text(archive_digest + "\n", encoding="ascii")
+            Path(journal.directory, execution_protocol.SNAPSHOT_OWNER_FILE).write_text(json.dumps({
+                "kind": "candidate", "runId": run_id, "requestId": request_id,
+                "archiveDigest": archive_digest,
+            }), encoding="ascii")
+            Path(release, "manifest.yaml").write_text("catalogDigest: %s\n" % catalog_digest, encoding="utf-8")
+            request_value = {
+                "apiVersion": "platform.installer/execution-runtime/v1alpha1",
+                "operation": "BuildProjectSnapshot",
+                "runId": run_id,
+                "runtimeRelease": {"bundleDigest": bundle_digest},
+                "snapshotRequest": {
+                    "apiVersion": execution_protocol.SNAPSHOT_REQUEST_VERSION,
+                    "kind": "BuildProjectSnapshotRequest",
+                    "requestId": request_id,
+                    "projectIdentity": "project-1",
+                    "candidateProjectRevision": "sha256:" + "b" * 64,
+                    "projectArchiveDigest": archive_digest,
+                    "artifactLockDigest": bundle_digest,
+                    "catalogLockDigest": catalog_digest,
+                    "installerOwnedLogicalPaths": [],
+                    "projectContract": "v2alpha1",
+                    "snapshotContract": "v1alpha1",
+                    "editContract": "v1alpha2",
+                },
+            }
+            completed = execution_protocol.subprocess.run(
+                [sys.executable, script, "--state-root", root, "--runtime-release", release,
+                 "--controller", str(Path(release, "unused-controller.py")), "--bundle-digest", bundle_digest],
+                input=json.dumps(request_value), text=True, capture_output=True, check=False,
+            )
+            return completed
+
+    def test_protocol_rejects_malformed_candidate_project_as_typed_json(self):
+        for project_content in (b"metadata: [\n", b"\xff"):
+            with self.subTest(project_content=project_content):
+                completed = self._candidate_project_protocol_error(project_content)
+                self.assertEqual(2, completed.returncode)
+                self.assertEqual("", completed.stderr)
+                self.assertEqual("PROJECT_SNAPSHOT_PROJECT_INVALID", json.loads(completed.stdout)["error"])
+
     def test_snapshot_uses_fixed_controller_playbook_and_removes_request_staging(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
             Path(release, "catalog").mkdir()
@@ -30,6 +128,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
             Path(journal.directory, "project", "inventory").mkdir(parents=True)
             Path(journal.directory, "project", "inventory", "hosts.yml").write_text("all: {hosts: {}}\n", encoding="utf-8")
             Path(journal.directory, "project", "project.yml").write_text("apiVersion: platform.installer/project/v2alpha1\n", encoding="utf-8")
+            Path(journal.directory, execution_protocol.SNAPSHOT_OWNER_FILE).write_text(json.dumps({"kind": "readonly", "runId": "run-1"}), encoding="ascii")
             snapshot = {"projectRevision": "sha256:" + "a" * 64, "status": "PASS"}
 
             def completed(command, **kwargs):
@@ -43,6 +142,164 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 result = execution_protocol.snapshot({"runId": "run-1", "runtimeRelease": {}}, root, release)
             self.assertEqual(snapshot, result["projectSnapshot"])
             self.assertFalse(Path(journal.directory).exists())
+
+    def test_snapshot_does_not_remove_foreign_run_without_owner_marker(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            journal = Journal(root, "run-foreign")
+            Path(journal.directory).mkdir(parents=True)
+            sentinel = Path(journal.directory, "result.json")
+            sentinel.write_text('{"status":"RUNNING"}\n', encoding="utf-8")
+            with self.assertRaisesRegex(LifecycleError, "PROJECT_SNAPSHOT_STAGING_NOT_OWNED"):
+                execution_protocol.snapshot({"runId": "run-foreign", "runtimeRelease": {}, "snapshotRequest": {"requestId": "malformed"}}, root, release)
+            self.assertTrue(sentinel.is_file())
+
+    def test_snapshot_cleanup_rechecks_owned_directory_identity(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-owned")
+            Path(journal.directory).mkdir(parents=True)
+            Path(journal.directory, execution_protocol.SNAPSHOT_OWNER_FILE).write_text(
+                json.dumps({"kind": "readonly", "runId": "run-owned"}), encoding="ascii"
+            )
+            sentinel = Path(journal.directory, "result.json")
+            sentinel.write_text('{"status":"RUNNING"}\n', encoding="utf-8")
+            identity = (1, 2)
+            with mock.patch.object(execution_protocol, "_snapshot_stage_identity", side_effect=[identity, None]):
+                self.assertFalse(execution_protocol._cleanup_snapshot_staging(journal.directory, journal, identity))
+            self.assertTrue(sentinel.is_file())
+
+    def test_candidate_snapshot_uses_project_config_and_verifies_identity(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            Path(release, "catalog").mkdir()
+            journal = Journal(root, "run-1")
+            project = Path(journal.directory, "project")
+            Path(project, "inventory").mkdir(parents=True)
+            Path(project, "inventory", "hosts.yml").write_text("all: {hosts: {node1: {ansible_host: 192.0.2.10}}}\n", encoding="utf-8")
+            Path(project, "ansible.cfg").write_bytes(execution_protocol.APPROVED_CANDIDATE_ANSIBLE_CONFIG)
+            artifact = "sha256:" + "b" * 64
+            catalog = "sha256:" + "c" * 64
+            Path(release, "manifest.yaml").write_text("catalogDigest: %s\n" % catalog, encoding="utf-8")
+            Path(project, "project.yml").write_text("metadata:\n  id: project-1\nartifactLock:\n  digest: %s\ncatalogLock:\n  digest: %s\n" % (artifact, catalog), encoding="utf-8")
+            archive = "sha256:" + "d" * 64
+            Path(journal.directory, "project-archive.digest").write_text(archive + "\n", encoding="ascii")
+            revision = "sha256:" + "a" * 64
+            request = {
+                "apiVersion": execution_protocol.SNAPSHOT_REQUEST_VERSION, "kind": "BuildProjectSnapshotRequest",
+                "requestId": "0" * 32, "projectIdentity": "project-1", "candidateProjectRevision": revision,
+                "projectArchiveDigest": archive, "artifactLockDigest": artifact, "catalogLockDigest": catalog,
+                "installerOwnedLogicalPaths": ["inventory/group_vars/all/platform-installer.yml"],
+                "projectContract": "v2alpha1", "snapshotContract": "v1alpha1", "editContract": "v1alpha2",
+            }
+
+            def completed(command, **kwargs):
+                self.assertNotIn("-i", command)
+                self.assertEqual(str(Path(project, "ansible.cfg")), kwargs["env"]["ANSIBLE_CONFIG"])
+                self.assertEqual(str(project), kwargs["cwd"])
+                self.assertEqual(request["installerOwnedLogicalPaths"], json.loads(Path(command[-1][1:]).read_text(encoding="utf-8"))["platform_installer_owned_paths"])
+                Path(kwargs["env"]["PLATFORM_PROJECT_SNAPSHOT_OUTPUT"]).write_text(json.dumps({"projectRevision": revision, "status": "PASS"}), encoding="utf-8")
+                return subprocess_completed(0)
+
+            with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
+                result = execution_protocol.core_operation({"runId": "run-1", "runtimeRelease": {}, "snapshotRequest": request}, root, release, "BuildProjectSnapshot")
+            self.assertEqual(revision, result["projectSnapshot"]["projectRevision"])
+
+    def _candidate_archive(self, path, members):
+        with tarfile.open(path, "w:") as archive:
+            for name, content, member_type in members:
+                info = tarfile.TarInfo(name)
+                info.type = member_type
+                info.size = len(content) if member_type == tarfile.REGTYPE else 0
+                archive.addfile(info, io.BytesIO(content) if member_type == tarfile.REGTYPE else None)
+        return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    def test_candidate_archive_preflight_and_safe_extraction(self):
+        with tempfile.TemporaryDirectory() as state_root, tempfile.TemporaryDirectory() as transfer:
+            run_id = "installer-candidate-safe"
+            archive_path = Path(transfer, "project.tar")
+            members = [
+                ("project.yml", b"metadata: {id: project-1}\n", tarfile.REGTYPE),
+                ("ansible.cfg", execution_protocol.APPROVED_CANDIDATE_ANSIBLE_CONFIG, tarfile.REGTYPE),
+                ("inventory/hosts.yml", b"all: {hosts: {}}\n", tarfile.REGTYPE),
+                ("inventory/group_vars/all/platform-installer.yml", b"platform: true\n", tarfile.REGTYPE),
+            ]
+            expected = self._candidate_archive(archive_path, members)
+            with mock.patch.object(execution_protocol, "_candidate_archive_path", return_value=str(archive_path)):
+                execution_protocol.stage_candidate_archive(str(archive_path), run_id, "0" * 32, expected, state_root)
+            project = Path(state_root, "runs", run_id, "project")
+            self.assertEqual(b"platform: true\n", Path(project, "inventory", "group_vars", "all", "platform-installer.yml").read_bytes())
+            self.assertEqual(expected, Path(state_root, "runs", run_id, "project-archive.digest").read_text(encoding="ascii").strip())
+            marker = json.loads(Path(state_root, "runs", run_id, execution_protocol.SNAPSHOT_OWNER_FILE).read_text(encoding="ascii"))
+            self.assertEqual({"kind": "candidate", "runId": run_id, "requestId": "0" * 32, "archiveDigest": expected}, marker)
+            self.assertFalse(Path(project, ".project-staging").exists())
+
+    def test_candidate_exception_cleanup_preserves_replaced_owned_directory(self):
+        with tempfile.TemporaryDirectory() as state_root, tempfile.TemporaryDirectory() as transfer:
+            run_id = "installer-candidate-cleanup-race"
+            request_id = "0" * 32
+            archive_path = Path(transfer, "project.tar")
+            members = [
+                ("project.yml", b"metadata: {id: project-1}\n", tarfile.REGTYPE),
+                ("ansible.cfg", execution_protocol.APPROVED_CANDIDATE_ANSIBLE_CONFIG, tarfile.REGTYPE),
+                ("inventory/hosts.yml", b"all: {hosts: {}}\n", tarfile.REGTYPE),
+            ]
+            expected = self._candidate_archive(archive_path, members)
+            identity = (1, 2)
+            with mock.patch.object(execution_protocol, "_candidate_archive_path", return_value=str(archive_path)), \
+                    mock.patch.object(execution_protocol, "_candidate_members", side_effect=LifecycleError("INJECTED")), \
+                    mock.patch.object(execution_protocol, "_snapshot_stage_identity", side_effect=[identity, identity, None]):
+                with self.assertRaisesRegex(LifecycleError, "INJECTED"):
+                    execution_protocol.stage_candidate_archive(str(archive_path), run_id, request_id, expected, state_root)
+            self.assertTrue(Path(state_root, "runs", run_id, execution_protocol.SNAPSHOT_OWNER_FILE).is_file())
+
+    def test_candidate_archive_copy_rejects_same_inode_same_size_mutation(self):
+        with tempfile.TemporaryDirectory() as root:
+            source = Path(root, "project.tar")
+            source.write_bytes(b"verified archive bytes")
+            expected = "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()
+            original_info = source.stat()
+            source.write_bytes(b"mutated!!archive bytes")
+            mutated_info = source.stat()
+            self.assertEqual((original_info.st_dev, original_info.st_ino, original_info.st_size),
+                             (mutated_info.st_dev, mutated_info.st_ino, mutated_info.st_size))
+            with self.assertRaisesRegex(LifecycleError, "PROJECT_SNAPSHOT_ARCHIVE_DIGEST_MISMATCH"):
+                execution_protocol._copy_verified_candidate_archive(
+                    str(source), str(Path(root, "verified.tar")), expected, original_info
+                )
+
+    def test_candidate_archive_rejects_malicious_members_and_config_without_staging(self):
+        base = [
+            ("project.yml", b"metadata: {id: project-1}\n", tarfile.REGTYPE),
+            ("ansible.cfg", execution_protocol.APPROVED_CANDIDATE_ANSIBLE_CONFIG, tarfile.REGTYPE),
+            ("inventory/hosts.yml", b"all: {hosts: {}}\n", tarfile.REGTYPE),
+        ]
+        cases = {
+            "traversal": base + [("inventory/group_vars/../../escape.yml", b"x\n", tarfile.REGTYPE)],
+            "hardlink": base + [("inventory/host_vars/node.yml", b"", tarfile.LNKTYPE)],
+            "case-collision": base + [("inventory/group_vars/A.yml", b"a\n", tarfile.REGTYPE), ("inventory/group_vars/a.yml", b"b\n", tarfile.REGTYPE)],
+            "plugin-config": [(name, b"[defaults]\nstrategy_plugins = ./plugins\n" if name == "ansible.cfg" else content, kind) for name, content, kind in base],
+        }
+        for name, members in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as state_root, tempfile.TemporaryDirectory() as transfer:
+                run_id = "installer-candidate-" + name
+                archive_path = Path(transfer, "project.tar")
+                expected = self._candidate_archive(archive_path, members)
+                with mock.patch.object(execution_protocol, "_candidate_archive_path", return_value=str(archive_path)):
+                    with self.assertRaises((execution_protocol.LifecycleError, tarfile.TarError)):
+                        execution_protocol.stage_candidate_archive(str(archive_path), run_id, "0" * 32, expected, state_root)
+                self.assertFalse(Path(state_root, "runs", run_id).exists())
+
+    def test_candidate_snapshot_rejects_config_changed_after_staging(self):
+        with tempfile.TemporaryDirectory() as project, tempfile.TemporaryDirectory() as release:
+            Path(project, "ansible.cfg").write_text("[defaults]\ncallback_plugins = ./plugins\n", encoding="utf-8")
+            with self.assertRaisesRegex(execution_protocol.LifecycleError, "PROJECT_CANDIDATE_ANSIBLE_CONFIG_UNSAFE"):
+                execution_protocol._candidate_ansible_environment(project, release, str(Path(project, "snapshot.json")))
+
+    def test_candidate_ansible_environment_drops_inherited_plugin_overrides(self):
+        with tempfile.TemporaryDirectory() as project, tempfile.TemporaryDirectory() as release:
+            Path(project, "ansible.cfg").write_bytes(execution_protocol.APPROVED_CANDIDATE_ANSIBLE_CONFIG)
+            with mock.patch.dict(execution_protocol.os.environ, {"ANSIBLE_STRATEGY_PLUGINS": "/tmp/untrusted", "ANSIBLE_CALLBACK_PLUGINS": "/tmp/untrusted"}):
+                environment = execution_protocol._candidate_ansible_environment(project, release, str(Path(project, "snapshot.json")))
+            self.assertNotIn("ANSIBLE_STRATEGY_PLUGINS", environment)
+            self.assertNotIn("ANSIBLE_CALLBACK_PLUGINS", environment)
 
     def test_core_operation_returns_blocked_plan_without_manifest(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:

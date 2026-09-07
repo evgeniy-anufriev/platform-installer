@@ -12,7 +12,9 @@ import (
 )
 
 var identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
-var secretKeyPattern = regexp.MustCompile(`(?i)password|passphrase|private.?key|pgpass|token|secret`)
+var serverAddressPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$`)
+var secretKeyPattern = regexp.MustCompile(`(?i)password|passphrase|private.?key|pgpass|token|secret|credential`)
+var runtimeRefPattern = regexp.MustCompile(`^runtime:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
 type expectation struct {
 	Operation string
@@ -59,7 +61,12 @@ func semanticEqual(left, right any) bool {
 func safeValue(value any, key string) error {
 	if key != "" && secretKeyPattern.MatchString(key) {
 		lower := strings.ToLower(key)
-		if !strings.HasSuffix(lower, "secretref") && !strings.HasSuffix(lower, "credentialref") {
+		if strings.HasSuffix(lower, "secretref") || strings.HasSuffix(lower, "credentialref") {
+			text, ok := value.(string)
+			if !ok || !runtimeRefPattern.MatchString(text) {
+				return blocked("SECRET_REFERENCE_INVALID", "Only opaque runtime secret references are accepted", "command.value")
+			}
+		} else {
 			return blocked("SECRET_VALUE_NOT_ALLOWED", "Plaintext secret fields are not accepted", "command.value")
 		}
 	}
@@ -86,10 +93,20 @@ func safeValue(value any, key string) error {
 }
 
 func validateCommand(command EditCommand) error {
-	if command.APIVersion != EditCommandAPIVersion || command.Kind != "EditCommand" || command.BaseProjectRevision == "" {
+	return validateCommandWithInternalBatch(command, false)
+}
+
+func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
+	if (command.APIVersion != EditCommandAPIVersion && command.APIVersion != EditCommandAPIVersionV2) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (command.APIVersion == EditCommandAPIVersionV2 && !validSHA256(command.BaseProjectRevision)) {
 		return blocked("INVALID_EDIT_COMMAND", "EditCommand version, kind, or base revision is invalid", "command")
 	}
 	if command.Operation == "Batch" {
+		if command.APIVersion == EditCommandAPIVersionV2 && !allowV2Batch {
+			return blocked("INVALID_EDIT_COMMAND", "Batch is an internal review aggregate and is not a public v1alpha2 operation", "command.operation")
+		}
+		if err := validateCommandFields(command, "commands"); err != nil {
+			return err
+		}
 		if len(command.Commands) < 1 || len(command.Commands) > 16 {
 			return blocked("INVALID_EDIT_COMMAND", "Batch must contain 1 through 16 semantic commands", "command.commands")
 		}
@@ -106,20 +123,85 @@ func validateCommand(command EditCommand) error {
 		}
 		return nil
 	}
-	allowed := map[string]bool{
-		"CreateServiceDeployment": true, "DeleteServiceDeployment": true,
-		"SetServiceConfigurationValue": true, "RemoveServiceConfigurationOverride": true,
-		"SetServiceEndpointGroup": true, "ClearServiceEndpointGroup": true,
-		"SetHAProxyIntegration": true, "ClearHAProxyIntegration": true,
-		"CreateEndpointGroup": true, "UpdateEndpointGroup": true, "DeleteEndpointGroup": true,
-		"AssignServiceToHost": true, "RemoveServiceFromHost": true, "SetPlacementProperty": true,
+	fieldsV2 := map[string][]string{
+		"CreateServer": {"hostId", "address", "sshPort"}, "UpdateServer": {"hostId", "address", "sshPort", "clearSSHPort"}, "DeleteServer": {"hostId"},
+		"ReconcileDeploymentPlacement": {"deploymentId", "members"},
+		"CreateServiceDeployment":      {"deploymentId", "serviceType", "mode"}, "DeleteServiceDeployment": {"deploymentId"},
+		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
+		"SetServiceEndpointGroup": {"deploymentId", "endpointGroupId"}, "ClearServiceEndpointGroup": {"deploymentId"},
+		"SetHAProxyIntegration": {"deploymentId", "haproxyDeploymentId"}, "ClearHAProxyIntegration": {"deploymentId"},
+		"CreateEndpointGroup": {"endpointGroupId", "endpointGroup"}, "UpdateEndpointGroup": {"endpointGroupId", "endpointGroup"}, "DeleteEndpointGroup": {"endpointGroupId"},
+		"CreateCertificateAuthority": {"entityId", "entity"}, "UpdateCertificateAuthority": {"entityId", "entity"}, "DeleteCertificateAuthority": {"entityId"},
+		"CreateCertificateProfile": {"entityId", "entity"}, "UpdateCertificateProfile": {"entityId", "entity"}, "DeleteCertificateProfile": {"entityId"},
+		"CreateTLSProfile": {"entityId", "entity"}, "UpdateTLSProfile": {"entityId", "entity"}, "DeleteTLSProfile": {"entityId"},
+		"CreateCertificateScope": {"entityId", "entity"}, "UpdateCertificateScope": {"entityId", "entity"}, "DeleteCertificateScope": {"entityId"},
 	}
-	if !allowed[command.Operation] {
-		return blocked("INVALID_EDIT_COMMAND", "Edit operation is unsupported", "command.operation")
+	fieldsV1 := map[string][]string{
+		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
+		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
+		"SetServiceEndpointGroup": {"deploymentId", "endpointGroupId"}, "ClearServiceEndpointGroup": {"deploymentId"},
+		"SetHAProxyIntegration": {"deploymentId", "haproxyDeploymentId", "backend"}, "ClearHAProxyIntegration": {"deploymentId"},
+		"CreateEndpointGroup": {"endpointGroupId", "endpointGroup"}, "UpdateEndpointGroup": {"endpointGroupId", "endpointGroup"}, "DeleteEndpointGroup": {"endpointGroupId"},
+		"AssignServiceToHost": {"hostId", "deploymentId", "placement"}, "RemoveServiceFromHost": {"hostId", "deploymentId"}, "SetPlacementProperty": {"hostId", "deploymentId", "property", "value"},
+	}
+	fields := fieldsV1
+	if command.APIVersion == EditCommandAPIVersionV2 {
+		fields = fieldsV2
+	}
+	allowedFields, allowed := fields[command.Operation]
+	if !allowed {
+		return blocked("INVALID_EDIT_COMMAND", "Edit operation is unsupported for this contract version", "command.operation")
+	}
+	if err := validateCommandFields(command, allowedFields...); err != nil {
+		return err
 	}
 	switch command.Operation {
+	case "CreateServer":
+		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
+		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.HostID) || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
+			return blocked("INVALID_EDIT_COMMAND", "CreateServer requires a valid host, address and optional SSH port", "command")
+		}
+	case "UpdateServer":
+		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
+		hasClearSSHPort := command.ClearSSHPort || command.presentFields["clearSSHPort"]
+		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort) || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
+			return blocked("INVALID_EDIT_COMMAND", "UpdateServer fields are invalid", "command")
+		}
+	case "DeleteServer":
+		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.HostID) {
+			return blocked("INVALID_EDIT_COMMAND", "DeleteServer requires a valid host", "command.hostId")
+		}
+	case "ReconcileDeploymentPlacement":
+		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > 1024 {
+			return blocked("INVALID_EDIT_COMMAND", "Deployment placement reconcile is invalid", "command.members")
+		}
+		memberIDs := make(map[string]bool)
+		for _, member := range command.Members {
+			if !identifierPattern.MatchString(member.MemberID) || !identifierPattern.MatchString(member.HostID) || len(member.Roles) == 0 || memberIDs[member.MemberID] {
+				return blocked("INVALID_EDIT_COMMAND", "Placement member is invalid or duplicated", "command.members")
+			}
+			memberIDs[member.MemberID] = true
+			roleIDs := make(map[string]bool)
+			for _, role := range member.Roles {
+				if !identifierPattern.MatchString(role) || roleIDs[role] {
+					return blocked("INVALID_EDIT_COMMAND", "Placement role is invalid or duplicated", "command.members.roles")
+				}
+				roleIDs[role] = true
+			}
+			if err := safeValue(member.Configuration, "configuration"); err != nil {
+				return err
+			}
+		}
+	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "CreateCertificateProfile", "UpdateCertificateProfile", "CreateTLSProfile", "UpdateTLSProfile", "CreateCertificateScope", "UpdateCertificateScope":
+		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.EntityID) || command.Entity == nil {
+			return blocked("INVALID_EDIT_COMMAND", "Certificate entity command is invalid", "command.entity")
+		}
+	case "DeleteCertificateAuthority", "DeleteCertificateProfile", "DeleteTLSProfile", "DeleteCertificateScope":
+		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.EntityID) {
+			return blocked("INVALID_EDIT_COMMAND", "Certificate entity identifier is invalid", "command.entityId")
+		}
 	case "CreateServiceDeployment":
-		if !identifierPattern.MatchString(command.DeploymentID) || command.Deployment == nil {
+		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (command.APIVersion == EditCommandAPIVersionV2 && (!identifierPattern.MatchString(command.ServiceType) || !identifierPattern.MatchString(command.Mode))) {
 			return blocked("INVALID_EDIT_COMMAND", "Create deployment requires an identifier and deployment object", "command")
 		}
 	case "DeleteServiceDeployment", "ClearServiceEndpointGroup", "ClearHAProxyIntegration":
@@ -155,12 +237,51 @@ func validateCommand(command EditCommand) error {
 			return blocked("INVALID_EDIT_COMMAND", "Placement property edit requires host, deployment, and property identifiers", "command")
 		}
 	}
-	for _, value := range []any{command.Value, command.Deployment, command.EndpointGroup, command.Placement, command.Backend} {
+	if err := safeValue(command.Value, command.Setting); err != nil {
+		return err
+	}
+	if err := safeValue(command.Value, command.Property); err != nil {
+		return err
+	}
+	for _, value := range []any{command.Deployment, command.EndpointGroup, command.Placement, command.Backend, command.Entity, command.Members} {
 		if err := safeValue(value, ""); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func validateCommandFields(command EditCommand, allowed ...string) error {
+	if len(command.unknownFields) != 0 {
+		return blocked("INVALID_EDIT_COMMAND", "Edit command contains an unknown field", "command."+command.unknownFields[0])
+	}
+	data, err := json.Marshal(command)
+	if err != nil {
+		return blocked("INVALID_EDIT_COMMAND", "Edit command cannot be encoded", "command")
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(data, &object); err != nil {
+		return blocked("INVALID_EDIT_COMMAND", "Edit command cannot be decoded", "command")
+	}
+	permitted := map[string]bool{"apiVersion": true, "kind": true, "baseProjectRevision": true, "operation": true}
+	for _, field := range allowed {
+		permitted[field] = true
+	}
+	for field := range command.presentFields {
+		if !permitted[field] {
+			return blocked("INVALID_EDIT_COMMAND", "Edit command contains fields from another operation", "command."+field)
+		}
+	}
+	for field := range object {
+		if !permitted[field] {
+			return blocked("INVALID_EDIT_COMMAND", "Edit command contains fields from another operation", "command."+field)
+		}
+	}
+	return nil
+}
+
+func validServerAddress(value string) bool {
+	return serverAddressPattern.MatchString(value)
 }
 
 func commandSummary(command EditCommand) SemanticChange {
@@ -311,7 +432,10 @@ func applyOne(command EditCommand, root string, snapshot *coreadapter.Snapshot,
 			if !identifierPattern.MatchString(command.DeploymentID) || deployments[command.DeploymentID] != nil {
 				return expectation{}, nil, blocked("INVALID_EDIT_COMMAND", "Deployment identifier is invalid or already exists", "command.deploymentId")
 			}
-			value := deepCopy(command.Deployment).(map[string]any)
+			value := map[string]any{"serviceType": command.ServiceType, "mode": command.Mode}
+			if command.APIVersion == EditCommandAPIVersion {
+				value = deepCopy(command.Deployment).(map[string]any)
+			}
 			serviceType, _ := value["serviceType"].(string)
 			mode, _ := value["mode"].(string)
 			if !catalogMode(snapshot, serviceType, mode) {
@@ -442,7 +566,12 @@ func applyCommand(command EditCommand, root string, snapshot *coreadapter.Snapsh
 	candidates map[string]map[string]any, originals map[string][]byte) ([]expectation, []SemanticChange, []string, error) {
 	commands := []EditCommand{command}
 	if command.Operation == "Batch" {
-		commands = command.Commands
+		commands = append([]EditCommand(nil), command.Commands...)
+		for index := range commands {
+			commands[index].APIVersion = command.APIVersion
+			commands[index].Kind = command.Kind
+			commands[index].BaseProjectRevision = command.BaseProjectRevision
+		}
 	}
 	var expectations []expectation
 	var changes []SemanticChange

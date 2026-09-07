@@ -17,7 +17,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
+	"runtime"
+	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"platform-installer/internal/artifactsource"
 	"platform-installer/internal/executionbundle"
@@ -405,13 +409,13 @@ func createProjectArchive(root string) (string, error) {
 	if err != nil {
 		return "", errors.New("SERVICE_PROJECT_INVALID")
 	}
-	info, err := os.Stat(absolute)
-	if err != nil || !info.IsDir() {
+	info, err := os.Lstat(absolute)
+	if err != nil || !info.IsDir() || isUnsafeFilesystemLink(info) {
 		return "", errors.New("SERVICE_PROJECT_INVALID")
 	}
 	for _, required := range []string{"inventory"} {
-		entry, statErr := os.Stat(filepath.Join(absolute, required))
-		if statErr != nil || !entry.IsDir() {
+		entry, statErr := os.Lstat(filepath.Join(absolute, required))
+		if statErr != nil || !entry.IsDir() || isUnsafeFilesystemLink(entry) {
 			return "", errors.New("SERVICE_PROJECT_INVALID")
 		}
 	}
@@ -451,26 +455,229 @@ func createProjectArchive(root string) (string, error) {
 	return name, nil
 }
 
+const managedCandidateAnsibleConfig = "# Managed by Platform Installer.\n" +
+	"# This is standard Ansible configuration; formatting may be normalized.\n" +
+	"[defaults]\n" +
+	"inventory = ./inventory/hosts.yml\n" +
+	"retry_files_enabled = False\n" +
+	"host_key_checking = True\n" +
+	"interpreter_python = auto_silent\n" +
+	"hash_behaviour = merge\n"
+
+// createCandidateProjectArchive is intentionally narrower than the service
+// archive. Only documents frozen by UI-01A cross the Execution Node boundary.
+func createCandidateProjectArchive(root string) (string, error) {
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", errors.New("PROJECT_CANDIDATE_INVALID")
+	}
+	rootInfo, err := os.Lstat(absolute)
+	if err != nil || !rootInfo.IsDir() || isUnsafeFilesystemLink(rootInfo) {
+		return "", errors.New("PROJECT_CANDIDATE_INVALID")
+	}
+	paths := []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"}
+	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars"} {
+		candidateRoot := filepath.Join(absolute, filepath.FromSlash(directory))
+		entry, statErr := os.Lstat(candidateRoot)
+		if errors.Is(statErr, os.ErrNotExist) {
+			continue
+		}
+		if statErr != nil || !entry.IsDir() || isUnsafeFilesystemLink(entry) {
+			return "", errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+		}
+		if walkErr := filepath.WalkDir(candidateRoot, func(current string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			info, infoErr := entry.Info()
+			if infoErr != nil {
+				return infoErr
+			}
+			if isUnsafeFilesystemLink(info) {
+				return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if !entry.Type().IsRegular() {
+				return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+			}
+			relative, relErr := filepath.Rel(absolute, current)
+			if relErr != nil || !containedLocal(absolute, current) {
+				return errors.New("PROJECT_CANDIDATE_PATH_INVALID")
+			}
+			logical := filepath.ToSlash(relative)
+			if candidateArchiveLogicalPathAllowed(logical) {
+				paths = append(paths, logical)
+			}
+			return nil
+		}); walkErr != nil {
+			return "", walkErr
+		}
+	}
+	slices.Sort(paths)
+
+	file, err := os.CreateTemp("", "platform-candidate-project-*.tar")
+	if err != nil {
+		return "", err
+	}
+	name := file.Name()
+	writer := tar.NewWriter(file)
+	cleanup := func(cause error) (string, error) {
+		_ = writer.Close()
+		_ = file.Close()
+		_ = os.Remove(name)
+		return "", cause
+	}
+	limits := projectArchiveLimits{}
+	seen := make(map[string]bool, len(paths))
+	identities := make([]os.FileInfo, 0, len(paths))
+	for _, logical := range paths {
+		if !candidateArchiveLogicalPathAllowed(logical) || !utf8.ValidString(logical) || len([]byte(logical)) > 512 {
+			return cleanup(errors.New("PROJECT_CANDIDATE_PATH_INVALID"))
+		}
+		folded := strings.ToLower(logical)
+		if seen[folded] {
+			return cleanup(errors.New("PROJECT_CANDIDATE_PATH_COLLISION"))
+		}
+		seen[folded] = true
+		content, readErr := readStableCandidateFile(absolute, logical)
+		if readErr != nil {
+			return cleanup(readErr)
+		}
+		identity, identityErr := os.Lstat(filepath.Join(absolute, filepath.FromSlash(logical)))
+		if identityErr != nil {
+			return cleanup(errors.New("PROJECT_CANDIDATE_FILE_REPLACED"))
+		}
+		for _, previous := range identities {
+			if os.SameFile(previous, identity) {
+				return cleanup(errors.New("PROJECT_CANDIDATE_HARDLINK_UNSAFE"))
+			}
+		}
+		identities = append(identities, identity)
+		if logical == "ansible.cfg" && string(content) != managedCandidateAnsibleConfig {
+			return cleanup(errors.New("PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID"))
+		}
+		limits.files++
+		limits.bytes += int64(len(content))
+		if limits.files > 4096 || len(content) > 4*1024*1024 || limits.bytes > 64*1024*1024 {
+			return cleanup(errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED"))
+		}
+		header := &tar.Header{Name: logical, Mode: 0o600, Size: int64(len(content)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}
+		if err := writer.WriteHeader(header); err != nil {
+			return cleanup(err)
+		}
+		if _, err := writer.Write(content); err != nil {
+			return cleanup(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		_ = file.Close()
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	if info, statErr := os.Stat(name); statErr != nil || info.Size() > 32*1024*1024 {
+		_ = os.Remove(name)
+		return "", errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
+	}
+	return name, nil
+}
+
+func candidateArchiveLogicalPathAllowed(logical string) bool {
+	if logical == "project.yml" || logical == "ansible.cfg" || logical == "inventory/hosts.yml" {
+		return true
+	}
+	if strings.Contains(logical, "\\") || strings.Contains(logical, ":") || path.Clean(logical) != logical || strings.HasPrefix(logical, "/") {
+		return false
+	}
+	extension := strings.ToLower(path.Ext(logical))
+	if extension != ".yml" && extension != ".yaml" && extension != ".json" {
+		return false
+	}
+	return strings.HasPrefix(logical, "inventory/group_vars/") || strings.HasPrefix(logical, "inventory/host_vars/")
+}
+
+func readStableCandidateFile(root, logical string) ([]byte, error) {
+	absolute := filepath.Join(root, filepath.FromSlash(logical))
+	if !containedLocal(root, absolute) {
+		return nil, errors.New("PROJECT_CANDIDATE_PATH_INVALID")
+	}
+	before, err := os.Lstat(absolute)
+	if err != nil || !before.Mode().IsRegular() || isUnsafeFilesystemLink(before) {
+		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+	}
+	if before.Size() > 4*1024*1024 {
+		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
+	}
+	input, err := os.Open(absolute)
+	if err != nil {
+		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+	}
+	defer input.Close()
+	opened, err := input.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+		return nil, errors.New("PROJECT_CANDIDATE_FILE_REPLACED")
+	}
+	system := reflect.ValueOf(opened.Sys())
+	if system.IsValid() && system.Kind() == reflect.Ptr && !system.IsNil() {
+		links := system.Elem().FieldByName("Nlink")
+		if links.IsValid() && links.CanUint() && links.Uint() > 1 {
+			return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+		}
+	}
+	if runtime.GOOS == "windows" {
+		output, linkErr := exec.Command("fsutil", "hardlink", "list", absolute).CombinedOutput()
+		if linkErr != nil {
+			// Error 50 means the filesystem itself does not support hardlinks.
+			// Other failures cannot prove that the candidate file is single-link.
+			if !bytes.Contains(output, []byte("Error 50:")) {
+				return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+			}
+		} else {
+			lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(string(output), "\r\n", "\n")), "\n")
+			if len(lines) != 1 || strings.TrimSpace(lines[0]) == "" {
+				return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+			}
+		}
+	}
+	content, err := io.ReadAll(io.LimitReader(input, 4*1024*1024+1))
+	if err != nil || len(content) > 4*1024*1024 {
+		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
+	}
+	after, err := input.Stat()
+	pathAfter, pathErr := os.Lstat(absolute)
+	if err != nil || pathErr != nil || !os.SameFile(opened, after) || !os.SameFile(after, pathAfter) || opened.Size() != after.Size() || !opened.ModTime().Equal(after.ModTime()) {
+		return nil, errors.New("PROJECT_CANDIDATE_FILE_REPLACED")
+	}
+	return content, nil
+}
+
+type projectArchiveLimits struct{ files, bytes int64 }
+
 func appendTarPath(writer *tar.Writer, root, source string) error {
-	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+	return filepath.WalkDir(source, func(current string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return errors.New("SERVICE_PROJECT_SYMLINK_UNSAFE")
-		}
-		relative, err := filepath.Rel(root, path)
-		if err != nil || !containedLocal(root, path) {
+		relative, err := filepath.Rel(root, current)
+		if err != nil || !containedLocal(root, current) {
 			return errors.New("SERVICE_PROJECT_PATH_INVALID")
 		}
 		if relative == "." {
 			return nil
 		}
-		fileInfo, err := entry.Info()
+		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
-		header, err := tar.FileInfoHeader(fileInfo, "")
+		if isUnsafeFilesystemLink(info) {
+			return errors.New("SERVICE_PROJECT_SYMLINK_UNSAFE")
+		}
+		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return err
 		}
@@ -484,7 +691,7 @@ func appendTarPath(writer *tar.Writer, root, source string) error {
 		if !entry.Type().IsRegular() {
 			return errors.New("SERVICE_PROJECT_FILE_UNSAFE")
 		}
-		input, err := os.Open(path)
+		input, err := os.Open(current)
 		if err != nil {
 			return err
 		}
@@ -496,6 +703,7 @@ func appendTarPath(writer *tar.Writer, root, source string) error {
 		return closeErr
 	})
 }
+
 func (t OpenSSHTransport) stageRoot() string {
 	if t.StageRoot != "" {
 		return t.StageRoot
@@ -578,7 +786,7 @@ func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []st
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s", name)
+		return out, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s", name)
 	}
 	return out, nil
 }

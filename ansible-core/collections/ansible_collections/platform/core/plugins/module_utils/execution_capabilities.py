@@ -21,6 +21,7 @@ def build_capabilities(manifest, core_version):
             "bundleDigest": manifest.get("bundleDigest", ""),
         },
         "supportedOperations": ["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"],
+        "projectSnapshotRequestVersions": ["platform.installer/project-snapshot-request/v1alpha1"],
     }
 
 

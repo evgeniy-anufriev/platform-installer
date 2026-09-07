@@ -1,9 +1,10 @@
 # Current state
 
-## UI-01A completion (2026-09-05)
+## UI-01 implementation status (2026-09-07)
 
-UI-01A, UI-01B and UI-01C are DONE. UI-01 overall remains NOT DONE; UI-01D is
-NEXT and requires an explicit owner request. UI-01B adds only the Wails/React read-only
+UI-01A through UI-01D are DONE. UI-01D was accepted by the owner without a
+final revision-bound review. UI-01 overall remains NOT DONE; UI-01E is not
+started. UI-01B adds only the Wails/React read-only
 shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
 edit/session, candidate, save or apply path.
 
@@ -43,8 +44,11 @@ UI-01A is the completed documentation freeze. UI-01B is DONE: its native
 Windows Wails shell opens an existing project read-only through a READY
 Execution Node and Core's fixed target-free ProjectSnapshot operation. UI-01C is
 DONE: metadata-only local creation publishes one managed `project.yml`, and
-empty-project reopen remains local without a Core snapshot. UI-01D is NEXT;
-first-save/edit/session work has not started.
+empty-project reopen remains local without a Core snapshot. UI-01D is DONE by
+owner acceptance without final revision-bound review: the Go-owned bounded
+transient session, negotiated remote complete-candidate Core proof, guarded
+first write and narrow Wails review/save shell passed Windows and RED OS
+acceptance. UI-01E is not started.
 
 ## Phase
 
@@ -512,10 +516,11 @@ DONE and UI-01B remains separately gated.
   deployment plan.
 - Generic Core mutation roles.
 - Production services beyond the accepted service slices.
-- Desktop or web UI transport over the accepted Go backend.
+- Production UI editor beyond the accepted UI-01B read-only, UI-01C
+  metadata-only creation and UI-01D first-write/review slices.
 - Generic backend/project persistence beyond the scoped Kafka identity
   transaction primitive.
-- Desktop or web UI.
+- UI-01E server/session-credential work and later UI editor slices.
 - Stateful listener-transition workflows; these remain deferred.
 - Imported/external CA materialization, JKS, mTLS, global JVM cacerts,
   renewal and rotation.
@@ -530,6 +535,7 @@ desired-state model.
 
 POSTGRES-01, NET-01, NET-02, NET-03, NET-03.1, NET-04, NET-04.1, UI-BE-03,
 DEVX-01, EXEC-01A, UI-BE-04B, UI-BE-04C, UI-BE-04D and UI-BE-04E are DONE.
-UI-BE-04 overall, EXEC-OBS-01 and documentation-only UI-01A are DONE. UI-01B is
-the next separately authorized milestone over the accepted project/execution
-contracts and typed RunObserver subscriptions. UI-01 overall is not done.
+UI-BE-04 overall, EXEC-OBS-01, documentation-only UI-01A, UI-01B, UI-01C and
+UI-01D are DONE. UI-01D was owner-accepted without final revision-bound
+review. UI-01E remains separately authorized and is not started; UI-01 overall
+is not done.

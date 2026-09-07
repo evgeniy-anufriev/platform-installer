@@ -3,12 +3,27 @@ package executionnode
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+type failedProtocolRunner struct{ protocolRunner }
+
+func (r *failedProtocolRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
+	if len(input) > 0 {
+		return []byte(`{"status":"FAILED","error":"PROJECT_SNAPSHOT_INPUT_INVALID","diagnostic":{"findings":[{"code":"PROJECT_SNAPSHOT_INPUT_INVALID","safeMessage":"Project snapshot inputs could not be loaded"}]}}`), errors.New("exit status 2")
+	}
+	return r.protocolRunner.Run(ctx, name, args, input)
+}
+
+func (r *failedProtocolRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	r.limits = append(r.limits, limit)
+	return r.Run(ctx, name, args, input)
+}
 
 type protocolRunner struct {
 	calls  []recordedCommand
@@ -89,6 +104,16 @@ func TestRuntimeProtocolIsTypedAndNeverCarriesClientCommandMaterial(t *testing.T
 	}
 }
 
+func TestRuntimeProtocolPreservesStructuredFailureFromNonZeroProcess(t *testing.T) {
+	runner := &failedProtocolRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	_, err := transport.runtimeProtocol(context.Background(), testNode(), map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildProjectSnapshot"})
+	var executionErr *ExecutionError
+	if !errors.As(err, &executionErr) || executionErr.Code != "PROJECT_SNAPSHOT_INPUT_INVALID" || len(executionErr.Findings) != 1 {
+		t.Fatalf("structured failure was lost: %#v", err)
+	}
+}
+
 func TestBuildProjectSnapshotUsesFixedSemanticRequestAndBoundedResponse(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
@@ -107,6 +132,163 @@ func TestBuildProjectSnapshotUsesFixedSemanticRequestAndBoundedResponse(t *testi
 	if got := runner.limits[len(runner.limits)-1]; got != maxProjectSnapshotResponseBytes {
 		t.Fatalf("response limit=%d", got)
 	}
+}
+
+func TestBuildCandidateProjectSnapshotNegotiatesAndSendsClosedRequest(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"inventory/hosts.yml": "all: {hosts: {node1: {ansible_host: 192.0.2.10}}}\n", "ansible.cfg": managedCandidateAnsibleConfig, "project.yml": "metadata: {id: project-1}\n"} {
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(name)), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revision := "sha256:" + strings.Repeat("a", 64)
+	runner := &candidateSnapshotRunner{revision: revision}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	snapshot, err := transport.BuildCandidateProjectSnapshot(context.Background(), testNode(), root, map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64)}, CandidateProjectSnapshotRequest{
+		ProjectIdentity: "project-1", CandidateProjectRevision: revision,
+		ArtifactLockDigest: "sha256:" + strings.Repeat("c", 64), CatalogLockDigest: "sha256:" + strings.Repeat("d", 64),
+		InstallerOwnedLogicalPaths: []string{"inventory/group_vars/all/platform-installer.yml"},
+	})
+	if err != nil || snapshot.ProjectRevision != revision {
+		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
+	}
+	request := runner.protocolRequest
+	for _, required := range []string{`"snapshotRequest"`, `"apiVersion":"platform.installer/project-snapshot-request/v1alpha1"`, `"editContract":"v1alpha2"`, `"installerOwnedLogicalPaths"`} {
+		if !strings.Contains(request, required) {
+			t.Fatalf("candidate request missing %s: %s", required, request)
+		}
+	}
+	for _, forbidden := range []string{`"command"`, `"argv"`, `"playbook"`} {
+		if strings.Contains(request, forbidden) {
+			t.Fatalf("unsafe candidate request: %s", request)
+		}
+	}
+	if !runnerCalledCleanup(runner.calls) {
+		t.Fatalf("candidate staging was not cleaned after success: %#v", runner.calls)
+	}
+}
+
+func TestBuildCandidateProjectSnapshotRejectsUnsupportedCapabilityBeforeStaging(t *testing.T) {
+	for name, capabilities := range map[string]string{
+		"missing request version": `{"supportedOperations":["BuildProjectSnapshot"]}`,
+		"missing operation":       `{"supportedOperations":["GetCapabilities"],"projectSnapshotRequestVersions":["platform.installer/project-snapshot-request/v1alpha1"]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			runner := &unsupportedCandidateRunner{capabilities: capabilities}
+			transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+			_, err := transport.BuildCandidateProjectSnapshot(context.Background(), testNode(), root, map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64)}, CandidateProjectSnapshotRequest{
+				ProjectIdentity: "project-1", CandidateProjectRevision: "sha256:" + strings.Repeat("a", 64),
+				ArtifactLockDigest: "sha256:" + strings.Repeat("b", 64), CatalogLockDigest: "sha256:" + strings.Repeat("c", 64),
+			})
+			if err == nil || err.Error() != "PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED" {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			for _, call := range runner.calls {
+				if call.name == "scp" {
+					t.Fatal("unsupported node received candidate staging")
+				}
+			}
+		})
+	}
+}
+
+func TestCandidateCommitPreflightRequiresOperationAndRequestVersion(t *testing.T) {
+	for name, capabilities := range map[string]string{
+		"missing request version": `{"supportedOperations":["BuildProjectSnapshot"]}`,
+		"missing operation":       `{"supportedOperations":["GetCapabilities"],"projectSnapshotRequestVersions":["platform.installer/project-snapshot-request/v1alpha1"]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := &unsupportedCandidateRunner{capabilities: capabilities}
+			transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+			err := transport.CheckCandidateProjectSnapshotCapability(context.Background(), testNode(), map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64)})
+			if err == nil || err.Error() != "PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED" {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestCandidateCommitPreflightRejectsChangedRuntimeRelease(t *testing.T) {
+	runner := &protocolRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	err := transport.CheckCandidateProjectSnapshotCapability(context.Background(), testNode(), map[string]any{"bundleDigest": "sha256:" + strings.Repeat("c", 64)})
+	if err == nil || err.Error() != "EXECUTION_RUNTIME_RELEASE_CHANGED" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+type unsupportedCandidateRunner struct {
+	protocolRunner
+	capabilities string
+}
+
+func (r *unsupportedCandidateRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
+	if strings.Contains(string(input), `"operation":"GetCapabilities"`) {
+		r.calls = append(r.calls, recordedCommand{name: name, args: append([]string(nil), args...), input: string(input)})
+		return []byte(r.capabilities), nil
+	}
+	return r.protocolRunner.Run(ctx, name, args, input)
+}
+
+func (r *unsupportedCandidateRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	r.limits = append(r.limits, limit)
+	return r.Run(ctx, name, args, input)
+}
+
+func runnerCalledCleanup(calls []recordedCommand) bool {
+	for _, call := range calls {
+		if strings.Contains(call.input, "--cleanup-snapshot-run-id") && strings.Contains(call.input, "--cleanup-request-id") && strings.Contains(call.input, "--cleanup-archive-digest") {
+			return true
+		}
+	}
+	return false
+}
+
+func runnerCalledUploadCleanup(calls []recordedCommand) bool {
+	for _, call := range calls {
+		if !strings.Contains(call.input, "sudo -n rm -rf -- \"$staging\"") && strings.Contains(call.input, "rm -rf -- \"$temporary\"") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGeneratedRunIDsAreUniqueRuntimeTokens(t *testing.T) {
+	seen := make(map[string]bool)
+	for index := 0; index < 128; index++ {
+		runID, err := newRunID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !validRuntimeToken(runID) || seen[runID] {
+			t.Fatalf("invalid or duplicate generated run ID: %q", runID)
+		}
+		seen[runID] = true
+	}
+}
+
+type candidateSnapshotRunner struct {
+	protocolRunner
+	revision, protocolRequest string
+}
+
+func (r *candidateSnapshotRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
+	if strings.Contains(string(input), `"operation":"GetCapabilities"`) {
+		return []byte(`{"supportedOperations":["BuildProjectSnapshot"],"projectSnapshotRequestVersions":["platform.installer/project-snapshot-request/v1alpha1"]}`), nil
+	}
+	if strings.Contains(string(input), `"operation":"BuildProjectSnapshot"`) {
+		r.protocolRequest = string(input)
+		return []byte(`{"projectSnapshot":{"projectRevision":"` + r.revision + `","status":"PASS"}}`), nil
+	}
+	return r.protocolRunner.Run(ctx, name, args, input)
+}
+func (r *candidateSnapshotRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	r.limits = append(r.limits, limit)
+	return r.Run(ctx, name, args, input)
 }
 
 type snapshotProtocolRunner struct {

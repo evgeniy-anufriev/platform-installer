@@ -39,7 +39,10 @@ read-only in normal UI flows.
 ## 2. Navigation and application shell
 
 After a project is opened, **Installation** is the default operational page.
-Global navigation is a persistent vertical sidebar. Its primary items are:
+Global navigation is a persistent vertical sidebar. Every project page also
+shows the current Execution Node application context in the shell; it is not
+portable project desired state. Clicking its status opens Servers and the
+Execution Node panel. Its primary items are:
 
 | Page | Responsibility |
 | --- | --- |
@@ -48,14 +51,15 @@ Global navigation is a persistent vertical sidebar. Its primary items are:
 | Topology | service instances, placement, roles and entry-point configuration |
 | Certificates | PKI profile intent, Core-derived consumers/SAN preview; no runtime issuance |
 | Services | settings of the same topology deployments, including PKI profile references |
-| Installation | readiness, plan, current workflow and direct remediation |
+| Installation | current-revision readiness summary, plan and deployment lifecycle; it does not prepare the Execution Node |
 | Logs | historical runs, audit and sanitized diagnostics |
 | Help | offline help and troubleshooting entry point |
 | About | version and compatibility information |
 | Settings | application-local settings; never portable desired state |
 
-Installation has local navigation: **Summary**, **Preparation**, **Plan**,
-**Execution**, **Result**. Topology, Certificates and Services are global pages, in that
+Installation has local navigation: **Summary**, **Plan**, **Execution**,
+**Result**. Execution Node selection and preparation belong to Servers, not an
+Installation Preparation page. Topology, Certificates and Services are global pages, in that
 order; topology creates instances and placement before profile/settings editing.
 Findings and service rows link contextually to **Topology** or **Servers**,
 depending on whether the action changes placement or physical-host readiness.
@@ -70,8 +74,9 @@ horizontally, and tables retain horizontal scrolling rather than hiding data.
 The page has five compact regions in this order:
 
 1. Project breadcrumb, page title and aggregate state.
-2. Execution Node strip: selected node, address, Ansible/Python capability,
-   offline payload, disk capacity and an **Configure and prepare** action.
+2. Execution Node readiness prerequisite summary: selected node, current
+   capability/revision state and a link to Servers. There is no setup or
+   preparation card on Installation.
 3. A persistent stage strip: Validate → Plan → Execute → Result. It remains
    visible on every Installation local page and highlights the current stage;
    local-page navigation does not imply a workflow transition.
@@ -80,20 +85,12 @@ The page has five compact regions in this order:
 5. A plan preview grouped by Servers, Services and Certificates, with one
    page-level **Generate plan** action on Summary.
 
-The Summary action is disabled until the selected Execution Node has completed
-its required preparation successfully. Its disabled explanation links to the
-Execution Node strip; it is not duplicated inside an individual service or
-node card. A subsequent topology/configuration change invalidates the plan,
-but does not silently claim that node preparation still applies when its
-observed capability fingerprint has changed.
-
-**Configure and prepare Execution Node** opens a modal workflow with: mode
-(local Installer, selected project server or external Linux host), selected
-host/transport metadata, current-session credential reference, non-secret
-readiness checks (SSH/elevation, Python/Ansible, payload, workspace and disk)
-and the planned preparation/result. Checking is read-only; preparation is an
-explicit action. The dialog neither stores a password/key nor substitutes the
-Execution Node for a topology placement.
+The Summary action is enabled only when all current-revision prerequisites hold:
+READY Execution Node, saved canonical project, no unsaved edit session changes,
+authoritative Core validation for the current revision, and non-stale revision
+and fingerprint. Its disabled explanation links to the Servers Execution Node
+panel or the project review state. Installation never selects, prepares,
+bootstraps, activates or updates the Execution Node.
 
 The UI distinguishes desired state, observed state, finding, proposed action
 and execution result. A green TCP check is not presented as Kafka health;
