@@ -80,22 +80,58 @@ Never persist plaintext secrets in project files, inventory, logs, events, audit
   protocols, paths, identities and security policy must come from the resolved
   runtime projection shared by apply, verify and diagnostics.
 - Update decisions and roadmap when a boundary changes.
-- For milestone architecture plans, delegate to `architecture-reviewer`
-  (`.codex/agents/architecture-reviewer.toml`) before presenting the plan for
-  owner approval. Repeat on the implementation diff before milestone commit.
-  Overengineering review is mandatory in both modes; require zero unresolved
-  blocking findings. Material changes invalidate the affected review findings.
-  Supply milestone, PLAN/DIFF mode, exact revision identity, scope,
-  non-goals, owner decisions, relevant contracts and QA evidence. Do not
-  supply an expected verdict or self-review conclusion. A material change
-  makes the affected review STALE; owner approval is forbidden while a required
-  PLAN review is stale or pending, and commit is forbidden while a required
-  DIFF review is stale or pending. Review does not replace owner authorization
-  or required Core-contract/safety reviews. If the custom role cannot be
-  loaded, give the SAME full reviewer instructions to an independent read-only
-  subagent and disclose that fallback. Self-review never counts as independent
-  review. If no independent reviewer/subagent is available, the gate remains
-  PENDING rather than becoming self-approved.
+- `architecture-reviewer` (`.codex/agents/architecture-reviewer.toml`) is an
+  independent read-only advisor to the owner, not an autonomous approval or
+  convergence authority. For an architecture-sensitive plan, run one FULL
+  PLAN review before presenting the plan to the owner. APPROVE goes to owner
+  approval; APPROVE_WITH_CHANGES may receive obvious bounded nonblocking
+  corrections and then goes to the owner without an automatic full re-review;
+  BLOCK stops automatic work and returns the finding IDs, evidence, impact,
+  smallest corrections and implementer recommendation to the owner. Never
+  redesign and repeatedly review until APPROVE. A further full PLAN review
+  requires an explicit owner request, except that one new review may follow a
+  materially changed owner-approved architecture revision.
+- Architecture DIFF review is risk-based. HIGH-RISK changes require one FULL
+  DIFF review: canonical-state ownership, filesystem transactions/first save,
+  migration, secret or credential persistence/security boundaries, Execution
+  Node or process lifecycle/cancel/recovery, artifact/bundle trust or source
+  authority, Vault/container-runtime architecture, a new persistence layer, or
+  public/versioned contract architecture. MEDIUM-RISK changes normally rely on
+  the PLAN review and need DIFF review only when the approved plan requires it,
+  implementation changes architecture materially, or the owner requests it;
+  examples include typed CRUD on the existing lifecycle, server model
+  extensions, service editor integration and topology UI on existing
+  contracts. LOW-RISK layout/labels/display fields, application-config value
+  additions, CLI formatting, documentation, straightforward tests and bounded
+  fixes within an approved contract normally require no architecture review.
+- Per architecture review gate, the maximum automatic budget is one initial
+  FULL review plus at most one TARGETED_RECHECK of owner-approved corrected
+  blocker IDs. The recheck inspects only those findings and the immediately
+  affected boundary. If it still BLOCKS, stop and return to the owner; there is
+  no third automatic cycle. Nonblocking findings never trigger an automatic
+  rerun. Any review beyond this budget requires explicit owner authorization.
+- A material architecture change is narrowly limited to a change in canonical
+  state ownership, persistence, public/versioned contract semantics,
+  Core/Go/UI ownership, execution or resolver/source-selection authority,
+  secret/security boundary, transaction/rollback model, daemon/lifecycle
+  subsystem, or owner-approved architectural scope. Tests, names, error text,
+  missing bounds/cleanup, negative tests, finding corrections that preserve the
+  approved architecture, documentation synchronization and behavior-preserving
+  local refactors do not automatically invalidate the whole review. If
+  uncertain, report that uncertainty to the owner instead of starting another
+  full review.
+- Mandatory overengineering review remains. It is blocking only with evidence
+  of a concrete unnecessary mechanism, a viable simpler existing/standard
+  alternative satisfying the current requirement, and material maintenance,
+  contract or safety cost. A merely aesthetic preference is nonblocking.
+  Architecture review never replaces owner authorization or applicable
+  Core-contract, safety and QA gates. Supply a facts-only envelope with mode,
+  FULL/TARGETED_RECHECK context, exact revision identity, scope/non-goals,
+  owner decisions, contracts and available evidence; never supply an expected
+  verdict or self-review conclusion. If the custom role cannot be loaded, give
+  the same full instructions to an independent read-only subagent and disclose
+  the fallback. Self-review never counts. If no independent reviewer is
+  available, report the review as unavailable/pending.
 - Use focused subagents for independent architecture review, implementation or QA when requested.
 - Keep V1 unchanged unless the user explicitly requests a V1 change.
 

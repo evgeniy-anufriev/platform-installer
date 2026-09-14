@@ -77,16 +77,15 @@ They are procedures, not duplicated architecture documentation.
 
 ## 9. Agent/reviewer roles
 
-The repository now includes a project-scoped custom agent:
+The repository includes one project-scoped custom agent:
 [architecture-reviewer](../.codex/agents/architecture-reviewer.toml).
-It reviews plans before owner approval and implementation diffs before
-milestone commit, including mandatory overengineering analysis. Its TOML
-defines read-only behavior and the report contract; model settings inherit
-from the caller. PLAN reviews identify the exact plan revision (git object or
-deterministic SHA-256); DIFF reviews identify the base commit and exact head
-commit or deterministic worktree-diff fingerprint. A material change makes
-the affected review stale and requires re-review. Other roles below remain
-documented prompt templates:
+It is an independent read-only advisor to the owner, not an autonomous approval
+authority. It performs one FULL review where required and includes mandatory
+overengineering analysis. Its TOML defines read-only behavior and the report
+contract; model settings inherit from the caller. PLAN reviews identify the
+exact plan revision (git object or deterministic SHA-256); DIFF reviews identify
+the base commit and exact head commit or deterministic worktree-diff
+fingerprint. Other roles below remain documented prompt templates:
 
 - **go-implementer**: implement one bounded Go backend task with
   `installer-go-backend`; use `core-adapter-contract` when Core interaction
@@ -100,6 +99,63 @@ documented prompt templates:
   subprocess/cancellation lifecycle and sensitive logs.
 
 No service-specific agents are created. UI implementer is deferred.
+
+### Bounded architecture-review lifecycle
+
+For an architecture-sensitive PLAN, the author creates one concrete revision
+and requests one FULL PLAN review. APPROVE goes to owner approval.
+APPROVE_WITH_CHANGES may receive obvious bounded nonblocking corrections and is
+then presented to the owner without an automatic full re-review. BLOCK stops
+automatic work; the parent returns finding IDs, evidence, impact, smallest
+corrections and its recommendation to the owner. Further full PLAN review needs
+an explicit owner request, except for one new review of a materially changed
+owner-approved architecture revision.
+
+Architecture DIFF review is risk-based:
+
+| Risk | Default architecture review |
+| --- | --- |
+| HIGH — state ownership, transactions/first save, migration, secrets/security, Execution Node/process lifecycle, source/bundle trust, new persistence or public contract architecture | One FULL DIFF review |
+| MEDIUM — typed CRUD on an existing lifecycle, server model extension, service editor integration, topology UI on existing contracts | PLAN review normally sufficient; DIFF only when required by the plan, material architecture drift or owner request |
+| LOW — React display/layout, labels, application-config values, CLI formatting, docs, straightforward tests or bounded fixes within an approved contract | Normally no architecture review |
+
+For a HIGH-RISK DIFF that returns BLOCK, the parent stops and returns findings
+to the owner. After an owner-approved correction, the parent may run one
+TARGETED_RECHECK limited to those finding IDs and their immediately affected
+boundary. A second BLOCK returns to the owner; no third automatic cycle or full
+review restart is allowed.
+
+The formal maximum automatic budget per gate is:
+
+```text
+1 initial FULL review + at most 1 TARGETED_RECHECK
+```
+
+Nonblocking findings never trigger an automatic rerun. Anything beyond the
+budget requires explicit owner authorization. Material architecture change is
+limited to ownership, persistence, public contract semantics, execution/source
+authority, security boundaries, transaction model, lifecycle subsystem or an
+owner-approved architectural scope change. Tests, names, messages, missing
+bounds/cleanup, negative tests, documentation and behavior-preserving refactors
+do not invalidate the whole review automatically. Uncertainty is reported to
+the owner instead of starting a review loop.
+
+Overengineering remains mandatory, but it blocks only when the reviewer shows
+a concrete unnecessary mechanism, a viable simpler existing/standard mechanism
+that meets the current need, and material maintenance, contract or safety cost.
+Aesthetic alternatives are nonblocking. Architecture review does not replace
+owner authorization or applicable Core-contract, safety and QA gates.
+
+Concrete process checks:
+
+| Scenario | Expected result |
+| --- | --- |
+| PLAN → APPROVE | Present to owner; no second review |
+| PLAN → APPROVE_WITH_CHANGES → bounded correction | Present revision and findings to owner; no automatic full re-review |
+| PLAN → BLOCK | Stop and return blockers to owner; no autonomous redesign loop |
+| HIGH DIFF → BLOCK → owner correction → TARGETED_RECHECK PASS | Continue normal gates; do not restart FULL DIFF review |
+| TARGETED_RECHECK still BLOCKS | Stop for owner decision; no third automatic review |
+| Simple React/display change | No architecture review by default |
 
 ## 10. Invocation examples
 
