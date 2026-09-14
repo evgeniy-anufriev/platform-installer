@@ -1,0 +1,540 @@
+import { useEffect, useState } from "react";
+import type { OpenResult } from "./backend";
+
+export type ServerIntent = Record<string, unknown> & {
+  operation: "CreateServer" | "UpdateServer" | "DeleteServer";
+  hostId: string;
+};
+type Row = {
+  hostId: string;
+  type: string;
+  desiredHostname: string;
+  address: string;
+  port: number;
+  state?: "new" | "changed" | "deleting";
+};
+type Dialog =
+  | { mode: "add" }
+  | { mode: "edit"; row: Row }
+  | { mode: "delete"; row: Row }
+  | null;
+type ServerType = { id: string; displayName: string };
+
+function rows(
+  snapshot: OpenResult["snapshot"],
+  intents: ServerIntent[],
+): Row[] {
+  const result = new Map<string, Row>();
+  for (const [hostId, raw] of Object.entries(snapshot?.hosts || {})) {
+    const host = raw as Record<string, unknown>;
+    result.set(hostId, {
+      hostId,
+      type: String(host.type || ""),
+      desiredHostname: String(host.desiredHostname || ""),
+      address: String(host.ansibleHost || ""),
+      port: Number(host.ansiblePort || 22),
+    });
+  }
+  for (const intent of intents) {
+    const existing = result.get(intent.hostId);
+    if (intent.operation === "CreateServer")
+      result.set(intent.hostId, {
+        hostId: intent.hostId,
+        type: String(intent.type || ""),
+        desiredHostname: String(intent.desiredHostname || ""),
+        address: String(intent.address || ""),
+        port: typeof intent.sshPort === "number" ? intent.sshPort : 22,
+        state: "new",
+      });
+    else if (intent.operation === "UpdateServer" && existing)
+      result.set(intent.hostId, {
+        ...existing,
+        type: intent.type === undefined ? existing.type : String(intent.type),
+        desiredHostname:
+          intent.desiredHostname === undefined
+            ? existing.desiredHostname
+            : String(intent.desiredHostname),
+        address:
+          intent.address === undefined
+            ? existing.address
+            : String(intent.address),
+        port:
+          typeof intent.sshPort === "number" ? intent.sshPort : existing.port,
+        state: "changed",
+      });
+    else if (intent.operation === "DeleteServer" && existing)
+      result.set(intent.hostId, { ...existing, state: "deleting" });
+  }
+  return [...result.values()].sort((a, b) => a.hostId.localeCompare(b.hostId));
+}
+
+export function ServersPage({
+  snapshot,
+  empty,
+  stale,
+  intents,
+  serverTypes,
+  configError,
+  busy,
+  onAppend,
+  onReview,
+  onDiscard,
+  commandCount,
+  onRefresh,
+}: {
+  snapshot: OpenResult["snapshot"];
+  empty: boolean;
+  stale: boolean;
+  intents: ServerIntent[];
+  serverTypes: ServerType[];
+  configError: string | null;
+  busy: boolean;
+  onAppend: (intent: ServerIntent) => Promise<boolean>;
+  onReview: () => void;
+  onDiscard: () => void;
+  commandCount: number;
+  onRefresh: () => void;
+}) {
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const visible = rows(snapshot, intents);
+  if (stale)
+    return (
+      <section className="card error">
+        <h1>Снимок проекта требует обновления</h1>
+        <p>
+          Изменения сохранены, но authoritative Core snapshot не был обновлён.
+          Серверы не показываются как актуальные.
+        </p>
+        <button onClick={onRefresh} disabled={busy}>
+          Обновить снимок проекта
+        </button>
+      </section>
+    );
+  const firstSave = empty;
+  return (
+    <>
+      <section className="title servers-title">
+        <div>
+          <h1>Серверы</h1>
+          <p>Желаемая конфигурация серверов проекта.</p>
+        </div>
+        <button
+          onClick={() => setDialog({ mode: "add" })}
+          disabled={busy || !!configError}
+        >
+          Добавить сервер
+        </button>
+      </section>
+      {configError && (
+        <section className="field-error card" role="alert">
+          {configError} Создание сервера и изменение типа недоступны.
+        </section>
+      )}
+      {visible.length === 0 ? (
+        <section className="card empty">
+          <h2>Серверов пока нет</h2>
+          <p>
+            Добавление сервера создаёт typed intent. Файлы появятся только после
+            проверки и общего сохранения.
+          </p>
+          <button
+            onClick={() => setDialog({ mode: "add" })}
+            disabled={busy || !!configError}
+          >
+            Добавить первый сервер
+          </button>
+        </section>
+      ) : (
+        <section className="card server-table">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Тип</th>
+                <th>Желаемое имя</th>
+                <th>Адрес</th>
+                <th>SSH</th>
+                <th>Состояние</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((row) => {
+                const created = row.state === "new";
+                const disableCrud =
+                  busy || row.state === "deleting" || (firstSave && created);
+                return (
+                  <tr
+                    key={row.hostId}
+                    className={row.state ? `draft-${row.state}` : ""}
+                  >
+                    <td>
+                      <b>{row.hostId}</b>
+                    </td>
+                    <td>{labelType(row.type, serverTypes)}</td>
+                    <td>{row.desiredHostname || <em>Не задано</em>}</td>
+                    <td>{row.address}</td>
+                    <td>{row.port}</td>
+                    <td>
+                      {row.state === "new"
+                        ? "Новый"
+                        : row.state === "changed"
+                          ? "Изменён"
+                          : row.state === "deleting"
+                            ? "Будет удалён"
+                            : "Сохранён"}
+                    </td>
+                    <td>
+                      {firstSave && created ? (
+                        <small>Доступно после первого сохранения</small>
+                      ) : (
+                        <>
+                          <button
+                            className="link"
+                            onClick={() => setDialog({ mode: "edit", row })}
+                            disabled={disableCrud}
+                          >
+                            Изменить
+                          </button>
+                          {" · "}
+                          <button
+                            className="link danger"
+                            onClick={() => setDialog({ mode: "delete", row })}
+                            disabled={disableCrud}
+                          >
+                            Удалить
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+      {commandCount > 0 && (
+        <section className="card draft-actions">
+          <p>
+            Черновик: {commandCount}. Core проверит полный candidate на
+            выбранном Execution Node.
+          </p>
+          <button className="outline" onClick={onDiscard} disabled={busy}>
+            Отменить все изменения
+          </button>
+          <button onClick={onReview} disabled={busy}>
+            Проверить изменения
+          </button>
+        </section>
+      )}
+      {dialog?.mode === "add" && (
+        <ServerDialog
+          mode="add"
+          serverTypes={serverTypes}
+          configError={configError}
+          busy={busy}
+          onClose={() => setDialog(null)}
+          onAppend={async (intent) => {
+            const ok = await onAppend(intent);
+            if (ok) setDialog(null);
+            return ok;
+          }}
+        />
+      )}
+      {dialog?.mode === "edit" && (
+        <ServerDialog
+          mode="edit"
+          row={dialog.row}
+          serverTypes={serverTypes}
+          configError={configError}
+          busy={busy}
+          onClose={() => setDialog(null)}
+          onAppend={async (intent) => {
+            const ok = await onAppend(intent);
+            if (ok) setDialog(null);
+            return ok;
+          }}
+        />
+      )}
+      {dialog?.mode === "delete" && (
+        <DeleteDialog
+          row={dialog.row}
+          busy={busy}
+          onClose={() => setDialog(null)}
+          onAppend={async (intent) => {
+            const ok = await onAppend(intent);
+            if (ok) setDialog(null);
+            return ok;
+          }}
+        />
+      )}
+    </>
+  );
+}
+function labelType(value: string, types: ServerType[]) {
+  const found = types.find((item) => item.id === value);
+  return found
+    ? `${found.displayName} (${value})`
+    : value
+      ? `Неизвестный тип (${value})`
+      : "Не задан";
+}
+function ServerDialog({
+  mode,
+  row,
+  serverTypes,
+  configError,
+  busy,
+  onClose,
+  onAppend,
+}: {
+  mode: "add" | "edit";
+  row?: Row;
+  serverTypes: ServerType[];
+  configError: string | null;
+  busy: boolean;
+  onClose: () => void;
+  onAppend: (intent: ServerIntent) => Promise<boolean>;
+}) {
+  const [hostId, setHostId] = useState(row?.hostId || "");
+  const [type, setType] = useState(row?.type || "");
+  const [desiredHostname, setDesiredHostname] = useState(
+    row?.desiredHostname || "",
+  );
+  const [address, setAddress] = useState(row?.address || "");
+  const [portMode, setPortMode] = useState<
+    "inherit" | "explicit" | "unchanged" | "clear"
+  >(mode === "add" ? "inherit" : "unchanged");
+  const [port, setPort] = useState(row?.port ? String(row.port) : "");
+  const [error, setError] = useState("");
+  const unknownCurrentType =
+    mode === "edit" &&
+    type !== "" &&
+    !serverTypes.some((serverType) => serverType.id === type);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) =>
+      event.key === "Escape" && !busy && onClose();
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [busy, onClose]);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const numericPort = Number(port);
+    if (
+      !hostId ||
+      !address ||
+      !desiredHostname ||
+      (mode === "add" && (!type || configError)) ||
+      (mode === "edit" && !type && !!configError) ||
+      (portMode === "explicit" &&
+        (!Number.isInteger(numericPort) ||
+          numericPort < 1 ||
+          numericPort > 65535))
+    ) {
+      setError(
+        mode === "edit" && !type && configError
+          ? "Для сервера без типа требуется доступная конфигурация приложения."
+          : "Заполните обязательные поля и корректный SSH-порт.",
+      );
+      return;
+    }
+    if (mode === "add") {
+      const intent: ServerIntent = {
+        operation: "CreateServer",
+        hostId,
+        type,
+        desiredHostname,
+        address,
+      };
+      if (portMode === "explicit") intent.sshPort = numericPort;
+      await onAppend(intent);
+      return;
+    }
+    const intent: ServerIntent = { operation: "UpdateServer", hostId };
+    if (type !== row?.type) intent.type = type;
+    if (desiredHostname !== row?.desiredHostname)
+      intent.desiredHostname = desiredHostname;
+    if (address !== row?.address) intent.address = address;
+    if (portMode === "explicit") intent.sshPort = numericPort;
+    if (portMode === "clear") intent.clearSSHPort = true;
+    if (Object.keys(intent).length === 2) {
+      onClose();
+      return;
+    }
+    await onAppend(intent);
+  };
+  const typeDisabled = !!configError || (mode === "edit" && !!configError);
+  return (
+    <div className="modal" role="presentation">
+      <form
+        className="card dialog server-dialog"
+        onSubmit={submit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="server-title"
+      >
+        <h1 id="server-title">
+          {mode === "add" ? "Добавить сервер" : "Изменить сервер"}
+        </h1>
+        <label>
+          ID сервера
+          <input
+            value={hostId}
+            onChange={(event) => setHostId(event.target.value)}
+            readOnly={mode === "edit"}
+            required
+            autoFocus
+          />
+        </label>
+        <label>
+          Тип сервера
+          {configError && mode === "edit" ? (
+            <input value={type || "Не задан"} readOnly />
+          ) : (
+            <select
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+              disabled={typeDisabled}
+              required={mode === "add" || !type}
+            >
+              <option value="">Выберите тип</option>
+              {unknownCurrentType && (
+                <option value={type}>Неизвестный тип ({type})</option>
+              )}
+              {serverTypes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.displayName} ({item.id})
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+        <label>
+          Желаемое имя хоста
+          <input
+            value={desiredHostname}
+            onChange={(event) => setDesiredHostname(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          IP-адрес / DNS-имя
+          <input
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          SSH-порт
+          <select
+            value={portMode}
+            onChange={(event) =>
+              setPortMode(event.target.value as typeof portMode)
+            }
+          >
+            <option value="inherit">Использовать inherited/default</option>
+            {mode === "edit" && <option value="unchanged">Не изменять</option>}
+            <option value="explicit">Задать явно</option>
+            {mode === "edit" && (
+              <option value="clear">Убрать Installer override</option>
+            )}
+          </select>
+        </label>
+        {portMode === "explicit" && (
+          <label>
+            Явный SSH-порт
+            <input
+              type="number"
+              min="1"
+              max="65535"
+              value={port}
+              onChange={(event) => setPort(event.target.value)}
+              required
+            />
+          </label>
+        )}
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+        <p className="muted">
+          Сохранить изменение в черновик. Файлы проекта будут изменены только
+          после проверки и общего сохранения проекта.
+        </p>
+        <div className="actions">
+          <button
+            type="button"
+            className="outline"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Отмена
+          </button>
+          <button
+            type="submit"
+            disabled={busy || (mode === "add" && !!configError)}
+            title="Сохранить изменение в черновик. Файлы проекта будут изменены только после проверки и общего сохранения проекта."
+          >
+            Сохранить
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+function DeleteDialog({
+  row,
+  busy,
+  onClose,
+  onAppend,
+}: {
+  row: Row;
+  busy: boolean;
+  onClose: () => void;
+  onAppend: (intent: ServerIntent) => Promise<boolean>;
+}) {
+  return (
+    <div className="modal" role="presentation">
+      <section
+        className="card dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-title"
+      >
+        <h1 id="delete-title">Удалить сервер</h1>
+        <p>
+          Сервер <b>{row.hostId}</b> будет удалён из inventory. Связанные
+          сервисы и размещение автоматически не удаляются.
+        </p>
+        <div className="actions">
+          <button
+            className="outline"
+            autoFocus
+            onClick={onClose}
+            disabled={busy}
+          >
+            Отмена
+          </button>
+          <button
+            className="danger-button"
+            onClick={async () => {
+              if (
+                await onAppend({
+                  operation: "DeleteServer",
+                  hostId: row.hostId,
+                })
+              )
+                onClose();
+            }}
+            disabled={busy}
+          >
+            Удалить
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}

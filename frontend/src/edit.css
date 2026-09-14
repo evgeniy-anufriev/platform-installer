@@ -32,3 +32,73 @@
   color: #344054;
   line-height: 1.7;
 }
+.servers-title {
+  align-items: center;
+}
+.server-table {
+  overflow-x: auto;
+}
+.server-table table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+.server-table th,
+.server-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+}
+.server-table th {
+  color: #475569;
+  font-size: 12px;
+}
+.draft-new {
+  background: #eff6ff;
+}
+.draft-changed {
+  background: #fffbeb;
+}
+.draft-deleting {
+  opacity: 0.62;
+  text-decoration: line-through;
+}
+.draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.server-dialog {
+  max-width: 620px;
+}
+.server-dialog label {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  font-weight: 650;
+}
+.server-dialog input,
+.server-dialog select {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+  background: #fff;
+}
+.danger,
+.danger-button {
+  color: #b42318;
+}
+.danger-button {
+  border-color: #b42318;
+}
+.review-dialog {
+  max-width: 720px;
+}
+@media (max-width: 860px) {
+  .servers-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

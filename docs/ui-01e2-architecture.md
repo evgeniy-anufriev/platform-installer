@@ -1,6 +1,6 @@
 # UI-01E2 — Servers page + Add/Edit/Delete architecture
 
-Status: **PLAN / IMPLEMENTATION NOT STARTED**. This milestone implements the
+Status: **IMPLEMENTATION IN PROGRESS**. This milestone implements the
 production Servers editor surface over the accepted UI-01D lifecycle and the
 UI-01E1 server CRUD contract. It does not implement runtime credentials,
 connection discovery, Execution Node management or readiness.

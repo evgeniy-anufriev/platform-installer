@@ -2,523 +2,353 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import type { OpenResult, ProjectBackend } from "./backend";
 
-const editApi = () => ({
-  getApplicationConfig: vi
-    .fn()
-    .mockResolvedValue({
+const sessionID = "0123456789abcdef0123456789abcdef";
+const project = {
+  status: "OPEN",
+  root: "C:/Projects/test",
+  classification: "MANAGED_PROJECT",
+  snapshot: {
+    status: "PASS",
+    project: { name: "Test" },
+    projectRevision: "sha256:old",
+    snapshotFingerprint: "sha256:snapshot",
+    hosts: {
+      node1: {
+        type: "infra",
+        desiredHostname: "node1.example.internal",
+        ansibleHost: "192.0.2.10",
+        ansiblePort: 2222,
+      },
+    },
+    serviceDeployments: {},
+    pki: {},
+    findings: [],
+    documents: [],
+  },
+};
+const emptyProject = {
+  status: "OPEN",
+  root: "C:/Projects/test",
+  classification: "EMPTY_MANAGED_PROJECT",
+  project: {
+    id: "project-0123456789abcdef",
+    name: "Test",
+    source: { bundleDigest: "sha256:bundle" },
+  },
+  counts: { servers: 0, deployments: 0, runs: 0 },
+};
+
+type MockApi = ProjectBackend & {
+  chooseProject: ReturnType<typeof vi.fn>;
+  openProject: ReturnType<typeof vi.fn>;
+  startEditSession: ReturnType<typeof vi.fn>;
+  appendEditCommand: ReturnType<typeof vi.fn>;
+  reviewEditSession: ReturnType<typeof vi.fn>;
+  commitEditPlan: ReturnType<typeof vi.fn>;
+  discardEditSession: ReturnType<typeof vi.fn>;
+};
+
+function api(overrides: Record<string, unknown> = {}): MockApi {
+  return {
+    getApplicationConfig: vi.fn().mockResolvedValue({
       status: "READY",
       config: {
         schemaVersion: 1,
         serverTypes: [{ id: "infra", displayName: "Инфраструктура" }],
       },
     }),
-  startEditSession: vi.fn(),
-  appendEditCommand: vi.fn(),
-  reviewEditSession: vi.fn(),
-  commitEditPlan: vi.fn(),
-  discardEditSession: vi.fn(),
-});
+    chooseProject: vi.fn(),
+    openProject: vi.fn(),
+    chooseProjectParent: vi.fn(),
+    createProject: vi.fn(),
+    closeProject: vi.fn().mockResolvedValue({ status: "NO_PROJECT" }),
+    startEditSession: vi.fn().mockResolvedValue({
+      status: "EDITING",
+      session: { sessionId: sessionID, commandCount: 0 },
+    }),
+    appendEditCommand: vi.fn().mockResolvedValue({
+      status: "EDITING",
+      session: { sessionId: sessionID, commandCount: 1 },
+    }),
+    reviewEditSession: vi.fn(),
+    commitEditPlan: vi.fn(),
+    discardEditSession: vi.fn().mockResolvedValue({ status: "DISCARDED" }),
+    ...overrides,
+  } as unknown as MockApi;
+}
 
-describe("UI-01B read-only shell", () => {
-  it("opens and closes a Core snapshot without exposing edit actions", async () => {
-    const api = {
-      ...editApi(),
-      chooseProject: vi
-        .fn()
-        .mockResolvedValue({
-          status: "OPEN",
-          root: "C:/fixture",
-          snapshot: {
-            status: "PASS",
-            project: { name: "Fixture" },
-            projectRevision: "sha256:abc",
-            snapshotFingerprint: "sha256:def",
-            hosts: { node1: {} },
-            serviceDeployments: {},
-            pki: {},
-            findings: [],
-            documents: [],
-          },
-        }),
-      chooseProjectParent: vi.fn(),
-      createProject: vi.fn(),
-      closeProject: vi.fn().mockResolvedValue({ status: "NO_PROJECT" }),
-    };
-    render(<App api={api} />);
+async function openServers(
+  value: MockApi,
+  open: OpenResult = project as unknown as OpenResult,
+) {
+  value.chooseProject.mockResolvedValue(open);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+}
+
+describe("UI-01E2 server editor", () => {
+  it("adds a first server as a transient v1alpha3 CreateServer intent", async () => {
+    const value = api();
+    await openServers(value, emptyProject as unknown as OpenResult);
     await userEvent.click(
-      screen.getByRole("button", { name: "Открыть папку проекта" }),
+      screen.getByRole("button", { name: "Добавить сервер" }),
     );
-    expect(
-      await screen.findByRole("heading", { name: "Fixture" }),
-    ).toBeTruthy();
-    expect(screen.getByText("Проверено Core")).toBeTruthy();
-    expect(screen.queryByText("Сохранить")).toBeNull();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Закрыть проект" }),
+    await userEvent.type(screen.getByLabelText("ID сервера"), "node1");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Тип сервера"),
+      "infra",
     );
-    expect(
-      await screen.findByText(
-        "Выберите существующий проект или создайте новый",
-      ),
-    ).toBeTruthy();
+    await userEvent.type(
+      screen.getByLabelText("Желаемое имя хоста"),
+      "node1.example.internal",
+    );
+    await userEvent.type(
+      screen.getByLabelText("IP-адрес / DNS-имя"),
+      "192.0.2.10",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "CreateServer",
+      hostId: "node1",
+      type: "infra",
+      desiredHostname: "node1.example.internal",
+      address: "192.0.2.10",
+    });
+    expect(screen.getByText("Доступно после первого сохранения")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Изменить" })).toBeNull();
   });
 
-  it("creates and renders an empty managed project without a Core snapshot", async () => {
-    const api = {
-      ...editApi(),
-      chooseProject: vi.fn(),
-      chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),
-      closeProject: vi.fn(),
-      createProject: vi
-        .fn()
-        .mockResolvedValue({
-          status: "OPEN",
-          root: "C:/Projects/new-project",
-          classification: "EMPTY_MANAGED_PROJECT",
-          project: {
-            id: "project-0123456789abcdef",
-            name: "New Project",
-            source: {
-              id: "default",
-              bundleDigest: "sha256:bundle",
-              catalogDigest: "sha256:catalog",
-            },
-          },
-          counts: { servers: 0, deployments: 0, runs: 0 },
-        }),
-    };
-    render(<App api={api} />);
+  it("sends explicit port 22 only when the operator chooses it", async () => {
+    const value = api();
+    await openServers(value, emptyProject as unknown as OpenResult);
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Создать проект" })[0],
+      screen.getByRole("button", { name: "Добавить сервер" }),
+    );
+    await userEvent.type(screen.getByLabelText("ID сервера"), "node1");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Тип сервера"),
+      "infra",
     );
     await userEvent.type(
-      screen.getByLabelText("Название проекта"),
-      "New Project",
+      screen.getByLabelText("Желаемое имя хоста"),
+      "node1.example.internal",
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Выбрать parent" }),
-    );
-    await userEvent.clear(screen.getByLabelText("Название проекта"));
     await userEvent.type(
-      screen.getByLabelText("Название проекта"),
-      "Renamed Project",
+      screen.getByLabelText("IP-адрес / DNS-имя"),
+      "192.0.2.10",
     );
-    expect(
-      (screen.getByLabelText("Новая папка проекта") as HTMLInputElement).value,
-    ).toBe("C:/Projects\\Renamed Project");
-    await userEvent.clear(screen.getByLabelText("Новая папка проекта"));
-    await userEvent.type(
-      screen.getByLabelText("Новая папка проекта"),
-      "D:/Manual/custom-folder",
+    await userEvent.selectOptions(
+      screen.getByLabelText("SSH-порт"),
+      "explicit",
     );
-    await userEvent.clear(screen.getByLabelText("Название проекта"));
-    await userEvent.type(
-      screen.getByLabelText("Название проекта"),
-      "Final Project",
-    );
-    expect(
-      (screen.getByLabelText("Новая папка проекта") as HTMLInputElement).value,
-    ).toBe("D:/Manual/Final Project");
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
-    );
-    expect(
-      await screen.findByRole("heading", { name: "Проект ещё не настроен" }),
-    ).toBeTruthy();
-    expect(screen.getByText("Не создан")).toBeTruthy();
-    expect(api.createProject).toHaveBeenCalledWith({
-      projectRoot: "D:/Manual/Final Project",
-      displayName: "Final Project",
-      compatibilitySourceId: "default",
+    await userEvent.clear(screen.getByLabelText("Явный SSH-порт"));
+    await userEvent.type(screen.getByLabelText("Явный SSH-порт"), "22");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "CreateServer",
+      hostId: "node1",
+      type: "infra",
+      desiredHostname: "node1.example.internal",
+      address: "192.0.2.10",
+      sshPort: 22,
     });
   });
 
-  it("shows a create error immediately instead of keeping its modal open", async () => {
-    const api = {
-      ...editApi(),
-      chooseProject: vi.fn(),
-      chooseProjectParent: vi.fn(),
-      closeProject: vi.fn(),
-      createProject: vi
-        .fn()
-        .mockResolvedValue({
-          status: "ERROR",
-          error: {
-            code: "PROJECT_COMPATIBILITY_SOURCE_UNAVAILABLE",
-            message: "Нет проверенного local source.",
-          },
-        }),
-    };
-    render(<App api={api} />);
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Создать проект" })[0],
-    );
-    await userEvent.type(screen.getByLabelText("Название проекта"), "Project");
-    await userEvent.type(
-      screen.getByLabelText("Новая папка проекта"),
-      "C:/Projects/project",
-    );
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
-    );
-    expect(
-      await screen.findByText("Нет проверенного local source."),
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole("heading", { name: "Создать проект" }),
-    ).toBeNull();
-  });
-
-  it("requires a project name and never calls the backend without one", async () => {
-    const api = {
-      ...editApi(),
-      chooseProject: vi.fn(),
-      chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),
-      closeProject: vi.fn(),
-      createProject: vi.fn(),
-    };
-    render(<App api={api} />);
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Создать проект" })[0],
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Выбрать parent" }),
-    );
-    expect(
-      (screen.getByLabelText("Новая папка проекта") as HTMLInputElement).value,
-    ).toBe("C:/Projects\\");
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
-    );
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Заполните «Название проекта»",
-    );
-    expect(api.createProject).not.toHaveBeenCalled();
-  });
-
-  it("keeps first-save changes transient until review and explicit save", async () => {
-    const project = {
-      status: "OPEN",
-      root: "C:/Projects/test",
-      classification: "EMPTY_MANAGED_PROJECT",
-      project: {
-        id: "project-0123456789abcdef",
-        name: "Test",
-        source: { bundleDigest: "sha256:bundle" },
-      },
-      counts: { servers: 0, deployments: 0, runs: 0 },
-    };
-    const api = {
-      ...editApi(),
-      chooseProject: vi.fn().mockResolvedValue(project),
-      chooseProjectParent: vi.fn(),
-      createProject: vi.fn(),
-      closeProject: vi.fn(),
-      startEditSession: vi
-        .fn()
-        .mockResolvedValue({
-          status: "EDITING",
-          session: {
-            sessionId: "0123456789abcdef0123456789abcdef",
-            commandCount: 0,
-          },
-        }),
-      appendEditCommand: vi
-        .fn()
-        .mockResolvedValue({
-          status: "EDITING",
-          session: {
-            sessionId: "0123456789abcdef0123456789abcdef",
-            commandCount: 1,
-          },
-        }),
-      reviewEditSession: vi
-        .fn()
-        .mockResolvedValue({
-          status: "READY",
-          plan: {
-            planId: "abcdef0123456789abcdef0123456789",
-            commitAllowed: true,
-            validation: { status: "PASS" },
-            semanticChanges: [{ safeSummary: "CreateServer node1" }],
-            affectedDocuments: [
-              {
-                logicalPath: "inventory/hosts.yml",
-                before: { state: "ABSENT" },
-                after: { state: "PRESENT" },
-              },
-            ],
-          },
-        }),
-      commitEditPlan: vi
-        .fn()
-        .mockResolvedValue({
-          status: "COMMITTED",
-          commit: {
-            status: "COMMITTED",
-            snapshot: {
-              status: "PASS",
-              project: { name: "Test" },
-              hosts: { node1: {} },
-              serviceDeployments: {},
-              pki: {},
-              findings: [],
-              documents: [],
-              projectRevision: "sha256:new",
-              snapshotFingerprint: "sha256:snapshot",
-            },
-          },
-        }),
-    };
-    render(<App api={api} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Открыть папку проекта" }),
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Начать редактирование" }),
-    );
-    await userEvent.selectOptions(
-      screen.getByLabelText("Тип сервера"),
-      "infra",
-    );
-    await userEvent.type(screen.getByLabelText("Адрес"), "192.0.2.10");
+  it("emits a deliberately partial UpdateServer and preserves omitted sshPort", async () => {
+    const value = api();
+    await openServers(value);
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    await userEvent.clear(screen.getByLabelText("Желаемое имя хоста"));
     await userEvent.type(
       screen.getByLabelText("Желаемое имя хоста"),
-      "node1.example.internal",
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Добавить в черновик" }),
-    );
-    expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Проверить изменения" }),
-    );
-    expect(
-      await screen.findByRole("heading", { name: "План изменений" }),
-    ).toBeTruthy();
-    expect(api.appendEditCommand).toHaveBeenCalledWith(
-      "0123456789abcdef0123456789abcdef",
-      {
-        operation: "CreateServer",
-        hostId: "node1",
-        type: "infra",
-        desiredHostname: "node1.example.internal",
-        address: "192.0.2.10",
-        sshPort: 22,
-      },
+      "node1.changed.internal",
     );
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(await screen.findByRole("heading", { name: "Test" })).toBeTruthy();
-    expect(api.commitEditPlan).toHaveBeenCalledWith(
-      "0123456789abcdef0123456789abcdef",
-      "abcdef0123456789abcdef0123456789",
-    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "UpdateServer",
+      hostId: "node1",
+      desiredHostname: "node1.changed.internal",
+    });
   });
 
-  it("blocks only new server input when application config is unavailable", async () => {
-    const project = {
-      status: "OPEN",
-      root: "C:/Projects/test",
-      classification: "EMPTY_MANAGED_PROJECT",
-      project: {
-        id: "project-0123456789abcdef",
-        name: "Test",
-        source: { bundleDigest: "sha256:bundle" },
+  it("keeps explicit, omitted, and clear SSH-port edits distinct", async () => {
+    const value = api();
+    await openServers(value);
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    await userEvent.selectOptions(screen.getByLabelText("SSH-порт"), "clear");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "UpdateServer",
+      hostId: "node1",
+      clearSSHPort: true,
+    });
+  });
+
+  it("preserves an unknown configured type when another field changes", async () => {
+    const unknown = {
+      ...project,
+      snapshot: {
+        ...project.snapshot,
+        hosts: { node1: { ...project.snapshot.hosts.node1, type: "scada" } },
       },
-      counts: { servers: 0, deployments: 0, runs: 0 },
     };
-    const api = {
-      ...editApi(),
-      getApplicationConfig: vi
-        .fn()
-        .mockResolvedValue({
-          status: "ERROR",
-          error: {
-            code: "APPLICATION_CONFIG_INVALID",
-            message: "Конфигурация приложения недоступна.",
-          },
-        }),
-      chooseProject: vi.fn().mockResolvedValue(project),
-      chooseProjectParent: vi.fn(),
-      createProject: vi.fn(),
-      closeProject: vi.fn(),
-      startEditSession: vi
-        .fn()
-        .mockResolvedValue({
-          status: "EDITING",
-          session: {
-            sessionId: "0123456789abcdef0123456789abcdef",
-            commandCount: 0,
-          },
-        }),
-    };
-    render(<App api={api} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    const value = api();
+    await openServers(value, unknown as unknown as OpenResult);
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    expect(
+      screen.getByRole("option", { name: "Неизвестный тип (scada)" }),
+    ).toBeTruthy();
+    await userEvent.clear(screen.getByLabelText("IP-адрес / DNS-имя"));
+    await userEvent.type(
+      screen.getByLabelText("IP-адрес / DNS-имя"),
+      "192.0.2.11",
     );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "UpdateServer",
+      hostId: "node1",
+      address: "192.0.2.11",
+    });
+  });
+
+  it("requires confirmation and emits only generic DeleteServer", async () => {
+    const value = api();
+    await openServers(value);
     await userEvent.click(
-      screen.getByRole("button", { name: "Начать редактирование" }),
-    );
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Конфигурация приложения недоступна",
+      screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
     );
     expect(
-      (
-        screen.getByRole("button", {
-          name: "Добавить в черновик",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
+      screen.getByText(
+        /Связанные сервисы и размещение автоматически не удаляются/,
+      ),
+    ).toBeTruthy();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "DeleteServer",
+      hostId: "node1",
+    });
   });
 
-  it("retains the draft and reviewed plan across transient review and save failures", async () => {
-    const project = {
-      status: "OPEN",
-      root: "C:/Projects/test",
-      classification: "EMPTY_MANAGED_PROJECT",
-      project: {
-        id: "project-0123456789abcdef",
-        name: "Test",
-        source: { bundleDigest: "sha256:bundle" },
-      },
-      counts: { servers: 0, deployments: 0, runs: 0 },
-    };
-    const sessionId = "0123456789abcdef0123456789abcdef";
-    const planId = "abcdef0123456789abcdef0123456789";
-    const plan = {
-      planId,
-      commitAllowed: true,
-      validation: { status: "PASS" },
-      semanticChanges: [{ safeSummary: "CreateServer node1" }],
-      affectedDocuments: [
-        {
-          logicalPath: "inventory/hosts.yml",
-          before: { state: "ABSENT" },
-          after: { state: "PRESENT" },
+  it("allows address-only edits when AppConfig is temporarily unavailable", async () => {
+    const value = api({
+      getApplicationConfig: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        error: {
+          code: "APPLICATION_CONFIG_INVALID",
+          message: "Конфигурация приложения недоступна.",
         },
-      ],
-    };
-    const refreshedPlan = {
-      ...plan,
-      planId: "fedcba9876543210fedcba9876543210",
-    };
-    const api = {
-      ...editApi(),
-      chooseProject: vi.fn().mockResolvedValue(project),
-      chooseProjectParent: vi.fn(),
-      createProject: vi.fn(),
-      closeProject: vi.fn(),
-      startEditSession: vi
-        .fn()
-        .mockResolvedValue({
-          status: "EDITING",
-          session: { sessionId, commandCount: 0 },
-        }),
-      appendEditCommand: vi
-        .fn()
-        .mockResolvedValue({
-          status: "EDITING",
-          session: { sessionId, commandCount: 1 },
-        }),
-      reviewEditSession: vi
-        .fn()
-        .mockResolvedValueOnce({
-          status: "BLOCKED",
-          plan: {
-            status: "BLOCKED",
-            validation: {
-              status: "BLOCKED",
-              findings: [
-                {
-                  code: "CORE_VALIDATION_UNAVAILABLE",
-                  safeMessage: "Execution Node недоступен.",
-                },
-              ],
-            },
-          },
-        })
-        .mockResolvedValueOnce({ status: "READY", plan })
-        .mockResolvedValueOnce({ status: "READY", plan: refreshedPlan }),
-      commitEditPlan: vi
-        .fn()
-        .mockResolvedValueOnce({
-          status: "BLOCKED",
-          commit: {
-            status: "BLOCKED",
-            finding: { code: "PLAN_EXPIRED", safeMessage: "План истёк." },
-          },
-        })
-        .mockResolvedValueOnce({
-          status: "COMMITTED",
-          commit: {
-            status: "COMMITTED",
-            snapshot: {
-              status: "PASS",
-              project: { name: "Test" },
-              hosts: { node1: {} },
-              serviceDeployments: {},
-              pki: {},
-              findings: [],
-              documents: [],
-              projectRevision: "sha256:new",
-              snapshotFingerprint: "sha256:snapshot",
-            },
-          },
-        }),
-    };
-    render(<App api={api} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Открыть папку проекта" }),
+      }),
+    });
+    await openServers(value);
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Конфигурация приложения недоступна.",
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Начать редактирование" }),
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    expect(screen.getByDisplayValue("infra")).toHaveProperty("readOnly", true);
+    await userEvent.clear(screen.getByLabelText("IP-адрес / DNS-имя"));
+    await userEvent.type(
+      screen.getByLabelText("IP-адрес / DNS-имя"),
+      "192.0.2.11",
     );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "UpdateServer",
+      hostId: "node1",
+      address: "192.0.2.11",
+    });
+  });
+
+  it("discards a newly created empty session when its first append fails", async () => {
+    const value = api({
+      appendEditCommand: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        error: { code: "EDIT_COMMAND_BLOCKED", message: "Blocked" },
+      }),
+    });
+    await openServers(value, emptyProject as unknown as OpenResult);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить сервер" }),
+    );
+    await userEvent.type(screen.getByLabelText("ID сервера"), "node1");
     await userEvent.selectOptions(
       screen.getByLabelText("Тип сервера"),
       "infra",
     );
-    await userEvent.type(screen.getByLabelText("Адрес"), "192.0.2.10");
     await userEvent.type(
       screen.getByLabelText("Желаемое имя хоста"),
       "node1.example.internal",
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Добавить в черновик" }),
+    await userEvent.type(
+      screen.getByLabelText("IP-адрес / DNS-имя"),
+      "192.0.2.10",
     );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(value.discardEditSession).toHaveBeenCalledWith(sessionID);
+    expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
+  });
+
+  it("hides the stale snapshot after COMMITTED_REFRESH_FAILED and reopens through OpenProject", async () => {
+    const planID = "abcdef0123456789abcdef0123456789";
+    const refreshed = {
+      ...project,
+      snapshot: {
+        ...project.snapshot,
+        projectRevision: "sha256:new",
+        hosts: {
+          node1: {
+            ...project.snapshot.hosts.node1,
+            desiredHostname: "node1.changed.internal",
+          },
+        },
+      },
+    };
+    const value = api({
+      reviewEditSession: vi.fn().mockResolvedValue({
+        status: "READY",
+        plan: {
+          planId: planID,
+          commitAllowed: true,
+          validation: { status: "PASS", findings: [] },
+          semanticChanges: [],
+          affectedDocuments: [],
+        },
+      }),
+      commitEditPlan: vi.fn().mockResolvedValue({
+        status: "COMMITTED_REFRESH_FAILED",
+        commit: { status: "COMMITTED_REFRESH_FAILED" },
+      }),
+      openProject: vi.fn().mockResolvedValue(refreshed),
+    });
+    await openServers(value);
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    await userEvent.clear(screen.getByLabelText("Желаемое имя хоста"));
+    await userEvent.type(
+      screen.getByLabelText("Желаемое имя хоста"),
+      "node1.changed.internal",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Проверить изменения" }),
     );
-    expect(
-      await screen.findByRole("button", { name: "Повторить проверку" }),
-    ).toBeTruthy();
-    expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "Повторить проверку" }),
+      await screen.findByRole("button", { name: "Сохранить проект" }),
     );
     expect(
-      await screen.findByRole("heading", { name: "План изменений" }),
-    ).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(
-      await screen.findByRole("button", { name: "Повторить сохранение" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Повторить проверку" }),
+      await screen.findByRole("heading", {
+        name: "Снимок проекта требует обновления",
+      }),
     ).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "Повторить проверку" }),
+      screen.getByRole("button", { name: "Обновить снимок проекта" }),
     );
-    expect(
-      await screen.findByRole("heading", { name: "План изменений" }),
-    ).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(await screen.findByRole("heading", { name: "Test" })).toBeTruthy();
-    expect(api.reviewEditSession).toHaveBeenCalledTimes(3);
-    expect(api.commitEditPlan).toHaveBeenCalledTimes(2);
-    expect(api.commitEditPlan).toHaveBeenLastCalledWith(
-      sessionId,
-      refreshedPlan.planId,
-    );
+    expect(value.openProject).toHaveBeenCalledWith("C:/Projects/test");
+    expect(await screen.findByText("node1.changed.internal")).toBeTruthy();
   });
 });

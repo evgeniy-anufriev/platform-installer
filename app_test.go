@@ -24,6 +24,11 @@ type snapshotReaderStub struct {
 
 type editorReaderStub struct{ readyErr error }
 
+// refreshFailureReader models the narrow post-commit failure boundary: Core
+// validates the candidate during review, then cannot return the authoritative
+// snapshot after the filesystem transaction has committed.
+type refreshFailureReader struct{ candidateCalls int }
+
 type acceptanceReader struct {
 	projectReader
 	t *testing.T
@@ -53,6 +58,18 @@ func (editorReaderStub) BuildCandidateSnapshot(_ context.Context, root string, _
 		return nil, err
 	}
 	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: "sha256:" + string(make([]byte, 64)), Hosts: map[string]map[string]any{"node1": {"type": "infra", "desiredHostname": "node1.example.internal", "ansibleHost": "192.0.2.10", "ansiblePort": 22}}}, nil
+}
+
+func (*refreshFailureReader) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
+	return nil, errors.New("not used")
+}
+func (*refreshFailureReader) CheckCandidateReady(context.Context) error { return nil }
+func (r *refreshFailureReader) BuildCandidateSnapshot(ctx context.Context, root string, owned []string, project *projectlifecycle.Project) (*coreadapter.Snapshot, error) {
+	r.candidateCalls++
+	if r.candidateCalls > 1 {
+		return nil, errors.New("EXECUTION_NODE_UNAVAILABLE")
+	}
+	return editorReaderStub{}.BuildCandidateSnapshot(ctx, root, owned, project)
 }
 
 func testApplicationConfig() AppOption {
@@ -223,6 +240,29 @@ func TestAppFirstSaveRequiresReviewAndConsumesSession(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "inventory", "hosts.yml")); err != nil {
 		t.Fatal(err)
+	}
+	// A committed transaction without its authoritative refresh must not leave
+	// the preceding snapshot visible as current state.
+	refreshRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(refreshRoot, "project.yml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refreshApp := NewApp(&refreshFailureReader{}, lifecycleStub{}, testApplicationConfig())
+	refreshApp.current = ProjectOpenResult{Status: "OPEN", Root: refreshRoot, Classification: projectlifecycle.ClassificationEmpty, Project: project}
+	refreshSession := refreshApp.StartEditSession()
+	if refreshSession.Session == nil {
+		t.Fatalf("refresh start=%#v", refreshSession)
+	}
+	if refreshed := refreshApp.AppendEditCommand(refreshSession.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"}); refreshed.Session == nil {
+		t.Fatalf("refresh append=%#v", refreshed)
+	}
+	refreshPlan := refreshApp.ReviewEditSession(refreshSession.Session.SessionID)
+	if refreshPlan.Plan == nil || !refreshPlan.Plan.CommitAllowed {
+		t.Fatalf("refresh plan=%#v", refreshPlan)
+	}
+	refreshFailed := refreshApp.CommitEditPlan(refreshSession.Session.SessionID, refreshPlan.Plan.PlanID)
+	if refreshFailed.Status != "COMMITTED_REFRESH_FAILED" || refreshApp.current.Snapshot != nil || refreshApp.activeSession != "" {
+		t.Fatalf("refresh failure did not invalidate snapshot: result=%#v current=%#v active=%q", refreshFailed, refreshApp.current, refreshApp.activeSession)
 	}
 }
 

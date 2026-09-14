@@ -7,6 +7,7 @@ import {
   CreateProject,
   DiscardEditSession,
   GetApplicationConfig,
+  OpenProject,
   ReviewEditSession,
   StartEditSession,
 } from "../wailsjs/go/main/App";
@@ -18,6 +19,7 @@ export type ConfigResult = main.ApplicationConfigResult;
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
+  openProject(root: string): Promise<OpenResult>;
   chooseProjectParent(): Promise<string>;
   createProject(input: {
     projectRoot: string;
@@ -41,6 +43,7 @@ export interface ProjectBackend {
 export const backend: ProjectBackend = {
   getApplicationConfig: GetApplicationConfig,
   chooseProject: ChooseProject,
+  openProject: OpenProject,
   chooseProjectParent: ChooseProjectParent,
   createProject: CreateProject,
   closeProject: CloseProject,

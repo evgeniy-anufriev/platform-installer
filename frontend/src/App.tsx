@@ -1,31 +1,33 @@
 import { useEffect, useState } from "react";
 import type { EditResult, OpenResult, ProjectBackend } from "./backend";
 import { backend } from "./backend";
+import { type ServerIntent, ServersPage } from "./ServersPage";
 import "./edit.css";
 
-const navigation = [
-  "Проект",
-  "Серверы",
-  "Топология",
-  "Сертификаты",
-  "Сервисы",
-  "Установка",
-  "Логи",
-  "Справка",
-  "О программе",
-  "Настройки",
+type Page = "project" | "servers";
+const navigation: Array<{ id: Page | string; label: string }> = [
+  { id: "project", label: "Проект" },
+  { id: "servers", label: "Серверы" },
+  { id: "topology", label: "Топология" },
+  { id: "certificates", label: "Сертификаты" },
+  { id: "services", label: "Сервисы" },
+  { id: "installation", label: "Установка" },
+  { id: "logs", label: "Логи" },
+  { id: "help", label: "Справка" },
+  { id: "about", label: "О программе" },
+  { id: "settings", label: "Настройки" },
 ];
-function count(value: unknown): number {
-  return value && typeof value === "object" ? Object.keys(value).length : 0;
-}
+const count = (value: unknown) =>
+  value && typeof value === "object" ? Object.keys(value).length : 0;
 
 export function App({ api = backend }: { api?: ProjectBackend }) {
   const [result, setResult] = useState<OpenResult>({
     status: "NO_PROJECT",
   } as OpenResult);
+  const [page, setPage] = useState<Page>("project");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [dialog, setDialog] = useState(false);
+  const [projectDialog, setProjectDialog] = useState(false);
   const [name, setName] = useState("");
   const [root, setRoot] = useState("");
   const [parent, setParent] = useState("");
@@ -34,24 +36,38 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [edit, setEdit] = useState<EditResult | null>(null);
   const [editError, setEditError] = useState<EditResult["error"] | null>(null);
   const [editBusy, setEditBusy] = useState(false);
-  const [hostId, setHostId] = useState("node1");
-  const [serverType, setServerType] = useState("");
-  const [desiredHostname, setDesiredHostname] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [commandCount, setCommandCount] = useState(0);
+  const [intents, setIntents] = useState<ServerIntent[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [staleSnapshot, setStaleSnapshot] = useState(false);
   const [serverTypes, setServerTypes] = useState<
     Array<{ id: string; displayName: string }>
   >([]);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [address, setAddress] = useState("");
-  const [sshPort, setSSHPort] = useState("22");
-  const [sessionId, setSessionId] = useState("");
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
+  const snapshot = result.snapshot;
+  const local = result.project;
+  const project = snapshot?.project as Record<string, unknown> | undefined;
+  const empty =
+    result.status === "OPEN" &&
+    result.classification === "EMPTY_MANAGED_PROJECT" &&
+    local &&
+    !snapshot;
+  const projectOpen = result.status === "OPEN";
+  const stale = projectOpen && staleSnapshot;
+  const title = empty
+    ? local.name
+    : project?.name
+      ? String(project.name)
+      : local?.name || "Проект не открыт";
 
   useEffect(() => {
-    let current = true;
+    let live = true;
     api
       .getApplicationConfig()
       .then((value) => {
-        if (!current) return;
+        if (!live) return;
         if (value.status === "READY" && value.config) {
           setServerTypes(value.config.serverTypes || []);
           setConfigError(null);
@@ -62,18 +78,29 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           );
         }
       })
-      .catch(() => {
-        if (current) setConfigError("Конфигурация типов серверов недоступна.");
-      });
+      .catch(
+        () => live && setConfigError("Конфигурация типов серверов недоступна."),
+      );
     return () => {
-      current = false;
+      live = false;
     };
   }, [api]);
 
+  const clearDraft = () => {
+    setEdit(null);
+    setEditError(null);
+    setSessionId("");
+    setCommandCount(0);
+    setIntents([]);
+    setReviewOpen(false);
+  };
   const open = async () => {
     setLoading(true);
     try {
-      setResult(await api.chooseProject());
+      const next = await api.chooseProject();
+      setResult(next);
+      setPage("project");
+      setStaleSnapshot(false);
     } finally {
       setLoading(false);
     }
@@ -110,7 +137,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         compatibilitySourceId: "default",
       });
       setResult(next);
-      setDialog(false);
+      setProjectDialog(false);
+      setPage("project");
+      setStaleSnapshot(false);
       if (next.status === "OPEN") {
         setName("");
         setRoot("");
@@ -122,53 +151,68 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setCreating(false);
     }
   };
-  const close = async () => setResult(await api.closeProject());
-  const startEdit = async () => {
-    setEditBusy(true);
-    try {
-      const next = await api.startEditSession();
-      setEdit(next);
-      setEditError(next.error || null);
-      setSessionId(next.session?.sessionId || "");
-    } finally {
-      setEditBusy(false);
-    }
+  const close = async () => {
+    setResult(await api.closeProject());
+    setPage("project");
+    setStaleSnapshot(false);
   };
-  const addFirstServer = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!sessionId || !serverType || !desiredHostname) return;
+
+  const appendServerIntent = async (intent: ServerIntent): Promise<boolean> => {
     setEditBusy(true);
+    let id = sessionId;
+    let created = false;
     try {
-      const next = await api.appendEditCommand(sessionId, {
-        operation: "CreateServer",
-        hostId,
-        type: serverType,
-        desiredHostname,
-        address,
-        sshPort: Number(sshPort),
-      });
+      if (!id) {
+        const started = await api.startEditSession();
+        if (started.error || !started.session?.sessionId) {
+          setEdit(started);
+          setEditError(
+            started.error || {
+              code: "EDIT_SESSION_UNAVAILABLE",
+              message: "Не удалось начать черновик изменений.",
+            },
+          );
+          return false;
+        }
+        id = started.session.sessionId;
+        created = true;
+        setEdit(started);
+        setSessionId(id);
+      }
+      const next = await api.appendEditCommand(id, intent);
+      if (next.error || !next.session) {
+        if (created) {
+          await api.discardEditSession(id);
+          clearDraft();
+        } else {
+          setEdit(next);
+          setEditError(
+            next.error || {
+              code: "EDIT_COMMAND_BLOCKED",
+              message: "Изменение не добавлено в черновик.",
+            },
+          );
+        }
+        return false;
+      }
       setEdit(next);
-      setEditError(next.error || null);
+      setEditError(null);
+      setSessionId(id);
+      setCommandCount(next.session.commandCount);
+      setIntents((current) => [...current, intent]);
+      return true;
     } finally {
       setEditBusy(false);
     }
   };
   const review = async () => {
-    if (!sessionId) return;
+    if (!sessionId || commandCount === 0) return;
     setEditBusy(true);
+    setReviewOpen(true);
     try {
       const next = await api.reviewEditSession(sessionId);
-      const finding = next.plan?.validation?.findings?.[0];
-      if (next.error) setEditError(next.error);
-      else if (next.plan?.status === "BLOCKED")
-        setEditError({
-          code: finding?.code || "CORE_VALIDATION_BLOCKED",
-          message: finding?.safeMessage || "Проверка изменений заблокирована.",
-        });
-      else {
-        setEdit(next);
-        setEditError(null);
-      }
+      setEdit(next);
+      setEditError(next.error || null);
     } finally {
       setEditBusy(false);
     }
@@ -179,35 +223,49 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setEditBusy(true);
     try {
       const next = await api.commitEditPlan(sessionId, planId);
-      const finding = next.commit?.finding;
       if (next.error) {
+        setEdit(next);
         setEditError(next.error);
         return;
       }
-      if (
-        next.commit &&
-        next.commit.status !== "COMMITTED" &&
-        next.commit.status !== "COMMITTED_REFRESH_FAILED"
-      ) {
-        setEditError({
-          code: finding?.code || "WRITE_FAILED",
-          message:
-            finding?.safeMessage || "Сохранение изменений заблокировано.",
-        });
-        return;
-      }
-      setEdit(next);
-      setEditError(null);
-      if (next.commit?.snapshot)
+      if (next.status === "COMMITTED") {
         setResult(
           (current) =>
             ({
               ...current,
               classification: "MANAGED_PROJECT",
-              snapshot: next.commit?.snapshot as OpenResult["snapshot"],
+              snapshot: next.commit?.snapshot,
             }) as OpenResult,
         );
-      if (next.status.startsWith("COMMITTED")) setSessionId("");
+        setStaleSnapshot(false);
+        clearDraft();
+        return;
+      }
+      if (next.status === "COMMITTED_REFRESH_FAILED") {
+        setResult(
+          (current) =>
+            ({
+              ...current,
+              classification: "MANAGED_PROJECT",
+              snapshot: undefined,
+            }) as OpenResult,
+        );
+        setStaleSnapshot(true);
+        clearDraft();
+        return;
+      }
+      setEdit(next);
+      setEditError(
+        next.commit?.finding
+          ? {
+              code: next.commit.finding.code,
+              message: next.commit.finding.safeMessage,
+            }
+          : {
+              code: "WRITE_FAILED",
+              message: "Сохранение изменений заблокировано.",
+            },
+      );
     } finally {
       setEditBusy(false);
     }
@@ -217,27 +275,23 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setEditBusy(true);
     try {
       await api.discardEditSession(sessionId);
-      setEdit(null);
-      setEditError(null);
-      setSessionId("");
+      clearDraft();
     } finally {
       setEditBusy(false);
     }
   };
+  const refreshSnapshot = async () => {
+    if (!result.root) return;
+    setLoading(true);
+    try {
+      const next = await api.openProject(result.root);
+      setResult(next);
+      if (next.status === "OPEN" && next.snapshot) setStaleSnapshot(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const snapshot = result.snapshot;
-  const local = result.project;
-  const project = snapshot?.project as Record<string, unknown> | undefined;
-  const empty =
-    result.status === "OPEN" &&
-    result.classification === "EMPTY_MANAGED_PROJECT" &&
-    local &&
-    !snapshot;
-  const title = empty
-    ? local.name
-    : project?.name
-      ? String(project.name)
-      : "Проект не открыт";
   return (
     <div className="shell">
       <aside>
@@ -247,15 +301,23 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           <span>Installer</span>
         </div>
         <nav>
-          {navigation.map((item, index) => (
-            <button
-              key={item}
-              className={index === 0 ? "active" : "future"}
-              disabled={index !== 0}
-            >
-              {item}
-            </button>
-          ))}
+          {navigation.map((item) => {
+            const enabled =
+              item.id === "project" || (item.id === "servers" && projectOpen);
+            return (
+              <button
+                key={item.id}
+                className={item.id === page ? "active" : "future"}
+                disabled={!enabled}
+                onClick={() =>
+                  (item.id === "project" || item.id === "servers") &&
+                  setPage(item.id)
+                }
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </aside>
       <main>
@@ -269,14 +331,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {sessionId && (
             <div className="unsaved">Есть несохранённые изменения</div>
           )}
-          {result.status === "OPEN" && !sessionId && (
+          {projectOpen && !sessionId && !stale && (
             <div className="readonly">
               {empty ? "Не настроен" : "Проверено Core"}
             </div>
           )}
           <button
             className="outline"
-            onClick={() => setDialog(true)}
+            onClick={() => setProjectDialog(true)}
             disabled={loading || creating || !!sessionId}
           >
             Создать проект
@@ -288,18 +350,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           >
             Открыть проект
           </button>
+          {sessionId && commandCount > 0 && (
+            <button onClick={review} disabled={editBusy}>
+              Просмотреть изменения
+            </button>
+          )}
         </header>
         <section className="banner">
-          UI‑01D: изменения остаются в transient session до проверки полного
-          candidate на READY Execution Node и явного сохранения.
+          Изменения остаются в transient session до проверки полного candidate
+          на READY Execution Node и явного сохранения.
         </section>
-        {sessionId && (
-          <section className="banner">
-            <code>ACTIVE_EXECUTION_STATE_UNKNOWN</code> Состояние выполнения
-            UNKNOWN: если выполнение существует, оно использует immutable
-            предыдущую revision.
-          </section>
-        )}
         {(loading || creating) && (
           <section className="card">
             {creating ? "Безопасное создание проекта…" : "Открытие проекта…"}
@@ -312,7 +372,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               Новый проект содержит только metadata и compatibility locks из
               verified local bundle.
             </p>
-            <button onClick={() => setDialog(true)}>Создать проект</button>
+            <button onClick={() => setProjectDialog(true)}>
+              Создать проект
+            </button>
             <button className="outline" onClick={open}>
               Открыть папку проекта
             </button>
@@ -323,114 +385,42 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <h1>Проект не открыт</h1>
             <p>{result.error?.message}</p>
             <code>{result.error?.code}</code>
-            <button onClick={() => setDialog(true)}>Создать проект</button>
+            <button onClick={() => setProjectDialog(true)}>
+              Создать проект
+            </button>
             <button className="outline" onClick={open}>
               Открыть другой проект
             </button>
           </section>
         )}
-        {!loading && !creating && empty && (
-          <>
-            <section className="title">
-              <div>
-                <h1>Проект ещё не настроен</h1>
-                <p>
-                  Это корректный metadata-only проект. Первое сохранение создаст
-                  полный минимальный Ansible project.
-                </p>
-              </div>
-              <button
-                className="outline"
-                onClick={close}
-                disabled={!!sessionId}
-              >
-                Закрыть проект
-              </button>
-            </section>
-            <section className="grid">
-              <Stat label="Серверы" value={result.counts?.servers ?? 0} />
-              <Stat
-                label="Deployments / Сервисы"
-                value={result.counts?.deployments ?? 0}
-              />
-              <Stat label="Выполнения" value={result.counts?.runs ?? 0} />
-              <Stat label="Inventory" value="Не создан" />
-            </section>
-            <section className="card">
-              <h2>Сведения проекта</h2>
-              <dl>
-                <dt>Название</dt>
-                <dd>{local.name}</dd>
-                <dt>Путь</dt>
-                <dd>{result.root}</dd>
-                <dt>Project ID</dt>
-                <dd>{local.id}</dd>
-                <dt>Compatibility source</dt>
-                <dd>{local.source?.bundleDigest}</dd>
-              </dl>
-            </section>
-            <FirstSave
-              edit={edit}
-              error={editError}
-              busy={editBusy}
-              sessionId={sessionId}
-              hostId={hostId}
-              serverType={serverType}
-              desiredHostname={desiredHostname}
-              serverTypes={serverTypes}
-              configError={configError}
-              address={address}
-              sshPort={sshPort}
-              onStart={startEdit}
-              onSubmit={addFirstServer}
-              onHost={setHostId}
-              onType={setServerType}
-              onDesiredHostname={setDesiredHostname}
-              onAddress={setAddress}
-              onPort={setSSHPort}
-              onReview={review}
-              onSave={save}
-              onDiscard={discard}
-            />
-          </>
+        {!loading && !creating && projectOpen && page === "project" && (
+          <ProjectPage
+            empty={!!empty}
+            snapshot={snapshot}
+            local={local}
+            onClose={close}
+            onServers={() => setPage("servers")}
+            closeDisabled={!!sessionId}
+          />
         )}
-        {!loading && !creating && result.status === "OPEN" && snapshot && (
-          <>
-            <section className="title">
-              <div>
-                <h1>{title}</h1>
-                <p>Авторитетный снимок Core.</p>
-              </div>
-              <button className="outline" onClick={close}>
-                Закрыть проект
-              </button>
-            </section>
-            <section className="grid">
-              <Stat label="Хосты" value={count(snapshot.hosts)} />
-              <Stat
-                label="Развёртывания"
-                value={count(snapshot.serviceDeployments)}
-              />
-              <Stat label="PKI профили" value={count(snapshot.pki)} />
-              <Stat label="Findings" value={snapshot.findings?.length ?? 0} />
-            </section>
-            <section className="card">
-              <h2>Состояние проекта</h2>
-              <dl>
-                <dt>Статус</dt>
-                <dd>{snapshot.status}</dd>
-                <dt>Revision</dt>
-                <dd>{snapshot.projectRevision}</dd>
-                <dt>Snapshot fingerprint</dt>
-                <dd>{snapshot.snapshotFingerprint}</dd>
-                <dt>Документы</dt>
-                <dd>{snapshot.documents?.length ?? 0}</dd>
-              </dl>
-            </section>
-          </>
+        {!loading && !creating && projectOpen && page === "servers" && (
+          <ServersPage
+            snapshot={snapshot}
+            empty={!!empty}
+            stale={stale}
+            intents={intents}
+            serverTypes={serverTypes}
+            configError={configError}
+            busy={editBusy}
+            onAppend={appendServerIntent}
+            onReview={review}
+            onDiscard={discard}
+            commandCount={commandCount}
+            onRefresh={refreshSnapshot}
+          />
         )}
-        {dialog && (
-          <div className="modal">
+        {projectDialog && (
+          <div className="modal" role="presentation">
             <form className="card dialog" onSubmit={create}>
               <h1>Создать проект</h1>
               <label>
@@ -472,7 +462,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 <button
                   type="button"
                   className="outline"
-                  onClick={() => setDialog(false)}
+                  onClick={() => setProjectDialog(false)}
                 >
                   Отмена
                 </button>
@@ -490,229 +480,189 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             </form>
           </div>
         )}
+        {reviewOpen && (
+          <ReviewDialog
+            edit={edit}
+            error={editError}
+            busy={editBusy}
+            onClose={() => setReviewOpen(false)}
+            onReview={review}
+            onSave={save}
+            onDiscard={discard}
+          />
+        )}
       </main>
     </div>
   );
 }
 
-interface FirstSaveProps {
-  edit: EditResult | null;
-  error: EditResult["error"] | null;
-  busy: boolean;
-  sessionId: string;
-  hostId: string;
-  serverType: string;
-  desiredHostname: string;
-  serverTypes: Array<{ id: string; displayName: string }>;
-  configError: string | null;
-  address: string;
-  sshPort: string;
-  onStart: () => void;
-  onSubmit: (event: React.FormEvent) => void;
-  onHost: (value: string) => void;
-  onType: (value: string) => void;
-  onDesiredHostname: (value: string) => void;
-  onAddress: (value: string) => void;
-  onPort: (value: string) => void;
-  onReview: () => void;
-  onSave: () => void;
-  onDiscard: () => void;
+function ProjectPage({
+  empty,
+  snapshot,
+  local,
+  onClose,
+  onServers,
+  closeDisabled,
+}: {
+  empty: boolean;
+  snapshot: OpenResult["snapshot"];
+  local: OpenResult["project"];
+  onClose: () => void;
+  onServers: () => void;
+  closeDisabled: boolean;
+}) {
+  if (empty && local)
+    return (
+      <>
+        <section className="title">
+          <div>
+            <h1>Проект ещё не настроен</h1>
+            <p>
+              Это корректный metadata-only проект. Добавьте серверы, затем
+              проверьте и сохраните проект.
+            </p>
+          </div>
+          <button
+            className="outline"
+            onClick={onClose}
+            disabled={closeDisabled}
+          >
+            Закрыть проект
+          </button>
+        </section>
+        <section className="grid">
+          <Stat label="Серверы" value={0} />
+          <Stat label="Deployments / Сервисы" value={0} />
+          <Stat label="Выполнения" value={0} />
+          <Stat label="Inventory" value="Не создан" />
+        </section>
+        <section className="card">
+          <h2>Сведения проекта</h2>
+          <dl>
+            <dt>Название</dt>
+            <dd>{local.name}</dd>
+            <dt>Project ID</dt>
+            <dd>{local.id}</dd>
+            <dt>Compatibility source</dt>
+            <dd>{local.source?.bundleDigest}</dd>
+          </dl>
+          <button onClick={onServers}>Добавить первый сервер</button>
+        </section>
+      </>
+    );
+  return (
+    <>
+      <section className="title">
+        <div>
+          <h1>
+            {(snapshot?.project as Record<string, unknown> | undefined)?.name
+              ? String((snapshot?.project as Record<string, unknown>).name)
+              : "Проект"}
+          </h1>
+          <p>Авторитетный снимок Core.</p>
+        </div>
+        <button className="outline" onClick={onClose} disabled={closeDisabled}>
+          Закрыть проект
+        </button>
+      </section>
+      <section className="grid">
+        <Stat label="Хосты" value={count(snapshot?.hosts)} />
+        <Stat
+          label="Развёртывания"
+          value={count(snapshot?.serviceDeployments)}
+        />
+        <Stat label="PKI профили" value={count(snapshot?.pki)} />
+        <Stat label="Findings" value={snapshot?.findings?.length ?? 0} />
+      </section>
+      <section className="card">
+        <h2>Состояние проекта</h2>
+        <dl>
+          <dt>Статус</dt>
+          <dd>{snapshot?.status}</dd>
+          <dt>Revision</dt>
+          <dd>{snapshot?.projectRevision}</dd>
+        </dl>
+        <button onClick={onServers}>Открыть серверы</button>
+      </section>
+    </>
+  );
 }
-
-function FirstSave({
+function ReviewDialog({
   edit,
   error,
   busy,
-  sessionId,
-  hostId,
-  serverType,
-  desiredHostname,
-  serverTypes,
-  configError,
-  address,
-  sshPort,
-  onStart,
-  onSubmit,
-  onHost,
-  onType,
-  onDesiredHostname,
-  onAddress,
-  onPort,
+  onClose,
   onReview,
   onSave,
   onDiscard,
-}: FirstSaveProps) {
-  const commandCount = edit?.session?.commandCount ?? 0;
-  if (
-    edit?.commit &&
-    (edit.commit.status === "COMMITTED" ||
-      edit.commit.status === "COMMITTED_REFRESH_FAILED")
-  )
-    return (
-      <section className="card">
-        <h2>Изменения сохранены</h2>
-        <p>
-          Статус: {edit.commit.status}. Canonical project revision обновлён.
-        </p>
-      </section>
-    );
-  if (!sessionId)
-    return (
-      <section className="card">
-        <h2>Первое сохранение</h2>
-        <p>До проверки и кнопки «Сохранить» файлы проекта не изменятся.</p>
-        <button onClick={onStart} disabled={busy}>
-          Начать редактирование
-        </button>
-      </section>
-    );
-  if (error)
-    return (
-      <section className="error card">
-        <h2>Изменения заблокированы</h2>
-        <p>{error.message}</p>
-        <code>{error.code}</code>
+}: {
+  edit: EditResult | null;
+  error: EditResult["error"] | null;
+  busy: boolean;
+  onClose: () => void;
+  onReview: () => void;
+  onSave: () => void;
+  onDiscard: () => void;
+}) {
+  const plan = edit?.plan;
+  const findings = plan?.validation?.findings || [];
+  return (
+    <div className="modal" role="presentation">
+      <section
+        className="card dialog review-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-title"
+      >
+        <h1 id="review-title">Изменения конфигурации</h1>
+        {error && (
+          <p className="field-error" role="alert">
+            <code>{error.code}</code> {error.message}
+          </p>
+        )}
+        {plan ? (
+          <>
+            <p>
+              Core: {plan.validation?.status}. Документов:{" "}
+              {plan.affectedDocuments?.length ?? 0}.
+            </p>
+            <ul>
+              {plan.semanticChanges?.map((change, index) => (
+                <li key={index}>{change.safeSummary}</li>
+              ))}
+            </ul>
+            <ul>
+              {findings.map((finding, index) => (
+                <li key={index}>
+                  <code>{finding.code}</code> {finding.safeMessage}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>Проверка черновика ещё не вернула план.</p>
+        )}
         <div className="actions">
-          <button className="outline" onClick={onDiscard}>
-            Отменить изменения
+          <button className="outline" onClick={onClose}>
+            Вернуться к редактированию
           </button>
-          <button onClick={onReview} disabled={busy}>
-            Повторить проверку
+          <button className="outline" onClick={onDiscard} disabled={busy}>
+            Отменить все изменения
           </button>
-          {edit?.plan?.planId && (
+          {plan?.commitAllowed ? (
             <button onClick={onSave} disabled={busy}>
-              Повторить сохранение
+              Сохранить проект
+            </button>
+          ) : (
+            <button onClick={onReview} disabled={busy}>
+              Повторить проверку
             </button>
           )}
         </div>
       </section>
-    );
-  if (edit?.plan)
-    return (
-      <section className="card review">
-        <h2>План изменений</h2>
-        <p>
-          Core: {edit.plan.validation?.status}. Документов:{" "}
-          {edit.plan.affectedDocuments?.length ?? 0}.
-        </p>
-        <ul>
-          {edit.plan.semanticChanges?.map((change, index) => (
-            <li key={index}>{change.safeSummary}</li>
-          ))}
-        </ul>
-        <ul>
-          {edit.plan.affectedDocuments?.map((change) => (
-            <li key={change.logicalPath}>
-              {change.logicalPath}: {change.before?.state} →{" "}
-              {change.after?.state}
-            </li>
-          ))}
-        </ul>
-        <div className="actions">
-          <button className="outline" onClick={onDiscard}>
-            Отменить изменения
-          </button>
-          <button onClick={onSave} disabled={busy || !edit.plan.commitAllowed}>
-            Сохранить
-          </button>
-        </div>
-      </section>
-    );
-  if (commandCount > 0)
-    return (
-      <section className="card review">
-        <h2>Черновик готов к проверке</h2>
-        <p>
-          Команд: {commandCount}. Core проверит полный candidate на выбранном
-          Execution Node.
-        </p>
-        <div className="actions">
-          <button className="outline" onClick={onDiscard}>
-            Отменить изменения
-          </button>
-          <button onClick={onReview} disabled={busy}>
-            Проверить изменения
-          </button>
-        </div>
-      </section>
-    );
-  return (
-    <form className="card first-server" onSubmit={onSubmit}>
-      <h2>Первый сервер</h2>
-      <p>
-        Узкий bootstrap-сценарий UI‑01D; полный редактор серверов относится к
-        UI‑01E.
-      </p>
-      <label>
-        ID сервера
-        <input
-          value={hostId}
-          onChange={(event) => onHost(event.target.value)}
-          required
-        />
-      </label>
-      <label>
-        Тип сервера
-        <select
-          value={serverType}
-          onChange={(event) => onType(event.target.value)}
-          required
-          disabled={!!configError}
-        >
-          <option value="">Выберите тип</option>
-          {serverTypes.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.displayName} ({item.id})
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Адрес
-        <input
-          value={address}
-          onChange={(event) => onAddress(event.target.value)}
-          placeholder="192.0.2.10"
-          required
-        />
-      </label>
-      <label>
-        Желаемое имя хоста
-        <input
-          value={desiredHostname}
-          onChange={(event) => onDesiredHostname(event.target.value)}
-          placeholder="node1.example.internal"
-          required
-        />
-      </label>
-      <label>
-        SSH port
-        <input
-          type="number"
-          min="1"
-          max="65535"
-          value={sshPort}
-          onChange={(event) => onPort(event.target.value)}
-          required
-        />
-      </label>
-      {configError && (
-        <p className="field-error" role="alert">
-          {configError}
-        </p>
-      )}
-      <div className="actions">
-        <button type="button" className="outline" onClick={onDiscard}>
-          Отменить изменения
-        </button>
-        <button type="submit" disabled={busy || !!configError || !serverType || !desiredHostname}>
-          Добавить в черновик
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
-
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <article className="stat">

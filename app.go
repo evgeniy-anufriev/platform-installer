@@ -327,7 +327,9 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 	if sessionID == "" || sessionID != a.activeSession {
 		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
-	if command.Operation != "CreateServer" {
+	switch command.Operation {
+	case "CreateServer", "UpdateServer", "DeleteServer":
+	default:
 		return a.editFailure(errors.New("EDIT_OPERATION_NOT_AVAILABLE"))
 	}
 	session, err := a.sessions.Append(sessionID, command, a.editor)
@@ -388,6 +390,12 @@ func (a *App) CommitEditPlan(sessionID, planID string) EditOperationResult {
 		if snapshot, ok := result.Snapshot.(*coreadapter.Snapshot); ok {
 			a.current.Snapshot = snapshot
 			a.current.Diagnostics = a.serverTypeDiagnostics(snapshot)
+			a.current.Classification = projectlifecycle.ClassificationManaged
+		} else if result.Status == "COMMITTED_REFRESH_FAILED" {
+			// The transaction committed, but no post-commit Core projection is
+			// authoritative. Never leave a previous snapshot visible as current.
+			a.current.Snapshot = nil
+			a.current.Diagnostics = nil
 			a.current.Classification = projectlifecycle.ClassificationManaged
 		}
 	}

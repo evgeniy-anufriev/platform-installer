@@ -557,7 +557,7 @@ credentials, E4 Execution Node selection panel, E5 readiness/navigation gating
 and E6 final Windows/RED OS acceptance. UI-01E1 is DONE: v1alpha4 server CRUD
 intents use the existing edit/review/commit lifecycle, Core projects desired
 hostname/normalized port and generic references, and focused Windows/RED OS
-gates passed. UI-01E2 is next and not started.
+gates passed. UI-01E2 is IN PROGRESS.
 
 ### DEVX-01: Codex engineering harness
 
@@ -642,7 +642,7 @@ remote Core proof, guarded first write and narrow Windows review/save shell
 passed its executable gates and was owner-accepted without final
 revision-bound review. The application config/server-type foundation is
 independent of UI-01E and does not advance its implementation. UI-01E1 is DONE;
-UI-01E2 is next and has not started. UI-01 overall is NOT DONE.
+UI-01E2 is IN PROGRESS. UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
