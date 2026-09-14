@@ -1,9 +1,10 @@
 # UI-01E3 — Shared runtime session credentials architecture
 
-Status: **PLAN — OWNER APPROVAL PENDING**. This milestone adds one write-only,
-runtime-only technical credential for all target servers in the currently open
-project. It does not contact targets, prepare an Execution Node, change project
-files or implement execution-time secret transport.
+Status: **OWNER-APPROVED PLAN; ADDITIONAL REVIEW WAIVED (2026-09-14)**. This
+milestone adds one write-only, runtime-only technical credential for all target
+servers in the currently open project. It does not contact targets, prepare an
+Execution Node, change project files or implement execution-time secret
+transport.
 
 ## 1. Goal
 
@@ -42,13 +43,20 @@ The UX document says a server record may contain an opaque `SecretRef`. That
 does not apply to the shared E3 session credential. The accepted UI-01A freeze
 is authoritative for E3: credential material is held only by a runtime broker
 and never enters the portable project. The broker may create an opaque internal
-`runtime:ssh-session-<32-hex>` reference, but E3 never writes that reference to
-`project.yml`, inventory, `group_vars`, `host_vars` or generated state.
+`runtime:ssh-session-<32-hex>` reference for a future trusted Go consumer, but
+E3 never exposes it through Wails/React and never writes it to `project.yml`,
+inventory, `group_vars`, `host_vars` or generated state.
 
 The current repository has no application runtime-secret broker. Existing
 `executionnode.IdentityResolver` resolves the separately configured trusted
 Execution Node identity and is not a target-session credential store. E3 must
 not overload that resolver or the current desktop command-line flags.
+
+After the initial approved review cycle, the owner made two binding
+corrections: E5 is independent of the E3 target lease until UI-02 transport
+exists, and the internal broker reference is not part of Wails/React status.
+The owner explicitly waived an additional architecture review of this revised
+plan.
 
 ## 3. Scope and non-goals
 
@@ -101,10 +109,13 @@ an explicit **same as SSH password** choice in password mode, but unchecked or
 absent input never implies equality. The broker records the resulting secret
 bytes in separate fields inside the same lease.
 
-E5 will first test `sudo -n` through its own approved preparation path. When
-passwordless elevation works, no sudo password is required. When elevation
-requires a password and the E3 lease has none, E5 returns the safe blocker
-`ELEVATION_CREDENTIAL_MISSING`. E3 itself does not make this determination.
+E4/E5 do not consume the E3 target credential. E5 checks and prepares only the
+selected Execution Node through its separate trusted application binding. Any
+`sudo -n` probe or elevation requirement in E5 therefore belongs to that
+Execution Node binding and cannot use E3 password/key material or derive a
+blocker from E3 availability. Target-host credential transfer, elevation checks
+and preparation remain blocked until UI-02 implements the approved remote
+secret-lease transport.
 
 ## 5. Contract
 
@@ -139,16 +150,16 @@ Conceptual status response:
 ```text
 SessionCredentialStatus/v1alpha1
   status                   MISSING | PRESENT | EXPIRED
-  reference                opaque runtime:ssh-session-<32-hex>, when PRESENT
   username                 safe metadata, when PRESENT
   sshMode                  safe metadata, when PRESENT
   sudoPasswordStatus       NOT_PROVIDED | PRESENT
   expiresAt                when PRESENT
 ```
 
-The response contains no password, key bytes, key path, hash, length, preview
-or value-derived diagnostic. The opaque reference is operational runtime state,
-not portable desired state. React does not need to interpret it.
+The response contains no password, key bytes, key path, internal reference,
+hash, length, preview or value-derived diagnostic. The opaque reference remains
+private to the Go broker and a future trusted UI-02 consumer; React cannot read
+or interpret it.
 
 Wails application operations are:
 
@@ -345,10 +356,11 @@ background service, worker queue or persistence layer is introduced.
 - Project save and credential replacement are independent; neither is rolled
   back because the other fails.
 
-The future UI-02 transport must request the internal opaque reference from the
-broker and implement `PutRuntimeSecretLease/v1alpha1` before target execution.
-E3 deliberately provides no export method returning raw bytes to React or a
-generic caller.
+The future UI-02 trusted Go transport may resolve the internal opaque reference
+directly from the broker and must implement `PutRuntimeSecretLease/v1alpha1`
+before target execution. Neither Wails nor React participates in that
+resolution. E3 deliberately provides no export method returning a reference or
+raw bytes to React or a generic caller.
 
 ## 11. Implementation slices
 
@@ -369,14 +381,14 @@ generic caller.
 
 Automated and native Windows tests must prove:
 
-- one password credential is available to every projected target through one
-  internal reference, without per-host records;
+- one password credential is held as one broker lease for all projected
+  targets, without per-host records or a Wails-visible reference;
 - private-key mode reads the selected file once and retains bytes, not path;
 - optional sudo password is independent and status exposes presence only;
 - explicit same-as-SSH choice works only when selected;
 - invalid/oversized/unreadable input is rejected without replacing a valid
   lease;
-- replacement invalidates the previous reference;
+- replacement invalidates the previous internal broker reference;
 - clear, expiry, project close, successful project switch and process shutdown
   remove availability;
 - failed project switch preserves the current lease;
@@ -393,6 +405,7 @@ Automated and native Windows tests must prove:
 - snapshots, plans, frontend state after submit, errors and logs contain no
   secret, private-key path or value-derived material;
 - target and Execution Node transports receive zero calls from E3 operations;
+- E4/E5 behavior and Execution Node readiness do not depend on E3 availability;
 - no credential values or references are added to portable project files.
 
 Required gates:

@@ -357,12 +357,14 @@ only refresh/review/commit that require remote Core.
 The target credential contract is `SessionCredential/v1alpha1`. One active
 project session has one technical username and exactly one authentication mode:
 `SSH_PRIVATE_KEY` or `SSH_PASSWORD`. Wails submits the secret once to a
-write-only Go `RuntimeSecretBroker`; the response contains only an opaque
-`runtime:ssh-session-<32-hex>` reference, mode, availability and expiry. Query,
-review, logs and events never return the value. The lease expires after 30 idle
-minutes, on project close/replacement or process exit, whichever comes first,
-and is applied to every target `Node` for that project. Execution Node
-credentials remain a separate trusted binding.
+write-only Go `RuntimeSecretBroker`; the response contains only status metadata:
+mode, availability and expiry. Its internal
+`runtime:ssh-session-<32-hex>` reference is never exposed through Wails/React.
+Query, review, logs and events never return the value or internal reference.
+The lease expires after 30 idle minutes, on project close/replacement or process
+exit, whichever comes first, and is applied to every target `Node` for that
+project only by a future trusted Go transport. Execution Node credentials
+remain a separate trusted binding.
 
 The Installer never opens a direct workstation-to-target SSH path and never
 materializes the target password or private key in a Windows file. Secret bytes
@@ -629,8 +631,8 @@ values until that evidence passes.
 | missing PKI identity reference | optional selector warning | no fabricated identity | authoritative | BLOCK |
 | plaintext disguised as `*SecretRef` | generic reference error | strict `runtime:` reference grammar | schema confirms | BLOCK before staging |
 | validation node unavailable | status banner; forms remain | remote adapter unavailable | not reached | review/commit BLOCK; draft retained |
-| target credentials absent | readiness warning | secret availability only | irrelevant to target-free validation | editor save allowed |
-| target credential mode lacks proven runtime materializer | readiness blocker | keep lease local only | irrelevant to editor validation | save allowed; installation BLOCK |
+| target credentials absent | session status only on Servers | secret availability only | irrelevant to target-free validation | editor and E5 allowed; UI-02 target execution BLOCK |
+| target credential mode lacks proven runtime materializer | session status only on Servers | keep lease local only | irrelevant to target-free validation | editor and E5 allowed; UI-02 target execution BLOCK |
 | validation transport credential absent | explicit validation warning | secret availability only | unavailable | review/commit BLOCK |
 | execution active during edit/save | revision warning | allow edit/save; bind new revision | validates candidate normally | allowed; active run unchanged |
 
