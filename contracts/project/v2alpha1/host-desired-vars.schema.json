@@ -5,6 +5,13 @@
   "description": "An empty object is valid when a target has no host-specific desired overrides.",
   "type": "object",
   "properties": {
+    "type": {
+      "description": "Stable descriptive server type identifier; optional for legacy project compatibility.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+    },
     "desiredHostname": {
       "type": "string",
       "minLength": 1,

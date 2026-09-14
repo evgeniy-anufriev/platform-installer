@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
+	"platform-installer/internal/appconfig"
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionbundle"
 	"platform-installer/internal/executionnode"
@@ -58,10 +59,21 @@ func main() {
 			reader = projectReader{transport: executionnode.OpenSSHTransport{Identity: desktopIdentity{*identity}}, node: node, runtimeRelease: release}
 		}
 	}
-	app := NewApp(reader, projectlifecycle.NewService(sources))
+	applicationConfig, applicationConfigErr := loadApplicationConfig()
+	app := NewApp(reader, projectlifecycle.NewService(sources), WithApplicationConfig(applicationConfig, applicationConfigErr))
 	if err := wails.Run(&options.App{Title: "Platform Installer", Width: 1280, Height: 800, MinWidth: 1024, MinHeight: 720, AssetServer: &assetserver.Options{Assets: assets}, OnStartup: app.startup, Bind: []interface{}{app}}); err != nil {
 		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 	}
+}
+
+func loadApplicationConfig() (appconfig.Config, error) {
+	workingDirectory, _ := os.Getwd()
+	executable, _ := os.Executable()
+	path, err := appconfig.ResolveDevelopmentPath(workingDirectory, executable)
+	if err != nil {
+		return appconfig.Config{}, err
+	}
+	return appconfig.Load(path)
 }
 
 // resolveBundleRoot accepts an explicit operator path first. For the

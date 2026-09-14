@@ -123,3 +123,14 @@ UI-01E owns the full server editor, session credentials and Execution Node
 selection/preparation panel. UI-01F–H own topology, PKI and service forms.
 UI-02 owns installation planning/execution/progress/result composition. No
 later milestone was started by UI-01D.
+
+## Additive server-type foundation
+
+The later `OWNER-APP-CONFIG-01/02` decision preserves this milestone's
+published v1alpha2 evidence and payload compatibility. Current new Installer
+sessions now emit additive `project-edit/v1alpha3`; its first-save
+`CreateServer` requires a grammar-valid type; the normal selector is populated
+from Go-loaded application config and writes only the stable ID to
+`platform_host.type`. A type absent from the local list is warning-only. The existing narrow form
+adds that one selector so the accepted first-save path remains usable. This is
+not general add/edit/remove server UI and does not start UI-01E.

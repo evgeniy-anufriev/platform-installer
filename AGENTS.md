@@ -204,7 +204,8 @@ The Windows development workstation is not the canonical runtime for Python/Ansi
 - Transfer only required repository content to a temporary remote test workspace.
 - Clean temporary remote test workspaces after QA unless preservation is explicitly required for debugging.
 - Use `scripts/qa-sync.ps1` for Windows to RED OS source transfer. It uses
-  `scp -r` to copy only `ansible-core`, `services`, `examples` and `contracts`
+  `scp -r` to copy only `ansible-core`, `services`, `examples`, `contracts` and
+  the repository application `config`
   into a unique `/var/tmp/platform-installer-qa-*` workspace, verifies the
   source tree, and must be cleaned with the same helper after QA. Do not use
   tar streaming, `tar | ssh tar`, or ad-hoc archive pipelines. Transfer

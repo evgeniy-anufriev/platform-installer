@@ -16,6 +16,7 @@ var firstSaveAnsibleConfig = append(append([]byte(nil), managedConfigHeader...),
 
 type firstSaveServer struct {
 	id      string
+	typeID  string
 	address string
 	port    int
 }
@@ -27,6 +28,9 @@ func firstSaveInventory(servers []firstSaveServer) []byte {
 	value.WriteString("all:\n  hosts:\n")
 	for _, server := range servers {
 		fmt.Fprintf(&value, "    %s:\n      ansible_host: %s\n", server.id, server.address)
+		if server.typeID != "" {
+			fmt.Fprintf(&value, "      platform_host:\n        type: %s\n", server.typeID)
+		}
 		if server.port != 0 && server.port != 22 {
 			fmt.Fprintf(&value, "      ansible_port: %d\n", server.port)
 		}
@@ -57,14 +61,14 @@ func (b *Backend) planFirstWrite(ctx context.Context, root, revision string, com
 		if command.Operation != "CreateServer" {
 			return blockedPlan(skeleton, revision, blocked("FIRST_SAVE_COMMAND_UNSUPPORTED", "First save currently accepts only server creation intents", "command.operation")), nil
 		}
-		if err := validateCommand(command); err != nil {
+		if err := b.validateCommand(command); err != nil {
 			return blockedPlan(skeleton, revision, err), nil
 		}
 		if seen[command.HostID] {
 			return blockedPlan(skeleton, revision, blocked("INVALID_EDIT_COMMAND", "Server identifier is duplicated", "command.hostId")), nil
 		}
 		seen[command.HostID] = true
-		servers = append(servers, firstSaveServer{id: command.HostID, address: command.Address, port: command.SSHPort})
+		servers = append(servers, firstSaveServer{id: command.HostID, typeID: command.ServerType, address: command.Address, port: command.SSHPort})
 		changes = append(changes, SemanticChange{Operation: "CreateServer", EntityID: command.HostID, SafeSummary: "CreateServer " + command.HostID})
 	}
 	if len(servers) == 0 {
@@ -108,7 +112,7 @@ func (b *Backend) planFirstWrite(ctx context.Context, root, revision string, com
 		return blockedCorePlan(skeleton, revision, staged), nil
 	}
 	for _, server := range servers {
-		if staged.Hosts[server.id] == nil {
+		if staged.Hosts[server.id] == nil || (server.typeID != "" && staged.Hosts[server.id]["type"] != server.typeID) {
 			return blockedPlan(skeleton, revision, blocked("EDIT_SHADOWED", "Core snapshot did not contain the created server", "command.hostId")), nil
 		}
 	}

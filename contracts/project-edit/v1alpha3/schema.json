@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-edit/v1alpha3/schema.json",
+  "title": "Platform Installer edit session contracts v1alpha3",
+  "oneOf": [
+    {"$ref": "#/$defs/editCommand"},
+    {"$ref": "#/$defs/editSession"},
+    {"$ref": "#/$defs/editPlan"},
+    {"$ref": "#/$defs/editCommitResult"}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+    "serverAddress": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$"},
+    "serverType": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+    "opaqueId": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "commandBase": {
+      "type": "object",
+      "required": ["apiVersion", "kind", "baseProjectRevision", "operation"],
+      "properties": {
+        "apiVersion": {"const": "platform.installer/edit-command/v1alpha3"},
+        "kind": {"const": "EditCommand"},
+        "baseProjectRevision": {"$ref": "#/$defs/digest"},
+        "operation": {"type": "string"}
+      }
+    },
+    "serverCreate": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["hostId", "address", "type"], "properties": {"operation": {"const": "CreateServer"}, "hostId": {"$ref": "#/$defs/id"}, "address": {"$ref": "#/$defs/serverAddress"}, "sshPort": {"type": "integer", "minimum": 1, "maximum": 65535}, "type": {"$ref": "#/$defs/serverType"}}}],
+      "unevaluatedProperties": false
+    },
+    "serverUpdate": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["hostId"], "properties": {"operation": {"const": "UpdateServer"}, "hostId": {"$ref": "#/$defs/id"}, "address": {"$ref": "#/$defs/serverAddress"}, "sshPort": {"type": "integer", "minimum": 1, "maximum": 65535}, "clearSSHPort": {"const": true}, "type": {"$ref": "#/$defs/serverType"}}, "anyOf": [{"required": ["address"]}, {"required": ["sshPort"]}, {"required": ["clearSSHPort"]}, {"required": ["type"]}]}],
+      "unevaluatedProperties": false
+    },
+    "idOnlyCommand": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["entityId"], "properties": {"operation": {"enum": ["DeleteCertificateAuthority", "DeleteCertificateProfile", "DeleteTLSProfile", "DeleteCertificateScope"]}, "entityId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "pkiAuthorityWrite": {"allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["entityId", "entity"], "properties": {"operation": {"enum": ["CreateCertificateAuthority", "UpdateCertificateAuthority"]}, "entityId": {"$ref": "#/$defs/id"}, "entity": {"$ref": "../../project/v2alpha1/desired-state.schema.json#/$defs/certificateAuthority"}}}], "unevaluatedProperties": false},
+    "pkiCertificateProfileWrite": {"allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["entityId", "entity"], "properties": {"operation": {"enum": ["CreateCertificateProfile", "UpdateCertificateProfile"]}, "entityId": {"$ref": "#/$defs/id"}, "entity": {"$ref": "../../project/v2alpha1/desired-state.schema.json#/$defs/certificateProfile"}}}], "unevaluatedProperties": false},
+    "pkiTLSProfileWrite": {"allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["entityId", "entity"], "properties": {"operation": {"enum": ["CreateTLSProfile", "UpdateTLSProfile"]}, "entityId": {"$ref": "#/$defs/id"}, "entity": {"$ref": "../../project/v2alpha1/desired-state.schema.json#/$defs/tlsProfile"}}}], "unevaluatedProperties": false},
+    "pkiScopeWrite": {"allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["entityId", "entity"], "properties": {"operation": {"enum": ["CreateCertificateScope", "UpdateCertificateScope"]}, "entityId": {"$ref": "#/$defs/id"}, "entity": {"$ref": "../../project/v2alpha1/desired-state.schema.json#/$defs/certificateScope"}}}], "unevaluatedProperties": false},
+    "deploymentCreate": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "serviceType", "mode"], "properties": {"operation": {"const": "CreateServiceDeployment"}, "deploymentId": {"$ref": "#/$defs/id"}, "serviceType": {"$ref": "#/$defs/id"}, "mode": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "deploymentDelete": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId"], "properties": {"operation": {"const": "DeleteServiceDeployment"}, "deploymentId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "settingWrite": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "setting", "value"], "properties": {"operation": {"const": "SetServiceConfigurationValue"}, "deploymentId": {"$ref": "#/$defs/id"}, "setting": {"type": "string", "minLength": 1, "maxLength": 128}, "value": true}}],
+      "unevaluatedProperties": false
+    },
+    "settingRemove": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "setting"], "properties": {"operation": {"const": "RemoveServiceConfigurationOverride"}, "deploymentId": {"$ref": "#/$defs/id"}, "setting": {"type": "string", "minLength": 1, "maxLength": 128}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointWrite": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["endpointGroupId", "endpointGroup"], "properties": {"operation": {"enum": ["CreateEndpointGroup", "UpdateEndpointGroup"]}, "endpointGroupId": {"$ref": "#/$defs/id"}, "endpointGroup": {"$ref": "../../project/v2alpha1/desired-state.schema.json#/$defs/endpointGroup"}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointDelete": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["endpointGroupId"], "properties": {"operation": {"const": "DeleteEndpointGroup"}, "endpointGroupId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "deploymentRelation": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId"], "properties": {"operation": {"enum": ["ClearServiceEndpointGroup", "ClearHAProxyIntegration"]}, "deploymentId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointRelation": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "endpointGroupId"], "properties": {"operation": {"const": "SetServiceEndpointGroup"}, "deploymentId": {"$ref": "#/$defs/id"}, "endpointGroupId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "haproxyRelation": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "haproxyDeploymentId"], "properties": {"operation": {"const": "SetHAProxyIntegration"}, "deploymentId": {"$ref": "#/$defs/id"}, "haproxyDeploymentId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "placementMember": {"type": "object", "required": ["memberId", "hostId", "roles"], "properties": {"memberId": {"$ref": "#/$defs/id"}, "hostId": {"$ref": "#/$defs/id"}, "roles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}, "uniqueItems": true}, "configuration": {"type": "object", "maxProperties": 128}}, "additionalProperties": false},
+    "placementReconcile": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "members"], "properties": {"operation": {"const": "ReconcileDeploymentPlacement"}, "deploymentId": {"$ref": "#/$defs/id"}, "members": {"type": "array", "maxItems": 1024, "items": {"$ref": "#/$defs/placementMember"}}}}],
+      "unevaluatedProperties": false
+    },
+    "editCommand": {
+      "oneOf": [
+        {"$ref": "#/$defs/serverCreate"}, {"$ref": "#/$defs/serverUpdate"},
+        {"allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["hostId"], "properties": {"operation": {"const": "DeleteServer"}, "hostId": {"$ref": "#/$defs/id"}}}], "unevaluatedProperties": false},
+        {"$ref": "#/$defs/deploymentCreate"}, {"$ref": "#/$defs/deploymentDelete"},
+        {"$ref": "#/$defs/settingWrite"}, {"$ref": "#/$defs/settingRemove"},
+        {"$ref": "#/$defs/endpointWrite"}, {"$ref": "#/$defs/endpointDelete"},
+        {"$ref": "#/$defs/deploymentRelation"}, {"$ref": "#/$defs/endpointRelation"}, {"$ref": "#/$defs/haproxyRelation"},
+        {"$ref": "#/$defs/placementReconcile"}, {"$ref": "#/$defs/pkiAuthorityWrite"}, {"$ref": "#/$defs/pkiCertificateProfileWrite"}, {"$ref": "#/$defs/pkiTLSProfileWrite"}, {"$ref": "#/$defs/pkiScopeWrite"}, {"$ref": "#/$defs/idOnlyCommand"}
+      ]
+    },
+    "documentState": {"oneOf": [{"type": "object", "required": ["state"], "properties": {"state": {"const": "ABSENT"}}, "additionalProperties": false}, {"type": "object", "required": ["state", "digest"], "properties": {"state": {"const": "PRESENT"}, "digest": {"$ref": "#/$defs/digest"}}, "additionalProperties": false}]},
+    "documentChange": {"type": "object", "required": ["logicalPath", "before", "after"], "properties": {"logicalPath": {"type": "string", "pattern": "^(ansible\\.cfg|inventory/hosts\\.yml|inventory/group_vars/all/platform-installer\\.yml|inventory/host_vars/[a-z0-9][a-z0-9-]{0,62}/platform-installer\\.yml)$"}, "before": {"$ref": "#/$defs/documentState"}, "after": {"$ref": "#/$defs/documentState"}}, "not": {"properties": {"before": {"properties": {"state": {"const": "ABSENT"}}}, "after": {"properties": {"state": {"const": "ABSENT"}}}}}, "additionalProperties": false},
+    "finding": {"$ref": "../../finding/v1alpha1/schema.json"},
+    "editSession": {"type": "object", "required": ["apiVersion", "kind", "sessionId", "projectContextId", "baseProjectRevision", "status", "commandCount", "encodedBytes", "expiresAt"], "properties": {"apiVersion": {"const": "platform.installer/edit-session/v1alpha1"}, "kind": {"const": "EditSession"}, "sessionId": {"$ref": "#/$defs/opaqueId"}, "projectContextId": {"type": "string", "minLength": 1, "maxLength": 128}, "baseProjectRevision": {"$ref": "#/$defs/digest"}, "status": {"enum": ["EDITING", "REVIEWED"]}, "commandCount": {"type": "integer", "minimum": 0, "maximum": 1024}, "encodedBytes": {"type": "integer", "minimum": 0, "maximum": 4194304}, "expiresAt": {"type": "string", "format": "date-time"}, "reviewedPlanId": {"$ref": "#/$defs/opaqueId"}}, "additionalProperties": false},
+    "editPlan": {"type": "object", "required": ["apiVersion", "kind", "status", "baseProjectRevision", "semanticChanges", "affectedDocuments", "validation", "reviewDiff", "commitAllowed", "applyRequired"], "properties": {"apiVersion": {"const": "platform.installer/edit-plan/v1alpha2"}, "kind": {"const": "EditPlan"}, "status": {"enum": ["READY", "BLOCKED", "NO_CHANGE"]}, "planId": {"$ref": "#/$defs/opaqueId"}, "baseProjectRevision": {"$ref": "#/$defs/digest"}, "commandSummary": {"type": "object"}, "semanticChanges": {"type": "array", "maxItems": 1024, "items": {"type": "object"}}, "affectedEntities": {"type": "array", "items": {"type": "string"}}, "affectedDocuments": {"type": "array", "maxItems": 1026, "items": {"$ref": "#/$defs/documentChange"}}, "impacts": {"type": "array", "items": {"type": "string"}}, "validation": {"type": "object", "required": ["status", "findings"], "properties": {"status": {"enum": ["PASS", "BLOCKED"]}, "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}}, "additionalProperties": false}, "expectedEffectiveState": {"type": "array", "items": {"type": "object"}}, "expectedSnapshotFingerprint": {"$ref": "#/$defs/digest"}, "reviewDiff": {"type": "string", "maxLength": 65536}, "commitAllowed": {"type": "boolean"}, "applyRequired": {"type": "boolean"}, "expiresAt": {"type": "string", "format": "date-time"}, "timing": {"type": "object"}}, "additionalProperties": false},
+    "editCommitResult": {"type": "object", "required": ["apiVersion", "kind", "status", "changed", "applyRequired"], "properties": {"apiVersion": {"const": "platform.installer/edit-commit-result/v1alpha2"}, "kind": {"const": "EditCommitResult"}, "status": {"enum": ["COMMITTED", "COMMITTED_REFRESH_FAILED", "BLOCKED", "DISCARDED"]}, "changed": {"type": "boolean"}, "finding": {"$ref": "#/$defs/finding"}, "oldProjectRevision": {"$ref": "#/$defs/digest"}, "newProjectRevision": {"$ref": "#/$defs/digest"}, "affectedDocuments": {"type": "array", "items": {"$ref": "#/$defs/documentChange"}}, "snapshot": {"$ref": "../../project-snapshot/v1alpha1/schema.json"}, "applyRequired": {"type": "boolean"}, "discarded": {"type": "boolean"}, "timing": {"type": "object"}}, "additionalProperties": false}
+  }
+}

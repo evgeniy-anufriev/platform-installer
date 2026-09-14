@@ -179,6 +179,23 @@ permit the member scope.
 
 ## Versioning and migration
 
+## Server type metadata
+
+An inventory host may carry one stable descriptive type ID as
+`platform_host.type`. The field is optional when reading historical projects;
+it is required when a new server is created by current Installer edit sessions.
+The portable schema validates only lowercase bounded identifier grammar. The
+selectable list and localized labels belong to versioned Installer application
+configuration and are not copied into the project.
+
+A grammar-valid type absent from the local application configuration remains
+portable and readable. It is preserved until explicitly changed and may
+produce only a local presentation warning. Server type is separate from host
+identity and has no implicit effect on services, topology, placement,
+Execution Node selection, package or artifact-source selection.
+
+## Versioning and migration
+
 - Published schemas version portable machine state and resolved projections.
 - Every service deployment pins a compatible service-definition version through the catalog lock.
 - Plans pin project, catalog, artifact and Core fingerprints.

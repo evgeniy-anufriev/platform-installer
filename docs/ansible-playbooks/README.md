@@ -33,8 +33,9 @@ $qaWorkspace = .\scripts\qa-sync.ps1 `
 ```
 
 Helper применяет только `scp -r`, создаёт уникальный workspace под
-`/var/tmp`, передаёт каталоги `ansible-core`, `services`, `examples` и
-`contracts`, затем проверяет их наличие и обязательный catalog generator.
+`/var/tmp`, передаёт каталоги `ansible-core`, `services`, `examples`,
+`contracts` и repository application `config`, затем проверяет их наличие и
+обязательный catalog generator.
 Полученный путь используйте как корень QA-запуска. После завершения удалите
 только этот workspace:
 

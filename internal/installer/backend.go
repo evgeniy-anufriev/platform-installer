@@ -14,18 +14,27 @@ import (
 )
 
 type Backend struct {
-	core     coreadapter.Adapter
-	plans    PlanStore
-	now      func() time.Time
-	planTTL  time.Duration
-	lockWait time.Duration
-	replace  replaceFunc
+	core        coreadapter.Adapter
+	plans       PlanStore
+	now         func() time.Time
+	planTTL     time.Duration
+	lockWait    time.Duration
+	replace     replaceFunc
+	serverTypes map[string]bool
 }
 
 type Option func(*Backend)
 
 func WithPlanStore(store PlanStore) Option { return func(backend *Backend) { backend.plans = store } }
 func WithPlanTTL(ttl time.Duration) Option { return func(backend *Backend) { backend.planTTL = ttl } }
+func WithServerTypes(values []string) Option {
+	return func(backend *Backend) {
+		backend.serverTypes = make(map[string]bool, len(values))
+		for _, value := range values {
+			backend.serverTypes[value] = true
+		}
+	}
+}
 func withReplace(function replaceFunc) Option {
 	return func(backend *Backend) { backend.replace = function }
 }
@@ -42,6 +51,37 @@ func NewBackend(adapter coreadapter.Adapter, options ...Option) *Backend {
 	return backend
 }
 
+func (b *Backend) validateCommand(command EditCommand) error {
+	return b.validateCommandWithInternalBatch(command, false)
+}
+
+func (b *Backend) validateCommandWithInternalBatch(command EditCommand, allowBatch bool) error {
+	if err := validateCommandWithInternalBatch(command, allowBatch); err != nil {
+		return err
+	}
+	return b.validateConfiguredTypes(command)
+}
+
+func (b *Backend) validateConfiguredTypes(command EditCommand) error {
+	if command.Operation == "Batch" {
+		for _, child := range command.Commands {
+			child.APIVersion = command.APIVersion
+			child.Kind = command.Kind
+			child.BaseProjectRevision = command.BaseProjectRevision
+			if err := b.validateConfiguredTypes(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if command.APIVersion == EditCommandAPIVersionV3 && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
+		if len(b.serverTypes) == 0 {
+			return blocked("APPLICATION_CONFIG_UNAVAILABLE", "Application configuration is unavailable", "command.type")
+		}
+	}
+	return nil
+}
+
 func blockedPlan(command EditCommand, revision string, err error) *EditPlan {
 	finding := Finding{APIVersion: "platform.installer/finding/v1alpha1", Kind: "Finding",
 		Code: "EDIT_PLAN_FAILED", Status: "BLOCKED", Category: "project-writer", Field: "command",
@@ -50,7 +90,7 @@ func blockedPlan(command EditCommand, revision string, err error) *EditPlan {
 		finding = typed.finding()
 	}
 	version := EditPlanAPIVersion
-	if command.APIVersion == EditCommandAPIVersionV2 {
+	if command.APIVersion == EditCommandAPIVersionV2 || command.APIVersion == EditCommandAPIVersionV3 {
 		version = EditPlanAPIVersionV2
 	}
 	return &EditPlan{APIVersion: version, Kind: "EditPlan", Status: "BLOCKED",
@@ -62,7 +102,7 @@ func blockedPlan(command EditCommand, revision string, err error) *EditPlan {
 }
 
 func planVersion(command EditCommand) string {
-	if command.APIVersion == EditCommandAPIVersionV2 {
+	if command.APIVersion == EditCommandAPIVersionV2 || command.APIVersion == EditCommandAPIVersionV3 {
 		return EditPlanAPIVersionV2
 	}
 	return EditPlanAPIVersion
@@ -171,7 +211,7 @@ func (b *Backend) planEdit(ctx context.Context, projectRoot string, command Edit
 	if err != nil {
 		return blockedPlan(command, command.BaseProjectRevision, err), nil
 	}
-	if err := validateCommandWithInternalBatch(command, allowV2Batch); err != nil {
+	if err := b.validateCommandWithInternalBatch(command, allowV2Batch); err != nil {
 		return blockedPlan(command, command.BaseProjectRevision, err), nil
 	}
 	owned, err := discoverOwnedPaths(root)
@@ -234,7 +274,7 @@ func (b *Backend) planEdit(ctx context.Context, projectRoot string, command Edit
 		storedDocuments = append(storedDocuments, storedDocument{LogicalPath: logical,
 			Before: append([]byte(nil), before...), After: after, Existed: true})
 		change := DocumentChange{LogicalPath: logical, BeforeDigest: digestBytes(before), AfterDigest: digestBytes(after)}
-		if command.APIVersion == EditCommandAPIVersionV2 {
+		if command.APIVersion == EditCommandAPIVersionV2 || command.APIVersion == EditCommandAPIVersionV3 {
 			change.Before = &DocumentState{State: "PRESENT", Digest: digestBytes(before)}
 			change.After = &DocumentState{State: "PRESENT", Digest: digestBytes(after)}
 			change.BeforeDigest, change.AfterDigest = "", ""

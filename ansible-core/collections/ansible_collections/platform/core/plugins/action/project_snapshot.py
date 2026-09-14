@@ -18,6 +18,27 @@ from ansible_collections.platform.core.plugins.module_utils.schema_validation im
 from ansible_collections.platform.core.plugins.module_utils.topology_resolution import resolve_topology
 
 
+def snapshot_host(values, host_id):
+    result = {"ansibleHost": values.get("ansible_host", host_id)}
+    platform_host = values.get("platform_host", {})
+    if isinstance(platform_host, dict) and isinstance(platform_host.get("type"), str):
+        result["type"] = platform_host["type"]
+    return result
+
+
+def validate_host_desired_values(validator, schema_path, hostvars, host_ids):
+    findings = []
+    for host_id in sorted(host_ids):
+        values = hostvars.get(host_id, {})
+        platform_host = values.get("platform_host", {}) if isinstance(values, dict) else {}
+        prefix = "/hosts/%s/platform_host" % str(host_id).replace("~", "~0").replace("/", "~1")
+        for finding in validator.validate(platform_host, schema_path):
+            contextual = copy.deepcopy(finding)
+            contextual["field"] = prefix + contextual.get("field", "")
+            findings.append(contextual)
+    return findings
+
+
 class ActionModule(ActionBase):
     """Build a target-free read-only projection from the loaded Ansible project."""
 
@@ -160,7 +181,7 @@ class ActionModule(ActionBase):
             hosts, inventory_deployments = {}, {}
             for host_id in target_ids:
                 values = hostvars[host_id]
-                hosts[host_id] = {"ansibleHost": values.get("ansible_host", host_id)}
+                hosts[host_id] = snapshot_host(values, host_id)
                 inventory_deployments[host_id] = values.get("platform_deployments", {})
 
             host_addresses = {host_id: {"ansible_host": hosts[host_id]["ansibleHost"]} for host_id in target_ids}
@@ -179,6 +200,12 @@ class ActionModule(ActionBase):
                 if manifest:
                     schema_specs.append(("project/v2alpha1/project-manifest.schema.json", manifest))
                 schema_findings = []
+                schema_findings.extend(validate_host_desired_values(
+                    validator,
+                    os.path.join(repo_root, "contracts", "project", "v2alpha1", "host-desired-vars.schema.json"),
+                    hostvars,
+                    target_ids,
+                ))
                 for relative, document in schema_specs:
                     schema_findings.extend(validator.validate(document, os.path.join(repo_root, "contracts", *relative.split("/"))))
                 if schema_findings:

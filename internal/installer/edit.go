@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"platform-installer/internal/appconfig"
 	"platform-installer/internal/coreadapter"
 )
 
@@ -96,13 +97,17 @@ func validateCommand(command EditCommand) error {
 	return validateCommandWithInternalBatch(command, false)
 }
 
+func isEditCommandV2OrV3(version string) bool {
+	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3
+}
+
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
-	if (command.APIVersion != EditCommandAPIVersion && command.APIVersion != EditCommandAPIVersionV2) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (command.APIVersion == EditCommandAPIVersionV2 && !validSHA256(command.BaseProjectRevision)) {
+	if (command.APIVersion != EditCommandAPIVersion && !isEditCommandV2OrV3(command.APIVersion)) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (isEditCommandV2OrV3(command.APIVersion) && !validSHA256(command.BaseProjectRevision)) {
 		return blocked("INVALID_EDIT_COMMAND", "EditCommand version, kind, or base revision is invalid", "command")
 	}
 	if command.Operation == "Batch" {
-		if command.APIVersion == EditCommandAPIVersionV2 && !allowV2Batch {
-			return blocked("INVALID_EDIT_COMMAND", "Batch is an internal review aggregate and is not a public v1alpha2 operation", "command.operation")
+		if isEditCommandV2OrV3(command.APIVersion) && !allowV2Batch {
+			return blocked("INVALID_EDIT_COMMAND", "Batch is an internal review aggregate and is not a public operation", "command.operation")
 		}
 		if err := validateCommandFields(command, "commands"); err != nil {
 			return err
@@ -136,6 +141,12 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		"CreateTLSProfile": {"entityId", "entity"}, "UpdateTLSProfile": {"entityId", "entity"}, "DeleteTLSProfile": {"entityId"},
 		"CreateCertificateScope": {"entityId", "entity"}, "UpdateCertificateScope": {"entityId", "entity"}, "DeleteCertificateScope": {"entityId"},
 	}
+	fieldsV3 := make(map[string][]string, len(fieldsV2))
+	for operation, operationFields := range fieldsV2 {
+		fieldsV3[operation] = operationFields
+	}
+	fieldsV3["CreateServer"] = []string{"hostId", "type", "address", "sshPort"}
+	fieldsV3["UpdateServer"] = []string{"hostId", "type", "address", "sshPort", "clearSSHPort"}
 	fieldsV1 := map[string][]string{
 		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
 		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
@@ -147,6 +158,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	fields := fieldsV1
 	if command.APIVersion == EditCommandAPIVersionV2 {
 		fields = fieldsV2
+	} else if command.APIVersion == EditCommandAPIVersionV3 {
+		fields = fieldsV3
 	}
 	allowedFields, allowed := fields[command.Operation]
 	if !allowed {
@@ -158,21 +171,25 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	switch command.Operation {
 	case "CreateServer":
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
-		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.HostID) || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
-			return blocked("INVALID_EDIT_COMMAND", "CreateServer requires a valid host, address and optional SSH port", "command")
+		versionValid := isEditCommandV2OrV3(command.APIVersion)
+		typeValid := command.APIVersion == EditCommandAPIVersionV2 || appconfig.ServerTypeIDPattern.MatchString(command.ServerType)
+		if !versionValid || !identifierPattern.MatchString(command.HostID) || !typeValid || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
+			return blocked("INVALID_EDIT_COMMAND", "CreateServer requires a valid host, type, address and optional SSH port", "command")
 		}
 	case "UpdateServer":
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
 		hasClearSSHPort := command.ClearSSHPort || command.presentFields["clearSSHPort"]
-		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort) || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
+		versionValid := isEditCommandV2OrV3(command.APIVersion)
+		typeValid := command.ServerType == "" || (command.APIVersion == EditCommandAPIVersionV3 && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
+		if !versionValid || !typeValid || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort && command.ServerType == "") || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
 			return blocked("INVALID_EDIT_COMMAND", "UpdateServer fields are invalid", "command")
 		}
 	case "DeleteServer":
-		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.HostID) {
+		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.HostID) {
 			return blocked("INVALID_EDIT_COMMAND", "DeleteServer requires a valid host", "command.hostId")
 		}
 	case "ReconcileDeploymentPlacement":
-		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > 1024 {
+		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > 1024 {
 			return blocked("INVALID_EDIT_COMMAND", "Deployment placement reconcile is invalid", "command.members")
 		}
 		memberIDs := make(map[string]bool)
@@ -193,15 +210,15 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			}
 		}
 	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "CreateCertificateProfile", "UpdateCertificateProfile", "CreateTLSProfile", "UpdateTLSProfile", "CreateCertificateScope", "UpdateCertificateScope":
-		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.EntityID) || command.Entity == nil {
+		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.EntityID) || command.Entity == nil {
 			return blocked("INVALID_EDIT_COMMAND", "Certificate entity command is invalid", "command.entity")
 		}
 	case "DeleteCertificateAuthority", "DeleteCertificateProfile", "DeleteTLSProfile", "DeleteCertificateScope":
-		if command.APIVersion != EditCommandAPIVersionV2 || !identifierPattern.MatchString(command.EntityID) {
+		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.EntityID) {
 			return blocked("INVALID_EDIT_COMMAND", "Certificate entity identifier is invalid", "command.entityId")
 		}
 	case "CreateServiceDeployment":
-		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (command.APIVersion == EditCommandAPIVersionV2 && (!identifierPattern.MatchString(command.ServiceType) || !identifierPattern.MatchString(command.Mode))) {
+		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (isEditCommandV2OrV3(command.APIVersion) && (!identifierPattern.MatchString(command.ServiceType) || !identifierPattern.MatchString(command.Mode))) {
 			return blocked("INVALID_EDIT_COMMAND", "Create deployment requires an identifier and deployment object", "command")
 		}
 	case "DeleteServiceDeployment", "ClearServiceEndpointGroup", "ClearHAProxyIntegration":

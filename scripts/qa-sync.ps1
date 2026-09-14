@@ -46,7 +46,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$sourceDirectories = @('ansible-core', 'services', 'examples', 'contracts')
+$sourceDirectories = @('ansible-core', 'services', 'examples', 'contracts', 'config')
 $sourceFiles = @()
 if ($IncludeGo) {
     $sourceDirectories += @('cmd', 'internal')

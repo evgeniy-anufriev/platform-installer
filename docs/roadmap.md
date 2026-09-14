@@ -549,7 +549,10 @@ UI-01A, UI-01B and UI-01C are DONE. UI-01B provides the production Wails/React
 read-only existing-project shell and its one fixed target-free Core snapshot
 operation. UI-01C adds local metadata-only project creation and empty-project
 reopen; UI-01D implementation/acceptance is complete and owner-accepted
-without final revision-bound review. UI-01E is not started.
+without final revision-bound review. The separately authorized application
+config/server-type foundation adds a versioned local type catalog and additive
+`CreateServer` v1alpha3 contract without starting full server CRUD. UI-01E is
+not started.
 
 ### DEVX-01: Codex engineering harness
 
@@ -632,7 +635,8 @@ accepted without Core/Execution Node contact. UI-01D implementation and
 acceptance are complete: the bounded transient session, complete-candidate
 remote Core proof, guarded first write and narrow Windows review/save shell
 passed its executable gates and was owner-accepted without final
-revision-bound review. UI-01E is not started; UI-01
+revision-bound review. The application config/server-type foundation is
+independent of UI-01E and does not advance it. UI-01E is not started; UI-01
 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive

@@ -1,0 +1,8 @@
+schemaVersion: 1
+serverTypes:
+  - id: infra
+    displayName: Инфраструктура
+  - id: app
+    displayName: Приложения
+  - id: db
+    displayName: Базы данных

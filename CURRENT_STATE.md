@@ -1,5 +1,23 @@
 # Current state
 
+## Application config and server type foundation (2026-09-14)
+
+`OWNER-APP-CONFIG-01/02` is implemented. Repository development configuration
+is the versioned `config/application.yml`; it currently declares `infra`,
+`app` and `db`. New Installer sessions emit additive
+`project-edit/v1alpha3`, whose `CreateServer` requires one grammar-valid type;
+absence from the local configured list is warning-only.
+Published v1alpha2 remains unchanged and both versions use the same Go
+`EditCommand` model.
+
+Canonical projects store only the grammar-valid ID as optional-on-legacy-read
+`platform_host.type`. Core projects it through the existing
+`ProjectSnapshot.hosts` object. Missing legacy and locally unknown valid types
+are preserved without backfill; unknown configured types produce only a
+nonblocking Installer diagnostic and do not alter Core status, validation or
+fingerprint. Type has no service, topology, placement, Execution Node or source
+selection semantics. UI-01E and UI-01H remain not started.
+
 ## UI-01 implementation status (2026-09-07)
 
 UI-01A through UI-01D are DONE. UI-01D was accepted by the owner without a

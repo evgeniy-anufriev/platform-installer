@@ -105,10 +105,6 @@ func validSHA256(value string) bool {
 }
 
 func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend *Backend) (EditSession, error) {
-	encoded, err := json.Marshal(command)
-	if err != nil {
-		return EditSession{}, blocked("INVALID_EDIT_COMMAND", "Edit command cannot be encoded", "command")
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.expireLocked()
@@ -119,11 +115,18 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 	if state.busy {
 		return EditSession{}, blocked("EDIT_SESSION_BUSY", "Edit session review is in progress", "sessionId")
 	}
-	command.APIVersion = EditCommandAPIVersionV2
+	command.APIVersion = EditCommandAPIVersionV3
 	command.Kind = "EditCommand"
 	command.BaseProjectRevision = state.public.BaseProjectRevision
-	if err := validateCommand(command); err != nil {
+	if backend == nil {
+		return EditSession{}, blocked("APPLICATION_CONFIG_UNAVAILABLE", "Application configuration is unavailable", "command.type")
+	}
+	if err := backend.validateCommand(command); err != nil {
 		return EditSession{}, err
+	}
+	encoded, err := json.Marshal(command)
+	if err != nil {
+		return EditSession{}, blocked("INVALID_EDIT_COMMAND", "Edit command cannot be encoded", "command")
 	}
 	if len(state.commands) >= maxSessionCommands || state.public.EncodedBytes+len(encoded) > maxSessionBytes {
 		return EditSession{}, blocked("EDIT_SESSION_LIMIT", "Edit session command limit was reached", "command")

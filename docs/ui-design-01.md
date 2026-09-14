@@ -19,6 +19,14 @@ the project header carries name/path/edit state. One session credential applies
 to all target servers. Execution details are collapsed by default. The HTML
 includes an explicitly simulated create/edit/review/save flow, never disk writes.
 
+Owner decisions `OWNER-APP-CONFIG-01/02` add one required server type to new
+Installer-created servers. The UI receives stable IDs and display labels from
+the Go-loaded versioned application config; React does not own the list. Type
+is descriptive metadata and future template-slot input only. It remains
+separate from server identity and cannot select services, placement,
+Execution Node or source policy. Legacy missing and locally unknown valid types
+remain readable without automatic defaults or rewrites.
+
 ## 1. Product principle
 
 Platform Installer is a visual editor and orchestrator for the same standard

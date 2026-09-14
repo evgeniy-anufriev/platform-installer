@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"platform-installer/internal/appconfig"
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionbundle"
 	"platform-installer/internal/executionnode"
@@ -51,7 +52,11 @@ func (editorReaderStub) BuildCandidateSnapshot(_ context.Context, root string, _
 	if err != nil {
 		return nil, err
 	}
-	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: "sha256:" + string(make([]byte, 64)), Hosts: map[string]map[string]any{"node1": {}}}, nil
+	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: "sha256:" + string(make([]byte, 64)), Hosts: map[string]map[string]any{"node1": {"type": "infra"}}}, nil
+}
+
+func testApplicationConfig() AppOption {
+	return WithApplicationConfig(appconfig.Config{SchemaVersion: 1, ServerTypes: []appconfig.ServerType{{ID: "infra", DisplayName: "Инфраструктура"}}}, nil)
 }
 
 func (s snapshotReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
@@ -90,6 +95,74 @@ func TestAppReturnsSafeFailure(t *testing.T) {
 	}
 }
 
+func TestApplicationConfigFailureDoesNotBlockReadOnlyOpen(t *testing.T) {
+	snapshot := &coreadapter.Snapshot{Status: "PASS", ProjectRevision: "sha256:revision", SnapshotFingerprint: "sha256:fingerprint", Hosts: map[string]map[string]any{"node1": {"type": "scada"}}}
+	app := NewApp(snapshotReaderStub{snapshot: snapshot}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "MANAGED_PROJECT"}})
+	result := app.OpenProject(t.TempDir())
+	if result.Status != "OPEN" || result.Snapshot != snapshot {
+		t.Fatalf("read-only open blocked: %#v", result)
+	}
+	if config := app.GetApplicationConfig(); config.Status != "ERROR" || config.Error == nil {
+		t.Fatalf("config=%#v", config)
+	}
+}
+
+func TestApplicationConfigFailureBlocksNewServerWithoutWriting(t *testing.T) {
+	root := t.TempDir()
+	manifest := "apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-aaaaaaaaaaaaaaaa\n  name: Test\n  labels:\n    platform.installer/managed-project: v1alpha1\ndesiredStateContract: platform.installer/project-desired-state/v2alpha1\ncatalogLock:\n  apiVersion: platform.installer/catalog/v1alpha1\n  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  services: {}\nartifactLock:\n  apiVersion: platform.installer/artifacts/v1alpha1\n  digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n"
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	project := &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa", Name: "Test"}
+	app := NewApp(editorReaderStub{}, lifecycleStub{})
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: project}
+	started := app.StartEditSession()
+	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10"})
+	if result.Error == nil || result.Error.Code != "APPLICATION_CONFIG_UNAVAILABLE" {
+		t.Fatalf("result=%#v", result)
+	}
+	if _, err := os.Stat(filepath.Join(root, "inventory")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("blocked command wrote inventory: %v", err)
+	}
+}
+
+func TestUnknownAndLegacyServerTypesArePresentationDiagnosticsOnly(t *testing.T) {
+	snapshot := &coreadapter.Snapshot{Status: "PASS", ProjectRevision: "sha256:revision", SnapshotFingerprint: "sha256:unchanged", Validation: map[string]any{"status": "PASS"}, Hosts: map[string]map[string]any{"known": {"type": "infra"}, "unknown": {"type": "scada"}, "legacy": {}}}
+	app := NewApp(snapshotReaderStub{snapshot: snapshot}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "MANAGED_PROJECT"}}, testApplicationConfig())
+	result := app.OpenProject(t.TempDir())
+	if result.Snapshot != snapshot || snapshot.Status != "PASS" || snapshot.SnapshotFingerprint != "sha256:unchanged" || snapshot.Validation["status"] != "PASS" {
+		t.Fatal("application diagnostics mutated authoritative snapshot")
+	}
+	if len(result.Diagnostics) != 2 || result.Diagnostics[0].Severity != "WARNING" || result.Diagnostics[1].Severity != "WARNING" {
+		t.Fatalf("diagnostics=%#v", result.Diagnostics)
+	}
+}
+
+func TestUnknownNewServerTypeReturnsNonBlockingDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	manifest := "apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-aaaaaaaaaaaaaaaa\n  name: Test\n  labels:\n    platform.installer/managed-project: v1alpha1\ndesiredStateContract: platform.installer/project-desired-state/v2alpha1\ncatalogLock:\n  apiVersion: platform.installer/catalog/v1alpha1\n  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  services: {}\nartifactLock:\n  apiVersion: platform.installer/artifacts/v1alpha1\n  digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n"
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	revision, err := installer.ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(editorReaderStub{}, lifecycleStub{}, testApplicationConfig())
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}}
+	started := app.StartEditSession()
+	if started.Error != nil || started.Session == nil {
+		t.Fatalf("start=%#v", started)
+	}
+	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "scada", Address: "192.0.2.10"})
+	if result.Error != nil || result.Status != "EDITING" || len(result.Diagnostics) != 1 || result.Diagnostics[0].Code != "UNKNOWN_CONFIGURED_SERVER_TYPE" {
+		t.Fatalf("result=%#v", result)
+	}
+	if currentRevision, err := installer.ProjectRevision(root); err != nil || currentRevision != revision {
+		t.Fatalf("revision=%q err=%v", currentRevision, err)
+	}
+}
+
 func TestAppKeepsEmptyProjectLocalWithoutSnapshotCall(t *testing.T) {
 	project := &projectlifecycle.Project{ID: "project-0123456789abcdef", Name: "Empty"}
 	app := NewApp(snapshotReaderStub{err: errors.New("snapshot must not be called")}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "EMPTY_MANAGED_PROJECT", Project: project}})
@@ -110,13 +183,13 @@ func TestAppFirstSaveRequiresReviewAndConsumesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa", Name: "Test", Source: projectlifecycle.CompatibilitySourceSummary{BundleDigest: "sha256:" + string(make([]byte, 64)), CatalogDigest: "sha256:" + string(make([]byte, 64))}}
-	app := NewApp(editorReaderStub{}, lifecycleStub{})
+	app := NewApp(editorReaderStub{}, lifecycleStub{}, testApplicationConfig())
 	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: project}
 	started := app.StartEditSession()
 	if started.Status != "EDITING" || started.Session == nil {
 		t.Fatalf("started=%#v", started)
 	}
-	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", Address: "192.0.2.10", SSHPort: 22})
+	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10", SSHPort: 22})
 	if appended.Session == nil || appended.Session.CommandCount != 1 {
 		t.Fatalf("appended=%#v", appended)
 	}
@@ -259,7 +332,7 @@ func TestUI01DRemoteFirstSaveAcceptance(t *testing.T) {
 			"planningProtocol": executionbundle.ProtocolVersion,
 		},
 	}
-	app := NewApp(acceptanceReader{projectReader: reader, t: t}, projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle}))
+	app := NewApp(acceptanceReader{projectReader: reader, t: t}, projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle}), testApplicationConfig())
 	root := os.Getenv("UI01D_E2E_PROJECT_ROOT")
 	if root == "" {
 		root = filepath.Join(t.TempDir(), "ui-01d-first-save")
@@ -275,7 +348,7 @@ func TestUI01DRemoteFirstSaveAcceptance(t *testing.T) {
 	if started.Session == nil {
 		t.Fatalf("start result=%+v", started)
 	}
-	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", Address: "192.0.2.10", SSHPort: 22})
+	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10", SSHPort: 22})
 	if appended.Session == nil || appended.Session.CommandCount != 1 {
 		t.Fatalf("append result=%+v", appended)
 	}

@@ -37,6 +37,55 @@ func TestValidateV2CreateServerRejectsUnknownDecodedFields(t *testing.T) {
 	}
 }
 
+func TestV2CreateServerRemainsCompatibleAndV3RequiresType(t *testing.T) {
+	revision := "sha256:" + strings.Repeat("a", 64)
+	v2 := EditCommand{APIVersion: EditCommandAPIVersionV2, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", Address: "192.0.2.1"}
+	if err := validateCommand(v2); err != nil {
+		t.Fatalf("historical v1alpha2 command rejected: %v", err)
+	}
+	backend := NewBackend(nil, WithServerTypes([]string{"infra"}))
+	for name, command := range map[string]EditCommand{
+		"missing": {APIVersion: EditCommandAPIVersionV3, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", Address: "192.0.2.1"},
+		"invalid": {APIVersion: EditCommandAPIVersionV3, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", ServerType: "Infra type", Address: "192.0.2.1"},
+	} {
+		if err := backend.validateCommand(command); err == nil {
+			t.Fatalf("%s v1alpha3 type accepted", name)
+		}
+	}
+	unknown := EditCommand{APIVersion: EditCommandAPIVersionV3, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", ServerType: "scada", Address: "192.0.2.1"}
+	if err := backend.validateCommand(unknown); err != nil {
+		t.Fatalf("grammar-valid unknown type affected canonical command semantics: %v", err)
+	}
+	known := unknown
+	known.ServerType = "infra"
+	if err := backend.validateCommand(known); err != nil {
+		t.Fatalf("configured type rejected: %v", err)
+	}
+}
+
+func TestV3PreservesNonServerV2Commands(t *testing.T) {
+	revision := "sha256:" + strings.Repeat("a", 64)
+	commands := []EditCommand{
+		{Operation: "DeleteServiceDeployment", DeploymentID: "kafka-main"},
+		{Operation: "CreateServiceDeployment", DeploymentID: "kafka-main", ServiceType: "kafka", Mode: "kraft"},
+		{Operation: "ReconcileDeploymentPlacement", DeploymentID: "kafka-main", Members: []PlacementMember{{MemberID: "broker-1", HostID: "node1", Roles: []string{"broker"}}}},
+		{Operation: "CreateCertificateAuthority", EntityID: "root-ca", Entity: map[string]any{"scope": "deployment"}},
+		{Operation: "DeleteCertificateAuthority", EntityID: "root-ca"},
+	}
+	for _, command := range commands {
+		command.APIVersion = EditCommandAPIVersionV3
+		command.Kind = "EditCommand"
+		command.BaseProjectRevision = revision
+		if err := validateCommand(command); err != nil {
+			t.Fatalf("v1alpha3 rejected unchanged %s semantics: %v", command.Operation, err)
+		}
+	}
+	invalidDeployment := EditCommand{APIVersion: EditCommandAPIVersionV3, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServiceDeployment", DeploymentID: "kafka-main"}
+	if err := validateCommand(invalidDeployment); err == nil {
+		t.Fatal("v1alpha3 accepted CreateServiceDeployment without serviceType/mode")
+	}
+}
+
 func TestValidateV2ServerCommandsPreserveOptionalFieldPresence(t *testing.T) {
 	baseRevision := "sha256:" + strings.Repeat("a", 64)
 	invalid := []string{
@@ -88,19 +137,30 @@ func TestValidateCommandRejectsScalarSecretSettings(t *testing.T) {
 }
 
 func createServerCommand(host, address string) EditCommand {
-	return EditCommand{Operation: "CreateServer", HostID: host, Address: address}
+	return EditCommand{Operation: "CreateServer", HostID: host, ServerType: "infra", Address: address}
 }
 
 func TestSessionAppendInvalidatesReviewedPlan(t *testing.T) {
 	root, revision := emptyManagedProject(t)
-	backend := NewBackend(&firstWriteAdapter{})
+	backend := NewBackend(&firstWriteAdapter{}, WithServerTypes([]string{"infra"}))
 	store := NewEditSessionStore()
 	session, err := store.Start("project-aaaaaaaaaaaaaaaa", root, "EMPTY_MANAGED_PROJECT", revision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Append(session.SessionID, createServerCommand("node1", "192.0.2.10"), backend); err != nil {
+	appended, err := store.Append(session.SessionID, createServerCommand("node1", "192.0.2.10"), backend)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV3 {
+		t.Fatalf("new session emitted %s", got)
+	}
+	encoded, err := json.Marshal(store.sessions[session.SessionID].commands[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appended.EncodedBytes != len(encoded) {
+		t.Fatalf("encodedBytes = %d, want normalized command size %d", appended.EncodedBytes, len(encoded))
 	}
 	plan, err := store.Review(context.Background(), backend, session.SessionID)
 	if err != nil || !plan.CommitAllowed {
@@ -127,14 +187,14 @@ func TestSessionLimitsAndExpiryDoNotMutateDraft(t *testing.T) {
 	}
 	state := store.sessions[session.SessionID]
 	state.public.EncodedBytes = maxSessionBytes
-	if _, err := store.Append(session.SessionID, createServerCommand("node1", "192.0.2.10"), nil); err == nil || err.Error() != "EDIT_SESSION_LIMIT" {
+	if _, err := store.Append(session.SessionID, createServerCommand("node1", "192.0.2.10"), NewBackend(nil, WithServerTypes([]string{"infra"}))); err == nil || err.Error() != "EDIT_SESSION_LIMIT" {
 		t.Fatalf("limit err=%v", err)
 	}
 	if state.public.CommandCount != 0 || len(state.commands) != 0 {
 		t.Fatal("rejected append changed draft")
 	}
 	now = now.Add(defaultSessionTTL + time.Second)
-	if _, err := store.Append(session.SessionID, createServerCommand("node1", "192.0.2.10"), nil); err == nil || err.Error() != "EDIT_SESSION_EXPIRED" {
+	if _, err := store.Append(session.SessionID, createServerCommand("node1", "192.0.2.10"), NewBackend(nil, WithServerTypes([]string{"infra"}))); err == nil || err.Error() != "EDIT_SESSION_EXPIRED" {
 		t.Fatalf("expiry err=%v", err)
 	}
 }

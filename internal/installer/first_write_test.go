@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,6 +27,9 @@ func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned 
 	hosts := make(map[string]map[string]any, len(hostValues))
 	for id, raw := range hostValues {
 		hosts[id] = asMap(raw)
+		if platformHost := asMap(hosts[id]["platform_host"]); platformHost != nil {
+			hosts[id]["type"] = platformHost["type"]
+		}
 	}
 	documents, revision, err := collectProjectDocuments(root)
 	if err != nil {
@@ -63,13 +67,13 @@ func emptyManagedProject(t *testing.T) (string, string) {
 func TestFirstSaveSessionCreatesCompleteCandidateAndCommitsOnce(t *testing.T) {
 	root, revision := emptyManagedProject(t)
 	adapter := &firstWriteAdapter{}
-	backend := NewBackend(adapter)
+	backend := NewBackend(adapter, WithServerTypes([]string{"infra"}))
 	sessions := NewEditSessionStore()
 	session, err := sessions.Start("project-aaaaaaaaaaaaaaaa", root, "EMPTY_MANAGED_PROJECT", revision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := EditCommand{Operation: "CreateServer", HostID: "node1", Address: "192.0.2.10"}
+	command := EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10"}
 	if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +104,7 @@ func TestFirstSaveSessionCreatesCompleteCandidateAndCommitsOnce(t *testing.T) {
 		t.Fatal("ansible.cfg template drift")
 	}
 	inventory := string(mustRead(t, filepath.Join(root, "inventory", "hosts.yml")))
-	if inventory != string(firstSaveInventory([]firstSaveServer{{id: "node1", address: "192.0.2.10"}})) {
+	if inventory != string(firstSaveInventory([]firstSaveServer{{id: "node1", typeID: "infra", address: "192.0.2.10"}})) {
 		t.Fatalf("inventory=%s", inventory)
 	}
 }
@@ -123,6 +127,22 @@ func TestFirstSaveCollisionBlocksWithoutCanonicalWrites(t *testing.T) {
 	}
 	if string(mustRead(t, filepath.Join(root, "inventory", "hosts.yml"))) != "user-owned\n" {
 		t.Fatal("collision was mutated")
+	}
+}
+
+func TestFirstSaveUnknownConfiguredTypePlansWithoutCanonicalWrites(t *testing.T) {
+	root, revision := emptyManagedProject(t)
+	manifestBefore := append([]byte(nil), mustRead(t, filepath.Join(root, "project.yml"))...)
+	backend := NewBackend(&firstWriteAdapter{}, WithServerTypes([]string{"infra"}))
+	plan, err := backend.planFirstWrite(context.Background(), root, revision, []EditCommand{{APIVersion: EditCommandAPIVersionV3, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", ServerType: "scada", Address: "192.0.2.10"}})
+	if err != nil || plan.Status != "READY" || !plan.CommitAllowed {
+		t.Fatalf("plan=%#v err=%v", plan, err)
+	}
+	if string(mustRead(t, filepath.Join(root, "project.yml"))) != string(manifestBefore) {
+		t.Fatal("planning unknown type mutated project.yml")
+	}
+	if _, err := os.Stat(filepath.Join(root, "inventory")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("planning unknown type created inventory: %v", err)
 	}
 }
 

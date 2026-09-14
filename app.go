@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"platform-installer/internal/appconfig"
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
@@ -88,12 +90,26 @@ type ProjectOpenResult struct {
 	Project        *projectlifecycle.Project `json:"project,omitempty"`
 	Counts         projectlifecycle.Counts   `json:"counts"`
 	Snapshot       *coreadapter.Snapshot     `json:"snapshot,omitempty"`
+	Diagnostics    []ApplicationDiagnostic   `json:"diagnostics,omitempty"`
 	Error          *ProjectOpenError         `json:"error,omitempty"`
 }
 
 type ProjectOpenError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type ApplicationDiagnostic struct {
+	Code        string `json:"code"`
+	Severity    string `json:"severity"`
+	HostID      string `json:"hostId,omitempty"`
+	SafeMessage string `json:"safeMessage"`
+}
+
+type ApplicationConfigResult struct {
+	Status string            `json:"status"`
+	Config *appconfig.Config `json:"config,omitempty"`
+	Error  *ProjectOpenError `json:"error,omitempty"`
 }
 
 type App struct {
@@ -107,6 +123,19 @@ type App struct {
 	editor        *installer.Backend
 	activeSession string
 	editMu        sync.Mutex
+	config        appconfig.Config
+	configErr     error
+}
+
+type AppOption func(*App)
+
+func WithApplicationConfig(config appconfig.Config, err error) AppOption {
+	return func(app *App) {
+		app.config, app.configErr = config, err
+		if err == nil {
+			app.configErr = appconfig.Validate(config)
+		}
+	}
 }
 
 type projectLifecycle interface {
@@ -116,8 +145,43 @@ type projectLifecycle interface {
 
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
-}, lifecycle projectLifecycle) *App {
-	return &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}}
+}, lifecycle projectLifecycle, options ...AppOption) *App {
+	app := &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND")}
+	for _, option := range options {
+		option(app)
+	}
+	return app
+}
+
+func (a *App) GetApplicationConfig() ApplicationConfigResult {
+	if a.configErr != nil {
+		code := projectErrorCode(a.configErr)
+		return ApplicationConfigResult{Status: "ERROR", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	}
+	config := a.config
+	return ApplicationConfigResult{Status: "READY", Config: &config}
+}
+
+func (a *App) serverTypeDiagnostics(snapshot *coreadapter.Snapshot) []ApplicationDiagnostic {
+	if snapshot == nil || a.configErr != nil {
+		return nil
+	}
+	var diagnostics []ApplicationDiagnostic
+	hostIDs := make([]string, 0, len(snapshot.Hosts))
+	for hostID := range snapshot.Hosts {
+		hostIDs = append(hostIDs, hostID)
+	}
+	sort.Strings(hostIDs)
+	for _, hostID := range hostIDs {
+		host := snapshot.Hosts[hostID]
+		typeID, _ := host["type"].(string)
+		if typeID == "" {
+			diagnostics = append(diagnostics, ApplicationDiagnostic{Code: "LEGACY_SERVER_TYPE_MISSING", Severity: "WARNING", HostID: hostID, SafeMessage: "Server type is missing and must be selected before editing this server"})
+		} else if !a.config.HasServerType(typeID) {
+			diagnostics = append(diagnostics, ApplicationDiagnostic{Code: "UNKNOWN_CONFIGURED_SERVER_TYPE", Severity: "WARNING", HostID: hostID, SafeMessage: "Server type is not present in the current application configuration"})
+		}
+	}
+	return diagnostics
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
@@ -189,7 +253,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	if err != nil {
 		return a.failure(projectErrorCode(err))
 	}
-	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot}
+	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot, Diagnostics: a.serverTypeDiagnostics(snapshot)}
 	return a.current
 }
 
@@ -205,11 +269,12 @@ func (a *App) CloseProject() ProjectOpenResult {
 }
 
 type EditOperationResult struct {
-	Status  string                      `json:"status"`
-	Session *installer.EditSession      `json:"session,omitempty"`
-	Plan    *installer.EditPlan         `json:"plan,omitempty"`
-	Commit  *installer.EditCommitResult `json:"commit,omitempty"`
-	Error   *ProjectOpenError           `json:"error,omitempty"`
+	Status      string                      `json:"status"`
+	Session     *installer.EditSession      `json:"session,omitempty"`
+	Plan        *installer.EditPlan         `json:"plan,omitempty"`
+	Commit      *installer.EditCommitResult `json:"commit,omitempty"`
+	Diagnostics []ApplicationDiagnostic     `json:"diagnostics,omitempty"`
+	Error       *ProjectOpenError           `json:"error,omitempty"`
 }
 
 func (a *App) editFailure(err error) EditOperationResult {
@@ -240,7 +305,13 @@ func (a *App) StartEditSession() EditOperationResult {
 			return a.editFailure(err)
 		}
 	}
-	a.editor = installer.NewBackend(candidateCoreAdapter{reader: reader, project: a.current.Project})
+	typeIDs := make([]string, 0, len(a.config.ServerTypes))
+	if a.configErr == nil {
+		for _, serverType := range a.config.ServerTypes {
+			typeIDs = append(typeIDs, serverType.ID)
+		}
+	}
+	a.editor = installer.NewBackend(candidateCoreAdapter{reader: reader, project: a.current.Project}, installer.WithServerTypes(typeIDs))
 	session, err := a.sessions.Start(a.current.Project.ID, a.current.Root, a.current.Classification, revision)
 	if err != nil {
 		return a.editFailure(err)
@@ -263,7 +334,11 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 	if err != nil {
 		return a.editFailure(err)
 	}
-	return EditOperationResult{Status: "EDITING", Session: &session}
+	result := EditOperationResult{Status: "EDITING", Session: &session}
+	if command.ServerType != "" && a.configErr == nil && !a.config.HasServerType(command.ServerType) {
+		result.Diagnostics = []ApplicationDiagnostic{{Code: "UNKNOWN_CONFIGURED_SERVER_TYPE", Severity: "WARNING", HostID: command.HostID, SafeMessage: "Server type is not present in the current application configuration"}}
+	}
+	return result
 }
 
 func (a *App) ReviewEditSession(sessionID string) EditOperationResult {
@@ -312,6 +387,7 @@ func (a *App) CommitEditPlan(sessionID, planID string) EditOperationResult {
 		a.editor = nil
 		if snapshot, ok := result.Snapshot.(*coreadapter.Snapshot); ok {
 			a.current.Snapshot = snapshot
+			a.current.Diagnostics = a.serverTypeDiagnostics(snapshot)
 			a.current.Classification = projectlifecycle.ClassificationManaged
 		}
 	}
@@ -389,6 +465,8 @@ func projectErrorMessage(code string) string {
 		return "Нельзя безопасно создать проект в выбранной папке."
 	case "PROJECT_DISPLAY_NAME_INVALID":
 		return "Введите корректное название проекта."
+	case "APPLICATION_CONFIG_NOT_FOUND", "APPLICATION_CONFIG_UNREADABLE", "APPLICATION_CONFIG_UNSAFE_PATH", "APPLICATION_CONFIG_INVALID", "APPLICATION_CONFIG_TOO_LARGE", "APPLICATION_CONFIG_VERSION_UNSUPPORTED", "APPLICATION_CONFIG_SERVER_TYPES_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_ID_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_DUPLICATE", "APPLICATION_CONFIG_UNAVAILABLE":
+		return "Конфигурация приложения недоступна или некорректна. Создание нового сервера заблокировано."
 	case "PROJECT_NOT_OPEN":
 		return "Сначала откройте проект."
 	case "EDIT_SESSION_ACTIVE":

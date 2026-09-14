@@ -1,3 +1,52 @@
+export namespace appconfig {
+  export class ServerType {
+    id: string;
+    displayName: string;
+
+    static createFrom(source: any = {}) {
+      return new ServerType(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.displayName = source["displayName"];
+    }
+  }
+  export class Config {
+    schemaVersion: number;
+    serverTypes: ServerType[];
+
+    static createFrom(source: any = {}) {
+      return new Config(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.schemaVersion = source["schemaVersion"];
+      this.serverTypes = this.convertValues(source["serverTypes"], ServerType);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+}
+
 export namespace coreadapter {
   export class Document {
     logicalPath: string;
@@ -180,6 +229,7 @@ export namespace installer {
     endpointGroupId?: string;
     haproxyDeploymentId?: string;
     hostId?: string;
+    type?: string;
     address?: string;
     sshPort?: number;
     clearSSHPort?: boolean;
@@ -211,6 +261,7 @@ export namespace installer {
       this.endpointGroupId = source["endpointGroupId"];
       this.haproxyDeploymentId = source["haproxyDeploymentId"];
       this.hostId = source["hostId"];
+      this.type = source["type"];
       this.address = source["address"];
       this.sshPort = source["sshPort"];
       this.clearSSHPort = source["clearSSHPort"];
@@ -530,11 +581,64 @@ export namespace main {
       this.message = source["message"];
     }
   }
+  export class ApplicationConfigResult {
+    status: string;
+    config?: appconfig.Config;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ApplicationConfigResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.config = this.convertValues(source["config"], appconfig.Config);
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ApplicationDiagnostic {
+    code: string;
+    severity: string;
+    hostId?: string;
+    safeMessage: string;
+
+    static createFrom(source: any = {}) {
+      return new ApplicationDiagnostic(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.code = source["code"];
+      this.severity = source["severity"];
+      this.hostId = source["hostId"];
+      this.safeMessage = source["safeMessage"];
+    }
+  }
   export class EditOperationResult {
     status: string;
     session?: installer.EditSession;
     plan?: installer.EditPlan;
     commit?: installer.EditCommitResult;
+    diagnostics?: ApplicationDiagnostic[];
     error?: ProjectOpenError;
 
     static createFrom(source: any = {}) {
@@ -552,6 +656,10 @@ export namespace main {
       this.commit = this.convertValues(
         source["commit"],
         installer.EditCommitResult,
+      );
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
       );
       this.error = this.convertValues(source["error"], ProjectOpenError);
     }
@@ -582,6 +690,7 @@ export namespace main {
     project?: projectlifecycle.Project;
     counts: projectlifecycle.Counts;
     snapshot?: coreadapter.Snapshot;
+    diagnostics?: ApplicationDiagnostic[];
     error?: ProjectOpenError;
 
     static createFrom(source: any = {}) {
@@ -604,6 +713,10 @@ export namespace main {
       this.snapshot = this.convertValues(
         source["snapshot"],
         coreadapter.Snapshot,
+      );
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
       );
       this.error = this.convertValues(source["error"], ProjectOpenError);
     }

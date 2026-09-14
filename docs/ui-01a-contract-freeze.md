@@ -661,6 +661,17 @@ screens remain placeholders; UI-BE-04 and EXEC-OBS-01 are consumed in UI-02.
 
 - External project inventory adoption and host rename are deferred.
 - Template import/server slots are deferred; UI-01I exports saved full projects.
+
+### Post-freeze additive server-type decision
+
+`OWNER-APP-CONFIG-01/02` supersedes only the command-version detail above.
+Published `project-edit/v1alpha2` remains unchanged and continues to represent
+the historical `CreateServer(hostId,address,sshPort?)`. New Installer sessions
+use additive `project-edit/v1alpha3`, whose same `CreateServer` command also
+requires `type`. Both versions decode to the existing Go `EditCommand`; no
+parallel server model is introduced. `platform_host.type` is optional on legacy
+read, grammar-only in the portable schema, and required/configured-list checked
+for new v1alpha3 creation by the Go application layer.
 - Generic service dependency editing beyond accepted endpoint/HAProxy relations
   needs a future catalog/Core contract.
 - Unsaved drafts are not crash-persistent.

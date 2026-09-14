@@ -322,3 +322,27 @@ Servers/application lifecycle owns selection, host-key trust, bootstrap,
 runtime preparation and activation through EXEC-01A. Installation owns only
 the deployment lifecycle and requires READY, saved canonical state, no unsaved
 changes and authoritative non-stale Core validation for the current revision.
+
+## ADR-026: Application config owns selectable server types
+
+Status: Accepted as `OWNER-APP-CONFIG-01` and `OWNER-APP-CONFIG-02`,
+2026-09-14.
+
+Installer uses one versioned `config/application.yml` contract for bounded
+application/product behavior. It is not portable infrastructure desired state
+and cannot contain service defaults, topology, PKI, placement, credentials,
+target addresses, Execution Node policy or source-selection rules.
+
+Every server newly created by Installer has one stable type ID. The canonical
+ID is stored as `platform_host.type`; localized display labels and the
+selectable list remain in application configuration. Portable validation uses
+grammar only, so a valid type unknown to the current workstation remains
+readable and unchanged. Such a mismatch is a nonblocking Installer diagnostic
+and never changes Core snapshot status, validation or fingerprint.
+
+`project-edit/v1alpha2` remains immutable. Additive
+`project-edit/v1alpha3` requires `CreateServer.type`; both versions normalize
+into the same Go `EditCommand` model, and new Installer sessions emit v1alpha3.
+Missing or invalid AppConfig blocks only AppConfig-dependent creation and does
+not block read-only Core interpretation of existing projects. Production
+embedding, override and distribution policy is a separate future decision.
