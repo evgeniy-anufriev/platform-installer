@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"platform-installer/internal/appconfig"
@@ -345,10 +346,11 @@ func TestUI01BRemoteOpenAcceptance(t *testing.T) {
 	}
 }
 
-// TestUI01DRemoteFirstSaveAcceptance exercises the Wails-bound create,
-// transient edit, authoritative remote review and explicit commit path. It is
-// opt-in so normal unit tests never require a reachable Execution Node.
-func TestUI01DRemoteFirstSaveAcceptance(t *testing.T) {
+// TestUI01E2RemoteServerCRUDAcceptance exercises the Wails-bound first save
+// and subsequent server CRUD through authoritative remote review and explicit
+// commits. It is opt-in so normal unit tests never require a reachable
+// Execution Node.
+func TestUI01E2RemoteServerCRUDAcceptance(t *testing.T) {
 	required := func(name string) string {
 		t.Helper()
 		value := os.Getenv(name)
@@ -424,7 +426,62 @@ func TestUI01DRemoteFirstSaveAcceptance(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(root, "inventory", "host_vars")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("unexpected host_vars materialization: %v", statErr)
 	}
-	t.Logf("remote UI-01D first save PASS: plan=%s revision=%s", reviewed.Plan.PlanID, committed.Commit.NewProjectRevision)
+	second := app.StartEditSession()
+	if second.Session == nil {
+		t.Fatalf("start second session result=%+v", second)
+	}
+	added := app.AppendEditCommand(second.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node2", ServerType: "app", DesiredHostname: "node2.example.internal", Address: "192.0.2.11", SSHPort: 22})
+	if added.Session == nil || added.Session.CommandCount != 1 {
+		t.Fatalf("append second server result=%+v", added)
+	}
+	secondReview := app.ReviewEditSession(second.Session.SessionID)
+	if secondReview.Plan == nil || secondReview.Plan.Status != "READY" || !secondReview.Plan.CommitAllowed {
+		t.Fatalf("second review result=%+v", secondReview)
+	}
+	if secondCommit := app.CommitEditPlan(second.Session.SessionID, secondReview.Plan.PlanID); secondCommit.Status != "COMMITTED" {
+		t.Fatalf("second commit result=%+v", secondCommit)
+	}
+
+	updated := app.StartEditSession()
+	if updated.Session == nil {
+		t.Fatalf("start update session result=%+v", updated)
+	}
+	updatedCommand := app.AppendEditCommand(updated.Session.SessionID, installer.EditCommand{Operation: "UpdateServer", HostID: "node1", Address: "192.0.2.12", ClearSSHPort: true})
+	if updatedCommand.Session == nil || updatedCommand.Session.CommandCount != 1 {
+		t.Fatalf("append update result=%+v", updatedCommand)
+	}
+	updateReview := app.ReviewEditSession(updated.Session.SessionID)
+	if updateReview.Plan == nil || updateReview.Plan.Status != "READY" || !updateReview.Plan.CommitAllowed {
+		t.Fatalf("update review result=%+v", updateReview)
+	}
+	if updateCommit := app.CommitEditPlan(updated.Session.SessionID, updateReview.Plan.PlanID); updateCommit.Status != "COMMITTED" {
+		t.Fatalf("update commit result=%+v", updateCommit)
+	}
+
+	deleted := app.StartEditSession()
+	if deleted.Session == nil {
+		t.Fatalf("start delete session result=%+v", deleted)
+	}
+	deletedCommand := app.AppendEditCommand(deleted.Session.SessionID, installer.EditCommand{Operation: "DeleteServer", HostID: "node2"})
+	if deletedCommand.Session == nil || deletedCommand.Session.CommandCount != 1 {
+		t.Fatalf("append delete result=%+v", deletedCommand)
+	}
+	deleteReview := app.ReviewEditSession(deleted.Session.SessionID)
+	if deleteReview.Plan == nil || deleteReview.Plan.Status != "READY" || !deleteReview.Plan.CommitAllowed {
+		t.Fatalf("delete review result=%+v", deleteReview)
+	}
+	if deleteCommit := app.CommitEditPlan(deleted.Session.SessionID, deleteReview.Plan.PlanID); deleteCommit.Status != "COMMITTED" {
+		t.Fatalf("delete commit result=%+v", deleteCommit)
+	}
+	contentBytes, readErr := os.ReadFile(filepath.Join(root, "inventory", "hosts.yml"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	content := string(contentBytes)
+	if strings.Contains(content, "node2") || strings.Contains(content, "ansible_port") || !strings.Contains(content, "192.0.2.12") {
+		t.Fatalf("unexpected final inventory: %s", content)
+	}
+	t.Logf("remote UI-01E2 server CRUD PASS: first-save-plan=%s revision=%s", reviewed.Plan.PlanID, committed.Commit.NewProjectRevision)
 }
 
 func fileDigest(t *testing.T, path string) string {

@@ -1,6 +1,6 @@
 # UI-01E2 — Servers page + Add/Edit/Delete architecture
 
-Status: **IMPLEMENTATION IN PROGRESS**. This milestone implements the
+Status: **DONE (2026-09-14)**. This milestone implements the
 production Servers editor surface over the accepted UI-01D lifecycle and the
 UI-01E1 server CRUD contract. It does not implement runtime credentials,
 connection discovery, Execution Node management or readiness.
@@ -586,3 +586,37 @@ successfully acknowledged commands. It is not authoritative, persisted or
 accepted by commit. A backend candidate-view DTO, command mutation API,
 separate server repository, generic form engine and optimistic concurrency
 layer would duplicate or expand the existing lifecycle and are excluded.
+
+## 18. Final acceptance evidence
+
+The Windows Wails production build passed with Go 1.25.0 and Wails 2.15.0.
+Focused frontend coverage passed 11/11 tests, lint, TypeScript and Vite
+production build. `go test ./...`, `go vet ./...` and the RED OS
+`go test -race ./internal/installer` gate passed; the isolated RED OS QA
+workspace was removed.
+
+The opt-in Wails-bound remote acceptance used the active immutable runtime
+`qa-ui-01e2-20260914-02`
+(`sha256:dcdd5ea9bec9cc6bf842ae3a15f5f7ff9e71f144fadafc2ac8be79b37cd49ad8`)
+on the READY QA Execution Node:
+
+```text
+metadata-only project
+→ CreateServer node1 (explicit port 22)
+→ Review → Commit
+→ CreateServer node2 (explicit port 22)
+→ Review → Commit
+→ UpdateServer node1 (new address, clearSSHPort)
+→ Review → Commit
+→ DeleteServer node2
+→ Review → Commit
+```
+
+`TestUI01E2RemoteServerCRUDAcceptance` passed in 56.90 seconds. Every
+candidate snapshot returned `PASS`; the final authoritative state contained
+only `node1` at `192.0.2.12`, with no Installer-owned `ansible_port` override.
+The test uses TEST-NET addresses and performs only target-free snapshot proof.
+No service playbook or Kafka deployment was invoked. Remote inspection after
+the test confirmed the active release digest, advertised
+`BuildProjectSnapshot` capability and zero residual candidate staging
+directories. `git diff --check` passed.
