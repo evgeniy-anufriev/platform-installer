@@ -122,7 +122,7 @@ func (b *Backend) planFirstWrite(ctx context.Context, root, revision string, com
 	}
 	for _, server := range servers {
 		host := staged.Hosts[server.id]
-		if host == nil || (server.typeID != "" && host["type"] != server.typeID) || (server.desiredHostname != "" && host["desiredHostname"] != server.desiredHostname) || (server.portSet && host["ansiblePort"] != server.port) {
+		if host == nil || (server.typeID != "" && host["type"] != server.typeID) || (server.desiredHostname != "" && host["desiredHostname"] != server.desiredHostname) || (server.portSet && !samePort(host["ansiblePort"], server.port)) {
 			return blockedPlan(skeleton, revision, blocked("EDIT_SHADOWED", "Core snapshot did not contain the created server", "command.hostId")), nil
 		}
 	}

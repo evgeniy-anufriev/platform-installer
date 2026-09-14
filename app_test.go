@@ -44,6 +44,8 @@ func (r acceptanceReader) BuildCandidateSnapshot(ctx context.Context, root strin
 		if errors.As(err, &executionErr) {
 			r.t.Logf("candidate snapshot findings: %+v", executionErr.Findings)
 		}
+	} else if snapshot != nil {
+		r.t.Logf("candidate snapshot: status=%s hosts=%#v", snapshot.Status, snapshot.Hosts)
 	}
 	return snapshot, err
 }

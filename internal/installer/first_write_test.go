@@ -12,8 +12,9 @@ import (
 )
 
 type firstWriteAdapter struct {
-	calls      int
-	references map[string]map[string][]map[string]any
+	calls         int
+	references    map[string]map[string][]map[string]any
+	jsonPortValue bool
 }
 
 func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned []string) (*coreadapter.Snapshot, error) {
@@ -36,7 +37,11 @@ func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned 
 			hosts[id]["desiredHostname"] = platformHost["desiredHostname"]
 		}
 		if port, ok := hosts[id]["ansible_port"]; ok {
-			hosts[id]["ansiblePort"] = port
+			if a.jsonPortValue {
+				hosts[id]["ansiblePort"] = float64(port.(int))
+			} else {
+				hosts[id]["ansiblePort"] = port
+			}
 		} else {
 			hosts[id]["ansiblePort"] = 22
 		}
@@ -58,6 +63,18 @@ func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned 
 	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: digestBytes([]byte(revision)),
 		Documents: resultDocuments, Hosts: hosts, References: a.references, ServiceCatalog: map[string]map[string]any{}, ServiceDeployments: map[string]map[string]any{},
 		EffectiveConfiguration: map[string]any{}, EndpointGroups: map[string]any{}, Topology: map[string]any{}, Endpoints: map[string]any{}, Integrations: map[string]any{}, PKI: map[string]any{}}, nil
+}
+
+func TestFirstSaveAcceptsJSONNumberPortFromCoreSnapshot(t *testing.T) {
+	root, revision := emptyManagedProject(t)
+	backend := NewBackend(&firstWriteAdapter{jsonPortValue: true}, WithServerTypes([]string{"infra"}))
+	plan, err := backend.planFirstWrite(context.Background(), root, revision, []EditCommand{{
+		APIVersion: EditCommandAPIVersionV4, Kind: "EditCommand", BaseProjectRevision: revision,
+		Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10", SSHPort: 22,
+	}})
+	if err != nil || plan.Status != "READY" || !plan.CommitAllowed {
+		t.Fatalf("plan=%#v err=%v", plan, err)
+	}
 }
 
 func emptyManagedProject(t *testing.T) (string, string) {
