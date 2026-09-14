@@ -64,6 +64,21 @@ The owner accepted the bounded corrections from the first architecture review:
 | UI01E2-ARCH-002 | `COMMITTED_REFRESH_FAILED` is a completed commit with unavailable current projection: stale rows are hidden and CRUD remains blocked until a fresh authoritative read-only snapshot succeeds. |
 | UI01E2-ARCH-003 | If E2 creates a session and its first append fails, it discards that still-empty session automatically. Existing non-empty sessions are retained on later append failures. |
 
+The subsequent owner review adds four binding clarifications:
+
+1. Post-commit authoritative recovery reuses the existing exported Go/Wails
+   `App.OpenProject(root)` operation. E2 exposes that already-generated binding
+   through the TypeScript backend facade; it does not add a new Go protocol.
+2. Generic reference ownership is split explicitly: Core discovers canonical
+   host references and projects safe records; the Go project writer owns the
+   non-cascading delete guard and emits `REFERENCE_IN_USE`; React owns neither.
+3. After first commit, draft-created rows lose their draft origin and become
+   ordinary committed rows only from the returned authoritative snapshot.
+4. Temporary Application Config failure does not block address, hostname, port
+   or delete operations for a complete existing server when its type is left
+   unchanged. It blocks type selection/change, CreateServer and completion of a
+   legacy server whose required type is missing.
+
 ## 3. Mockup reconciliation
 
 This plan was checked against `docs/ui-design-01-mockups.html`,
@@ -175,10 +190,32 @@ unchanged.
 committed, the plan is consumed and commit must not be retried. E2 clears the
 session and overlay, removes the previous snapshot from the current
 authoritative view, marks the project projection **Stale / unavailable**, and
-blocks Add/Edit/Delete. The user receives a **Refresh project snapshot** action
-that invokes the existing read-only project-open snapshot path for the current
-root. Until that succeeds, no old server row may be presented as current. A
-separate mutation, candidate or save path is not introduced.
+blocks Add/Edit/Delete.
+
+The exact recovery seam is the existing exported Go method
+`App.OpenProject(root string) ProjectOpenResult`, already present in generated
+Wails bindings as `OpenProject(arg1: string)`. E2 adds only
+`openProject(root)` to the TypeScript `ProjectBackend` facade and calls it with
+the retained current absolute project root from an explicit **Refresh project
+snapshot** action. `OpenProject` re-runs local project classification and, for
+a managed project, the existing read-only `BuildSnapshot` path on the active
+Execution Node. It performs no project-file mutation and is not a CRUD/save
+operation.
+
+On `COMMITTED_REFRESH_FAILED`, `App.CommitEditPlan` must first invalidate
+application context before returning: set `a.current.Snapshot` to nil, clear
+snapshot-derived diagnostics, retain root and safe local project metadata, and
+set classification to `MANAGED_PROJECT`. The frontend clears session/overlay
+and renders only the stale/unavailable state. A failed `OpenProject(currentRoot)`
+returns a safe error while the invalidated backend context remains without an
+authoritative snapshot. A successful result atomically replaces frontend and
+backend project context. Until then, no old server row may be presented as
+current. Commit is never retried and no new protocol is introduced.
+
+For a successful first commit, every draft-created row is discarded as draft
+UI state and reconstructed solely from the returned managed-project snapshot.
+Only then do its normal Edit/Delete actions become available. No persistent
+`draftCreated` marker or origin is carried into canonical or application state.
 
 ## 6. Add server dialog
 
@@ -237,6 +274,16 @@ A grammar-valid current type absent from Application Config is shown as
 preserves the canonical ID. The user may replace it with a configured type.
 Local membership and labels never affect Core status or fingerprint.
 
+If Application Config is temporarily unavailable, a complete existing server
+remains editable for `address`, `desiredHostname` and SSH-port intent. Its
+canonical type ID is displayed read-only and omitted from `UpdateServer`; type
+selection/change is disabled. `DeleteServer` also remains available because it
+does not consume Application Config. `CreateServer` remains blocked. A legacy
+server with missing required `type` cannot be completed through v1alpha4 until
+Application Config is restored, because supplying type is required and the
+backend correctly rejects type-bearing commands without configured choices.
+Missing `desiredHostname` alone may still be completed while type is preserved.
+
 Saving with no changed field does not append a command. The dialog closes or
 shows **No changes** without starting a session.
 
@@ -249,9 +296,27 @@ The confirmation states:
 > автоматически не удаляются.
 
 There is no cascade and no service-specific reference logic in React or Go
-Wails application code. The generic Core host-reference contract remains the
-only reference source. `REFERENCE_IN_USE` appears during Review as a blocking
-finding and leaves canonical files unchanged.
+Wails application code. Ownership is deliberately divided at the existing
+Core/Go boundary:
+
+- Core owns discovery and projection of canonical references as safe generic
+  `ProjectSnapshot.references.hosts[hostId][]` records. The current producer
+  discovers `platform_deployments` placement references; future canonical host
+  reference kinds must be added in Core, not in React or service-specific Go;
+- the Go project writer owns the non-cascade transaction policy. After applying
+  DeleteServer to the complete staged candidate and obtaining its authoritative
+  snapshot, `serverReferenceInUse` asks only whether the deleted host has one or
+  more generic records. It does not interpret `kind`, `sourceId`, service type
+  or placement semantics;
+- when records remain, Go emits the project-writer finding
+  `REFERENCE_IN_USE` and makes the plan non-committable;
+- React does not precompute references or independently decide whether delete
+  is legal. It submits the intent and renders the Review finding.
+
+Therefore `REFERENCE_IN_USE` is not a Core validation rule or UI guard. Core is
+the reference-discovery authority; Go is the generic write-policy authority.
+The required snapshot contract includes `references`; E2 does not add fallback
+reference discovery or treat a UI-side cached relationship as proof.
 
 Deleting the final server is not prohibited by React. Core and the existing
 writer decide whether the complete candidate is valid.
@@ -399,7 +464,8 @@ form engine or design-system migration is introduced for E2.
 5. Implement delete confirmation and generic blocker presentation.
 6. Add acknowledged-intent overlay, global review/discard interaction and
    refreshed-snapshot reconciliation after commit, including fail-safe
-   `COMMITTED_REFRESH_FAILED` recovery.
+   `COMMITTED_REFRESH_FAILED` invalidation and recovery through the existing
+   `OpenProject(currentRoot)` Wails seam.
 7. Add accessibility states, responsive table styling and focused component
    tests.
 8. Recheck the mockup and run E2 acceptance before updating milestone state.
@@ -420,12 +486,18 @@ Automated and native tests must prove:
 - missing legacy metadata is required on v1alpha4 edit without open-time
   backfill;
 - unknown configured type is preserved when type is not changed;
+- temporary Application Config failure leaves non-type edits and delete of a
+  complete existing server available, while Create/type-change/legacy missing
+  type completion remain blocked;
 - create-port omission differs from explicit 22;
 - update port modes map exactly to omit, explicit value and clear;
 - no-change edit appends nothing;
 - duplicate create and absent update/delete show safe blockers;
 - delete confirmation is non-cascading;
 - referenced delete becomes `REFERENCE_IN_USE` at Review and writes nothing;
+- Core supplies generic host-reference records, Go blocks on record presence
+  without interpreting reference kind, and React performs no independent
+  reference validation;
 - Create → Update, repeated Update and Create → Delete are exercised only after
   the first commit has produced a `MANAGED_PROJECT`, and render consistently
   with the final reviewed plan;
@@ -435,9 +507,13 @@ Automated and native tests must prove:
 - Discard restores the committed snapshot with unchanged project digests;
 - before Review and before Commit canonical project digests are unchanged;
 - successful commit refreshes rows from the returned authoritative snapshot;
+- after first commit, former draft-created rows are reconstructed as ordinary
+  managed rows and immediately use normal post-commit CRUD semantics;
 - `COMMITTED_REFRESH_FAILED` clears the session/overlay, hides the prior rows,
   blocks CRUD, does not retry commit, and recovers only through a fresh
-  authoritative read-only snapshot;
+  authoritative read-only `OpenProject(currentRoot)` snapshot;
+- backend application context also has a nil snapshot after that result, so a
+  frontend rerender or `CurrentProject` call cannot resurrect stale rows;
 - stale revision, ownership conflict, unavailable Execution Node and expired
   session remain non-mutating;
 - opening and editing forms contacts no target server;
