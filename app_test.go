@@ -396,7 +396,7 @@ func TestUI01DRemoteFirstSaveAcceptance(t *testing.T) {
 	if started.Session == nil {
 		t.Fatalf("start result=%+v", started)
 	}
-	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10", SSHPort: 22})
+	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10", SSHPort: 22})
 	if appended.Session == nil || appended.Session.CommandCount != 1 {
 		t.Fatalf("append result=%+v", appended)
 	}
