@@ -14,6 +14,7 @@ import (
 
 var identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 var serverAddressPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$`)
+var desiredHostnamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$`)
 var secretKeyPattern = regexp.MustCompile(`(?i)password|passphrase|private.?key|pgpass|token|secret|credential`)
 var runtimeRefPattern = regexp.MustCompile(`^runtime:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
@@ -97,16 +98,16 @@ func validateCommand(command EditCommand) error {
 	return validateCommandWithInternalBatch(command, false)
 }
 
-func isEditCommandV2OrV3(version string) bool {
-	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3
+func isEditCommandV2OrLater(version string) bool {
+	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4
 }
 
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
-	if (command.APIVersion != EditCommandAPIVersion && !isEditCommandV2OrV3(command.APIVersion)) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (isEditCommandV2OrV3(command.APIVersion) && !validSHA256(command.BaseProjectRevision)) {
+	if (command.APIVersion != EditCommandAPIVersion && !isEditCommandV2OrLater(command.APIVersion)) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (isEditCommandV2OrLater(command.APIVersion) && !validSHA256(command.BaseProjectRevision)) {
 		return blocked("INVALID_EDIT_COMMAND", "EditCommand version, kind, or base revision is invalid", "command")
 	}
 	if command.Operation == "Batch" {
-		if isEditCommandV2OrV3(command.APIVersion) && !allowV2Batch {
+		if isEditCommandV2OrLater(command.APIVersion) && !allowV2Batch {
 			return blocked("INVALID_EDIT_COMMAND", "Batch is an internal review aggregate and is not a public operation", "command.operation")
 		}
 		if err := validateCommandFields(command, "commands"); err != nil {
@@ -147,6 +148,14 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	}
 	fieldsV3["CreateServer"] = []string{"hostId", "type", "address", "sshPort"}
 	fieldsV3["UpdateServer"] = []string{"hostId", "type", "address", "sshPort", "clearSSHPort"}
+	// v1alpha4 is deliberately narrow: E1 adds only server CRUD with
+	// desiredHostname.  Do not silently advertise the older non-server
+	// operations under a contract whose schema does not define them.
+	fieldsV4 := map[string][]string{
+		"CreateServer": {"hostId", "type", "desiredHostname", "address", "sshPort"},
+		"UpdateServer": {"hostId", "type", "desiredHostname", "address", "sshPort", "clearSSHPort"},
+		"DeleteServer": {"hostId"},
+	}
 	fieldsV1 := map[string][]string{
 		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
 		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
@@ -160,6 +169,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		fields = fieldsV2
 	} else if command.APIVersion == EditCommandAPIVersionV3 {
 		fields = fieldsV3
+	} else if command.APIVersion == EditCommandAPIVersionV4 {
+		fields = fieldsV4
 	}
 	allowedFields, allowed := fields[command.Operation]
 	if !allowed {
@@ -171,25 +182,27 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	switch command.Operation {
 	case "CreateServer":
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
-		versionValid := isEditCommandV2OrV3(command.APIVersion)
+		versionValid := isEditCommandV2OrLater(command.APIVersion)
 		typeValid := command.APIVersion == EditCommandAPIVersionV2 || appconfig.ServerTypeIDPattern.MatchString(command.ServerType)
-		if !versionValid || !identifierPattern.MatchString(command.HostID) || !typeValid || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
+		desiredHostnameValid := command.APIVersion != EditCommandAPIVersionV4 || (len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
+		if !versionValid || !identifierPattern.MatchString(command.HostID) || !typeValid || !desiredHostnameValid || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
 			return blocked("INVALID_EDIT_COMMAND", "CreateServer requires a valid host, type, address and optional SSH port", "command")
 		}
 	case "UpdateServer":
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
 		hasClearSSHPort := command.ClearSSHPort || command.presentFields["clearSSHPort"]
-		versionValid := isEditCommandV2OrV3(command.APIVersion)
-		typeValid := command.ServerType == "" || (command.APIVersion == EditCommandAPIVersionV3 && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
-		if !versionValid || !typeValid || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort && command.ServerType == "") || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
+		versionValid := isEditCommandV2OrLater(command.APIVersion)
+		typeValid := command.ServerType == "" || ((command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4) && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
+		desiredHostnameValid := command.DesiredHostname == "" || (command.APIVersion == EditCommandAPIVersionV4 && len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
+		if !versionValid || !typeValid || !desiredHostnameValid || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort && command.ServerType == "" && command.DesiredHostname == "") || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
 			return blocked("INVALID_EDIT_COMMAND", "UpdateServer fields are invalid", "command")
 		}
 	case "DeleteServer":
-		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.HostID) {
+		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.HostID) {
 			return blocked("INVALID_EDIT_COMMAND", "DeleteServer requires a valid host", "command.hostId")
 		}
 	case "ReconcileDeploymentPlacement":
-		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > 1024 {
+		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > 1024 {
 			return blocked("INVALID_EDIT_COMMAND", "Deployment placement reconcile is invalid", "command.members")
 		}
 		memberIDs := make(map[string]bool)
@@ -210,15 +223,15 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			}
 		}
 	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "CreateCertificateProfile", "UpdateCertificateProfile", "CreateTLSProfile", "UpdateTLSProfile", "CreateCertificateScope", "UpdateCertificateScope":
-		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.EntityID) || command.Entity == nil {
+		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.EntityID) || command.Entity == nil {
 			return blocked("INVALID_EDIT_COMMAND", "Certificate entity command is invalid", "command.entity")
 		}
 	case "DeleteCertificateAuthority", "DeleteCertificateProfile", "DeleteTLSProfile", "DeleteCertificateScope":
-		if !isEditCommandV2OrV3(command.APIVersion) || !identifierPattern.MatchString(command.EntityID) {
+		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.EntityID) {
 			return blocked("INVALID_EDIT_COMMAND", "Certificate entity identifier is invalid", "command.entityId")
 		}
 	case "CreateServiceDeployment":
-		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (isEditCommandV2OrV3(command.APIVersion) && (!identifierPattern.MatchString(command.ServiceType) || !identifierPattern.MatchString(command.Mode))) {
+		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (isEditCommandV2OrLater(command.APIVersion) && (!identifierPattern.MatchString(command.ServiceType) || !identifierPattern.MatchString(command.Mode))) {
 			return blocked("INVALID_EDIT_COMMAND", "Create deployment requires an identifier and deployment object", "command")
 		}
 	case "DeleteServiceDeployment", "ClearServiceEndpointGroup", "ClearHAProxyIntegration":
@@ -402,6 +415,9 @@ func catalogMode(snapshot *coreadapter.Snapshot, serviceType, mode string) bool 
 func applyOne(command EditCommand, root string, snapshot *coreadapter.Snapshot,
 	candidates map[string]map[string]any, originals map[string][]byte) (expectation, []string, error) {
 	operation := command.Operation
+	if operation == "CreateServer" || operation == "UpdateServer" || operation == "DeleteServer" {
+		return applyServerCommand(command, root, snapshot, candidates, originals)
+	}
 	if strings.Contains(operation, "ServiceDeployment") || strings.Contains(operation, "Configuration") ||
 		strings.Contains(operation, "EndpointGroup") || strings.Contains(operation, "HAProxy") {
 		state, err := desiredState(candidates, originals, root)
@@ -591,9 +607,14 @@ func applyCommand(command EditCommand, root string, snapshot *coreadapter.Snapsh
 		}
 	}
 	var expectations []expectation
+	serverFinal := make(map[string]expectation)
+	deletedServers := make(map[string]bool)
 	var changes []SemanticChange
 	impactSet := make(map[string]bool)
 	for _, child := range commands {
+		if child.Operation == "CreateServer" && deletedServers[child.HostID] {
+			return nil, nil, nil, blocked("SERVER_RECREATE_IN_SESSION_UNSUPPORTED", "Delete and recreate of one server in a session is not supported", "command.hostId")
+		}
 		expected, impacts, err := applyOne(child, root, snapshot, candidates, originals)
 		if err != nil {
 			return nil, nil, nil, err
@@ -601,11 +622,26 @@ func applyCommand(command EditCommand, root string, snapshot *coreadapter.Snapsh
 		if expected.Operation == "" {
 			continue
 		}
-		expectations = append(expectations, expected)
+		if expected.Operation == "ServerFinal" {
+			serverFinal[expected.First] = expected
+			if child.Operation == "DeleteServer" {
+				deletedServers[child.HostID] = true
+			}
+		} else {
+			expectations = append(expectations, expected)
+		}
 		changes = append(changes, commandSummary(child))
 		for _, impact := range impacts {
 			impactSet[impact] = true
 		}
+	}
+	serverIDs := make([]string, 0, len(serverFinal))
+	for hostID := range serverFinal {
+		serverIDs = append(serverIDs, hostID)
+	}
+	sort.Strings(serverIDs)
+	for _, hostID := range serverIDs {
+		expectations = append(expectations, serverFinal[hostID])
 	}
 	impacts := make([]string, 0, len(impactSet))
 	for impact := range impactSet {
@@ -641,6 +677,24 @@ func proveSnapshot(snapshot *coreadapter.Snapshot, expectations []expectation) b
 	for _, expected := range expectations {
 		deployment := snapshot.ServiceDeployments[expected.First]
 		switch expected.Operation {
+		case "ServerFinal":
+			value := asMap(expected.Value)
+			host := snapshot.Hosts[expected.First]
+			if value == nil {
+				return false
+			}
+			if value["exists"] == false {
+				if host != nil {
+					return false
+				}
+				continue
+			}
+			if host == nil || host["ansibleHost"] != value["address"] || host["type"] != value["type"] || host["desiredHostname"] != value["desiredHostname"] {
+				return false
+			}
+			if value["portPresent"] == true && !samePort(host["ansiblePort"], value["port"]) {
+				return false
+			}
 		case "SetServiceConfigurationValue":
 			actual := asMap(snapshotValue(snapshot, "effectiveConfiguration", "services", expected.First, "configuration", expected.Second))
 			if actual == nil || !semanticEqual(actual["value"], expected.Value) || actual["source"] != "DEPLOYMENT_OVERRIDE" {
@@ -703,6 +757,15 @@ func proveSnapshot(snapshot *coreadapter.Snapshot, expectations []expectation) b
 		}
 	}
 	return true
+}
+
+func samePort(left, right any) bool {
+	leftNumber, leftOK := left.(float64)
+	rightNumber, rightOK := right.(int)
+	if leftOK && rightOK {
+		return leftNumber == float64(rightNumber)
+	}
+	return semanticEqual(left, right)
 }
 
 func expectedState(expectations []expectation) []map[string]any {

@@ -53,6 +53,35 @@ class ProjectEditVersionTests(unittest.TestCase):
         }
         self.assertEqual([], self.validate(payload, "v1alpha3"))
 
+    def test_v1alpha4_requires_desired_hostname_and_keeps_v2_v3_unchanged(self):
+        payload = {
+            "apiVersion": "platform.installer/edit-command/v1alpha4",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "CreateServer",
+            "hostId": "node1",
+            "address": "192.0.2.10",
+            "type": "infra",
+        }
+        self.assertTrue(self.validate(payload, "v1alpha4"))
+        payload["desiredHostname"] = "node1.example.internal"
+        self.assertEqual([], self.validate(payload, "v1alpha4"))
+        payload["desiredHostname"] = None
+        self.assertTrue(self.validate(payload, "v1alpha4"))
+
+    def test_v1alpha4_update_is_closed_semantic_patch(self):
+        payload = {
+            "apiVersion": "platform.installer/edit-command/v1alpha4",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "UpdateServer",
+            "hostId": "node1",
+            "desiredHostname": "node1.example.internal",
+        }
+        self.assertEqual([], self.validate(payload, "v1alpha4"))
+        payload["patch"] = {"unsafe": True}
+        self.assertTrue(self.validate(payload, "v1alpha4"))
+
 
 if __name__ == "__main__":
     unittest.main()

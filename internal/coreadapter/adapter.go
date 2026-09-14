@@ -19,25 +19,26 @@ type Document struct {
 
 // Snapshot mirrors only fields consumed by Installer application semantics.
 type Snapshot struct {
-	Status                 string                    `json:"status"`
-	Partial                bool                      `json:"partial"`
-	Project                map[string]any            `json:"project"`
-	ProjectRevision        string                    `json:"projectRevision"`
-	SnapshotFingerprint    string                    `json:"snapshotFingerprint"`
-	Documents              []Document                `json:"documents"`
-	Hosts                  map[string]map[string]any `json:"hosts"`
-	ServiceCatalog         map[string]map[string]any `json:"serviceCatalog"`
-	ServiceDeployments     map[string]map[string]any `json:"serviceDeployments"`
-	EffectiveConfiguration map[string]any            `json:"effectiveConfiguration"`
-	EndpointGroups         map[string]any            `json:"endpointGroups"`
-	Topology               map[string]any            `json:"topology"`
-	Endpoints              map[string]any            `json:"endpoints"`
-	Integrations           map[string]any            `json:"integrations"`
-	PKI                    map[string]any            `json:"pki"`
-	Validation             map[string]any            `json:"validation"`
-	Readiness              map[string]any            `json:"readiness"`
-	Findings               []map[string]any          `json:"findings"`
-	Raw                    json.RawMessage           `json:"-"`
+	Status                 string                                 `json:"status"`
+	Partial                bool                                   `json:"partial"`
+	Project                map[string]any                         `json:"project"`
+	ProjectRevision        string                                 `json:"projectRevision"`
+	SnapshotFingerprint    string                                 `json:"snapshotFingerprint"`
+	Documents              []Document                             `json:"documents"`
+	Hosts                  map[string]map[string]any              `json:"hosts"`
+	References             map[string]map[string][]map[string]any `json:"references"`
+	ServiceCatalog         map[string]map[string]any              `json:"serviceCatalog"`
+	ServiceDeployments     map[string]map[string]any              `json:"serviceDeployments"`
+	EffectiveConfiguration map[string]any                         `json:"effectiveConfiguration"`
+	EndpointGroups         map[string]any                         `json:"endpointGroups"`
+	Topology               map[string]any                         `json:"topology"`
+	Endpoints              map[string]any                         `json:"endpoints"`
+	Integrations           map[string]any                         `json:"integrations"`
+	PKI                    map[string]any                         `json:"pki"`
+	Validation             map[string]any                         `json:"validation"`
+	Readiness              map[string]any                         `json:"readiness"`
+	Findings               []map[string]any                       `json:"findings"`
+	Raw                    json.RawMessage                        `json:"-"`
 }
 
 func DecodeSnapshot(data []byte) (*Snapshot, error) {

@@ -52,7 +52,7 @@ func (editorReaderStub) BuildCandidateSnapshot(_ context.Context, root string, _
 	if err != nil {
 		return nil, err
 	}
-	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: "sha256:" + string(make([]byte, 64)), Hosts: map[string]map[string]any{"node1": {"type": "infra"}}}, nil
+	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: "sha256:" + string(make([]byte, 64)), Hosts: map[string]map[string]any{"node1": {"type": "infra", "desiredHostname": "node1.example.internal", "ansibleHost": "192.0.2.10", "ansiblePort": 22}}}, nil
 }
 
 func testApplicationConfig() AppOption {
@@ -117,7 +117,7 @@ func TestApplicationConfigFailureBlocksNewServerWithoutWriting(t *testing.T) {
 	app := NewApp(editorReaderStub{}, lifecycleStub{})
 	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: project}
 	started := app.StartEditSession()
-	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10"})
+	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"})
 	if result.Error == nil || result.Error.Code != "APPLICATION_CONFIG_UNAVAILABLE" {
 		t.Fatalf("result=%#v", result)
 	}
@@ -154,7 +154,7 @@ func TestUnknownNewServerTypeReturnsNonBlockingDiagnostic(t *testing.T) {
 	if started.Error != nil || started.Session == nil {
 		t.Fatalf("start=%#v", started)
 	}
-	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "scada", Address: "192.0.2.10"})
+	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "scada", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"})
 	if result.Error != nil || result.Status != "EDITING" || len(result.Diagnostics) != 1 || result.Diagnostics[0].Code != "UNKNOWN_CONFIGURED_SERVER_TYPE" {
 		t.Fatalf("result=%#v", result)
 	}
@@ -189,7 +189,7 @@ func TestAppFirstSaveRequiresReviewAndConsumesSession(t *testing.T) {
 	if started.Status != "EDITING" || started.Session == nil {
 		t.Fatalf("started=%#v", started)
 	}
-	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10", SSHPort: 22})
+	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10", SSHPort: 22})
 	if appended.Session == nil || appended.Session.CommandCount != 1 {
 		t.Fatalf("appended=%#v", appended)
 	}

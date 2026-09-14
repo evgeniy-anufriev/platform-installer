@@ -74,6 +74,7 @@ export namespace coreadapter {
     snapshotFingerprint: string;
     documents: Document[];
     hosts: Record<string, any>;
+    references: Record<string, any>;
     serviceCatalog: Record<string, any>;
     serviceDeployments: Record<string, any>;
     effectiveConfiguration: Record<string, any>;
@@ -99,6 +100,7 @@ export namespace coreadapter {
       this.snapshotFingerprint = source["snapshotFingerprint"];
       this.documents = this.convertValues(source["documents"], Document);
       this.hosts = source["hosts"];
+      this.references = source["references"];
       this.serviceCatalog = source["serviceCatalog"];
       this.serviceDeployments = source["serviceDeployments"];
       this.effectiveConfiguration = source["effectiveConfiguration"];
@@ -230,6 +232,7 @@ export namespace installer {
     haproxyDeploymentId?: string;
     hostId?: string;
     type?: string;
+    desiredHostname?: string;
     address?: string;
     sshPort?: number;
     clearSSHPort?: boolean;
@@ -262,6 +265,7 @@ export namespace installer {
       this.haproxyDeploymentId = source["haproxyDeploymentId"];
       this.hostId = source["hostId"];
       this.type = source["type"];
+      this.desiredHostname = source["desiredHostname"];
       this.address = source["address"];
       this.sshPort = source["sshPort"];
       this.clearSSHPort = source["clearSSHPort"];

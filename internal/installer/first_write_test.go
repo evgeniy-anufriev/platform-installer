@@ -11,7 +11,10 @@ import (
 	"platform-installer/internal/coreadapter"
 )
 
-type firstWriteAdapter struct{ calls int }
+type firstWriteAdapter struct {
+	calls      int
+	references map[string]map[string][]map[string]any
+}
 
 func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned []string) (*coreadapter.Snapshot, error) {
 	a.calls++
@@ -27,8 +30,15 @@ func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned 
 	hosts := make(map[string]map[string]any, len(hostValues))
 	for id, raw := range hostValues {
 		hosts[id] = asMap(raw)
+		hosts[id]["ansibleHost"] = hosts[id]["ansible_host"]
 		if platformHost := asMap(hosts[id]["platform_host"]); platformHost != nil {
 			hosts[id]["type"] = platformHost["type"]
+			hosts[id]["desiredHostname"] = platformHost["desiredHostname"]
+		}
+		if port, ok := hosts[id]["ansible_port"]; ok {
+			hosts[id]["ansiblePort"] = port
+		} else {
+			hosts[id]["ansiblePort"] = 22
 		}
 	}
 	documents, revision, err := collectProjectDocuments(root)
@@ -46,7 +56,7 @@ func (a *firstWriteAdapter) BuildSnapshot(_ context.Context, root string, owned 
 		resultDocuments = append(resultDocuments, coreadapter.Document{LogicalPath: item.LogicalPath, Digest: item.Digest, Ownership: ownership, RevisionIncluded: true})
 	}
 	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: digestBytes([]byte(revision)),
-		Documents: resultDocuments, Hosts: hosts, ServiceCatalog: map[string]map[string]any{}, ServiceDeployments: map[string]map[string]any{},
+		Documents: resultDocuments, Hosts: hosts, References: a.references, ServiceCatalog: map[string]map[string]any{}, ServiceDeployments: map[string]map[string]any{},
 		EffectiveConfiguration: map[string]any{}, EndpointGroups: map[string]any{}, Topology: map[string]any{}, Endpoints: map[string]any{}, Integrations: map[string]any{}, PKI: map[string]any{}}, nil
 }
 
@@ -73,7 +83,7 @@ func TestFirstSaveSessionCreatesCompleteCandidateAndCommitsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", Address: "192.0.2.10"}
+	command := EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"}
 	if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +114,7 @@ func TestFirstSaveSessionCreatesCompleteCandidateAndCommitsOnce(t *testing.T) {
 		t.Fatal("ansible.cfg template drift")
 	}
 	inventory := string(mustRead(t, filepath.Join(root, "inventory", "hosts.yml")))
-	if inventory != string(firstSaveInventory([]firstSaveServer{{id: "node1", typeID: "infra", address: "192.0.2.10"}})) {
+	if inventory != string(firstSaveInventory([]firstSaveServer{{id: "node1", typeID: "infra", desiredHostname: "node1.example.internal", address: "192.0.2.10"}})) {
 		t.Fatalf("inventory=%s", inventory)
 	}
 }
@@ -134,7 +144,7 @@ func TestFirstSaveUnknownConfiguredTypePlansWithoutCanonicalWrites(t *testing.T)
 	root, revision := emptyManagedProject(t)
 	manifestBefore := append([]byte(nil), mustRead(t, filepath.Join(root, "project.yml"))...)
 	backend := NewBackend(&firstWriteAdapter{}, WithServerTypes([]string{"infra"}))
-	plan, err := backend.planFirstWrite(context.Background(), root, revision, []EditCommand{{APIVersion: EditCommandAPIVersionV3, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", ServerType: "scada", Address: "192.0.2.10"}})
+	plan, err := backend.planFirstWrite(context.Background(), root, revision, []EditCommand{{APIVersion: EditCommandAPIVersionV4, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", ServerType: "scada", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"}})
 	if err != nil || plan.Status != "READY" || !plan.CommitAllowed {
 		t.Fatalf("plan=%#v err=%v", plan, err)
 	}

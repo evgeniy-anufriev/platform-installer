@@ -2,10 +2,8 @@ package installer
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"platform-installer/internal/projectlifecycle"
@@ -15,35 +13,46 @@ var managedConfigHeader = []byte("# Managed by Platform Installer.\n# This is st
 var firstSaveAnsibleConfig = append(append([]byte(nil), managedConfigHeader...), []byte("[defaults]\ninventory = ./inventory/hosts.yml\nretry_files_enabled = False\nhost_key_checking = True\ninterpreter_python = auto_silent\nhash_behaviour = merge\n")...)
 
 type firstSaveServer struct {
-	id      string
-	typeID  string
-	address string
-	port    int
+	id              string
+	typeID          string
+	desiredHostname string
+	address         string
+	port            int
+	portSet         bool
 }
 
 func firstSaveInventory(servers []firstSaveServer) []byte {
-	sort.Slice(servers, func(i, j int) bool { return servers[i].id < servers[j].id })
-	var value strings.Builder
-	value.Write(managedHeader)
-	value.WriteString("all:\n  hosts:\n")
+	hosts := make(map[string]any, len(servers))
+	targets := make(map[string]any, len(servers))
 	for _, server := range servers {
-		fmt.Fprintf(&value, "    %s:\n      ansible_host: %s\n", server.id, server.address)
+		value := map[string]any{"ansible_host": server.address}
+		platformHost := map[string]any{}
 		if server.typeID != "" {
-			fmt.Fprintf(&value, "      platform_host:\n        type: %s\n", server.typeID)
+			platformHost["type"] = server.typeID
 		}
-		if server.port != 0 && server.port != 22 {
-			fmt.Fprintf(&value, "      ansible_port: %d\n", server.port)
+		if server.desiredHostname != "" {
+			platformHost["desiredHostname"] = server.desiredHostname
 		}
+		if len(platformHost) > 0 {
+			value["platform_host"] = platformHost
+		}
+		if server.portSet {
+			value["ansible_port"] = server.port
+		}
+		hosts[server.id] = value
+		targets[server.id] = map[string]any{}
 	}
-	value.WriteString("  children:\n    platform_targets:\n      hosts:\n")
-	for _, server := range servers {
-		fmt.Fprintf(&value, "        %s: {}\n", server.id)
+	value, err := deterministicYAML(map[string]any{"all": map[string]any{
+		"hosts": hosts, "children": map[string]any{"platform_targets": map[string]any{"hosts": targets}},
+	}})
+	if err != nil {
+		panic("first-save inventory is not serializable")
 	}
-	return []byte(value.String())
+	return value
 }
 
 func (b *Backend) planFirstWrite(ctx context.Context, root, revision string, commands []EditCommand) (*EditPlan, error) {
-	skeleton := EditCommand{APIVersion: EditCommandAPIVersionV2, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "Batch", Commands: commands}
+	skeleton := EditCommand{APIVersion: EditCommandAPIVersionV4, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "Batch", Commands: commands}
 	if !projectlifecycle.FirstSaveEligible(root) {
 		return blockedPlan(skeleton, revision, blocked("WRITE_OWNERSHIP_REQUIRED", "First save requires a valid empty managed project", "project")), nil
 	}
@@ -68,7 +77,7 @@ func (b *Backend) planFirstWrite(ctx context.Context, root, revision string, com
 			return blockedPlan(skeleton, revision, blocked("INVALID_EDIT_COMMAND", "Server identifier is duplicated", "command.hostId")), nil
 		}
 		seen[command.HostID] = true
-		servers = append(servers, firstSaveServer{id: command.HostID, typeID: command.ServerType, address: command.Address, port: command.SSHPort})
+		servers = append(servers, firstSaveServer{id: command.HostID, typeID: command.ServerType, desiredHostname: command.DesiredHostname, address: command.Address, port: command.SSHPort, portSet: command.SSHPort != 0 || command.presentFields["sshPort"]})
 		changes = append(changes, SemanticChange{Operation: "CreateServer", EntityID: command.HostID, SafeSummary: "CreateServer " + command.HostID})
 	}
 	if len(servers) == 0 {
@@ -112,7 +121,8 @@ func (b *Backend) planFirstWrite(ctx context.Context, root, revision string, com
 		return blockedCorePlan(skeleton, revision, staged), nil
 	}
 	for _, server := range servers {
-		if staged.Hosts[server.id] == nil || (server.typeID != "" && staged.Hosts[server.id]["type"] != server.typeID) {
+		host := staged.Hosts[server.id]
+		if host == nil || (server.typeID != "" && host["type"] != server.typeID) || (server.desiredHostname != "" && host["desiredHostname"] != server.desiredHostname) || (server.portSet && host["ansiblePort"] != server.port) {
 			return blockedPlan(skeleton, revision, blocked("EDIT_SHADOWED", "Core snapshot did not contain the created server", "command.hostId")), nil
 		}
 	}

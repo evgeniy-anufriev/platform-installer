@@ -165,7 +165,7 @@ def _integration_view(desired_state, catalog, endpoint_result, haproxy_result, d
 def build_project_snapshot(project_id, project_name, documents, project_revision, catalog,
                            hosts, desired_state, topology_result, configuration_result,
                            endpoint_result, pki_result, haproxy_result,
-                           dns_result, desired_state_path, role_default_paths, core_version="0.1.0", identity_source="PROJECT_MANIFEST"):
+                           dns_result, desired_state_path, role_default_paths, core_version="0.1.0", identity_source="PROJECT_MANIFEST", references=None):
     ownership = {item["logicalPath"]: item["ownership"] for item in documents}
     results = (topology_result, configuration_result, endpoint_result, pki_result, haproxy_result, dns_result)
     findings = []
@@ -209,6 +209,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
         "coreVersion": core_version,
         "documents": documents,
         "hosts": {key: hosts[key] for key in sorted(hosts)},
+        "references": redact(references if isinstance(references, dict) else {"hosts": {}}),
         "serviceCatalog": _catalog_view(catalog),
         "serviceDeployments": redact(deployments),
         "effectiveConfiguration": configuration,

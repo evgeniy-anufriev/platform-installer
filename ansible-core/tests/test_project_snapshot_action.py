@@ -12,12 +12,17 @@ from ansible_collections.platform.core.plugins.module_utils.schema_validation im
 
 
 class ProjectSnapshotActionTests(unittest.TestCase):
-    def test_server_type_is_projected_without_becoming_identity(self):
+    def test_server_desired_values_and_port_are_projected(self):
         self.assertEqual(
-            {"ansibleHost": "192.0.2.10", "type": "infra"},
-            snapshot_host({"ansible_host": "192.0.2.10", "platform_host": {"type": "infra"}}, "node1"),
+            ({"ansibleHost": "192.0.2.10", "ansiblePort": 22, "type": "infra", "desiredHostname": "node1.example.internal"}, None),
+            snapshot_host({"ansible_host": "192.0.2.10", "platform_host": {"type": "infra", "desiredHostname": "node1.example.internal"}}, "node1"),
         )
-        self.assertEqual({"ansibleHost": "node1"}, snapshot_host({}, "node1"))
+        self.assertEqual(({"ansibleHost": "node1", "ansiblePort": 22}, None), snapshot_host({}, "node1"))
+        host, finding = snapshot_host({"ansible_port": "22"}, "node1")
+        self.assertEqual(22, host["ansiblePort"])
+        self.assertIsNone(finding)
+        _, finding = snapshot_host({"ansible_port": True}, "node1")
+        self.assertEqual("HOST_TRANSPORT_PORT_INVALID", finding["code"])
 
     def test_host_type_validation_is_deterministic_and_contextual(self):
         class Validator:
@@ -77,6 +82,20 @@ class ProjectSnapshotActionTests(unittest.TestCase):
                 str(schema.resolve()),
                 action._catalog_reference(str(root.resolve()), str(catalog.resolve()), "../../services/kafka/configuration.schema.json"),
             )
+
+    def test_generic_host_references_do_not_expose_service_rules_to_go(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            placement = root / "inventory" / "host_vars" / "node1" / "platform-installer.yml"
+            placement.parent.mkdir(parents=True)
+            placement.write_text("platform_deployments:\n  kafka-main:\n    members: {}\n", encoding="utf-8")
+            action = object.__new__(ActionModule)
+            action._load = lambda path, required=False: {"platform_deployments": {"kafka-main": {}}}
+            references = action._generic_host_references(str(root))
+            self.assertEqual([{
+                "kind": "placement", "sourceId": "kafka-main",
+                "field": "inventory/host_vars/node1/platform-installer.yml#platform_deployments.kafka-main",
+            }], references["node1"])
 
 
 if __name__ == "__main__":

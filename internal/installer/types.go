@@ -9,6 +9,7 @@ const (
 	EditCommandAPIVersion   = "platform.installer/edit-command/v1alpha1"
 	EditCommandAPIVersionV2 = "platform.installer/edit-command/v1alpha2"
 	EditCommandAPIVersionV3 = "platform.installer/edit-command/v1alpha3"
+	EditCommandAPIVersionV4 = "platform.installer/edit-command/v1alpha4"
 	EditPlanAPIVersion      = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2    = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion    = "platform.installer/edit-commit-result/v1alpha1"
@@ -28,6 +29,7 @@ type EditCommand struct {
 	HAProxyDeploymentID string            `json:"haproxyDeploymentId,omitempty"`
 	HostID              string            `json:"hostId,omitempty"`
 	ServerType          string            `json:"type,omitempty"`
+	DesiredHostname     string            `json:"desiredHostname,omitempty"`
 	Address             string            `json:"address,omitempty"`
 	SSHPort             int               `json:"sshPort,omitempty"`
 	ClearSSHPort        bool              `json:"clearSSHPort,omitempty"`
@@ -61,7 +63,7 @@ func (command *EditCommand) UnmarshalJSON(content []byte) error {
 	known := map[string]bool{
 		"apiVersion": true, "kind": true, "baseProjectRevision": true, "operation": true,
 		"deploymentId": true, "setting": true, "value": true, "endpointGroupId": true,
-		"haproxyDeploymentId": true, "hostId": true, "type": true, "address": true, "sshPort": true,
+		"haproxyDeploymentId": true, "hostId": true, "type": true, "desiredHostname": true, "address": true, "sshPort": true,
 		"clearSSHPort": true, "serviceType": true, "mode": true, "entityId": true,
 		"entity": true, "members": true, "property": true, "deployment": true,
 		"endpointGroup": true, "placement": true, "backend": true, "commands": true,

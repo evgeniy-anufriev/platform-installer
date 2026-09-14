@@ -4,7 +4,7 @@
   "title": "ProjectSnapshot v1alpha1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "kind", "status", "partial", "project", "projectRevision", "catalogRevision", "coreVersion", "documents", "hosts", "serviceCatalog", "serviceDeployments", "effectiveConfiguration", "endpointGroups", "topology", "endpoints", "integrations", "pki", "validation", "readiness", "findings", "snapshotFingerprint"],
+  "required": ["apiVersion", "kind", "status", "partial", "project", "projectRevision", "catalogRevision", "coreVersion", "documents", "hosts", "references", "serviceCatalog", "serviceDeployments", "effectiveConfiguration", "endpointGroups", "topology", "endpoints", "integrations", "pki", "validation", "readiness", "findings", "snapshotFingerprint"],
   "properties": {
     "apiVersion": {"const": "platform.installer/project-snapshot/v1alpha1"},
     "kind": {"const": "ProjectSnapshot"},
@@ -16,6 +16,7 @@
     "coreVersion": {"type": "string"},
     "documents": {"type": "array", "items": {"type": "object"}},
     "hosts": {"type": "object"},
+    "references": {"type": "object"},
     "serviceCatalog": {"type": "object"},
     "serviceDeployments": {"type": "object"},
     "effectiveConfiguration": {"type": "object"},

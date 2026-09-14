@@ -36,6 +36,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [editBusy, setEditBusy] = useState(false);
   const [hostId, setHostId] = useState("node1");
   const [serverType, setServerType] = useState("");
+  const [desiredHostname, setDesiredHostname] = useState("");
   const [serverTypes, setServerTypes] = useState<
     Array<{ id: string; displayName: string }>
   >([]);
@@ -135,13 +136,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   };
   const addFirstServer = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!sessionId || !serverType) return;
+    if (!sessionId || !serverType || !desiredHostname) return;
     setEditBusy(true);
     try {
       const next = await api.appendEditCommand(sessionId, {
         operation: "CreateServer",
         hostId,
         type: serverType,
+        desiredHostname,
         address,
         sshPort: Number(sshPort),
       });
@@ -374,6 +376,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               sessionId={sessionId}
               hostId={hostId}
               serverType={serverType}
+              desiredHostname={desiredHostname}
               serverTypes={serverTypes}
               configError={configError}
               address={address}
@@ -382,6 +385,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onSubmit={addFirstServer}
               onHost={setHostId}
               onType={setServerType}
+              onDesiredHostname={setDesiredHostname}
               onAddress={setAddress}
               onPort={setSSHPort}
               onReview={review}
@@ -498,6 +502,7 @@ interface FirstSaveProps {
   sessionId: string;
   hostId: string;
   serverType: string;
+  desiredHostname: string;
   serverTypes: Array<{ id: string; displayName: string }>;
   configError: string | null;
   address: string;
@@ -506,6 +511,7 @@ interface FirstSaveProps {
   onSubmit: (event: React.FormEvent) => void;
   onHost: (value: string) => void;
   onType: (value: string) => void;
+  onDesiredHostname: (value: string) => void;
   onAddress: (value: string) => void;
   onPort: (value: string) => void;
   onReview: () => void;
@@ -520,6 +526,7 @@ function FirstSave({
   sessionId,
   hostId,
   serverType,
+  desiredHostname,
   serverTypes,
   configError,
   address,
@@ -528,6 +535,7 @@ function FirstSave({
   onSubmit,
   onHost,
   onType,
+  onDesiredHostname,
   onAddress,
   onPort,
   onReview,
@@ -669,6 +677,15 @@ function FirstSave({
         />
       </label>
       <label>
+        Желаемое имя хоста
+        <input
+          value={desiredHostname}
+          onChange={(event) => onDesiredHostname(event.target.value)}
+          placeholder="node1.example.internal"
+          required
+        />
+      </label>
+      <label>
         SSH port
         <input
           type="number"
@@ -688,7 +705,7 @@ function FirstSave({
         <button type="button" className="outline" onClick={onDiscard}>
           Отменить изменения
         </button>
-        <button type="submit" disabled={busy || !!configError || !serverType}>
+        <button type="submit" disabled={busy || !!configError || !serverType || !desiredHostname}>
           Добавить в черновик
         </button>
       </div>

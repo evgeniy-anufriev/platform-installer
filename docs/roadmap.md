@@ -552,7 +552,12 @@ reopen; UI-01D implementation/acceptance is complete and owner-accepted
 without final revision-bound review. The separately authorized application
 config/server-type foundation adds a versioned local type catalog and additive
 `CreateServer` v1alpha3 contract without starting full server CRUD. UI-01E is
-not started.
+decomposed into E1 server CRUD integration, E2 Servers UI, E3 shared runtime
+credentials, E4 Execution Node selection panel, E5 readiness/navigation gating
+and E6 final Windows/RED OS acceptance. UI-01E1 is DONE: v1alpha4 server CRUD
+intents use the existing edit/review/commit lifecycle, Core projects desired
+hostname/normalized port and generic references, and focused Windows/RED OS
+gates passed. UI-01E2 is next and not started.
 
 ### DEVX-01: Codex engineering harness
 
@@ -636,8 +641,8 @@ acceptance are complete: the bounded transient session, complete-candidate
 remote Core proof, guarded first write and narrow Windows review/save shell
 passed its executable gates and was owner-accepted without final
 revision-bound review. The application config/server-type foundation is
-independent of UI-01E and does not advance it. UI-01E is not started; UI-01
-overall is NOT DONE.
+independent of UI-01E and does not advance its implementation. UI-01E1 is DONE;
+UI-01E2 is next and has not started. UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

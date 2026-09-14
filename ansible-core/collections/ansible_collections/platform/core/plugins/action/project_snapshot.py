@@ -4,6 +4,7 @@ __metaclass__ = type
 
 import copy
 import os
+import re
 
 from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
@@ -18,12 +19,38 @@ from ansible_collections.platform.core.plugins.module_utils.schema_validation im
 from ansible_collections.platform.core.plugins.module_utils.topology_resolution import resolve_topology
 
 
+_CANONICAL_PORT = re.compile(r"^(0|[1-9][0-9]*)$")
+
+
 def snapshot_host(values, host_id):
     result = {"ansibleHost": values.get("ansible_host", host_id)}
     platform_host = values.get("platform_host", {})
     if isinstance(platform_host, dict) and isinstance(platform_host.get("type"), str):
         result["type"] = platform_host["type"]
-    return result
+    if isinstance(platform_host, dict) and isinstance(platform_host.get("desiredHostname"), str):
+        result["desiredHostname"] = platform_host["desiredHostname"]
+    raw_port = values.get("ansible_port", 22)
+    if isinstance(raw_port, bool):
+        return result, {"apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
+                        "code": "HOST_TRANSPORT_PORT_INVALID", "status": "BLOCKED",
+                        "category": "project-state", "field": "/hosts/%s/ansible_port" % host_id,
+                        "safeMessage": "Host SSH port must be an integer between 1 and 65535"}
+    if isinstance(raw_port, int):
+        port = raw_port
+    elif isinstance(raw_port, str) and _CANONICAL_PORT.match(raw_port):
+        port = int(raw_port)
+    else:
+        return result, {"apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
+                        "code": "HOST_TRANSPORT_PORT_INVALID", "status": "BLOCKED",
+                        "category": "project-state", "field": "/hosts/%s/ansible_port" % host_id,
+                        "safeMessage": "Host SSH port must be an integer between 1 and 65535"}
+    if port < 1 or port > 65535:
+        return result, {"apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
+                        "code": "HOST_TRANSPORT_PORT_INVALID", "status": "BLOCKED",
+                        "category": "project-state", "field": "/hosts/%s/ansible_port" % host_id,
+                        "safeMessage": "Host SSH port must be an integer between 1 and 65535"}
+    result["ansiblePort"] = port
+    return result, None
 
 
 def validate_host_desired_values(validator, schema_path, hostvars, host_ids):
@@ -145,6 +172,25 @@ class ActionModule(ActionBase):
         }
         return desired_path, placement_paths
 
+    def _generic_host_references(self, project_root):
+        """Return safe host-reference records without service-specific policy."""
+        result = {}
+        root = os.path.join(project_root, "inventory", "host_vars")
+        if not os.path.isdir(root):
+            return result
+        for host_id in sorted(os.listdir(root)):
+            path = os.path.join(root, host_id, "platform-installer.yml")
+            document = self._load(path, required=False)
+            deployments = document.get("platform_deployments", {}) if isinstance(document, dict) else {}
+            if not isinstance(deployments, dict):
+                continue
+            for deployment_id in sorted(deployments):
+                result.setdefault(host_id, []).append({
+                    "kind": "placement", "sourceId": str(deployment_id),
+                    "field": "inventory/host_vars/%s/platform-installer.yml#platform_deployments.%s" % (host_id, deployment_id),
+                })
+        return result
+
     def run(self, tmp=None, task_vars=None):
         del tmp
         task_vars = task_vars or {}
@@ -178,10 +224,12 @@ class ActionModule(ActionBase):
             groups = task_vars.get("groups", {})
             hostvars = task_vars.get("hostvars", {})
             target_ids = sorted(groups.get("platform_targets", []))
-            hosts, inventory_deployments = {}, {}
+            hosts, inventory_deployments, transport_findings = {}, {}, []
             for host_id in target_ids:
                 values = hostvars[host_id]
-                hosts[host_id] = snapshot_host(values, host_id)
+                hosts[host_id], finding = snapshot_host(values, host_id)
+                if finding:
+                    transport_findings.append(finding)
                 inventory_deployments[host_id] = values.get("platform_deployments", {})
 
             host_addresses = {host_id: {"ansible_host": hosts[host_id]["ansibleHost"]} for host_id in target_ids}
@@ -208,8 +256,8 @@ class ActionModule(ActionBase):
                 ))
                 for relative, document in schema_specs:
                     schema_findings.extend(validator.validate(document, os.path.join(repo_root, "contracts", *relative.split("/"))))
-                if schema_findings:
-                    topology["findings"] = sorted(topology.get("findings", []) + schema_findings,
+                if schema_findings or transport_findings:
+                    topology["findings"] = sorted(topology.get("findings", []) + schema_findings + transport_findings,
                                                    key=lambda item: (item.get("field", ""), item.get("code", "")))
                     topology["status"] = "BLOCKED"
             except SchemaValidationError:
@@ -263,6 +311,7 @@ class ActionModule(ActionBase):
                 metadata.get("name", metadata.get("id", os.path.basename(project_root))),
                 documents, revision, catalog, hosts, desired_state, topology,
                 configuration, endpoints, pki, haproxy, dns, desired_path, role_paths,
+                references={"hosts": self._generic_host_references(project_root)},
                 identity_source="PROJECT_MANIFEST" if metadata.get("id") else "PATH_FALLBACK",
             )
             return {"changed": False, "snapshot": snapshot}

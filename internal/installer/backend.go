@@ -74,7 +74,7 @@ func (b *Backend) validateConfiguredTypes(command EditCommand) error {
 		}
 		return nil
 	}
-	if command.APIVersion == EditCommandAPIVersionV3 && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
+	if (command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4) && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
 		if len(b.serverTypes) == 0 {
 			return blocked("APPLICATION_CONFIG_UNAVAILABLE", "Application configuration is unavailable", "command.type")
 		}
@@ -90,7 +90,7 @@ func blockedPlan(command EditCommand, revision string, err error) *EditPlan {
 		finding = typed.finding()
 	}
 	version := EditPlanAPIVersion
-	if command.APIVersion == EditCommandAPIVersionV2 || command.APIVersion == EditCommandAPIVersionV3 {
+	if isEditCommandV2OrLater(command.APIVersion) {
 		version = EditPlanAPIVersionV2
 	}
 	return &EditPlan{APIVersion: version, Kind: "EditPlan", Status: "BLOCKED",
@@ -102,7 +102,7 @@ func blockedPlan(command EditCommand, revision string, err error) *EditPlan {
 }
 
 func planVersion(command EditCommand) string {
-	if command.APIVersion == EditCommandAPIVersionV2 || command.APIVersion == EditCommandAPIVersionV3 {
+	if isEditCommandV2OrLater(command.APIVersion) {
 		return EditPlanAPIVersionV2
 	}
 	return EditPlanAPIVersion
@@ -274,7 +274,7 @@ func (b *Backend) planEdit(ctx context.Context, projectRoot string, command Edit
 		storedDocuments = append(storedDocuments, storedDocument{LogicalPath: logical,
 			Before: append([]byte(nil), before...), After: after, Existed: true})
 		change := DocumentChange{LogicalPath: logical, BeforeDigest: digestBytes(before), AfterDigest: digestBytes(after)}
-		if command.APIVersion == EditCommandAPIVersionV2 || command.APIVersion == EditCommandAPIVersionV3 {
+		if isEditCommandV2OrLater(command.APIVersion) {
 			change.Before = &DocumentState{State: "PRESENT", Digest: digestBytes(before)}
 			change.After = &DocumentState{State: "PRESENT", Digest: digestBytes(after)}
 			change.BeforeDigest, change.AfterDigest = "", ""
@@ -320,6 +320,10 @@ func (b *Backend) planEdit(ctx context.Context, projectRoot string, command Edit
 				blocked("CORE_SNAPSHOT_FAILED", "Staged authoritative snapshot could not be built", "project")), nil
 		}
 		return blockedCorePlan(command, snapshot.ProjectRevision, staged), nil
+	}
+	if serverReferenceInUse(staged, expectations) {
+		return blockedPlan(command, snapshot.ProjectRevision,
+			blocked("REFERENCE_IN_USE", "Server is still referenced by the canonical project", "command.hostId")), nil
 	}
 	if !proveSnapshot(staged, expectations) {
 		return blockedPlan(command, snapshot.ProjectRevision,

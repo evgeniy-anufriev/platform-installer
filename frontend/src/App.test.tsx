@@ -283,6 +283,10 @@ describe("UI-01B read-only shell", () => {
       "infra",
     );
     await userEvent.type(screen.getByLabelText("Адрес"), "192.0.2.10");
+    await userEvent.type(
+      screen.getByLabelText("Желаемое имя хоста"),
+      "node1.example.internal",
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Добавить в черновик" }),
     );
@@ -299,6 +303,7 @@ describe("UI-01B read-only shell", () => {
         operation: "CreateServer",
         hostId: "node1",
         type: "infra",
+        desiredHostname: "node1.example.internal",
         address: "192.0.2.10",
         sshPort: 22,
       },
@@ -474,6 +479,10 @@ describe("UI-01B read-only shell", () => {
       "infra",
     );
     await userEvent.type(screen.getByLabelText("Адрес"), "192.0.2.10");
+    await userEvent.type(
+      screen.getByLabelText("Желаемое имя хоста"),
+      "node1.example.internal",
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Добавить в черновик" }),
     );

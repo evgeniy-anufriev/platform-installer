@@ -137,7 +137,7 @@ func TestValidateCommandRejectsScalarSecretSettings(t *testing.T) {
 }
 
 func createServerCommand(host, address string) EditCommand {
-	return EditCommand{Operation: "CreateServer", HostID: host, ServerType: "infra", Address: address}
+	return EditCommand{Operation: "CreateServer", HostID: host, ServerType: "infra", DesiredHostname: host + ".example.internal", Address: address}
 }
 
 func TestSessionAppendInvalidatesReviewedPlan(t *testing.T) {
@@ -152,7 +152,7 @@ func TestSessionAppendInvalidatesReviewedPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV3 {
+	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV4 {
 		t.Fatalf("new session emitted %s", got)
 	}
 	encoded, err := json.Marshal(store.sessions[session.SessionID].commands[0])
