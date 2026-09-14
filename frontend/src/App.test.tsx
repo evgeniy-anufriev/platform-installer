@@ -75,6 +75,21 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
     reviewEditSession: vi.fn(),
     commitEditPlan: vi.fn(),
     discardEditSession: vi.fn().mockResolvedValue({ status: "DISCARDED" }),
+    getSessionCredentialStatus: vi.fn().mockResolvedValue({
+      status: "MISSING",
+      sudoPasswordStatus: "NOT_PROVIDED",
+    }),
+    setSessionCredential: vi.fn().mockResolvedValue({
+      status: "PRESENT",
+      username: "installer",
+      sshMode: "SSH_PASSWORD",
+      sudoPasswordStatus: "PRESENT",
+      expiresAt: "2026-09-14T14:00:00Z",
+    }),
+    clearSessionCredential: vi.fn().mockResolvedValue({
+      status: "MISSING",
+      sudoPasswordStatus: "NOT_PROVIDED",
+    }),
     ...overrides,
   } as unknown as MockApi;
 }
@@ -408,5 +423,29 @@ describe("UI-01E2 server editor", () => {
     );
     expect(value.openProject).toHaveBeenCalledWith("C:/Projects/test");
     expect(await screen.findByText("node1.changed.internal")).toBeTruthy();
+  });
+});
+
+describe("UI-01E3 session credentials", () => {
+  it("submits write-only credentials and clears transient fields after success", async () => {
+    const value = api();
+    await openServers(value);
+    await userEvent.type(screen.getByLabelText("Технический пользователь"), "installer");
+    await userEvent.type(screen.getByLabelText("SSH-пароль"), "not-visible-after-submit");
+    await userEvent.click(screen.getByLabelText("Требуется пароль sudo"));
+    await userEvent.type(screen.getByLabelText("Пароль sudo"), "also-not-visible-after-submit");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить в сеансе" }));
+    expect(value.setSessionCredential).toHaveBeenCalledWith({
+      username: "installer",
+      sshMode: "SSH_PASSWORD",
+      sshPassword: "not-visible-after-submit",
+      privateKeyPath: "",
+      elevationMode: "SUDO_PASSWORD",
+      elevationPassword: "also-not-visible-after-submit",
+    });
+    expect((screen.getByLabelText("SSH-пароль") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Пароль sudo") as HTMLInputElement).value).toBe("");
+    expect(screen.getByText("Доступны до 2026-09-14T14:00:00Z")).toBeTruthy();
+    expect(screen.queryByText("not-visible-after-submit")).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ import (
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
+	"platform-installer/internal/runtimesecret"
 )
 
 type snapshotReaderStub struct {
@@ -491,4 +492,52 @@ func fileDigest(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return fmt.Sprintf("sha256:%x", sha256.Sum256(content))
+}
+
+func TestSessionCredentialIsProjectBoundAndDoesNotMutateProject(t *testing.T) {
+	root := t.TempDir()
+	projectFile := filepath.Join(root, "project.yml")
+	if err := os.WriteFile(projectFile, []byte("name: safe\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := fileDigest(t, projectFile)
+	app := NewApp(unavailableProjectReader{}, lifecycleStub{})
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}}
+	status, err := app.SetSessionCredential(runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "not-in-result", ElevationMode: runtimesecret.ElevationSudo, ElevationPassword: "also-not-in-result"})
+	if err != nil || status.Status != runtimesecret.StatusPresent || status.Username != "installer" || status.SudoPasswordStatus != runtimesecret.SudoPresent {
+		t.Fatalf("set safe status=%#v err=%v", status, err)
+	}
+	if strings.Contains(fmt.Sprintf("%#v", status), "not-in-result") {
+		t.Fatalf("credential status disclosed secret: %#v", status)
+	}
+	if after := fileDigest(t, projectFile); after != before {
+		t.Fatalf("credential operation mutated project: before=%s after=%s", before, after)
+	}
+	closed := app.CloseProject()
+	if closed.Status != "NO_PROJECT" {
+		t.Fatalf("close=%#v", closed)
+	}
+	if _, err := app.GetSessionCredentialStatus(); err == nil || err.Error() != "PROJECT_NOT_OPEN" {
+		t.Fatalf("closed status error=%v", err)
+	}
+}
+
+func TestFailedOpenPreservesSessionCredential(t *testing.T) {
+	root := t.TempDir()
+	project := &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}
+	app := NewApp(unavailableProjectReader{}, lifecycleStub{err: errors.New("PROJECT_PATH_INVALID")})
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: project}
+	if _, err := app.SetSessionCredential(runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "write-only", ElevationMode: runtimesecret.ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if result := app.OpenProject(t.TempDir()); result.Status != "ERROR" {
+		t.Fatalf("open=%#v", result)
+	}
+	if status, err := app.GetSessionCredentialStatus(); err != nil || status.Status != runtimesecret.StatusPresent {
+		t.Fatalf("failed open cleared credential: %#v err=%v", status, err)
+	}
+	app.clearCredentialForReplacementLocked(t.TempDir(), &projectlifecycle.Project{ID: "project-bbbbbbbbbbbbbbbb"})
+	if status, err := app.GetSessionCredentialStatus(); err != nil || status.Status != runtimesecret.StatusMissing {
+		t.Fatalf("replacement did not clear credential: %#v err=%v", status, err)
+	}
 }

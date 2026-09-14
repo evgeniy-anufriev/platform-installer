@@ -7,15 +7,33 @@ import {
   CreateProject,
   DiscardEditSession,
   GetApplicationConfig,
+	GetSessionCredentialStatus,
   OpenProject,
   ReviewEditSession,
+	SetSessionCredential,
   StartEditSession,
+  ClearSessionCredential,
 } from "../wailsjs/go/main/App";
 import type { main } from "../wailsjs/go/models";
 
 export type OpenResult = main.ProjectOpenResult;
 export type EditResult = main.EditOperationResult;
 export type ConfigResult = main.ApplicationConfigResult;
+export type SessionCredentialStatus = {
+  status: string;
+  username?: string;
+  sshMode?: string;
+  sudoPasswordStatus: string;
+  expiresAt?: string;
+};
+export type SessionCredentialInput = {
+  username: string;
+  sshMode: "SSH_PASSWORD" | "SSH_PRIVATE_KEY";
+  sshPassword: string;
+  privateKeyPath: string;
+  elevationMode: "NONE" | "SUDO_PASSWORD";
+  elevationPassword: string;
+};
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
@@ -38,6 +56,11 @@ export interface ProjectBackend {
     planId: string,
   ): Promise<main.EditOperationResult>;
   discardEditSession(sessionId: string): Promise<main.EditOperationResult>;
+  getSessionCredentialStatus?(): Promise<SessionCredentialStatus>;
+  setSessionCredential?(
+    input: SessionCredentialInput,
+  ): Promise<SessionCredentialStatus>;
+  clearSessionCredential?(): Promise<SessionCredentialStatus>;
 }
 
 export const backend: ProjectBackend = {
@@ -53,4 +76,7 @@ export const backend: ProjectBackend = {
   reviewEditSession: ReviewEditSession,
   commitEditPlan: CommitEditPlan,
   discardEditSession: DiscardEditSession,
+  getSessionCredentialStatus: GetSessionCredentialStatus,
+  setSessionCredential: (input) => SetSessionCredential(input as never),
+  clearSessionCredential: ClearSessionCredential,
 };

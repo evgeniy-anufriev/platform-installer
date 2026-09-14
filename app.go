@@ -14,6 +14,7 @@ import (
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
+	"platform-installer/internal/runtimesecret"
 )
 
 // projectSnapshotReader is intentionally narrower than the future editor
@@ -125,6 +126,7 @@ type App struct {
 	editMu        sync.Mutex
 	config        appconfig.Config
 	configErr     error
+	secrets       *runtimesecret.Broker
 }
 
 type AppOption func(*App)
@@ -146,7 +148,7 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND")}
+	app := &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker()}
 	for _, option := range options {
 		option(app)
 	}
@@ -185,6 +187,12 @@ func (a *App) serverTypeDiagnostics(snapshot *coreadapter.Snapshot) []Applicatio
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+
+func (a *App) shutdown(context.Context) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.secrets.Close()
+}
 
 func (a *App) ChooseProject() ProjectOpenResult {
 	if a.ctx == nil {
@@ -225,6 +233,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 	if err != nil {
 		return a.failure(projectErrorCode(err))
 	}
+	a.secrets.Clear()
 	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts}
 	return a.current
 }
@@ -244,6 +253,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 		return a.failure(projectErrorCode(err))
 	}
 	if local.Classification == "EMPTY_MANAGED_PROJECT" {
+		a.clearCredentialForReplacementLocked(local.Root, local.Project)
 		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts}
 		return a.current
 	}
@@ -253,6 +263,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	if err != nil {
 		return a.failure(projectErrorCode(err))
 	}
+	a.clearCredentialForReplacementLocked(local.Root, local.Project)
 	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot, Diagnostics: a.serverTypeDiagnostics(snapshot)}
 	return a.current
 }
@@ -264,8 +275,54 @@ func (a *App) CloseProject() ProjectOpenResult {
 	if a.activeSession != "" {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
+	a.secrets.Clear()
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
+}
+
+// SetSessionCredential captures one target credential for the current project
+// in memory only. It does not contact an Execution Node or target host.
+func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Status, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return runtimesecret.Status{}, err
+	}
+	return a.secrets.Set(binding, input)
+}
+
+func (a *App) GetSessionCredentialStatus() (runtimesecret.Status, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return runtimesecret.Status{}, err
+	}
+	return a.secrets.Status(binding), nil
+}
+
+func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if _, err := a.credentialBindingLocked(); err != nil {
+		return runtimesecret.Status{}, err
+	}
+	a.secrets.Clear()
+	return runtimesecret.Status{Status: runtimesecret.StatusMissing, SudoPasswordStatus: runtimesecret.SudoNotProvided}, nil
+}
+
+func (a *App) credentialBindingLocked() (runtimesecret.Binding, error) {
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Root == "" || a.current.Project.ID == "" {
+		return runtimesecret.Binding{}, errors.New("PROJECT_NOT_OPEN")
+	}
+	return runtimesecret.Binding{Root: a.current.Root, ID: a.current.Project.ID}, nil
+}
+
+func (a *App) clearCredentialForReplacementLocked(root string, project *projectlifecycle.Project) {
+	if a.current.Status != "OPEN" || a.current.Project == nil || project == nil || a.current.Root != root || a.current.Project.ID != project.ID {
+		a.secrets.Clear()
+	}
 }
 
 type EditOperationResult struct {

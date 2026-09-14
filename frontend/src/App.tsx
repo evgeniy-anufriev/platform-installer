@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import type { EditResult, OpenResult, ProjectBackend } from "./backend";
+import type {
+  EditResult,
+  OpenResult,
+  ProjectBackend,
+  SessionCredentialInput,
+  SessionCredentialStatus,
+} from "./backend";
 import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
 import "./edit.css";
@@ -45,6 +51,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     Array<{ id: string; displayName: string }>
   >([]);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [credentialStatus, setCredentialStatus] =
+    useState<SessionCredentialStatus | null>(null);
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
   const snapshot = result.snapshot;
   const local = result.project;
@@ -85,6 +93,24 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       live = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    let live = true;
+    if (!projectOpen) {
+      setCredentialStatus(null);
+      return () => {
+        live = false;
+      };
+    }
+    if (!api.getSessionCredentialStatus) return () => { live = false; };
+    api
+      .getSessionCredentialStatus()
+      .then((value) => live && setCredentialStatus(value))
+      .catch(() => live && setCredentialStatus(null));
+    return () => {
+      live = false;
+    };
+  }, [api, projectOpen, result.root]);
 
   const clearDraft = () => {
     setEdit(null);
@@ -291,6 +317,18 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setLoading(false);
     }
   };
+  const setSessionCredential = async (input: SessionCredentialInput) => {
+    if (!api.setSessionCredential) throw new Error("SESSION_CREDENTIAL_UNAVAILABLE");
+    const status = await api.setSessionCredential(input);
+    setCredentialStatus(status);
+    return status;
+  };
+  const clearSessionCredential = async () => {
+    if (!api.clearSessionCredential) throw new Error("SESSION_CREDENTIAL_UNAVAILABLE");
+    const status = await api.clearSessionCredential();
+    setCredentialStatus(status);
+    return status;
+  };
 
   return (
     <div className="shell">
@@ -417,6 +455,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onDiscard={discard}
             commandCount={commandCount}
             onRefresh={refreshSnapshot}
+            credentialStatus={credentialStatus}
+            onSetCredential={setSessionCredential}
+            onClearCredential={clearSessionCredential}
           />
         )}
         {projectDialog && (

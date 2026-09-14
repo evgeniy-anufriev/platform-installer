@@ -14,6 +14,10 @@ export function ChooseProjectParent() {
   return window["go"]["main"]["App"]["ChooseProjectParent"]();
 }
 
+export function ClearSessionCredential() {
+  return window["go"]["main"]["App"]["ClearSessionCredential"]();
+}
+
 export function CloseProject() {
   return window["go"]["main"]["App"]["CloseProject"]();
 }
@@ -38,12 +42,20 @@ export function GetApplicationConfig() {
   return window["go"]["main"]["App"]["GetApplicationConfig"]();
 }
 
+export function GetSessionCredentialStatus() {
+  return window["go"]["main"]["App"]["GetSessionCredentialStatus"]();
+}
+
 export function OpenProject(arg1) {
   return window["go"]["main"]["App"]["OpenProject"](arg1);
 }
 
 export function ReviewEditSession(arg1) {
   return window["go"]["main"]["App"]["ReviewEditSession"](arg1);
+}
+
+export function SetSessionCredential(arg1) {
+  return window["go"]["main"]["App"]["SetSessionCredential"](arg1);
 }
 
 export function StartEditSession() {

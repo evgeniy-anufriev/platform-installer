@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { OpenResult } from "./backend";
+import type {
+  OpenResult,
+  SessionCredentialInput,
+  SessionCredentialStatus,
+} from "./backend";
 
 export type ServerIntent = Record<string, unknown> & {
   operation: "CreateServer" | "UpdateServer" | "DeleteServer";
@@ -81,6 +85,9 @@ export function ServersPage({
   onDiscard,
   commandCount,
   onRefresh,
+  credentialStatus,
+  onSetCredential,
+  onClearCredential,
 }: {
   snapshot: OpenResult["snapshot"];
   empty: boolean;
@@ -94,6 +101,11 @@ export function ServersPage({
   onDiscard: () => void;
   commandCount: number;
   onRefresh: () => void;
+  credentialStatus: SessionCredentialStatus | null;
+  onSetCredential: (
+    input: SessionCredentialInput,
+  ) => Promise<SessionCredentialStatus>;
+  onClearCredential: () => Promise<SessionCredentialStatus>;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const visible = rows(snapshot, intents);
@@ -130,6 +142,12 @@ export function ServersPage({
           {configError} Создание сервера и изменение типа недоступны.
         </section>
       )}
+      <SessionCredentialsPanel
+        status={credentialStatus}
+        disabled={busy}
+        onSet={onSetCredential}
+        onClear={onClearCredential}
+      />
       {visible.length === 0 ? (
         <section className="card empty">
           <h2>Серверов пока нет</h2>
@@ -270,6 +288,93 @@ export function ServersPage({
         />
       )}
     </>
+  );
+}
+
+function SessionCredentialsPanel({
+  status,
+  disabled,
+  onSet,
+  onClear,
+}: {
+  status: SessionCredentialStatus | null;
+  disabled: boolean;
+  onSet: (input: SessionCredentialInput) => Promise<SessionCredentialStatus>;
+  onClear: () => Promise<SessionCredentialStatus>;
+}) {
+  const [username, setUsername] = useState("");
+  const [sshMode, setSSHMode] = useState<"SSH_PASSWORD" | "SSH_PRIVATE_KEY">(
+    "SSH_PASSWORD",
+  );
+  const [sshPassword, setSSHPassword] = useState("");
+  const [privateKeyPath, setPrivateKeyPath] = useState("");
+  const [sudoEnabled, setSudoEnabled] = useState(false);
+  const [sudoPassword, setSudoPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const clearDraft = () => {
+    setSSHPassword("");
+    setPrivateKeyPath("");
+    setSudoPassword("");
+  };
+  useEffect(() => () => clearDraft(), []);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await onSet({
+        username,
+        sshMode,
+        sshPassword: sshMode === "SSH_PASSWORD" ? sshPassword : "",
+        privateKeyPath: sshMode === "SSH_PRIVATE_KEY" ? privateKeyPath : "",
+        elevationMode: sudoEnabled ? "SUDO_PASSWORD" : "NONE",
+        elevationPassword: sudoEnabled ? sudoPassword : "",
+      });
+      clearDraft();
+    } catch (reason) {
+      setError(typeof reason === "string" ? reason : "SESSION_CREDENTIAL_UNAVAILABLE");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const effectiveStatus = status?.status || "MISSING";
+  return (
+    <section className="card session-credentials">
+      <div>
+        <h2>Учётные данные сеанса</h2>
+        <p className="muted">
+          Применяются ко всем серверам только в текущем сеансе и не записываются в проект.
+        </p>
+      </div>
+      <form onSubmit={submit}>
+        <label>
+          Технический пользователь
+          <input value={username} onChange={(event) => setUsername(event.target.value)} required disabled={busy || disabled} />
+        </label>
+        <label>
+          SSH-аутентификация
+          <select value={sshMode} onChange={(event) => setSSHMode(event.target.value as "SSH_PASSWORD" | "SSH_PRIVATE_KEY")} disabled={busy || disabled}>
+            <option value="SSH_PASSWORD">Пароль</option>
+            <option value="SSH_PRIVATE_KEY">Приватный ключ PEM</option>
+          </select>
+        </label>
+        {sshMode === "SSH_PASSWORD" ? (
+          <label>SSH-пароль<input type="password" value={sshPassword} onChange={(event) => setSSHPassword(event.target.value)} required disabled={busy || disabled} autoComplete="off" /></label>
+        ) : (
+          <label>Абсолютный путь к приватному ключу<input value={privateKeyPath} onChange={(event) => setPrivateKeyPath(event.target.value)} required disabled={busy || disabled} autoComplete="off" /></label>
+        )}
+        <label className="checkbox-label"><input type="checkbox" checked={sudoEnabled} onChange={(event) => setSudoEnabled(event.target.checked)} disabled={busy || disabled} /> Требуется пароль sudo</label>
+        {sudoEnabled && <label>Пароль sudo<input type="password" value={sudoPassword} onChange={(event) => setSudoPassword(event.target.value)} required disabled={busy || disabled} autoComplete="off" /></label>}
+        {error && <p className="field-error" role="alert">{error}</p>}
+        <div className="actions">
+          <button type="submit" disabled={busy || disabled}>Сохранить в сеансе</button>
+          <button type="button" className="outline" onClick={async () => { setBusy(true); setError(""); try { await onClear(); clearDraft(); } catch (reason) { setError(typeof reason === "string" ? reason : "SESSION_CREDENTIAL_UNAVAILABLE"); } finally { setBusy(false); } }} disabled={busy || disabled}>Очистить</button>
+        </div>
+      </form>
+      <p className="muted" aria-live="polite">{effectiveStatus === "PRESENT" ? `Доступны до ${status?.expiresAt || ""}` : effectiveStatus === "EXPIRED" ? "Срок хранения учётных данных истёк" : "Учётные данные не заданы"}</p>
+    </section>
   );
 }
 function labelType(value: string, types: ServerType[]) {

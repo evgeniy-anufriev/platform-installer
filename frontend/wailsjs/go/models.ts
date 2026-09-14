@@ -834,3 +834,48 @@ export namespace projectlifecycle {
     }
   }
 }
+
+export namespace runtimesecret {
+  export class Input {
+    username: string;
+    sshMode: string;
+    sshPassword: string;
+    privateKeyPath: string;
+    elevationMode: string;
+    elevationPassword: string;
+
+    static createFrom(source: any = {}) {
+      return new Input(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.username = source["username"];
+      this.sshMode = source["sshMode"];
+      this.sshPassword = source["sshPassword"];
+      this.privateKeyPath = source["privateKeyPath"];
+      this.elevationMode = source["elevationMode"];
+      this.elevationPassword = source["elevationPassword"];
+    }
+  }
+  export class Status {
+    status: string;
+    username?: string;
+    sshMode?: string;
+    sudoPasswordStatus: string;
+    expiresAt?: string;
+
+    static createFrom(source: any = {}) {
+      return new Status(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.username = source["username"];
+      this.sshMode = source["sshMode"];
+      this.sudoPasswordStatus = source["sudoPasswordStatus"];
+      this.expiresAt = source["expiresAt"];
+    }
+  }
+}

@@ -207,8 +207,10 @@ Go is authoritative for application-level input shape:
   to be one readable regular file are rejected safely.
 
 E3 does not authenticate the credential or infer target capability. Every
-private key is parsed before publication with the existing
-`golang.org/x/crypto/ssh` parser. Invalid input returns
+private key is parsed before publication with the Go standard-library parser;
+the first implementation accepts unencrypted regular PEM RSA/ECDSA private
+keys and deliberately rejects other encodings rather than expanding the
+vendored dependency graph for a UI-only session cache. Invalid input returns
 `SESSION_PRIVATE_KEY_INVALID`; encrypted input returns
 `SESSION_PRIVATE_KEY_ENCRYPTED_UNSUPPORTED`. Parser messages and key-derived
 details are never returned. Encrypted-key passphrases are not requested,
@@ -442,7 +444,7 @@ coordinator, project-context generation transaction, scheduler subsystem or one
 goroutine per consumer is unnecessary and excluded.
 
 Private-key selection uses the same setter and broker rather than a pending
-selection token, staging store or second credential lifecycle. The already
-present SSH parser gives deterministic structural validation without a custom
-key model. Durable OS credential-store integration and encrypted-key
+selection token, staging store or second credential lifecycle. The Go
+standard-library PEM parser gives deterministic structural validation without a
+custom key model or new dependency. Durable OS credential-store integration and encrypted-key
 passphrases remain separate owner decisions backed by a concrete consumer.
