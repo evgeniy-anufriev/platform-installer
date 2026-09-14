@@ -485,6 +485,24 @@ func projectErrorMessage(code string) string {
 		return "Проверка черновика уже выполняется."
 	case "EDIT_OPERATION_NOT_AVAILABLE":
 		return "Эта операция ещё не доступна в текущем UI milestone."
+	case "INVALID_EDIT_COMMAND", "INVALID_VALUE":
+		return "Изменение сервера содержит некорректное значение. Исправьте поля и повторите проверку."
+	case "SERVER_METADATA_REQUIRED":
+		return "Для редактирования сервера заполните обязательные метаданные."
+	case "REFERENCE_IN_USE":
+		return "Удаление заблокировано: сервер остаётся в канонических ссылках проекта."
+	case "EDIT_SHADOWED", "SERVER_RECREATE_IN_SESSION_UNSUPPORTED":
+		return "Черновик содержит конфликтующие изменения сервера. Отмените его и начните заново."
+	case "EDIT_SESSION_EMPTY", "EDIT_SESSION_COMMANDS_UNSUPPORTED":
+		return "В черновике нет поддерживаемых изменений для проверки."
+	case "PLAN_EXPIRED":
+		return "План изменений истёк. Проверьте черновик заново перед сохранением."
+	case "PROJECT_LOCKED":
+		return "Проект занят другой операцией. Повторите сохранение позже."
+	case "STAGING_FAILED", "CORE_SNAPSHOT_FAILED", "VALIDATION_BLOCKED":
+		return "Core не смог безопасно проверить полный candidate проекта. Проект на диске не изменён."
+	case "WRITE_FAILED", "RECOVERY_FAILED", "ROLLBACK_FAILED", "PATH_UNSAFE":
+		return "Сохранение проекта не выполнено безопасно. Проверьте состояние проекта перед повтором."
 	case "PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED":
 		return "Активный Execution Node не поддерживает проверку edit candidate."
 	case "WRITE_OWNERSHIP_REQUIRED", "WRITE_NOT_ALLOWED", "DOCUMENT_CHANGED", "PROJECT_CHANGED":

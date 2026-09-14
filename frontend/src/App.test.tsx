@@ -92,6 +92,51 @@ async function openServers(
 }
 
 describe("UI-01E2 server editor", () => {
+  it("keeps a Core-opened project read-only until a server intent is added", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    expect(await screen.findByText("Проверено Core")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Топология" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
+  });
+
+  it("requires a name before creating a metadata-only project", async () => {
+    const value = api({
+      chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),
+      createProject: vi.fn().mockResolvedValue(emptyProject),
+    });
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" })[0],
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Выбрать parent" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Заполните «Название проекта»",
+    );
+    expect(value.createProject).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByLabelText("Название проекта"), "Test");
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
+    );
+    expect(value.createProject).toHaveBeenCalledWith({
+      projectRoot: "C:/Projects\\Test",
+      displayName: "Test",
+      compatibilitySourceId: "default",
+    });
+  });
+
   it("adds a first server as a transient v1alpha3 CreateServer intent", async () => {
     const value = api();
     await openServers(value, emptyProject as unknown as OpenResult);
@@ -317,7 +362,14 @@ describe("UI-01E2 server editor", () => {
           commitAllowed: true,
           validation: { status: "PASS", findings: [] },
           semanticChanges: [],
-          affectedDocuments: [],
+          affectedDocuments: [
+            {
+              logicalPath: "inventory/hosts.yml",
+              before: { state: "PRESENT" },
+              after: { state: "PRESENT" },
+            },
+          ],
+          impacts: ["Inventory changes require a later apply."],
         },
       }),
       commitEditPlan: vi.fn().mockResolvedValue({
@@ -337,8 +389,14 @@ describe("UI-01E2 server editor", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Проверить изменения" }),
     );
+    expect(
+      await screen.findByRole("heading", { name: "Затрагиваемые документы" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Inventory changes require a later apply."),
+    ).toBeTruthy();
     await userEvent.click(
-      await screen.findByRole("button", { name: "Сохранить проект" }),
+      screen.getByRole("button", { name: "Сохранить проект" }),
     );
     expect(
       await screen.findByRole("heading", {

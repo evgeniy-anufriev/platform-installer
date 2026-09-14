@@ -631,6 +631,29 @@ function ReviewDialog({
                 <li key={index}>{change.safeSummary}</li>
               ))}
             </ul>
+            {plan.affectedDocuments && plan.affectedDocuments.length > 0 && (
+              <>
+                <h2>Затрагиваемые документы</h2>
+                <ul>
+                  {plan.affectedDocuments.map((document) => (
+                    <li key={document.logicalPath}>
+                      {document.logicalPath}: {document.before?.state} →{" "}
+                      {document.after?.state}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {plan.impacts && plan.impacts.length > 0 && (
+              <>
+                <h2>Последствия</h2>
+                <ul>
+                  {plan.impacts.map((impact) => (
+                    <li key={impact}>{impact}</li>
+                  ))}
+                </ul>
+              </>
+            )}
             <ul>
               {findings.map((finding, index) => (
                 <li key={index}>

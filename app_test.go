@@ -112,6 +112,14 @@ func TestAppReturnsSafeFailure(t *testing.T) {
 	}
 }
 
+func TestServerWriterBlockersHaveSafeMessages(t *testing.T) {
+	for _, code := range []string{"INVALID_EDIT_COMMAND", "SERVER_METADATA_REQUIRED", "REFERENCE_IN_USE", "EDIT_SHADOWED", "PLAN_EXPIRED", "WRITE_FAILED"} {
+		if message := projectErrorMessage(code); message == "" || message == projectErrorMessage("UNRELATED_UNKNOWN_ERROR") {
+			t.Fatalf("code=%q message=%q", code, message)
+		}
+	}
+}
+
 func TestApplicationConfigFailureDoesNotBlockReadOnlyOpen(t *testing.T) {
 	snapshot := &coreadapter.Snapshot{Status: "PASS", ProjectRevision: "sha256:revision", SnapshotFingerprint: "sha256:fingerprint", Hosts: map[string]map[string]any{"node1": {"type": "scada"}}}
 	app := NewApp(snapshotReaderStub{snapshot: snapshot}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "MANAGED_PROJECT"}})
