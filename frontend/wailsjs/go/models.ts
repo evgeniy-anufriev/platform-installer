@@ -686,6 +686,28 @@ export namespace main {
       return a;
     }
   }
+  export class ExecutionNodeContext {
+    status: string;
+    selectionKind: string;
+    selectionSource: string;
+    selectedHostId?: string;
+    safeLabel?: string;
+    locked: boolean;
+
+    static createFrom(source: any = {}) {
+      return new ExecutionNodeContext(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.selectionKind = source["selectionKind"];
+      this.selectionSource = source["selectionSource"];
+      this.selectedHostId = source["selectedHostId"];
+      this.safeLabel = source["safeLabel"];
+      this.locked = source["locked"];
+    }
+  }
 
   export class ProjectOpenResult {
     status: string;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type {
   EditResult,
+  ExecutionNodeContext,
   OpenResult,
   ProjectBackend,
   SessionCredentialInput,
@@ -53,6 +54,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [configError, setConfigError] = useState<string | null>(null);
   const [credentialStatus, setCredentialStatus] =
     useState<SessionCredentialStatus | null>(null);
+  const [executionNode, setExecutionNode] =
+    useState<ExecutionNodeContext | null>(null);
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
   const snapshot = result.snapshot;
   const local = result.project;
@@ -102,7 +105,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         live = false;
       };
     }
-    if (!api.getSessionCredentialStatus) return () => { live = false; };
+    if (!api.getSessionCredentialStatus)
+      return () => {
+        live = false;
+      };
     api
       .getSessionCredentialStatus()
       .then((value) => live && setCredentialStatus(value))
@@ -111,6 +117,23 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       live = false;
     };
   }, [api, projectOpen, result.root]);
+
+  useEffect(() => {
+    let live = true;
+    if (!projectOpen || !api.getExecutionNodeContext) {
+      setExecutionNode(null);
+      return () => {
+        live = false;
+      };
+    }
+    api
+      .getExecutionNodeContext()
+      .then((value) => live && setExecutionNode(value))
+      .catch(() => live && setExecutionNode(null));
+    return () => {
+      live = false;
+    };
+  }, [api, projectOpen, result.root, commandCount]);
 
   const clearDraft = () => {
     setEdit(null);
@@ -318,16 +341,25 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const setSessionCredential = async (input: SessionCredentialInput) => {
-    if (!api.setSessionCredential) throw new Error("SESSION_CREDENTIAL_UNAVAILABLE");
+    if (!api.setSessionCredential)
+      throw new Error("SESSION_CREDENTIAL_UNAVAILABLE");
     const status = await api.setSessionCredential(input);
     setCredentialStatus(status);
     return status;
   };
   const clearSessionCredential = async () => {
-    if (!api.clearSessionCredential) throw new Error("SESSION_CREDENTIAL_UNAVAILABLE");
+    if (!api.clearSessionCredential)
+      throw new Error("SESSION_CREDENTIAL_UNAVAILABLE");
     const status = await api.clearSessionCredential();
     setCredentialStatus(status);
     return status;
+  };
+  const selectExecutionNode = async (hostId: string) => {
+    if (!api.selectExecutionNode)
+      throw new Error("EXECUTION_NODE_SELECTION_UNAVAILABLE");
+    const context = await api.selectExecutionNode(hostId);
+    setExecutionNode(context);
+    return context;
   };
 
   return (
@@ -373,6 +405,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <div className="readonly">
               {empty ? "Не настроен" : "Проверено Core"}
             </div>
+          )}
+          {projectOpen && (
+            <button
+              className="execution-node-badge"
+              aria-label="Открыть Execution Node"
+              onClick={() => setPage("servers")}
+              title="Открыть Execution Node на странице Серверы"
+            >
+              Execution Node: {executionNode?.status || "NOT_CONFIGURED"}
+              {executionNode?.safeLabel ? ` · ${executionNode.safeLabel}` : ""}
+            </button>
           )}
           <button
             className="outline"
@@ -458,6 +501,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             credentialStatus={credentialStatus}
             onSetCredential={setSessionCredential}
             onClearCredential={clearSessionCredential}
+            executionNode={executionNode}
+            onSelectExecutionNode={selectExecutionNode}
           />
         )}
         {projectDialog && (

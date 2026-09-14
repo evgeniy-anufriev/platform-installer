@@ -7,10 +7,12 @@ import {
   CreateProject,
   DiscardEditSession,
   GetApplicationConfig,
-	GetSessionCredentialStatus,
+  GetExecutionNodeContext,
+  GetSessionCredentialStatus,
   OpenProject,
   ReviewEditSession,
-	SetSessionCredential,
+  SetSessionCredential,
+  SelectExecutionNode,
   StartEditSession,
   ClearSessionCredential,
 } from "../wailsjs/go/main/App";
@@ -33,6 +35,14 @@ export type SessionCredentialInput = {
   privateKeyPath: string;
   elevationMode: "NONE" | "SUDO_PASSWORD";
   elevationPassword: string;
+};
+export type ExecutionNodeContext = {
+  status: string;
+  selectionKind: string;
+  selectionSource: string;
+  selectedHostId?: string;
+  safeLabel?: string;
+  locked: boolean;
 };
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
@@ -61,6 +71,8 @@ export interface ProjectBackend {
     input: SessionCredentialInput,
   ): Promise<SessionCredentialStatus>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
+  getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
+  selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
 }
 
 export const backend: ProjectBackend = {
@@ -79,4 +91,6 @@ export const backend: ProjectBackend = {
   getSessionCredentialStatus: GetSessionCredentialStatus,
   setSessionCredential: (input) => SetSessionCredential(input as never),
   clearSessionCredential: ClearSessionCredential,
+  getExecutionNodeContext: GetExecutionNodeContext,
+  selectExecutionNode: SelectExecutionNode,
 };

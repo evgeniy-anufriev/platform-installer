@@ -127,6 +127,7 @@ type App struct {
 	config        appconfig.Config
 	configErr     error
 	secrets       *runtimesecret.Broker
+	execution     *executionNodeContextStore
 }
 
 type AppOption func(*App)
@@ -140,6 +141,17 @@ func WithApplicationConfig(config appconfig.Config, err error) AppOption {
 	}
 }
 
+// WithExplicitExecutionNode supplies only a safe display identity for the
+// existing startup-configured Execution Node. It never changes its transport.
+func WithExplicitExecutionNode(id, address string) AppOption {
+	return func(app *App) {
+		if id == "" || address == "" {
+			return
+		}
+		app.execution.external = &executionNodeCandidate{label: id + " · " + address}
+	}
+}
+
 type projectLifecycle interface {
 	CreateProject(context.Context, projectlifecycle.CreateProjectRequest) (projectlifecycle.Result, error)
 	OpenProject(context.Context, string) (projectlifecycle.Result, error)
@@ -148,7 +160,7 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker()}
+	app := &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate())}
 	for _, option := range options {
 		option(app)
 	}
@@ -192,6 +204,7 @@ func (a *App) shutdown(context.Context) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.secrets.Close()
+	a.execution.clear()
 }
 
 func (a *App) ChooseProject() ProjectOpenResult {
@@ -235,6 +248,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 	}
 	a.secrets.Clear()
 	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts}
+	a.bindExecutionLocked(result.Root, result.Project, nil)
 	return a.current
 }
 
@@ -255,6 +269,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	if local.Classification == "EMPTY_MANAGED_PROJECT" {
 		a.clearCredentialForReplacementLocked(local.Root, local.Project)
 		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts}
+		a.bindExecutionLocked(local.Root, local.Project, nil)
 		return a.current
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -265,6 +280,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	}
 	a.clearCredentialForReplacementLocked(local.Root, local.Project)
 	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot, Diagnostics: a.serverTypeDiagnostics(snapshot)}
+	a.bindExecutionLocked(local.Root, local.Project, snapshot.Hosts)
 	return a.current
 }
 
@@ -276,6 +292,7 @@ func (a *App) CloseProject() ProjectOpenResult {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
 	a.secrets.Clear()
+	a.execution.clear()
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
 }
@@ -310,6 +327,31 @@ func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 	}
 	a.secrets.Clear()
 	return runtimesecret.Status{Status: runtimesecret.StatusMissing, SudoPasswordStatus: runtimesecret.SudoNotProvided}, nil
+}
+
+// GetExecutionNodeContext exposes only app-memory, non-secret selection state.
+func (a *App) GetExecutionNodeContext() (ExecutionNodeContext, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.current.Status != "OPEN" || a.current.Project == nil {
+		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
+	}
+	return a.execution.context, nil
+}
+
+// SelectExecutionNode changes only the current safe project-server selection.
+func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.current.Status != "OPEN" || a.current.Project == nil {
+		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
+	}
+	if err := a.execution.selectProjectServer(hostID); err != nil {
+		return ExecutionNodeContext{}, err
+	}
+	return a.execution.context, nil
 }
 
 func (a *App) credentialBindingLocked() (runtimesecret.Binding, error) {
@@ -393,6 +435,7 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 	if err != nil {
 		return a.editFailure(err)
 	}
+	a.execution.applyCommand(command.HostID, command.Operation, command.Address)
 	result := EditOperationResult{Status: "EDITING", Session: &session}
 	if command.ServerType != "" && a.configErr == nil && !a.config.HasServerType(command.ServerType) {
 		result.Diagnostics = []ApplicationDiagnostic{{Code: "UNKNOWN_CONFIGURED_SERVER_TYPE", Severity: "WARNING", HostID: command.HostID, SafeMessage: "Server type is not present in the current application configuration"}}
@@ -448,6 +491,7 @@ func (a *App) CommitEditPlan(sessionID, planID string) EditOperationResult {
 			a.current.Snapshot = snapshot
 			a.current.Diagnostics = a.serverTypeDiagnostics(snapshot)
 			a.current.Classification = projectlifecycle.ClassificationManaged
+			a.bindExecutionLocked(a.current.Root, a.current.Project, snapshot.Hosts)
 		} else if result.Status == "COMMITTED_REFRESH_FAILED" {
 			// The transaction committed, but no post-commit Core projection is
 			// authoritative. Never leave a previous snapshot visible as current.
@@ -474,13 +518,30 @@ func (a *App) DiscardEditSession(sessionID string) EditOperationResult {
 		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
 	a.activeSession, a.editor = "", nil
+	a.execution.discardDraft(snapshotHosts(a.current.Snapshot))
 	return EditOperationResult{Status: "DISCARDED"}
 }
 
 func (a *App) reconcileEditSessionLocked() {
 	if a.activeSession != "" && !a.sessions.Active(a.activeSession) {
 		a.activeSession, a.editor = "", nil
+		a.execution.discardDraft(snapshotHosts(a.current.Snapshot))
 	}
+}
+
+func snapshotHosts(snapshot *coreadapter.Snapshot) map[string]map[string]any {
+	if snapshot == nil {
+		return nil
+	}
+	return snapshot.Hosts
+}
+
+func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
+	if project == nil || project.ID == "" {
+		a.execution.clear()
+		return
+	}
+	a.execution.bind(root, project.ID, hosts)
 }
 
 func (a *App) operationContext(timeout time.Duration) (context.Context, context.CancelFunc) {

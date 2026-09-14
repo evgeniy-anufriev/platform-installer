@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  ExecutionNodeContext,
   OpenResult,
   SessionCredentialInput,
   SessionCredentialStatus,
@@ -88,6 +89,8 @@ export function ServersPage({
   credentialStatus,
   onSetCredential,
   onClearCredential,
+  executionNode,
+  onSelectExecutionNode,
 }: {
   snapshot: OpenResult["snapshot"];
   empty: boolean;
@@ -106,6 +109,8 @@ export function ServersPage({
     input: SessionCredentialInput,
   ) => Promise<SessionCredentialStatus>;
   onClearCredential: () => Promise<SessionCredentialStatus>;
+  executionNode: ExecutionNodeContext | null;
+  onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const visible = rows(snapshot, intents);
@@ -148,90 +153,98 @@ export function ServersPage({
         onSet={onSetCredential}
         onClear={onClearCredential}
       />
-      {visible.length === 0 ? (
-        <section className="card empty">
-          <h2>Серверов пока нет</h2>
-          <p>
-            Добавление сервера создаёт typed intent. Файлы появятся только после
-            проверки и общего сохранения.
-          </p>
-          <button
-            onClick={() => setDialog({ mode: "add" })}
-            disabled={busy || !!configError}
-          >
-            Добавить первый сервер
-          </button>
-        </section>
-      ) : (
-        <section className="card server-table">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Тип</th>
-                <th>Желаемое имя</th>
-                <th>Адрес</th>
-                <th>SSH</th>
-                <th>Состояние</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((row) => {
-                const created = row.state === "new";
-                const disableCrud =
-                  busy || row.state === "deleting" || (firstSave && created);
-                return (
-                  <tr
-                    key={row.hostId}
-                    className={row.state ? `draft-${row.state}` : ""}
-                  >
-                    <td>
-                      <b>{row.hostId}</b>
-                    </td>
-                    <td>{labelType(row.type, serverTypes)}</td>
-                    <td>{row.desiredHostname || <em>Не задано</em>}</td>
-                    <td>{row.address}</td>
-                    <td>{row.port}</td>
-                    <td>
-                      {row.state === "new"
-                        ? "Новый"
-                        : row.state === "changed"
-                          ? "Изменён"
-                          : row.state === "deleting"
-                            ? "Будет удалён"
-                            : "Сохранён"}
-                    </td>
-                    <td>
-                      {firstSave && created ? (
-                        <small>Доступно после первого сохранения</small>
-                      ) : (
-                        <>
-                          <button
-                            className="link"
-                            onClick={() => setDialog({ mode: "edit", row })}
-                            disabled={disableCrud}
-                          >
-                            Изменить
-                          </button>
-                          {" · "}
-                          <button
-                            className="link danger"
-                            onClick={() => setDialog({ mode: "delete", row })}
-                            disabled={disableCrud}
-                          >
-                            Удалить
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </section>
-      )}
+      <div className="servers-layout">
+        {visible.length === 0 ? (
+          <section className="card empty server-list-scroll">
+            <h2>Серверов пока нет</h2>
+            <p>
+              Добавление сервера создаёт typed intent. Файлы появятся только
+              после проверки и общего сохранения.
+            </p>
+            <button
+              onClick={() => setDialog({ mode: "add" })}
+              disabled={busy || !!configError}
+            >
+              Добавить первый сервер
+            </button>
+          </section>
+        ) : (
+          <section className="card server-table server-list-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Тип</th>
+                  <th>Желаемое имя</th>
+                  <th>Адрес</th>
+                  <th>SSH</th>
+                  <th>Состояние</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((row) => {
+                  const created = row.state === "new";
+                  const disableCrud =
+                    busy || row.state === "deleting" || (firstSave && created);
+                  return (
+                    <tr
+                      key={row.hostId}
+                      className={row.state ? `draft-${row.state}` : ""}
+                    >
+                      <td>
+                        <b>{row.hostId}</b>
+                      </td>
+                      <td>{labelType(row.type, serverTypes)}</td>
+                      <td>{row.desiredHostname || <em>Не задано</em>}</td>
+                      <td>{row.address}</td>
+                      <td>{row.port}</td>
+                      <td>
+                        {row.state === "new"
+                          ? "Новый"
+                          : row.state === "changed"
+                            ? "Изменён"
+                            : row.state === "deleting"
+                              ? "Будет удалён"
+                              : "Сохранён"}
+                      </td>
+                      <td>
+                        {firstSave && created ? (
+                          <small>Доступно после первого сохранения</small>
+                        ) : (
+                          <>
+                            <button
+                              className="link"
+                              onClick={() => setDialog({ mode: "edit", row })}
+                              disabled={disableCrud}
+                            >
+                              Изменить
+                            </button>
+                            {" · "}
+                            <button
+                              className="link danger"
+                              onClick={() => setDialog({ mode: "delete", row })}
+                              disabled={disableCrud}
+                            >
+                              Удалить
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+        )}
+        <ExecutionNodePanel
+          context={executionNode}
+          rows={visible.filter((row) => row.state !== "deleting")}
+          disabled={busy}
+          onSelect={onSelectExecutionNode}
+        />
+      </div>
       {commandCount > 0 && (
         <section className="card draft-actions">
           <p>
@@ -291,6 +304,113 @@ export function ServersPage({
   );
 }
 
+function ExecutionNodePanel({
+  context,
+  rows,
+  disabled,
+  onSelect,
+}: {
+  context: ExecutionNodeContext | null;
+  rows: Row[];
+  disabled: boolean;
+  onSelect: (hostId: string) => Promise<ExecutionNodeContext>;
+}) {
+  const [changing, setChanging] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const effective: Partial<ExecutionNodeContext> & {
+    status: string;
+    selectionSource: string;
+  } = context || {
+    status: "NOT_CONFIGURED",
+    selectionSource: "NONE",
+  };
+  const choose = async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onSelect(selected);
+      setChanging(false);
+    } catch (reason) {
+      setError(
+        typeof reason === "string"
+          ? reason
+          : "EXECUTION_NODE_SELECTION_UNAVAILABLE",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card execution-node-panel" aria-labelledby="execution-node-heading">
+      <div className="execution-node-heading">
+        <h2 id="execution-node-heading">Execution Node</h2>
+        <span className="readonly">{effective.status}</span>
+      </div>
+      <div className="execution-node-detail">
+        <span>Выбранный узел</span>
+        <b>{effective.safeLabel || "Не выбран"}</b>
+        <span>Источник выбора</span>
+        <b>{effective.selectionSource}</b>
+      </div>
+      <p className="muted">
+        Выбор хранится только в приложении и не записывается в проект. Проверка
+        готовности и подготовка появятся в следующем этапе.
+      </p>
+      {!changing ? (
+        <button
+          className="outline"
+          aria-label="Выбрать Execution Node"
+          onClick={() => {
+            setSelected(context?.selectedHostId || rows[0]?.hostId || "");
+            setChanging(true);
+          }}
+          disabled={disabled || rows.length === 0}
+        >
+          Выбрать Execution Node
+        </button>
+      ) : (
+        <div className="execution-node-change">
+          <label>
+            Сервер проекта
+            <select
+              aria-label="Сервер проекта для Execution Node"
+              value={selected}
+              onChange={(event) => setSelected(event.target.value)}
+              disabled={busy || disabled}
+            >
+              {rows.map((row) => (
+                <option key={row.hostId} value={row.hostId}>
+                  {row.hostId} · {row.address}
+                </option>
+              ))}
+            </select>
+          </label>
+          {error && (
+            <p className="field-error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="actions">
+            <button
+              className="outline"
+              onClick={() => setChanging(false)}
+              disabled={busy}
+            >
+              Отмена
+            </button>
+            <button onClick={choose} disabled={busy || disabled || !selected}>
+              Выбрать
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SessionCredentialsPanel({
   status,
   disabled,
@@ -334,7 +454,9 @@ function SessionCredentialsPanel({
       });
       clearDraft();
     } catch (reason) {
-      setError(typeof reason === "string" ? reason : "SESSION_CREDENTIAL_UNAVAILABLE");
+      setError(
+        typeof reason === "string" ? reason : "SESSION_CREDENTIAL_UNAVAILABLE",
+      );
     } finally {
       setBusy(false);
     }
@@ -345,35 +467,122 @@ function SessionCredentialsPanel({
       <div>
         <h2>Учётные данные сеанса</h2>
         <p className="muted">
-          Применяются ко всем серверам только в текущем сеансе и не записываются в проект.
+          Применяются ко всем серверам только в текущем сеансе и не записываются
+          в проект.
         </p>
       </div>
       <form onSubmit={submit}>
         <label>
           Технический пользователь
-          <input value={username} onChange={(event) => setUsername(event.target.value)} required disabled={busy || disabled} />
+          <input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            required
+            disabled={busy || disabled}
+          />
         </label>
         <label>
           SSH-аутентификация
-          <select value={sshMode} onChange={(event) => setSSHMode(event.target.value as "SSH_PASSWORD" | "SSH_PRIVATE_KEY")} disabled={busy || disabled}>
+          <select
+            value={sshMode}
+            onChange={(event) =>
+              setSSHMode(
+                event.target.value as "SSH_PASSWORD" | "SSH_PRIVATE_KEY",
+              )
+            }
+            disabled={busy || disabled}
+          >
             <option value="SSH_PASSWORD">Пароль</option>
             <option value="SSH_PRIVATE_KEY">Приватный ключ PEM</option>
           </select>
         </label>
         {sshMode === "SSH_PASSWORD" ? (
-          <label>SSH-пароль<input type="password" value={sshPassword} onChange={(event) => setSSHPassword(event.target.value)} required disabled={busy || disabled} autoComplete="off" /></label>
+          <label>
+            SSH-пароль
+            <input
+              type="password"
+              value={sshPassword}
+              onChange={(event) => setSSHPassword(event.target.value)}
+              required
+              disabled={busy || disabled}
+              autoComplete="off"
+            />
+          </label>
         ) : (
-          <label>Абсолютный путь к приватному ключу<input value={privateKeyPath} onChange={(event) => setPrivateKeyPath(event.target.value)} required disabled={busy || disabled} autoComplete="off" /></label>
+          <label>
+            Абсолютный путь к приватному ключу
+            <input
+              value={privateKeyPath}
+              onChange={(event) => setPrivateKeyPath(event.target.value)}
+              required
+              disabled={busy || disabled}
+              autoComplete="off"
+            />
+          </label>
         )}
-        <label className="checkbox-label"><input type="checkbox" checked={sudoEnabled} onChange={(event) => setSudoEnabled(event.target.checked)} disabled={busy || disabled} /> Требуется пароль sudo</label>
-        {sudoEnabled && <label>Пароль sudo<input type="password" value={sudoPassword} onChange={(event) => setSudoPassword(event.target.value)} required disabled={busy || disabled} autoComplete="off" /></label>}
-        {error && <p className="field-error" role="alert">{error}</p>}
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={sudoEnabled}
+            onChange={(event) => setSudoEnabled(event.target.checked)}
+            disabled={busy || disabled}
+          />{" "}
+          Требуется пароль sudo
+        </label>
+        {sudoEnabled && (
+          <label>
+            Пароль sudo
+            <input
+              type="password"
+              value={sudoPassword}
+              onChange={(event) => setSudoPassword(event.target.value)}
+              required
+              disabled={busy || disabled}
+              autoComplete="off"
+            />
+          </label>
+        )}
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
         <div className="actions">
-          <button type="submit" disabled={busy || disabled}>Сохранить в сеансе</button>
-          <button type="button" className="outline" onClick={async () => { setBusy(true); setError(""); try { await onClear(); clearDraft(); } catch (reason) { setError(typeof reason === "string" ? reason : "SESSION_CREDENTIAL_UNAVAILABLE"); } finally { setBusy(false); } }} disabled={busy || disabled}>Очистить</button>
+          <button type="submit" disabled={busy || disabled}>
+            Сохранить в сеансе
+          </button>
+          <button
+            type="button"
+            className="outline"
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                await onClear();
+                clearDraft();
+              } catch (reason) {
+                setError(
+                  typeof reason === "string"
+                    ? reason
+                    : "SESSION_CREDENTIAL_UNAVAILABLE",
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+            disabled={busy || disabled}
+          >
+            Очистить
+          </button>
         </div>
       </form>
-      <p className="muted" aria-live="polite">{effectiveStatus === "PRESENT" ? `Доступны до ${status?.expiresAt || ""}` : effectiveStatus === "EXPIRED" ? "Срок хранения учётных данных истёк" : "Учётные данные не заданы"}</p>
+      <p className="muted" aria-live="polite">
+        {effectiveStatus === "PRESENT"
+          ? `Доступны до ${status?.expiresAt || ""}`
+          : effectiveStatus === "EXPIRED"
+            ? "Срок хранения учётных данных истёк"
+            : "Учётные данные не заданы"}
+      </p>
     </section>
   );
 }

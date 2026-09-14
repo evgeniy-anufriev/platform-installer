@@ -35,6 +35,8 @@ export function DiscardEditSession(
 
 export function GetApplicationConfig(): Promise<main.ApplicationConfigResult>;
 
+export function GetExecutionNodeContext(): Promise<main.ExecutionNodeContext>;
+
 export function GetSessionCredentialStatus(): Promise<runtimesecret.Status>;
 
 export function OpenProject(arg1: string): Promise<main.ProjectOpenResult>;
@@ -42,6 +44,10 @@ export function OpenProject(arg1: string): Promise<main.ProjectOpenResult>;
 export function ReviewEditSession(
   arg1: string,
 ): Promise<main.EditOperationResult>;
+
+export function SelectExecutionNode(
+  arg1: string,
+): Promise<main.ExecutionNodeContext>;
 
 export function SetSessionCredential(
   arg1: runtimesecret.Input,

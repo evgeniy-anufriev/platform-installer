@@ -42,6 +42,10 @@ export function GetApplicationConfig() {
   return window["go"]["main"]["App"]["GetApplicationConfig"]();
 }
 
+export function GetExecutionNodeContext() {
+  return window["go"]["main"]["App"]["GetExecutionNodeContext"]();
+}
+
 export function GetSessionCredentialStatus() {
   return window["go"]["main"]["App"]["GetSessionCredentialStatus"]();
 }
@@ -52,6 +56,10 @@ export function OpenProject(arg1) {
 
 export function ReviewEditSession(arg1) {
   return window["go"]["main"]["App"]["ReviewEditSession"](arg1);
+}
+
+export function SelectExecutionNode(arg1) {
+  return window["go"]["main"]["App"]["SelectExecutionNode"](arg1);
 }
 
 export function SetSessionCredential(arg1) {
