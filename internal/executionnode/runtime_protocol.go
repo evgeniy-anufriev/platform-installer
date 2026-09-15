@@ -103,6 +103,20 @@ type ExecutionStartRequest struct {
 	RuntimeRelease  map[string]any `json:"runtimeRelease"`
 }
 
+// RuntimeEvidence is the immutable runtime identity asserted by the active
+// Execution Node process, not the release requested by the workstation.
+type RuntimeEvidence struct {
+	BundleDigest  string `json:"bundleDigest"`
+	CoreVersion   string `json:"coreVersion"`
+	CatalogDigest string `json:"catalogDigest"`
+	Protocol      string `json:"protocol"`
+}
+
+type ProjectVerificationSnapshot struct {
+	Snapshot *coreadapter.Snapshot
+	Runtime  RuntimeEvidence
+}
+
 type ExecutionRun struct {
 	RunID           string `json:"runId"`
 	ProjectIdentity string `json:"projectIdentity,omitempty"`
@@ -228,15 +242,26 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 // staging is owned by this one request and the Execution Node removes it after
 // replying; it never creates an execution manifest or lifecycle run.
 func (t OpenSSHTransport) BuildProjectSnapshot(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (*coreadapter.Snapshot, error) {
-	if projectRoot == "" || len(runtimeRelease) == 0 {
-		return nil, errors.New("PROJECT_SNAPSHOT_INPUT_INVALID")
-	}
-	runID, err := newRunID()
+	result, err := t.BuildProjectVerificationSnapshot(ctx, node, projectRoot, runtimeRelease)
 	if err != nil {
 		return nil, err
 	}
+	return result.Snapshot, nil
+}
+
+// BuildProjectVerificationSnapshot is additive to the UI-01B snapshot query:
+// it returns the same read-only Core snapshot plus identity attested by the
+// active immutable runtime that executed it.
+func (t OpenSSHTransport) BuildProjectVerificationSnapshot(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (ProjectVerificationSnapshot, error) {
+	if projectRoot == "" || len(runtimeRelease) == 0 {
+		return ProjectVerificationSnapshot{}, errors.New("PROJECT_SNAPSHOT_INPUT_INVALID")
+	}
+	runID, err := newRunID()
+	if err != nil {
+		return ProjectVerificationSnapshot{}, err
+	}
 	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "snapshot"); err != nil {
-		return nil, err
+		return ProjectVerificationSnapshot{}, err
 	}
 	response, err := t.runtimeProtocol(ctx, node, map[string]any{
 		"apiVersion": "platform.installer/execution-runtime/v1alpha1",
@@ -244,21 +269,51 @@ func (t OpenSSHTransport) BuildProjectSnapshot(ctx context.Context, node Node, p
 		"runtimeRelease": runtimeRelease,
 	})
 	if err != nil {
-		return nil, err
+		return ProjectVerificationSnapshot{}, err
 	}
 	value, ok := response["projectSnapshot"]
 	if !ok {
-		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+		return ProjectVerificationSnapshot{}, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
 	}
 	data, err := json.Marshal(value)
 	if err != nil || len(data) > maxProjectSnapshotResponseBytes {
-		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+		return ProjectVerificationSnapshot{}, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
 	}
 	snapshot, err := coreadapter.DecodeSnapshot(data)
 	if err != nil || snapshot.ProjectRevision == "" {
-		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+		return ProjectVerificationSnapshot{}, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
 	}
-	return snapshot, nil
+	runtime, ok := decodeRuntimeEvidence(response["runtimeEvidence"])
+	if !ok {
+		return ProjectVerificationSnapshot{}, errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED")
+	}
+	return ProjectVerificationSnapshot{Snapshot: snapshot, Runtime: runtime}, nil
+}
+
+func decodeRuntimeEvidence(raw any) (RuntimeEvidence, bool) {
+	value, ok := raw.(map[string]any)
+	if !ok || len(value) != 4 {
+		return RuntimeEvidence{}, false
+	}
+	evidence := RuntimeEvidence{}
+	var fields = []struct {
+		key    string
+		target *string
+	}{
+		{"bundleDigest", &evidence.BundleDigest}, {"coreVersion", &evidence.CoreVersion},
+		{"catalogDigest", &evidence.CatalogDigest}, {"protocol", &evidence.Protocol},
+	}
+	for _, field := range fields {
+		value, ok := value[field.key].(string)
+		if !ok || value == "" || len(value) > 256 {
+			return RuntimeEvidence{}, false
+		}
+		*field.target = value
+	}
+	if !validSHA256(evidence.BundleDigest) || !validSHA256(evidence.CatalogDigest) {
+		return RuntimeEvidence{}, false
+	}
+	return evidence, true
 }
 
 // BuildCandidateProjectSnapshot proves a complete transient candidate through

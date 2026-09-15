@@ -26,6 +26,18 @@ const navigation: Array<{ id: Page | string; label: string }> = [
 ];
 const count = (value: unknown) =>
   value && typeof value === "object" ? Object.keys(value).length : 0;
+const verificationLabel = (status: string) => {
+  switch (status) {
+    case "VERIFIED":
+      return "Проверено";
+    case "INVALID":
+      return "Ошибки проверки";
+    case "VERIFYING":
+      return "Проверяется";
+    default:
+      return "Не проверено";
+  }
+};
 
 export function App({ api = backend }: { api?: ProjectBackend }) {
   const [result, setResult] = useState<OpenResult>({
@@ -47,7 +59,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [commandCount, setCommandCount] = useState(0);
   const [intents, setIntents] = useState<ServerIntent[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [staleSnapshot, setStaleSnapshot] = useState(false);
   const [serverTypes, setServerTypes] = useState<
     Array<{ id: string; displayName: string }>
   >([]);
@@ -58,6 +69,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     useState<ExecutionNodeContext | null>(null);
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
   const snapshot = result.snapshot;
+  const managed = result.managed;
+  const verification = result.verification || { status: "UNVERIFIED" };
   const local = result.project;
   const project = snapshot?.project as Record<string, unknown> | undefined;
   const empty =
@@ -66,7 +79,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     local &&
     !snapshot;
   const projectOpen = result.status === "OPEN";
-  const stale = projectOpen && staleSnapshot;
   const title = empty
     ? local.name
     : project?.name
@@ -149,7 +161,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       const next = await api.chooseProject();
       setResult(next);
       setPage("project");
-      setStaleSnapshot(false);
     } finally {
       setLoading(false);
     }
@@ -188,7 +199,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setResult(next);
       setProjectDialog(false);
       setPage("project");
-      setStaleSnapshot(false);
       if (next.status === "OPEN") {
         setName("");
         setRoot("");
@@ -203,7 +213,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const close = async () => {
     setResult(await api.closeProject());
     setPage("project");
-    setStaleSnapshot(false);
   };
 
   const appendServerIntent = async (intent: ServerIntent): Promise<boolean> => {
@@ -278,28 +287,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         return;
       }
       if (next.status === "COMMITTED") {
-        setResult(
-          (current) =>
-            ({
-              ...current,
-              classification: "MANAGED_PROJECT",
-              snapshot: next.commit?.snapshot,
-            }) as OpenResult,
-        );
-        setStaleSnapshot(false);
-        clearDraft();
-        return;
-      }
-      if (next.status === "COMMITTED_REFRESH_FAILED") {
-        setResult(
-          (current) =>
-            ({
-              ...current,
-              classification: "MANAGED_PROJECT",
-              snapshot: undefined,
-            }) as OpenResult,
-        );
-        setStaleSnapshot(true);
+        if (next.current) setResult(next.current);
         clearDraft();
         return;
       }
@@ -329,15 +317,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setEditBusy(false);
     }
   };
-  const refreshSnapshot = async () => {
-    if (!result.root) return;
-    setLoading(true);
+  const verify = async () => {
+    if (!api.verifyProject) return;
+    setEditBusy(true);
+    setResult(
+      (current) =>
+        ({ ...current, verification: { status: "VERIFYING" } }) as OpenResult,
+    );
     try {
-      const next = await api.openProject(result.root);
-      setResult(next);
-      if (next.status === "OPEN" && next.snapshot) setStaleSnapshot(false);
+      const next = await api.verifyProject();
+      setResult(
+        (current) => ({ ...current, verification: next }) as OpenResult,
+      );
     } finally {
-      setLoading(false);
+      setEditBusy(false);
     }
   };
   const setSessionCredential = async (input: SessionCredentialInput) => {
@@ -401,9 +394,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {sessionId && (
             <div className="unsaved">Есть несохранённые изменения</div>
           )}
-          {projectOpen && !sessionId && !stale && (
+          {projectOpen && (
             <div className="readonly">
-              {empty ? "Не настроен" : "Проверено Core"}
+              {sessionId ? "Есть изменения" : "Сохранено"}
+            </div>
+          )}
+          {projectOpen && (
+            <div className="readonly">
+              {verificationLabel(verification.status)}
             </div>
           )}
           {projectOpen && (
@@ -433,13 +431,22 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           </button>
           {sessionId && commandCount > 0 && (
             <button onClick={review} disabled={editBusy}>
-              Просмотреть изменения
+              Сохранить
+            </button>
+          )}
+          {projectOpen && (
+            <button
+              className="outline"
+              onClick={verify}
+              disabled={editBusy || verification.status === "VERIFYING"}
+            >
+              Проверить
             </button>
           )}
         </header>
         <section className="banner">
-          Изменения остаются в transient session до проверки полного candidate
-          на READY Execution Node и явного сохранения.
+          Сохранение выполняется локально. Проверка последней сохранённой
+          ревизии через Core запускается отдельно.
         </section>
         {(loading || creating) && (
           <section className="card">
@@ -478,6 +485,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           <ProjectPage
             empty={!!empty}
             snapshot={snapshot}
+            managed={managed}
+            verification={verification}
             local={local}
             onClose={close}
             onServers={() => setPage("servers")}
@@ -487,8 +496,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         {!loading && !creating && projectOpen && page === "servers" && (
           <ServersPage
             snapshot={snapshot}
+            managed={managed}
             empty={!!empty}
-            stale={stale}
             intents={intents}
             serverTypes={serverTypes}
             configError={configError}
@@ -497,7 +506,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onReview={review}
             onDiscard={discard}
             commandCount={commandCount}
-            onRefresh={refreshSnapshot}
             credentialStatus={credentialStatus}
             onSetCredential={setSessionCredential}
             onClearCredential={clearSessionCredential}
@@ -585,6 +593,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 function ProjectPage({
   empty,
   snapshot,
+  managed,
+  verification,
   local,
   onClose,
   onServers,
@@ -592,6 +602,8 @@ function ProjectPage({
 }: {
   empty: boolean;
   snapshot: OpenResult["snapshot"];
+  managed: OpenResult["managed"];
+  verification: NonNullable<OpenResult["verification"]>;
   local: OpenResult["project"];
   onClose: () => void;
   onServers: () => void;
@@ -645,14 +657,17 @@ function ProjectPage({
               ? String((snapshot?.project as Record<string, unknown>).name)
               : "Проект"}
           </h1>
-          <p>Авторитетный снимок Core.</p>
+          <p>Сохранённые Installer-managed поля проекта.</p>
         </div>
         <button className="outline" onClick={onClose} disabled={closeDisabled}>
           Закрыть проект
         </button>
       </section>
       <section className="grid">
-        <Stat label="Хосты" value={count(snapshot?.hosts)} />
+        <Stat
+          label="Хосты"
+          value={count(managed?.servers || snapshot?.hosts)}
+        />
         <Stat
           label="Развёртывания"
           value={count(snapshot?.serviceDeployments)}
@@ -664,9 +679,9 @@ function ProjectPage({
         <h2>Состояние проекта</h2>
         <dl>
           <dt>Статус</dt>
-          <dd>{snapshot?.status}</dd>
+          <dd>{verificationLabel(verification.status)}</dd>
           <dt>Revision</dt>
-          <dd>{snapshot?.projectRevision}</dd>
+          <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>
         </dl>
         <button onClick={onServers}>Открыть серверы</button>
       </section>
@@ -691,7 +706,6 @@ function ReviewDialog({
   onDiscard: () => void;
 }) {
   const plan = edit?.plan;
-  const findings = plan?.validation?.findings || [];
   return (
     <div className="modal" role="presentation">
       <section
@@ -708,8 +722,13 @@ function ReviewDialog({
         )}
         {plan ? (
           <>
+            {plan.finding && (
+              <p className="field-error" role="alert">
+                <code>{plan.finding.code}</code> {plan.finding.safeMessage}
+              </p>
+            )}
             <p>
-              Core: {plan.validation?.status}. Документов:{" "}
+              Локальная структурная проверка завершена. Документов:{" "}
               {plan.affectedDocuments?.length ?? 0}.
             </p>
             <ul>
@@ -730,23 +749,6 @@ function ReviewDialog({
                 </ul>
               </>
             )}
-            {plan.impacts && plan.impacts.length > 0 && (
-              <>
-                <h2>Последствия</h2>
-                <ul>
-                  {plan.impacts.map((impact) => (
-                    <li key={impact}>{impact}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-            <ul>
-              {findings.map((finding, index) => (
-                <li key={index}>
-                  <code>{finding.code}</code> {finding.safeMessage}
-                </li>
-              ))}
-            </ul>
           </>
         ) : (
           <p>Проверка черновика ещё не вернула план.</p>
@@ -758,7 +760,7 @@ function ReviewDialog({
           <button className="outline" onClick={onDiscard} disabled={busy}>
             Отменить все изменения
           </button>
-          {plan?.commitAllowed ? (
+          {plan?.saveAllowed ? (
             <button onClick={onSave} disabled={busy}>
               Сохранить проект
             </button>

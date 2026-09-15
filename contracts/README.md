@@ -16,6 +16,8 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Project edit command (compatibility) | `v1alpha2` | `project-edit/v1alpha2/schema.json` |
 | CreateServer command with required type | `v1alpha3` | `project-edit/v1alpha3/schema.json` |
 | Server CRUD command with required desired hostname | `v1alpha4` | `project-edit/v1alpha4/schema.json` |
+| Local structural Save plan/result | `v1alpha1` | `project-save/v1alpha1/schema.json` |
+| Derived saved-revision verification | `v1alpha1` | `project-verification/v1alpha1/schema.json` |
 | Service package manifest | `v1alpha1` | `service-manifest/v1alpha1/schema.json` |
 | Derived service catalog | `v1alpha1` | `service-catalog/v1alpha1/schema.json` |
 | Finding | `v1alpha1` | `finding/v1alpha1/schema.json` |
@@ -40,6 +42,11 @@ Application configuration is local Installer product behavior, not portable
 infrastructure desired state. The project persists only the selected stable
 server type ID under `platform_host.type`; its schema validates ID grammar and
 does not copy or enumerate the local configured list.
+
+The structural Save contract reports only typed local changes and guarded
+filesystem persistence; it contains no Core validation claim. Project
+verification is derived runtime evidence for one exact saved revision and is
+not portable desired state or execution authorization.
 
 ## Versioning
 

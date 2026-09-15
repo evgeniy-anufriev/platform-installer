@@ -136,7 +136,8 @@ Ansible Core, service packages, published contracts, backend and frontend start 
 
 ## ADR-020: Installer writes use reviewed Ansible-native edit plans
 
-Status: Accepted by UI-BE-01; implemented by UI-BE-03.
+Status: Transaction/ownership controls remain accepted; Core-approved Save
+authorization is superseded by ADR-027 for new Installer sessions.
 
 Go is the Installer application backend. It owns semantic edit commands,
 in-memory review-plan lifecycle, concurrency guards and filesystem
@@ -153,9 +154,9 @@ ordinary Ansible documents: `group_vars/all/platform-installer.yml` owns
 each host's `platform_deployments`. Existing human-owned files and subtrees
 are not mutated without a separate adoption decision.
 
-A semantic command produces an opaque, reviewable EditPlan by staging only
-owned documents and proving its effective result with Core ProjectSnapshot.
-Commit rechecks the raw-byte project revision and affected document digests
+A semantic command produces a bounded local structural preview by staging only
+owned documents. Optional Core Project Verify is separate from Save. Commit
+rechecks the raw-byte project revision and affected document digests
 under a project writer lock. It journals exact old bytes, performs synced
 atomic replacements, rolls back a failed multi-document write and recovers an
 interrupted journal before a later commit. The terminal state is either the
@@ -279,11 +280,10 @@ remote snapshot request are separately versioned typed application contracts;
 none exposes raw YAML, paths to Core, shell or generic SSH.
 
 Editor navigation and transient drafts do not require a current execution run,
-repository probe, RuntimeProjection or target facts. Because Python/Core do not
-run on the workstation, fresh configured-project interpretation and every
-review/commit use a fixed target-contact-free ProjectSnapshot operation on the
-operator-selected READY Execution Node. Unavailability blocks proof/save while
-retaining the draft; it never becomes PASS. Runtime credentials remain outside
+repository probe, RuntimeProjection or target facts. Per ADR-027, local
+structural Review/Save uses the guarded writer without Python/Core or an
+Execution Node. Optional Project Verify and fresh DeploymentPlan construction
+remain target-free Core operations on READY. Runtime credentials remain outside
 canonical project state. Execution progress reaches future React only through
 typed Go/RunObserver subscriptions.
 
@@ -312,16 +312,17 @@ user choice, eligible local Linux, first eligible project server once, then
 `NOT_CONFIGURED`. Later sorting, filtering, additions or removal do not silently
 switch a previously selected node; replacement is explicit.
 
-Before the first READY node, Project and Servers remain available and Services,
-Topology, Certificates and Installation remain visible but locked. Temporary
-loss of a previously prepared node retains the current page and transient edit
-session, but blocks Review, Save/Commit, DeploymentPlan and Installation. It
-does not discard draft state or claim validation success.
+Before the first READY node, currently implemented Project and Servers remain
+available. Future editor availability is milestone-gated, not a prerequisite
+for local Save. Temporary loss retains the current page and transient session;
+it blocks Project Verify and remote planning/execution, but not structural
+Review/Save. It does not discard draft state or claim validation success.
 
 Servers/application lifecycle owns selection, host-key trust, bootstrap,
 runtime preparation and activation through EXEC-01A. Installation owns only
-the deployment lifecycle and requires READY, saved canonical state, no unsaved
-changes and authoritative non-stale Core validation for the current revision.
+the deployment lifecycle. Prior Project Verify is optional; every execution
+still requires READY, saved canonical state, no unsaved changes and a fresh
+authoritative DeploymentPlan for the same revision/runtime.
 
 ## ADR-026: Application config owns selectable server types
 
@@ -346,3 +347,26 @@ into the same Go `EditCommand` model, and new Installer sessions emit v1alpha3.
 Missing or invalid AppConfig blocks only AppConfig-dependent creation and does
 not block read-only Core interpretation of existing projects. Production
 embedding, override and distribution policy is a separate future decision.
+
+## ADR-027: Save, Project Verify and DeploymentPlan are separate operations
+
+Status: Accepted by `OWNER-UI-SAVE-VERIFY-01` through
+`OWNER-UI-SAVE-VERIFY-06`, 2026-09-15.
+
+Save is a local Go application operation over the existing typed EditSession,
+bounded managed candidate and guarded filesystem transaction. It proves
+structural/write safety only and requires neither Core nor an Execution Node.
+A saved canonical project may therefore be `UNVERIFIED`, `INVALID` or `STALE`
+without preventing later editing or Save. Verification evidence is derived
+runtime state, never portable desired state.
+
+Project Verify is an optional target-free Core preflight for the exact last
+saved canonical revision on a READY Execution Node. It never saves an unsaved
+overlay or mutates project files. E5 may automatically check readiness and may
+prepare only after explicit confirmation.
+
+Fresh `BuildDeploymentPlan` remains the mandatory execution gate for the exact
+current saved revision/runtime. Prior Project Verify never permits direct
+`StartExecution`, and Installation may request a fresh plan regardless of the
+optional verification badge. See
+[the binding owner-change architecture](ui-save-verify-architecture.md).

@@ -23,6 +23,11 @@ export function CommitEditPlan(
   arg2: string,
 ): Promise<main.EditOperationResult>;
 
+export function CommitStructuralEditPlan(
+  arg1: string,
+  arg2: string,
+): Promise<main.StructuralEditOperationResult>;
+
 export function CreateProject(
   arg1: projectlifecycle.CreateProjectRequest,
 ): Promise<main.ProjectOpenResult>;
@@ -45,6 +50,10 @@ export function ReviewEditSession(
   arg1: string,
 ): Promise<main.EditOperationResult>;
 
+export function ReviewStructuralEditSession(
+  arg1: string,
+): Promise<main.StructuralEditOperationResult>;
+
 export function SelectExecutionNode(
   arg1: string,
 ): Promise<main.ExecutionNodeContext>;
@@ -54,3 +63,5 @@ export function SetSessionCredential(
 ): Promise<runtimesecret.Status>;
 
 export function StartEditSession(): Promise<main.EditOperationResult>;
+
+export function VerifyProject(): Promise<main.ProjectVerification>;

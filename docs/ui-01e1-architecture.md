@@ -4,27 +4,33 @@ Status: **DONE** (2026-09-14). This document defines the backend and contract
 integration for server CRUD. UI-01E2 owns the production Servers page and its
 Add/Edit/Delete dialogs.
 
+> **Owner supersession, 2026-09-15:** ADR-027 and
+> [Save / Project Verify / DeploymentPlan](ui-save-verify-architecture.md)
+> replace every statement below that makes target-free Core Review/PASS or a
+> READY Execution Node a prerequisite for Save. Server fields, v1alpha4 typed
+> intents, final-state reducer, source ownership, revision/digest guards and the
+> generic reference contract remain unchanged. Core-backed candidate proof is
+> historical acceptance evidence, not new Save authorization.
+
 ## 1. Goal
 
 Make server creation, partial update and deletion work for an existing
-Installer-managed project through the accepted UI-01D lifecycle:
+Installer-managed project through the revised UI-01D lifecycle:
 
 ```text
-ProjectSnapshot.hosts
+saved/local managed server view
         ↓
 typed project-edit/v1alpha4 intent
         ↓
 EditSessionStore
         ↓
-Installer staged candidate
-        ↓
-authoritative target-free ProjectSnapshot on the READY Execution Node
-        ↓
-EditPlan review
+Installer local structural candidate/review
         ↓
 existing revision/digest-guarded CommitEditPlan transaction
         ↓
-refreshed authoritative ProjectSnapshot
+canonical saved revision (`UNVERIFIED` or `STALE`)
+        ↓ optional
+target-free Project Verify on READY
 ```
 
 There is no `SaveServer`, direct YAML mutation, UI-owned project model or
@@ -122,7 +128,8 @@ The following mockup elements remain deferred:
 | Desired hostname | `platform_host.desiredHostname` in the portable project |
 | Type choices and labels | versioned local application config |
 | Edit/session/review/transaction lifecycle | Go Installer backend |
-| Ansible precedence and candidate validity | Core on the selected READY Execution Node |
+| Local structural/write safety | Go managed-project writer |
+| Ansible precedence and infrastructure validity | optional Project Verify and mandatory fresh DeploymentPlan through Core |
 | Non-cascading delete/source ownership guard | Go managed-project writer |
 | Rendering and form state | React in E2 |
 | Credentials, host-key trust, facts and readiness | runtime state in E3-E5 |
@@ -363,20 +370,21 @@ The bounded Batch used by `ReviewEditSession` remains. Appending after review
 invalidates the previous opaque plan exactly as in UI-01D. E1 adds no undo
 history, draft persistence or client-side reducer.
 
-## 11. Authoritative review, proof and impacts
+## 11. Revised local Save and optional proof
 
 For every non-empty candidate diff:
 
-1. build the current authoritative snapshot;
-2. verify `baseProjectRevision`;
-3. reduce commands into the in-memory managed representation;
-4. derive final-state expectations per affected host;
-5. write only the staged project copy;
-6. build a second target-free Core snapshot on the READY Execution Node;
-7. require Core `PASS` and prove source/final projected state;
-8. create an opaque revision-bound `EditPlan`;
-9. commit only through the existing journaled transaction;
-10. refresh the authoritative snapshot after commit.
+1. read the current managed source view and verify `baseProjectRevision`;
+2. reduce typed commands into one bounded local candidate;
+3. validate structural shape, ownership, paths and document before states;
+4. produce a local affected-document preview;
+5. commit only through the existing journaled transaction;
+6. return the new canonical revision as `UNVERIFIED` or `STALE`.
+
+Optional Project Verify later asks Core to validate exactly that saved revision.
+Before execution, fresh `BuildDeploymentPlan` remains mandatory regardless of
+the optional Verify result. Historical E1 Core candidate acceptance below
+proves the old implementation, not a prerequisite for the revised Save.
 
 Impact reporting follows actual semantics:
 
@@ -402,11 +410,12 @@ E1 preserves or adds stable blocked outcomes for:
 - create of an existing host;
 - update/delete of an absent host;
 - same-session delete/recreate;
-- server still referenced by placement/member state;
+- server reference warning/optional Verify invalid result from generic records;
 - inconsistent managed inventory membership;
 - unmarked or user-owned inventory;
 - stale project revision, expired session/plan and superseded review;
-- staged Core validation failure or `EDIT_SHADOWED` proof failure;
+- local candidate structural failure; optional Project Verify findings are
+  separate and never undo Save;
 - transaction conflict, unsafe path, symlink/reparse point or recovery failure.
 
 Errors and plans contain no credentials. Unknown configured type is a warning,
@@ -431,7 +440,7 @@ not a blocked outcome.
 6. Add required `desiredHostname` to the existing narrow UI-01D first-save form
    and its v1alpha4 command mapping. Do not add the Servers page.
 7. Add focused backend/session/Wails tests and a frontend regression proving
-   first save still reaches Review → Commit with the required hostname.
+   first save reaches local structural Review → Save with required hostname.
 8. Synchronize milestone evidence only after executable acceptance passes.
 
 ## 14. Acceptance
@@ -442,7 +451,7 @@ UI-01E1 is complete only when automated tests prove:
 - new sessions emit v1alpha4 and CreateServer requires type and desired
   hostname;
 - the existing first-save form requires and sends desired hostname, and its
-  complete Review → Commit flow remains functional before UI-01E2;
+  local structural Review → Save flow remains functional before UI-01E2;
 - create, partial update, type/desired-hostname replacement, port set/clear
   and delete;
 - absent port, explicit 22, numeric string, invalid value, precedence shadow
@@ -491,12 +500,12 @@ RED OS acceptance uses the current worktree in a temporary QA workspace,
 remains target-free and proves cleanup. Full Windows UI interaction, shared
 credentials, target preparation and end-to-end UI regressions belong to E2-E6.
 
-### Implementation evidence (2026-09-14)
+### Historical implementation evidence (2026-09-14, before ADR-027)
 
 - New sessions emit the deliberately server-CRUD-only
   `project-edit/v1alpha4`; v1alpha2/v1alpha3 tests remain compatible.
 - The existing first-save compatibility form now requires desired hostname and
-  still reaches the existing Review → Commit lifecycle; it is not a Servers
+  reached the then-current Core-backed Review → Commit lifecycle; it is not a Servers
   page or a direct writer.
 - Core projects `desiredHostname`, normalized `ansiblePort`, and generic host
   reference records. The Go reducer owns no service-specific delete rules.

@@ -187,6 +187,50 @@ func (s *EditSessionStore) Review(ctx context.Context, backend *Backend, session
 	return plan, err
 }
 
+// ReviewStructural builds the local-only Save preview for the current draft.
+func (s *EditSessionStore) ReviewStructural(ctx context.Context, backend *Backend, sessionID string) (*StructuralEditPlan, error) {
+	s.mu.Lock()
+	s.expireLocked()
+	state := s.sessions[sessionID]
+	if state == nil {
+		s.mu.Unlock()
+		return nil, blocked("EDIT_SESSION_EXPIRED", "Edit session is absent or expired", "sessionId")
+	}
+	if state.busy {
+		s.mu.Unlock()
+		return nil, blocked("EDIT_SESSION_BUSY", "Edit session review is already in progress", "sessionId")
+	}
+	if len(state.commands) == 0 {
+		s.mu.Unlock()
+		return nil, blocked("EDIT_SESSION_EMPTY", "Edit session contains no commands", "sessionId")
+	}
+	if state.public.ReviewedPlanID != "" {
+		backend.plans.Discard(state.public.ReviewedPlanID)
+		state.public.ReviewedPlanID = ""
+		state.public.Status = "EDITING"
+	}
+	state.busy = true
+	commands := append([]EditCommand(nil), state.commands...)
+	root, classification, revision := state.public.ProjectRoot, state.public.ProjectClassification, state.public.BaseProjectRevision
+	s.mu.Unlock()
+
+	plan, err := backend.PlanStructuralSave(ctx, root, classification, revision, commands)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state = s.sessions[sessionID]
+	if state != nil {
+		state.busy = false
+		state.updated = s.now()
+		state.public.ExpiresAt = state.updated.Add(s.ttl)
+		if err == nil && plan != nil && plan.SaveAllowed {
+			state.public.Status = "REVIEWED"
+			state.public.ReviewedPlanID = plan.PlanID
+		}
+	}
+	return plan, err
+}
+
 func (s *EditSessionStore) BeginCommit(sessionID, planID string) (EditSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

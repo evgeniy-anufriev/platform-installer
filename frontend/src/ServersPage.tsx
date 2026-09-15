@@ -27,10 +27,21 @@ type ServerType = { id: string; displayName: string };
 
 function rows(
   snapshot: OpenResult["snapshot"],
+  managed: OpenResult["managed"],
   intents: ServerIntent[],
 ): Row[] {
   const result = new Map<string, Row>();
+  for (const [hostId, host] of Object.entries(managed?.servers || {})) {
+    result.set(hostId, {
+      hostId,
+      type: String(host.type || ""),
+      desiredHostname: String(host.desiredHostname || ""),
+      address: String(host.address || ""),
+      port: Number(host.sshPort || 22),
+    });
+  }
   for (const [hostId, raw] of Object.entries(snapshot?.hosts || {})) {
+    if (result.has(hostId)) continue;
     const host = raw as Record<string, unknown>;
     result.set(hostId, {
       hostId,
@@ -75,8 +86,8 @@ function rows(
 
 export function ServersPage({
   snapshot,
+  managed,
   empty,
-  stale,
   intents,
   serverTypes,
   configError,
@@ -85,7 +96,6 @@ export function ServersPage({
   onReview,
   onDiscard,
   commandCount,
-  onRefresh,
   credentialStatus,
   onSetCredential,
   onClearCredential,
@@ -93,8 +103,8 @@ export function ServersPage({
   onSelectExecutionNode,
 }: {
   snapshot: OpenResult["snapshot"];
+  managed: OpenResult["managed"];
   empty: boolean;
-  stale: boolean;
   intents: ServerIntent[];
   serverTypes: ServerType[];
   configError: string | null;
@@ -103,7 +113,6 @@ export function ServersPage({
   onReview: () => void;
   onDiscard: () => void;
   commandCount: number;
-  onRefresh: () => void;
   credentialStatus: SessionCredentialStatus | null;
   onSetCredential: (
     input: SessionCredentialInput,
@@ -113,20 +122,7 @@ export function ServersPage({
   onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
-  const visible = rows(snapshot, intents);
-  if (stale)
-    return (
-      <section className="card error">
-        <h1>Снимок проекта требует обновления</h1>
-        <p>
-          Изменения сохранены, но authoritative Core snapshot не был обновлён.
-          Серверы не показываются как актуальные.
-        </p>
-        <button onClick={onRefresh} disabled={busy}>
-          Обновить снимок проекта
-        </button>
-      </section>
-    );
+  const visible = rows(snapshot, managed, intents);
   const firstSave = empty;
   return (
     <>
@@ -248,14 +244,14 @@ export function ServersPage({
       {commandCount > 0 && (
         <section className="card draft-actions">
           <p>
-            Черновик: {commandCount}. Core проверит полный candidate на
-            выбранном Execution Node.
+            Черновик: {commandCount}. Перед сохранением будет показан локальный
+            structural preview затрагиваемых документов.
           </p>
           <button className="outline" onClick={onDiscard} disabled={busy}>
             Отменить все изменения
           </button>
           <button onClick={onReview} disabled={busy}>
-            Проверить изменения
+            Просмотреть изменения
           </button>
         </section>
       )}
@@ -344,7 +340,10 @@ function ExecutionNodePanel({
     }
   };
   return (
-    <section className="card execution-node-panel" aria-labelledby="execution-node-heading">
+    <section
+      className="card execution-node-panel"
+      aria-labelledby="execution-node-heading"
+    >
       <div className="execution-node-heading">
         <h2 id="execution-node-heading">Execution Node</h2>
         <span className="readonly">{effective.status}</span>
@@ -776,7 +775,7 @@ function ServerDialog({
         )}
         <p className="muted">
           Сохранить изменение в черновик. Файлы проекта будут изменены только
-          после проверки и общего сохранения проекта.
+          после локального просмотра и общего сохранения проекта.
         </p>
         <div className="actions">
           <button
@@ -790,7 +789,7 @@ function ServerDialog({
           <button
             type="submit"
             disabled={busy || (mode === "add" && !!configError)}
-            title="Сохранить изменение в черновик. Файлы проекта будут изменены только после проверки и общего сохранения проекта."
+            title="Сохранить изменение в черновик. Файлы проекта будут изменены только после локального просмотра и общего сохранения проекта."
           >
             Сохранить
           </button>

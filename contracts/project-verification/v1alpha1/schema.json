@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.invalid/contracts/project-verification/v1alpha1/schema.json",
+  "title": "ProjectVerification",
+  "oneOf": [{ "$ref": "#/$defs/unverified" }, { "$ref": "#/$defs/verifying" }, { "$ref": "#/$defs/evidence" }],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "error": { "type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": { "code": { "type": "string", "minLength": 1, "maxLength": 128 }, "message": { "type": "string", "minLength": 1, "maxLength": 1024 } } },
+    "runtime": { "type": "object", "additionalProperties": false, "required": ["bundleDigest", "coreVersion", "catalogDigest", "protocol"], "properties": { "bundleDigest": { "$ref": "#/$defs/digest" }, "coreVersion": { "type": "string", "minLength": 1, "maxLength": 256 }, "catalogDigest": { "$ref": "#/$defs/digest" }, "protocol": { "type": "string", "minLength": 1, "maxLength": 256 } } },
+    "finding": { "type": "object", "additionalProperties": false, "required": ["code", "severity", "summary"], "properties": { "code": { "type": "string", "minLength": 1, "maxLength": 128 }, "severity": { "type": "string", "minLength": 1, "maxLength": 32 }, "summary": { "type": "string", "minLength": 1, "maxLength": 512 }, "subjectKind": { "type": "string", "maxLength": 64 }, "subjectId": { "type": "string", "maxLength": 128 }, "helpRef": { "type": "string", "maxLength": 256 } } },
+    "base": { "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "status"], "properties": { "apiVersion": { "const": "platform.installer/project-verification/v1alpha1" }, "kind": { "const": "ProjectVerification" }, "status": { "enum": ["UNVERIFIED", "VERIFYING", "VERIFIED", "INVALID"] }, "projectIdentity": { "type": "string", "minLength": 1, "maxLength": 128 }, "projectRevision": { "$ref": "#/$defs/digest" }, "executionNodeId": { "type": "string", "minLength": 1, "maxLength": 128 }, "runtime": { "$ref": "#/$defs/runtime" }, "findings": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/finding" } }, "findingsTruncated": { "type": "boolean" }, "checkedAt": { "type": "string", "format": "date-time" }, "error": { "$ref": "#/$defs/error" } } },
+    "unverified": { "allOf": [{ "$ref": "#/$defs/base" }, { "properties": { "status": { "const": "UNVERIFIED" } }, "not": { "anyOf": [{ "required": ["runtime"] }, { "required": ["findings"] }] } }] },
+    "verifying": { "allOf": [{ "$ref": "#/$defs/base" }, { "required": ["projectIdentity", "projectRevision"], "properties": { "status": { "const": "VERIFYING" } }, "not": { "anyOf": [{ "required": ["runtime"] }, { "required": ["findings"] }, { "required": ["error"] }] } }] },
+    "evidence": { "allOf": [{ "$ref": "#/$defs/base" }, { "required": ["projectIdentity", "projectRevision", "executionNodeId", "runtime", "checkedAt", "findings"], "properties": { "status": { "enum": ["VERIFIED", "INVALID"] } }, "not": { "required": ["error"] } }] }
+  }
+}

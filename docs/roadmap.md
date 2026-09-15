@@ -555,9 +555,13 @@ config/server-type foundation adds a versioned local type catalog and additive
 decomposed into E1 server CRUD integration, E2 Servers UI, E3 shared runtime
 credentials, E4 Execution Node selection panel, E5 readiness/navigation gating
 and E6 final Windows/RED OS acceptance. UI-01E1 is DONE: v1alpha4 server CRUD
-intents use the existing edit/review/commit lifecycle, Core projects desired
+intents use the existing edit/session/guarded-transaction lifecycle, Core projects desired
 hostname/normalized port and generic references, and focused Windows/RED OS
 gates passed. UI-01E2 through UI-01E4 are DONE; UI-01E5 is NEXT.
+
+ADR-027 changes the target architecture without changing milestone statuses:
+new Save is local structural persistence; Project Verify is optional derived
+preflight on READY; every execution still requires fresh BuildDeploymentPlan.
 
 ### DEVX-01: Codex engineering harness
 
@@ -642,7 +646,8 @@ remote Core proof, guarded first write and narrow Windows review/save shell
 passed its executable gates and was owner-accepted without final
 revision-bound review. The application config/server-type foundation is
 independent of UI-01E and does not advance its implementation. UI-01E1 through UI-01E4 are DONE;
-UI-01E5 is NEXT. UI-01 overall is NOT DONE.
+the pre-E5 ADR-027 Save/Verify separation is implemented without advancing E5.
+UI-01E5 is NEXT and NOT STARTED. UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
@@ -675,8 +680,9 @@ Not ready when:
 
 Local pages: Summary → Plan → Execution → Result. Execution Node selection and
 preparation are owned by the Servers/application lifecycle and existing EXEC-01A
-contracts; Installation consumes a READY node and a saved, current,
-authoritatively Core-validated project revision. Plan shows Core
+contracts; Installation consumes a READY node and a saved current revision,
+then always builds a fresh authoritative DeploymentPlan. Prior optional Project
+Verify is displayed separately and never bypasses planning. Plan shows Core
 actions/dependencies and target hosts; Result shows observed per-action outcomes
 and verify for a specific run, without rerunning verification on view.
 

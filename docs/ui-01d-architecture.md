@@ -5,6 +5,15 @@ Implementation status: **FINAL REVIEW**. Final evidence: [ui-01d.md](ui-01d.md).
 Статус документа: архитектурный план, не разрешение на реализацию.
 Revision binding: `UI-01D-ARCH-2026-09-05-EXECNODE-01`.
 
+> **Owner supersession, 2026-09-15:** ADR-027 and
+> [Save / Project Verify / DeploymentPlan](ui-save-verify-architecture.md)
+> replace the target lifecycle described below. The original Core-backed
+> Review/EditPlan, post-commit refresh and `COMMITTED_REFRESH_FAILED` sections
+> remain implementation/compatibility history, not the architecture for new
+> Save. New flow: `EditSession → local structural candidate/review → guarded
+> Save`; optional Project Verify is separate; every execution still requires a
+> fresh `BuildDeploymentPlan`. Save no longer requires READY or Core PASS.
+
 Эта ревизия включает owner decisions `OWNER-UI-EXECNODE-01` через
 `OWNER-UI-EXECNODE-09`, изменяет только application-context/navigation gates
 и границы UI-01D/UI-01E/UI-02, и сверена с
@@ -12,8 +21,9 @@ Revision binding: `UI-01D-ARCH-2026-09-05-EXECNODE-01`.
 полный Servers/Execution Node panel, bootstrap, selection controls или
 Installation execution implementation.
 
-UI-01D закрывает общий backend-owned цикл редактирования, первый
-authoritative save и guarded transaction. Он сохраняет read-only open/snapshot
+UI-01D established the backend-owned edit session, first managed write and
+guarded transaction. ADR-027 now reuses those local mechanics for Save while
+separating optional Core verification. It preserves read-only open/snapshot
 из UI-01B и metadata-only creation из UI-01C. Полные редакторы серверов,
 топологии, сертификатов и сервисов остаются в UI-01E–H.
 
@@ -542,19 +552,15 @@ with an explanation. This is an application UX gate, not a Core semantic.
 
 If a previously prepared node becomes temporarily unavailable, the current
 configuration page and transient draft remain visible. The application blocks
-only operations that require fresh Core proof:
+only remote operations that require Core:
 
-- `ReviewEditSession`;
-- `CommitEditPlan`/Save;
+- optional Project Verify;
 - `BuildDeploymentPlan`;
 - installation/execution.
 
-It does not discard the session, hide the page or report a false validation
-result. UI-01D therefore accepts a session without a currently reachable node,
-but Review requires current `READY` and Save requires a current unexpired
-`READY` review plan. No local Linux shortcut bypasses the Execution Node
-semantic interface; local Linux is one supported implementation of that
-interface.
+It does not discard the session, hide the page, block structural Review/Save or
+report false validation. No local Linux shortcut bypasses the Execution Node
+interface for optional Verify or mandatory planning.
 
 Installation does not prepare the environment. Selection, host-key trust,
 bootstrap, runtime activation/update and readiness preparation belong to
@@ -565,8 +571,8 @@ only:
 ExecutionNode = READY
 AND saved canonical project
 AND no unsaved session changes
-AND authoritative Core validation for the current project revision
-AND non-stale revision/fingerprint
+THEN fresh BuildDeploymentPlan for the current revision/runtime
+AND explicit approval of that plan
 ```
 
 Only then may UI-02 expose DeploymentPlan → approval → StartExecution →
@@ -587,17 +593,19 @@ must not contain an Execution Node setup card.
   desired state.
 - `OWNER-UI-EXECNODE-06`: before first READY, only Project and Servers are
   available; other navigation remains visible but locked.
-- `OWNER-UI-EXECNODE-07`: temporary node loss retains configuration UI and
-  draft, while Review/Save/Installation are blocked.
+- `OWNER-UI-EXECNODE-07` is narrowed by ADR-027: temporary node loss retains
+  configuration UI/draft and does not block local Save; it blocks Verify and
+  remote planning/execution.
 - `OWNER-UI-EXECNODE-08`: preparation belongs to Servers/application
   lifecycle, not Installation.
-- `OWNER-UI-EXECNODE-09`: Installation requires READY plus saved,
-  current-revision authoritative Core validation.
+- `OWNER-UI-EXECNODE-09` is clarified by ADR-027: Installation execution
+  requires READY plus a fresh approved DeploymentPlan for the saved revision;
+  prior optional Project Verify is not required.
 
 ### 12.2 Milestone impact
 
-UI-01D implements only the gate/context contract: readiness is an input to
-review/commit and session retention is defined for outage. It does not build
+UI-01D implemented the historical gate/context contract. ADR-027 removes
+readiness from new local Save while retaining session outage behavior. It does not build
 the full Servers panel, candidate-selection controls or bootstrap UI.
 
 UI-01E owns target-server CRUD, the persistent Execution Node panel, automatic
@@ -606,8 +614,9 @@ or ineligibility handling. It reuses EXEC-01A contracts and does not recreate
 bootstrap semantics in React.
 
 UI-02 Installation owns deployment lifecycle only. It consumes a READY node
-and current saved/Core-valid revision; it does not select, prepare, activate or
-update the Execution Node.
+and current saved revision, builds a fresh authoritative DeploymentPlan and
+requires approval before StartExecution; it does not select, prepare, activate
+or update the Execution Node.
 
 ## 13. Mockup and acceptance references
 

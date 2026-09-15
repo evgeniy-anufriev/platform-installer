@@ -3,6 +3,13 @@
 Status: ACCEPTED by UI-01A, 2026-09-05. This is an architecture contract, not
 an implementation. Normative words MUST, MUST NOT and MAY constrain UI-01B+.
 
+> **Normative owner supersession, 2026-09-15:** ADR-027 and
+> [Save / Project Verify / DeploymentPlan](ui-save-verify-architecture.md)
+> replace only the Core-before-Save and READY-before-Save requirements in this
+> freeze. Typed commands, canonical ownership and transaction safety remain.
+> New Save is local structural persistence; Project Verify is optional; fresh
+> BuildDeploymentPlan remains mandatory before execution.
+
 ## 1. Screen / contract matrix
 
 `AVAILABLE` means implemented in the current repository. `PLANNED` means an
@@ -15,7 +22,7 @@ future method does not make it available.
 | Projects / open empty managed | Local structural classifier and `project.yml` metadata | `OpenProject` | Same file; recent list is operational only | No Core result is invented | Read-only | PLANNED UI-01B/C |
 | Projects / open configured | Local classifier, then existing `ProjectSnapshot/v1alpha1` | `OpenProject`, `RefreshProject` | Native Ansible files | Core owns interpretation/findings | No write | Snapshot AVAILABLE; application methods and remote adapter PLANNED UI-01B/D |
 | Servers / list | `ProjectSnapshot.hosts` | none | Inventory | Facts/readiness are separate observations | none | Read AVAILABLE; view composition PLANNED UI-01B/E |
-| Servers / add-edit-remove | Snapshot plus transient edit session | `CreateServer`, `UpdateServer`, `DeleteServer` | Installer-owned inventory for managed projects | Go validates command shape; Core validates complete candidate | Shared review/commit | Commands and inventory writer PLANNED UI-01D/E |
+| Servers / add-edit-remove | Saved/local managed view plus transient edit session | `CreateServer`, `UpdateServer`, `DeleteServer` | Installer-owned inventory for managed projects | Go validates structural safety; optional Verify/Core validates saved revision | Local structural review/commit | Commands and inventory writer PLANNED UI-01D/E |
 | Session credentials | Secret broker availability only | `SetSessionCredential`, `ClearSessionCredential` | Runtime-only memory/provider | Go validates type/lifetime; never Core desired state | Never project save | PLANNED UI-01E |
 | Topology / catalog | `ProjectSnapshot.serviceCatalog`, deployments, topology | Existing deployment commands | Service manifests own modes/rules; managed group_vars owns selected deployment | Core resolves and validates | Shared review/commit | Read and create/delete deployment AVAILABLE |
 | Topology / members and placement | Snapshot topology/hosts | Existing placement commands; planned `ReconcileDeploymentPlacement` | Managed host_vars | Core validates roles/cardinality/references | Shared review/commit | Point operations AVAILABLE; whole-deployment reconcile PLANNED UI-01F |
@@ -26,7 +33,7 @@ future method does not make it available.
 | Services / PKI reference | Snapshot effective configuration and PKI identities | Existing `SetServiceConfigurationValue` / remove override for catalog-declared `tlsProfile` | Managed group_vars/host_vars according to allowed scope | Core validates profile existence/compatibility | Shared review/commit | AVAILABLE when service manifest exposes setting; UI PLANNED UI-01H |
 | Settings / UI preferences | Local operational preferences | bounded preference update | Application-local store | Go only | Local atomic preference save | PLANNED; never portable desired state |
 | Settings / validation binding | Stored node ID and non-secret transport references | select/clear binding | Application operational metadata | Inspection result is observed state | Local only | Node primitives AVAILABLE; editor binding service PLANNED UI-01B/D |
-| Review/save | Current snapshot, transient session and existing `EditPlan` | `ReviewEditSession`, existing commit/discard | Native Ansible files | Complete staged `ProjectSnapshot` is mandatory | One guarded transaction | Existing PlanEdit flow AVAILABLE for pre-existing owned files; first-write/session/remote snapshot PLANNED UI-01D |
+| Review/save | Saved/local managed view and transient session | Local structural preview, guarded commit/discard | Native Ansible files | Go proves structural/write safety; Core is optional Verify and mandatory fresh plan | One guarded transaction | ADR-027 target; old Core-backed PlanEdit remains compatibility history |
 | Installation / plan | Existing `DeploymentPlan` | build/approve in UI-02 | Plan is derived and revision-bound | Core owns plan/manifest | No project write | Backend AVAILABLE; UI-02 |
 | Installation / progress | `GetExecution`, typed RunObserver subscription | cancel only through lifecycle contract | Remote journal is observed authority | Execution lifecycle | No project write | Backend AVAILABLE; UI-02 |
 | Installation / result | terminal run/result and per-action events | no verify-on-view | Observed result | Service verify entrypoint | No project write | Backend data AVAILABLE; UI-02 composition |
@@ -147,6 +154,10 @@ Process restart preserves only canonical states. An unsaved draft is lost after
 an explicit close/discard decision; it is not restored as desired state.
 
 ## 3. First save and ownership freeze
+
+The Core-before-commit flow in section 3.1 is historical UI-01D architecture
+before ADR-027. The ownership matrix and transaction guards remain current;
+new Save uses local structural candidate review as defined by ADR-027.
 
 ### 3.1 Complete candidate invariant
 
@@ -599,7 +610,9 @@ origin under the same snapshot contract:
 - other user host_vars -> `HOST_VARS`, exact path, `READ_ONLY`;
 - unresolved origin -> `UNKNOWN`, `READ_ONLY_UNRESOLVED`.
 
-UI-01D must add the fixed remote snapshot operation and a standalone acceptance
+### Historical UI-01D remote acceptance before ADR-027
+
+UI-01D was required to add the fixed remote snapshot operation and a standalone acceptance
 test for the generated project-local `ansible.cfg`. On RED OS that test changes
 to the exported project root, unsets `ANSIBLE_CONFIG`, asserts through
 `ansible-config --version` that the active file is that root's `ansible.cfg`,
@@ -617,24 +630,24 @@ values until that evidence passes.
 | missing `metadata.id` | display safe field hint | classify invalid | contract finding | BLOCK |
 | missing catalog/artifact locks | display compatibility error | Create/Open BLOCK | schema/compatibility | BLOCK |
 | marked empty project, no inventory | show normal empty state | valid classification | not invoked until complete candidate | allowed to edit, not yet saved |
-| malformed inventory | syntax-neutral error UI | no repair/adoption | authoritative input finding | BLOCK |
+| malformed managed document structure | syntax-neutral error UI | structural reject; no repair/adoption | not required for Save | BLOCK Save |
 | arbitrary user-owned YAML | read-only origin | ownership check | may read safely | BLOCK affected edit; preserve bytes |
 | project/runtime path contains reparse point | safe path error | OS-specific path identity guard | not reached | BLOCK before stage/lock/recovery |
 | candidate exceeds file/path/byte limits | bounded size error | candidate/archive guard | not reached | BLOCK; no partial snapshot |
 | stale project revision | stale badge | revision guard | fresh snapshot if requested | BLOCK, retain draft |
 | document digest mismatch | generic conflict | digest guard | none needed | BLOCK entire transaction |
-| first-save Core failure | show findings | keep session/plan non-committable | authoritative | BLOCK, zero canonical writes |
-| cross-file partial candidate invalid | do not validate forms as final truth | build complete candidate | authoritative | BLOCK all documents |
+| first Project Verify Core failure | show findings | keep saved project editable | authoritative | Save remains; mark `INVALID` |
+| cross-file structurally safe but semantically invalid candidate | do not validate forms as final truth | save complete bounded candidate | optional Verify/fresh plan authoritative | Save remains; execution requires fresh successful plan |
 | duplicate server identity | immediate hint | structural reject | confirms candidate | BLOCK |
-| invalid topology reference | optional client hint | no semantic inference | authoritative | BLOCK |
-| missing deployment reference | display returned finding | shape/reference guard | authoritative | BLOCK |
-| missing PKI identity reference | optional selector warning | no fabricated identity | authoritative | BLOCK |
+| invalid topology reference | optional client hint | no semantic inference | optional Verify/fresh plan authoritative | Save may remain; no direct execution |
+| missing deployment reference | display returned finding | no local service rule | optional Verify/fresh plan authoritative | Save may remain; no direct execution |
+| missing PKI identity reference | optional selector warning | no fabricated identity | optional Verify/fresh plan authoritative | Save may remain; no direct execution |
 | plaintext disguised as `*SecretRef` | generic reference error | strict `runtime:` reference grammar | schema confirms | BLOCK before staging |
-| validation node unavailable | status banner; forms remain | remote adapter unavailable | not reached | review/commit BLOCK; draft retained |
+| Execution Node unavailable | status banner; forms remain | local writer unaffected | Verify/plan unavailable | Save allowed; draft retained |
 | target credentials absent | session status only on Servers | secret availability only | irrelevant to target-free validation | editor and E5 allowed; UI-02 target execution BLOCK |
 | target credential mode lacks proven runtime materializer | session status only on Servers | keep lease local only | irrelevant to target-free validation | editor and E5 allowed; UI-02 target execution BLOCK |
-| validation transport credential absent | explicit validation warning | secret availability only | unavailable | review/commit BLOCK |
-| execution active during edit/save | revision warning | allow edit/save; bind new revision | validates candidate normally | allowed; active run unchanged |
+| Execution Node transport credential absent | explicit Verify/plan warning | local writer unaffected | unavailable | Save allowed; Verify/plan blocked |
+| execution active during edit/save | revision warning | allow edit/save; bind new revision | prior run remains plan-bound | allowed; active run unchanged |
 
 Client-side validation improves forms only. It never turns an operation READY.
 

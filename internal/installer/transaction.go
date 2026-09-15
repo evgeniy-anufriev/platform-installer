@@ -18,6 +18,34 @@ import (
 
 const maxTransactionDocuments = 1024
 
+// expectedRevisionAfterCommit derives the exact canonical revision represented
+// by the already guarded candidate bytes. It is used only to report a committed
+// transaction honestly if a subsequent local read cannot complete.
+func expectedRevisionAfterCommit(current []projectDocument, changes []storedDocument) string {
+	digests := make(map[string]string, len(current)+len(changes))
+	for _, document := range current {
+		digests[document.LogicalPath] = document.Digest
+	}
+	for _, change := range changes {
+		digests[change.LogicalPath] = digestBytes(change.After)
+	}
+	paths := make([]string, 0, len(digests))
+	for logical := range digests {
+		if logical != generatedDocument {
+			paths = append(paths, logical)
+		}
+	}
+	sort.Strings(paths)
+	var input []byte
+	for _, logical := range paths {
+		input = append(input, []byte(logical)...)
+		input = append(input, 0)
+		input = append(input, []byte(digests[logical])...)
+		input = append(input, 0)
+	}
+	return digestBytes(input)
+}
+
 type transactionParent struct {
 	LogicalPath string `json:"logicalPath"`
 	Identity    string `json:"identity"`
@@ -1201,6 +1229,7 @@ func (b *Backend) commitEditPlan(ctx context.Context, planID, missingPlanVersion
 	if revision != plan.Public.BaseProjectRevision {
 		return resultBlockedFor(plan, blocked("PROJECT_CHANGED", "Project changed after planning", "project"))
 	}
+	expectedRevision := expectedRevisionAfterCommit(documents, plan.Documents)
 	transactionStarted := b.now()
 	if err := b.commitDocuments(plan.ProjectRoot, planID, plan.Documents); err != nil {
 		return resultBlockedFor(plan, err)
@@ -1208,6 +1237,23 @@ func (b *Backend) commitEditPlan(ctx context.Context, planID, missingPlanVersion
 	transactionDuration := b.now().Sub(transactionStarted)
 	b.plans.Discard(planID)
 	_, newRevision, revisionErr := collectProjectDocuments(plan.ProjectRoot)
+	if plan.LocalOnly {
+		if revisionErr != nil || newRevision != expectedRevision {
+			return EditCommitResult{APIVersion: resultVersion, Kind: "EditCommitResult", Status: "COMMITTED_REFRESH_FAILED", Changed: true,
+				OldProjectRevision: plan.Public.BaseProjectRevision, NewProjectRevision: expectedRevision, AffectedDocuments: plan.Public.AffectedDocuments,
+				ApplyRequired: true, Timing: CommitTiming{Transaction: transactionDuration}}
+		}
+		managed, managedErr := ReadManagedProjectView(plan.ProjectRoot)
+		if managedErr != nil || managed == nil || managed.ProjectRevision != newRevision {
+			return EditCommitResult{APIVersion: resultVersion, Kind: "EditCommitResult", Status: "COMMITTED_REFRESH_FAILED", Changed: true,
+				OldProjectRevision: plan.Public.BaseProjectRevision, NewProjectRevision: newRevision, AffectedDocuments: plan.Public.AffectedDocuments,
+				ApplyRequired: true, Timing: CommitTiming{Transaction: transactionDuration}}
+		}
+		return EditCommitResult{APIVersion: resultVersion, Kind: "EditCommitResult",
+			Status: "COMMITTED", Changed: true, OldProjectRevision: plan.Public.BaseProjectRevision,
+			NewProjectRevision: newRevision, AffectedDocuments: plan.Public.AffectedDocuments,
+			Managed: managed, ApplyRequired: true, Timing: CommitTiming{Transaction: transactionDuration}}
+	}
 	owned, ownedErr := discoverOwnedPaths(plan.ProjectRoot)
 	snapshotStarted := b.now()
 	var snapshot *coreadapter.Snapshot

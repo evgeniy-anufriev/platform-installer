@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.invalid/contracts/project-save/v1alpha1/schema.json",
+  "title": "Structural project Save contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/structuralEditPlan" },
+    { "$ref": "#/$defs/structuralSaveResult" }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "documentState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "enum": ["ABSENT", "PRESENT"] },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "documentChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logicalPath", "before", "after"],
+      "properties": {
+        "logicalPath": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "before": { "$ref": "#/$defs/documentState" },
+        "after": { "$ref": "#/$defs/documentState" }
+      }
+    },
+    "semanticChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "safeSummary"],
+      "properties": {
+        "operation": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "property": { "type": "string", "maxLength": 128 },
+        "safeSummary": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "kind", "code", "status", "category", "field", "safeMessage"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/finding/v1alpha1" },
+        "kind": { "const": "Finding" },
+        "code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "field": { "type": "string", "maxLength": 256 },
+        "safeMessage": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "structuralEditPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "kind", "status", "baseProjectRevision", "semanticChanges", "affectedEntities", "affectedDocuments", "reviewDiff", "saveAllowed"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/structural-edit-plan/v1alpha1" },
+        "kind": { "const": "StructuralEditPlan" },
+        "status": { "enum": ["READY", "NO_CHANGE", "BLOCKED"] },
+        "finding": { "$ref": "#/$defs/finding" },
+        "planId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "baseProjectRevision": { "$ref": "#/$defs/digest" },
+        "semanticChanges": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/semanticChange" } },
+        "affectedEntities": { "type": "array", "maxItems": 1024, "items": { "type": "string", "maxLength": 128 } },
+        "affectedDocuments": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/documentChange" } },
+        "reviewDiff": { "type": "string", "maxLength": 65536 },
+        "saveAllowed": { "type": "boolean" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "structuralSaveResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "kind", "status", "changed", "timing"],
+      "properties": {
+        "apiVersion": { "const": "platform.installer/structural-save-result/v1alpha1" },
+        "kind": { "const": "StructuralSaveResult" },
+        "status": { "enum": ["COMMITTED", "COMMITTED_REFRESH_FAILED", "BLOCKED"] },
+        "changed": { "type": "boolean" },
+        "finding": { "$ref": "#/$defs/finding" },
+        "oldProjectRevision": { "$ref": "#/$defs/digest" },
+        "newProjectRevision": { "$ref": "#/$defs/digest" },
+        "affectedDocuments": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/documentChange" } },
+        "managed": { "type": "object", "additionalProperties": false, "required": ["projectRevision", "servers"], "properties": { "projectRevision": { "$ref": "#/$defs/digest" }, "servers": { "type": "object", "additionalProperties": { "type": "object" } } } },
+        "timing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transaction", "snapshot"],
+          "properties": { "transaction": { "type": "integer", "minimum": 0 }, "snapshot": { "type": "integer", "minimum": 0 } }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "COMMITTED" } } }, "then": { "required": ["newProjectRevision", "managed"] } },
+        { "if": { "properties": { "status": { "const": "COMMITTED_REFRESH_FAILED" } } }, "then": { "required": ["newProjectRevision"] } }
+      ]
+    }
+  }
+}

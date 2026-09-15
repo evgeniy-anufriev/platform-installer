@@ -1,5 +1,14 @@
 # UI-01E2 — Servers page + Add/Edit/Delete architecture
 
+> **Owner supersession, 2026-09-15:** ADR-027 and
+> [Save / Project Verify / DeploymentPlan](ui-save-verify-architecture.md)
+> replace every statement below that requires READY/Core candidate PASS before
+> Save. Current UI semantics are typed server intents → EditSession → local
+> structural preview → guarded Save; optional Project Verify is separate.
+> Existing server CRUD, draft overlay, source ownership, revision/digest and
+> generic-reference behavior otherwise remains. Historical Core-backed
+> acceptance evidence is retained as evidence for the old implementation only.
+
 Status: **DONE (2026-09-14)**. This milestone implements the
 production Servers editor surface over the accepted UI-01D lifecycle and the
 UI-01E1 server CRUD contract. It does not implement runtime credentials,
@@ -10,7 +19,7 @@ connection discovery, Execution Node management or readiness.
 Provide one production Servers page for empty and existing managed projects:
 
 ```text
-authoritative ProjectSnapshot.hosts
+saved/local managed server view
         ↓
 Servers page and server dialog
         ↓
@@ -18,9 +27,11 @@ acknowledged project-edit/v1alpha4 server intents
         ↓
 existing bounded EditSession
         ↓
-existing Review → target-free Core candidate proof → Commit
+local structural preview → guarded Save
         ↓
-refreshed authoritative ProjectSnapshot.hosts
+new canonical revision (`UNVERIFIED` or `STALE`)
+        ↓ optional
+Project Verify of the saved revision through Core
 ```
 
 E2 adds no direct YAML write, server repository, persistent draft, alternate
@@ -31,8 +42,8 @@ only canonical desired state.
 
 The following accepted foundations are reused unchanged:
 
-- UI-01D owns transient edit sessions, review plans, complete-candidate Core
-  validation and guarded commit;
+- UI-01D owns transient edit sessions, local structural plans and guarded
+  commit; ADR-027 separates optional saved-revision Core verification;
 - UI-01E1 owns `project-edit/v1alpha4` `CreateServer`, `UpdateServer` and
   `DeleteServer`, managed inventory mutation, final-state proof and generic
   host-reference protection;
@@ -61,7 +72,7 @@ The owner accepted the bounded corrections from the first architecture review:
 | Finding | Resolution |
 | --- | --- |
 | UI01E2-ARCH-001 | Metadata-only first save accepts CreateServer only. Draft-created rows cannot be edited or deleted until the first commit transitions the project to `MANAGED_PROJECT`. |
-| UI01E2-ARCH-002 | `COMMITTED_REFRESH_FAILED` is a completed commit with unavailable current projection: stale rows are hidden and CRUD remains blocked until a fresh authoritative read-only snapshot succeeds. |
+| UI01E2-ARCH-002 | Superseded by ADR-027 for new Save: no post-commit Core refresh occurs, so `COMMITTED_REFRESH_FAILED` is compatibility-only. A remaining local source-view refresh error is reported as local refresh/IO state without converting a committed Save into failure. |
 | UI01E2-ARCH-003 | If E2 creates a session and its first append fails, it discards that still-empty session automatically. Existing non-empty sessions are retained on later append failures. |
 
 The subsequent owner review adds four binding clarifications:
@@ -171,26 +182,25 @@ presentation only:
 Metadata-only first-save rows support only the create preview described above.
 The UI does not offer Update/Delete for them before their first commit.
 
-The overlay is not sent to Core as a snapshot and is never a commit input. The
-Go `EditSessionStore` retains the actual ordered commands; Review independently
-reduces them and Core proves the complete staged candidate. If UI preview and
-review disagree, the plan and Core findings win.
+The overlay is never a commit input. `EditSessionStore` retains ordered typed
+commands; local structural Review independently reduces them into the exact
+candidate and affected-document plan. If UI preview and backend plan disagree,
+the backend plan wins. Optional Core Verify evaluates only the later saved
+revision.
 
 The overlay and edit session are intentionally transient. A process restart
 destroys both. No local storage, SQLite, recovery journal or second draft
 contract is added.
 
-After a `COMMITTED` result, the returned snapshot replaces committed rows and
-the overlay is cleared. After discard, the overlay is cleared and the previous
-snapshot remains. After blocked review or a pre-write failed commit, the
-overlay remains available for inspection and the canonical project remains
-unchanged.
+After a committed Save, a local revision-bound managed source view replaces
+committed rows and the overlay clears. After discard it clears and the previous
+saved view remains. After blocked structural review or pre-write failure the
+overlay remains and canonical bytes are unchanged.
 
-`COMMITTED_REFRESH_FAILED` is different: canonical files have already been
-committed, the plan is consumed and commit must not be retried. E2 clears the
-session and overlay, removes the previous snapshot from the current
-authoritative view, marks the project projection **Stale / unavailable**, and
-blocks Add/Edit/Delete.
+The old `COMMITTED_REFRESH_FAILED` behavior below is compatibility history.
+New Save performs no Core refresh. If local source-view refresh fails after a
+commit, the result states that bytes committed, consumes the plan exactly once
+and offers a local reopen; it is not a Verify failure and does not retry Save.
 
 The exact recovery seam is the existing exported Go method
 `App.OpenProject(root string) ProjectOpenResult`, already present in generated
@@ -303,18 +313,19 @@ Core/Go boundary:
   `ProjectSnapshot.references.hosts[hostId][]` records. The current producer
   discovers `platform_deployments` placement references; future canonical host
   reference kinds must be added in Core, not in React or service-specific Go;
-- the Go project writer owns the non-cascade transaction policy. After applying
-  DeleteServer to the complete staged candidate and obtaining its authoritative
-  snapshot, `serverReferenceInUse` asks only whether the deleted host has one or
-  more generic records. It does not interpret `kind`, `sourceId`, service type
-  or placement semantics;
-- when records remain, Go emits the project-writer finding
-  `REFERENCE_IN_USE` and makes the plan non-committable;
+- the Go writer owns non-cascade mutation: DeleteServer removes no related
+  service/placement document. Local Save does not require fresh Core evidence;
+- during optional Verify (and fresh planning), Go may apply the same generic
+  `serverReferenceInUse` policy to authoritative Core records. It does not
+  interpret `kind`, `sourceId`, service type or placement semantics;
+- remaining records make the saved revision `INVALID` with
+  `REFERENCE_IN_USE`; they do not undo the already successful structural Save;
 - React does not precompute references or independently decide whether delete
   is legal. It submits the intent and renders the Review finding.
 
-Therefore `REFERENCE_IN_USE` is not a Core validation rule or UI guard. Core is
-the reference-discovery authority; Go is the generic write-policy authority.
+Therefore `REFERENCE_IN_USE` is not service-specific Go logic or a UI guard.
+Core is the reference-discovery authority; Go is the generic non-cascade and
+verification-policy authority.
 The required snapshot contract includes `references`; E2 does not add fallback
 reference discovery or treat a UI-side cached relationship as proof.
 
@@ -343,16 +354,15 @@ The App Shell shows:
 Modal **Cancel** discards only unsubmitted form input. It never discards an
 existing session.
 
-Appending after an earlier Review uses current session behavior: the previous
-plan is invalidated and the shell returns to editing state. Commit is possible
-only for the latest reviewed plan.
+Appending after an earlier structural Review invalidates its local plan and
+returns the shell to editing. Save consumes only the latest revision-bound
+structural plan.
 
 The existing review surface displays:
 
 - ordered safe semantic summaries;
 - affected documents and present/absent states;
-- impacts;
-- Core validation status and safe findings;
+- structural/safety findings (never labelled Core validation);
 - **Return to editing**, **Discard all changes** and **Save project** actions.
 
 The final action may remain labelled **Save** in the compact UI, but its nearby
@@ -421,18 +431,18 @@ form engine or design-system migration is introduced for E2.
 - Append failure keeps the dialog/form visible and does not alter the overlay.
 - If the failed append was the first command in a newly created empty session,
   that empty session is discarded; close/open/create are not left blocked.
-- Review is the first server-edit action that invokes target-free Core on the
-  selected READY Execution Node.
-- Execution Node unavailable keeps the session and project bytes unchanged.
+- Structural Review/Save starts no Core or SSH work. Optional Project Verify is
+  the first action that invokes target-free Core on READY.
+- Execution Node unavailable blocks Verify/planning, not local Save.
 - External project revision change blocks review/commit through existing
   revision guards.
 - Busy operations disable conflicting actions and duplicate submission.
-- A blocked Review never enables commit.
+- A structurally blocked Review never enables Save.
 - Commit failure retains the reviewed state when retry is supported by the
   existing lifecycle; stale/ownership failures are shown without local repair.
-- `COMMITTED_REFRESH_FAILED` is never retried as commit: the stale snapshot and
-  draft are cleared, CRUD is blocked, and only read-only snapshot refresh is
-  offered until authoritative state is restored.
+- `COMMITTED_REFRESH_FAILED` is compatibility-only. New Save performs no Core
+  refresh; a local source-view refresh failure cannot make an already committed
+  transaction false-failed or trigger a second commit.
 - Closing/opening/creating a project remains disabled during an active session.
 - React unmount cleanup must not attempt to commit or mutate project files.
 
@@ -462,10 +472,9 @@ form engine or design-system migration is introduced for E2.
 4. Implement add/edit dialogs, Application Config type handling and exact port
    intent mapping.
 5. Implement delete confirmation and generic blocker presentation.
-6. Add acknowledged-intent overlay, global review/discard interaction and
-   refreshed-snapshot reconciliation after commit, including fail-safe
-   `COMMITTED_REFRESH_FAILED` invalidation and recovery through the existing
-   `OpenProject(currentRoot)` Wails seam.
+6. Add acknowledged-intent overlay, local structural review/discard interaction
+   and revision-bound local source-view reconciliation after Save. Keep old
+   `COMMITTED_REFRESH_FAILED` only for compatibility callers.
 7. Add accessibility states, responsive table styling and focused component
    tests.
 8. Recheck the mockup and run E2 acceptance before updating milestone state.
@@ -477,7 +486,7 @@ Automated and native tests must prove:
 - no-project, empty-project and populated-project Servers states;
 - Servers navigation is available only in an open project;
 - creating an empty project does not start a session;
-- Add first server follows the guarded first-write Review → Commit path;
+- Add first server follows guarded local structural Review → Save;
 - multiple CreateServer commands reuse one metadata-only first-save session;
 - metadata-only Review contains CreateServer commands only, and draft-created
   rows expose no Edit/Delete actions before first commit;
@@ -494,10 +503,9 @@ Automated and native tests must prove:
 - no-change edit appends nothing;
 - duplicate create and absent update/delete show safe blockers;
 - delete confirmation is non-cascading;
-- referenced delete becomes `REFERENCE_IN_USE` at Review and writes nothing;
-- Core supplies generic host-reference records, Go blocks on record presence
-  without interpreting reference kind, and React performs no independent
-  reference validation;
+- referenced delete never cascades; optional Verify may return
+  `REFERENCE_IN_USE` and `INVALID` from generic Core records without undoing
+  Save; React performs no independent reference validation;
 - Create → Update, repeated Update and Create → Delete are exercised only after
   the first commit has produced a `MANAGED_PROJECT`, and render consistently
   with the final reviewed plan;
@@ -506,20 +514,22 @@ Automated and native tests must prove:
 - modal Cancel preserves earlier draft commands;
 - Discard restores the committed snapshot with unchanged project digests;
 - before Review and before Commit canonical project digests are unchanged;
-- successful commit refreshes rows from the returned authoritative snapshot;
+- successful Save refreshes rows from the local revision-bound managed view;
 - after first commit, former draft-created rows are reconstructed as ordinary
   managed rows and immediately use normal post-commit CRUD semantics;
-- `COMMITTED_REFRESH_FAILED` clears the session/overlay, hides the prior rows,
-  blocks CRUD, does not retry commit, and recovers only through a fresh
-  authoritative read-only `OpenProject(currentRoot)` snapshot;
-- backend application context also has a nil snapshot after that result, so a
-  frontend rerender or `CurrentProject` call cannot resurrect stale rows;
-- stale revision, ownership conflict, unavailable Execution Node and expired
-  session remain non-mutating;
+- old `COMMITTED_REFRESH_FAILED` remains compatibility-only; local post-Save
+  refresh failure cannot falsely report rollback or repeat commit;
+- stale revision, ownership conflict and expired session remain non-mutating;
+  unavailable Execution Node does not prevent local Save;
 - opening and editing forms contacts no target server;
 - keyboard focus, Escape, labels and destructive confirmation behavior work.
 
-Native Windows acceptance uses temporary QA projects and the existing READY
+### Historical native acceptance before ADR-027
+
+The following records the completed Core-backed E2 acceptance and is not the
+acceptance contract for new local Save.
+
+Native Windows acceptance used temporary QA projects and the existing READY
 Execution Node only for target-free candidate proof. It covers:
 
 ```text
@@ -587,7 +597,7 @@ accepted by commit. A backend candidate-view DTO, command mutation API,
 separate server repository, generic form engine and optimistic concurrency
 layer would duplicate or expand the existing lifecycle and are excluded.
 
-## 18. Final acceptance evidence
+## 18. Historical final acceptance evidence (before ADR-027)
 
 The Windows Wails production build passed with Go 1.25.0 and Wails 2.15.0.
 Focused frontend coverage passed 11/11 tests, lint, TypeScript and Vite

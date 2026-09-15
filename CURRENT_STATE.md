@@ -26,13 +26,25 @@ UI-01E3 and UI-01E4 are DONE; UI-01E5 is NEXT. UI-01B adds only the Wails/React 
 shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
 edit/session, candidate, save or apply path.
 
-The accepted freeze is `docs/ui-01a-contract-freeze.md`; toolchain, mockup
+ADR-027 is implemented pre-UI-01E5 without changing milestone statuses. New
+Installer sessions use local structural review and the existing guarded writer;
+Save requires no Execution Node/Core call and returns a locally projected saved
+revision. Reopen without a node reads only directly Installer-owned canonical
+server fields. Explicit Project Verify runs the existing target-free
+`BuildProjectSnapshot` operation, binds derived in-memory evidence to the saved
+revision/attested active-runtime identity, and never mutates project files. A semantic Save
+makes the new revision `UNVERIFIED`. Fresh `BuildDeploymentPlan` remains mandatory
+before execution. UI-01E5 is still NOT STARTED/NEXT and owns readiness,
+preparation and navigation gating.
+
+The 2026-09-05 accepted freeze is `docs/ui-01a-contract-freeze.md`; toolchain, mockup
 reconciliation, reviews and QA are recorded in the adjacent `ui-01a-*`
-documents. It fixes the one-file empty project (`project.yml` only), exact lock
-provenance, first-save ownership, complete-candidate Core proof on the selected
-READY Execution Node, project-edit v1alpha2 evolution, missing server/topology/
-PKI commands, and runtime-only session credentials. Core-contract and safety
-reviews both report 0 blocking findings.
+documents. It fixed the one-file empty project (`project.yml` only), exact lock
+provenance, first-save ownership, then-current complete-candidate Core proof,
+project-edit v1alpha2 evolution, missing server/topology/PKI commands, and
+runtime-only session credentials. ADR-027 supersedes only its Core-before-Save
+requirement; its ownership and transaction protections remain. Historical
+Core-contract and safety reviews reported 0 blocking findings.
 
 The implementation sequence remains `docs/ui-01.md` (UI-01B through UI-01J).
 Every milestone requires pre-start and acceptance mockup/contract checks.
@@ -68,7 +80,8 @@ transient session, negotiated remote complete-candidate Core proof, guarded
 first write and narrow Wails review/save shell passed Windows and RED OS
 acceptance. UI-01E1 is DONE: new sessions use v1alpha4 server CRUD intents;
 Core projects desired hostname, normalized SSH port and generic host references;
-the existing staged review/commit lifecycle remains authoritative. UI-01E2
+the staged Core-backed review/commit lifecycle is retained as historical
+acceptance evidence, while ADR-027 defines the new local Save target. UI-01E2
 Servers UI, UI-01E3 shared runtime session credentials and UI-01E4 Execution Node selection are DONE. UI-01E5 is NEXT.
 
 ## Phase

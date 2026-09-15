@@ -9,6 +9,19 @@ const project = {
   status: "OPEN",
   root: "C:/Projects/test",
   classification: "MANAGED_PROJECT",
+  managed: {
+    projectRevision: "sha256:old",
+    servers: {
+      node1: {
+        hostId: "node1",
+        type: "infra",
+        desiredHostname: "node1.example.internal",
+        address: "192.0.2.10",
+        sshPort: 2222,
+      },
+    },
+  },
+  verification: { status: "NOT_VERIFIED" },
   snapshot: {
     status: "PASS",
     project: { name: "Test" },
@@ -48,6 +61,7 @@ type MockApi = ProjectBackend & {
   reviewEditSession: ReturnType<typeof vi.fn>;
   commitEditPlan: ReturnType<typeof vi.fn>;
   discardEditSession: ReturnType<typeof vi.fn>;
+  verifyProject: ReturnType<typeof vi.fn>;
 };
 
 function api(overrides: Record<string, unknown> = {}): MockApi {
@@ -75,6 +89,9 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
     reviewEditSession: vi.fn(),
     commitEditPlan: vi.fn(),
     discardEditSession: vi.fn().mockResolvedValue({ status: "DISCARDED" }),
+    verifyProject: vi
+      .fn()
+      .mockResolvedValue({ status: "VERIFIED", projectRevision: "sha256:old" }),
     getSessionCredentialStatus: vi.fn().mockResolvedValue({
       status: "MISSING",
       sudoPasswordStatus: "NOT_PROVIDED",
@@ -107,14 +124,15 @@ async function openServers(
 }
 
 describe("UI-01E2 server editor", () => {
-  it("keeps a Core-opened project read-only until a server intent is added", async () => {
+  it("shows saved and verification state separately before editing", async () => {
     const value = api();
     value.chooseProject.mockResolvedValue(project);
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    expect(await screen.findByText("Проверено Core")).toBeTruthy();
+    expect(await screen.findByText("Сохранено")).toBeTruthy();
+    expect(await screen.findAllByText("Не проверено")).not.toHaveLength(0);
     expect(
       (screen.getByRole("button", { name: "Топология" }) as HTMLButtonElement)
         .disabled,
@@ -252,6 +270,10 @@ describe("UI-01E2 server editor", () => {
   it("preserves an unknown configured type when another field changes", async () => {
     const unknown = {
       ...project,
+      managed: {
+        ...project.managed,
+        servers: { node1: { ...project.managed.servers.node1, type: "scada" } },
+      },
       snapshot: {
         ...project.snapshot,
         hosts: { node1: { ...project.snapshot.hosts.node1, type: "scada" } },
@@ -354,28 +376,27 @@ describe("UI-01E2 server editor", () => {
     expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
   });
 
-  it("hides the stale snapshot after COMMITTED_REFRESH_FAILED and reopens through OpenProject", async () => {
+  it("saves from a local structural preview and verifies separately", async () => {
     const planID = "abcdef0123456789abcdef0123456789";
-    const refreshed = {
+    const saved = {
       ...project,
-      snapshot: {
-        ...project.snapshot,
+      managed: {
         projectRevision: "sha256:new",
-        hosts: {
+        servers: {
           node1: {
-            ...project.snapshot.hosts.node1,
+            ...project.managed.servers.node1,
             desiredHostname: "node1.changed.internal",
           },
         },
       },
+      verification: { status: "STALE", projectRevision: "sha256:old" },
     };
     const value = api({
       reviewEditSession: vi.fn().mockResolvedValue({
         status: "READY",
         plan: {
           planId: planID,
-          commitAllowed: true,
-          validation: { status: "PASS", findings: [] },
+          saveAllowed: true,
           semanticChanges: [],
           affectedDocuments: [
             {
@@ -388,10 +409,14 @@ describe("UI-01E2 server editor", () => {
         },
       }),
       commitEditPlan: vi.fn().mockResolvedValue({
-        status: "COMMITTED_REFRESH_FAILED",
-        commit: { status: "COMMITTED_REFRESH_FAILED" },
+        status: "COMMITTED",
+        commit: { status: "COMMITTED", newProjectRevision: "sha256:new" },
+        current: saved,
       }),
-      openProject: vi.fn().mockResolvedValue(refreshed),
+      verifyProject: vi.fn().mockResolvedValue({
+        status: "VERIFIED",
+        projectRevision: "sha256:new",
+      }),
     });
     await openServers(value);
     await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
@@ -402,27 +427,19 @@ describe("UI-01E2 server editor", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await userEvent.click(
-      screen.getByRole("button", { name: "Проверить изменения" }),
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
     );
     expect(
       await screen.findByRole("heading", { name: "Затрагиваемые документы" }),
     ).toBeTruthy();
-    expect(
-      screen.getByText("Inventory changes require a later apply."),
-    ).toBeTruthy();
     await userEvent.click(
       screen.getByRole("button", { name: "Сохранить проект" }),
     );
-    expect(
-      await screen.findByRole("heading", {
-        name: "Снимок проекта требует обновления",
-      }),
-    ).toBeTruthy();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Обновить снимок проекта" }),
-    );
-    expect(value.openProject).toHaveBeenCalledWith("C:/Projects/test");
+    expect(await screen.findByText("Не проверено")).toBeTruthy();
     expect(await screen.findByText("node1.changed.internal")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+    expect(value.verifyProject).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Проверено")).toBeTruthy();
   });
 });
 
@@ -430,11 +447,22 @@ describe("UI-01E3 session credentials", () => {
   it("submits write-only credentials and clears transient fields after success", async () => {
     const value = api();
     await openServers(value);
-    await userEvent.type(screen.getByLabelText("Технический пользователь"), "installer");
-    await userEvent.type(screen.getByLabelText("SSH-пароль"), "not-visible-after-submit");
+    await userEvent.type(
+      screen.getByLabelText("Технический пользователь"),
+      "installer",
+    );
+    await userEvent.type(
+      screen.getByLabelText("SSH-пароль"),
+      "not-visible-after-submit",
+    );
     await userEvent.click(screen.getByLabelText("Требуется пароль sudo"));
-    await userEvent.type(screen.getByLabelText("Пароль sudo"), "also-not-visible-after-submit");
-    await userEvent.click(screen.getByRole("button", { name: "Сохранить в сеансе" }));
+    await userEvent.type(
+      screen.getByLabelText("Пароль sudo"),
+      "also-not-visible-after-submit",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сеансе" }),
+    );
     expect(value.setSessionCredential).toHaveBeenCalledWith({
       username: "installer",
       sshMode: "SSH_PASSWORD",
@@ -443,8 +471,12 @@ describe("UI-01E3 session credentials", () => {
       elevationMode: "SUDO_PASSWORD",
       elevationPassword: "also-not-visible-after-submit",
     });
-    expect((screen.getByLabelText("SSH-пароль") as HTMLInputElement).value).toBe("");
-    expect((screen.getByLabelText("Пароль sudo") as HTMLInputElement).value).toBe("");
+    expect(
+      (screen.getByLabelText("SSH-пароль") as HTMLInputElement).value,
+    ).toBe("");
+    expect(
+      (screen.getByLabelText("Пароль sudo") as HTMLInputElement).value,
+    ).toBe("");
     expect(screen.getByText("Доступны до 2026-09-14T14:00:00Z")).toBeTruthy();
     expect(screen.queryByText("not-visible-after-submit")).toBeNull();
   });

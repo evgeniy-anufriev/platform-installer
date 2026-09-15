@@ -54,6 +54,23 @@ def reply(payload):
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
 
 
+def runtime_evidence(args):
+    """Return only immutable identity read from the active runtime release."""
+    try:
+        with open(os.path.join(args.runtime_release, "manifest.yaml"), "r", encoding="utf-8") as stream:
+            manifest = yaml.safe_load(stream)
+    except (OSError, UnicodeError, yaml.YAMLError):
+        raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+    if not isinstance(manifest, dict):
+        raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+    core_version = manifest.get("coreVersion")
+    catalog_digest = manifest.get("catalogDigest")
+    planning_protocol = manifest.get("bootstrapProtocol")
+    if not isinstance(core_version, str) or not core_version or len(core_version) > 256 or not isinstance(catalog_digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", catalog_digest) is None or not isinstance(planning_protocol, str) or not planning_protocol or len(planning_protocol) > 256 or re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or "") is None:
+        raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+    return {"bundleDigest": args.bundle_digest, "coreVersion": core_version, "catalogDigest": catalog_digest, "protocol": planning_protocol}
+
+
 def unit_name(run_id):
     return "platform-installer-run-%s.service" % run_id
 
@@ -398,7 +415,7 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
         os.close(active_lock)
 
 
-def core_operation(value, state_root, runtime_release, operation):
+def core_operation(value, state_root, runtime_release, operation, runtime_identity=None):
     """Run one fixed Core playbook against already trusted run staging."""
     journal = Journal(state_root, value["runId"])
     project = os.path.join(journal.directory, "project")
@@ -501,7 +518,9 @@ def core_operation(value, state_root, runtime_release, operation):
         request_value = value.get("snapshotRequest")
         if request_value is not None and snapshot.get("projectRevision") != request_value.get("candidateProjectRevision"):
             raise LifecycleError("PROJECT_SNAPSHOT_REVISION_MISMATCH")
-        return {"projectSnapshot": snapshot}
+        if runtime_identity is None:
+            raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+        return {"projectSnapshot": snapshot, "runtimeEvidence": runtime_identity}
     if operation == "BuildDeploymentPlan":
         with open(os.path.join(journal.directory, "deployment-plan.json"), "r", encoding="utf-8") as stream:
             plan = json.load(stream)
@@ -514,14 +533,14 @@ def core_operation(value, state_root, runtime_release, operation):
     return {"validation": "PASS"}
 
 
-def snapshot(value, state_root, runtime_release):
+def snapshot(value, state_root, runtime_release, runtime_identity):
     """Return a Core snapshot and remove the request-owned staging directory."""
     journal = Journal(state_root, value["runId"])
     stage_identity = _snapshot_stage_identity(value, journal)
     if stage_identity is None:
         raise LifecycleError("PROJECT_SNAPSHOT_STAGING_NOT_OWNED")
     try:
-        return core_operation(value, state_root, runtime_release, "BuildProjectSnapshot")
+        return core_operation(value, state_root, runtime_release, "BuildProjectSnapshot", runtime_identity)
     finally:
         _cleanup_snapshot_staging(value, journal, stage_identity)
 
@@ -606,13 +625,13 @@ def main():
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)
+        runtime_release = value.get("runtimeRelease")
+        if not isinstance(runtime_release, dict) or runtime_release.get("bundleDigest") != args.bundle_digest:
+            raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         if candidate is not None:
-            runtime_release = value.get("runtimeRelease")
-            if not isinstance(runtime_release, dict):
-                raise LifecycleError("PROJECT_SNAPSHOT_REQUEST_INVALID")
             if candidate.get("artifactLockDigest") != args.bundle_digest or runtime_release.get("bundleDigest") != args.bundle_digest:
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
-        return reply(snapshot(value, args.state_root, args.runtime_release))
+        return reply(snapshot(value, args.state_root, args.runtime_release, runtime_evidence(args)))
     if operation == "StartExecution": return reply(start(value, args.state_root, args.runtime_release, args.controller, args.bundle_digest))
     if operation == "GetExecution": return reply(get(value, args.state_root))
     if operation == "GetEvents": return reply(events(value, args.state_root))

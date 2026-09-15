@@ -299,7 +299,7 @@ type snapshotProtocolRunner struct {
 func (r *snapshotProtocolRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
 	if strings.Contains(string(input), `"operation":"BuildProjectSnapshot"`) {
 		r.protocolRequest = string(input)
-		return []byte(`{"projectSnapshot":{"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"PASS"}}`), nil
+		return []byte(`{"projectSnapshot":{"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"PASS"},"runtimeEvidence":{"bundleDigest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","coreVersion":"test-core","catalogDigest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","protocol":"v1alpha1"}}`), nil
 	}
 	return r.protocolRunner.Run(ctx, name, args, input)
 }

@@ -23,16 +23,44 @@ type projectSnapshotReader interface {
 	BuildProjectSnapshot(context.Context, executionnode.Node, string, map[string]any) (*coreadapter.Snapshot, error)
 }
 
-type candidateProjectSnapshotReader interface {
-	BuildCandidateProjectSnapshot(context.Context, executionnode.Node, string, map[string]any, executionnode.CandidateProjectSnapshotRequest) (*coreadapter.Snapshot, error)
-}
-
-type candidateReadyReader interface{ CheckCandidateReady(context.Context) error }
-
 type projectReader struct {
 	transport      projectSnapshotReader
 	node           executionnode.Node
 	runtimeRelease map[string]any
+}
+
+type verificationSnapshot struct {
+	Snapshot *coreadapter.Snapshot
+	Runtime  executionnode.RuntimeEvidence
+	NodeID   string
+}
+
+func (r projectReader) BuildVerificationSnapshot(ctx context.Context, root string) (verificationSnapshot, error) {
+	transport, ok := r.transport.(interface {
+		BuildProjectVerificationSnapshot(context.Context, executionnode.Node, string, map[string]any) (executionnode.ProjectVerificationSnapshot, error)
+	})
+	if !ok || r.node.ID == "" || len(r.runtimeRelease) == 0 {
+		return verificationSnapshot{}, errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED")
+	}
+	result, err := transport.BuildProjectVerificationSnapshot(ctx, r.node, root, r.runtimeRelease)
+	if err != nil {
+		return verificationSnapshot{}, err
+	}
+	if !runtimeEvidenceMatchesExpected(result.Runtime, r.runtimeRelease) {
+		return verificationSnapshot{}, errors.New("EXECUTION_RUNTIME_IDENTITY_MISMATCH")
+	}
+	return verificationSnapshot{Snapshot: result.Snapshot, Runtime: result.Runtime, NodeID: r.node.ID}, nil
+}
+
+func runtimeEvidenceMatchesExpected(actual executionnode.RuntimeEvidence, expected map[string]any) bool {
+	for key, actualValue := range map[string]string{"bundleDigest": actual.BundleDigest, "coreVersion": actual.CoreVersion, "catalogDigest": actual.CatalogDigest} {
+		requested, present := expected[key]
+		if !present || requested != actualValue {
+			return false
+		}
+	}
+	planningProtocol, ok := expected["planningProtocol"].(string)
+	return ok && planningProtocol != "" && actual.Protocol != "" && planningProtocol == actual.Protocol
 }
 
 func (r projectReader) BuildSnapshot(ctx context.Context, root string) (*coreadapter.Snapshot, error) {
@@ -42,42 +70,6 @@ func (r projectReader) BuildSnapshot(ctx context.Context, root string) (*coreada
 	return r.transport.BuildProjectSnapshot(ctx, r.node, root, r.runtimeRelease)
 }
 
-func (r projectReader) BuildCandidateSnapshot(ctx context.Context, root string, owned []string, project *projectlifecycle.Project) (*coreadapter.Snapshot, error) {
-	transport, ok := r.transport.(candidateProjectSnapshotReader)
-	if !ok || project == nil {
-		return nil, errors.New("PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED")
-	}
-	revision, err := installer.ProjectRevision(root)
-	if err != nil {
-		return nil, err
-	}
-	return transport.BuildCandidateProjectSnapshot(ctx, r.node, root, r.runtimeRelease, executionnode.CandidateProjectSnapshotRequest{
-		ProjectIdentity: project.ID, CandidateProjectRevision: revision, ArtifactLockDigest: project.Source.BundleDigest,
-		CatalogLockDigest: project.Source.CatalogDigest, InstallerOwnedLogicalPaths: owned,
-	})
-}
-
-func (r projectReader) CheckCandidateReady(ctx context.Context) error {
-	checker, ok := r.transport.(interface {
-		CheckCandidateProjectSnapshotCapability(context.Context, executionnode.Node, map[string]any) error
-	})
-	if !ok || r.node.ID == "" || len(r.runtimeRelease) == 0 {
-		return errors.New("EXECUTION_NODE_NOT_CONFIGURED")
-	}
-	return checker.CheckCandidateProjectSnapshotCapability(ctx, r.node, r.runtimeRelease)
-}
-
-type candidateCoreAdapter struct {
-	reader interface {
-		BuildCandidateSnapshot(context.Context, string, []string, *projectlifecycle.Project) (*coreadapter.Snapshot, error)
-	}
-	project *projectlifecycle.Project
-}
-
-func (a candidateCoreAdapter) BuildSnapshot(ctx context.Context, root string, owned []string) (*coreadapter.Snapshot, error) {
-	return a.reader.BuildCandidateSnapshot(ctx, root, owned, a.project)
-}
-
 type unavailableProjectReader struct{}
 
 func (unavailableProjectReader) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
@@ -85,14 +77,43 @@ func (unavailableProjectReader) BuildSnapshot(context.Context, string) (*coreada
 }
 
 type ProjectOpenResult struct {
-	Status         string                    `json:"status"`
-	Root           string                    `json:"root,omitempty"`
-	Classification string                    `json:"classification,omitempty"`
-	Project        *projectlifecycle.Project `json:"project,omitempty"`
-	Counts         projectlifecycle.Counts   `json:"counts"`
-	Snapshot       *coreadapter.Snapshot     `json:"snapshot,omitempty"`
-	Diagnostics    []ApplicationDiagnostic   `json:"diagnostics,omitempty"`
-	Error          *ProjectOpenError         `json:"error,omitempty"`
+	Status         string                        `json:"status"`
+	Root           string                        `json:"root,omitempty"`
+	Classification string                        `json:"classification,omitempty"`
+	Project        *projectlifecycle.Project     `json:"project,omitempty"`
+	Counts         projectlifecycle.Counts       `json:"counts"`
+	Snapshot       *coreadapter.Snapshot         `json:"snapshot,omitempty"`
+	Managed        *installer.ManagedProjectView `json:"managed,omitempty"`
+	Verification   ProjectVerification           `json:"verification"`
+	Diagnostics    []ApplicationDiagnostic       `json:"diagnostics,omitempty"`
+	Error          *ProjectOpenError             `json:"error,omitempty"`
+}
+
+type ProjectVerification struct {
+	APIVersion        string                         `json:"apiVersion"`
+	Kind              string                         `json:"kind"`
+	Status            string                         `json:"status"`
+	ProjectIdentity   string                         `json:"projectIdentity,omitempty"`
+	ProjectRevision   string                         `json:"projectRevision,omitempty"`
+	ExecutionNodeID   string                         `json:"executionNodeId,omitempty"`
+	Runtime           *executionnode.RuntimeEvidence `json:"runtime,omitempty"`
+	Findings          []VerificationFinding          `json:"findings,omitempty"`
+	FindingsTruncated bool                           `json:"findingsTruncated,omitempty"`
+	CheckedAt         time.Time                      `json:"checkedAt,omitempty"`
+	Error             *ProjectOpenError              `json:"error,omitempty"`
+}
+
+type VerificationFinding struct {
+	Code        string `json:"code"`
+	Severity    string `json:"severity"`
+	Summary     string `json:"summary"`
+	SubjectKind string `json:"subjectKind,omitempty"`
+	SubjectID   string `json:"subjectId,omitempty"`
+	HelpRef     string `json:"helpRef,omitempty"`
+}
+
+func notVerified() ProjectVerification {
+	return ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification", Status: "UNVERIFIED"}
 }
 
 type ProjectOpenError struct {
@@ -198,6 +219,14 @@ func (a *App) serverTypeDiagnostics(snapshot *coreadapter.Snapshot) []Applicatio
 	return diagnostics
 }
 
+func (a *App) managedServerTypeDiagnostics(view *installer.ManagedProjectView) []ApplicationDiagnostic {
+	if view == nil || a.configErr != nil {
+		return nil
+	}
+	hosts := managedSnapshotHosts(view)
+	return a.serverTypeDiagnostics(&coreadapter.Snapshot{Hosts: hosts})
+}
+
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
 
 func (a *App) shutdown(context.Context) {
@@ -247,7 +276,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 		return a.failure(projectErrorCode(err))
 	}
 	a.secrets.Clear()
-	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts}
+	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts, Verification: notVerified()}
 	a.bindExecutionLocked(result.Root, result.Project, nil)
 	return a.current
 }
@@ -268,8 +297,20 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	}
 	if local.Classification == "EMPTY_MANAGED_PROJECT" {
 		a.clearCredentialForReplacementLocked(local.Root, local.Project)
-		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts}
+		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Verification: notVerified()}
 		a.bindExecutionLocked(local.Root, local.Project, nil)
+		return a.current
+	}
+	if local.Classification == projectlifecycle.ClassificationManaged && local.Project != nil {
+		managed, err := installer.ReadManagedProjectView(local.Root)
+		if err != nil {
+			return a.failure(projectErrorCode(err))
+		}
+		local.Counts.Servers = len(managed.Servers)
+		a.clearCredentialForReplacementLocked(local.Root, local.Project)
+		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project,
+			Counts: local.Counts, Managed: managed, Verification: notVerified(), Diagnostics: a.managedServerTypeDiagnostics(managed)}
+		a.bindExecutionLocked(local.Root, local.Project, managedSnapshotHosts(managed))
 		return a.current
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -279,7 +320,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 		return a.failure(projectErrorCode(err))
 	}
 	a.clearCredentialForReplacementLocked(local.Root, local.Project)
-	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot, Diagnostics: a.serverTypeDiagnostics(snapshot)}
+	a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Snapshot: snapshot, Verification: notVerified(), Diagnostics: a.serverTypeDiagnostics(snapshot)}
 	a.bindExecutionLocked(local.Root, local.Project, snapshot.Hosts)
 	return a.current
 }
@@ -295,6 +336,101 @@ func (a *App) CloseProject() ProjectOpenResult {
 	a.execution.clear()
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
+}
+
+// VerifyProject validates exactly the current saved revision through the
+// existing target-free Core snapshot operation. It never writes project files
+// and never prepares an Execution Node.
+func (a *App) VerifyProject() ProjectVerification {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.current.Status != "OPEN" || a.current.Root == "" || a.current.Project == nil {
+		return ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification", Status: "UNVERIFIED",
+			Error: &ProjectOpenError{Code: "PROJECT_NOT_OPEN", Message: projectErrorMessage("PROJECT_NOT_OPEN")}}
+	}
+	revision, err := installer.ProjectRevision(a.current.Root)
+	if err != nil {
+		return a.setVerificationUnavailableLocked(err, "")
+	}
+	ctx, cancel := a.operationContext(2 * time.Minute)
+	defer cancel()
+	reader, ok := a.reader.(interface {
+		BuildVerificationSnapshot(context.Context, string) (verificationSnapshot, error)
+	})
+	if !ok {
+		return a.setVerificationUnavailableLocked(errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED"), revision)
+	}
+	verifiedSnapshot, err := reader.BuildVerificationSnapshot(ctx, a.current.Root)
+	if err != nil {
+		return a.setVerificationUnavailableLocked(err, revision)
+	}
+	after, err := installer.ProjectRevision(a.current.Root)
+	if err != nil {
+		return a.setVerificationUnavailableLocked(err, revision)
+	}
+	evidence := ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification",
+		ProjectIdentity: a.current.Project.ID, ProjectRevision: revision, ExecutionNodeID: verifiedSnapshot.NodeID,
+		Runtime: &verifiedSnapshot.Runtime, CheckedAt: time.Now().UTC()}
+	evidence.Findings, evidence.FindingsTruncated = safeVerificationFindings(verifiedSnapshot.Snapshot.Findings)
+	if after != revision || verifiedSnapshot.Snapshot.ProjectRevision != revision {
+		return a.setVerificationUnavailableLocked(errors.New("PROJECT_REVISION_CHANGED"), revision)
+	} else if verifiedSnapshot.Snapshot.Status == "PASS" && !verifiedSnapshot.Snapshot.Partial {
+		evidence.Status = "VERIFIED"
+		a.current.Snapshot = verifiedSnapshot.Snapshot
+	} else {
+		evidence.Status = "INVALID"
+		a.current.Snapshot = verifiedSnapshot.Snapshot
+	}
+	a.current.Verification = evidence
+	return evidence
+}
+
+func (a *App) setVerificationUnavailableLocked(err error, revision string) ProjectVerification {
+	code := projectErrorCode(err)
+	if code == "EXECUTION_NODE_NOT_CONFIGURED" || code == "EXECUTION_NODE_UNAVAILABLE" {
+		code = "EXECUTION_NODE_READY_REQUIRED"
+	}
+	evidence := ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification", Status: "UNVERIFIED",
+		ProjectRevision: revision, CheckedAt: time.Now().UTC(), Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	a.current.Verification = evidence
+	return evidence
+}
+
+func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding, bool) {
+	const maxFindings = 64
+	truncated := len(findings) > maxFindings
+	if truncated {
+		findings = findings[:maxFindings]
+	}
+	result := make([]VerificationFinding, 0, len(findings))
+	for _, raw := range findings {
+		code, message := boundedFindingString(raw["code"], 128), boundedFindingString(raw["safeMessage"], 512)
+		if code == "" || message == "" {
+			continue
+		}
+		finding := VerificationFinding{Code: code, Summary: message, Severity: boundedFindingString(raw["status"], 32)}
+		if finding.Severity == "" {
+			finding.Severity = "UNKNOWN"
+		}
+		if subject, ok := raw["subject"].(map[string]any); ok {
+			finding.SubjectKind = boundedFindingString(subject["kind"], 64)
+			finding.SubjectID = boundedFindingString(subject["id"], 128)
+		}
+		if remediation, ok := raw["remediation"].(map[string]any); ok {
+			finding.HelpRef = boundedFindingString(remediation["helpUri"], 256)
+		}
+		result = append(result, finding)
+	}
+	return result, truncated
+}
+
+func boundedFindingString(raw any, limit int) string {
+	value, ok := raw.(string)
+	if !ok || len(value) == 0 || len(value) > limit {
+		return ""
+	}
+	return value
 }
 
 // SetSessionCredential captures one target credential for the current project
@@ -376,9 +512,26 @@ type EditOperationResult struct {
 	Error       *ProjectOpenError           `json:"error,omitempty"`
 }
 
+// StructuralEditOperationResult is the additive local Save contract. Legacy
+// EditOperationResult remains published for previous Wails consumers.
+type StructuralEditOperationResult struct {
+	Status      string                          `json:"status"`
+	Session     *installer.EditSession          `json:"session,omitempty"`
+	Plan        *installer.StructuralEditPlan   `json:"plan,omitempty"`
+	Commit      *installer.StructuralSaveResult `json:"commit,omitempty"`
+	Current     *ProjectOpenResult              `json:"current,omitempty"`
+	Diagnostics []ApplicationDiagnostic         `json:"diagnostics,omitempty"`
+	Error       *ProjectOpenError               `json:"error,omitempty"`
+}
+
 func (a *App) editFailure(err error) EditOperationResult {
 	code := projectErrorCode(err)
 	return EditOperationResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+}
+
+func (a *App) structuralEditFailure(err error) StructuralEditOperationResult {
+	code := projectErrorCode(err)
+	return StructuralEditOperationResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 }
 
 func (a *App) StartEditSession() EditOperationResult {
@@ -388,11 +541,8 @@ func (a *App) StartEditSession() EditOperationResult {
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return a.editFailure(errors.New("PROJECT_NOT_OPEN"))
 	}
-	reader, ok := a.reader.(interface {
-		BuildCandidateSnapshot(context.Context, string, []string, *projectlifecycle.Project) (*coreadapter.Snapshot, error)
-	})
-	if !ok {
-		return a.editFailure(errors.New("PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED"))
+	if a.current.Classification == projectlifecycle.ClassificationManaged && a.current.Managed == nil {
+		return a.editFailure(errors.New("LOCAL_PROJECT_REFRESH_REQUIRED"))
 	}
 	revision := ""
 	if a.current.Snapshot != nil {
@@ -410,7 +560,7 @@ func (a *App) StartEditSession() EditOperationResult {
 			typeIDs = append(typeIDs, serverType.ID)
 		}
 	}
-	a.editor = installer.NewBackend(candidateCoreAdapter{reader: reader, project: a.current.Project}, installer.WithServerTypes(typeIDs))
+	a.editor = installer.NewBackend(nil, installer.WithServerTypes(typeIDs))
 	session, err := a.sessions.Start(a.current.Project.ID, a.current.Root, a.current.Classification, revision)
 	if err != nil {
 		return a.editFailure(err)
@@ -443,67 +593,77 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 	return result
 }
 
-func (a *App) ReviewEditSession(sessionID string) EditOperationResult {
-	a.editMu.Lock()
-	defer a.editMu.Unlock()
-	a.reconcileEditSessionLocked()
-	if a.editor == nil || sessionID == "" || sessionID != a.activeSession {
-		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
-	}
-	ctx, cancel := a.operationContext(2 * time.Minute)
-	defer cancel()
-	plan, err := a.sessions.Review(ctx, a.editor, sessionID)
-	if err != nil {
-		return a.editFailure(err)
-	}
-	return EditOperationResult{Status: plan.Status, Plan: plan}
+// ReviewEditSession is retained only as a shape-compatible legacy endpoint.
+func (a *App) ReviewEditSession(string) EditOperationResult {
+	return a.editFailure(errors.New("EDIT_CONTRACT_SUPERSEDED"))
 }
 
-func (a *App) CommitEditPlan(sessionID, planID string) EditOperationResult {
+func (a *App) ReviewStructuralEditSession(sessionID string) StructuralEditOperationResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.reconcileEditSessionLocked()
 	if a.editor == nil || sessionID == "" || sessionID != a.activeSession {
-		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
-	}
-	if _, err := a.sessions.BeginCommit(sessionID, planID); err != nil {
-		return a.editFailure(err)
+		return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
-	ready, ok := a.reader.(candidateReadyReader)
-	if !ok {
-		a.sessions.FinishCommit(sessionID, planID, false)
-		return a.editFailure(errors.New("EXECUTION_NODE_NOT_CONFIGURED"))
+	plan, err := a.sessions.ReviewStructural(ctx, a.editor, sessionID)
+	if err != nil {
+		return a.structuralEditFailure(err)
 	}
-	if err := ready.CheckCandidateReady(ctx); err != nil {
-		a.sessions.FinishCommit(sessionID, planID, false)
-		return a.editFailure(err)
+	return StructuralEditOperationResult{Status: plan.Status, Plan: plan}
+}
+
+// CommitEditPlan is retained only as a shape-compatible legacy endpoint.
+func (a *App) CommitEditPlan(string, string) EditOperationResult {
+	return a.editFailure(errors.New("EDIT_CONTRACT_SUPERSEDED"))
+}
+
+func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.editor == nil || sessionID == "" || sessionID != a.activeSession {
+		return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
-	result := a.editor.CommitEditPlanV2(ctx, planID)
+	if _, err := a.sessions.BeginCommit(sessionID, planID); err != nil {
+		return a.structuralEditFailure(err)
+	}
+	ctx, cancel := a.operationContext(2 * time.Minute)
+	defer cancel()
+	result := a.editor.CommitStructuralSave(ctx, planID)
 	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
-			return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+			return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
 		}
 		a.activeSession = ""
 		a.editor = nil
-		if snapshot, ok := result.Snapshot.(*coreadapter.Snapshot); ok {
-			a.current.Snapshot = snapshot
-			a.current.Diagnostics = a.serverTypeDiagnostics(snapshot)
-			a.current.Classification = projectlifecycle.ClassificationManaged
-			a.bindExecutionLocked(a.current.Root, a.current.Project, snapshot.Hosts)
-		} else if result.Status == "COMMITTED_REFRESH_FAILED" {
-			// The transaction committed, but no post-commit Core projection is
-			// authoritative. Never leave a previous snapshot visible as current.
+		a.current.Snapshot = nil
+		a.current.Classification = projectlifecycle.ClassificationManaged
+		if result.Status == "COMMITTED" && result.Managed != nil && result.Managed.ProjectRevision == result.NewProjectRevision {
+			a.current.Managed = result.Managed
+			managed := result.Managed
+			a.current.Counts.Servers = len(managed.Servers)
+			a.current.Diagnostics = a.managedServerTypeDiagnostics(managed)
+			a.bindExecutionLocked(a.current.Root, a.current.Project, managedSnapshotHosts(managed))
+		} else {
+			a.current.Managed = nil
 			a.current.Snapshot = nil
+			a.current.Counts.Servers = 0
 			a.current.Diagnostics = nil
-			a.current.Classification = projectlifecycle.ClassificationManaged
+			a.execution.bind(a.current.Root, a.current.Project.ID, nil)
 		}
+		a.current.Verification = notVerified()
 	}
 	if result.Status != "COMMITTED" && result.Status != "COMMITTED_REFRESH_FAILED" {
 		a.sessions.FinishCommit(sessionID, planID, false)
 	}
-	return EditOperationResult{Status: result.Status, Commit: &result}
+	response := StructuralEditOperationResult{Status: result.Status, Commit: &result}
+	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
+		current := a.current
+		response.Current = &current
+	}
+	return response
 }
 
 func (a *App) DiscardEditSession(sessionID string) EditOperationResult {
@@ -518,14 +678,14 @@ func (a *App) DiscardEditSession(sessionID string) EditOperationResult {
 		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
 	a.activeSession, a.editor = "", nil
-	a.execution.discardDraft(snapshotHosts(a.current.Snapshot))
+	a.execution.discardDraft(currentProjectHosts(a.current))
 	return EditOperationResult{Status: "DISCARDED"}
 }
 
 func (a *App) reconcileEditSessionLocked() {
 	if a.activeSession != "" && !a.sessions.Active(a.activeSession) {
 		a.activeSession, a.editor = "", nil
-		a.execution.discardDraft(snapshotHosts(a.current.Snapshot))
+		a.execution.discardDraft(currentProjectHosts(a.current))
 	}
 }
 
@@ -534,6 +694,27 @@ func snapshotHosts(snapshot *coreadapter.Snapshot) map[string]map[string]any {
 		return nil
 	}
 	return snapshot.Hosts
+}
+
+func currentProjectHosts(current ProjectOpenResult) map[string]map[string]any {
+	if current.Managed != nil {
+		return managedSnapshotHosts(current.Managed)
+	}
+	return snapshotHosts(current.Snapshot)
+}
+
+func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[string]any {
+	if view == nil {
+		return nil
+	}
+	hosts := make(map[string]map[string]any, len(view.Servers))
+	for id, server := range view.Servers {
+		hosts[id] = map[string]any{"ansibleHost": server.Address, "type": server.Type, "desiredHostname": server.DesiredHostname}
+		if server.SSHPort != nil {
+			hosts[id]["ansiblePort"] = *server.SSHPort
+		}
+	}
+	return hosts
 }
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
@@ -579,6 +760,8 @@ func projectErrorMessage(code string) string {
 		return "Не настроен READY Execution Node для read-only открытия проекта."
 	case "EXECUTION_NODE_UNAVAILABLE":
 		return "Execution Node недоступен. Проект на диске не изменён."
+	case "EXECUTION_NODE_READY_REQUIRED":
+		return "Для проверки требуется READY Execution Node. Подготовка будет доступна в UI-01E5."
 	case "PROJECT_SNAPSHOT_INPUT_INVALID", "PROJECT_SNAPSHOT_FAILED", "PROJECT_SNAPSHOT_RESPONSE_INVALID":
 		return "Core не смог построить снимок проекта. Проект на диске не изменён."
 	case "PROJECT_PATH_INVALID":
@@ -625,7 +808,7 @@ func projectErrorMessage(code string) string {
 		return "Активный Execution Node не поддерживает проверку edit candidate."
 	case "WRITE_OWNERSHIP_REQUIRED", "WRITE_NOT_ALLOWED", "DOCUMENT_CHANGED", "PROJECT_CHANGED":
 		return "Сохранение заблокировано: проект или владение документами изменилось."
-	case "PROJECT_INPUT_INCOMPLETE", "MANAGED_PROJECT_INVALID", "PROJECT_OPEN_BLOCKED":
+	case "PROJECT_INPUT_INCOMPLETE", "MANAGED_PROJECT_INVALID", "MANAGED_DOCUMENT_INVALID", "PROJECT_OPEN_BLOCKED":
 		return "Выбранный проект нельзя безопасно открыть в текущем режиме."
 	default:
 		return "Не удалось открыть проект в режиме только чтения. Проект на диске не изменён."

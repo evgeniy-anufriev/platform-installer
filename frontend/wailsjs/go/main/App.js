@@ -26,6 +26,10 @@ export function CommitEditPlan(arg1, arg2) {
   return window["go"]["main"]["App"]["CommitEditPlan"](arg1, arg2);
 }
 
+export function CommitStructuralEditPlan(arg1, arg2) {
+  return window["go"]["main"]["App"]["CommitStructuralEditPlan"](arg1, arg2);
+}
+
 export function CreateProject(arg1) {
   return window["go"]["main"]["App"]["CreateProject"](arg1);
 }
@@ -58,6 +62,10 @@ export function ReviewEditSession(arg1) {
   return window["go"]["main"]["App"]["ReviewEditSession"](arg1);
 }
 
+export function ReviewStructuralEditSession(arg1) {
+  return window["go"]["main"]["App"]["ReviewStructuralEditSession"](arg1);
+}
+
 export function SelectExecutionNode(arg1) {
   return window["go"]["main"]["App"]["SelectExecutionNode"](arg1);
 }
@@ -68,4 +76,8 @@ export function SetSessionCredential(arg1) {
 
 export function StartEditSession() {
   return window["go"]["main"]["App"]["StartEditSession"]();
+}
+
+export function VerifyProject() {
+  return window["go"]["main"]["App"]["VerifyProject"]();
 }

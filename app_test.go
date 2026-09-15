@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,56 +25,45 @@ type snapshotReaderStub struct {
 	err      error
 }
 
-type editorReaderStub struct{ readyErr error }
-
-// refreshFailureReader models the narrow post-commit failure boundary: Core
-// validates the candidate during review, then cannot return the authoritative
-// snapshot after the filesystem transaction has committed.
-type refreshFailureReader struct{ candidateCalls int }
-
-type acceptanceReader struct {
-	projectReader
-	t *testing.T
+type verificationReader struct {
+	calls   int
+	status  string
+	partial bool
+	err     error
 }
 
-func (r acceptanceReader) BuildCandidateSnapshot(ctx context.Context, root string, owned []string, project *projectlifecycle.Project) (*coreadapter.Snapshot, error) {
-	revision, _ := installer.ProjectRevision(root)
-	r.t.Logf("candidate request: project=%s revision=%s bundle=%s catalog=%s owned=%v", project.ID, revision, project.Source.BundleDigest, project.Source.CatalogDigest, owned)
-	snapshot, err := r.projectReader.BuildCandidateSnapshot(ctx, root, owned, project)
-	if err != nil {
-		r.t.Logf("candidate snapshot error: %v", err)
-		var executionErr *executionnode.ExecutionError
-		if errors.As(err, &executionErr) {
-			r.t.Logf("candidate snapshot findings: %+v", executionErr.Findings)
-		}
-	} else if snapshot != nil {
-		r.t.Logf("candidate snapshot: status=%s hosts=%#v", snapshot.Status, snapshot.Hosts)
+func (r *verificationReader) BuildSnapshot(_ context.Context, root string) (*coreadapter.Snapshot, error) {
+	r.calls++
+	if r.err != nil {
+		return nil, r.err
 	}
-	return snapshot, err
-}
-
-func (editorReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
-	return nil, errors.New("not used")
-}
-func (r editorReaderStub) CheckCandidateReady(context.Context) error { return r.readyErr }
-func (editorReaderStub) BuildCandidateSnapshot(_ context.Context, root string, _ []string, _ *projectlifecycle.Project) (*coreadapter.Snapshot, error) {
 	revision, err := installer.ProjectRevision(root)
 	if err != nil {
 		return nil, err
 	}
-	return &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision, SnapshotFingerprint: "sha256:" + string(make([]byte, 64)), Hosts: map[string]map[string]any{"node1": {"type": "infra", "desiredHostname": "node1.example.internal", "ansibleHost": "192.0.2.10", "ansiblePort": 22}}}, nil
+	return &coreadapter.Snapshot{Status: r.status, Partial: r.partial, ProjectRevision: revision,
+		Findings: []map[string]any{{"apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding", "code": "REFERENCE_IN_USE", "status": "BLOCKED", "safeMessage": "Host remains referenced"}}}, nil
 }
 
-func (*refreshFailureReader) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
-	return nil, errors.New("not used")
+func (*verificationReader) RuntimeIdentityDigest() string {
+	return "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 }
-func (*refreshFailureReader) CheckCandidateReady(context.Context) error { return nil }
-func (r *refreshFailureReader) BuildCandidateSnapshot(ctx context.Context, root string, owned []string, project *projectlifecycle.Project) (*coreadapter.Snapshot, error) {
-	r.candidateCalls++
-	if r.candidateCalls > 1 {
-		return nil, errors.New("EXECUTION_NODE_UNAVAILABLE")
+
+func (r *verificationReader) BuildVerificationSnapshot(ctx context.Context, root string) (verificationSnapshot, error) {
+	snapshot, err := r.BuildSnapshot(ctx, root)
+	if err != nil {
+		return verificationSnapshot{}, err
 	}
-	return editorReaderStub{}.BuildCandidateSnapshot(ctx, root, owned, project)
+	return verificationSnapshot{Snapshot: snapshot, NodeID: "qa-node", Runtime: executionnode.RuntimeEvidence{
+		BundleDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		CoreVersion:  "test-core", CatalogDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		Protocol: "platform.installer/execution-runtime/v1alpha1"}}, nil
+}
+
+type editorReaderStub struct{}
+
+func (editorReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
+	return nil, errors.New("not used")
 }
 
 func testApplicationConfig() AppOption {
@@ -205,6 +195,27 @@ func TestAppKeepsEmptyProjectLocalWithoutSnapshotCall(t *testing.T) {
 	}
 }
 
+func TestRuntimeEvidenceRequiresExactPlanningProtocol(t *testing.T) {
+	expected := map[string]any{"bundleDigest": "sha256:" + strings.Repeat("a", 64), "coreVersion": "1.0.0", "catalogDigest": "sha256:" + strings.Repeat("b", 64), "planningProtocol": "v1alpha1"}
+	actual := executionnode.RuntimeEvidence{BundleDigest: expected["bundleDigest"].(string), CoreVersion: "1.0.0", CatalogDigest: expected["catalogDigest"].(string), Protocol: "v1alpha1"}
+	if !runtimeEvidenceMatchesExpected(actual, expected) {
+		t.Fatal("exact attested protocol was rejected")
+	}
+	for name, mutate := range map[string]func(*executionnode.RuntimeEvidence, map[string]any){
+		"protocol mismatch":         func(value *executionnode.RuntimeEvidence, _ map[string]any) { value.Protocol = "v2alpha1" },
+		"missing attested protocol": func(value *executionnode.RuntimeEvidence, _ map[string]any) { value.Protocol = "" },
+		"missing expected protocol": func(_ *executionnode.RuntimeEvidence, value map[string]any) { delete(value, "planningProtocol") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate, configured := actual, maps.Clone(expected)
+			mutate(&candidate, configured)
+			if runtimeEvidenceMatchesExpected(candidate, configured) {
+				t.Fatal("protocol mismatch was accepted")
+			}
+		})
+	}
+}
+
 func TestAppFirstSaveRequiresReviewAndConsumesSession(t *testing.T) {
 	root := t.TempDir()
 	manifest := "apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-aaaaaaaaaaaaaaaa\n  name: Test\n  labels:\n    platform.installer/managed-project: v1alpha1\ndesiredStateContract: platform.installer/project-desired-state/v2alpha1\ncatalogLock:\n  apiVersion: platform.installer/catalog/v1alpha1\n  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  services:\n    kafka:\n      definitionVersion: 1.0.0\n      digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nartifactLock:\n  apiVersion: platform.installer/artifacts/v1alpha1\n  digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n"
@@ -222,59 +233,119 @@ func TestAppFirstSaveRequiresReviewAndConsumesSession(t *testing.T) {
 	if appended.Session == nil || appended.Session.CommandCount != 1 {
 		t.Fatalf("appended=%#v", appended)
 	}
-	plan := app.ReviewEditSession(started.Session.SessionID)
-	if plan.Plan == nil || !plan.Plan.CommitAllowed {
+	plan := app.ReviewStructuralEditSession(started.Session.SessionID)
+	if plan.Plan == nil || !plan.Plan.SaveAllowed {
 		t.Fatalf("plan=%#v", plan)
 	}
-	latest := app.ReviewEditSession(started.Session.SessionID)
+	latest := app.ReviewStructuralEditSession(started.Session.SessionID)
 	if latest.Plan == nil || latest.Plan.PlanID == plan.Plan.PlanID {
 		t.Fatalf("latest plan=%#v", latest)
 	}
-	stale := app.CommitEditPlan(started.Session.SessionID, plan.Plan.PlanID)
+	stale := app.CommitStructuralEditPlan(started.Session.SessionID, plan.Plan.PlanID)
 	if stale.Status != "BLOCKED" {
 		t.Fatalf("stale commit=%#v", stale)
 	}
 	if _, err := os.Stat(filepath.Join(root, "ansible.cfg")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("stale plan mutated project: %v", err)
 	}
-	app.reader = editorReaderStub{readyErr: errors.New("EXECUTION_NODE_UNAVAILABLE")}
-	unavailable := app.CommitEditPlan(started.Session.SessionID, latest.Plan.PlanID)
-	if unavailable.Status != "BLOCKED" || unavailable.Error == nil || unavailable.Error.Code != "EXECUTION_NODE_UNAVAILABLE" {
-		t.Fatalf("unavailable commit=%#v", unavailable)
-	}
-	if _, err := os.Stat(filepath.Join(root, "ansible.cfg")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("unavailable node commit mutated project: %v", err)
-	}
 	app.reader = editorReaderStub{}
-	committed := app.CommitEditPlan(started.Session.SessionID, latest.Plan.PlanID)
+	committed := app.CommitStructuralEditPlan(started.Session.SessionID, latest.Plan.PlanID)
 	if committed.Status != "COMMITTED" || app.activeSession != "" {
 		t.Fatalf("committed=%#v", committed)
+	}
+	if committed.Current == nil || committed.Current.Managed == nil || committed.Current.Verification.Status != "UNVERIFIED" {
+		t.Fatalf("local save did not return managed state: %#v", committed)
 	}
 	if _, err := os.Stat(filepath.Join(root, "inventory", "hosts.yml")); err != nil {
 		t.Fatal(err)
 	}
-	// A committed transaction without its authoritative refresh must not leave
-	// the preceding snapshot visible as current state.
-	refreshRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(refreshRoot, "project.yml"), []byte(manifest), 0o644); err != nil {
+}
+
+func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
+	root := t.TempDir()
+	manifest := "apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-aaaaaaaaaaaaaaaa\n  name: Test\n  labels:\n    platform.installer/managed-project: v1alpha1\ndesiredStateContract: platform.installer/project-desired-state/v2alpha1\ncatalogLock:\n  apiVersion: platform.installer/catalog/v1alpha1\n  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  services:\n    kafka:\n      definitionVersion: 1.0.0\n      digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nartifactLock:\n  apiVersion: platform.installer/artifacts/v1alpha1\n  digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n"
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	refreshApp := NewApp(&refreshFailureReader{}, lifecycleStub{}, testApplicationConfig())
-	refreshApp.current = ProjectOpenResult{Status: "OPEN", Root: refreshRoot, Classification: projectlifecycle.ClassificationEmpty, Project: project}
-	refreshSession := refreshApp.StartEditSession()
-	if refreshSession.Session == nil {
-		t.Fatalf("refresh start=%#v", refreshSession)
+	reader := &verificationReader{err: errors.New("CORE_MUST_NOT_BE_CALLED_BY_SAVE")}
+	project := &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa", Name: "Test"}
+	app := NewApp(reader, projectlifecycle.NewService(nil), testApplicationConfig())
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: project, Verification: notVerified()}
+	started := app.StartEditSession()
+	if started.Session == nil {
+		t.Fatalf("start=%#v", started)
 	}
-	if refreshed := refreshApp.AppendEditCommand(refreshSession.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"}); refreshed.Session == nil {
-		t.Fatalf("refresh append=%#v", refreshed)
+	appended := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1.example.internal", Address: "192.0.2.10"})
+	if appended.Session == nil {
+		t.Fatalf("append=%#v", appended)
 	}
-	refreshPlan := refreshApp.ReviewEditSession(refreshSession.Session.SessionID)
-	if refreshPlan.Plan == nil || !refreshPlan.Plan.CommitAllowed {
-		t.Fatalf("refresh plan=%#v", refreshPlan)
+	beforeRevision, err := installer.ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
 	}
-	refreshFailed := refreshApp.CommitEditPlan(refreshSession.Session.SessionID, refreshPlan.Plan.PlanID)
-	if refreshFailed.Status != "COMMITTED_REFRESH_FAILED" || refreshApp.current.Snapshot != nil || refreshApp.activeSession != "" {
-		t.Fatalf("refresh failure did not invalidate snapshot: result=%#v current=%#v active=%q", refreshFailed, refreshApp.current, refreshApp.activeSession)
+	reviewed := app.ReviewStructuralEditSession(started.Session.SessionID)
+	if reviewed.Plan == nil || !reviewed.Plan.SaveAllowed || reader.calls != 0 {
+		t.Fatalf("local review called Core or failed: review=%#v plan=%+v finding=%+v calls=%d", reviewed, reviewed.Plan, reviewed.Plan.Finding, reader.calls)
+	}
+	if current, _ := installer.ProjectRevision(root); current != beforeRevision {
+		t.Fatalf("review changed canonical bytes: before=%s after=%s", beforeRevision, current)
+	}
+	saved := app.CommitStructuralEditPlan(started.Session.SessionID, reviewed.Plan.PlanID)
+	if saved.Status != "COMMITTED" || reader.calls != 0 || saved.Current == nil || saved.Current.Managed.Servers["node1"].Address != "192.0.2.10" {
+		t.Fatalf("local save=%#v calls=%d", saved, reader.calls)
+	}
+	if closed := app.CloseProject(); closed.Status != "NO_PROJECT" {
+		t.Fatalf("close=%#v", closed)
+	}
+	reopened := app.OpenProject(root)
+	if reopened.Status != "OPEN" || reopened.Managed == nil || reopened.Managed.Servers["node1"].DesiredHostname != "node1.example.internal" || reader.calls != 0 {
+		t.Fatalf("local reopen=%#v calls=%d", reopened, reader.calls)
+	}
+
+	reader.err, reader.status = nil, "PASS"
+	canonicalBefore := fileDigest(t, filepath.Join(root, "inventory", "hosts.yml"))
+	verified := app.VerifyProject()
+	if verified.Status != "VERIFIED" || reader.calls != 1 || verified.ProjectRevision != reopened.Managed.ProjectRevision || verified.Runtime == nil {
+		t.Fatalf("verify=%#v calls=%d", verified, reader.calls)
+	}
+	if after := fileDigest(t, filepath.Join(root, "inventory", "hosts.yml")); after != canonicalBefore {
+		t.Fatalf("Verify mutated canonical bytes: before=%s after=%s", canonicalBefore, after)
+	}
+
+	reader.status = "BLOCKED"
+	invalid := app.VerifyProject()
+	if invalid.Status != "INVALID" || len(invalid.Findings) != 1 || fileDigest(t, filepath.Join(root, "inventory", "hosts.yml")) != canonicalBefore {
+		t.Fatalf("invalid verify=%#v", invalid)
+	}
+	reader.status = "PASS"
+	if app.VerifyProject().Status != "VERIFIED" {
+		t.Fatal("could not restore verified evidence")
+	}
+	update := app.StartEditSession()
+	app.AppendEditCommand(update.Session.SessionID, installer.EditCommand{Operation: "UpdateServer", HostID: "node1", Address: "192.0.2.11"})
+	updatePlan := app.ReviewStructuralEditSession(update.Session.SessionID)
+	updated := app.CommitStructuralEditPlan(update.Session.SessionID, updatePlan.Plan.PlanID)
+	if updated.Status != "COMMITTED" || updated.Current == nil || updated.Current.Verification.Status != "UNVERIFIED" || reader.calls != 3 {
+		t.Fatalf("save did not stale evidence or called Core: %#v calls=%d", updated, reader.calls)
+	}
+}
+
+func TestVerifyWithoutReadyNodeReturnsPrerequisiteWithoutPreparation(t *testing.T) {
+	root := t.TempDir()
+	projectFile := filepath.Join(root, "project.yml")
+	if err := os.WriteFile(projectFile, []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reader := &verificationReader{err: errors.New("EXECUTION_NODE_NOT_CONFIGURED")}
+	app := NewApp(reader, lifecycleStub{})
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	before := fileDigest(t, projectFile)
+	result := app.VerifyProject()
+	if result.Status != "UNVERIFIED" || result.Error == nil || result.Error.Code != "EXECUTION_NODE_READY_REQUIRED" || reader.calls != 1 {
+		t.Fatalf("result=%#v calls=%d", result, reader.calls)
+	}
+	if after := fileDigest(t, projectFile); after != before {
+		t.Fatalf("Verify prerequisite path mutated project: before=%s after=%s", before, after)
 	}
 }
 
@@ -385,7 +456,7 @@ func TestUI01E2RemoteServerCRUDAcceptance(t *testing.T) {
 			"planningProtocol": executionbundle.ProtocolVersion,
 		},
 	}
-	app := NewApp(acceptanceReader{projectReader: reader, t: t}, projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle}), testApplicationConfig())
+	app := NewApp(reader, projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle}), testApplicationConfig())
 	root := os.Getenv("UI01D_E2E_PROJECT_ROOT")
 	if root == "" {
 		root = filepath.Join(t.TempDir(), "ui-01d-first-save")
@@ -405,14 +476,14 @@ func TestUI01E2RemoteServerCRUDAcceptance(t *testing.T) {
 	if appended.Session == nil || appended.Session.CommandCount != 1 {
 		t.Fatalf("append result=%+v", appended)
 	}
-	reviewed := app.ReviewEditSession(started.Session.SessionID)
-	if reviewed.Plan == nil || reviewed.Plan.Status != "READY" || !reviewed.Plan.CommitAllowed {
+	reviewed := app.ReviewStructuralEditSession(started.Session.SessionID)
+	if reviewed.Plan == nil || reviewed.Plan.Status != "READY" || !reviewed.Plan.SaveAllowed {
 		if reviewed.Plan != nil {
 			t.Fatalf("review status=%s plan=%+v", reviewed.Status, *reviewed.Plan)
 		}
 		t.Fatalf("review result=%+v", reviewed)
 	}
-	committed := app.CommitEditPlan(started.Session.SessionID, reviewed.Plan.PlanID)
+	committed := app.CommitStructuralEditPlan(started.Session.SessionID, reviewed.Plan.PlanID)
 	if committed.Commit == nil || committed.Status != "COMMITTED" {
 		t.Fatalf("commit result=%+v", committed)
 	}
@@ -435,11 +506,11 @@ func TestUI01E2RemoteServerCRUDAcceptance(t *testing.T) {
 	if added.Session == nil || added.Session.CommandCount != 1 {
 		t.Fatalf("append second server result=%+v", added)
 	}
-	secondReview := app.ReviewEditSession(second.Session.SessionID)
-	if secondReview.Plan == nil || secondReview.Plan.Status != "READY" || !secondReview.Plan.CommitAllowed {
+	secondReview := app.ReviewStructuralEditSession(second.Session.SessionID)
+	if secondReview.Plan == nil || secondReview.Plan.Status != "READY" || !secondReview.Plan.SaveAllowed {
 		t.Fatalf("second review result=%+v", secondReview)
 	}
-	if secondCommit := app.CommitEditPlan(second.Session.SessionID, secondReview.Plan.PlanID); secondCommit.Status != "COMMITTED" {
+	if secondCommit := app.CommitStructuralEditPlan(second.Session.SessionID, secondReview.Plan.PlanID); secondCommit.Status != "COMMITTED" {
 		t.Fatalf("second commit result=%+v", secondCommit)
 	}
 
@@ -451,11 +522,11 @@ func TestUI01E2RemoteServerCRUDAcceptance(t *testing.T) {
 	if updatedCommand.Session == nil || updatedCommand.Session.CommandCount != 1 {
 		t.Fatalf("append update result=%+v", updatedCommand)
 	}
-	updateReview := app.ReviewEditSession(updated.Session.SessionID)
-	if updateReview.Plan == nil || updateReview.Plan.Status != "READY" || !updateReview.Plan.CommitAllowed {
+	updateReview := app.ReviewStructuralEditSession(updated.Session.SessionID)
+	if updateReview.Plan == nil || updateReview.Plan.Status != "READY" || !updateReview.Plan.SaveAllowed {
 		t.Fatalf("update review result=%+v", updateReview)
 	}
-	if updateCommit := app.CommitEditPlan(updated.Session.SessionID, updateReview.Plan.PlanID); updateCommit.Status != "COMMITTED" {
+	if updateCommit := app.CommitStructuralEditPlan(updated.Session.SessionID, updateReview.Plan.PlanID); updateCommit.Status != "COMMITTED" {
 		t.Fatalf("update commit result=%+v", updateCommit)
 	}
 
@@ -467,11 +538,11 @@ func TestUI01E2RemoteServerCRUDAcceptance(t *testing.T) {
 	if deletedCommand.Session == nil || deletedCommand.Session.CommandCount != 1 {
 		t.Fatalf("append delete result=%+v", deletedCommand)
 	}
-	deleteReview := app.ReviewEditSession(deleted.Session.SessionID)
-	if deleteReview.Plan == nil || deleteReview.Plan.Status != "READY" || !deleteReview.Plan.CommitAllowed {
+	deleteReview := app.ReviewStructuralEditSession(deleted.Session.SessionID)
+	if deleteReview.Plan == nil || deleteReview.Plan.Status != "READY" || !deleteReview.Plan.SaveAllowed {
 		t.Fatalf("delete review result=%+v", deleteReview)
 	}
-	if deleteCommit := app.CommitEditPlan(deleted.Session.SessionID, deleteReview.Plan.PlanID); deleteCommit.Status != "COMMITTED" {
+	if deleteCommit := app.CommitStructuralEditPlan(deleted.Session.SessionID, deleteReview.Plan.PlanID); deleteCommit.Status != "COMMITTED" {
 		t.Fatalf("delete commit result=%+v", deleteCommit)
 	}
 	contentBytes, readErr := os.ReadFile(filepath.Join(root, "inventory", "hosts.yml"))

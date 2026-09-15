@@ -18,6 +18,7 @@ type storedPlan struct {
 	Created     time.Time
 	ProjectRoot string
 	Public      EditPlan
+	LocalOnly   bool
 	Documents   []storedDocument
 }
 

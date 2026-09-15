@@ -6,15 +6,17 @@ import (
 )
 
 const (
-	EditCommandAPIVersion   = "platform.installer/edit-command/v1alpha1"
-	EditCommandAPIVersionV2 = "platform.installer/edit-command/v1alpha2"
-	EditCommandAPIVersionV3 = "platform.installer/edit-command/v1alpha3"
-	EditCommandAPIVersionV4 = "platform.installer/edit-command/v1alpha4"
-	EditPlanAPIVersion      = "platform.installer/edit-plan/v1alpha1"
-	EditPlanAPIVersionV2    = "platform.installer/edit-plan/v1alpha2"
-	EditResultAPIVersion    = "platform.installer/edit-commit-result/v1alpha1"
-	EditResultAPIVersionV2  = "platform.installer/edit-commit-result/v1alpha2"
-	EditSessionAPIVersion   = "platform.installer/edit-session/v1alpha1"
+	EditCommandAPIVersion      = "platform.installer/edit-command/v1alpha1"
+	EditCommandAPIVersionV2    = "platform.installer/edit-command/v1alpha2"
+	EditCommandAPIVersionV3    = "platform.installer/edit-command/v1alpha3"
+	EditCommandAPIVersionV4    = "platform.installer/edit-command/v1alpha4"
+	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
+	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
+	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
+	EditResultAPIVersionV2     = "platform.installer/edit-commit-result/v1alpha2"
+	EditSessionAPIVersion      = "platform.installer/edit-session/v1alpha1"
+	StructuralPlanAPIVersion   = "platform.installer/structural-edit-plan/v1alpha1"
+	StructuralResultAPIVersion = "platform.installer/structural-save-result/v1alpha1"
 )
 
 type EditCommand struct {
@@ -140,6 +142,52 @@ type EditPlan struct {
 	Timing                      PlanTiming       `json:"timing"`
 }
 
+// StructuralEditPlan is the local-only preview used by new Installer edit
+// sessions. It deliberately contains no Core validation or effective-state
+// claims.
+type StructuralEditPlan struct {
+	APIVersion          string           `json:"apiVersion"`
+	Kind                string           `json:"kind"`
+	Status              string           `json:"status"`
+	Finding             *Finding         `json:"finding,omitempty"`
+	PlanID              string           `json:"planId,omitempty"`
+	BaseProjectRevision string           `json:"baseProjectRevision"`
+	SemanticChanges     []SemanticChange `json:"semanticChanges"`
+	AffectedEntities    []string         `json:"affectedEntities"`
+	AffectedDocuments   []DocumentChange `json:"affectedDocuments"`
+	ReviewDiff          string           `json:"reviewDiff"`
+	SaveAllowed         bool             `json:"saveAllowed"`
+	ExpiresAt           time.Time        `json:"expiresAt,omitempty"`
+}
+
+type StructuralSaveResult struct {
+	APIVersion         string              `json:"apiVersion"`
+	Kind               string              `json:"kind"`
+	Status             string              `json:"status"`
+	Changed            bool                `json:"changed"`
+	Finding            *Finding            `json:"finding,omitempty"`
+	OldProjectRevision string              `json:"oldProjectRevision,omitempty"`
+	NewProjectRevision string              `json:"newProjectRevision,omitempty"`
+	AffectedDocuments  []DocumentChange    `json:"affectedDocuments,omitempty"`
+	Timing             CommitTiming        `json:"timing"`
+	Managed            *ManagedProjectView `json:"managed,omitempty"`
+}
+
+// ManagedProjectView exposes only Installer-owned canonical server fields.
+// It is not an Ansible-resolved ProjectSnapshot.
+type ManagedProjectView struct {
+	ProjectRevision string                   `json:"projectRevision"`
+	Servers         map[string]ManagedServer `json:"servers"`
+}
+
+type ManagedServer struct {
+	HostID          string `json:"hostId"`
+	Type            string `json:"type,omitempty"`
+	DesiredHostname string `json:"desiredHostname,omitempty"`
+	Address         string `json:"address,omitempty"`
+	SSHPort         *int   `json:"sshPort,omitempty"`
+}
+
 type PlanTiming struct {
 	Application     time.Duration `json:"application"`
 	InitialSnapshot time.Duration `json:"initialSnapshot"`
@@ -152,18 +200,19 @@ type CommitTiming struct {
 }
 
 type EditCommitResult struct {
-	APIVersion         string           `json:"apiVersion"`
-	Kind               string           `json:"kind"`
-	Status             string           `json:"status"`
-	Changed            bool             `json:"changed"`
-	Finding            *Finding         `json:"finding,omitempty"`
-	OldProjectRevision string           `json:"oldProjectRevision,omitempty"`
-	NewProjectRevision string           `json:"newProjectRevision,omitempty"`
-	AffectedDocuments  []DocumentChange `json:"affectedDocuments,omitempty"`
-	Snapshot           any              `json:"snapshot,omitempty"`
-	ApplyRequired      bool             `json:"applyRequired"`
-	Discarded          bool             `json:"discarded,omitempty"`
-	Timing             CommitTiming     `json:"timing"`
+	APIVersion         string              `json:"apiVersion"`
+	Kind               string              `json:"kind"`
+	Status             string              `json:"status"`
+	Changed            bool                `json:"changed"`
+	Finding            *Finding            `json:"finding,omitempty"`
+	OldProjectRevision string              `json:"oldProjectRevision,omitempty"`
+	NewProjectRevision string              `json:"newProjectRevision,omitempty"`
+	AffectedDocuments  []DocumentChange    `json:"affectedDocuments,omitempty"`
+	Snapshot           any                 `json:"snapshot,omitempty"`
+	Managed            *ManagedProjectView `json:"managed,omitempty"`
+	ApplyRequired      bool                `json:"applyRequired"`
+	Discarded          bool                `json:"discarded,omitempty"`
+	Timing             CommitTiming        `json:"timing"`
 }
 
 type EditSession struct {

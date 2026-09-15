@@ -19,6 +19,10 @@ the project header carries name/path/edit state. One session credential applies
 to all target servers. Execution details are collapsed by default. The HTML
 includes an explicitly simulated create/edit/review/save flow, never disk writes.
 
+ADR-027 (2026-09-15) further separates local **Save**, optional **Project
+Verify**, and mandatory fresh **BuildDeploymentPlan**. The current binding
+semantics are in [the owner-change architecture](ui-save-verify-architecture.md).
+
 Owner decisions `OWNER-APP-CONFIG-01/02` add one required server type to new
 Installer-created servers. The UI receives stable IDs and display labels from
 the Go-loaded versioned application config; React does not own the list. Type
@@ -79,25 +83,28 @@ horizontally, and tables retain horizontal scrolling rather than hiding data.
 
 ## 3. Installation as the project home
 
-The page has five compact regions in this order:
+The page has six compact regions in this order:
 
 1. Project breadcrumb, page title and aggregate state.
 2. Execution Node readiness prerequisite summary: selected node, current
    capability/revision state and a link to Servers. There is no setup or
    preparation card on Installation.
-3. A persistent stage strip: Validate → Plan → Execute → Result. It remains
+3. Saved-project state with a separate optional **Verify project** action and
+   `UNVERIFIED/VERIFIED/INVALID/STALE/UNAVAILABLE` indication.
+4. A persistent execution stage strip: Plan → Execute → Result. It remains
    visible on every Installation local page and highlights the current stage;
-   local-page navigation does not imply a workflow transition.
-4. Readiness and actionable findings. Each finding contains plain-language
+   Project Verify is not an execution authorization stage.
+5. Readiness and actionable findings. Each finding contains plain-language
    impact, technical code in Advanced view, and an explicit destination.
-5. A plan preview grouped by Servers, Services and Certificates, with one
+6. A plan preview grouped by Servers, Services and Certificates, with one
    page-level **Generate plan** action on Summary.
 
-The Summary action is enabled only when all current-revision prerequisites hold:
-READY Execution Node, saved canonical project, no unsaved edit session changes,
-authoritative Core validation for the current revision, and non-stale revision
-and fingerprint. Its disabled explanation links to the Servers Execution Node
-panel or the project review state. Installation never selects, prepares,
+The Summary action requires READY Execution Node, a saved canonical project and
+no unsaved edit-session changes. It always invokes fresh
+`BuildDeploymentPlan`; prior optional Project Verify is neither required nor an
+authorization shortcut. Plan findings decide whether approval and
+`StartExecution` can follow. Its disabled explanation links to the Servers
+Execution Node panel or Save state. Installation never selects, prepares,
 bootstraps, activates or updates the Execution Node.
 
 The UI distinguishes desired state, observed state, finding, proposed action
@@ -343,10 +350,12 @@ callback text.
 | view Kafka IDs / PKI fingerprints | `platform_generated_state` | read-only query |
 | submit secret | runtime SecretRef session | in-memory broker only |
 
-Save is optimistic and transactional: load revision → frontend draft → backend
-semantic validation → affected-file preview → user Save → compare revisions →
-stage and atomically replace approved documents → reload → Core validation.
-External change mismatch opens conflict review; it never overwrites silently.
+Save is optimistic and transactional: load revision → frontend draft → local
+structural/safety validation and affected-file preview → user Save → compare
+revisions/digests → stage and atomically replace approved documents → local
+source-view refresh. Core infrastructure validation is a separate optional
+Project Verify; execution still requires fresh `BuildDeploymentPlan`. External
+change mismatch opens conflict review; it never overwrites silently.
 
 ## 11. YAML and Jinja preservation
 

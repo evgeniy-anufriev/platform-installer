@@ -48,14 +48,11 @@ The following owner decisions are binding:
    it deterministically returns `available=false`, even on an otherwise
    supported Linux host.  A positive result is selectable candidacy only, not
    READY, capability proof or preparation.
-10. **OWNER-UI-SAVE-EXECNODE-01/02:** when authoritative Review/Save requires a
-   READY Execution Node, its flow may run the current read-only readiness check
-   automatically.  If preparation is required, the Installer offers an
-   explicit operator confirmation before invoking the existing mutating
-   Execution Node prepare workflow.  Save introduces no bootstrap/readiness
-   mechanism.  After successful preparation it resumes the original
-   Review/Save flow; failure or cancellation preserves the draft and canonical
-   project bytes, and offers retry, node change or cancellation.
+10. **OWNER-UI-SAVE-VERIFY-01..06** supersedes the earlier Save handoff: local
+   Save never requires READY. Optional Project Verify may run a read-only
+   readiness check automatically and, when preparation is required, may invoke
+   the existing mutating workflow only after explicit confirmation. It resumes
+   Verify, not Save. Failure/cancel preserves draft and canonical bytes.
 
 The mockup at `docs/ui-design-01-mockups.html` already establishes the Shell
 badge, the fixed bottom panel, and the `NOT_CONFIGURED` / `NOT_PREPARED`
@@ -252,19 +249,17 @@ The E3 shared session-credentials panel remains independent.  Its availability
 does not change the Execution Node panel and the panel does not show an E3
 reference.
 
-## 7. E5 Review/Save handoff
+## 7. E5 Project Verify handoff
 
 E4 supplies selection context only.  E5 owns the readiness check, the existing
-check/prepare workflow, navigation gating and the `READY` state.  Per
-`OWNER-UI-SAVE-EXECNODE-01`, when authoritative Review/Save requires READY, it
-first consults E5's current result and may run its read-only readiness check
-automatically.  Under `OWNER-UI-SAVE-EXECNODE-02`, any mutating preparation
-requires explicit user confirmation.  Successful preparation resumes the
-original Review/Save request rather than creating a parallel save path.
-Failure or cancellation preserves the active edit draft and leaves canonical
-project files unchanged.  The operator can retry, choose another Execution
-Node or cancel.  This handoff does not authorize E4 to probe, prepare or claim
-readiness.
+check/prepare workflow and `READY` state. ADR-027 and
+`OWNER-UI-SAVE-VERIFY-01..06` supersede the former Review/Save handoff: local
+Save never consults E4/E5 readiness. Optional Project Verify may inspect
+readiness automatically; any mutating preparation requires explicit user
+confirmation. Successful preparation resumes only the exact bound Verify.
+Failure/cancel preserves saved project and active draft. Mandatory Installation
+still builds a fresh DeploymentPlan and never executes from a Verify badge.
+This handoff does not authorize E4 to probe, prepare or claim readiness.
 
 ## 8. Concurrency, failure and security
 

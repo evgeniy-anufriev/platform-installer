@@ -29,6 +29,12 @@ plans, facts and results as derived state.
 - Go owns Installer application semantics: edit/session lifecycle, review plans,
   coordination and filesystem transactions. Python/Ansible owns infrastructure
   semantics and must not become the owner of Installer UI lifecycle.
+- Local Save proves only structural/write safety through the guarded managed
+  writer and does not require Core or an Execution Node. Optional Project
+  Verify evaluates the exact last saved revision through target-free Core.
+- Project Verify never authorizes execution. Every execution requires a fresh
+  authoritative `BuildDeploymentPlan` for the current saved revision/runtime,
+  approval, and `StartExecution` bound to that plan.
 - Go must not recreate Ansible precedence or service/Core rules. Future Wails is
   a thin transport over the same Go backend.
 - Installation source selection is one node-scoped policy: a compatible

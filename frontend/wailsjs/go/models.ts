@@ -134,6 +134,27 @@ export namespace coreadapter {
   }
 }
 
+export namespace executionnode {
+  export class RuntimeEvidence {
+    bundleDigest: string;
+    coreVersion: string;
+    catalogDigest: string;
+    protocol: string;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeEvidence(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.bundleDigest = source["bundleDigest"];
+      this.coreVersion = source["coreVersion"];
+      this.catalogDigest = source["catalogDigest"];
+      this.protocol = source["protocol"];
+    }
+  }
+}
+
 export namespace installer {
   export class CommitTiming {
     transaction: number;
@@ -300,6 +321,58 @@ export namespace installer {
       return a;
     }
   }
+  export class ManagedServer {
+    hostId: string;
+    type?: string;
+    desiredHostname?: string;
+    address?: string;
+    sshPort?: number;
+
+    static createFrom(source: any = {}) {
+      return new ManagedServer(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.hostId = source["hostId"];
+      this.type = source["type"];
+      this.desiredHostname = source["desiredHostname"];
+      this.address = source["address"];
+      this.sshPort = source["sshPort"];
+    }
+  }
+  export class ManagedProjectView {
+    projectRevision: string;
+    servers: Record<string, ManagedServer>;
+
+    static createFrom(source: any = {}) {
+      return new ManagedProjectView(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.projectRevision = source["projectRevision"];
+      this.servers = this.convertValues(source["servers"], ManagedServer, true);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class Finding {
     apiVersion: string;
     kind: string;
@@ -334,6 +407,7 @@ export namespace installer {
     newProjectRevision?: string;
     affectedDocuments?: DocumentChange[];
     snapshot?: any;
+    managed?: ManagedProjectView;
     applyRequired: boolean;
     discarded?: boolean;
     timing: CommitTiming;
@@ -356,6 +430,7 @@ export namespace installer {
         DocumentChange,
       );
       this.snapshot = source["snapshot"];
+      this.managed = this.convertValues(source["managed"], ManagedProjectView);
       this.applyRequired = source["applyRequired"];
       this.discarded = source["discarded"];
       this.timing = this.convertValues(source["timing"], CommitTiming);
@@ -568,6 +643,117 @@ export namespace installer {
       return a;
     }
   }
+
+  export class StructuralEditPlan {
+    apiVersion: string;
+    kind: string;
+    status: string;
+    finding?: Finding;
+    planId?: string;
+    baseProjectRevision: string;
+    semanticChanges: SemanticChange[];
+    affectedEntities: string[];
+    affectedDocuments: DocumentChange[];
+    reviewDiff: string;
+    saveAllowed: boolean;
+    // Go type: time
+    expiresAt?: any;
+
+    static createFrom(source: any = {}) {
+      return new StructuralEditPlan(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.status = source["status"];
+      this.finding = this.convertValues(source["finding"], Finding);
+      this.planId = source["planId"];
+      this.baseProjectRevision = source["baseProjectRevision"];
+      this.semanticChanges = this.convertValues(
+        source["semanticChanges"],
+        SemanticChange,
+      );
+      this.affectedEntities = source["affectedEntities"];
+      this.affectedDocuments = this.convertValues(
+        source["affectedDocuments"],
+        DocumentChange,
+      );
+      this.reviewDiff = source["reviewDiff"];
+      this.saveAllowed = source["saveAllowed"];
+      this.expiresAt = this.convertValues(source["expiresAt"], null);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class StructuralSaveResult {
+    apiVersion: string;
+    kind: string;
+    status: string;
+    changed: boolean;
+    finding?: Finding;
+    oldProjectRevision?: string;
+    newProjectRevision?: string;
+    affectedDocuments?: DocumentChange[];
+    timing: CommitTiming;
+    managed?: ManagedProjectView;
+
+    static createFrom(source: any = {}) {
+      return new StructuralSaveResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.status = source["status"];
+      this.changed = source["changed"];
+      this.finding = this.convertValues(source["finding"], Finding);
+      this.oldProjectRevision = source["oldProjectRevision"];
+      this.newProjectRevision = source["newProjectRevision"];
+      this.affectedDocuments = this.convertValues(
+        source["affectedDocuments"],
+        DocumentChange,
+      );
+      this.timing = this.convertValues(source["timing"], CommitTiming);
+      this.managed = this.convertValues(source["managed"], ManagedProjectView);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
 }
 
 export namespace main {
@@ -709,6 +895,85 @@ export namespace main {
     }
   }
 
+  export class VerificationFinding {
+    code: string;
+    severity: string;
+    summary: string;
+    subjectKind?: string;
+    subjectId?: string;
+    helpRef?: string;
+
+    static createFrom(source: any = {}) {
+      return new VerificationFinding(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.code = source["code"];
+      this.severity = source["severity"];
+      this.summary = source["summary"];
+      this.subjectKind = source["subjectKind"];
+      this.subjectId = source["subjectId"];
+      this.helpRef = source["helpRef"];
+    }
+  }
+  export class ProjectVerification {
+    apiVersion: string;
+    kind: string;
+    status: string;
+    projectIdentity?: string;
+    projectRevision?: string;
+    executionNodeId?: string;
+    runtime?: executionnode.RuntimeEvidence;
+    findings?: VerificationFinding[];
+    findingsTruncated?: boolean;
+    // Go type: time
+    checkedAt?: any;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ProjectVerification(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.status = source["status"];
+      this.projectIdentity = source["projectIdentity"];
+      this.projectRevision = source["projectRevision"];
+      this.executionNodeId = source["executionNodeId"];
+      this.runtime = this.convertValues(
+        source["runtime"],
+        executionnode.RuntimeEvidence,
+      );
+      this.findings = this.convertValues(
+        source["findings"],
+        VerificationFinding,
+      );
+      this.findingsTruncated = source["findingsTruncated"];
+      this.checkedAt = this.convertValues(source["checkedAt"], null);
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class ProjectOpenResult {
     status: string;
     root?: string;
@@ -716,6 +981,8 @@ export namespace main {
     project?: projectlifecycle.Project;
     counts: projectlifecycle.Counts;
     snapshot?: coreadapter.Snapshot;
+    managed?: installer.ManagedProjectView;
+    verification: ProjectVerification;
     diagnostics?: ApplicationDiagnostic[];
     error?: ProjectOpenError;
 
@@ -740,6 +1007,69 @@ export namespace main {
         source["snapshot"],
         coreadapter.Snapshot,
       );
+      this.managed = this.convertValues(
+        source["managed"],
+        installer.ManagedProjectView,
+      );
+      this.verification = this.convertValues(
+        source["verification"],
+        ProjectVerification,
+      );
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class StructuralEditOperationResult {
+    status: string;
+    session?: installer.EditSession;
+    plan?: installer.StructuralEditPlan;
+    commit?: installer.StructuralSaveResult;
+    current?: ProjectOpenResult;
+    diagnostics?: ApplicationDiagnostic[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new StructuralEditOperationResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.session = this.convertValues(
+        source["session"],
+        installer.EditSession,
+      );
+      this.plan = this.convertValues(
+        source["plan"],
+        installer.StructuralEditPlan,
+      );
+      this.commit = this.convertValues(
+        source["commit"],
+        installer.StructuralSaveResult,
+      );
+      this.current = this.convertValues(source["current"], ProjectOpenResult);
       this.diagnostics = this.convertValues(
         source["diagnostics"],
         ApplicationDiagnostic,
