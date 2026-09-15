@@ -86,6 +86,13 @@ func (s *executionNodeContextStore) clear() {
 	s.context = emptyExecutionNodeContext()
 }
 
+func (s *executionNodeContextStore) setStatus(status string) {
+	if status == "" || s.context.SelectionKind == "NONE" {
+		return
+	}
+	s.context.Status = status
+}
+
 func (s *executionNodeContextStore) replaceSnapshotHosts(hosts map[string]map[string]any) {
 	s.candidates = map[string]executionNodeCandidate{}
 	for hostID, host := range hosts {

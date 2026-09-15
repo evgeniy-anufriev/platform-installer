@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"platform-installer/internal/appconfig"
 	"platform-installer/internal/coreadapter"
@@ -30,6 +31,43 @@ type verificationReader struct {
 	status  string
 	partial bool
 	err     error
+}
+
+type verificationTransportStub struct{}
+
+func (verificationTransportStub) BuildProjectSnapshot(ctx context.Context, node executionnode.Node, root string, release map[string]any) (*coreadapter.Snapshot, error) {
+	result, err := (verificationTransportStub{}).BuildProjectVerificationSnapshot(ctx, node, root, release)
+	return result.Snapshot, err
+}
+
+func (verificationTransportStub) BuildProjectVerificationSnapshot(_ context.Context, _ executionnode.Node, root string, _ map[string]any) (executionnode.ProjectVerificationSnapshot, error) {
+	revision, err := installer.ProjectRevision(root)
+	if err != nil {
+		return executionnode.ProjectVerificationSnapshot{}, err
+	}
+	return executionnode.ProjectVerificationSnapshot{Snapshot: &coreadapter.Snapshot{Status: "PASS", ProjectRevision: revision}, Runtime: executionnode.RuntimeEvidence{
+		BundleDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", CoreVersion: "test-core",
+		CatalogDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Protocol: executionbundle.ProtocolVersion,
+	}}, nil
+}
+
+type executionLifecycleStub struct {
+	inspectCalls, prepareCalls int
+	inspection                 executionnode.Inspection
+	plan                       executionnode.Plan
+	prepared                   executionnode.Result
+}
+
+func (s *executionLifecycleStub) InspectExecutionNode(context.Context, executionnode.Node) (executionnode.Inspection, error) {
+	s.inspectCalls++
+	return s.inspection, nil
+}
+func (s *executionLifecycleStub) PlanExecutionNodePreparation(context.Context, executionnode.Node, string) (executionnode.Plan, error) {
+	return s.plan, nil
+}
+func (s *executionLifecycleStub) Prepare(context.Context, executionnode.Node, string, string) (executionnode.Result, error) {
+	s.prepareCalls++
+	return s.prepared, nil
 }
 
 func (r *verificationReader) BuildSnapshot(_ context.Context, root string) (*coreadapter.Snapshot, error) {
@@ -346,6 +384,71 @@ func TestVerifyWithoutReadyNodeReturnsPrerequisiteWithoutPreparation(t *testing.
 	}
 	if after := fileDigest(t, projectFile); after != before {
 		t.Fatalf("Verify prerequisite path mutated project: before=%s after=%s", before, after)
+	}
+}
+
+func TestE5TrustedBindingAndPreparationContinuation(t *testing.T) {
+	root := t.TempDir()
+	projectFile := filepath.Join(root, "project.yml")
+	if err := os.WriteFile(projectFile, []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := executionnode.Node{ID: "desktop-qa", Address: "192.0.2.10", User: "qa", Port: 22, CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: "known_hosts", Fingerprint: "SHA256:qa"}}
+	stub := &executionLifecycleStub{
+		inspection: executionnode.Inspection{State: executionnode.Ready},
+		plan:       executionnode.Plan{ID: "prepare-plan", Digest: "sha256:plan", State: executionnode.PreparationRequired, ExpiresAt: time.Now().Add(time.Minute)},
+		prepared:   executionnode.Result{State: executionnode.Ready},
+	}
+	reader := projectReader{transport: verificationTransportStub{}, node: node, runtimeRelease: map[string]any{
+		"bundleDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "coreVersion": "test-core",
+		"catalogDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "planningProtocol": executionbundle.ProtocolVersion,
+	}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, map[string]map[string]any{"node1": {"ansibleHost": "192.0.2.11"}})
+
+	if readiness := app.CheckExecutionNode(); readiness.Status != "READY" || stub.inspectCalls != 1 {
+		t.Fatalf("readiness=%#v inspectCalls=%d", readiness, stub.inspectCalls)
+	}
+	if _, err := app.SelectExecutionNode("node1"); err != nil {
+		t.Fatal(err)
+	}
+	if readiness := app.CheckExecutionNode(); readiness.Error == nil || readiness.Error.Code != "BINDING_REQUIRED" {
+		t.Fatalf("project candidate unexpectedly received binding: %#v", readiness)
+	}
+	app.execution.bind(root, app.current.Project.ID, map[string]map[string]any{"node1": {"ansibleHost": "192.0.2.11"}})
+	preparation := app.PlanExecutionNodePreparation()
+	if preparation.Status != "CONFIRMATION_REQUIRED" || preparation.PlanID != "prepare-plan" {
+		t.Fatalf("preparation=%#v", preparation)
+	}
+	completed := app.PrepareExecutionNode(preparation.PlanID)
+	if completed.Status != "PREPARED" || completed.Verification == nil || completed.Verification.Status != "VERIFIED" || stub.prepareCalls != 1 || stub.inspectCalls < 2 {
+		t.Fatalf("completed=%#v prepareCalls=%d inspectCalls=%d", completed, stub.prepareCalls, stub.inspectCalls)
+	}
+}
+
+func TestE5PreparationRejectsRevisionChange(t *testing.T) {
+	root := t.TempDir()
+	projectFile := filepath.Join(root, "project.yml")
+	if err := os.WriteFile(projectFile, []byte("name: original\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := executionnode.Node{ID: "desktop-qa", Address: "192.0.2.10", User: "qa", Port: 22, CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: "known_hosts", Fingerprint: "SHA256:qa"}}
+	stub := &executionLifecycleStub{inspection: executionnode.Inspection{State: executionnode.PreparationRequired}, plan: executionnode.Plan{ID: "prepare-plan", Digest: "sha256:plan", State: executionnode.PreparationRequired, ExpiresAt: time.Now().Add(time.Minute)}, prepared: executionnode.Result{State: executionnode.Ready}}
+	reader := projectReader{transport: verificationTransportStub{}, node: node, runtimeRelease: map[string]any{"bundleDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "coreVersion": "test-core", "catalogDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "planningProtocol": executionbundle.ProtocolVersion}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+	preparation := app.PlanExecutionNodePreparation()
+	if preparation.Status != "CONFIRMATION_REQUIRED" {
+		t.Fatalf("preparation=%#v", preparation)
+	}
+	if err := os.WriteFile(projectFile, []byte("name: changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result := app.PrepareExecutionNode(preparation.PlanID)
+	if result.Error == nil || result.Error.Code != "PROJECT_REVISION_CHANGED" || stub.prepareCalls != 0 {
+		t.Fatalf("result=%#v prepareCalls=%d", result, stub.prepareCalls)
 	}
 }
 

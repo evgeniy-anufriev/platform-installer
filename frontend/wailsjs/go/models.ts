@@ -894,7 +894,6 @@ export namespace main {
       this.locked = source["locked"];
     }
   }
-
   export class VerificationFinding {
     code: string;
     severity: string;
@@ -974,6 +973,128 @@ export namespace main {
       return a;
     }
   }
+  export class ExecutionNodeSafeFinding {
+    code: string;
+    safeMessage: string;
+
+    static createFrom(source: any = {}) {
+      return new ExecutionNodeSafeFinding(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.code = source["code"];
+      this.safeMessage = source["safeMessage"];
+    }
+  }
+  export class ExecutionNodeSafeStep {
+    id: string;
+    action: string;
+    mutates: boolean;
+
+    static createFrom(source: any = {}) {
+      return new ExecutionNodeSafeStep(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.action = source["action"];
+      this.mutates = source["mutates"];
+    }
+  }
+  export class ExecutionNodePreparation {
+    status: string;
+    planId?: string;
+    expiresAt?: string;
+    steps?: ExecutionNodeSafeStep[];
+    findings?: ExecutionNodeSafeFinding[];
+    error?: ProjectOpenError;
+    verification?: ProjectVerification;
+
+    static createFrom(source: any = {}) {
+      return new ExecutionNodePreparation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.planId = source["planId"];
+      this.expiresAt = source["expiresAt"];
+      this.steps = this.convertValues(source["steps"], ExecutionNodeSafeStep);
+      this.findings = this.convertValues(
+        source["findings"],
+        ExecutionNodeSafeFinding,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+      this.verification = this.convertValues(
+        source["verification"],
+        ProjectVerification,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ExecutionNodeReadiness {
+    status: string;
+    nodeId?: string;
+    safeLabel?: string;
+    checkedAt?: string;
+    findings?: ExecutionNodeSafeFinding[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ExecutionNodeReadiness(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.nodeId = source["nodeId"];
+      this.safeLabel = source["safeLabel"];
+      this.checkedAt = source["checkedAt"];
+      this.findings = this.convertValues(
+        source["findings"],
+        ExecutionNodeSafeFinding,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
   export class ProjectOpenResult {
     status: string;
     root?: string;

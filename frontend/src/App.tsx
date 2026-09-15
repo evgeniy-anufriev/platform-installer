@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type {
   EditResult,
   ExecutionNodeContext,
+  ExecutionNodePreparation,
+  ExecutionNodeReadiness,
   OpenResult,
   ProjectBackend,
   SessionCredentialInput,
@@ -11,7 +13,7 @@ import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
 import "./edit.css";
 
-type Page = "project" | "servers";
+type Page = "project" | "servers" | "installation";
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -79,6 +81,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     local &&
     !snapshot;
   const projectOpen = result.status === "OPEN";
+  const executionReady = executionNode?.status === "READY";
   const title = empty
     ? local.name
     : project?.name
@@ -354,6 +357,25 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setExecutionNode(context);
     return context;
   };
+  const checkExecutionNode = async (): Promise<ExecutionNodeReadiness> => {
+    if (!api.checkExecutionNode) throw new Error("EXECUTION_NODE_CHECK_UNAVAILABLE");
+    const readiness = await api.checkExecutionNode();
+    setExecutionNode((current) => current ? { ...current, status: readiness.status } : current);
+    return readiness;
+  };
+  const planExecutionNodePreparation = async (): Promise<ExecutionNodePreparation> => {
+    if (!api.planExecutionNodePreparation) throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
+    return api.planExecutionNodePreparation();
+  };
+  const prepareExecutionNode = async (planId: string): Promise<ExecutionNodePreparation> => {
+    if (!api.prepareExecutionNode) throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
+    const preparation = await api.prepareExecutionNode(planId);
+    if (preparation.verification) {
+      setResult((current) => ({ ...current, verification: preparation.verification }) as OpenResult);
+    }
+    setExecutionNode((current) => current ? { ...current, status: preparation.status === "PREPARED" ? "READY" : preparation.status } : current);
+    return preparation;
+  };
 
   return (
     <div className="shell">
@@ -366,14 +388,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         <nav>
           {navigation.map((item) => {
             const enabled =
-              item.id === "project" || (item.id === "servers" && projectOpen);
+              item.id === "project" ||
+              (item.id === "servers" && projectOpen) ||
+              (item.id === "installation" && projectOpen && executionReady);
             return (
               <button
                 key={item.id}
                 className={item.id === page ? "active" : "future"}
                 disabled={!enabled}
                 onClick={() =>
-                  (item.id === "project" || item.id === "servers") &&
+                  (item.id === "project" || item.id === "servers" || item.id === "installation") &&
                   setPage(item.id)
                 }
               >
@@ -511,7 +535,31 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onClearCredential={clearSessionCredential}
             executionNode={executionNode}
             onSelectExecutionNode={selectExecutionNode}
+            onCheckExecutionNode={checkExecutionNode}
+            onPlanExecutionNodePreparation={planExecutionNodePreparation}
+            onPrepareExecutionNode={prepareExecutionNode}
           />
+        )}
+        {!loading && !creating && projectOpen && page === "installation" && (
+          <section className="card">
+            <h1>Установка</h1>
+            <p>
+              Execution Node: <b>{executionNode?.status || "NOT_CONFIGURED"}</b>
+              {executionNode?.safeLabel ? ` · ${executionNode.safeLabel}` : ""}
+            </p>
+            <p>
+              Проверка проекта: <b>{verificationLabel(verification.status)}</b>.
+              Проверка не является разрешением на запуск.
+            </p>
+            <p className="muted">
+              Перед выполнением будет обязателен свежий authoritative DeploymentPlan
+              для сохранённой ревизии и текущего runtime. Подготовка Execution Node
+              доступна только на странице Серверы.
+            </p>
+            <button className="outline" onClick={() => setPage("servers")}>
+              Открыть Execution Node
+            </button>
+          </section>
         )}
         {projectDialog && (
           <div className="modal" role="presentation">

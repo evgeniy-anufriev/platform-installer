@@ -1,6 +1,6 @@
 # UI-01E5 — Execution Node readiness, preparation and navigation gating
 
-Status: **NEXT — not started**.
+Status: **DONE — 2026-09-15**.
 
 ## Scope boundary
 
@@ -23,7 +23,7 @@ not UI-01E5 work:
 The owner-authorized AR-SV-001 follow-up was implemented without a third
 architecture review. It closed only the missing planning-protocol comparison.
 
-UI-01E5 starts only when explicitly requested. Its remaining scope is:
+UI-01E5 implemented the following scope:
 
 1. read-only readiness inspection for the already trusted immutable Execution
    Node binding;
@@ -164,3 +164,29 @@ parameters, staging paths, credentials and raw output.
 - Fresh `BuildDeploymentPlan` is still observed before every StartExecution.
 - E5 acceptance rechecks the UI mockup and records any discrepancy before
   coding, per `AGENTS.md`.
+
+## Implementation evidence
+
+- `CheckExecutionNode` uses only the application-owned binding and the
+  existing read-only `executionnode.Service.InspectExecutionNode` operation.
+- `PlanExecutionNodePreparation` retains the exact saved revision, trusted
+  binding, plan ID/digest and expiry only in memory. `PrepareExecutionNode`
+  requires that exact plan ID after explicit UI confirmation, re-checks the
+  saved revision and binding, then performs a fresh inspection before Verify.
+- The Wails surface receives bounded safe readiness/step/finding DTOs only;
+  it receives no connection values, credentials, host-key inputs, commands or
+  staging paths.
+- The Servers panel exposes Check, planning and an explicit confirmation
+  button. The global App Shell shows the typed readiness status. Installation
+  is gated until `READY`, never performs Prepare, and states that fresh
+  `BuildDeploymentPlan` remains mandatory.
+- Mockup reconciliation: its global readiness badge and Servers-side
+  read-only Check / explicitly confirmed Prepare flow are implemented. The
+  mockup's external-host form remains illustrative only; E5 deliberately does
+  not turn that form or a project-server candidate into a trusted binding.
+- Focused Go tests cover trusted-binding rejection for project candidates,
+  revision-bound Prepare continuation and post-Prepare Verify. Frontend tests
+  cover the `READY` navigation gate and confirmation flow. `go test ./...`,
+  frontend lint/test/build, Wails build and `git diff --check` passed. RED OS
+  `go test -race ./internal/executionnode` passed with CGO enabled in a
+  temporary workspace that was cleaned afterwards.

@@ -10,6 +10,8 @@ export function AppendEditCommand(
   arg2: installer.EditCommand,
 ): Promise<main.EditOperationResult>;
 
+export function CheckExecutionNode(): Promise<main.ExecutionNodeReadiness>;
+
 export function ChooseProject(): Promise<main.ProjectOpenResult>;
 
 export function ChooseProjectParent(): Promise<string>;
@@ -45,6 +47,12 @@ export function GetExecutionNodeContext(): Promise<main.ExecutionNodeContext>;
 export function GetSessionCredentialStatus(): Promise<runtimesecret.Status>;
 
 export function OpenProject(arg1: string): Promise<main.ProjectOpenResult>;
+
+export function PlanExecutionNodePreparation(): Promise<main.ExecutionNodePreparation>;
+
+export function PrepareExecutionNode(
+  arg1: string,
+): Promise<main.ExecutionNodePreparation>;
 
 export function ReviewEditSession(
   arg1: string,

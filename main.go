@@ -46,6 +46,7 @@ func main() {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
 	reader = unavailableProjectReader{}
+	appOptions := []AppOption{}
 	sources := map[string]string{}
 	if bundleRoot != "" {
 		if _, err := executionbundle.ValidateRoot(bundleRoot); err == nil {
@@ -56,11 +57,14 @@ func main() {
 		if verified, err := executionbundle.ValidateRoot(bundleRoot); err == nil {
 			node := executionnode.Node{ID: "desktop-" + *address, Address: *address, User: *user, Port: uint16(*port), CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: *knownHosts, Fingerprint: *fingerprint}}
 			release := map[string]any{"bundleDigest": verified.Digest, "coreVersion": verified.Manifest.CoreVersion, "catalogDigest": verified.Manifest.CatalogDigest, "planningProtocol": executionbundle.ProtocolVersion}
-			reader = projectReader{transport: executionnode.OpenSSHTransport{Identity: desktopIdentity{*identity}}, node: node, runtimeRelease: release}
+			transport := executionnode.OpenSSHTransport{Identity: desktopIdentity{*identity}}
+			projectReadBinding := projectReader{transport: transport, node: node, runtimeRelease: release}
+			reader = projectReadBinding
+			appOptions = append(appOptions, WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: projectReadBinding, service: executionnode.NewService(transport), bundleRoot: bundleRoot}))
 		}
 	}
 	applicationConfig, applicationConfigErr := loadApplicationConfig()
-	appOptions := []AppOption{WithApplicationConfig(applicationConfig, applicationConfigErr)}
+	appOptions = append(appOptions, WithApplicationConfig(applicationConfig, applicationConfigErr))
 	if *address != "" && *user != "" && *identity != "" && *knownHosts != "" && *fingerprint != "" && bundleRoot != "" && *port > 0 && *port <= 65535 {
 		appOptions = append(appOptions, WithExplicitExecutionNode("desktop-"+*address, *address))
 	}

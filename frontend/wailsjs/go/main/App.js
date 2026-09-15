@@ -6,6 +6,10 @@ export function AppendEditCommand(arg1, arg2) {
   return window["go"]["main"]["App"]["AppendEditCommand"](arg1, arg2);
 }
 
+export function CheckExecutionNode() {
+  return window["go"]["main"]["App"]["CheckExecutionNode"]();
+}
+
 export function ChooseProject() {
   return window["go"]["main"]["App"]["ChooseProject"]();
 }
@@ -56,6 +60,14 @@ export function GetSessionCredentialStatus() {
 
 export function OpenProject(arg1) {
   return window["go"]["main"]["App"]["OpenProject"](arg1);
+}
+
+export function PlanExecutionNodePreparation() {
+  return window["go"]["main"]["App"]["PlanExecutionNodePreparation"]();
+}
+
+export function PrepareExecutionNode(arg1) {
+  return window["go"]["main"]["App"]["PrepareExecutionNode"](arg1);
 }
 
 export function ReviewEditSession(arg1) {

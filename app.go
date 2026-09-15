@@ -149,6 +149,8 @@ type App struct {
 	configErr     error
 	secrets       *runtimesecret.Broker
 	execution     *executionNodeContextStore
+	binding       *executionNodeBinding
+	continuation  *verificationContinuation
 }
 
 type AppOption func(*App)
@@ -169,7 +171,16 @@ func WithExplicitExecutionNode(id, address string) AppOption {
 		if id == "" || address == "" {
 			return
 		}
-		app.execution.external = &executionNodeCandidate{label: id + " · " + address}
+		app.execution.external = &executionNodeCandidate{hostID: id, label: id + " · " + address}
+	}
+}
+
+// WithTrustedExecutionNodeBinding supplies the private, startup-validated
+// binding used by the existing read-only project reader. It is deliberately
+// not derived from an E4 candidate or Wails input.
+func WithTrustedExecutionNodeBinding(binding executionNodeBinding) AppOption {
+	return func(app *App) {
+		app.binding = &binding
 	}
 }
 
@@ -234,6 +245,7 @@ func (a *App) shutdown(context.Context) {
 	defer a.editMu.Unlock()
 	a.secrets.Close()
 	a.execution.clear()
+	a.continuation = nil
 }
 
 func (a *App) ChooseProject() ProjectOpenResult {
@@ -334,13 +346,15 @@ func (a *App) CloseProject() ProjectOpenResult {
 	}
 	a.secrets.Clear()
 	a.execution.clear()
+	a.continuation = nil
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
 }
 
 // VerifyProject validates exactly the current saved revision through the
-// existing target-free Core snapshot operation. It never writes project files
-// and never prepares an Execution Node.
+// existing target-free Core snapshot operation. It never writes project files.
+// When E5 has a trusted binding it first performs the permitted read-only
+// readiness check; preparation remains a separately confirmed operation.
 func (a *App) VerifyProject() ProjectVerification {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
@@ -353,15 +367,44 @@ func (a *App) VerifyProject() ProjectVerification {
 	if err != nil {
 		return a.setVerificationUnavailableLocked(err, "")
 	}
+	if a.binding != nil {
+		binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+		if err != nil {
+			return a.setVerificationUnavailableLocked(err, revision)
+		}
+		return a.verifyProjectWithBindingLocked(binding, revision, true)
+	}
+	return a.verifyProjectWithReaderLocked(a.reader, revision)
+}
+
+func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revision string, inspect bool) ProjectVerification {
+	if inspect {
+		ctx, cancel := a.operationContext(90 * time.Second)
+		defer cancel()
+		inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
+		if err != nil {
+			return a.setVerificationUnavailableLocked(err, revision)
+		}
+		a.execution.setStatus(string(inspection.State))
+		if inspection.State != executionnode.Ready {
+			return a.setVerificationUnavailableLocked(errors.New("EXECUTION_NODE_READY_REQUIRED"), revision)
+		}
+	}
+	return a.verifyProjectWithReaderLocked(binding.reader, revision)
+}
+
+func (a *App) verifyProjectWithReaderLocked(reader interface {
+	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
+}, revision string) ProjectVerification {
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
-	reader, ok := a.reader.(interface {
+	verificationReader, ok := reader.(interface {
 		BuildVerificationSnapshot(context.Context, string) (verificationSnapshot, error)
 	})
 	if !ok {
 		return a.setVerificationUnavailableLocked(errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED"), revision)
 	}
-	verifiedSnapshot, err := reader.BuildVerificationSnapshot(ctx, a.current.Root)
+	verifiedSnapshot, err := verificationReader.BuildVerificationSnapshot(ctx, a.current.Root)
 	if err != nil {
 		return a.setVerificationUnavailableLocked(err, revision)
 	}
@@ -487,6 +530,7 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 	if err := a.execution.selectProjectServer(hostID); err != nil {
 		return ExecutionNodeContext{}, err
 	}
+	a.continuation = nil
 	return a.execution.context, nil
 }
 
@@ -653,6 +697,7 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 			a.current.Diagnostics = nil
 			a.execution.bind(a.current.Root, a.current.Project.ID, nil)
 		}
+		a.continuation = nil
 		a.current.Verification = notVerified()
 	}
 	if result.Status != "COMMITTED" && result.Status != "COMMITTED_REFRESH_FAILED" {
@@ -718,6 +763,7 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 }
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
+	a.continuation = nil
 	if project == nil || project.ID == "" {
 		a.execution.clear()
 		return
@@ -761,7 +807,13 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_UNAVAILABLE":
 		return "Execution Node недоступен. Проект на диске не изменён."
 	case "EXECUTION_NODE_READY_REQUIRED":
-		return "Для проверки требуется READY Execution Node. Подготовка будет доступна в UI-01E5."
+		return "Для проверки требуется READY Execution Node. Проверьте или подготовьте его на странице Серверы."
+	case "BINDING_REQUIRED":
+		return "Выбранный кандидат не имеет доверенного Execution Node binding. Настройте узел через поддерживаемый trusted path."
+	case "EXECUTION_NODE_PLAN_INVALID":
+		return "План подготовки отсутствует, изменился или истёк. Проверьте узел и спланируйте подготовку заново."
+	case "PROJECT_REVISION_CHANGED":
+		return "Сохранённая ревизия проекта изменилась. Подготовка отменена; проверьте проект заново."
 	case "PROJECT_SNAPSHOT_INPUT_INVALID", "PROJECT_SNAPSHOT_FAILED", "PROJECT_SNAPSHOT_RESPONSE_INVALID":
 		return "Core не смог построить снимок проекта. Проект на диске не изменён."
 	case "PROJECT_PATH_INVALID":

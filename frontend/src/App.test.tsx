@@ -140,6 +140,38 @@ describe("UI-01E2 server editor", () => {
     expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
   });
 
+  it("keeps Installation gated until a read-only Execution Node check is READY and confirms preparation", async () => {
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue({
+        status: "NOT_PREPARED",
+        selectionKind: "EXPLICIT_EXTERNAL",
+        selectionSource: "EXPLICIT",
+        safeLabel: "desktop-qa · 192.0.2.10",
+        locked: true,
+      }),
+      checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
+      planExecutionNodePreparation: vi.fn().mockResolvedValue({
+        status: "CONFIRMATION_REQUIRED",
+        planId: "prepare-plan",
+      }),
+      prepareExecutionNode: vi.fn().mockResolvedValue({
+        status: "PREPARED",
+        verification: { status: "VERIFIED" },
+      }),
+    });
+    await openServers(value);
+    expect((await screen.findByRole("button", { name: "Установка" })) as HTMLButtonElement).toHaveProperty("disabled", true);
+    await userEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+    expect(value.checkExecutionNode).toHaveBeenCalledOnce();
+    expect((screen.getByRole("button", { name: "Установка" }) as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
+    expect(await screen.findByRole("button", { name: "Подтвердить подготовку" })).toBeTruthy();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await userEvent.click(screen.getByRole("button", { name: "Подтвердить подготовку" }));
+    expect(value.prepareExecutionNode).toHaveBeenCalledWith("prepare-plan");
+    expect(await screen.findByText(/Проверка проекта: VERIFIED/)).toBeTruthy();
+  });
+
   it("requires a name before creating a metadata-only project", async () => {
     const value = api({
       chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),

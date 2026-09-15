@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type {
   ExecutionNodeContext,
+  ExecutionNodePreparation,
+  ExecutionNodeReadiness,
   OpenResult,
   SessionCredentialInput,
   SessionCredentialStatus,
@@ -101,6 +103,9 @@ export function ServersPage({
   onClearCredential,
   executionNode,
   onSelectExecutionNode,
+  onCheckExecutionNode,
+  onPlanExecutionNodePreparation,
+  onPrepareExecutionNode,
 }: {
   snapshot: OpenResult["snapshot"];
   managed: OpenResult["managed"];
@@ -120,6 +125,9 @@ export function ServersPage({
   onClearCredential: () => Promise<SessionCredentialStatus>;
   executionNode: ExecutionNodeContext | null;
   onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
+  onCheckExecutionNode: () => Promise<ExecutionNodeReadiness>;
+  onPlanExecutionNodePreparation: () => Promise<ExecutionNodePreparation>;
+  onPrepareExecutionNode: (planId: string) => Promise<ExecutionNodePreparation>;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const visible = rows(snapshot, managed, intents);
@@ -239,6 +247,9 @@ export function ServersPage({
           rows={visible.filter((row) => row.state !== "deleting")}
           disabled={busy}
           onSelect={onSelectExecutionNode}
+          onCheck={onCheckExecutionNode}
+          onPlan={onPlanExecutionNodePreparation}
+          onPrepare={onPrepareExecutionNode}
         />
       </div>
       {commandCount > 0 && (
@@ -305,16 +316,24 @@ function ExecutionNodePanel({
   rows,
   disabled,
   onSelect,
+  onCheck,
+  onPlan,
+  onPrepare,
 }: {
   context: ExecutionNodeContext | null;
   rows: Row[];
   disabled: boolean;
   onSelect: (hostId: string) => Promise<ExecutionNodeContext>;
+  onCheck: () => Promise<ExecutionNodeReadiness>;
+  onPlan: () => Promise<ExecutionNodePreparation>;
+  onPrepare: (planId: string) => Promise<ExecutionNodePreparation>;
 }) {
   const [changing, setChanging] = useState(false);
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [readiness, setReadiness] = useState<ExecutionNodeReadiness | null>(null);
+  const [preparation, setPreparation] = useState<ExecutionNodePreparation | null>(null);
   const effective: Partial<ExecutionNodeContext> & {
     status: string;
     selectionSource: string;
@@ -356,8 +375,60 @@ function ExecutionNodePanel({
       </div>
       <p className="muted">
         Выбор хранится только в приложении и не записывается в проект. Проверка
-        готовности и подготовка появятся в следующем этапе.
+        не изменяет узел. Подготовка выполняется только после подтверждения.
       </p>
+      {readiness && (
+        <p className={readiness.error ? "field-error" : "muted"} role={readiness.error ? "alert" : undefined}>
+          Проверка: <b>{readiness.status}</b>
+          {readiness.error ? ` · ${readiness.error.message}` : ""}
+        </p>
+      )}
+      {preparation && (
+        <p className={preparation.error ? "field-error" : "muted"} role={preparation.error ? "alert" : undefined}>
+          Подготовка: <b>{preparation.status}</b>
+          {preparation.verification ? ` · Проверка проекта: ${preparation.verification.status}` : ""}
+          {preparation.error ? ` · ${preparation.error.message}` : ""}
+        </p>
+      )}
+      <div className="actions">
+        <button
+          className="outline"
+          onClick={async () => {
+            setBusy(true); setError("");
+            try { setReadiness(await onCheck()); } catch { setError("EXECUTION_NODE_CHECK_UNAVAILABLE"); }
+            finally { setBusy(false); }
+          }}
+          disabled={disabled || busy}
+        >
+          Проверить узел
+        </button>
+        <button
+          className="outline"
+          onClick={async () => {
+            setBusy(true); setError("");
+            try { setPreparation(await onPlan()); } catch { setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE"); }
+            finally { setBusy(false); }
+          }}
+          disabled={disabled || busy}
+        >
+          Спланировать подготовку
+        </button>
+        {preparation?.status === "CONFIRMATION_REQUIRED" && preparation.planId && (
+          <button
+            onClick={async () => {
+              const planId = preparation.planId;
+              if (!planId) return;
+              if (!window.confirm("Подготовить выбранный Execution Node? Это может активировать проверенный runtime.")) return;
+              setBusy(true); setError("");
+              try { setPreparation(await onPrepare(planId)); } catch { setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE"); }
+              finally { setBusy(false); }
+            }}
+            disabled={disabled || busy}
+          >
+            Подтвердить подготовку
+          </button>
+        )}
+      </div>
       {!changing ? (
         <button
           className="outline"

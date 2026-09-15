@@ -9,7 +9,10 @@ import {
   GetApplicationConfig,
   GetExecutionNodeContext,
   GetSessionCredentialStatus,
+  CheckExecutionNode,
   OpenProject,
+  PlanExecutionNodePreparation,
+  PrepareExecutionNode,
   ReviewStructuralEditSession,
   SetSessionCredential,
   SelectExecutionNode,
@@ -102,6 +105,23 @@ export type ExecutionNodeContext = {
   safeLabel?: string;
   locked: boolean;
 };
+export type ExecutionNodeReadiness = {
+  status: string;
+  nodeId?: string;
+  safeLabel?: string;
+  checkedAt?: string;
+  findings?: Array<{ code: string; safeMessage: string }>;
+  error?: { code: string; message: string };
+};
+export type ExecutionNodePreparation = {
+  status: string;
+  planId?: string;
+  expiresAt?: string;
+  steps?: Array<{ id: string; action: string; mutates: boolean }>;
+  findings?: Array<{ code: string; safeMessage: string }>;
+  error?: { code: string; message: string };
+  verification?: VerificationStatus;
+};
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
@@ -128,6 +148,9 @@ export interface ProjectBackend {
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
   selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
+  checkExecutionNode?(): Promise<ExecutionNodeReadiness>;
+  planExecutionNodePreparation?(): Promise<ExecutionNodePreparation>;
+  prepareExecutionNode?(planId: string): Promise<ExecutionNodePreparation>;
   verifyProject?(): Promise<VerificationStatus>;
 }
 
@@ -159,6 +182,12 @@ export const backend: ProjectBackend = {
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
   selectExecutionNode: SelectExecutionNode,
+  checkExecutionNode: () =>
+    CheckExecutionNode() as unknown as Promise<ExecutionNodeReadiness>,
+  planExecutionNodePreparation: () =>
+    PlanExecutionNodePreparation() as unknown as Promise<ExecutionNodePreparation>,
+  prepareExecutionNode: (planId) =>
+    PrepareExecutionNode(planId) as unknown as Promise<ExecutionNodePreparation>,
   verifyProject: () =>
     VerifyProject() as unknown as Promise<VerificationStatus>,
 };
