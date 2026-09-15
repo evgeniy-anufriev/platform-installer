@@ -25,6 +25,15 @@ def subprocess_completed(returncode):
     return execution_protocol.subprocess.CompletedProcess([], returncode)
 
 
+def runtime_evidence():
+    return {
+        "bundleDigest": "sha256:" + "e" * 64,
+        "coreVersion": "test-core",
+        "catalogDigest": "sha256:" + "f" * 64,
+        "protocol": "test-protocol",
+    }
+
+
 class ExecutionLifecycleTests(unittest.TestCase):
     def test_protocol_rejects_malformed_candidate_request_as_typed_json(self):
         script = str(TOOLS / "execution_protocol.py")
@@ -85,7 +94,10 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 "kind": "candidate", "runId": run_id, "requestId": request_id,
                 "archiveDigest": archive_digest,
             }), encoding="ascii")
-            Path(release, "manifest.yaml").write_text("catalogDigest: %s\n" % catalog_digest, encoding="utf-8")
+            Path(release, "manifest.yaml").write_text(
+                "coreVersion: test-core\ncatalogDigest: %s\nbootstrapProtocol: test-protocol\n" % catalog_digest,
+                encoding="utf-8",
+            )
             request_value = {
                 "apiVersion": "platform.installer/execution-runtime/v1alpha1",
                 "operation": "BuildProjectSnapshot",
@@ -139,8 +151,9 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 return subprocess_completed(0)
 
             with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
-                result = execution_protocol.snapshot({"runId": "run-1", "runtimeRelease": {}}, root, release)
+                result = execution_protocol.snapshot({"runId": "run-1", "runtimeRelease": {}}, root, release, runtime_evidence())
             self.assertEqual(snapshot, result["projectSnapshot"])
+            self.assertEqual(runtime_evidence(), result["runtimeEvidence"])
             self.assertFalse(Path(journal.directory).exists())
 
     def test_snapshot_does_not_remove_foreign_run_without_owner_marker(self):
@@ -150,7 +163,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
             sentinel = Path(journal.directory, "result.json")
             sentinel.write_text('{"status":"RUNNING"}\n', encoding="utf-8")
             with self.assertRaisesRegex(LifecycleError, "PROJECT_SNAPSHOT_STAGING_NOT_OWNED"):
-                execution_protocol.snapshot({"runId": "run-foreign", "runtimeRelease": {}, "snapshotRequest": {"requestId": "malformed"}}, root, release)
+                execution_protocol.snapshot({"runId": "run-foreign", "runtimeRelease": {}, "snapshotRequest": {"requestId": "malformed"}}, root, release, runtime_evidence())
             self.assertTrue(sentinel.is_file())
 
     def test_snapshot_cleanup_rechecks_owned_directory_identity(self):
@@ -199,8 +212,9 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 return subprocess_completed(0)
 
             with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
-                result = execution_protocol.core_operation({"runId": "run-1", "runtimeRelease": {}, "snapshotRequest": request}, root, release, "BuildProjectSnapshot")
+                result = execution_protocol.core_operation({"runId": "run-1", "runtimeRelease": {}, "snapshotRequest": request}, root, release, "BuildProjectSnapshot", runtime_evidence())
             self.assertEqual(revision, result["projectSnapshot"]["projectRevision"])
+            self.assertEqual(runtime_evidence(), result["runtimeEvidence"])
 
     def _candidate_archive(self, path, members):
         with tarfile.open(path, "w:") as archive:
