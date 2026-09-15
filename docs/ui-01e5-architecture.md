@@ -1,433 +1,166 @@
-# UI-01E5 — Local Save, authoritative Verify, Execution Node readiness and gating
+# UI-01E5 — Execution Node readiness, preparation and navigation gating
 
-Status: **DRAFT — revised after OWNER-UI-SAVE-VERIFY-01..06; E5 not started**.
+Status: **NEXT — not started**.
 
-Implementation note (2026-09-15): the owner explicitly moved structural Save
-and basic saved-revision Verify before E5. Those portions are now implemented
-under ADR-027 without starting this milestone. UI-01E5 remains responsible only
-for readiness inspection, explicitly confirmed preparation, Verify continuation
-after preparation, and navigation/Installation gating. The detailed Save/Verify
-sections below remain contract rationale, not unfinished E5 work.
+## Scope boundary
 
-Binding owner change: [Save / Project Verify / DeploymentPlan](ui-save-verify-architecture.md).
-E5 is not advanced by this documentation update.
+ADR-027 and the committed pre-E5 Save/Verify correction are complete. They are
+not UI-01E5 work:
 
-## 1. Goal and binding decisions
+- local structural Review/Save uses the guarded writer without Core or an
+  Execution Node;
+- saved Installer-owned server fields reopen locally without Ansible precedence;
+- explicit target-free Verify uses `BuildProjectVerificationSnapshot` and
+  cannot mutate project files;
+- Verify evidence is revision-bound and uses the active runtime's attested
+  bundle, Core, catalog and planning-protocol identity;
+- Verify requires `expected.planningProtocol == RuntimeEvidence.Protocol`;
+  a missing or unequal value returns a typed `UNVERIFIED` result, never
+  `VERIFIED`;
+- semantic Save makes the resulting revision `UNVERIFIED`;
+- `BuildDeploymentPlan` remains the fresh mandatory execution gate.
 
-UI-01E5 separates persistence from infrastructure verification and connects the
-existing `executionnode.Service` readiness/preparation lifecycle to Verify. It
-corrects the old UI-01D coupling without adding another desired-state store,
-writer, SSH path or local implementation of Core semantics.
+The owner-authorized AR-SV-001 follow-up was implemented without a third
+architecture review. It closed only the missing planning-protocol comparison.
 
-- **OWNER-UI-SAVE-VERIFY-01:** Save writes a structurally valid
-  Installer-managed candidate through the guarded local transaction and does
-  not require an Execution Node.
-- **OWNER-UI-SAVE-VERIFY-02:** `UNVERIFIED`, `INVALID` and `STALE` projects
-  remain editable/saveable; none authorizes execution.
-- **OWNER-UI-SAVE-VERIFY-03:** Verify validates the current saved canonical
-  revision through Core on a READY Execution Node and never writes project files.
-- **OWNER-UI-SAVE-VERIFY-04:** evidence is bound to exact canonical revision and
-  Core/runtime identity; every semantic Save makes prior evidence stale.
-- **OWNER-UI-SAVE-VERIFY-05:** fresh `BuildDeploymentPlan` remains mandatory
-  before every execution and is never bypassed by Project Verify.
-- **OWNER-UI-SAVE-VERIFY-06:** Verify may check readiness automatically. Any
-  mutating preparation requires explicit confirmation before Verify resumes.
+UI-01E5 starts only when explicitly requested. Its remaining scope is:
 
-Thus OWNER-UI-SAVE-EXECNODE-01..02 now applies to **Verify**, never Save. The
-old UI-01D requirement that Review/Save requires READY and candidate Core PASS
-is superseded for new Installer sessions. Published old contracts retain their
-meaning and are not reinterpreted.
+1. read-only readiness inspection for the already trusted immutable Execution
+   Node binding;
+2. explicit-confirmation flow for the existing mutating preparation workflow;
+3. retry/resume of the same saved-revision Verify after successful preparation;
+4. readiness presentation in the App Shell and Servers panel;
+5. navigation and Installation prerequisite rendering.
 
-## 2. Scope and sequence
+## Non-goals
 
-The original two-slice proposal is superseded. Slice 1 was completed as the
-pre-E5 ADR-027 correction; only slice 2 belongs to future UI-01E5:
+- No new Save path, candidate writer, EditSession model, local project parser,
+  Core emulator or verification persistence.
+- No execution, service deployment, target preparation, UI-02 transport, or
+  target-secret use.
+- No creation of an `executionnode.Node` from a React/Wails DTO or from an E4
+  project-server candidate.
+- No automatic mutating preparation. A read-only check may be automatic; every
+  Prepare action needs explicit user confirmation.
+- No bypass from `VERIFIED` to execution: a fresh authoritative
+  `BuildDeploymentPlan`, approval and bound `StartExecution` remain required.
 
-1. **PRE-E5 (DONE; not E5) — Save/Verify separation:** additive structural plan/result, local
-   guarded Save, saved-revision verification state and explicit Verify.
-2. **E5B — readiness/preparation and gates:** immutable trusted-node binding,
-   read-only check, confirmed preparation, Verify continuation and Installation
-   prerequisite rendering.
+## Required design
 
-It includes local structural Review/Save for typed commands exposed by the
-current UI; reuse of existing lock, path, ownership, revision, digest,
-transaction, rollback and recovery guards; read-only Verify through the fixed
-`BuildProjectSnapshot` protocol; bounded in-memory verification evidence; and
-reuse of `InspectExecutionNode`, `PlanExecutionNodePreparation` and `Prepare`.
+E5 reuses the existing `executionnode.Service` and one immutable application
+binding. The binding is constructed outside Wails from the configured trusted
+node, runtime release and transport. UI may select only that binding for
+readiness/prepare; it cannot provide address, host-key, credential or transport
+details.
 
-## 3. Non-goals
+### Candidate and trusted binding
 
-- No preparation of E4 project/local candidates or arbitrary addresses and no
-  synthesis of an `executionnode.Node`.
-- No E3 target credential use, generic remote-command API, UI-02 transport,
-  target preparation or service deployment.
-- No local Ansible precedence, service validation, topology resolution,
-  reference discovery, effective-state proof or snapshot fingerprinting.
-- No Core candidate proof before Save and no post-Save Core refresh.
-- No readiness/verification database, worker, polling daemon or project-file
-  verification marker.
-- No automatic preparation and no preparation from Installation.
+**OWNER-UI-E5-01:** an E4 candidate selection does not create transport trust.
+Readiness and preparation operate only through an application-owned trusted
+Execution Node binding.
 
-## 4. Ownership
-
-| Concern | Authority |
-| --- | --- |
-| Canonical desired state | portable Ansible project |
-| Typed edit/session lifecycle | Go Installer |
-| Structural candidate | existing Go managed-project writer |
-| Locking, stale checks, transaction, rollback | existing guarded transaction |
-| Infrastructure semantics and validation | Core on a READY Execution Node |
-| Node inspect/plan/prepare | existing `executionnode.Service` |
-| Rendering and transient form state | React/Wails |
-
-The local editable view is a bounded projection of Installer-owned source
-documents, read from canonical bytes and bound to `projectRevision`. It is not
-a `ProjectSnapshot`, does not resolve Ansible precedence and is not separately
-persisted. E5 exposes the already implemented server CRUD operations. A future
-editor may use local Save only after its typed operation has a structural
-reducer in the same writer; unsupported operations fail closed.
-
-## 5. Additive Save contract
-
-Existing project-edit schemas remain byte-for-byte unchanged. New Installer
-sessions continue emitting `edit-command/v1alpha4`. Local Review/Save uses a
-separate additive closed envelope at
-`contracts/project-save/v1alpha1/schema.json`:
+`ExecutionNodeContext` remains an app-memory selection/display model. Its
+`USER_SELECTED`, `AUTO_LOCAL_LINUX`, `AUTO_FIRST_PROJECT_SERVER` and
+`NOT_CONFIGURED` outcomes are candidates, not `executionnode.Node` values.
+The required E5 flow is:
 
 ```text
-platform.installer/project-save/v1alpha1
-kind: StructuralEditPlan
-  reviewMode: STRUCTURAL
-  status: READY | BLOCKED | NO_CHANGE
-  planId, baseProjectRevision
-  semanticChanges, affectedDocuments
-  structuralValidation: {status: PASS | BLOCKED, findings}
-  reviewDiff, commitAllowed, expiresAt
-
-platform.installer/project-save/v1alpha1
-kind: StructuralCommitResult
-  status: COMMITTED | BLOCKED | DISCARDED
-  changed, oldProjectRevision, newProjectRevision
-  affectedDocuments
-  verificationStatus: UNVERIFIED | STALE
+ExecutionNodeContext candidate
+  → Go application binding resolver
+  → existing approved trusted binding / executionnode.Service
 ```
 
-The schema is Draft 2020-12, `additionalProperties:false` at every object and
-uses these exact bounds: plan/opaque ID 16..128 ASCII `[A-Za-z0-9_-]`, at most
-1024 semantic changes, 1026 affected documents, 256 findings and 65536 UTF-8
-bytes of review diff. A finding has code `[A-Z][A-Z0-9_]{0,127}`, safe message
-1..512 characters and optional safe field at most 256 characters. Existing
-digest and logical-path patterns are reused by `$ref`, not copied with changed
-semantics. Unknown fields and unknown kinds are rejected.
+React/Wails never supplies an address, credential, host-key policy, known-hosts
+path or transport. It does not parse Ansible and cannot reuse the E3 target
+credential. A sorted server list or automatic candidate selection does not
+change trust.
 
-The new plan deliberately has no Core validation status, expected effective
-state or expected snapshot fingerprint. `COMMITTED_REFRESH_FAILED` is absent:
-Save performs no remote refresh. The old planner remains compatibility-only;
-new Wails Save uses the structural plan.
-
-Structural Review may check only command schema and closed fields, bounds,
-identifier grammar, supported operation, managed ownership, safe paths, YAML
-shape/serialization, duplicate source keys, and current document/revision
-digests. It never labels these checks as Core validation.
-
-The Go decoder accepts old project-edit payloads only on old methods and the
-new project-save payloads only on the new structural Review/Save methods. It
-does not cross-decode or translate plan versions. Wails emits only the new
-project-save plan/result for new sessions.
-
-Save consumes the exact stored plan and reuses `commitDocuments` and all
-pre-write guards. It makes no `candidateReadyReader`, candidate/saved snapshot,
-SSH or target call. It computes the new raw-byte revision locally, discards the
-plan/session and returns no Core snapshot. Its `verificationStatus` is
-`UNVERIFIED` when no older evidence exists and `STALE` when retained evidence
-was invalidated by the new revision.
-
-## 6. Generic references and invalid saved state
-
-Core remains the only source of generic reference records. Go adds no
-service-specific reference rules and React never decides delete legality.
-Absence of current Core evidence cannot make Save depend on an Execution Node:
-
-- current revision-bound references may be shown as a safe Review warning;
-- structural Save never cascades;
-- stale/absent evidence is not proof that references are absent;
-- a structurally valid delete may be saved; during Verify, Go applies its
-  existing generic non-cascading guard to the returned Core `references.hosts`
-  contract and marks the revision `INVALID` with `REFERENCE_IN_USE` when a
-  deleted host is still referenced;
-- no saved verification state authorizes execution; a fresh DeploymentPlan is
-  still required.
-
-This supersedes only the old save-time Core dependency. Core discovers the
-safe generic records; Go checks target presence without knowing a service;
-new reference kinds still belong in Core, never in service-specific Go.
-
-## 7. Verification and exact binding
-
-Verification is runtime application state, not desired state. Its closed
-Draft 2020-12 schema is published additively at
-`contracts/project-verification/v1alpha1/schema.json`; it neither references
-nor modifies project-edit schemas:
+The current startup path already constructs one trusted `projectReader` binding
+from CLI/configured trust inputs; `executionnode.Service` accepts only its
+validated `Node`. It has no project-candidate-to-binding resolver. E5 therefore
+needs exactly one private application operation:
 
 ```text
-ProjectVerification/v1alpha1
-  apiVersion: platform.installer/project-verification/v1alpha1
-  kind: ProjectVerification
-  status: UNVERIFIED | VERIFYING | VERIFIED | INVALID | STALE | UNAVAILABLE
-  projectIdentity, projectRevision
-  runtimeIdentity: {bundleDigest, coreVersion, catalogDigest, protocol}
-  checkedAt
-  findings: bounded [{code, safeMessage, optional safe field}]
+resolveSelectedExecutionNodeBinding(context) -> trusted binding | BINDING_REQUIRED
 ```
 
-The object is `additionalProperties:false`; findings use the same code/message/
-field bounds as project-save and are limited to 256. Runtime identity is closed,
-all three digests use the canonical sha256 pattern, and Core version/protocol
-are 1..64 printable safe identifier characters. Verification payloads are
-decoded/emitted only by the verification methods.
+It may return the existing startup binding only when its application-owned
+candidate identity matches. Otherwise it returns `BINDING_REQUIRED`, not an
+ordinary readiness failure. Establishing a new binding remains the existing
+approved bootstrap/trust workflow, outside React and outside this resolver.
+This is a lookup over the current immutable application binding, not a node
+registry, database, transport provider, discovery worker or portable-project
+state.
 
-`INVALID` means Core completed authoritatively for the bound revision and
-returned blocking semantic findings. Transport, readiness, protocol, timeout
-or staging failure is `UNAVAILABLE`, never `INVALID`. `STALE` means old evidence
-no longer matches revision/runtime; without evidence the state is `UNVERIFIED`.
+Replacing a binding invalidates readiness, a pending preparation plan and any
+Verify continuation. The binding is runtime application state only.
 
-The existing `BuildProjectSnapshot` operation gains an additive negotiated
-verification-evidence mode, not a new operation. `GetCapabilities` advertises
-`platform.installer/project-verification/v1alpha1`. In this mode the runtime:
+Readiness is derived application state, never portable-project data. Its safe
+view may contain state, checked time, safe display label, attested runtime
+identity, bounded safe findings, whether preparation is possible, and a
+bounded preparation summary. It must exclude connection data, commands,
+staging paths, raw output, secrets and credential references.
 
-- reads actual bundle/Core/catalog/protocol identity from the active immutable
-  release and its validated manifest;
-- requires every expected identity field in the request to match that actual
-  identity before Core runs;
-- returns the same actual closed runtime identity alongside `projectSnapshot`;
-- fails with a stable safe mismatch error instead of returning a snapshot when
-  identity changes or cannot be attested.
+### Prepare and Verify continuation
 
-Old runtimes may still serve UI-01B read-only snapshots, but are not
-verification-capable. Verify requires the advertised capability. The Go
-transport shares the existing staging/cleanup implementation and exposes an
-evidence-bearing result internally; it does not create a duplicate remote
-operation. Bundle digest attests the immutable manifest, while Core/catalog/
-protocol fields are also compared explicitly.
+**OWNER-UI-E5-02:** Prepare may legitimately activate a different immutable
+runtime. A continuation must not pin pre-Prepare runtime identity as the final
+Verify expectation.
 
-`VerifyCurrentProject()` runs under the App operation lock:
+The user confirms one bounded preparation plan, not an abstract prepare
+action. Before `Prepare`, the continuation binds only project-root identity,
+project identity, exact saved revision, selected candidate/trusted-binding
+identity, preparation plan ID/digest and expiry, plus the explicit
+confirmation. `executionnode.Service.Prepare` already validates its plan ID,
+digest, node, expiry and current bundle before mutation.
 
-1. require an open saved project and no active write transaction;
-2. compute canonical revision `R0` locally;
-3. resolve only the immutable startup trusted-node/runtime binding;
-4. automatically perform existing read-only readiness/capability inspection
-   when readiness is absent or stale;
-5. if preparation is needed, return a safe confirmation request without
-   changing the project or edit session;
-6. after explicit confirmation, run the existing plan, re-inspect, and resume
-   the same bound Verify only on READY;
-7. call existing read-only `BuildProjectSnapshot` for the saved project, never
-   the candidate operation;
-8. require returned `snapshot.ProjectRevision == R0`, returned actual identity
-   equal to the verified startup binding, and the capability still advertised;
-9. recompute `R1`; publish `VERIFIED`/`INVALID` only if `R1 == R0`, otherwise
-   publish `STALE` and discard the projection as current evidence.
-
-Existing request-owned staging cleanup is reused. Verify never writes project
-files. A semantic Save marks prior evidence stale before exposing its revision.
-
-### 7.1 Deterministic state transitions
-
-Evidence is retained only to explain `STALE`; it is never accepted by the
-display unless status is `VERIFIED` and both bindings are current. Even current
-evidence never authorizes execution without a fresh DeploymentPlan.
-
-| Event | Resulting state | Evidence handling |
-| --- | --- | --- |
-| Open/restart with no in-memory evidence | `UNVERIFIED` | none |
-| Save `NO_CHANGE` | unchanged | unchanged |
-| Semantic Save, no prior evidence | `UNVERIFIED` | none |
-| Semantic Save, prior evidence present | `STALE` | retain old evidence for display only |
-| Verify starts | `VERIFYING` | retain previous terminal state internally until completion |
-| Authoritative `PASS`, `partial=false`, no dangling generic host reference | `VERIFIED` | replace with exact current revision/runtime evidence |
-| Authoritative non-`PASS` or `partial=true` | `INVALID` | replace with current evidence and bounded Core findings |
-| Authoritative snapshot has a generic reference to an absent host | `INVALID` | current evidence plus Go `REFERENCE_IN_USE`; no service rule |
-| Readiness/protocol/transport/staging failure before authoritative response | previous current terminal state, otherwise `UNAVAILABLE` | retain only still-current evidence; return attempt error separately |
-| User cancels readiness preparation or Verify | previous terminal state, otherwise `UNVERIFIED` | no new evidence |
-| Returned revision differs from `R0`, or `R1 != R0` | `STALE` if old evidence exists, otherwise `UNVERIFIED` | discard returned evidence |
-| Actual runtime identity/capability differs from expected | `STALE` if old evidence exists, otherwise `UNAVAILABLE` | discard returned evidence |
-| Fresh DeploymentPlan succeeds for exact revision/runtime and its existing result explicitly proves the same project-validation claim | may become `VERIFIED` | reuse plan evidence; no duplicate Core call |
-| Any other DeploymentPlan result | unchanged | plan keeps its own findings/status; do not infer a Project Verify result |
-| Retry | follows Verify-start row | no special transition |
-
-`StructuralCommitResult.verificationStatus` follows the two semantic-Save rows:
-`UNVERIFIED` without prior evidence, `STALE` with retained prior evidence.
-`VERIFYING` is transient and never installation-eligible. A failed attempt does
-not destroy still-current prior `VERIFIED` evidence.
-
-## 8. Trusted node and readiness contract
-
-`App` receives one immutable startup binding containing the same trusted
-`executionnode.Node`, verified bundle root/runtime identity, transport and
-`executionnode.Service` used by `projectReader`. `WithExplicitExecutionNode`
-remains display-only. E4 candidate IDs can never be resolved into transport
-coordinates.
-
-`main.go` constructs one private `executionNodeBinding` after validating the
-bundle and all trust inputs, then derives both the `projectReader` and the E5
-facade from that object. `NewApp` receives the binding as an option; tests may
-inject a private interface implementation, but no Wails DTO can construct it.
-This removes duplicated node configuration and guarantees that project reads,
-attested Verify and preparation address the same immutable authority.
-
-Only an E4 selection denoting that exact startup binding may inspect, prepare
-or Verify. Project/local candidates stay `NOT_PREPARED`, `canPrepare=false`,
-with a safe explanation. E3 credentials are never read or transmitted.
-
-The read model is also a closed additive schema at
-`contracts/execution-node-readiness/v1alpha1/schema.json`. It reuses the safe
-finding/digest patterns, limits findings to 64 and preparation actions to four.
-Actions are enum values `VERIFY`, `TRANSFER`, `ACTIVATE`, `BLOCKED`; step IDs
-and transport internals are not exposed.
+After successful Prepare, E5 performs a fresh readiness/capability handshake,
+obtains fresh active runtime attestation, then invokes Verify for the original
+saved revision. Only this post-Prepare attested runtime may enter verification
+evidence. No pre-Prepare release is reused as final proof.
 
 ```text
-ExecutionNodeReadiness/v1alpha1
-  selection: ExecutionNodeContext
-  state: NOT_CONFIGURED | UNREACHABLE | UNPREPARED |
-         PREPARATION_REQUIRED | READY | UPDATE_REQUIRED |
-         INCOMPATIBLE | BROKEN
-  checkedAt, safe runtime identity, safe findings, canPrepare
-  preparation:
-    planId, bundleDigest
-    actions: bounded allow-listed labels
-    mutating, expiresAt
+Verify(R42) → trusted binding → check → bounded plan → confirm
+  → revalidate R42/binding/plan/expiry → Prepare
+  → fresh readiness + fresh runtime attestation → Verify(R42)
+  → VERIFIED | INVALID
 ```
 
-The preparation summary allow-list is state, bundle digest, fixed action labels,
-mutability and expiry only. It excludes addresses, identity/known-host paths,
-host-key fingerprints, commands, output, staging paths and transport internals.
+Close, project-root/identity replacement, Save to a new revision, candidate or
+binding replacement, plan replacement/expiry, cancelled/failed Prepare and
+shutdown cancel the continuation. In each case no resumed Verify succeeds, the
+saved revision remains `UNVERIFIED`, and canonical files are unchanged.
 
-Fixed Wails methods:
+## UX and gating
 
-```text
-GetExecutionNodeReadiness()
-CheckExecutionNodeReadiness()
-PlanExecutionNodePreparation()
-PrepareExecutionNode(planId, confirmed bool)
-SelectStartupExecutionNode()
-VerifyCurrentProject()
-```
+- Save remains available without a ready node.
+- Verify with a non-READY node offers a clean readiness prerequisite; E5 may
+  perform the read-only check automatically, then offer confirmed Prepare.
+- Failed/cancelled preparation preserves canonical files and the edit draft.
+- Project and Servers remain available before READY. Existing editor pages are
+  not disabled merely because readiness is absent.
+- Installation presents readiness, optional Verify and authoritative plan state
+  separately. It never prepares a node implicitly and never treats Verify as an
+  execution authorization.
 
-Preparation rejects `confirmed=false`, stale/foreign plans and absent trusted
-binding. Existing Service expiry, node and bundle checks remain authoritative.
-`SelectStartupExecutionNode` only reselects the already bound safe external
-context and is unavailable without that binding; it accepts no node/address/
-credential input. This supports trusted binding → project candidate → trusted
-binding without deriving transport authority from the candidate.
-App stores one readiness record, one pending plan and one pending Verify
-continuation under its operation lock; all clear on close/replacement,
-selection change, completion and shutdown. No background goroutine is added.
-Every Verify attempt performs a fresh read-only inspect/capability check, so a
-cached shell status never authorizes verification. Cached readiness is display
-state only and has no security TTL semantics.
+Readiness presentation reuses typed `executionnode.State` rather than a new
+React enum. Its bounded view contains state, checked time, safe label, safe
+attested runtime identity, safe findings, preparation availability and the
+confirmed plan's bounded actions/expiry. It excludes commands, argv, SSH
+parameters, staging paths, credentials and raw output.
 
-## 9. UI and navigation reconciliation
+## Acceptance criteria
 
-- App Shell and Servers render one backend readiness record.
-- **Check** is read-only.
-- **Prepare** is enabled only for the trusted startup binding and always opens
-  confirmation containing the safe allow-listed summary.
-- Project/local candidates remain selectable context but cannot prepare.
-- **Save project** is local structural persistence.
-- **Verify saved project** is separate and shows verification state/findings.
-- Installation shows optional Project Verify separately from plan state; it
-  never prepares a node.
-
-OWNER-UI-SAVE-VERIFY-02 narrows the older navigation gate: readiness and
-verification must not disable implemented editor pages or Save. Only Project
-and Servers editors currently exist; E5 does not expose placeholder editors.
-Future Topology/Certificates/Services are gated by their own milestone, not
-READY. Requesting an Installation plan does not require prior Project Verify:
-
-```text
-READY trusted Execution Node
-AND saved canonical project
-AND no unsaved edit-session changes
-THEN fresh BuildDeploymentPlan for that exact revision/runtime
-THEN plan findings/blockers and explicit approval
-THEN StartExecution bound to the approved plan
-```
-
-`VERIFIED` never skips `BuildDeploymentPlan`. `UNVERIFIED`, `INVALID` and
-`STALE` do not by themselves prevent requesting a fresh plan. A successful plan
-may refresh the derived badge only when its existing result proves the same
-claim; no duplicate Core call is made solely for a badge.
-
-Readiness loss, `UNVERIFIED`, `INVALID`, `STALE`, failed Verify, cancelled or
-failed preparation preserves page, draft and canonical project. Editing and
-Save remain available.
-
-## 10. Concurrency and failure semantics
-
-- UI gating is presentation only; backend Verify and future Installation
-  recheck their distinct prerequisites. StartExecution always rechecks its
-  current approved DeploymentPlan binding.
-- Save and Verify serialize under the App operation lock; transaction locks and
-  before-digests remain filesystem authority.
-- External writes are caught by Save revision/digests and Verify `R0/R1`.
-- A continuation is bound to `VERIFY`, project root, `R0`, startup node/runtime
-  identity and preparation plan ID/expiry. Any mismatch cancels it safely.
-- Close/replace, selection change, Save, shutdown or expiry clears continuation.
-  After preparation all bindings/readiness are rechecked before Verify resumes.
-- Findings use safe fixed messages; raw output, paths and secrets never cross
-  Wails.
-
-## 11. Tests and acceptance
-
-### Backend
-
-- structural Review/Save works without an Execution Node and never invokes
-  Core, SSH, candidate capability or target transport;
-- old plan/result versions remain unchanged;
-- revision/document, ownership, path, lock, transaction and rollback guards
-  still fail closed;
-- Save returns a revision and no snapshot; its status is `UNVERIFIED` without
-  prior evidence or `STALE` when prior evidence is retained. Another edit/Save
-  is possible while `UNVERIFIED`, `STALE` or `INVALID`;
-- Verify covers exact `R0/snapshot/R1` and runtime binding plus `VERIFIED`,
-  `INVALID`, `STALE`, `UNAVAILABLE`;
-- DeploymentPlan never consumes a Verify badge as authorization; only an
-  explicitly equivalent successful plan result may update that badge;
-- no-binding/project-candidate behavior, confirmation, expiry/node mismatch,
-  safe summary allow-list and resume-only-bound-Verify;
-- no E3 broker call and no project mutation from Verify/readiness/preparation.
-
-### UI and platform
-
-- Save/Verify are visibly separate; Save remains available without READY;
-- confirmation appears only for trusted binding; shell/panel share one source;
-- Installation separates optional Verify state from mandatory plan state and
-  cannot bypass fresh planning;
-- Windows Wails offline Save changes canonical digest and performs no SSH;
-- RED OS real inspect → optional confirmed prepare → READY → read-only Verify,
-  with exact binding and unchanged project digest during Verify;
-- a structurally valid Core-invalid fixture saves, verifies `INVALID`, remains
-  editable/saveable, may request a fresh plan, and cannot reach StartExecution
-  unless that authoritative plan independently succeeds and is approved;
-- before E5 is marked DONE, synchronize `docs/architecture-decisions.md`,
-  `docs/ui-design-01.md`, `docs/ui-01d-architecture.md`,
-  `docs/ui-01e4-architecture.md`, the UI-01 plan/state/roadmap and
-  `docs/ui-design-01-mockups.html` with the new Save/Verify and navigation
-  semantics; preserve old contract behavior as compatibility history;
-- `go test ./...`, `go vet ./...`, affected RED OS race, frontend
-  test/lint/build, Playwright, Wails build, Core suite when Core-facing behavior
-  changes, schema/catalog reproducibility, secret audit and `git diff --check`.
-
-## 12. Overengineering guard
-
-E5 refactors the existing writer into a structural planning seam and reuses its
-plan store/transaction. It reuses `BuildProjectSnapshot` for Verify and the
-existing `executionnode.Service` for readiness. A local Core emulator, second
-writer, database, event bus, workflow engine, poller, transport registry,
-generic patch API or new SSH adapter is excluded.
-
-## 13. Review status
-
-Earlier E5 reviews are stale because ADR-027 materially changes Save,
-verification and Installation gating. This document participates in the one
-bounded FULL PLAN review of the exact owner-change documentation revision.
+- No-node local Save and reopen continue to pass.
+- Readiness check is read-only and never contacts project target hosts.
+- Prepare runs only after explicit confirmation and only for the trusted
+  binding.
+- Candidate without a resolved trusted binding returns `BINDING_REQUIRED` and
+  cannot inspect or prepare.
+- A runtime-changing Prepare is followed by fresh attestation; a continuation
+  never compares final evidence to pre-Prepare runtime identity.
+- Verify after Prepare uses the original saved revision and attested runtime;
+  mismatch/cancellation leaves the project `UNVERIFIED`.
+- Fresh `BuildDeploymentPlan` is still observed before every StartExecution.
+- E5 acceptance rechecks the UI mockup and records any discrepancy before
+  coding, per `AGENTS.md`.
