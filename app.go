@@ -77,16 +77,17 @@ func (unavailableProjectReader) BuildSnapshot(context.Context, string) (*coreada
 }
 
 type ProjectOpenResult struct {
-	Status         string                        `json:"status"`
-	Root           string                        `json:"root,omitempty"`
-	Classification string                        `json:"classification,omitempty"`
-	Project        *projectlifecycle.Project     `json:"project,omitempty"`
-	Counts         projectlifecycle.Counts       `json:"counts"`
-	Snapshot       *coreadapter.Snapshot         `json:"snapshot,omitempty"`
-	Managed        *installer.ManagedProjectView `json:"managed,omitempty"`
-	Verification   ProjectVerification           `json:"verification"`
-	Diagnostics    []ApplicationDiagnostic       `json:"diagnostics,omitempty"`
-	Error          *ProjectOpenError             `json:"error,omitempty"`
+	Status         string                               `json:"status"`
+	Root           string                               `json:"root,omitempty"`
+	Classification string                               `json:"classification,omitempty"`
+	Project        *projectlifecycle.Project            `json:"project,omitempty"`
+	Counts         projectlifecycle.Counts              `json:"counts"`
+	Catalog        *projectlifecycle.ProjectCatalogView `json:"catalog,omitempty"`
+	Snapshot       *coreadapter.Snapshot                `json:"snapshot,omitempty"`
+	Managed        *installer.ManagedProjectView        `json:"managed,omitempty"`
+	Verification   ProjectVerification                  `json:"verification"`
+	Diagnostics    []ApplicationDiagnostic              `json:"diagnostics,omitempty"`
+	Error          *ProjectOpenError                    `json:"error,omitempty"`
 }
 
 type ProjectVerification struct {
@@ -139,18 +140,19 @@ type App struct {
 	reader interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	lifecycle     projectLifecycle
-	current       ProjectOpenResult
-	sessions      *installer.EditSessionStore
-	editor        *installer.Backend
-	activeSession string
-	editMu        sync.Mutex
-	config        appconfig.Config
-	configErr     error
-	secrets       *runtimesecret.Broker
-	execution     *executionNodeContextStore
-	binding       *executionNodeBinding
-	continuation  *verificationContinuation
+	projectRevision func(string) (string, error)
+	lifecycle       projectLifecycle
+	current         ProjectOpenResult
+	sessions        *installer.EditSessionStore
+	editor          *installer.Backend
+	activeSession   string
+	editMu          sync.Mutex
+	config          appconfig.Config
+	configErr       error
+	secrets         *runtimesecret.Broker
+	execution       *executionNodeContextStore
+	binding         *executionNodeBinding
+	continuation    *verificationContinuation
 }
 
 type AppOption func(*App)
@@ -192,7 +194,7 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate())}
+	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate())}
 	for _, option := range options {
 		option(app)
 	}
@@ -288,7 +290,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 		return a.failure(projectErrorCode(err))
 	}
 	a.secrets.Clear()
-	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts, Verification: notVerified()}
+	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts, Catalog: result.Catalog, Verification: notVerified()}
 	a.bindExecutionLocked(result.Root, result.Project, nil)
 	return a.current
 }
@@ -303,28 +305,56 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	if a.lifecycle == nil {
 		return a.failure("PROJECT_OPEN_BLOCKED")
 	}
-	local, err := a.lifecycle.OpenProject(context.Background(), root)
-	if err != nil {
-		return a.failure(projectErrorCode(err))
-	}
-	if local.Classification == "EMPTY_MANAGED_PROJECT" {
-		a.clearCredentialForReplacementLocked(local.Root, local.Project)
-		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Verification: notVerified()}
-		a.bindExecutionLocked(local.Root, local.Project, nil)
-		return a.current
-	}
-	if local.Classification == projectlifecycle.ClassificationManaged && local.Project != nil {
-		managed, err := installer.ReadManagedProjectView(local.Root)
+	for attempt := 0; attempt < 2; attempt++ {
+		r0, revisionErr := a.projectRevision(root)
+		if revisionErr != nil {
+			return a.failure(projectErrorCode(revisionErr))
+		}
+		local, err := a.lifecycle.OpenProject(context.Background(), root)
 		if err != nil {
 			return a.failure(projectErrorCode(err))
 		}
-		local.Counts.Servers = len(managed.Servers)
-		a.clearCredentialForReplacementLocked(local.Root, local.Project)
-		a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project,
-			Counts: local.Counts, Managed: managed, Verification: notVerified(), Diagnostics: a.managedServerTypeDiagnostics(managed)}
-		a.bindExecutionLocked(local.Root, local.Project, managedSnapshotHosts(managed))
-		return a.current
+		if local.Classification == projectlifecycle.ClassificationEmpty {
+			r1, afterErr := a.projectRevision(local.Root)
+			if afterErr != nil {
+				return a.failure(projectErrorCode(afterErr))
+			}
+			if r0 != r1 {
+				continue
+			}
+			a.clearCredentialForReplacementLocked(local.Root, local.Project)
+			a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project, Counts: local.Counts, Catalog: local.Catalog, Verification: notVerified()}
+			a.bindExecutionLocked(local.Root, local.Project, nil)
+			return a.current
+		}
+		if local.Classification == projectlifecycle.ClassificationManaged && local.Project != nil {
+			managed, managedErr := installer.ReadManagedProjectView(local.Root)
+			if managedErr != nil {
+				return a.failure(projectErrorCode(managedErr))
+			}
+			r1, afterErr := a.projectRevision(local.Root)
+			if afterErr != nil {
+				return a.failure(projectErrorCode(afterErr))
+			}
+			if r0 != r1 || managed.ProjectRevision != r0 {
+				continue
+			}
+			local.Counts.Servers = len(managed.Servers)
+			local.Counts.Deployments = len(managed.Deployments)
+			a.clearCredentialForReplacementLocked(local.Root, local.Project)
+			a.current = ProjectOpenResult{Status: "OPEN", Root: local.Root, Classification: local.Classification, Project: local.Project,
+				Counts: local.Counts, Catalog: local.Catalog, Managed: managed, Verification: notVerified(), Diagnostics: a.managedServerTypeDiagnostics(managed)}
+			a.bindExecutionLocked(local.Root, local.Project, managedSnapshotHosts(managed))
+			return a.current
+		}
+		// Existing external-project behavior remains Core-backed and is outside
+		// F1's Installer-owned local observation contract.
+		return a.openExternalProjectLocked(local)
 	}
+	return a.failure("PROJECT_CHANGED")
+}
+
+func (a *App) openExternalProjectLocked(local projectlifecycle.Result) ProjectOpenResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	snapshot, err := a.reader.BuildSnapshot(ctx, local.Root)

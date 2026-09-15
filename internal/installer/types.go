@@ -173,11 +173,15 @@ type StructuralSaveResult struct {
 	Managed            *ManagedProjectView `json:"managed,omitempty"`
 }
 
-// ManagedProjectView exposes only Installer-owned canonical server fields.
-// It is not an Ansible-resolved ProjectSnapshot.
+// ManagedProjectView exposes only Installer-owned canonical fields. It is not
+// an Ansible-resolved ProjectSnapshot and does not project provider/VIP state.
 type ManagedProjectView struct {
-	ProjectRevision string                   `json:"projectRevision"`
-	Servers         map[string]ManagedServer `json:"servers"`
+	ProjectRevision  string                          `json:"projectRevision"`
+	Servers          map[string]ManagedServer        `json:"servers"`
+	Deployments      map[string]ManagedDeployment    `json:"deployments"`
+	EndpointGroups   map[string]ManagedEndpointGroup `json:"endpointGroups"`
+	MemberPlacements []ManagedMemberPlacement        `json:"memberPlacements"`
+	HostPlacements   []ManagedHostPlacement          `json:"hostPlacements"`
 }
 
 type ManagedServer struct {
@@ -186,6 +190,32 @@ type ManagedServer struct {
 	DesiredHostname string `json:"desiredHostname,omitempty"`
 	Address         string `json:"address,omitempty"`
 	SSHPort         *int   `json:"sshPort,omitempty"`
+}
+
+type ManagedDeployment struct {
+	DeploymentID  string `json:"deploymentId"`
+	ServiceType   string `json:"serviceType"`
+	Mode          string `json:"mode"`
+	EndpointGroup string `json:"endpointGroup,omitempty"`
+}
+
+type ManagedEndpointGroup struct {
+	EndpointGroupID string `json:"endpointGroupId"`
+	Domain          string `json:"domain"`
+	Wildcard        bool   `json:"wildcard"`
+}
+
+type ManagedMemberPlacement struct {
+	DeploymentID string   `json:"deploymentId"`
+	MemberID     string   `json:"memberId"`
+	HostID       string   `json:"hostId"`
+	Roles        []string `json:"roles"`
+}
+
+type ManagedHostPlacement struct {
+	DeploymentID string   `json:"deploymentId"`
+	HostID       string   `json:"hostId"`
+	Roles        []string `json:"roles"`
 }
 
 type PlanTiming struct {

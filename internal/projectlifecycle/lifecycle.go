@@ -11,6 +11,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -61,10 +63,11 @@ type Project struct {
 }
 
 type Result struct {
-	Root           string   `json:"root"`
-	Classification string   `json:"classification"`
-	Project        *Project `json:"project,omitempty"`
-	Counts         Counts   `json:"counts"`
+	Root           string              `json:"root"`
+	Classification string              `json:"classification"`
+	Project        *Project            `json:"project,omitempty"`
+	Counts         Counts              `json:"counts"`
+	Catalog        *ProjectCatalogView `json:"catalog,omitempty"`
 }
 
 // Counts are a local presentation of an intentionally metadata-only project.
@@ -73,6 +76,61 @@ type Counts struct {
 	Servers     int `json:"servers"`
 	Deployments int `json:"deployments"`
 	Runs        int `json:"runs"`
+}
+
+// ProjectCatalogView is a bounded local compatibility vocabulary derived only
+// from the immutable bundle explicitly locked by project.yml. It is not an
+// Ansible-resolved snapshot and it contains no service settings or runtime
+// semantics.
+type ProjectCatalogView struct {
+	Status                string                  `json:"status"`
+	ExpectedBundleDigest  string                  `json:"expectedBundleDigest"`
+	ExpectedCatalogDigest string                  `json:"expectedCatalogDigest"`
+	BundleVersion         string                  `json:"bundleVersion,omitempty"`
+	Services              []ProjectCatalogService `json:"services,omitempty"`
+	Error                 *CatalogViewError       `json:"error,omitempty"`
+}
+
+type CatalogViewError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type ProjectCatalogService struct {
+	ID                string               `json:"id"`
+	DefinitionVersion string               `json:"definitionVersion"`
+	DisplayName       string               `json:"displayName"`
+	Description       string               `json:"description,omitempty"`
+	Category          string               `json:"category,omitempty"`
+	UI                ProjectCatalogUI     `json:"ui"`
+	EndpointConsumer  bool                 `json:"endpointConsumer"`
+	EndpointProvider  bool                 `json:"endpointProvider"`
+	Modes             []ProjectCatalogMode `json:"modes"`
+}
+
+type ProjectCatalogUI struct {
+	Icon               string `json:"icon,omitempty"`
+	Order              *int   `json:"order,omitempty"`
+	DocumentationTopic string `json:"documentationTopic,omitempty"`
+}
+type ProjectCatalogMode struct {
+	ID            string                     `json:"id"`
+	DisplayName   string                     `json:"displayName"`
+	Description   string                     `json:"description,omitempty"`
+	PlacementKind string                     `json:"placementKind"`
+	Roles         []string                   `json:"roles"`
+	Guidance      ProjectCatalogModeGuidance `json:"guidance"`
+}
+type ProjectCatalogModeGuidance struct {
+	MinParticipants int                             `json:"minParticipants"`
+	MaxParticipants *int                            `json:"maxParticipants,omitempty"`
+	DistinctHosts   bool                            `json:"distinctHosts"`
+	RoleCardinality []ProjectCatalogRoleCardinality `json:"roleCardinality,omitempty"`
+}
+type ProjectCatalogRoleCardinality struct {
+	Role    string `json:"role"`
+	Minimum int    `json:"minimum"`
+	Maximum *int   `json:"maximum,omitempty"`
 }
 
 type source struct {
@@ -171,7 +229,7 @@ func (s *Service) CreateProject(ctx context.Context, request CreateProjectReques
 		return Result{}, errors.New("PROJECT_PUBLISH_FAILED")
 	}
 	published = true
-	return Result{Root: root, Classification: classificationEmpty, Project: &Project{ID: id, Name: name, Source: source.summary()}, Counts: Counts{}}, nil
+	return Result{Root: root, Classification: classificationEmpty, Project: &Project{ID: id, Name: name, Source: source.summary()}, Counts: Counts{}, Catalog: source.catalog.view(source.verified)}, nil
 }
 
 func (s *Service) OpenProject(_ context.Context, root string) (Result, error) {
@@ -189,7 +247,7 @@ func (s *Service) OpenProject(_ context.Context, root string) (Result, error) {
 		return Result{Root: root, Classification: classificationBlocked}, err
 	}
 	if managed && validEmptyManifest(manifest) {
-		result := Result{Root: root, Project: &Project{ID: manifest.Metadata.ID, Name: manifest.Metadata.Name, Source: CompatibilitySourceSummary{BundleDigest: manifest.ArtifactLock.Digest, CatalogDigest: manifest.CatalogLock.Digest}}, Counts: Counts{}}
+		result := Result{Root: root, Project: &Project{ID: manifest.Metadata.ID, Name: manifest.Metadata.Name, Source: CompatibilitySourceSummary{BundleDigest: manifest.ArtifactLock.Digest, CatalogDigest: manifest.CatalogLock.Digest}}, Counts: Counts{}, Catalog: s.resolveProjectCatalog(manifest)}
 		if canonical {
 			result.Classification = classificationManaged
 		} else {
@@ -240,24 +298,210 @@ type catalog struct {
 }
 type definition struct {
 	Metadata struct {
-		ID      string `yaml:"id"`
-		Version string `yaml:"version"`
+		ID          string `yaml:"id"`
+		Version     string `yaml:"version"`
+		DisplayName string `yaml:"displayName"`
+		Description string `yaml:"description"`
+		Category    string `yaml:"category"`
+		UI          struct {
+			Icon               string `yaml:"icon"`
+			Order              *int   `yaml:"order"`
+			DocumentationTopic string `yaml:"documentationTopic"`
+		} `yaml:"ui"`
 	} `yaml:"metadata"`
-	Digest string `yaml:"x-definitionDigest"`
+	Digest           string                 `yaml:"x-definitionDigest"`
+	Modes            map[string]catalogMode `yaml:"modes"`
+	EndpointConsumer map[string]any         `yaml:"endpointConsumer"`
+	EndpointProvider map[string]any         `yaml:"endpointProvider"`
 }
+
+type catalogMode struct {
+	DisplayName string   `yaml:"displayName"`
+	Description string   `yaml:"description"`
+	MemberRoles []string `yaml:"memberRoles"`
+	Placement   struct {
+		HostScoped      bool                       `yaml:"hostScoped"`
+		MinMembers      int                        `yaml:"minMembers"`
+		MaxMembers      *int                       `yaml:"maxMembers"`
+		DistinctHosts   bool                       `yaml:"distinctHosts"`
+		RoleCardinality map[string]roleCardinality `yaml:"roleCardinality"`
+	} `yaml:"placement"`
+}
+
+type roleCardinality struct {
+	Minimum int  `yaml:"minimum"`
+	Maximum *int `yaml:"maximum"`
+}
+
+var catalogIdentifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 func readCatalog(verified executionbundle.Verified) (catalog, error) {
 	var value catalog
-	data, err := os.ReadFile(filepath.Join(verified.Root, "catalog", "service-catalog.yml"))
-	if err != nil || yaml.Unmarshal(data, &value) != nil || value.APIVersion != "platform.installer/catalog/v1alpha1" || value.Kind != "ServiceCatalog" || value.Digest == "" || len(value.Definitions) == 0 {
+	data, err := executionbundle.ReadVerifiedCatalog(verified)
+	if err != nil || duplicateYAMLKeys(data) || yaml.Unmarshal(data, &value) != nil || value.APIVersion != "platform.installer/catalog/v1alpha1" || value.Kind != "ServiceCatalog" || !validDigest(value.Digest) || len(value.Definitions) == 0 || len(value.Definitions) > 4096 {
 		return catalog{}, errors.New("catalog invalid")
 	}
 	for id, definition := range value.Definitions {
-		if id == "" || id != definition.Metadata.ID || definition.Metadata.Version == "" || !validDigest(definition.Digest) {
+		if !catalogIdentifierPattern.MatchString(id) || id != definition.Metadata.ID || definition.Metadata.Version == "" || definition.Metadata.DisplayName == "" || len(definition.Metadata.DisplayName) > 256 || len(definition.Metadata.Description) > 4096 || len(definition.Metadata.Category) > 128 || len(definition.Metadata.UI.Icon) > 256 || len(definition.Metadata.UI.DocumentationTopic) > 256 || !validDigest(definition.Digest) || len(definition.Modes) == 0 || len(definition.Modes) > 256 || !validEndpointCapability(definition.EndpointConsumer) || !validEndpointCapability(definition.EndpointProvider) {
 			return catalog{}, errors.New("catalog definition invalid")
+		}
+		for modeID, mode := range definition.Modes {
+			if !catalogIdentifierPattern.MatchString(modeID) || mode.DisplayName == "" || len(mode.DisplayName) > 256 || len(mode.Description) > 4096 || len(mode.MemberRoles) > 128 || mode.Placement.MinMembers < 0 || (mode.Placement.MaxMembers != nil && *mode.Placement.MaxMembers < mode.Placement.MinMembers) || !validCatalogRoles(mode.MemberRoles) || !validRoleCardinality(mode.Placement.RoleCardinality) {
+				return catalog{}, errors.New("catalog mode invalid")
+			}
 		}
 	}
 	return value, nil
+}
+
+func validCatalogRoles(roles []string) bool {
+	seen := map[string]bool{}
+	for _, role := range roles {
+		if !catalogIdentifierPattern.MatchString(role) || seen[role] {
+			return false
+		}
+		seen[role] = true
+	}
+	return true
+}
+
+// Endpoint capability is the published genericEndpoint marker: it is absent
+// or exactly an empty object. F1 deliberately assigns no inner semantics.
+func validEndpointCapability(value map[string]any) bool { return value == nil || len(value) == 0 }
+func validRoleCardinality(values map[string]roleCardinality) bool {
+	if len(values) > 128 {
+		return false
+	}
+	for role, value := range values {
+		if !catalogIdentifierPattern.MatchString(role) || value.Minimum < 0 || (value.Maximum != nil && *value.Maximum < value.Minimum) {
+			return false
+		}
+	}
+	return true
+}
+func duplicateYAMLKeys(data []byte) bool {
+	var root yaml.Node
+	if yaml.Unmarshal(data, &root) != nil {
+		return true
+	}
+	var walk func(*yaml.Node) bool
+	walk = func(node *yaml.Node) bool {
+		if node.Kind == yaml.MappingNode {
+			seen := map[string]bool{}
+			for index := 0; index < len(node.Content); index += 2 {
+				key := node.Content[index]
+				if key.Kind != yaml.ScalarNode || seen[key.Value] {
+					return true
+				}
+				seen[key.Value] = true
+				if walk(node.Content[index+1]) {
+					return true
+				}
+			}
+			return false
+		}
+		for _, child := range node.Content {
+			if walk(child) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(&root)
+}
+
+func (s *Service) resolveProjectCatalog(project manifest) *ProjectCatalogView {
+	view := &ProjectCatalogView{Status: "UNAVAILABLE", ExpectedBundleDigest: project.ArtifactLock.Digest, ExpectedCatalogDigest: project.CatalogLock.Digest, Error: &CatalogViewError{Code: "CATALOG_UNAVAILABLE", Message: "Compatible catalog is unavailable"}}
+	ids := make([]string, 0, len(s.sources))
+	for id := range s.sources {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	exactDeclared := false
+	for _, id := range ids {
+		entry := s.sources[id]
+		verified, err := executionbundle.ValidateRoot(entry.root)
+		if err != nil {
+			exactDeclared = exactDeclared || executionbundle.DeclaresManifestIdentity(entry.root, project.ArtifactLock.Digest, project.CatalogLock.Digest)
+			continue
+		}
+		if verified.Digest != project.ArtifactLock.Digest || verified.Manifest.CatalogDigest != project.CatalogLock.Digest {
+			continue
+		}
+		exactDeclared = true
+		catalog, readErr := readCatalog(verified)
+		if readErr != nil || !catalogMatchesLock(catalog, project.CatalogLock) {
+			continue
+		}
+		return catalog.view(verified)
+	}
+	if exactDeclared {
+		view.Status = "INCOMPATIBLE"
+	}
+	return view
+}
+
+func catalogMatchesLock(value catalog, lock struct {
+	APIVersion string                 `yaml:"apiVersion"`
+	Digest     string                 `yaml:"digest"`
+	Services   map[string]serviceLock `yaml:"services"`
+}) bool {
+	if value.Digest != lock.Digest || len(value.Definitions) != len(lock.Services) {
+		return false
+	}
+	for id, definition := range value.Definitions {
+		locked, ok := lock.Services[id]
+		if !ok || definition.Metadata.Version != locked.DefinitionVersion || definition.Digest != locked.Digest {
+			return false
+		}
+	}
+	return true
+}
+
+func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView {
+	services := make([]ProjectCatalogService, 0, len(value.Definitions))
+	for id, definition := range value.Definitions {
+		modes := make([]ProjectCatalogMode, 0, len(definition.Modes))
+		for modeID, mode := range definition.Modes {
+			roles := append([]string(nil), mode.MemberRoles...)
+			kind := "MEMBER_SCOPED"
+			if mode.Placement.HostScoped {
+				kind = "HOST_SCOPED"
+			}
+			cardinality := make([]ProjectCatalogRoleCardinality, 0, len(mode.Placement.RoleCardinality))
+			for role, rule := range mode.Placement.RoleCardinality {
+				cardinality = append(cardinality, ProjectCatalogRoleCardinality{Role: role, Minimum: rule.Minimum, Maximum: rule.Maximum})
+			}
+			sort.Slice(cardinality, func(left, right int) bool { return cardinality[left].Role < cardinality[right].Role })
+			modes = append(modes, ProjectCatalogMode{ID: modeID, DisplayName: mode.DisplayName, Description: mode.Description, Roles: roles, PlacementKind: kind, Guidance: ProjectCatalogModeGuidance{MinParticipants: mode.Placement.MinMembers, MaxParticipants: mode.Placement.MaxMembers, DistinctHosts: mode.Placement.DistinctHosts, RoleCardinality: cardinality}})
+		}
+		sort.Slice(modes, func(left, right int) bool {
+			return catalogOrderLess(nil, modes[left].DisplayName, modes[left].ID, nil, modes[right].DisplayName, modes[right].ID)
+		})
+		services = append(services, ProjectCatalogService{ID: id, DefinitionVersion: definition.Metadata.Version, DisplayName: definition.Metadata.DisplayName, Description: definition.Metadata.Description, Category: definition.Metadata.Category, UI: ProjectCatalogUI{Icon: definition.Metadata.UI.Icon, Order: definition.Metadata.UI.Order, DocumentationTopic: definition.Metadata.UI.DocumentationTopic}, EndpointConsumer: definition.EndpointConsumer != nil, EndpointProvider: definition.EndpointProvider != nil, Modes: modes})
+	}
+	sort.Slice(services, func(left, right int) bool {
+		return catalogOrderLess(services[left].UI.Order, services[left].DisplayName, services[left].ID, services[right].UI.Order, services[right].DisplayName, services[right].ID)
+	})
+	return &ProjectCatalogView{Status: "READY", ExpectedBundleDigest: verified.Digest, ExpectedCatalogDigest: verified.Manifest.CatalogDigest, BundleVersion: verified.Manifest.BundleVersion, Services: services}
+}
+
+func catalogOrderLess(leftOrder *int, leftName, leftID string, rightOrder *int, rightName, rightID string) bool {
+	if leftOrder != nil || rightOrder != nil {
+		if leftOrder == nil {
+			return false
+		}
+		if rightOrder == nil {
+			return true
+		}
+		if *leftOrder != *rightOrder {
+			return *leftOrder < *rightOrder
+		}
+	}
+	if leftName != rightName {
+		return leftName < rightName
+	}
+	return leftID < rightID
 }
 
 type manifest struct {

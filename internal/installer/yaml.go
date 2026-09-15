@@ -17,6 +17,10 @@ func parseManagedYAML(content []byte) (map[string]any, error) {
 	if !bytes.HasPrefix(content, managedHeader) {
 		return nil, blocked("WRITE_NOT_ALLOWED", "Document is not explicitly Installer-owned", "document")
 	}
+	var node yaml.Node
+	if err := yaml.Unmarshal(content, &node); err != nil || managedYAMLDuplicateKeys(&node) {
+		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Installer-owned document is invalid YAML", "document")
+	}
 	var document map[string]any
 	if err := yaml.Unmarshal(content, &document); err != nil {
 		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Installer-owned document is invalid YAML", "document")
@@ -25,6 +29,26 @@ func parseManagedYAML(content []byte) (map[string]any, error) {
 		document = make(map[string]any)
 	}
 	return document, nil
+}
+
+func managedYAMLDuplicateKeys(node *yaml.Node) bool {
+	if node.Kind == yaml.MappingNode {
+		seen := map[string]bool{}
+		for index := 0; index < len(node.Content); index += 2 {
+			key := node.Content[index]
+			if key.Kind != yaml.ScalarNode || seen[key.Value] || managedYAMLDuplicateKeys(node.Content[index+1]) {
+				return true
+			}
+			seen[key.Value] = true
+		}
+		return false
+	}
+	for _, child := range node.Content {
+		if managedYAMLDuplicateKeys(child) {
+			return true
+		}
+	}
+	return false
 }
 
 func scalarNode(value any) (*yaml.Node, error) {

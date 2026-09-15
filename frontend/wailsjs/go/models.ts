@@ -321,6 +321,74 @@ export namespace installer {
       return a;
     }
   }
+  export class ManagedHostPlacement {
+    deploymentId: string;
+    hostId: string;
+    roles: string[];
+
+    static createFrom(source: any = {}) {
+      return new ManagedHostPlacement(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+    }
+  }
+  export class ManagedMemberPlacement {
+    deploymentId: string;
+    memberId: string;
+    hostId: string;
+    roles: string[];
+
+    static createFrom(source: any = {}) {
+      return new ManagedMemberPlacement(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.memberId = source["memberId"];
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+    }
+  }
+  export class ManagedEndpointGroup {
+    endpointGroupId: string;
+    domain: string;
+    wildcard: boolean;
+
+    static createFrom(source: any = {}) {
+      return new ManagedEndpointGroup(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.endpointGroupId = source["endpointGroupId"];
+      this.domain = source["domain"];
+      this.wildcard = source["wildcard"];
+    }
+  }
+  export class ManagedDeployment {
+    deploymentId: string;
+    serviceType: string;
+    mode: string;
+    endpointGroup?: string;
+
+    static createFrom(source: any = {}) {
+      return new ManagedDeployment(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.serviceType = source["serviceType"];
+      this.mode = source["mode"];
+      this.endpointGroup = source["endpointGroup"];
+    }
+  }
   export class ManagedServer {
     hostId: string;
     type?: string;
@@ -344,6 +412,10 @@ export namespace installer {
   export class ManagedProjectView {
     projectRevision: string;
     servers: Record<string, ManagedServer>;
+    deployments: Record<string, ManagedDeployment>;
+    endpointGroups: Record<string, ManagedEndpointGroup>;
+    memberPlacements: ManagedMemberPlacement[];
+    hostPlacements: ManagedHostPlacement[];
 
     static createFrom(source: any = {}) {
       return new ManagedProjectView(source);
@@ -353,6 +425,24 @@ export namespace installer {
       if ("string" === typeof source) source = JSON.parse(source);
       this.projectRevision = source["projectRevision"];
       this.servers = this.convertValues(source["servers"], ManagedServer, true);
+      this.deployments = this.convertValues(
+        source["deployments"],
+        ManagedDeployment,
+        true,
+      );
+      this.endpointGroups = this.convertValues(
+        source["endpointGroups"],
+        ManagedEndpointGroup,
+        true,
+      );
+      this.memberPlacements = this.convertValues(
+        source["memberPlacements"],
+        ManagedMemberPlacement,
+      );
+      this.hostPlacements = this.convertValues(
+        source["hostPlacements"],
+        ManagedHostPlacement,
+      );
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1101,6 +1191,7 @@ export namespace main {
     classification?: string;
     project?: projectlifecycle.Project;
     counts: projectlifecycle.Counts;
+    catalog?: projectlifecycle.ProjectCatalogView;
     snapshot?: coreadapter.Snapshot;
     managed?: installer.ManagedProjectView;
     verification: ProjectVerification;
@@ -1123,6 +1214,10 @@ export namespace main {
       this.counts = this.convertValues(
         source["counts"],
         projectlifecycle.Counts,
+      );
+      this.catalog = this.convertValues(
+        source["catalog"],
+        projectlifecycle.ProjectCatalogView,
       );
       this.snapshot = this.convertValues(
         source["snapshot"],
@@ -1219,6 +1314,20 @@ export namespace main {
 }
 
 export namespace projectlifecycle {
+  export class CatalogViewError {
+    code: string;
+    message: string;
+
+    static createFrom(source: any = {}) {
+      return new CatalogViewError(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.code = source["code"];
+      this.message = source["message"];
+    }
+  }
   export class CompatibilitySourceSummary {
     id: string;
     bundleDigest: string;
@@ -1286,6 +1395,211 @@ export namespace projectlifecycle {
         source["source"],
         CompatibilitySourceSummary,
       );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ProjectCatalogRoleCardinality {
+    role: string;
+    minimum: number;
+    maximum?: number;
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogRoleCardinality(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.role = source["role"];
+      this.minimum = source["minimum"];
+      this.maximum = source["maximum"];
+    }
+  }
+  export class ProjectCatalogModeGuidance {
+    minParticipants: number;
+    maxParticipants?: number;
+    distinctHosts: boolean;
+    roleCardinality?: ProjectCatalogRoleCardinality[];
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogModeGuidance(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.minParticipants = source["minParticipants"];
+      this.maxParticipants = source["maxParticipants"];
+      this.distinctHosts = source["distinctHosts"];
+      this.roleCardinality = this.convertValues(
+        source["roleCardinality"],
+        ProjectCatalogRoleCardinality,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ProjectCatalogMode {
+    id: string;
+    displayName: string;
+    description?: string;
+    placementKind: string;
+    roles: string[];
+    guidance: ProjectCatalogModeGuidance;
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogMode(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.displayName = source["displayName"];
+      this.description = source["description"];
+      this.placementKind = source["placementKind"];
+      this.roles = source["roles"];
+      this.guidance = this.convertValues(
+        source["guidance"],
+        ProjectCatalogModeGuidance,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class ProjectCatalogUI {
+    icon?: string;
+    order?: number;
+    documentationTopic?: string;
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogUI(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.icon = source["icon"];
+      this.order = source["order"];
+      this.documentationTopic = source["documentationTopic"];
+    }
+  }
+  export class ProjectCatalogService {
+    id: string;
+    definitionVersion: string;
+    displayName: string;
+    description?: string;
+    category?: string;
+    ui: ProjectCatalogUI;
+    endpointConsumer: boolean;
+    endpointProvider: boolean;
+    modes: ProjectCatalogMode[];
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogService(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.definitionVersion = source["definitionVersion"];
+      this.displayName = source["displayName"];
+      this.description = source["description"];
+      this.category = source["category"];
+      this.ui = this.convertValues(source["ui"], ProjectCatalogUI);
+      this.endpointConsumer = source["endpointConsumer"];
+      this.endpointProvider = source["endpointProvider"];
+      this.modes = this.convertValues(source["modes"], ProjectCatalogMode);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class ProjectCatalogView {
+    status: string;
+    expectedBundleDigest: string;
+    expectedCatalogDigest: string;
+    bundleVersion?: string;
+    services?: ProjectCatalogService[];
+    error?: CatalogViewError;
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogView(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.expectedBundleDigest = source["expectedBundleDigest"];
+      this.expectedCatalogDigest = source["expectedCatalogDigest"];
+      this.bundleVersion = source["bundleVersion"];
+      this.services = this.convertValues(
+        source["services"],
+        ProjectCatalogService,
+      );
+      this.error = this.convertValues(source["error"], CatalogViewError);
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {

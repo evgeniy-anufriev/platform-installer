@@ -44,9 +44,10 @@ type Component struct {
 }
 
 type Verified struct {
-	Root     string
-	Manifest Manifest
-	Digest   string
+	Root         string
+	Manifest     Manifest
+	Digest       string
+	rootIdentity string
 }
 
 func ValidateRoot(root string) (Verified, error) {
@@ -56,6 +57,10 @@ func ValidateRoot(root string) (Verified, error) {
 	}
 	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
+		return Verified{}, errors.New("EXECUTION_BUNDLE_ROOT_INVALID")
+	}
+	rootIdentity, err := verifiedRootIdentity(root)
+	if err != nil {
 		return Verified{}, errors.New("EXECUTION_BUNDLE_ROOT_INVALID")
 	}
 	manifestPath := filepath.Join(root, "manifest.yaml")
@@ -108,7 +113,7 @@ func ValidateRoot(root string) (Verified, error) {
 			return Verified{}, errors.New("EXECUTION_BUNDLE_COMPONENT_CHECKSUM_MISMATCH")
 		}
 	}
-	return Verified{Root: root, Manifest: manifest, Digest: bytesDigest(data)}, nil
+	return Verified{Root: root, Manifest: manifest, Digest: bytesDigest(data), rootIdentity: rootIdentity}, nil
 }
 
 func fileDigest(path string) (string, error) {

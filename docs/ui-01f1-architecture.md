@@ -1,10 +1,10 @@
 # UI-01F1 — Lock-bound catalog and local managed read model
 
-Status: **DRAFT ARCHITECTURE PLAN**
+Status: **IMPLEMENTED**
 
 Milestone: **UI-01F1**
 
-Implementation status: **NOT STARTED**
+Implementation status: **DONE**
 
 Parent architecture: `docs/ui-01f-architecture.md`
 
@@ -618,3 +618,16 @@ UI-01F1 is DONE only when:
    focused implementation commit exists and the worktree is clean.
 
 F2 and all topology mutation remain NOT STARTED at F1 completion.
+
+## 15. Implementation evidence
+
+UI-01F1 was implemented against the approved plan baseline `9dd719b`.
+`UI01F1-DIFF-001` and `UI01F1-DIFF-003` passed targeted review. The owner
+authorized the final bounded correction for `UI01F1-DIFF-002`: the published
+`genericEndpoint` marker is accepted only when absent or exactly `{}`; scalar,
+sequence and nonempty-object forms fail with the existing safe catalog error.
+No further architecture-review cycle was run or required for that exact
+contract-compliance correction.
+
+Focused Go tests, `go test ./...`, `go vet ./...`, RED OS catalog
+reproducibility and `git diff --check` passed. F2 remains **NOT STARTED**.

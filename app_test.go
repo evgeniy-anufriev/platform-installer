@@ -233,6 +233,38 @@ func TestAppKeepsEmptyProjectLocalWithoutSnapshotCall(t *testing.T) {
 	}
 }
 
+func TestAppOpenRetriesWholeLocalObservationOnceOnRevisionChange(t *testing.T) {
+	root := t.TempDir()
+	project := &projectlifecycle.Project{ID: "project-0123456789abcdef", Name: "Empty"}
+	app := NewApp(snapshotReaderStub{err: errors.New("snapshot must not be called")}, lifecycleStub{result: projectlifecycle.Result{Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: project}})
+	revisions := []string{"sha256:one", "sha256:two", "sha256:three", "sha256:three"}
+	app.projectRevision = func(string) (string, error) {
+		value := revisions[0]
+		revisions = revisions[1:]
+		return value, nil
+	}
+	result := app.OpenProject(root)
+	if result.Status != "OPEN" || result.Project != project || len(revisions) != 0 {
+		t.Fatalf("result=%#v remaining=%v", result, revisions)
+	}
+}
+
+func TestAppOpenRejectsSecondChangedLocalObservation(t *testing.T) {
+	root := t.TempDir()
+	project := &projectlifecycle.Project{ID: "project-0123456789abcdef", Name: "Empty"}
+	app := NewApp(snapshotReaderStub{err: errors.New("snapshot must not be called")}, lifecycleStub{result: projectlifecycle.Result{Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: project}})
+	revisions := []string{"sha256:one", "sha256:two", "sha256:three", "sha256:four"}
+	app.projectRevision = func(string) (string, error) {
+		value := revisions[0]
+		revisions = revisions[1:]
+		return value, nil
+	}
+	result := app.OpenProject(root)
+	if result.Status != "ERROR" || result.Error == nil || result.Error.Code != "PROJECT_CHANGED" || len(revisions) != 0 {
+		t.Fatalf("result=%#v remaining=%v", result, revisions)
+	}
+}
+
 func TestRuntimeEvidenceRequiresExactPlanningProtocol(t *testing.T) {
 	expected := map[string]any{"bundleDigest": "sha256:" + strings.Repeat("a", 64), "coreVersion": "1.0.0", "catalogDigest": "sha256:" + strings.Repeat("b", 64), "planningProtocol": "v1alpha1"}
 	actual := executionnode.RuntimeEvidence{BundleDigest: expected["bundleDigest"].(string), CoreVersion: "1.0.0", CatalogDigest: expected["catalogDigest"].(string), Protocol: "v1alpha1"}
@@ -332,11 +364,38 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	if saved.Status != "COMMITTED" || reader.calls != 0 || saved.Current == nil || saved.Current.Managed.Servers["node1"].Address != "192.0.2.10" {
 		t.Fatalf("local save=%#v calls=%d", saved, reader.calls)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "inventory", "host_vars", "node1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	desired := string(managedHeaderForTest()) + "platform_desired_state:\n  endpointGroups:\n    edge: {address: {domain: edge.example.test, wildcard: true}}\n  serviceDeployments:\n    kafka-main: {serviceType: kafka, mode: single, endpointGroup: edge}\n"
+	placement := string(managedHeaderForTest()) + "platform_deployments:\n  kafka-main:\n    members:\n      member-1: {roles: [broker]}\n  dns-main:\n    roles: [primary]\n"
+	if err := os.WriteFile(filepath.Join(root, "inventory", "group_vars", "all", "platform-installer.yml"), []byte(desired), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "inventory", "host_vars", "node1", "platform-installer.yml"), []byte(placement), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if closed := app.CloseProject(); closed.Status != "NO_PROJECT" {
 		t.Fatalf("close=%#v", closed)
 	}
+	originalRevision := app.projectRevision
+	revisionCalls := 0
+	app.projectRevision = func(projectRoot string) (string, error) {
+		revisionCalls++
+		value, err := originalRevision(projectRoot)
+		if revisionCalls == 1 && err == nil {
+			content, readErr := os.ReadFile(filepath.Join(projectRoot, "inventory", "host_vars", "node1", "platform-installer.yml"))
+			if readErr != nil {
+				return "", readErr
+			}
+			if writeErr := os.WriteFile(filepath.Join(projectRoot, "inventory", "host_vars", "node1", "platform-installer.yml"), append(content, []byte("# coherent retry\n")...), 0o600); writeErr != nil {
+				return "", writeErr
+			}
+		}
+		return value, err
+	}
 	reopened := app.OpenProject(root)
-	if reopened.Status != "OPEN" || reopened.Managed == nil || reopened.Managed.Servers["node1"].DesiredHostname != "node1.example.internal" || reader.calls != 0 {
+	if reopened.Status != "OPEN" || reopened.Managed == nil || reopened.Managed.Servers["node1"].DesiredHostname != "node1.example.internal" || len(reopened.Managed.MemberPlacements) != 1 || len(reopened.Managed.HostPlacements) != 1 || reader.calls != 0 || revisionCalls != 4 {
 		t.Fatalf("local reopen=%#v calls=%d", reopened, reader.calls)
 	}
 
@@ -366,6 +425,10 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	if updated.Status != "COMMITTED" || updated.Current == nil || updated.Current.Verification.Status != "UNVERIFIED" || reader.calls != 3 {
 		t.Fatalf("save did not stale evidence or called Core: %#v calls=%d", updated, reader.calls)
 	}
+}
+
+func managedHeaderForTest() []byte {
+	return []byte("# Managed by Platform Installer.\n# This is standard Ansible YAML; formatting may be normalized.\n")
 }
 
 func TestVerifyWithoutReadyNodeReturnsPrerequisiteWithoutPreparation(t *testing.T) {

@@ -9,15 +9,21 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"platform-installer/internal/executionbundle"
 )
 
 func testBundle(t *testing.T) string {
+	t.Helper()
+	return testBundleWithCatalog(t, "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata:\n      id: kafka\n      version: 1.0.0\n      displayName: Kafka\n    modes:\n      single:\n        displayName: Single\n        memberRoles: [broker]\n        placement:\n          minMembers: 1\n          distinctHosts: false\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n")
+}
+
+func testBundleWithCatalog(t *testing.T, catalog string) string {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "catalog"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	catalog := "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata:\n      id: kafka\n      version: 1.0.0\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
 	catalogPath := filepath.Join(root, "catalog", "service-catalog.yml")
 	if err := os.WriteFile(catalogPath, []byte(catalog), 0o644); err != nil {
 		t.Fatal(err)
@@ -41,6 +47,9 @@ func TestCreateProjectPublishesOneManagedManifest(t *testing.T) {
 	if result.Classification != classificationEmpty || result.Project == nil || !validProjectID(result.Project.ID) {
 		t.Fatalf("result=%+v", result)
 	}
+	if result.Catalog == nil || result.Catalog.Status != "READY" || len(result.Catalog.Services) != 1 || result.Catalog.Services[0].ID != "kafka" {
+		t.Fatalf("catalog=%#v", result.Catalog)
+	}
 	entries, err := os.ReadDir(result.Root)
 	if err != nil || len(entries) != 1 || entries[0].Name() != "project.yml" {
 		t.Fatalf("entries=%v err=%v", entries, err)
@@ -53,8 +62,68 @@ func TestCreateProjectPublishesOneManagedManifest(t *testing.T) {
 		t.Fatalf("unexpected manifest: %s", data)
 	}
 	reopened, err := service.OpenProject(t.Context(), result.Root)
-	if err != nil || reopened.Classification != classificationEmpty || reopened.Project.ID != result.Project.ID || reopened.Project.Name != "Production" {
+	if err != nil || reopened.Classification != classificationEmpty || reopened.Project.ID != result.Project.ID || reopened.Project.Name != "Production" || reopened.Catalog == nil || reopened.Catalog.Status != "READY" {
 		t.Fatalf("reopened=%+v err=%v", reopened, err)
+	}
+}
+
+func TestProjectCatalogViewIsClosedStableAndPreservesRoleOrder(t *testing.T) {
+	bundle := testBundleWithCatalog(t, "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  zeta:\n    metadata: {id: zeta, version: 1.0.0, displayName: Zeta, category: test}\n    modes:\n      mode:\n        displayName: Mode\n        memberRoles: [second, first]\n        placement:\n          minMembers: 1\n          distinctHosts: true\n          roleCardinality:\n            first: {minimum: 1}\n            second: {minimum: 1, maximum: 2}\n    endpointConsumer: {}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n  alpha:\n    metadata: {id: alpha, version: 1.0.0, displayName: Alpha}\n    modes:\n      mode:\n        displayName: Mode\n        memberRoles: []\n        placement: {hostScoped: true, minMembers: 0, distinctHosts: false}\n    endpointProvider: {}\n    x-definitionDigest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n")
+	verified, err := executionbundle.ValidateRoot(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := readCatalog(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := catalog.view(verified)
+	if view.Status != "READY" || view.BundleVersion != "test" || len(view.Services) != 2 || view.Services[0].ID != "alpha" || view.Services[1].ID != "zeta" {
+		t.Fatalf("view=%#v", view)
+	}
+	mode := view.Services[1].Modes[0]
+	if !view.Services[0].EndpointProvider || !view.Services[1].EndpointConsumer || mode.PlacementKind != "MEMBER_SCOPED" || strings.Join(mode.Roles, ",") != "second,first" || len(mode.Guidance.RoleCardinality) != 2 || mode.Guidance.RoleCardinality[0].Role != "first" {
+		t.Fatalf("view=%#v", view)
+	}
+}
+
+func TestReadCatalogRejectsMalformedKnownFieldsAndDuplicateRoles(t *testing.T) {
+	for name, catalogText := range map[string]string{
+		"duplicate role":           "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [broker, broker], placement: {minMembers: 1}}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+		"duplicate known key":      "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [], placement: {minMembers: 1}}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+		"endpoint scalar":          "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [], placement: {minMembers: 1}}\n    endpointConsumer: true\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+		"endpoint one field":       "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [], placement: {minMembers: 1}}\n    endpointConsumer: {unexpected: true}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+		"endpoint multiple fields": "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [], placement: {minMembers: 1}}\n    endpointProvider: {unexpected: true, another: false}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			verified, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, catalogText))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readCatalog(verified); err == nil || strings.Contains(err.Error(), "unexpected") {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestReadCatalogAcceptsEmptyOrAbsentGenericEndpoint(t *testing.T) {
+	for name, capability := range map[string]string{"empty": "endpointConsumer: {}", "absent": ""} {
+		t.Run(name, func(t *testing.T) {
+			catalogText := "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [], placement: {minMembers: 1}}\n    " + capability + "\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+			verified, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, catalogText))
+			if err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := readCatalog(verified)
+			if err != nil {
+				t.Fatal(err)
+			}
+			view := catalog.view(verified)
+			if len(view.Services) != 1 || view.Services[0].EndpointConsumer != (capability != "") {
+				t.Fatalf("view=%#v", view)
+			}
+		})
 	}
 }
 
