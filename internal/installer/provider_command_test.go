@@ -1,7 +1,6 @@
 package installer
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -41,22 +40,6 @@ func TestV6ProviderCommandValidation(t *testing.T) {
 				t.Fatal("expected invalid provider command")
 			}
 		})
-	}
-}
-
-func TestV6ProviderCommandCannotSilentlyNoOpBeforeProviderReducer(t *testing.T) {
-	root := managedReadProject(t)
-	revision, err := ProjectRevision(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend := NewBackend(nil)
-	plan, err := backend.PlanStructuralSave(context.Background(), root, "MANAGED_PROJECT", revision, []EditCommand{{
-		APIVersion: EditCommandAPIVersionV6, Kind: "EditCommand", BaseProjectRevision: revision,
-		Operation: "ClearEndpointProvider", DeploymentID: "provider",
-	}})
-	if err != nil || plan.Status != "BLOCKED" || plan.Finding == nil || plan.Finding.Code != "EDIT_OPERATION_UNAVAILABLE" {
-		t.Fatalf("plan=%#v err=%v", plan, err)
 	}
 }
 

@@ -43,7 +43,7 @@ func topologyOperation(operation string) bool {
 
 func commandNeedsCatalog(command EditCommand) bool {
 	switch command.Operation {
-	case "CreateServiceDeployment", "SetServiceEndpointGroup":
+	case "CreateServiceDeployment", "SetServiceEndpointGroup", "ReconcileEndpointProvider":
 		return true
 	case "ReconcileDeploymentPlacement":
 		return len(command.Members) != 0
@@ -131,6 +131,12 @@ func validateStructuralCommandConflicts(commands []EditCommand) error {
 			key = "endpoint-relation/" + command.DeploymentID
 			if relations[key] {
 				return blocked("EDIT_COMMAND_CONFLICT", "Edit session contains conflicting endpoint intents", "command")
+			}
+			relations[key] = true
+		case "ReconcileEndpointProvider", "ClearEndpointProvider":
+			key = "provider-relation/" + command.DeploymentID
+			if relations[key] {
+				return blocked("EDIT_COMMAND_CONFLICT", "Edit session contains conflicting provider intents", "command")
 			}
 			relations[key] = true
 		case "ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement":
@@ -231,14 +237,6 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 		return nil, mutations, err
 	}
 	for _, command := range commands {
-		if command.Operation == "ReconcileEndpointProvider" || command.Operation == "ClearEndpointProvider" {
-			// UI-NET-01A publishes the closed v1alpha6 decode boundary and
-			// managed projection only. Until UI-NET-01B owns the final-state
-			// reducer, rejecting is safer than a silent no-op Save.
-			return nil, mutations, blocked("EDIT_OPERATION_UNAVAILABLE", "Provider changes are not available until the provider reducer is installed", "command.operation")
-		}
-	}
-	for _, command := range commands {
 		if command.Operation != "CreateServer" && command.Operation != "UpdateServer" && command.Operation != "DeleteServer" {
 			continue
 		}
@@ -320,6 +318,30 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 				candidate.dirty[desiredDocument] = true
 			}
 			changes = append(changes, commandSummary(command))
+		case "ReconcileEndpointProvider":
+			deployment := asMap(deployments[command.DeploymentID])
+			if deployment == nil || groups[command.EndpointGroupID] == nil {
+				return nil, mutations, blocked("REFERENCE_NOT_FOUND", "Provider reconcile references a missing entity", "command")
+			}
+			serviceType, _ := deployment["serviceType"].(string)
+			if !catalogEndpointProvider(catalog, serviceType) {
+				return nil, mutations, blocked("CAPABILITY_NOT_SUPPORTED", "Service does not declare endpoint-provider capability", "command.deploymentId")
+			}
+			deployment["endpointGroupRef"] = command.EndpointGroupID
+			deployment["virtualRouterId"] = command.VirtualRouterID
+			deployment["virtualAddresses"] = virtualAddressValues(command.VirtualAddresses)
+			candidate.dirty[desiredDocument] = true
+			changes = append(changes, commandSummary(command))
+		case "ClearEndpointProvider":
+			deployment := asMap(deployments[command.DeploymentID])
+			if deployment == nil {
+				return nil, mutations, blocked("REFERENCE_NOT_FOUND", "Provider clear references a missing deployment", "command.deploymentId")
+			}
+			delete(deployment, "endpointGroupRef")
+			delete(deployment, "virtualRouterId")
+			delete(deployment, "virtualAddresses")
+			candidate.dirty[desiredDocument] = true
+			changes = append(changes, commandSummary(command))
 		case "ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement":
 			if err := candidate.reconcilePlacement(command, deployments, inventory, catalog); err != nil {
 				return nil, mutations, err
@@ -375,6 +397,26 @@ func catalogEndpointConsumer(catalog *projectlifecycle.ProjectCatalogView, servi
 		return false
 	}
 	return service.EndpointConsumer
+}
+
+func catalogEndpointProvider(catalog *projectlifecycle.ProjectCatalogView, serviceType string) bool {
+	if catalog == nil || catalog.Status != "READY" {
+		return false
+	}
+	for index := range catalog.Services {
+		if catalog.Services[index].ID == serviceType {
+			return catalog.Services[index].EndpointProvider
+		}
+	}
+	return false
+}
+
+func virtualAddressValues(values []VirtualAddress) []any {
+	result := make([]any, len(values))
+	for index, value := range values {
+		result[index] = map[string]any{"address": value.Address, "interface": value.Interface}
+	}
+	return result
 }
 
 func (candidate *structuralCandidate) hostDocument(hostID string, create bool) (map[string]any, error) {

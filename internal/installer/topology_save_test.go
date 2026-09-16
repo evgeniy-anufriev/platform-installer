@@ -16,6 +16,7 @@ func f2Catalog() *projectlifecycle.ProjectCatalogView {
 	return &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{
 		{ID: "kafka", EndpointConsumer: true, Modes: []projectlifecycle.ProjectCatalogMode{{ID: "kraft", PlacementKind: "MEMBER_SCOPED", Roles: []string{"broker", "controller"}}}},
 		{ID: "haproxy", Modes: []projectlifecycle.ProjectCatalogMode{{ID: "edge", PlacementKind: "HOST_SCOPED", Roles: []string{}}}},
+		{ID: "keepalived", EndpointProvider: true, Modes: []projectlifecycle.ProjectCatalogMode{{ID: "vrrp", PlacementKind: "HOST_SCOPED", Roles: []string{}}}},
 	}}
 }
 
