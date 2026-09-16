@@ -11,7 +11,7 @@ Prerequisites: UI-01D and UI-01E1 through UI-01E6 are DONE.
 Baseline revision: `5bc38903c0ce2e477bf1cff7f519bcaaea8704c0`.
 
 This document is the common architecture plan for UI-01F. It does not
-authorize UI-01G, UI-01H, service execution, PKI materialization or changes to
+authorize UI-NET-01, UI-01G, UI-01H, service execution, PKI materialization or changes to
 the standalone Ansible runtime.
 
 ## 1. Goal
@@ -32,7 +32,7 @@ endpoint-group CRUD/assignment and topology views:
 - preserve the selected deployment when navigating to the future common
   service editor.
 
-UI-01G owns provider-to-consumer relation editing, `endpointGroupRef`,
+UI-NET-01 owns provider-to-consumer relation editing, `endpointGroupRef`,
 `virtualRouterId`, `virtualAddresses` and related integration semantics. F
 does not add provider mutation commands.
 
@@ -268,7 +268,7 @@ listener names, ports or Kafka listeners.
 Provider-side `endpointGroupRef`, `virtualRouterId` and `virtualAddresses` do
 not belong to the endpoint-group body. UI-01F adds no commands for them. They
 are displayed only from fresh Core snapshot evidence and their editing is
-deferred to UI-01G with the related provider/consumer integration semantics.
+deferred to UI-NET-01 with the related provider/consumer integration semantics.
 
 Delete uses the generic reference graph and returns `REFERENCE_IN_USE` when
 referenced. No Kafka, PostgreSQL, HAProxy or other service-specific delete rule
@@ -284,7 +284,7 @@ exists. Existing saved relations remain preserved and, when present in a fresh
 snapshot, read-only.
 
 A future editable relation requires a versioned catalog declaration, a closed
-typed intent and Core validation evidence. UI-01G owns the provider/consumer
+typed intent and Core validation evidence. UI-NET-01 owns the provider/consumer
 relation and provider networking fields identified above; other generic
 dependency editing remains separately gated. This is a deliberate boundary,
 not a hidden service-specific switch in React or Go.
@@ -313,7 +313,7 @@ The generic reference graph is data-structural. It includes both consumer
 per-service branch and performs no cascade deletion. The UI must show consumers
 from current direct state or fresh snapshot evidence and require the operator
 to clear/move editable references explicitly before deletion. A provider edge
-that F cannot edit keeps deletion blocked until UI-01G.
+that F cannot edit keeps deletion blocked until UI-NET-01.
 
 ## 8. Save, Verify and freshness
 
@@ -462,7 +462,7 @@ Status: **NEXT**; separate owner gate. Plan: `docs/ui-01f5-architecture.md`.
 - Entry points view, endpoint-group CRUD and assignment;
 - generic consumer/delete UX;
 - provider relation and VIP fields read-only from fresh Core evidence, with
-  explicit UI-01G ownership for editing, through a minimal typed/bounded Go
+  explicit UI-NET-01 ownership for editing, through a minimal typed/bounded Go
   projection rather than raw ProjectSnapshot maps in React;
 - INVALID verification exposes safe findings but no authoritative
   FQDN/provider/VIP preview;
@@ -479,7 +479,7 @@ Status: **NEXT**; separate owner gate. Plan: `docs/ui-01f5-architecture.md`.
 Acceptance evidence is recorded in `docs/ui-01f6.md`. It passed the built
 Windows desktop check, deterministic web-view acceptance, RED OS target-free
 Core and race gates, catalog/schema reproducibility and hygiene checks. UI-01F
-is complete; UI-01G and UI-01H remain out of scope.
+is complete; UI-NET-01, UI-01G and UI-01H remain out of scope.
 
 Before each slice, compare its screens and flows with the mockup and record any
 material discrepancy. A discrepancy that changes ownership, contract or user
@@ -577,7 +577,7 @@ UI-01F is DONE only when:
    future catalog services require no React change.
 4. Deployment, both placement kinds and consumer endpoint-group changes use
    v1alpha5 typed intents, one EditSession and one guarded local Save path;
-   provider networking remains read-only and owned by UI-01G.
+   provider networking remains read-only and owned by UI-NET-01.
 5. Core remains the only authority for infrastructure semantics and derived
    previews; fresh planning remains the execution gate.
 6. Unknown/unsupported data is preserved, references are protected generically,
@@ -585,4 +585,4 @@ UI-01F is DONE only when:
 7. Architecture and safety review have zero blocking findings, docs/state/
    roadmap are updated, one focused commit exists, and the worktree is clean.
 
-UI-01G and UI-01H do not begin as part of UI-01F completion.
+UI-NET-01, UI-01G and UI-01H do not begin as part of UI-01F completion.

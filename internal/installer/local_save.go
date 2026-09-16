@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -143,7 +144,13 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		if deployment == nil || !serviceOK || !identifierPattern.MatchString(serviceType) || !modeOK || !identifierPattern.MatchString(mode) || !endpointOK || (endpointGroup != "" && !identifierPattern.MatchString(endpointGroup)) {
 			return managedReadError("Managed deployment is malformed", desiredDocument)
 		}
-		view.Deployments[id] = ManagedDeployment{DeploymentID: id, ServiceType: serviceType, Mode: mode, EndpointGroup: endpointGroup}
+		provider, providerErr := managedProviderProjection(deployment)
+		if providerErr != nil {
+			return providerErr
+		}
+		view.Deployments[id] = ManagedDeployment{DeploymentID: id, ServiceType: serviceType, Mode: mode, EndpointGroup: endpointGroup,
+			EndpointGroupRef: provider.endpointGroupRef, VirtualRouterID: provider.virtualRouterID,
+			VirtualAddresses: provider.virtualAddresses, ProviderEditState: provider.editState}
 	}
 	for id, raw := range groups {
 		if len(view.EndpointGroups) >= maxManagedEntities || !identifierPattern.MatchString(id) {
@@ -159,6 +166,78 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		view.EndpointGroups[id] = ManagedEndpointGroup{EndpointGroupID: id, Domain: domain, Wildcard: wildcard}
 	}
 	return nil
+}
+
+type managedProviderView struct {
+	endpointGroupRef string
+	virtualRouterID  *int
+	virtualAddresses []VirtualAddress
+	editState        string
+}
+
+func managedProviderProjection(deployment map[string]any) (managedProviderView, error) {
+	result := managedProviderView{virtualAddresses: []VirtualAddress{}, editState: "NONE"}
+	refRaw, hasRef := deployment["endpointGroupRef"]
+	routerRaw, hasRouter := deployment["virtualRouterId"]
+	addressesRaw, hasAddresses := deployment["virtualAddresses"]
+	if !hasRef && !hasRouter && !hasAddresses {
+		return result, nil
+	}
+	if hasRef {
+		ref, ok := refRaw.(string)
+		if !ok {
+			return result, managedReadError("Managed provider endpoint-group reference is malformed", desiredDocument)
+		}
+		result.endpointGroupRef = ref
+	}
+	if hasRouter {
+		routerID, ok := yamlInteger(routerRaw)
+		if !ok {
+			return result, managedReadError("Managed provider virtual router ID is malformed", desiredDocument)
+		}
+		result.virtualRouterID = &routerID
+	}
+	if hasAddresses {
+		values := asSlice(addressesRaw)
+		if values == nil || len(values) > maxManagedEntities {
+			return result, managedReadError("Managed provider address collection is malformed or exceeds its limit", desiredDocument)
+		}
+		result.virtualAddresses = make([]VirtualAddress, 0, len(values))
+		for _, raw := range values {
+			value := asMap(raw)
+			address, addressOK := value["address"].(string)
+			iface, interfaceOK := value["interface"].(string)
+			if value == nil || len(value) != 2 || !addressOK || !interfaceOK {
+				return result, managedReadError("Managed provider virtual address is malformed", desiredDocument)
+			}
+			result.virtualAddresses = append(result.virtualAddresses, VirtualAddress{Address: address, Interface: iface})
+		}
+	}
+
+	unsupported := len(result.virtualAddresses) > 64
+	complete := hasRef && hasRouter && hasAddresses && result.endpointGroupRef != "" && result.virtualRouterID != nil && *result.virtualRouterID >= 1 && *result.virtualRouterID <= 255 && len(result.virtualAddresses) != 0
+	if result.endpointGroupRef != "" && !identifierPattern.MatchString(result.endpointGroupRef) {
+		unsupported = true
+	}
+	for _, value := range result.virtualAddresses {
+		address, addressErr := netip.ParseAddr(value.Address)
+		if addressErr != nil || !address.Is4() || value.Interface == "" || !virtualAddressInterfacePattern.MatchString(value.Interface) {
+			complete = false
+		}
+		if len(value.Interface) > 128 {
+			unsupported = true
+		}
+	}
+	if unsupported {
+		result.editState = "UNSUPPORTED"
+		return result, nil
+	}
+	if complete {
+		result.editState = "EDITABLE"
+		return result, nil
+	}
+	result.editState = "INCOMPLETE"
+	return result, nil
 }
 
 func readManagedHostPlacements(root string, budget *managedReadBudget, view *ManagedProjectView) error {

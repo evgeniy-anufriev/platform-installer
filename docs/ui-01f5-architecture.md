@@ -580,16 +580,12 @@ snapshot representation; a generic snapshot framework or second endpoint
 contract is not. Anything that mutates provider networking, reconstructs Core
 semantics in React or adds storage would be unnecessary architecture.
 
-## 16. Future milestone naming discrepancy
+## 16. Future milestone ownership
 
-The accepted F parent architecture assigns provider relation and VIP editing
-to a future milestone named **UI-01G**. The older master `docs/ui-01.md` also
-uses **UI-01G** for the Certificates editor. F5 does not depend on resolving
-that label because provider editing is explicitly excluded.
-
-Before either post-F milestone starts, the owner must choose distinct milestone
-names and synchronize both documents. F5 must not silently absorb either
-provider networking or Certificates work.
+The owner resolved the former naming conflict. **UI-NET-01** owns provider
+relation, VRID and VIP editing and precedes **UI-01G**, because Core may include
+provider VIPs in certificate SAN. **UI-01G** remains the Certificates editor.
+F5 does not absorb either milestone.
 
 ## 17. Exit criteria
 

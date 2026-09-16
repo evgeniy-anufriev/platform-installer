@@ -191,7 +191,8 @@ action and **Save topology** action. It has three local tabs:
   domain and wildcard. Provider-side `endpointGroupRef`, `virtualRouterId` and
   `virtualAddresses` remain read-only from fresh Core evidence in UI-01F;
   their editing and related provider/consumer integration semantics belong to
-  UI-01G. This page does not edit endpoint bindings, aliases, listener names,
+  UI-NET-01, which precedes UI-01G because provider VIPs may affect certificate
+  SAN. UI-01G remains the Certificates editor. This page does not edit endpoint bindings, aliases, listener names,
   ports or Kafka endpoints. Transport/routing UI is deferred with NET-03.
 
 It supports zero to many deployments of every manifest service. A host can own

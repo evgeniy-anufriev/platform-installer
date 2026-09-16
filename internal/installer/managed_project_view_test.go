@@ -27,6 +27,62 @@ func TestReadManagedProjectViewProjectsOnlyOwnedTopologyFields(t *testing.T) {
 	}
 }
 
+func TestReadManagedProjectViewProjectsProviderStatesWithoutLoss(t *testing.T) {
+	cases := map[string]struct {
+		provider  string
+		wantState string
+	}{
+		"editable":              {"      endpointGroupRef: edge\n      virtualRouterId: 42\n      virtualAddresses:\n        - {address: 192.0.2.42, interface: eth0}\n", "EDITABLE"},
+		"incomplete":            {"      endpointGroupRef: edge\n", "INCOMPLETE"},
+		"unsupported interface": {"      endpointGroupRef: edge\n      virtualRouterId: 42\n      virtualAddresses:\n        - {address: 192.0.2.42, interface: " + strings.Repeat("e", 129) + "}\n", "UNSUPPORTED"},
+	}
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := managedReadProject(t)
+			desired := string(managedHeader) + "platform_desired_state:\n  endpointGroups:\n    edge:\n      address: {domain: edge.example.test, wildcard: true}\n  serviceDeployments:\n    provider:\n      serviceType: keepalived\n      mode: vrrp\n" + testCase.provider
+			path := filepath.Join(root, "inventory", "group_vars", "all", "platform-installer.yml")
+			if err := os.WriteFile(path, []byte(desired), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			view, err := ReadManagedProjectView(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := view.Deployments["provider"]
+			if got.ProviderEditState != testCase.wantState {
+				t.Fatalf("provider state = %q, want %q", got.ProviderEditState, testCase.wantState)
+			}
+			if name == "incomplete" && got.EndpointGroupRef != "edge" {
+				t.Fatalf("incomplete reference was lost: %#v", got)
+			}
+			if name == "unsupported interface" && (len(got.VirtualAddresses) != 1 || len(got.VirtualAddresses[0].Interface) != 129) {
+				t.Fatalf("unsupported value was truncated: %#v", got)
+			}
+		})
+	}
+}
+
+func TestReadManagedProjectViewProjectsLegacyProviderAddressListReadOnly(t *testing.T) {
+	root := managedReadProject(t)
+	var addresses strings.Builder
+	for index := 0; index < 65; index++ {
+		addresses.WriteString(fmt.Sprintf("        - {address: 192.0.2.%d, interface: eth0}\n", index+1))
+	}
+	desired := string(managedHeader) + "platform_desired_state:\n  endpointGroups:\n    edge:\n      address: {domain: edge.example.test, wildcard: true}\n  serviceDeployments:\n    provider:\n      serviceType: keepalived\n      mode: vrrp\n      endpointGroupRef: edge\n      virtualRouterId: 42\n      virtualAddresses:\n" + addresses.String()
+	path := filepath.Join(root, "inventory", "group_vars", "all", "platform-installer.yml")
+	if err := os.WriteFile(path, []byte(desired), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := view.Deployments["provider"]
+	if provider.ProviderEditState != "UNSUPPORTED" || len(provider.VirtualAddresses) != 65 {
+		t.Fatalf("provider=%#v", provider)
+	}
+}
+
 func TestReadManagedProjectViewRejectsSymlinkAndDuplicateKnownFields(t *testing.T) {
 	root := managedReadProject(t)
 	desired := filepath.Join(root, "inventory", "group_vars", "all", "platform-installer.yml")

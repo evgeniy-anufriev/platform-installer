@@ -70,7 +70,7 @@ and fresh BuildDeploymentPlan responsibilities.
 - new Go commands, reducers, writers, schemas, Wails methods or DTO versions;
 - endpoint-group CRUD/assignment or the **Entry points** tab — UI-01F5;
 - provider relations, `endpointGroupRef`, `virtualRouterId`, VIP or
-  `virtualAddresses` editing — UI-01G;
+  `virtualAddresses` editing — UI-NET-01;
 - service settings, member configuration or mode changes — UI-01H;
 - certificate-scope editing or automatic reference cleanup;
 - service-specific Kafka/PostgreSQL/BIND/HAProxy/Keepalived branches;

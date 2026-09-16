@@ -44,7 +44,7 @@ semantics.
   servers** projection — UI-01F4;
 - endpoint-group CRUD/assignment and **Entry points** — UI-01F5;
 - provider relations, `endpointGroupRef`, virtual router ID or virtual
-  addresses — UI-01G;
+  addresses — UI-NET-01;
 - service configuration or schema-driven Service settings — UI-01H;
 - Service-settings routing, destination placeholders, return context or
   preservation of a future editor navigation context;

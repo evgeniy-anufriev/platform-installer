@@ -33,7 +33,8 @@ func topologyOperation(operation string) bool {
 	case "CreateServiceDeployment", "DeleteServiceDeployment",
 		"ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement",
 		"CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",
-		"SetServiceEndpointGroup", "ClearServiceEndpointGroup":
+		"SetServiceEndpointGroup", "ClearServiceEndpointGroup",
+		"ReconcileEndpointProvider", "ClearEndpointProvider":
 		return true
 	default:
 		return false
@@ -228,6 +229,14 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 	_, deployments, groups, err := candidate.desired()
 	if err != nil {
 		return nil, mutations, err
+	}
+	for _, command := range commands {
+		if command.Operation == "ReconcileEndpointProvider" || command.Operation == "ClearEndpointProvider" {
+			// UI-NET-01A publishes the closed v1alpha6 decode boundary and
+			// managed projection only. Until UI-NET-01B owns the final-state
+			// reducer, rejecting is safer than a silent no-op Save.
+			return nil, mutations, blocked("EDIT_OPERATION_UNAVAILABLE", "Provider changes are not available until the provider reducer is installed", "command.operation")
+		}
 	}
 	for _, command := range commands {
 		if command.Operation != "CreateServer" && command.Operation != "UpdateServer" && command.Operation != "DeleteServer" {

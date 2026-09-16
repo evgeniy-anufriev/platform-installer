@@ -11,6 +11,7 @@ const (
 	EditCommandAPIVersionV3    = "platform.installer/edit-command/v1alpha3"
 	EditCommandAPIVersionV4    = "platform.installer/edit-command/v1alpha4"
 	EditCommandAPIVersionV5    = "platform.installer/edit-command/v1alpha5"
+	EditCommandAPIVersionV6    = "platform.installer/edit-command/v1alpha6"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -45,6 +46,8 @@ type EditCommand struct {
 	Property            string            `json:"property,omitempty"`
 	Deployment          map[string]any    `json:"deployment,omitempty"`
 	EndpointGroup       map[string]any    `json:"endpointGroup,omitempty"`
+	VirtualRouterID     int               `json:"virtualRouterId,omitempty"`
+	VirtualAddresses    []VirtualAddress  `json:"virtualAddresses,omitempty"`
 	Placement           map[string]any    `json:"placement,omitempty"`
 	Backend             map[string]any    `json:"backend,omitempty"`
 	Commands            []EditCommand     `json:"commands,omitempty"`
@@ -70,12 +73,40 @@ func (command *EditCommand) UnmarshalJSON(content []byte) error {
 		"haproxyDeploymentId": true, "hostId": true, "type": true, "desiredHostname": true, "address": true, "sshPort": true,
 		"clearSSHPort": true, "serviceType": true, "mode": true, "entityId": true,
 		"entity": true, "members": true, "hosts": true, "property": true, "deployment": true,
-		"endpointGroup": true, "placement": true, "backend": true, "commands": true,
+		"endpointGroup": true, "virtualRouterId": true, "virtualAddresses": true,
+		"placement": true, "backend": true, "commands": true,
 	}
 	for field := range fields {
 		command.presentFields[field] = true
 		if !known[field] {
 			command.unknownFields = append(command.unknownFields, field)
+		}
+	}
+	return nil
+}
+
+// VirtualAddress is the one closed provider-address value shared by the
+// v1alpha6 command boundary and the directly owned managed-project view.
+type VirtualAddress struct {
+	Address       string `json:"address"`
+	Interface     string `json:"interface"`
+	unknownFields []string
+}
+
+func (value *VirtualAddress) UnmarshalJSON(content []byte) error {
+	type alias VirtualAddress
+	var decoded alias
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(content, &fields); err != nil {
+		return err
+	}
+	*value = VirtualAddress(decoded)
+	for field := range fields {
+		if field != "address" && field != "interface" {
+			value.unknownFields = append(value.unknownFields, field)
 		}
 	}
 	return nil
@@ -221,7 +252,8 @@ type StructuralSaveResult struct {
 }
 
 // ManagedProjectView exposes only Installer-owned canonical fields. It is not
-// an Ansible-resolved ProjectSnapshot and does not project provider/VIP state.
+// an Ansible-resolved ProjectSnapshot and exposes only directly owned provider
+// fields, never Core-derived endpoint, DNS or PKI semantics.
 type ManagedProjectView struct {
 	ProjectRevision  string                          `json:"projectRevision"`
 	Servers          map[string]ManagedServer        `json:"servers"`
@@ -240,10 +272,14 @@ type ManagedServer struct {
 }
 
 type ManagedDeployment struct {
-	DeploymentID  string `json:"deploymentId"`
-	ServiceType   string `json:"serviceType"`
-	Mode          string `json:"mode"`
-	EndpointGroup string `json:"endpointGroup,omitempty"`
+	DeploymentID      string           `json:"deploymentId"`
+	ServiceType       string           `json:"serviceType"`
+	Mode              string           `json:"mode"`
+	EndpointGroup     string           `json:"endpointGroup,omitempty"`
+	EndpointGroupRef  string           `json:"endpointGroupRef,omitempty"`
+	VirtualRouterID   *int             `json:"virtualRouterId,omitempty"`
+	VirtualAddresses  []VirtualAddress `json:"virtualAddresses,omitempty"`
+	ProviderEditState string           `json:"providerEditState"`
 }
 
 type ManagedEndpointGroup struct {

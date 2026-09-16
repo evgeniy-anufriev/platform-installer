@@ -3,6 +3,7 @@ package installer
 import (
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"os"
 	"regexp"
 	"sort"
@@ -13,6 +14,7 @@ import (
 )
 
 var identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+var virtualAddressInterfacePattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
 var serverAddressPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$`)
 var desiredHostnamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$`)
 var extensionKeyPattern = regexp.MustCompile(`^x-[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -100,7 +102,11 @@ func validateCommand(command EditCommand) error {
 }
 
 func isEditCommandV2OrLater(version string) bool {
-	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5
+	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6
+}
+
+func isEditCommandV5OrLater(version string) bool {
+	return version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6
 }
 
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
@@ -171,6 +177,12 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		"SetServiceEndpointGroup":                {"deploymentId", "endpointGroupId"},
 		"ClearServiceEndpointGroup":              {"deploymentId"},
 	}
+	fieldsV6 := make(map[string][]string, len(fieldsV5)+2)
+	for operation, operationFields := range fieldsV5 {
+		fieldsV6[operation] = operationFields
+	}
+	fieldsV6["ReconcileEndpointProvider"] = []string{"deploymentId", "endpointGroupId", "virtualRouterId", "virtualAddresses"}
+	fieldsV6["ClearEndpointProvider"] = []string{"deploymentId"}
 	fieldsV1 := map[string][]string{
 		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
 		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
@@ -188,6 +200,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		fields = fieldsV4
 	} else if command.APIVersion == EditCommandAPIVersionV5 {
 		fields = fieldsV5
+	} else if command.APIVersion == EditCommandAPIVersionV6 {
+		fields = fieldsV6
 	}
 	allowedFields, allowed := fields[command.Operation]
 	if !allowed {
@@ -201,7 +215,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
 		versionValid := isEditCommandV2OrLater(command.APIVersion)
 		typeValid := command.APIVersion == EditCommandAPIVersionV2 || appconfig.ServerTypeIDPattern.MatchString(command.ServerType)
-		desiredHostnameValid := (command.APIVersion != EditCommandAPIVersionV4 && command.APIVersion != EditCommandAPIVersionV5) || (len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
+		desiredHostnameValid := (command.APIVersion != EditCommandAPIVersionV4 && !isEditCommandV5OrLater(command.APIVersion)) || (len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
 		if !versionValid || !identifierPattern.MatchString(command.HostID) || !typeValid || !desiredHostnameValid || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
 			return blocked("INVALID_EDIT_COMMAND", "CreateServer requires a valid host, type, address and optional SSH port", "command")
 		}
@@ -209,8 +223,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
 		hasClearSSHPort := command.ClearSSHPort || command.presentFields["clearSSHPort"]
 		versionValid := isEditCommandV2OrLater(command.APIVersion)
-		typeValid := command.ServerType == "" || ((command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
-		desiredHostnameValid := command.DesiredHostname == "" || ((command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
+		typeValid := command.ServerType == "" || ((command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4 || isEditCommandV5OrLater(command.APIVersion)) && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
+		desiredHostnameValid := command.DesiredHostname == "" || ((command.APIVersion == EditCommandAPIVersionV4 || isEditCommandV5OrLater(command.APIVersion)) && len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
 		if !versionValid || !typeValid || !desiredHostnameValid || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort && command.ServerType == "" && command.DesiredHostname == "") || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
 			return blocked("INVALID_EDIT_COMMAND", "UpdateServer fields are invalid", "command")
 		}
@@ -220,7 +234,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		}
 	case "ReconcileDeploymentPlacement":
 		limit := 1024
-		if command.APIVersion == EditCommandAPIVersionV5 {
+		if isEditCommandV5OrLater(command.APIVersion) {
 			limit = maxManagedPlacements
 		}
 		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > limit {
@@ -228,8 +242,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		}
 		memberIDs := make(map[string]bool)
 		for _, member := range command.Members {
-			rolesRequired := command.APIVersion != EditCommandAPIVersionV5
-			if !identifierPattern.MatchString(member.MemberID) || !identifierPattern.MatchString(member.HostID) || rolesRequired && len(member.Roles) == 0 || len(member.Roles) > maxManagedRoles || memberIDs[member.MemberID] || (command.APIVersion == EditCommandAPIVersionV5 && (member.Configuration != nil || len(member.unknownFields) != 0)) {
+			rolesRequired := !isEditCommandV5OrLater(command.APIVersion)
+			if !identifierPattern.MatchString(member.MemberID) || !identifierPattern.MatchString(member.HostID) || rolesRequired && len(member.Roles) == 0 || len(member.Roles) > maxManagedRoles || memberIDs[member.MemberID] || (isEditCommandV5OrLater(command.APIVersion) && (member.Configuration != nil || len(member.unknownFields) != 0)) {
 				return blocked("INVALID_EDIT_COMMAND", "Placement member is invalid or duplicated", "command.members")
 			}
 			memberIDs[member.MemberID] = true
@@ -245,7 +259,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			}
 		}
 	case "ReconcileHostScopedDeploymentPlacement":
-		if command.APIVersion != EditCommandAPIVersionV5 || !identifierPattern.MatchString(command.DeploymentID) || len(command.Hosts) > maxManagedHostDocuments {
+		if !isEditCommandV5OrLater(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Hosts) > maxManagedHostDocuments {
 			return blocked("INVALID_EDIT_COMMAND", "Host-scoped placement reconcile is invalid", "command.hosts")
 		}
 		hostIDs := make(map[string]bool)
@@ -291,12 +305,32 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "HAProxy relation requires two deployment identifiers", "command")
 		}
 	case "CreateEndpointGroup", "UpdateEndpointGroup":
-		if !identifierPattern.MatchString(command.EndpointGroupID) || command.EndpointGroup == nil || (command.APIVersion == EditCommandAPIVersionV5 && !validEndpointGroup(command.EndpointGroup)) {
+		if !identifierPattern.MatchString(command.EndpointGroupID) || command.EndpointGroup == nil || (isEditCommandV5OrLater(command.APIVersion) && !validEndpointGroup(command.EndpointGroup)) {
 			return blocked("INVALID_EDIT_COMMAND", "Endpoint-group edit requires an identifier and value", "command")
 		}
 	case "DeleteEndpointGroup":
 		if !identifierPattern.MatchString(command.EndpointGroupID) {
 			return blocked("INVALID_EDIT_COMMAND", "Endpoint-group identifier is required", "command.endpointGroupId")
+		}
+	case "ReconcileEndpointProvider":
+		if command.APIVersion != EditCommandAPIVersionV6 || !identifierPattern.MatchString(command.DeploymentID) || !identifierPattern.MatchString(command.EndpointGroupID) || command.VirtualRouterID < 1 || command.VirtualRouterID > 255 || len(command.VirtualAddresses) == 0 || len(command.VirtualAddresses) > 64 {
+			return blocked("INVALID_EDIT_COMMAND", "Provider reconcile requires a complete bounded provider tuple", "command")
+		}
+		seen := make(map[string]bool, len(command.VirtualAddresses))
+		for _, address := range command.VirtualAddresses {
+			ip, err := netip.ParseAddr(address.Address)
+			if err != nil || !ip.Is4() || address.Interface == "" || len(address.Interface) > 128 || !virtualAddressInterfacePattern.MatchString(address.Interface) || len(address.unknownFields) != 0 {
+				return blocked("INVALID_EDIT_COMMAND", "Provider virtual address is invalid", "command.virtualAddresses")
+			}
+			key := address.Address + "\x00" + address.Interface
+			if seen[key] {
+				return blocked("INVALID_EDIT_COMMAND", "Provider virtual address is duplicated", "command.virtualAddresses")
+			}
+			seen[key] = true
+		}
+	case "ClearEndpointProvider":
+		if command.APIVersion != EditCommandAPIVersionV6 || !identifierPattern.MatchString(command.DeploymentID) {
+			return blocked("INVALID_EDIT_COMMAND", "Provider clear requires a deployment identifier", "command.deploymentId")
 		}
 	case "AssignServiceToHost", "RemoveServiceFromHost":
 		if !identifierPattern.MatchString(command.HostID) || !identifierPattern.MatchString(command.DeploymentID) {
@@ -313,7 +347,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	if err := safeValue(command.Value, command.Property); err != nil {
 		return err
 	}
-	for _, value := range []any{command.Deployment, command.EndpointGroup, command.Placement, command.Backend, command.Entity, command.Members, command.Hosts} {
+	for _, value := range []any{command.Deployment, command.EndpointGroup, command.Placement, command.Backend, command.Entity, command.Members, command.Hosts, command.VirtualAddresses} {
 		if err := safeValue(value, ""); err != nil {
 			return err
 		}

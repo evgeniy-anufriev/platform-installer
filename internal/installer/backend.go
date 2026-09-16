@@ -79,7 +79,7 @@ func (b *Backend) validateConfiguredTypes(command EditCommand) error {
 		}
 		return nil
 	}
-	if (command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
+	if (command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4 || isEditCommandV5OrLater(command.APIVersion)) && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
 		if len(b.serverTypes) == 0 {
 			return blocked("APPLICATION_CONFIG_UNAVAILABLE", "Application configuration is unavailable", "command.type")
 		}
