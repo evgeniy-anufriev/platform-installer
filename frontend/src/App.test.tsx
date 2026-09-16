@@ -184,6 +184,182 @@ async function openTopology(
   await userEvent.click(screen.getByRole("button", { name: "Топология" }));
 }
 
+/**
+ * Deterministic UI acceptance backend.  It deliberately models only the
+ * public ProjectBackend edit/review/commit/reopen lifecycle: Core, an
+ * Execution Node and targets are absent from this test seam.
+ */
+function f4AcceptanceBackend() {
+  const appended: Array<Record<string, unknown>> = [];
+  let pending: Array<Record<string, unknown>> = [];
+  let revision = 0;
+  let memberPlacements: Array<{
+    deploymentId: string;
+    memberId: string;
+    hostId: string;
+    roles: string[];
+  }> = [];
+  let hostPlacements: Array<{
+    deploymentId: string;
+    hostId: string;
+    roles: string[];
+  }> = [];
+  const catalog = {
+    ...project.catalog,
+    services: [
+      ...project.catalog.services,
+      {
+        id: "agent",
+        definitionVersion: "1",
+        displayName: "Node Agent",
+        category: "Infrastructure",
+        ui: {},
+        endpointConsumer: false,
+        endpointProvider: false,
+        modes: [
+          {
+            id: "daemon",
+            displayName: "Daemon",
+            placementKind: "HOST_SCOPED",
+            roles: [],
+            guidance: { minParticipants: 1, distinctHosts: false, roleCardinality: [] },
+          },
+          {
+            id: "observer",
+            displayName: "Observer",
+            placementKind: "HOST_SCOPED",
+            roles: ["observer"],
+            guidance: { minParticipants: 1, distinctHosts: false, roleCardinality: [] },
+          },
+        ],
+      },
+    ],
+  };
+  const open = () =>
+    ({
+      status: "OPEN",
+      root: "C:/Projects/f4-acceptance",
+      classification: "MANAGED_PROJECT",
+      project: { name: "F4 acceptance" },
+      catalog,
+      managed: {
+        projectRevision: `sha256:f4-${revision}`,
+        servers: {
+          node1: {
+            hostId: "node1",
+            type: "infra",
+            desiredHostname: "node1.example.internal",
+            address: "192.0.2.10",
+          },
+        },
+        deployments: {
+          "kafka-main": {
+            deploymentId: "kafka-main",
+            serviceType: "kafka",
+            mode: "kraft",
+          },
+          "agent-main": {
+            deploymentId: "agent-main",
+            serviceType: "agent",
+            mode: "daemon",
+          },
+          "agent-role-main": {
+            deploymentId: "agent-role-main",
+            serviceType: "agent",
+            mode: "observer",
+          },
+        },
+        memberPlacements,
+        hostPlacements,
+      },
+      verification: { status: "UNVERIFIED" },
+    }) as unknown as OpenResult;
+  const value: ProjectBackend = {
+    getApplicationConfig: async () =>
+      ({
+        status: "READY",
+        config: {
+          schemaVersion: 1,
+          serverTypes: [{ id: "infra", displayName: "Инфраструктура" }],
+        },
+      }) as never,
+    chooseProject: async () => open(),
+    openProject: async () => open(),
+    chooseProjectParent: async () => "",
+    createProject: async () => open(),
+    closeProject: async () => ({ status: "NO_PROJECT" } as never),
+    startEditSession: async () =>
+      ({ status: "EDITING", session: { sessionId: sessionID, commandCount: pending.length } }) as never,
+    appendEditCommand: async (_sessionId, command) => {
+      appended.push(command);
+      pending.push(command);
+      return {
+        status: "EDITING",
+        session: { sessionId: sessionID, commandCount: pending.length },
+      } as never;
+    },
+    reviewEditSession: async () =>
+      ({
+        status: "READY",
+        plan: {
+          planId: "f4-plan",
+          status: "READY",
+          saveAllowed: true,
+          semanticChanges: [],
+          affectedDocuments: [],
+        },
+      }) as never,
+    commitEditPlan: async () => {
+      for (const command of pending) {
+        if (command.operation === "ReconcileDeploymentPlacement") {
+          const deploymentId = String(command.deploymentId);
+          memberPlacements = [
+            ...memberPlacements.filter((item) => item.deploymentId !== deploymentId),
+            ...(command.members as Array<{
+            memberId: string;
+            hostId: string;
+            roles?: string[];
+            }>).map((item) => ({
+            deploymentId,
+            memberId: item.memberId,
+            hostId: item.hostId,
+            roles: item.roles || [],
+            })),
+          ];
+          hostPlacements = hostPlacements.filter((item) => item.deploymentId !== deploymentId);
+        }
+        if (command.operation === "ReconcileHostScopedDeploymentPlacement") {
+          const deploymentId = String(command.deploymentId);
+          hostPlacements = [
+            ...hostPlacements.filter((item) => item.deploymentId !== deploymentId),
+            ...(command.hosts as Array<{
+            hostId: string;
+            roles?: string[];
+            }>).map((item) => ({
+            deploymentId,
+            hostId: item.hostId,
+            roles: item.roles || [],
+            })),
+          ];
+          memberPlacements = memberPlacements.filter((item) => item.deploymentId !== deploymentId);
+        }
+      }
+      pending = [];
+      revision += 1;
+      return {
+        status: "COMMITTED",
+        commit: { status: "COMMITTED", newProjectRevision: `sha256:f4-${revision}` },
+        current: open(),
+      } as never;
+    },
+    discardEditSession: async () => {
+      pending = [];
+      return { status: "DISCARDED" } as never;
+    },
+  };
+  return { value, appended };
+}
+
 describe("UI-01E2 server editor", () => {
   it("shows saved and verification state separately before editing", async () => {
     const value = api();
@@ -815,6 +991,135 @@ describe("UI-01F3 deployment editor", () => {
     expect(
       screen.getAllByRole("button", { name: "Отменить все изменения" }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("UI-TEST-01 F4 placement acceptance", () => {
+  it("saves, reopens and clears member- and host-scoped placement through the public backend", async () => {
+    const { value, appended } = f4AcceptanceBackend();
+    render(<App api={value} />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Топология" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /kafka-main/ })[0],
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Добавить размещение" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Добавить member" }));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить member" }));
+    expect((screen.getByLabelText("Member ID 1") as HTMLInputElement).value).toBe(
+      "kafka-1",
+    );
+    expect((screen.getByLabelText("Member ID 2") as HTMLInputElement).value).toBe(
+      "kafka-2",
+    );
+    await userEvent.selectOptions(screen.getAllByLabelText("Роли")[0], "broker");
+    await userEvent.selectOptions(screen.getAllByLabelText("Роли")[1], "controller");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(appended).toEqual([
+      {
+        operation: "ReconcileDeploymentPlacement",
+        deploymentId: "kafka-main",
+        members: [
+          { memberId: "kafka-1", hostId: "node1", roles: ["broker"] },
+          { memberId: "kafka-2", hostId: "node1", roles: ["controller"] },
+        ],
+      },
+    ]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Сохранить проект" }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Проект" }));
+    await userEvent.click(screen.getByRole("button", { name: "Закрыть проект" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Топология" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /kafka-main/ })[0],
+    );
+    expect(
+      screen.getByRole("button", { name: "Изменить размещение" }),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "По серверам" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Deployment для размещения"),
+      "agent-main",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Добавить сервер" }));
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(appended.at(-1)).toEqual({
+      operation: "ReconcileHostScopedDeploymentPlacement",
+      deploymentId: "agent-main",
+      hosts: [{ hostId: "node1", roles: [] }],
+    });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Сохранить проект" }),
+    );
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Deployment для размещения"),
+      "agent-role-main",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Добавить сервер" }));
+    await userEvent.selectOptions(screen.getByLabelText("Роли"), "observer");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(appended.at(-1)).toEqual({
+      operation: "ReconcileHostScopedDeploymentPlacement",
+      deploymentId: "agent-role-main",
+      hosts: [{ hostId: "node1", roles: ["observer"] }],
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Сохранить проект" }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "По сервисам" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /agent-main/ })[0],
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Очистить размещение" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(appended.at(-1)).toEqual({
+      operation: "ReconcileHostScopedDeploymentPlacement",
+      deploymentId: "agent-main",
+      hosts: [],
+    });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Сохранить проект" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Проект" }));
+    await userEvent.click(screen.getByRole("button", { name: "Закрыть проект" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Топология" }));
+
+    expect(screen.getByRole("button", { name: "Добавить размещение" })).toBeTruthy();
+    expect(appended).toHaveLength(4);
   });
 });
 

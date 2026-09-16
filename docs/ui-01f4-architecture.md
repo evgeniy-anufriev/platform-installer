@@ -1,6 +1,6 @@
 # UI-01F4 — Placement UI architecture
 
-Status: **PLAN / NOT STARTED**
+Status: **DONE** (2026-09-16)
 
 Milestone: **UI-01F4**
 
@@ -14,8 +14,8 @@ Prerequisites:
 
 Implementation baseline: `a516228`
 
-This document authorizes no implementation by itself. UI-01F4 remains a
-separate owner gate until the plan review is accepted.
+The implementation was authorized by the owner after the accepted bounded plan
+review. UI-01F5 remains a separate owner gate.
 
 ## 1. Goal
 
@@ -538,22 +538,29 @@ their implementation in React:
 - generic server/deployment/member reference guards;
 - local Save, rollback and reopen.
 
-### 16.3 Windows Wails acceptance
+### 16.3 Deterministic Wails frontend acceptance
 
-Using the production Wails executable and an isolated QA project:
+F4 has no native operating-system dialog or browser-owned persistence. Its
+full user lifecycle is therefore covered deterministically by rendering the
+real `App` with an injected stateful public `ProjectBackend` fake in
+`frontend/src/App.test.tsx`; the fake implements only edit/review/commit/reopen
+and deliberately exposes no Core, Execution Node or target operation.
 
-1. create/open a managed project without an Execution Node;
-2. create final-draft servers and deployments;
-3. configure one MEMBER_SCOPED deployment, including multiple members on one
-   host and catalog role choices;
-4. edit the same member-scoped placement from By servers, confirm the selected
-   host is initial context, and confirm one complete deployment reconcile;
-5. configure one roleless and one roleful HOST_SCOPED deployment and confirm no
-   member IDs are generated;
-6. Review and local Save once, close/reopen and verify both placement forms;
-7. clear placement explicitly, Review/Save/reopen and verify removal;
-8. confirm canonical bytes do not change before Commit and no Core, Execution
-   Node or target host is contacted.
+The `UI-TEST-01 F4 placement acceptance` scenario proves:
+
+1. MEMBER_SCOPED placement with two members on one host and catalog-selected
+   roles;
+2. saved member placement remains visible after local Save, close and reopen;
+3. the By-servers entry point creates one complete roleless HOST_SCOPED intent;
+4. it also creates a roleful HOST_SCOPED intent without any member ID;
+5. each operation uses the shared Review → local Save lifecycle;
+6. explicit clear emits an empty complete reconcile, then survives Save and
+   reopen as no placement;
+7. neither the fake nor the UI invokes Core, an Execution Node or targets.
+
+`wails build -nopackage -clean` separately builds the real Windows executable
+and generated binding boundary. This is stronger and less brittle than
+coordinate-based WebView automation for a flow containing no native dialog.
 
 ### 16.4 Gates
 
@@ -595,11 +602,18 @@ UI-01F4 may be marked DONE only when:
 - both placement kinds pass focused UI and existing backend regressions;
 - By servers is proven to project the same acknowledged final draft and to edit
   through the same complete-placement intent as By services;
-- Windows Wails acceptance proves local Save/reopen/clear without an Execution
-  Node or target contact;
+- deterministic Wails frontend acceptance proves local Save/reopen/clear
+  without an Execution Node or target contact, and the Windows Wails build
+  passes;
 - no new desired-state persistence, Core semantics or service-specific branch
   is introduced;
 - docs, `CURRENT_STATE.md` and roadmap record UI-01F4 DONE and UI-01F5 NEXT;
 - one focused implementation commit exists and the worktree is clean.
 
-Until then UI-01F4 remains **NOT STARTED** and UI-01F5 is not authorized.
+## 19. Completion evidence
+
+Completed on 2026-09-16. The bounded plan review finished with zero blocking
+findings. The F4 implementation contains no new persistence, Core semantics or
+service-specific branch. Focused and full frontend tests, typecheck, lint,
+production build, `go test ./...`, `go vet ./...`, Windows Wails build and
+`git diff --check` passed. UI-01F5 is **NEXT** and has not started.

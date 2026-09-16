@@ -555,11 +555,19 @@ function ByServersView({
     if (placement?.kind === "MEMBER_SCOPED")
       return placement.members
         .filter((member) => member.hostId === selectedHostId)
-        .map((member) => ({ deployment, text: `${member.memberId}${member.roles.length ? ` · ${member.roles.join(", ")}` : ""}` }));
+        .map((member) => ({
+          deployment,
+          key: `member:${member.memberId}`,
+          text: `${member.memberId}${member.roles.length ? ` · ${member.roles.join(", ")}` : ""}`,
+        }));
     if (placement?.kind === "HOST_SCOPED")
       return placement.hosts
         .filter((host) => host.hostId === selectedHostId)
-        .map((host) => ({ deployment, text: host.roles.join(", ") || "без ролей" }));
+        .map((host) => ({
+          deployment,
+          key: `host:${host.hostId}`,
+          text: host.roles.join(", ") || "без ролей",
+        }));
     return [];
   });
   return (
@@ -577,7 +585,7 @@ function ByServersView({
       </section>
       <section className="card topology-detail">
         <h2>Размещение на сервере</h2>
-        {!selected ? <p className="muted">Добавьте сервер или выберите его в списке.</p> : selected.state === "deleting" ? <p className="muted">Сервер будет удалён и не предлагается для нового размещения.</p> : <><div className="topology-list-scroll">{assignments.length === 0 ? <p className="muted">На этом сервере пока нет размещений.</p> : assignments.map(({ deployment, text }) => <article className="topology-assignment" key={deployment.deploymentId}><b>{deployment.deploymentId}</b><span>{text}</span><button className="outline" onClick={() => { onSelectedDeploymentChange(deployment.deploymentId); onEdit(deployment.deploymentId, selected.hostId); }} disabled={disabled || !!deployment.state || placementLocked(deployment.deploymentId)}>Изменить</button></article>)}</div><label className="topology-add-placement">Добавить размещение<select aria-label="Deployment для размещения" defaultValue="" onChange={(event) => { const deploymentId = event.target.value; if (deploymentId) { onSelectedDeploymentChange(deploymentId); onEdit(deploymentId, selected.hostId); event.currentTarget.value = ""; } }} disabled={disabled}><option value="">Выберите deployment</option>{rows.filter((row) => !row.state && !placements.has(row.deploymentId)).map((deployment) => <option key={deployment.deploymentId} value={deployment.deploymentId}>{deployment.deploymentId}</option>)}</select></label></>}
+        {!selected ? <p className="muted">Добавьте сервер или выберите его в списке.</p> : selected.state === "deleting" ? <p className="muted">Сервер будет удалён и не предлагается для нового размещения.</p> : <><div className="topology-list-scroll">{assignments.length === 0 ? <p className="muted">На этом сервере пока нет размещений.</p> : assignments.map(({ deployment, key, text }) => <article className="topology-assignment" key={`${deployment.deploymentId}:${key}`}><b>{deployment.deploymentId}</b><span>{text}</span><button className="outline" onClick={() => { onSelectedDeploymentChange(deployment.deploymentId); onEdit(deployment.deploymentId, selected.hostId); }} disabled={disabled || !!deployment.state || placementLocked(deployment.deploymentId)}>Изменить</button></article>)}</div><label className="topology-add-placement">Добавить размещение<select aria-label="Deployment для размещения" defaultValue="" onChange={(event) => { const deploymentId = event.target.value; if (deploymentId) { onSelectedDeploymentChange(deploymentId); onEdit(deploymentId, selected.hostId); event.currentTarget.value = ""; } }} disabled={disabled}><option value="">Выберите deployment</option>{rows.filter((row) => !row.state && !placements.has(row.deploymentId)).map((deployment) => <option key={deployment.deploymentId} value={deployment.deploymentId}>{deployment.deploymentId}</option>)}</select></label></>}
       </section>
       <section className="card topology-summary">
         <h2>Сводка</h2>
