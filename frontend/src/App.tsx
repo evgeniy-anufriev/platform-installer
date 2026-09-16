@@ -744,6 +744,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             selectedHostId={selectedTopologyHost}
             onSelectedHostChange={setSelectedTopologyHost}
             preview={endpointPreview}
+            verificationStatus={verification.status}
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (

@@ -1,6 +1,6 @@
 # UI-NET-01 — Endpoint provider and virtual address editor architecture
 
-Status: **UI-NET-01A and UI-NET-01B DONE; UI-NET-01C NEXT**.
+Status: **UI-NET-01A through UI-NET-01C DONE; UI-NET-01D NEXT**.
 
 Owner decision: UI-NET-01 precedes UI-01G because Core may include provider
 virtual addresses in certificate SAN when `sanPolicy.includeEndpointVip=true`.
@@ -331,13 +331,13 @@ material remains usable after a VIP change.
 - catalog-dependent reconcile and catalog-independent clear;
 - generic reference guard, preservation and transaction tests.
 
-### UI-NET-01C — Entry points provider editor — NEXT
+### UI-NET-01C — Entry points provider editor — DONE
 
 - catalog-driven eligible provider list;
 - provider modal/panel and shared draft integration;
 - unavailable catalog/read-only and clear behavior.
 
-### UI-NET-01D — preview and PKI-impact UX
+### UI-NET-01D — preview and PKI-impact UX — NEXT
 
 - reuse `EndpointPreviewProvider` freshness states;
 - draft-vs-verified presentation;

@@ -3,7 +3,11 @@ import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { EndpointPreview, OpenResult } from "./backend";
-import { TopologyPage } from "./TopologyPage";
+import {
+  type ProviderIntent,
+  type TopologyIntent,
+  TopologyPage,
+} from "./TopologyPage";
 import type { ServerIntent } from "./ServersPage";
 
 const managed = {
@@ -51,7 +55,7 @@ const catalog = {
 const props = () => ({
   managed,
   catalog,
-  intents: [],
+  intents: [] as TopologyIntent[],
   serverIntents: [] as ServerIntent[],
   busy: false,
   structuralDisabled: false,
@@ -66,6 +70,7 @@ const props = () => ({
   selectedHostId: "",
   onSelectedHostChange: vi.fn(),
   preview: undefined as EndpointPreview | undefined,
+  verificationStatus: "UNVERIFIED" as const,
 });
 
 function ControlledTopology(input: ReturnType<typeof props>) {
@@ -279,6 +284,33 @@ describe("UI-01F3 TopologyPage", () => {
       operation: "ClearEndpointProvider",
       deploymentId: "provider",
     });
+  });
+
+  it("labels a provider draft as stale without inferring a PKI result", () => {
+    render(
+      <ControlledTopology
+        {...props()}
+        activeTab="entryPoints"
+        intents={
+          [
+            {
+              operation: "ReconcileEndpointProvider",
+              deploymentId: "provider",
+              endpointGroupId: "edge",
+              virtualRouterId: 42,
+              virtualAddresses: [{ address: "192.0.2.42", interface: "eth0" }],
+            },
+          ] as ProviderIntent[]
+        }
+        preview={{ status: "STALE" }}
+      />,
+    );
+    expect(
+      screen.getByText(/Конфигурация provider изменена в черновике/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/влияние на PKI\/SAN определяет только Core/),
+    ).toBeTruthy();
   });
 
   it("blocks all structural CRUD in refresh-required state", () => {

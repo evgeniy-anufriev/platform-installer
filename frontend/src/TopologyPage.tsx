@@ -33,7 +33,7 @@ export type PlacementIntent =
       deploymentId: string;
       hosts: Array<{ hostId: string; roles?: string[] }>;
     };
-type TopologyIntent =
+export type TopologyIntent =
   DeploymentIntent | PlacementIntent | EndpointIntent | ProviderIntent;
 
 type CatalogService = NonNullable<OpenResult["catalog"]>["services"] extends
@@ -209,6 +209,7 @@ export function TopologyPage({
   selectedHostId,
   onSelectedHostChange,
   preview,
+  verificationStatus,
 }: {
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
@@ -227,6 +228,7 @@ export function TopologyPage({
   selectedHostId: string;
   onSelectedHostChange: (id: string) => void;
   preview?: EndpointPreview;
+  verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
 }) {
   const [dialog, setDialog] = useState<"add" | "delete" | "placement" | null>(
     null,
@@ -373,6 +375,7 @@ export function TopologyPage({
               intent.operation === "DeleteServiceDeployment",
           )}
           preview={preview}
+          verificationStatus={verificationStatus}
           busy={busy}
           disabled={crudDisabled}
           commandCount={commandCount}

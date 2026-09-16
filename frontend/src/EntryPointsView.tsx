@@ -163,6 +163,7 @@ export function EntryPointsView({
   providerIntents,
   deploymentIntents,
   preview,
+  verificationStatus,
   busy,
   disabled,
   commandCount,
@@ -174,6 +175,7 @@ export function EntryPointsView({
   providerIntents: ProviderIntent[];
   deploymentIntents: DeploymentIntent[];
   preview?: EndpointPreview;
+  verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
   busy: boolean;
   disabled: boolean;
   commandCount: number;
@@ -461,7 +463,12 @@ export function EntryPointsView({
             </div>
           )}
         </section>
-        <PreviewCard preview={preview} status={previewStatus} />
+        <PreviewCard
+          preview={preview}
+          status={previewStatus}
+          verificationStatus={verificationStatus}
+          providerChangePending={providerIntents.length !== 0}
+        />
       </div>
       {dialog && (
         <EndpointGroupDialog
@@ -496,9 +503,13 @@ export function EntryPointsView({
 function PreviewCard({
   preview,
   status,
+  verificationStatus,
+  providerChangePending,
 }: {
   preview?: EndpointPreview;
   status: string;
+  verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
+  providerChangePending: boolean;
 }) {
   if (status !== "CURRENT")
     return (
@@ -508,10 +519,14 @@ function PreviewCard({
           {status === "INVALID"
             ? "Проверка выявила ошибки. Адреса и provider/VIP не показаны."
             : status === "STALE"
-              ? "Проверка устарела из-за черновика или смены Execution Node."
-              : status === "UNAVAILABLE"
-                ? preview?.error?.message || "Read-only preview недоступен."
-                : "Сохраните проект и выполните Проверить."}
+              ? providerChangePending
+                ? "Конфигурация provider изменена в черновике. Проверка устарела; влияние на PKI/SAN определяет только Core после сохранения и проверки."
+                : "Проверка устарела из-за черновика или смены Execution Node."
+              : verificationStatus === "VERIFYING"
+                ? "Core проверяет сохранённую ревизию проекта."
+                : status === "UNAVAILABLE"
+                  ? preview?.error?.message || "Read-only preview недоступен."
+                  : "Сохраните проект и выполните Проверить."}
         </p>
         {status === "INVALID" &&
           preview?.findings?.map((finding) => (
@@ -527,6 +542,10 @@ function PreviewCard({
   return (
     <section className="card">
       <h2>Результат Core</h2>
+      <p className="muted">
+        Актуальные FQDN и provider/VIP получены из последней проверки Core.
+        Редактор не выводит влияние на PKI/SAN самостоятельно.
+      </p>
       {preview?.endpoints?.length ? (
         <>
           <h3>FQDN</h3>
