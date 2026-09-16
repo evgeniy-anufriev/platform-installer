@@ -15,6 +15,7 @@ import (
 var identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 var serverAddressPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$`)
 var desiredHostnamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$`)
+var extensionKeyPattern = regexp.MustCompile(`^x-[A-Za-z0-9][A-Za-z0-9._-]*$`)
 var secretKeyPattern = regexp.MustCompile(`(?i)password|passphrase|private.?key|pgpass|token|secret|credential`)
 var runtimeRefPattern = regexp.MustCompile(`^runtime:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
@@ -99,7 +100,7 @@ func validateCommand(command EditCommand) error {
 }
 
 func isEditCommandV2OrLater(version string) bool {
-	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4
+	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5
 }
 
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
@@ -156,6 +157,20 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		"UpdateServer": {"hostId", "type", "desiredHostname", "address", "sshPort", "clearSSHPort"},
 		"DeleteServer": {"hostId"},
 	}
+	fieldsV5 := map[string][]string{
+		"CreateServer":                           {"hostId", "type", "desiredHostname", "address", "sshPort"},
+		"UpdateServer":                           {"hostId", "type", "desiredHostname", "address", "sshPort", "clearSSHPort"},
+		"DeleteServer":                           {"hostId"},
+		"CreateServiceDeployment":                {"deploymentId", "serviceType", "mode"},
+		"DeleteServiceDeployment":                {"deploymentId"},
+		"ReconcileDeploymentPlacement":           {"deploymentId", "members"},
+		"ReconcileHostScopedDeploymentPlacement": {"deploymentId", "hosts"},
+		"CreateEndpointGroup":                    {"endpointGroupId", "endpointGroup"},
+		"UpdateEndpointGroup":                    {"endpointGroupId", "endpointGroup"},
+		"DeleteEndpointGroup":                    {"endpointGroupId"},
+		"SetServiceEndpointGroup":                {"deploymentId", "endpointGroupId"},
+		"ClearServiceEndpointGroup":              {"deploymentId"},
+	}
 	fieldsV1 := map[string][]string{
 		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
 		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
@@ -171,6 +186,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		fields = fieldsV3
 	} else if command.APIVersion == EditCommandAPIVersionV4 {
 		fields = fieldsV4
+	} else if command.APIVersion == EditCommandAPIVersionV5 {
+		fields = fieldsV5
 	}
 	allowedFields, allowed := fields[command.Operation]
 	if !allowed {
@@ -184,7 +201,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
 		versionValid := isEditCommandV2OrLater(command.APIVersion)
 		typeValid := command.APIVersion == EditCommandAPIVersionV2 || appconfig.ServerTypeIDPattern.MatchString(command.ServerType)
-		desiredHostnameValid := command.APIVersion != EditCommandAPIVersionV4 || (len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
+		desiredHostnameValid := (command.APIVersion != EditCommandAPIVersionV4 && command.APIVersion != EditCommandAPIVersionV5) || (len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
 		if !versionValid || !identifierPattern.MatchString(command.HostID) || !typeValid || !desiredHostnameValid || !validServerAddress(command.Address) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) {
 			return blocked("INVALID_EDIT_COMMAND", "CreateServer requires a valid host, type, address and optional SSH port", "command")
 		}
@@ -192,8 +209,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		hasSSHPort := command.SSHPort != 0 || command.presentFields["sshPort"]
 		hasClearSSHPort := command.ClearSSHPort || command.presentFields["clearSSHPort"]
 		versionValid := isEditCommandV2OrLater(command.APIVersion)
-		typeValid := command.ServerType == "" || ((command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4) && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
-		desiredHostnameValid := command.DesiredHostname == "" || (command.APIVersion == EditCommandAPIVersionV4 && len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
+		typeValid := command.ServerType == "" || ((command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && appconfig.ServerTypeIDPattern.MatchString(command.ServerType))
+		desiredHostnameValid := command.DesiredHostname == "" || ((command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && len(command.DesiredHostname) <= 253 && desiredHostnamePattern.MatchString(command.DesiredHostname))
 		if !versionValid || !typeValid || !desiredHostnameValid || !identifierPattern.MatchString(command.HostID) || (command.Address == "" && !hasSSHPort && !command.ClearSSHPort && command.ServerType == "" && command.DesiredHostname == "") || (command.Address != "" && !validServerAddress(command.Address)) || (hasSSHPort && (command.SSHPort < 1 || command.SSHPort > 65535)) || (hasSSHPort && command.ClearSSHPort) || (hasClearSSHPort && !command.ClearSSHPort) {
 			return blocked("INVALID_EDIT_COMMAND", "UpdateServer fields are invalid", "command")
 		}
@@ -202,12 +219,17 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "DeleteServer requires a valid host", "command.hostId")
 		}
 	case "ReconcileDeploymentPlacement":
-		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > 1024 {
+		limit := 1024
+		if command.APIVersion == EditCommandAPIVersionV5 {
+			limit = maxManagedPlacements
+		}
+		if !isEditCommandV2OrLater(command.APIVersion) || !identifierPattern.MatchString(command.DeploymentID) || len(command.Members) > limit {
 			return blocked("INVALID_EDIT_COMMAND", "Deployment placement reconcile is invalid", "command.members")
 		}
 		memberIDs := make(map[string]bool)
 		for _, member := range command.Members {
-			if !identifierPattern.MatchString(member.MemberID) || !identifierPattern.MatchString(member.HostID) || len(member.Roles) == 0 || memberIDs[member.MemberID] {
+			rolesRequired := command.APIVersion != EditCommandAPIVersionV5
+			if !identifierPattern.MatchString(member.MemberID) || !identifierPattern.MatchString(member.HostID) || rolesRequired && len(member.Roles) == 0 || len(member.Roles) > maxManagedRoles || memberIDs[member.MemberID] || (command.APIVersion == EditCommandAPIVersionV5 && (member.Configuration != nil || len(member.unknownFields) != 0)) {
 				return blocked("INVALID_EDIT_COMMAND", "Placement member is invalid or duplicated", "command.members")
 			}
 			memberIDs[member.MemberID] = true
@@ -220,6 +242,24 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			}
 			if err := safeValue(member.Configuration, "configuration"); err != nil {
 				return err
+			}
+		}
+	case "ReconcileHostScopedDeploymentPlacement":
+		if command.APIVersion != EditCommandAPIVersionV5 || !identifierPattern.MatchString(command.DeploymentID) || len(command.Hosts) > maxManagedHostDocuments {
+			return blocked("INVALID_EDIT_COMMAND", "Host-scoped placement reconcile is invalid", "command.hosts")
+		}
+		hostIDs := make(map[string]bool)
+		for _, host := range command.Hosts {
+			if !identifierPattern.MatchString(host.HostID) || len(host.Roles) > maxManagedRoles || hostIDs[host.HostID] || len(host.unknownFields) != 0 {
+				return blocked("INVALID_EDIT_COMMAND", "Placement host is invalid or duplicated", "command.hosts")
+			}
+			hostIDs[host.HostID] = true
+			roleIDs := make(map[string]bool)
+			for _, role := range host.Roles {
+				if !identifierPattern.MatchString(role) || roleIDs[role] {
+					return blocked("INVALID_EDIT_COMMAND", "Placement role is invalid or duplicated", "command.hosts.roles")
+				}
+				roleIDs[role] = true
 			}
 		}
 	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "CreateCertificateProfile", "UpdateCertificateProfile", "CreateTLSProfile", "UpdateTLSProfile", "CreateCertificateScope", "UpdateCertificateScope":
@@ -251,7 +291,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "HAProxy relation requires two deployment identifiers", "command")
 		}
 	case "CreateEndpointGroup", "UpdateEndpointGroup":
-		if !identifierPattern.MatchString(command.EndpointGroupID) || command.EndpointGroup == nil {
+		if !identifierPattern.MatchString(command.EndpointGroupID) || command.EndpointGroup == nil || (command.APIVersion == EditCommandAPIVersionV5 && !validEndpointGroup(command.EndpointGroup)) {
 			return blocked("INVALID_EDIT_COMMAND", "Endpoint-group edit requires an identifier and value", "command")
 		}
 	case "DeleteEndpointGroup":
@@ -273,12 +313,30 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	if err := safeValue(command.Value, command.Property); err != nil {
 		return err
 	}
-	for _, value := range []any{command.Deployment, command.EndpointGroup, command.Placement, command.Backend, command.Entity, command.Members} {
+	for _, value := range []any{command.Deployment, command.EndpointGroup, command.Placement, command.Backend, command.Entity, command.Members, command.Hosts} {
 		if err := safeValue(value, ""); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func validEndpointGroup(value map[string]any) bool {
+	address := asMap(value["address"])
+	if address == nil || len(address) != 2 {
+		return false
+	}
+	domain, domainOK := address["domain"].(string)
+	_, wildcardOK := address["wildcard"].(bool)
+	if !domainOK || domain == "" || !wildcardOK {
+		return false
+	}
+	for key := range value {
+		if key != "address" && !extensionKeyPattern.MatchString(key) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateCommandFields(command EditCommand, allowed ...string) error {

@@ -228,3 +228,53 @@ No third review was run. The preceding targeted verdict remains historical for
 SHA-256 `76f3028f7d5a985b965c778ec4672b98b9e1128b43e2f23712f8a305aa65a33f`;
 it does not independently approve the updated plan bytes. A further review
 requires an explicit owner request. No production implementation has started.
+
+## Implementation FULL DIFF review
+
+Review baseline: `1e8d27a5fb50091ff2d1283b44068a9b289dd592`.
+
+Initial implementation verdict: **BLOCK**.
+
+- `UI01F2-DIFF-001`: final-state dangling references were tolerated unless
+  the referenced target had been deleted by the current session.
+- `UI01F2-DIFF-002`: focused HIGH-RISK evidence was incomplete for reparse and
+  enumeration-to-open replacement, preserved generic references, conflicts,
+  revision races and instrumented local-only isolation.
+
+The reviewer found no overengineering and changed no files. The reviewed
+initial composite SHA-256 was
+`5c09d78cc8338055c598b06fb2d28f8e6d737a9a93bdbc63f21d4a71e7e44139`.
+
+The implementation correction was limited to those findings:
+
+- every independently dangling final-state placement, endpoint-group,
+  dependency, HAProxy or certificate-scope reference now returns
+  `REFERENCE_NOT_FOUND`; a reference whose target is removed by the current
+  session continues to return `REFERENCE_IN_USE`;
+- Windows junction and replacement tests, POSIX symlink replacement,
+  provider/dependency/deploymentRef guards, conflict, revision-race and
+  instrumented zero-Core tests were added;
+- the existing local-only plan/transaction branch remains the sole writer and
+  has no Execution Node, SSH/SCP, Ansible or target transport parameter.
+
+## Implementation TARGETED_RECHECK — DIFF-001 / DIFF-002
+
+Verdict: **PASS**.
+
+- `UI01F2-DIFF-001` — **RESOLVED**;
+- `UI01F2-DIFF-002` — **RESOLVED**;
+- immediately introduced regressions — none;
+- blocking findings — **0**;
+- overengineering findings — **0**.
+
+Final reviewed implementation binding before documentation-only status
+synchronization:
+
+- HEAD: `1e8d27a5fb50091ff2d1283b44068a9b289dd592`;
+- tracked diff blob: `39b490f105a4000823ffc920c0c2082132baf1bd`;
+- composite SHA-256:
+  `2cbb68ae2cafcbbd8d5c591fd0e758d8c87db007246bde97e4efd9eb0824471d`.
+
+Focused tests and `git diff --check` passed during the recheck. The reviewer
+modified no files. No further review cycle is required; UI-01F3 remains not
+started.

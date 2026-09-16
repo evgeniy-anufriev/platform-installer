@@ -414,6 +414,8 @@ slices:
 
 ### UI-01F1 — catalog and local read model
 
+Status: **DONE**.
+
 - lock-bound verified catalog resolver and `ProjectCatalogView`;
 - extend `ManagedProjectView` with direct deployments, endpoint groups and
   both canonical placement forms;
@@ -421,6 +423,9 @@ slices:
 - no mutation UI yet.
 
 ### UI-01F2 — contract and local reducer/writer
+
+Status: **DONE**. Detailed architecture and evidence:
+`docs/ui-01f2-architecture.md` and `docs/ui-01f2-architecture-review.md`.
 
 - immutable `project-edit/v1alpha5` schema;
 - normalize v1alpha5 into existing `EditCommand`;
@@ -432,6 +437,8 @@ slices:
 - generic reference/delete guards and preservation tests.
 
 ### UI-01F3 — deployment UI
+
+Status: **NOT STARTED**; separate owner gate.
 
 - Topology navigation and catalog-driven Add/Delete deployment;
 - By services view and stable selection;

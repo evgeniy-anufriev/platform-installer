@@ -264,6 +264,27 @@ func (s *Service) OpenProject(_ context.Context, root string) (Result, error) {
 	return Result{Root: root, Classification: classificationIncomplete}, errors.New("PROJECT_INPUT_INCOMPLETE")
 }
 
+// ResolveProjectCatalog rereads the managed project manifest and resolves only
+// the exact immutable compatibility source pinned by its locks. Callers must
+// still bind the result to their own coherent project-revision observation.
+func (s *Service) ResolveProjectCatalog(ctx context.Context, root string) (*ProjectCatalogView, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	root, err := existingRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	project, err := readManifest(root)
+	if err != nil {
+		return nil, err
+	}
+	if project.Metadata.Labels[managedProjectLabel] != managedProjectMarker || !validEmptyManifest(project) {
+		return nil, errors.New("MANAGED_PROJECT_INVALID")
+	}
+	return s.resolveProjectCatalog(project), nil
+}
+
 func (s *Service) compatibilitySource(id string) (compatibility, error) {
 	entry, ok := s.sources[id]
 	if !ok || id == "" || entry.root == "" {

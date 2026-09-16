@@ -123,6 +123,9 @@ func (s lifecycleStub) CreateProject(context.Context, projectlifecycle.CreatePro
 func (s lifecycleStub) OpenProject(context.Context, string) (projectlifecycle.Result, error) {
 	return s.result, s.err
 }
+func (s lifecycleStub) ResolveProjectCatalog(context.Context, string) (*projectlifecycle.ProjectCatalogView, error) {
+	return s.result.Catalog, s.err
+}
 
 func TestAppOpenProjectIsReadOnlyAndRetainsNoErrorState(t *testing.T) {
 	root := t.TempDir()
@@ -367,7 +370,7 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "inventory", "host_vars", "node1"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	desired := string(managedHeaderForTest()) + "platform_desired_state:\n  endpointGroups:\n    edge: {address: {domain: edge.example.test, wildcard: true}}\n  serviceDeployments:\n    kafka-main: {serviceType: kafka, mode: single, endpointGroup: edge}\n"
+	desired := string(managedHeaderForTest()) + "platform_desired_state:\n  endpointGroups:\n    edge: {address: {domain: edge.example.test, wildcard: true}}\n  serviceDeployments:\n    dns-main: {serviceType: bind, mode: primary}\n    kafka-main: {serviceType: kafka, mode: single, endpointGroup: edge}\n"
 	placement := string(managedHeaderForTest()) + "platform_deployments:\n  kafka-main:\n    members:\n      member-1: {roles: [broker]}\n  dns-main:\n    roles: [primary]\n"
 	if err := os.WriteFile(filepath.Join(root, "inventory", "group_vars", "all", "platform-installer.yml"), []byte(desired), 0o600); err != nil {
 		t.Fatal(err)

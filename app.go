@@ -189,6 +189,7 @@ func WithTrustedExecutionNodeBinding(binding executionNodeBinding) AppOption {
 type projectLifecycle interface {
 	CreateProject(context.Context, projectlifecycle.CreateProjectRequest) (projectlifecycle.Result, error)
 	OpenProject(context.Context, string) (projectlifecycle.Result, error)
+	ResolveProjectCatalog(context.Context, string) (*projectlifecycle.ProjectCatalogView, error)
 }
 
 func NewApp(reader interface {
@@ -634,7 +635,7 @@ func (a *App) StartEditSession() EditOperationResult {
 			typeIDs = append(typeIDs, serverType.ID)
 		}
 	}
-	a.editor = installer.NewBackend(nil, installer.WithServerTypes(typeIDs))
+	a.editor = installer.NewBackend(nil, installer.WithServerTypes(typeIDs), installer.WithProjectCatalogResolver(a.lifecycle.ResolveProjectCatalog))
 	session, err := a.sessions.Start(a.current.Project.ID, a.current.Root, a.current.Classification, revision)
 	if err != nil {
 		return a.editFailure(err)
@@ -651,7 +652,11 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
 	switch command.Operation {
-	case "CreateServer", "UpdateServer", "DeleteServer":
+	case "CreateServer", "UpdateServer", "DeleteServer",
+		"CreateServiceDeployment", "DeleteServiceDeployment",
+		"ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement",
+		"CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",
+		"SetServiceEndpointGroup", "ClearServiceEndpointGroup":
 	default:
 		return a.editFailure(errors.New("EDIT_OPERATION_NOT_AVAILABLE"))
 	}

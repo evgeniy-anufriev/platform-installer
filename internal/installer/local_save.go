@@ -1,16 +1,12 @@
 package installer
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"platform-installer/internal/coreadapter"
-	"platform-installer/internal/projectlifecycle"
 )
 
 const (
@@ -91,26 +87,31 @@ func (budget *managedReadBudget) ownedDocument(root, logical string) (map[string
 }
 
 func (budget *managedReadBudget) ownedDocumentOptional(root, logical string) (map[string]any, bool, error) {
+	document, _, exists, err := budget.ownedDocumentOptionalBytes(root, logical)
+	return document, exists, err
+}
+
+func (budget *managedReadBudget) ownedDocumentOptionalBytes(root, logical string) (map[string]any, []byte, bool, error) {
 	content, err := readF1OwnedDocument(root, logical)
 	if errors.Is(err, os.ErrNotExist) || os.IsNotExist(err) {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 	// This is only an absence classification after the authoritative
 	// handle-bound read failed. It never authorizes a later pathname read.
 	if err != nil {
 		if _, statErr := os.Lstat(filepath.Join(root, filepath.FromSlash(logical))); errors.Is(statErr, os.ErrNotExist) {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
 	}
 	if err != nil || int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
-		return nil, false, managedReadError("Managed document is unsafe, malformed, or exceeds the read limit", logical)
+		return nil, nil, false, managedReadError("Managed document is unsafe, malformed, or exceeds the read limit", logical)
 	}
 	budget.total += int64(len(content))
 	document, err := parseManagedYAML(content)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
-	return document, true, nil
+	return document, content, true, nil
 }
 
 func managedReadError(message, field string) error {
@@ -287,7 +288,7 @@ func blockedStructuralPlan(revision string, err error) *StructuralEditPlan {
 	return plan
 }
 
-// PlanStructuralSave builds a bounded local preview for server intents and
+// PlanStructuralSave builds a bounded local preview for server and topology intents and
 // stores its candidate bytes in the existing opaque plan store.
 func (b *Backend) PlanStructuralSave(ctx context.Context, projectRoot, classification, revision string, commands []EditCommand) (*StructuralEditPlan, error) {
 	if err := ctx.Err(); err != nil {
@@ -300,8 +301,8 @@ func (b *Backend) PlanStructuralSave(ctx context.Context, projectRoot, classific
 		return blockedStructuralPlan(revision, blocked("EDIT_SESSION_COMMANDS_UNSUPPORTED", "This edit set must be split", "session")), nil
 	}
 	for _, command := range commands {
-		if command.Operation != "CreateServer" && command.Operation != "UpdateServer" && command.Operation != "DeleteServer" {
-			return blockedStructuralPlan(revision, blocked("EDIT_OPERATION_NOT_AVAILABLE", "Only server intents are available in this editor", "command.operation")), nil
+		if command.Operation != "CreateServer" && command.Operation != "UpdateServer" && command.Operation != "DeleteServer" && !topologyOperation(command.Operation) {
+			return blockedStructuralPlan(revision, blocked("EDIT_OPERATION_NOT_AVAILABLE", "Edit operation is not available in this editor", "command.operation")), nil
 		}
 		if err := b.validateCommand(command); err != nil {
 			return blockedStructuralPlan(revision, err), nil
@@ -311,92 +312,7 @@ func (b *Backend) PlanStructuralSave(ctx context.Context, projectRoot, classific
 	if err != nil {
 		return blockedStructuralPlan(revision, err), nil
 	}
-	if isEmptyManagedClassification(classification) {
-		return b.planStructuralFirstWrite(root, revision, commands)
-	}
-	return b.planStructuralManaged(root, revision, commands)
-}
-
-func (b *Backend) planStructuralFirstWrite(root, revision string, commands []EditCommand) (*StructuralEditPlan, error) {
-	if !projectlifecycle.FirstSaveEligible(root) {
-		return blockedStructuralPlan(revision, blocked("WRITE_OWNERSHIP_REQUIRED", "First save requires a valid empty managed project", "project")), nil
-	}
-	_, currentRevision, err := collectProjectDocuments(root)
-	if err != nil || currentRevision != revision {
-		if err == nil {
-			err = blocked("PROJECT_CHANGED", "Project changed before review", "baseProjectRevision")
-		}
-		return blockedStructuralPlan(currentRevision, err), nil
-	}
-	seen := map[string]bool{}
-	servers := make([]firstSaveServer, 0, len(commands))
-	changes := make([]SemanticChange, 0, len(commands))
-	for _, command := range commands {
-		if command.Operation != "CreateServer" || seen[command.HostID] {
-			return blockedStructuralPlan(revision, blocked("FIRST_SAVE_COMMAND_UNSUPPORTED", "First save accepts unique server creation intents only", "command.operation")), nil
-		}
-		seen[command.HostID] = true
-		servers = append(servers, firstSaveServer{id: command.HostID, typeID: command.ServerType, desiredHostname: command.DesiredHostname, address: command.Address, port: command.SSHPort, portSet: portWasSupplied(command)})
-		changes = append(changes, commandSummary(command))
-	}
-	desired, err := deterministicYAML(map[string]any{"platform_desired_state": map[string]any{"serviceDeployments": map[string]any{}}})
-	if err != nil {
-		return nil, err
-	}
-	documents := []storedDocument{
-		{LogicalPath: "ansible.cfg", After: append([]byte(nil), firstSaveAnsibleConfig...), Existed: false},
-		{LogicalPath: managedInventoryDocument, After: firstSaveInventory(servers), Existed: false},
-		{LogicalPath: desiredDocument, After: desired, Existed: false},
-	}
-	return b.storeStructuralPlan(root, revision, changes, documents)
-}
-
-func (b *Backend) planStructuralManaged(root, revision string, commands []EditCommand) (*StructuralEditPlan, error) {
-	_, currentRevision, err := collectProjectDocuments(root)
-	if err != nil || currentRevision != revision {
-		if err == nil {
-			err = blocked("PROJECT_CHANGED", "Project changed before review", "baseProjectRevision")
-		}
-		return blockedStructuralPlan(currentRevision, err), nil
-	}
-	owned, err := discoverOwnedPaths(root)
-	if err != nil {
-		return blockedStructuralPlan(revision, err), nil
-	}
-	foundInventory := false
-	for _, logical := range owned {
-		foundInventory = foundInventory || logical == managedInventoryDocument
-	}
-	if !foundInventory {
-		return blockedStructuralPlan(revision, blocked("WRITE_OWNERSHIP_REQUIRED", "Managed inventory is not Installer-owned", managedInventoryDocument)), nil
-	}
-	command := commands[0]
-	if len(commands) > 1 {
-		command = EditCommand{APIVersion: EditCommandAPIVersionV4, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "Batch", Commands: commands}
-	}
-	candidates := map[string]map[string]any{}
-	originals := map[string][]byte{}
-	_, changes, _, err := applyCommand(command, root, &coreadapter.Snapshot{}, candidates, originals)
-	if err != nil {
-		return blockedStructuralPlan(revision, err), nil
-	}
-	documents := make([]storedDocument, 0, len(candidates))
-	paths := make([]string, 0, len(candidates))
-	for logical := range candidates {
-		paths = append(paths, logical)
-	}
-	sort.Strings(paths)
-	for _, logical := range paths {
-		after, encodeErr := deterministicYAML(candidates[logical])
-		if encodeErr != nil {
-			return blockedStructuralPlan(revision, blocked("INVALID_VALUE", "Edit value cannot be serialized safely", "command")), nil
-		}
-		before := originals[logical]
-		if !bytes.Equal(before, after) {
-			documents = append(documents, storedDocument{LogicalPath: logical, Before: append([]byte(nil), before...), After: after, Existed: true})
-		}
-	}
-	return b.storeStructuralPlan(root, revision, changes, documents)
+	return b.planStructuralCandidate(ctx, root, classification, revision, commands)
 }
 
 func (b *Backend) storeStructuralPlan(root, revision string, changes []SemanticChange, documents []storedDocument) (*StructuralEditPlan, error) {

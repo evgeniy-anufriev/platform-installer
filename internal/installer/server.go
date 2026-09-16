@@ -97,7 +97,7 @@ func applyServerCommand(command EditCommand, root string, snapshot *coreadapter.
 		} else if command.ClearSSHPort {
 			delete(host, "ansible_port")
 		}
-		if command.APIVersion == EditCommandAPIVersionV4 && (platformHost["type"] == nil || platformHost["desiredHostname"] == nil) {
+		if (command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && (platformHost["type"] == nil || platformHost["desiredHostname"] == nil) {
 			return expectation{}, nil, blocked("SERVER_METADATA_REQUIRED", "Current server edits require type and desired hostname", "command")
 		}
 		return serverFinalExpectation(inventory, command.HostID), serverUpdateImpacts(command), nil

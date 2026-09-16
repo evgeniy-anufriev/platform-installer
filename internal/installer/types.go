@@ -10,6 +10,7 @@ const (
 	EditCommandAPIVersionV2    = "platform.installer/edit-command/v1alpha2"
 	EditCommandAPIVersionV3    = "platform.installer/edit-command/v1alpha3"
 	EditCommandAPIVersionV4    = "platform.installer/edit-command/v1alpha4"
+	EditCommandAPIVersionV5    = "platform.installer/edit-command/v1alpha5"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -40,6 +41,7 @@ type EditCommand struct {
 	EntityID            string            `json:"entityId,omitempty"`
 	Entity              map[string]any    `json:"entity,omitempty"`
 	Members             []PlacementMember `json:"members,omitempty"`
+	Hosts               []PlacementHost   `json:"hosts,omitempty"`
 	Property            string            `json:"property,omitempty"`
 	Deployment          map[string]any    `json:"deployment,omitempty"`
 	EndpointGroup       map[string]any    `json:"endpointGroup,omitempty"`
@@ -67,7 +69,7 @@ func (command *EditCommand) UnmarshalJSON(content []byte) error {
 		"deploymentId": true, "setting": true, "value": true, "endpointGroupId": true,
 		"haproxyDeploymentId": true, "hostId": true, "type": true, "desiredHostname": true, "address": true, "sshPort": true,
 		"clearSSHPort": true, "serviceType": true, "mode": true, "entityId": true,
-		"entity": true, "members": true, "property": true, "deployment": true,
+		"entity": true, "members": true, "hosts": true, "property": true, "deployment": true,
 		"endpointGroup": true, "placement": true, "backend": true, "commands": true,
 	}
 	for field := range fields {
@@ -82,8 +84,53 @@ func (command *EditCommand) UnmarshalJSON(content []byte) error {
 type PlacementMember struct {
 	MemberID      string         `json:"memberId"`
 	HostID        string         `json:"hostId"`
-	Roles         []string       `json:"roles"`
+	Roles         []string       `json:"roles,omitempty"`
 	Configuration map[string]any `json:"configuration,omitempty"`
+	unknownFields []string
+}
+
+func (value *PlacementMember) UnmarshalJSON(content []byte) error {
+	type alias PlacementMember
+	var decoded alias
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(content, &fields); err != nil {
+		return err
+	}
+	*value = PlacementMember(decoded)
+	for field := range fields {
+		if field != "memberId" && field != "hostId" && field != "roles" && field != "configuration" {
+			value.unknownFields = append(value.unknownFields, field)
+		}
+	}
+	return nil
+}
+
+type PlacementHost struct {
+	HostID        string   `json:"hostId"`
+	Roles         []string `json:"roles,omitempty"`
+	unknownFields []string
+}
+
+func (value *PlacementHost) UnmarshalJSON(content []byte) error {
+	type alias PlacementHost
+	var decoded alias
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(content, &fields); err != nil {
+		return err
+	}
+	*value = PlacementHost(decoded)
+	for field := range fields {
+		if field != "hostId" && field != "roles" {
+			value.unknownFields = append(value.unknownFields, field)
+		}
+	}
+	return nil
 }
 
 type Finding struct {

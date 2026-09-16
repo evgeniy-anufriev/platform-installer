@@ -82,6 +82,40 @@ class ProjectEditVersionTests(unittest.TestCase):
         payload["patch"] = {"unsafe": True}
         self.assertTrue(self.validate(payload, "v1alpha4"))
 
+    def test_v1alpha5_supports_both_closed_placement_forms(self):
+        base = {
+            "apiVersion": "platform.installer/edit-command/v1alpha5",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "deploymentId": "service-main",
+        }
+        member = dict(base, operation="ReconcileDeploymentPlacement", members=[{
+            "memberId": "member-1", "hostId": "node1", "roles": ["server"],
+        }])
+        host = dict(base, operation="ReconcileHostScopedDeploymentPlacement", hosts=[{
+            "hostId": "node1", "roles": [],
+        }])
+        self.assertEqual([], self.validate(member, "v1alpha5"))
+        self.assertEqual([], self.validate(host, "v1alpha5"))
+        member["members"][0]["configuration"] = {"unsafe": True}
+        self.assertTrue(self.validate(member, "v1alpha5"))
+
+    def test_v1alpha5_topology_commands_are_closed(self):
+        commands = [
+            {"operation": "CreateServiceDeployment", "deploymentId": "kafka-main", "serviceType": "kafka", "mode": "kraft-standalone"},
+            {"operation": "DeleteServiceDeployment", "deploymentId": "kafka-main"},
+            {"operation": "CreateEndpointGroup", "endpointGroupId": "edge", "endpointGroup": {"address": {"domain": "edge.example.test", "wildcard": False}}},
+            {"operation": "UpdateEndpointGroup", "endpointGroupId": "edge", "endpointGroup": {"address": {"domain": "new.example.test", "wildcard": True}}},
+            {"operation": "DeleteEndpointGroup", "endpointGroupId": "edge"},
+            {"operation": "SetServiceEndpointGroup", "deploymentId": "kafka-main", "endpointGroupId": "edge"},
+            {"operation": "ClearServiceEndpointGroup", "deploymentId": "kafka-main"},
+        ]
+        for fields in commands:
+            payload = {"apiVersion": "platform.installer/edit-command/v1alpha5", "kind": "EditCommand", "baseProjectRevision": REVISION, **fields}
+            self.assertEqual([], self.validate(payload, "v1alpha5"), fields["operation"])
+            payload["rawYaml"] = "unsafe"
+            self.assertTrue(self.validate(payload, "v1alpha5"), fields["operation"])
+
 
 if __name__ == "__main__":
     unittest.main()

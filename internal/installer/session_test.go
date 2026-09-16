@@ -37,6 +37,39 @@ func TestValidateV2CreateServerRejectsUnknownDecodedFields(t *testing.T) {
 	}
 }
 
+func TestValidateV5RejectsUnknownNestedPlacementFields(t *testing.T) {
+	revision := "sha256:" + strings.Repeat("a", 64)
+	for _, content := range []string{
+		`{"apiVersion":"platform.installer/edit-command/v1alpha5","kind":"EditCommand","baseProjectRevision":"` + revision + `","operation":"ReconcileDeploymentPlacement","deploymentId":"kafka-main","members":[{"memberId":"member-1","hostId":"node1","rawYaml":"unsafe"}]}`,
+		`{"apiVersion":"platform.installer/edit-command/v1alpha5","kind":"EditCommand","baseProjectRevision":"` + revision + `","operation":"ReconcileHostScopedDeploymentPlacement","deploymentId":"proxy-main","hosts":[{"hostId":"node1","rawYaml":"unsafe"}]}`,
+	} {
+		var command EditCommand
+		if err := json.Unmarshal([]byte(content), &command); err != nil {
+			t.Fatal(err)
+		}
+		if err := validateCommand(command); err == nil {
+			t.Fatalf("unknown nested field was silently discarded: %s", content)
+		}
+	}
+}
+
+func TestValidateV5EndpointGroupMatchesClosedContract(t *testing.T) {
+	revision := "sha256:" + strings.Repeat("a", 64)
+	base := EditCommand{APIVersion: EditCommandAPIVersionV5, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateEndpointGroup", EndpointGroupID: "edge"}
+	base.EndpointGroup = map[string]any{"address": map[string]any{"domain": "edge.example.test", "wildcard": false}, "x-owner": "qa"}
+	if err := validateCommand(base); err != nil {
+		t.Fatalf("valid endpoint group rejected: %v", err)
+	}
+	for _, key := range []string{"unexpected", "x-"} {
+		invalid := base
+		invalid.EndpointGroup = deepCopy(base.EndpointGroup).(map[string]any)
+		invalid.EndpointGroup[key] = true
+		if err := validateCommand(invalid); err == nil {
+			t.Fatalf("invalid endpoint-group field %q accepted", key)
+		}
+	}
+}
+
 func TestV2CreateServerRemainsCompatibleAndV3RequiresType(t *testing.T) {
 	revision := "sha256:" + strings.Repeat("a", 64)
 	v2 := EditCommand{APIVersion: EditCommandAPIVersionV2, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateServer", HostID: "node1", Address: "192.0.2.1"}
@@ -152,7 +185,7 @@ func TestSessionAppendInvalidatesReviewedPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV4 {
+	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV5 {
 		t.Fatalf("new session emitted %s", got)
 	}
 	encoded, err := json.Marshal(store.sessions[session.SessionID].commands[0])

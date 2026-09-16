@@ -223,10 +223,24 @@ export namespace installer {
     }
   }
 
+  export class PlacementHost {
+    hostId: string;
+    roles?: string[];
+
+    static createFrom(source: any = {}) {
+      return new PlacementHost(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+    }
+  }
   export class PlacementMember {
     memberId: string;
     hostId: string;
-    roles: string[];
+    roles?: string[];
     configuration?: Record<string, any>;
 
     static createFrom(source: any = {}) {
@@ -262,6 +276,7 @@ export namespace installer {
     entityId?: string;
     entity?: Record<string, any>;
     members?: PlacementMember[];
+    hosts?: PlacementHost[];
     property?: string;
     deployment?: Record<string, any>;
     endpointGroup?: Record<string, any>;
@@ -295,6 +310,7 @@ export namespace installer {
       this.entityId = source["entityId"];
       this.entity = source["entity"];
       this.members = this.convertValues(source["members"], PlacementMember);
+      this.hosts = this.convertValues(source["hosts"], PlacementHost);
       this.property = source["property"];
       this.deployment = source["deployment"];
       this.endpointGroup = source["endpointGroup"];

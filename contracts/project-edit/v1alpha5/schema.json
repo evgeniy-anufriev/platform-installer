@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-edit/v1alpha5/schema.json",
+  "title": "Platform Installer topology edit contracts v1alpha5",
+  "oneOf": [
+    {"$ref": "#/$defs/editCommand"},
+    {"$ref": "../v1alpha3/schema.json#/$defs/editSession"},
+    {"$ref": "../v1alpha3/schema.json#/$defs/editPlan"},
+    {"$ref": "../v1alpha3/schema.json#/$defs/editCommitResult"}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+    "serverAddress": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$"},
+    "serverType": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+    "desiredHostname": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$"},
+    "roles": {"type": "array", "maxItems": 128, "items": {"$ref": "#/$defs/id"}, "uniqueItems": true},
+    "commandBase": {
+      "type": "object",
+      "required": ["apiVersion", "kind", "baseProjectRevision", "operation"],
+      "properties": {
+        "apiVersion": {"const": "platform.installer/edit-command/v1alpha5"},
+        "kind": {"const": "EditCommand"},
+        "baseProjectRevision": {"$ref": "#/$defs/digest"},
+        "operation": {"type": "string"}
+      }
+    },
+    "serverCreate": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["hostId", "address", "type", "desiredHostname"], "properties": {"operation": {"const": "CreateServer"}, "hostId": {"$ref": "#/$defs/id"}, "address": {"$ref": "#/$defs/serverAddress"}, "sshPort": {"type": "integer", "minimum": 1, "maximum": 65535}, "type": {"$ref": "#/$defs/serverType"}, "desiredHostname": {"$ref": "#/$defs/desiredHostname"}}}],
+      "unevaluatedProperties": false
+    },
+    "serverUpdate": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["hostId"], "properties": {"operation": {"const": "UpdateServer"}, "hostId": {"$ref": "#/$defs/id"}, "address": {"$ref": "#/$defs/serverAddress"}, "sshPort": {"type": "integer", "minimum": 1, "maximum": 65535}, "clearSSHPort": {"const": true}, "type": {"$ref": "#/$defs/serverType"}, "desiredHostname": {"$ref": "#/$defs/desiredHostname"}}, "anyOf": [{"required": ["address"]}, {"required": ["sshPort"]}, {"required": ["clearSSHPort"]}, {"required": ["type"]}, {"required": ["desiredHostname"]}]}],
+      "unevaluatedProperties": false
+    },
+    "serverDelete": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["hostId"], "properties": {"operation": {"const": "DeleteServer"}, "hostId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "deploymentCreate": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "serviceType", "mode"], "properties": {"operation": {"const": "CreateServiceDeployment"}, "deploymentId": {"$ref": "#/$defs/id"}, "serviceType": {"$ref": "#/$defs/id"}, "mode": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "deploymentDelete": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId"], "properties": {"operation": {"const": "DeleteServiceDeployment"}, "deploymentId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "placementMember": {
+      "type": "object",
+      "required": ["memberId", "hostId"],
+      "properties": {"memberId": {"$ref": "#/$defs/id"}, "hostId": {"$ref": "#/$defs/id"}, "roles": {"$ref": "#/$defs/roles"}},
+      "additionalProperties": false
+    },
+    "memberPlacementReconcile": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "members"], "properties": {"operation": {"const": "ReconcileDeploymentPlacement"}, "deploymentId": {"$ref": "#/$defs/id"}, "members": {"type": "array", "maxItems": 16384, "items": {"$ref": "#/$defs/placementMember"}}}}],
+      "unevaluatedProperties": false
+    },
+    "placementHost": {
+      "type": "object",
+      "required": ["hostId"],
+      "properties": {"hostId": {"$ref": "#/$defs/id"}, "roles": {"$ref": "#/$defs/roles"}},
+      "additionalProperties": false
+    },
+    "hostPlacementReconcile": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "hosts"], "properties": {"operation": {"const": "ReconcileHostScopedDeploymentPlacement"}, "deploymentId": {"$ref": "#/$defs/id"}, "hosts": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/placementHost"}}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointWrite": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["endpointGroupId", "endpointGroup"], "properties": {"operation": {"enum": ["CreateEndpointGroup", "UpdateEndpointGroup"]}, "endpointGroupId": {"$ref": "#/$defs/id"}, "endpointGroup": {"$ref": "../../project/v2alpha1/desired-state.schema.json#/$defs/endpointGroup"}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointDelete": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["endpointGroupId"], "properties": {"operation": {"const": "DeleteEndpointGroup"}, "endpointGroupId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointSet": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId", "endpointGroupId"], "properties": {"operation": {"const": "SetServiceEndpointGroup"}, "deploymentId": {"$ref": "#/$defs/id"}, "endpointGroupId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "endpointClear": {
+      "allOf": [{"$ref": "#/$defs/commandBase"}, {"type": "object", "required": ["deploymentId"], "properties": {"operation": {"const": "ClearServiceEndpointGroup"}, "deploymentId": {"$ref": "#/$defs/id"}}}],
+      "unevaluatedProperties": false
+    },
+    "editCommand": {
+      "oneOf": [
+        {"$ref": "#/$defs/serverCreate"},
+        {"$ref": "#/$defs/serverUpdate"},
+        {"$ref": "#/$defs/serverDelete"},
+        {"$ref": "#/$defs/deploymentCreate"},
+        {"$ref": "#/$defs/deploymentDelete"},
+        {"$ref": "#/$defs/memberPlacementReconcile"},
+        {"$ref": "#/$defs/hostPlacementReconcile"},
+        {"$ref": "#/$defs/endpointWrite"},
+        {"$ref": "#/$defs/endpointDelete"},
+        {"$ref": "#/$defs/endpointSet"},
+        {"$ref": "#/$defs/endpointClear"}
+      ]
+    }
+  }
+}

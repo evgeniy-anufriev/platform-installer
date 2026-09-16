@@ -1,16 +1,25 @@
 # UI-01F2 — Topology command contract, reducer and managed writer
 
-Status: **DRAFT FOR OWNER APPROVAL**
+Status: **DONE (2026-09-16)**
 
 Milestone: **UI-01F2**
 
-Implementation status: **NOT STARTED**
+Implementation status: **DONE**
 
 Parent architecture: `docs/ui-01f-architecture.md`
 
 Read-model prerequisite: `docs/ui-01f1-architecture.md`
 
 Baseline revision: `431c1704fcc9d4054305dfb2be216ad406a71b18`
+
+Implementation baseline: `1e8d27a5fb50091ff2d1283b44068a9b289dd592`
+
+Acceptance: the additive v1alpha5 contract, one local structural reducer,
+member/host placement writers, fresh catalog admission, generic reference
+guards and safe managed-host enumeration passed Windows and RED OS gates. The
+revision-bound FULL DIFF review's two findings were corrected and its single
+targeted recheck passed with zero blocking and zero overengineering findings.
+UI-01F3 remains separately gated and was not started.
 
 ## 1. Goal
 

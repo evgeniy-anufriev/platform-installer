@@ -11,16 +11,18 @@ import (
 	"time"
 
 	"platform-installer/internal/coreadapter"
+	"platform-installer/internal/projectlifecycle"
 )
 
 type Backend struct {
-	core        coreadapter.Adapter
-	plans       PlanStore
-	now         func() time.Time
-	planTTL     time.Duration
-	lockWait    time.Duration
-	replace     replaceFunc
-	serverTypes map[string]bool
+	core            coreadapter.Adapter
+	plans           PlanStore
+	now             func() time.Time
+	planTTL         time.Duration
+	lockWait        time.Duration
+	replace         replaceFunc
+	serverTypes     map[string]bool
+	catalogResolver func(context.Context, string) (*projectlifecycle.ProjectCatalogView, error)
 }
 
 type Option func(*Backend)
@@ -34,6 +36,9 @@ func WithServerTypes(values []string) Option {
 			backend.serverTypes[value] = true
 		}
 	}
+}
+func WithProjectCatalogResolver(resolver func(context.Context, string) (*projectlifecycle.ProjectCatalogView, error)) Option {
+	return func(backend *Backend) { backend.catalogResolver = resolver }
 }
 func withReplace(function replaceFunc) Option {
 	return func(backend *Backend) { backend.replace = function }
@@ -74,7 +79,7 @@ func (b *Backend) validateConfiguredTypes(command EditCommand) error {
 		}
 		return nil
 	}
-	if (command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4) && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
+	if (command.APIVersion == EditCommandAPIVersionV3 || command.APIVersion == EditCommandAPIVersionV4 || command.APIVersion == EditCommandAPIVersionV5) && (command.Operation == "CreateServer" || command.Operation == "UpdateServer" && command.ServerType != "") {
 		if len(b.serverTypes) == 0 {
 			return blocked("APPLICATION_CONFIG_UNAVAILABLE", "Application configuration is unavailable", "command.type")
 		}
