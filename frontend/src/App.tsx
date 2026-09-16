@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   EditResult,
   ExecutionNodeContext,
   ExecutionNodePreparation,
   ExecutionNodeReadiness,
+  EndpointPreview,
   OpenResult,
   ProjectBackend,
   SessionCredentialInput,
@@ -13,13 +14,15 @@ import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
 import {
   type DeploymentIntent,
+  type EndpointIntent,
   type PlacementIntent,
   TopologyPage,
 } from "./TopologyPage";
 import "./edit.css";
 
 type Page = "project" | "servers" | "topology" | "installation";
-type StructuralIntent = ServerIntent | DeploymentIntent | PlacementIntent;
+type StructuralIntent =
+  ServerIntent | DeploymentIntent | PlacementIntent | EndpointIntent;
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -66,9 +69,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [sessionId, setSessionId] = useState("");
   const [commandCount, setCommandCount] = useState(0);
   const [intents, setIntents] = useState<StructuralIntent[]>([]);
-  const [topologyTab, setTopologyTab] = useState<"services" | "servers">(
-    "services",
-  );
+  const [topologyTab, setTopologyTab] = useState<
+    "services" | "servers" | "entryPoints"
+  >("services");
   const [selectedTopologyDeployment, setSelectedTopologyDeployment] =
     useState("");
   const [selectedTopologyHost, setSelectedTopologyHost] = useState("");
@@ -84,6 +87,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     useState<SessionCredentialStatus | null>(null);
   const [executionNode, setExecutionNode] =
     useState<ExecutionNodeContext | null>(null);
+  const [endpointPreview, setEndpointPreview] = useState<
+    EndpointPreview | undefined
+  >(undefined);
+  const endpointPreviewRequest = useRef(0);
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
   const snapshot = result.snapshot;
   const managed = result.managed;
@@ -181,6 +188,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setTopologyTab("services");
     setSelectedTopologyDeployment("");
     setSelectedTopologyHost("");
+    endpointPreviewRequest.current += 1;
+    setEndpointPreview(undefined);
   };
   const clearRefreshFailure = () => {
     setRefreshRequired(false);
@@ -305,6 +314,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setSessionId(id);
       setCommandCount(next.session.commandCount);
       setIntents((current) => [...current, intent]);
+      endpointPreviewRequest.current += 1;
+      setEndpointPreview({ status: "STALE" });
       return true;
     } finally {
       setEditBusy(false);
@@ -335,6 +346,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       }
       if (next.status === "COMMITTED") {
         if (next.current) setResult(next.current);
+        setEndpointPreview(undefined);
         clearDraft();
         return;
       }
@@ -397,12 +409,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     try {
       await api.discardEditSession(sessionId);
       clearDraft();
+      endpointPreviewRequest.current += 1;
+      setEndpointPreview({ status: "STALE" });
     } finally {
       setEditBusy(false);
     }
   };
   const verify = async () => {
     if (!api.verifyProject) return;
+    const requestToken = ++endpointPreviewRequest.current;
     setEditBusy(true);
     setResult(
       (current) =>
@@ -410,9 +425,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     );
     try {
       const next = await api.verifyProject();
+      if (requestToken !== endpointPreviewRequest.current) return;
       setResult(
         (current) => ({ ...current, verification: next }) as OpenResult,
       );
+      if (api.getEndpointPreview) {
+        const preview = await api.getEndpointPreview();
+        if (requestToken !== endpointPreviewRequest.current) return;
+        setEndpointPreview(preview);
+      }
     } finally {
       setEditBusy(false);
     }
@@ -436,6 +457,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       throw new Error("EXECUTION_NODE_SELECTION_UNAVAILABLE");
     const context = await api.selectExecutionNode(hostId);
     setExecutionNode(context);
+    endpointPreviewRequest.current += 1;
+    setEndpointPreview({ status: "STALE" });
     return context;
   };
   const checkExecutionNode = async (): Promise<ExecutionNodeReadiness> => {
@@ -678,11 +701,19 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             managed={managed}
             catalog={result.catalog}
             intents={intents.filter(
-              (intent): intent is DeploymentIntent | PlacementIntent =>
+              (
+                intent,
+              ): intent is
+                DeploymentIntent | PlacementIntent | EndpointIntent =>
                 intent.operation === "CreateServiceDeployment" ||
                 intent.operation === "DeleteServiceDeployment" ||
                 intent.operation === "ReconcileDeploymentPlacement" ||
-                intent.operation === "ReconcileHostScopedDeploymentPlacement",
+                intent.operation === "ReconcileHostScopedDeploymentPlacement" ||
+                intent.operation === "CreateEndpointGroup" ||
+                intent.operation === "UpdateEndpointGroup" ||
+                intent.operation === "DeleteEndpointGroup" ||
+                intent.operation === "SetServiceEndpointGroup" ||
+                intent.operation === "ClearServiceEndpointGroup",
             )}
             serverIntents={intents.filter(
               (intent): intent is ServerIntent =>
@@ -702,6 +733,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onSelectedDeploymentChange={setSelectedTopologyDeployment}
             selectedHostId={selectedTopologyHost}
             onSelectedHostChange={setSelectedTopologyHost}
+            preview={endpointPreview}
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (

@@ -558,11 +558,20 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
 	}
+	before := a.execution.context
 	if err := a.execution.selectProjectServer(hostID); err != nil {
 		return ExecutionNodeContext{}, err
 	}
+	if !sameExecutionNodeTarget(before, a.execution.context) {
+		a.current.Snapshot = nil
+		a.current.Verification = notVerified()
+	}
 	a.continuation = nil
 	return a.execution.context, nil
+}
+
+func sameExecutionNodeTarget(left, right ExecutionNodeContext) bool {
+	return left.SelectionKind == right.SelectionKind && left.SelectedHostID == right.SelectedHostID
 }
 
 func (a *App) credentialBindingLocked() (runtimesecret.Binding, error) {

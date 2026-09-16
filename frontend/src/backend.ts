@@ -7,6 +7,7 @@ import {
   CreateProject,
   DiscardEditSession,
   GetApplicationConfig,
+  GetEndpointPreview,
   GetExecutionNodeContext,
   GetSessionCredentialStatus,
   CheckExecutionNode,
@@ -133,6 +134,21 @@ export type ExecutionNodeContext = {
   safeLabel?: string;
   locked: boolean;
 };
+export type EndpointPreview = {
+  status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
+  endpoints?: Array<{ deploymentId: string; fqdn: string }>;
+  providers?: Array<{
+    endpointGroupId: string;
+    providerDeploymentId: string;
+    endpointGroupRef: string;
+    virtualRouterId: number;
+    virtualAddresses: Array<{ address: string; interface: string }>;
+  }>;
+  findings?: VerificationStatus["findings"];
+  findingsTruncated?: boolean;
+  truncated?: boolean;
+  error?: { code: string; message: string };
+};
 export type ExecutionNodeReadiness = {
   status: string;
   nodeId?: string;
@@ -175,6 +191,7 @@ export interface ProjectBackend {
   ): Promise<SessionCredentialStatus>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
+  getEndpointPreview?(): Promise<EndpointPreview>;
   selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
   checkExecutionNode?(): Promise<ExecutionNodeReadiness>;
   planExecutionNodePreparation?(): Promise<ExecutionNodePreparation>;
@@ -209,6 +226,8 @@ export const backend: ProjectBackend = {
   setSessionCredential: (input) => SetSessionCredential(input as never),
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
+  getEndpointPreview: () =>
+    GetEndpointPreview() as unknown as Promise<EndpointPreview>,
   selectExecutionNode: SelectExecutionNode,
   checkExecutionNode: () =>
     CheckExecutionNode() as unknown as Promise<ExecutionNodeReadiness>,

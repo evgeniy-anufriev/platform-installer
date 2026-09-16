@@ -42,6 +42,8 @@ export function DiscardEditSession(
 
 export function GetApplicationConfig(): Promise<main.ApplicationConfigResult>;
 
+export function GetEndpointPreview(): Promise<main.EndpointPreview>;
+
 export function GetExecutionNodeContext(): Promise<main.ExecutionNodeContext>;
 
 export function GetSessionCredentialStatus(): Promise<runtimesecret.Status>;

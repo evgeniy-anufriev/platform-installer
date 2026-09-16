@@ -331,7 +331,10 @@
 }
 .placement-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(110px, 1fr) auto;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(
+      110px,
+      1fr
+    ) auto;
   gap: 8px;
   align-items: end;
 }
@@ -342,6 +345,48 @@
 }
 .role-selector select {
   min-height: 42px;
+}
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.entry-list {
+  display: grid;
+  gap: 10px;
+}
+.entry-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e6eaf0;
+}
+.entry-row > div:first-child,
+.entry-preview {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.entry-row span,
+.entry-preview span,
+.entry-preview small {
+  color: #667085;
+  overflow-wrap: anywhere;
+}
+.entry-row select {
+  min-width: 150px;
+  min-height: 38px;
+}
+.entry-preview {
+  padding: 9px 0;
+  border-bottom: 1px solid #e6eaf0;
+}
+@media (max-width: 1080px) {
+  .entry-grid {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 860px) {
   .servers-title {
@@ -363,5 +408,9 @@
   }
   .placement-row {
     grid-template-columns: 1fr;
+  }
+  .entry-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

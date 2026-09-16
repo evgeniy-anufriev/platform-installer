@@ -50,6 +50,10 @@ export function GetApplicationConfig() {
   return window["go"]["main"]["App"]["GetApplicationConfig"]();
 }
 
+export function GetEndpointPreview() {
+  return window["go"]["main"]["App"]["GetEndpointPreview"]();
+}
+
 export function GetExecutionNodeContext() {
   return window["go"]["main"]["App"]["GetExecutionNodeContext"]();
 }

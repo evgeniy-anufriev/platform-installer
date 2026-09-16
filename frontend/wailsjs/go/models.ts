@@ -978,28 +978,6 @@ export namespace main {
       return a;
     }
   }
-  export class ExecutionNodeContext {
-    status: string;
-    selectionKind: string;
-    selectionSource: string;
-    selectedHostId?: string;
-    safeLabel?: string;
-    locked: boolean;
-
-    static createFrom(source: any = {}) {
-      return new ExecutionNodeContext(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.selectionKind = source["selectionKind"];
-      this.selectionSource = source["selectionSource"];
-      this.selectedHostId = source["selectedHostId"];
-      this.safeLabel = source["safeLabel"];
-      this.locked = source["locked"];
-    }
-  }
   export class VerificationFinding {
     code: string;
     severity: string;
@@ -1020,6 +998,149 @@ export namespace main {
       this.subjectKind = source["subjectKind"];
       this.subjectId = source["subjectId"];
       this.helpRef = source["helpRef"];
+    }
+  }
+  export class EndpointPreviewVirtualAddress {
+    address: string;
+    interface: string;
+
+    static createFrom(source: any = {}) {
+      return new EndpointPreviewVirtualAddress(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.address = source["address"];
+      this.interface = source["interface"];
+    }
+  }
+  export class EndpointPreviewProvider {
+    endpointGroupId: string;
+    providerDeploymentId: string;
+    endpointGroupRef: string;
+    virtualRouterId: number;
+    virtualAddresses: EndpointPreviewVirtualAddress[];
+
+    static createFrom(source: any = {}) {
+      return new EndpointPreviewProvider(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.endpointGroupId = source["endpointGroupId"];
+      this.providerDeploymentId = source["providerDeploymentId"];
+      this.endpointGroupRef = source["endpointGroupRef"];
+      this.virtualRouterId = source["virtualRouterId"];
+      this.virtualAddresses = this.convertValues(
+        source["virtualAddresses"],
+        EndpointPreviewVirtualAddress,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class EndpointPreviewEndpoint {
+    deploymentId: string;
+    fqdn: string;
+
+    static createFrom(source: any = {}) {
+      return new EndpointPreviewEndpoint(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.fqdn = source["fqdn"];
+    }
+  }
+  export class EndpointPreview {
+    status: string;
+    endpoints?: EndpointPreviewEndpoint[];
+    providers?: EndpointPreviewProvider[];
+    findings?: VerificationFinding[];
+    findingsTruncated?: boolean;
+    truncated?: boolean;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new EndpointPreview(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.endpoints = this.convertValues(
+        source["endpoints"],
+        EndpointPreviewEndpoint,
+      );
+      this.providers = this.convertValues(
+        source["providers"],
+        EndpointPreviewProvider,
+      );
+      this.findings = this.convertValues(
+        source["findings"],
+        VerificationFinding,
+      );
+      this.findingsTruncated = source["findingsTruncated"];
+      this.truncated = source["truncated"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class ExecutionNodeContext {
+    status: string;
+    selectionKind: string;
+    selectionSource: string;
+    selectedHostId?: string;
+    safeLabel?: string;
+    locked: boolean;
+
+    static createFrom(source: any = {}) {
+      return new ExecutionNodeContext(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.selectionKind = source["selectionKind"];
+      this.selectionSource = source["selectionSource"];
+      this.selectedHostId = source["selectedHostId"];
+      this.safeLabel = source["safeLabel"];
+      this.locked = source["locked"];
     }
   }
   export class ProjectVerification {

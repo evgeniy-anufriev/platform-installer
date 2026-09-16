@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { OpenResult } from "./backend";
+import type { EndpointPreview, OpenResult } from "./backend";
+import { type EndpointIntent, EntryPointsView } from "./EntryPointsView";
 import type { ServerIntent } from "./ServersPage";
+
+export type { EndpointIntent } from "./EntryPointsView";
 
 export type DeploymentIntent =
   | {
@@ -25,7 +28,7 @@ export type PlacementIntent =
       deploymentId: string;
       hosts: Array<{ hostId: string; roles?: string[] }>;
     };
-type TopologyIntent = DeploymentIntent | PlacementIntent;
+type TopologyIntent = DeploymentIntent | PlacementIntent | EndpointIntent;
 
 type CatalogService = NonNullable<OpenResult["catalog"]>["services"] extends
   Array<infer Service> | undefined
@@ -87,13 +90,18 @@ function finalServers(
 ): ServerRow[] {
   const rows = new Map<string, ServerRow>();
   for (const [hostId, host] of Object.entries(managed?.servers || {}))
-    rows.set(hostId, { hostId, label: host.address ? `${hostId} · ${host.address}` : hostId });
+    rows.set(hostId, {
+      hostId,
+      label: host.address ? `${hostId} · ${host.address}` : hostId,
+    });
   for (const intent of intents) {
     const existing = rows.get(intent.hostId);
     if (intent.operation === "CreateServer")
       rows.set(intent.hostId, {
         hostId: intent.hostId,
-        label: intent.address ? `${intent.hostId} · ${String(intent.address)}` : intent.hostId,
+        label: intent.address
+          ? `${intent.hostId} · ${String(intent.address)}`
+          : intent.hostId,
         state: "new",
       });
     else if (intent.operation === "DeleteServer" && existing)
@@ -112,7 +120,14 @@ function finalPlacements(
     const members = current?.kind === "MEMBER_SCOPED" ? current.members : [];
     result.set(item.deploymentId, {
       kind: "MEMBER_SCOPED",
-      members: [...members, { memberId: item.memberId, hostId: item.hostId, roles: item.roles || [] }],
+      members: [
+        ...members,
+        {
+          memberId: item.memberId,
+          hostId: item.hostId,
+          roles: item.roles || [],
+        },
+      ],
     });
   }
   for (const item of managed?.hostPlacements || []) {
@@ -127,12 +142,18 @@ function finalPlacements(
     if (intent.operation === "ReconcileDeploymentPlacement")
       result.set(intent.deploymentId, {
         kind: "MEMBER_SCOPED",
-        members: intent.members.map((item) => ({ ...item, roles: item.roles || [] })),
+        members: intent.members.map((item) => ({
+          ...item,
+          roles: item.roles || [],
+        })),
       });
     if (intent.operation === "ReconcileHostScopedDeploymentPlacement")
       result.set(intent.deploymentId, {
         kind: "HOST_SCOPED",
-        hosts: intent.hosts.map((item) => ({ ...item, roles: item.roles || [] })),
+        hosts: intent.hosts.map((item) => ({
+          ...item,
+          roles: item.roles || [],
+        })),
       });
   }
   return result;
@@ -181,6 +202,7 @@ export function TopologyPage({
   onSelectedDeploymentChange,
   selectedHostId,
   onSelectedHostChange,
+  preview,
 }: {
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
@@ -192,14 +214,17 @@ export function TopologyPage({
   onAppend: (intent: TopologyIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
-  activeTab: "services" | "servers";
-  onActiveTabChange: (tab: "services" | "servers") => void;
+  activeTab: "services" | "servers" | "entryPoints";
+  onActiveTabChange: (tab: "services" | "servers" | "entryPoints") => void;
   selectedDeploymentId: string;
   onSelectedDeploymentChange: (id: string) => void;
   selectedHostId: string;
   onSelectedHostChange: (id: string) => void;
+  preview?: EndpointPreview;
 }) {
-  const [dialog, setDialog] = useState<"add" | "delete" | "placement" | null>(null);
+  const [dialog, setDialog] = useState<"add" | "delete" | "placement" | null>(
+    null,
+  );
   const [placementHostContext, setPlacementHostContext] = useState("");
   const [placementDeploymentId, setPlacementDeploymentId] = useState("");
   const [filter, setFilter] = useState("");
@@ -222,7 +247,9 @@ export function TopologyPage({
       .toLocaleLowerCase("ru")
       .includes(normalizedFilter);
   });
-  const selected = rows.find((row) => row.deploymentId === selectedDeploymentId);
+  const selected = rows.find(
+    (row) => row.deploymentId === selectedDeploymentId,
+  );
   const selectedVisible = filteredRows.some(
     (row) => row.deploymentId === selectedDeploymentId,
   );
@@ -237,23 +264,31 @@ export function TopologyPage({
   const crudDisabled = busy || structuralDisabled;
 
   useEffect(() => {
-    if (selectedDeploymentId && rows.some((row) => row.deploymentId === selectedDeploymentId))
+    if (
+      selectedDeploymentId &&
+      rows.some((row) => row.deploymentId === selectedDeploymentId)
+    )
       return;
     onSelectedDeploymentChange(rows[0]?.deploymentId || "");
   }, [rows, selectedDeploymentId, onSelectedDeploymentChange]);
 
   useEffect(() => {
-    if (selectedHostId && servers.some((row) => row.hostId === selectedHostId)) return;
+    if (selectedHostId && servers.some((row) => row.hostId === selectedHostId))
+      return;
     onSelectedHostChange(servers[0]?.hostId || "");
   }, [servers, selectedHostId, onSelectedHostChange]);
 
-  const placementLocked = !!selected && intents.some(
-    (intent) =>
-      (intent.operation === "ReconcileDeploymentPlacement" ||
-        intent.operation === "ReconcileHostScopedDeploymentPlacement") &&
-      intent.deploymentId === selected.deploymentId,
+  const placementLocked =
+    !!selected &&
+    intents.some(
+      (intent) =>
+        (intent.operation === "ReconcileDeploymentPlacement" ||
+          intent.operation === "ReconcileHostScopedDeploymentPlacement") &&
+        intent.deploymentId === selected.deploymentId,
+    );
+  const placementTarget = rows.find(
+    (row) => row.deploymentId === placementDeploymentId,
   );
-  const placementTarget = rows.find((row) => row.deploymentId === placementDeploymentId);
 
   return (
     <>
@@ -290,7 +325,11 @@ export function TopologyPage({
         >
           По серверам
         </button>
-        <button disabled title="Будет реализовано в UI-01F5">
+        <button
+          className={activeTab === "entryPoints" ? "active" : "outline"}
+          aria-selected={activeTab === "entryPoints"}
+          onClick={() => onActiveTabChange("entryPoints")}
+        >
           Точки входа
         </button>
       </nav>
@@ -305,164 +344,210 @@ export function TopologyPage({
         </section>
       )}
 
-      {activeTab === "services" ? <div className="topology-grid">
-        <section className="card topology-list">
-          <h2>Deployments</h2>
-          <label>
-            Поиск
-            <input
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              placeholder="ID или сервис"
-            />
-          </label>
-          <div className="topology-list-scroll">
-            {filteredRows.length === 0 ? (
+      {activeTab === "entryPoints" ? (
+        <EntryPointsView
+          managed={managed}
+          catalog={catalog}
+          intents={intents.filter(
+            (intent): intent is EndpointIntent =>
+              intent.operation === "CreateEndpointGroup" ||
+              intent.operation === "UpdateEndpointGroup" ||
+              intent.operation === "DeleteEndpointGroup" ||
+              intent.operation === "SetServiceEndpointGroup" ||
+              intent.operation === "ClearServiceEndpointGroup",
+          )}
+          deploymentIntents={intents.filter(
+            (intent): intent is DeploymentIntent =>
+              intent.operation === "CreateServiceDeployment" ||
+              intent.operation === "DeleteServiceDeployment",
+          )}
+          preview={preview}
+          busy={busy}
+          disabled={crudDisabled}
+          commandCount={commandCount}
+          onAppend={onAppend}
+        />
+      ) : activeTab === "services" ? (
+        <div className="topology-grid">
+          <section className="card topology-list">
+            <h2>Deployments</h2>
+            <label>
+              Поиск
+              <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="ID или сервис"
+              />
+            </label>
+            <div className="topology-list-scroll">
+              {filteredRows.length === 0 ? (
+                <p className="muted">
+                  {rows.length === 0
+                    ? "Экземпляров сервисов пока нет."
+                    : "По фильтру ничего не найдено."}
+                </p>
+              ) : (
+                filteredRows.map((row) => {
+                  const service = catalogService(catalog, row.serviceType);
+                  return (
+                    <button
+                      key={row.deploymentId}
+                      className={`topology-row ${selectedDeploymentId === row.deploymentId ? "selected" : ""} ${row.state ? `draft-${row.state}` : ""}`}
+                      onClick={() =>
+                        onSelectedDeploymentChange(row.deploymentId)
+                      }
+                    >
+                      <b>{row.deploymentId}</b>
+                      <span>{service?.displayName || row.serviceType}</span>
+                      {row.state && (
+                        <small>
+                          {row.state === "new" ? "Новый" : "Будет удалён"}
+                        </small>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          <section className="card topology-detail">
+            <h2>Выбранный deployment</h2>
+            {!selected ? (
+              <p className="muted">Выберите или добавьте экземпляр сервиса.</p>
+            ) : !selectedVisible ? (
               <p className="muted">
-                {rows.length === 0
-                  ? "Экземпляров сервисов пока нет."
-                  : "По фильтру ничего не найдено."}
+                Выбранный deployment скрыт фильтром. Очистите поиск, чтобы
+                открыть подробности.
               </p>
             ) : (
-              filteredRows.map((row) => {
-                const service = catalogService(catalog, row.serviceType);
-                return (
+              <>
+                <dl>
+                  <dt>ID</dt>
+                  <dd>{selected.deploymentId}</dd>
+                  <dt>Сервис</dt>
+                  <dd>{serviceLabel(selectedService, selected.serviceType)}</dd>
+                  <dt>Режим</dt>
+                  <dd>{modeLabel(selectedMode, selected.mode)}</dd>
+                  <dt>Размещение</dt>
+                  <dd>
+                    {selectedMode?.placementKind || "Недоступно без каталога"}
+                  </dd>
+                  <dt>Состояние</dt>
+                  <dd>
+                    {selected.state === "new"
+                      ? "Новый черновик"
+                      : selected.state === "deleting"
+                        ? "Будет удалён"
+                        : "Сохранён"}
+                  </dd>
+                </dl>
+                <div className="actions topology-actions">
                   <button
-                    key={row.deploymentId}
-                    className={`topology-row ${selectedDeploymentId === row.deploymentId ? "selected" : ""} ${row.state ? `draft-${row.state}` : ""}`}
-                    onClick={() => onSelectedDeploymentChange(row.deploymentId)}
-                  >
-                    <b>{row.deploymentId}</b>
-                    <span>{service?.displayName || row.serviceType}</span>
-                    {row.state && (
-                      <small>
-                        {row.state === "new" ? "Новый" : "Будет удалён"}
-                      </small>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </section>
-
-        <section className="card topology-detail">
-          <h2>Выбранный deployment</h2>
-          {!selected ? (
-            <p className="muted">Выберите или добавьте экземпляр сервиса.</p>
-          ) : !selectedVisible ? (
-            <p className="muted">
-              Выбранный deployment скрыт фильтром. Очистите поиск, чтобы открыть
-              подробности.
-            </p>
-          ) : (
-            <>
-              <dl>
-                <dt>ID</dt>
-                <dd>{selected.deploymentId}</dd>
-                <dt>Сервис</dt>
-                <dd>{serviceLabel(selectedService, selected.serviceType)}</dd>
-                <dt>Режим</dt>
-                <dd>{modeLabel(selectedMode, selected.mode)}</dd>
-                <dt>Размещение</dt>
-                <dd>
-                  {selectedMode?.placementKind || "Недоступно без каталога"}
-                </dd>
-                <dt>Состояние</dt>
-                <dd>
-                  {selected.state === "new"
-                    ? "Новый черновик"
-                    : selected.state === "deleting"
-                      ? "Будет удалён"
-                      : "Сохранён"}
-                </dd>
-              </dl>
-              <div className="actions topology-actions">
-                <button
-                  onClick={() => {
-                    setPlacementHostContext("");
-                    setPlacementDeploymentId(selected.deploymentId);
-                    setDialog("placement");
-                  }}
-                  disabled={
-                    crudDisabled ||
-                    !!selected.state ||
-                    placementLocked ||
-                    commandLimitReached ||
-                    (!catalogReady && !placements.has(selected.deploymentId))
-                  }
-                  title={placementLocked ? "Размещение этого deployment уже добавлено в текущий черновик." : undefined}
-                >
-                  {placements.has(selected.deploymentId) ? "Изменить размещение" : "Добавить размещение"}
-                </button>
-                {placements.has(selected.deploymentId) && (
-                  <button
-                    className="outline"
                     onClick={() => {
                       setPlacementHostContext("");
                       setPlacementDeploymentId(selected.deploymentId);
                       setDialog("placement");
                     }}
-                    disabled={crudDisabled || !!selected.state || placementLocked || commandLimitReached}
+                    disabled={
+                      crudDisabled ||
+                      !!selected.state ||
+                      placementLocked ||
+                      commandLimitReached ||
+                      (!catalogReady && !placements.has(selected.deploymentId))
+                    }
+                    title={
+                      placementLocked
+                        ? "Размещение этого deployment уже добавлено в текущий черновик."
+                        : undefined
+                    }
                   >
-                    Очистить размещение
+                    {placements.has(selected.deploymentId)
+                      ? "Изменить размещение"
+                      : "Добавить размещение"}
                   </button>
-                )}
-                <button
-                  className="outline"
-                  disabled
-                  title="Редактор сервиса будет реализован отдельным milestone"
-                >
-                  Настроить сервис
-                </button>
-                <button
-                  className="outline danger"
-                  onClick={() => setDialog("delete")}
-                  disabled={
-                    crudDisabled || !!selected.state || commandLimitReached
-                  }
-                >
-                  Удалить deployment
-                </button>
-              </div>
-            </>
-          )}
-        </section>
+                  {placements.has(selected.deploymentId) && (
+                    <button
+                      className="outline"
+                      onClick={() => {
+                        setPlacementHostContext("");
+                        setPlacementDeploymentId(selected.deploymentId);
+                        setDialog("placement");
+                      }}
+                      disabled={
+                        crudDisabled ||
+                        !!selected.state ||
+                        placementLocked ||
+                        commandLimitReached
+                      }
+                    >
+                      Очистить размещение
+                    </button>
+                  )}
+                  <button
+                    className="outline"
+                    disabled
+                    title="Редактор сервиса будет реализован отдельным milestone"
+                  >
+                    Настроить сервис
+                  </button>
+                  <button
+                    className="outline danger"
+                    onClick={() => setDialog("delete")}
+                    disabled={
+                      crudDisabled || !!selected.state || commandLimitReached
+                    }
+                  >
+                    Удалить deployment
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
 
-        <section className="card topology-summary">
-          <h2>Состояние топологии</h2>
-          <dl>
-            <dt>Deployments</dt>
-            <dd>{rows.filter((row) => row.state !== "deleting").length}</dd>
-            <dt>Черновик</dt>
-            <dd>{commandCount} / 16 изменений</dd>
-            <dt>Размещение</dt>
-            <dd>UI-01F4</dd>
-            <dt>Проверка Core</dt>
-            <dd>Запускается отдельно после сохранения</dd>
-          </dl>
-          <p className="muted">
-            F3 не рассчитывает members, роли, cardinality или результат Core.
-          </p>
-        </section>
-      </div> : <ByServersView
-        servers={servers}
-        rows={rows}
-        placements={placements}
-        selectedHostId={selectedHostId}
-        onSelectedHostChange={onSelectedHostChange}
-        onSelectedDeploymentChange={onSelectedDeploymentChange}
-        onEdit={(deploymentId, hostId) => {
-          onSelectedDeploymentChange(deploymentId);
-          setPlacementHostContext(hostId);
-          setPlacementDeploymentId(deploymentId);
-          setDialog("placement");
-        }}
-        disabled={crudDisabled || commandLimitReached}
-        placementLocked={(deploymentId) => intents.some((intent) =>
-          (intent.operation === "ReconcileDeploymentPlacement" || intent.operation === "ReconcileHostScopedDeploymentPlacement") && intent.deploymentId === deploymentId,
-        )}
-      />}
+          <section className="card topology-summary">
+            <h2>Состояние топологии</h2>
+            <dl>
+              <dt>Deployments</dt>
+              <dd>{rows.filter((row) => row.state !== "deleting").length}</dd>
+              <dt>Черновик</dt>
+              <dd>{commandCount} / 16 изменений</dd>
+              <dt>Размещение</dt>
+              <dd>UI-01F4</dd>
+              <dt>Проверка Core</dt>
+              <dd>Запускается отдельно после сохранения</dd>
+            </dl>
+            <p className="muted">
+              F3 не рассчитывает members, роли, cardinality или результат Core.
+            </p>
+          </section>
+        </div>
+      ) : (
+        <ByServersView
+          servers={servers}
+          rows={rows}
+          placements={placements}
+          selectedHostId={selectedHostId}
+          onSelectedHostChange={onSelectedHostChange}
+          onSelectedDeploymentChange={onSelectedDeploymentChange}
+          onEdit={(deploymentId, hostId) => {
+            onSelectedDeploymentChange(deploymentId);
+            setPlacementHostContext(hostId);
+            setPlacementDeploymentId(deploymentId);
+            setDialog("placement");
+          }}
+          disabled={crudDisabled || commandLimitReached}
+          placementLocked={(deploymentId) =>
+            intents.some(
+              (intent) =>
+                (intent.operation === "ReconcileDeploymentPlacement" ||
+                  intent.operation ===
+                    "ReconcileHostScopedDeploymentPlacement") &&
+                intent.deploymentId === deploymentId,
+            )
+          }
+        />
+      )}
 
       {commandCount > 0 && (
         <section className="card draft-actions">
@@ -511,7 +596,10 @@ export function TopologyPage({
       {dialog === "placement" && placementTarget && (
         <PlacementDialog
           row={placementTarget}
-          mode={catalogMode(catalogService(catalog, placementTarget.serviceType), placementTarget.mode)}
+          mode={catalogMode(
+            catalogService(catalog, placementTarget.serviceType),
+            placementTarget.mode,
+          )}
           placement={placements.get(placementTarget.deploymentId)}
           servers={servers}
           preferredHostId={placementHostContext}
@@ -576,28 +664,119 @@ function ByServersView({
         <h2>Серверы</h2>
         <div className="topology-list-scroll">
           {servers.map((server) => (
-            <button key={server.hostId} className={`topology-row ${server.hostId === selectedHostId ? "selected" : ""}`} onClick={() => onSelectedHostChange(server.hostId)}>
-              <b>{server.hostId}</b><span>{server.label}</span>
-              {server.state && <small>{server.state === "new" ? "Новый" : "Будет удалён"}</small>}
+            <button
+              key={server.hostId}
+              className={`topology-row ${server.hostId === selectedHostId ? "selected" : ""}`}
+              onClick={() => onSelectedHostChange(server.hostId)}
+            >
+              <b>{server.hostId}</b>
+              <span>{server.label}</span>
+              {server.state && (
+                <small>
+                  {server.state === "new" ? "Новый" : "Будет удалён"}
+                </small>
+              )}
             </button>
           ))}
         </div>
       </section>
       <section className="card topology-detail">
         <h2>Размещение на сервере</h2>
-        {!selected ? <p className="muted">Добавьте сервер или выберите его в списке.</p> : selected.state === "deleting" ? <p className="muted">Сервер будет удалён и не предлагается для нового размещения.</p> : <><div className="topology-list-scroll">{assignments.length === 0 ? <p className="muted">На этом сервере пока нет размещений.</p> : assignments.map(({ deployment, key, text }) => <article className="topology-assignment" key={`${deployment.deploymentId}:${key}`}><b>{deployment.deploymentId}</b><span>{text}</span><button className="outline" onClick={() => { onSelectedDeploymentChange(deployment.deploymentId); onEdit(deployment.deploymentId, selected.hostId); }} disabled={disabled || !!deployment.state || placementLocked(deployment.deploymentId)}>Изменить</button></article>)}</div><label className="topology-add-placement">Добавить размещение<select aria-label="Deployment для размещения" defaultValue="" onChange={(event) => { const deploymentId = event.target.value; if (deploymentId) { onSelectedDeploymentChange(deploymentId); onEdit(deploymentId, selected.hostId); event.currentTarget.value = ""; } }} disabled={disabled}><option value="">Выберите deployment</option>{rows.filter((row) => !row.state && !placements.has(row.deploymentId)).map((deployment) => <option key={deployment.deploymentId} value={deployment.deploymentId}>{deployment.deploymentId}</option>)}</select></label></>}
+        {!selected ? (
+          <p className="muted">Добавьте сервер или выберите его в списке.</p>
+        ) : selected.state === "deleting" ? (
+          <p className="muted">
+            Сервер будет удалён и не предлагается для нового размещения.
+          </p>
+        ) : (
+          <>
+            <div className="topology-list-scroll">
+              {assignments.length === 0 ? (
+                <p className="muted">На этом сервере пока нет размещений.</p>
+              ) : (
+                assignments.map(({ deployment, key, text }) => (
+                  <article
+                    className="topology-assignment"
+                    key={`${deployment.deploymentId}:${key}`}
+                  >
+                    <b>{deployment.deploymentId}</b>
+                    <span>{text}</span>
+                    <button
+                      className="outline"
+                      onClick={() => {
+                        onSelectedDeploymentChange(deployment.deploymentId);
+                        onEdit(deployment.deploymentId, selected.hostId);
+                      }}
+                      disabled={
+                        disabled ||
+                        !!deployment.state ||
+                        placementLocked(deployment.deploymentId)
+                      }
+                    >
+                      Изменить
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+            <label className="topology-add-placement">
+              Добавить размещение
+              <select
+                aria-label="Deployment для размещения"
+                defaultValue=""
+                onChange={(event) => {
+                  const deploymentId = event.target.value;
+                  if (deploymentId) {
+                    onSelectedDeploymentChange(deploymentId);
+                    onEdit(deploymentId, selected.hostId);
+                    event.currentTarget.value = "";
+                  }
+                }}
+                disabled={disabled}
+              >
+                <option value="">Выберите deployment</option>
+                {rows
+                  .filter(
+                    (row) => !row.state && !placements.has(row.deploymentId),
+                  )
+                  .map((deployment) => (
+                    <option
+                      key={deployment.deploymentId}
+                      value={deployment.deploymentId}
+                    >
+                      {deployment.deploymentId}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </>
+        )}
       </section>
       <section className="card topology-summary">
         <h2>Сводка</h2>
-        <dl><dt>Сервер</dt><dd>{selected?.hostId || "—"}</dd><dt>Размещений</dt><dd>{assignments.length}</dd><dt>Проверка Core</dt><dd>После сохранения</dd></dl>
-        <p className="muted">Изменение открывает общий editor deployment; отдельной команды для сервера нет.</p>
+        <dl>
+          <dt>Сервер</dt>
+          <dd>{selected?.hostId || "—"}</dd>
+          <dt>Размещений</dt>
+          <dd>{assignments.length}</dd>
+          <dt>Проверка Core</dt>
+          <dd>После сохранения</dd>
+        </dl>
+        <p className="muted">
+          Изменение открывает общий editor deployment; отдельной команды для
+          сервера нет.
+        </p>
       </section>
     </div>
   );
 }
 
 function normalizedMemberBase(serviceType: string, suffixLength: number) {
-  const normalized = serviceType.toLowerCase().replace(/[_.]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+  const normalized = serviceType
+    .toLowerCase()
+    .replace(/[_.]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return normalized.slice(0, Math.max(0, 63 - suffixLength));
 }
 
@@ -632,36 +811,329 @@ function PlacementDialog({
   onClose: () => void;
   onAppend: (intent: PlacementIntent) => Promise<boolean>;
 }) {
-  const kind = mode?.placementKind as "MEMBER_SCOPED" | "HOST_SCOPED" | undefined;
-  const [members, setMembers] = useState<MemberRow[]>(placement?.kind === "MEMBER_SCOPED" ? placement.members : []);
-  const [hosts, setHosts] = useState<HostRow[]>(placement?.kind === "HOST_SCOPED" ? placement.hosts : []);
+  const kind = mode?.placementKind as
+    "MEMBER_SCOPED" | "HOST_SCOPED" | undefined;
+  const [members, setMembers] = useState<MemberRow[]>(
+    placement?.kind === "MEMBER_SCOPED" ? placement.members : [],
+  );
+  const [hosts, setHosts] = useState<HostRow[]>(
+    placement?.kind === "HOST_SCOPED" ? placement.hosts : [],
+  );
   const [error, setError] = useState("");
   const selectable = servers.filter((server) => server.state !== "deleting");
   const roleOptions = mode?.roles || [];
   const addMember = () => {
-    const hostId = preferredHostId && selectable.some((server) => server.hostId === preferredHostId) ? preferredHostId : selectable[0]?.hostId || "";
-    setMembers((current) => [...current, { memberId: candidateMemberId(row.serviceType, current), hostId, roles: [] }]);
+    const hostId =
+      preferredHostId &&
+      selectable.some((server) => server.hostId === preferredHostId)
+        ? preferredHostId
+        : selectable[0]?.hostId || "";
+    setMembers((current) => [
+      ...current,
+      {
+        memberId: candidateMemberId(row.serviceType, current),
+        hostId,
+        roles: [],
+      },
+    ]);
   };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!kind) { setError("Для непустого размещения требуется READY catalog."); return; }
+    if (!kind) {
+      setError("Для непустого размещения требуется READY catalog.");
+      return;
+    }
     if (kind === "MEMBER_SCOPED") {
       const ids = new Set<string>();
-      if (members.some((member) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(member.memberId) || !member.hostId || ids.has(member.memberId) || (ids.add(member.memberId), false))) { setError("Укажите уникальные member ID и сервер для каждой строки."); return; }
-      if (!(await onAppend({ operation: "ReconcileDeploymentPlacement", deploymentId: row.deploymentId, members }))) setError("Размещение не добавлено в общий черновик.");
+      if (
+        members.some(
+          (member) =>
+            !/^[a-z0-9][a-z0-9-]{0,62}$/.test(member.memberId) ||
+            !member.hostId ||
+            ids.has(member.memberId) ||
+            (ids.add(member.memberId), false),
+        )
+      ) {
+        setError("Укажите уникальные member ID и сервер для каждой строки.");
+        return;
+      }
+      if (
+        !(await onAppend({
+          operation: "ReconcileDeploymentPlacement",
+          deploymentId: row.deploymentId,
+          members,
+        }))
+      )
+        setError("Размещение не добавлено в общий черновик.");
       return;
     }
     const seen = new Set<string>();
-    if (hosts.some((host) => !host.hostId || seen.has(host.hostId) || (seen.add(host.hostId), false))) { setError("Серверы в host-scoped размещении должны быть уникальны."); return; }
-    if (!(await onAppend({ operation: "ReconcileHostScopedDeploymentPlacement", deploymentId: row.deploymentId, hosts }))) setError("Размещение не добавлено в общий черновик.");
+    if (
+      hosts.some(
+        (host) =>
+          !host.hostId ||
+          seen.has(host.hostId) ||
+          (seen.add(host.hostId), false),
+      )
+    ) {
+      setError("Серверы в host-scoped размещении должны быть уникальны.");
+      return;
+    }
+    if (
+      !(await onAppend({
+        operation: "ReconcileHostScopedDeploymentPlacement",
+        deploymentId: row.deploymentId,
+        hosts,
+      }))
+    )
+      setError("Размещение не добавлено в общий черновик.");
   };
-  if (!kind) return <div className="modal"><section className="card dialog"><h1>Размещение недоступно</h1><p>Для нового размещения требуется READY catalog.</p>{placement && <button onClick={async () => { const accepted = await onAppend(placement.kind === "MEMBER_SCOPED" ? { operation: "ReconcileDeploymentPlacement", deploymentId: row.deploymentId, members: [] } : { operation: "ReconcileHostScopedDeploymentPlacement", deploymentId: row.deploymentId, hosts: [] }); if (!accepted) setError("Очистка размещения не добавлена в общий черновик."); }} disabled={busy}>Очистить существующее размещение</button>}{error && <p className="field-error" role="alert">{error}</p>}<button className="outline" onClick={onClose}>Закрыть</button></section></div>;
-  return <div className="modal" role="presentation"><form className="card dialog topology-dialog" onSubmit={submit}><h1>Размещение: {row.deploymentId}</h1><p className="muted">{kind === "MEMBER_SCOPED" ? "Members и роли" : "Серверы и роли"}. Apply заменяет полное размещение deployment.</p>{kind === "MEMBER_SCOPED" ? <><div className="placement-rows">{members.map((member, index) => <div className="placement-row" key={`${member.memberId}-${index}`}><input aria-label={`Member ID ${index + 1}`} value={member.memberId} placeholder={`${row.serviceType}-1`} onChange={(event) => setMembers((current) => current.map((value, i) => i === index ? { ...value, memberId: event.target.value } : value))}/><select aria-label={`Сервер ${index + 1}`} value={member.hostId} onChange={(event) => setMembers((current) => current.map((value, i) => i === index ? { ...value, hostId: event.target.value } : value))}>{selectable.map((server) => <option key={server.hostId} value={server.hostId}>{server.hostId}</option>)}</select><RoleSelector roles={roleOptions} value={member.roles} onChange={(roles) => setMembers((current) => current.map((value, i) => i === index ? { ...value, roles } : value))}/><button type="button" className="outline" onClick={() => setMembers((current) => current.filter((_, i) => i !== index))}>Удалить</button></div>)}</div><button type="button" className="outline" onClick={addMember} disabled={!selectable.length}>Добавить member</button></> : <><div className="placement-rows">{hosts.map((host, index) => <div className="placement-row" key={`${host.hostId}-${index}`}><select aria-label={`Сервер ${index + 1}`} value={host.hostId} onChange={(event) => setHosts((current) => current.map((value, i) => i === index ? { ...value, hostId: event.target.value } : value))}>{selectable.map((server) => <option key={server.hostId} value={server.hostId}>{server.hostId}</option>)}</select><RoleSelector roles={roleOptions} value={host.roles} onChange={(roles) => setHosts((current) => current.map((value, i) => i === index ? { ...value, roles } : value))}/><button type="button" className="outline" onClick={() => setHosts((current) => current.filter((_, i) => i !== index))}>Удалить</button></div>)}</div><button type="button" className="outline" onClick={() => setHosts((current) => [...current, { hostId: preferredHostId || selectable[0]?.hostId || "", roles: [] }])} disabled={!selectable.length}>Добавить сервер</button></>}{error && <p className="field-error" role="alert">{error}</p>}<div className="actions"><button type="button" className="outline" onClick={onClose} disabled={busy}>Отмена</button><button type="submit" disabled={busy}>Применить</button></div></form></div>;
+  if (!kind)
+    return (
+      <div className="modal">
+        <section className="card dialog">
+          <h1>Размещение недоступно</h1>
+          <p>Для нового размещения требуется READY catalog.</p>
+          {placement && (
+            <button
+              onClick={async () => {
+                const accepted = await onAppend(
+                  placement.kind === "MEMBER_SCOPED"
+                    ? {
+                        operation: "ReconcileDeploymentPlacement",
+                        deploymentId: row.deploymentId,
+                        members: [],
+                      }
+                    : {
+                        operation: "ReconcileHostScopedDeploymentPlacement",
+                        deploymentId: row.deploymentId,
+                        hosts: [],
+                      },
+                );
+                if (!accepted)
+                  setError("Очистка размещения не добавлена в общий черновик.");
+              }}
+              disabled={busy}
+            >
+              Очистить существующее размещение
+            </button>
+          )}
+          {error && (
+            <p className="field-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="outline" onClick={onClose}>
+            Закрыть
+          </button>
+        </section>
+      </div>
+    );
+  return (
+    <div className="modal" role="presentation">
+      <form className="card dialog topology-dialog" onSubmit={submit}>
+        <h1>Размещение: {row.deploymentId}</h1>
+        <p className="muted">
+          {kind === "MEMBER_SCOPED" ? "Members и роли" : "Серверы и роли"}.
+          Apply заменяет полное размещение deployment.
+        </p>
+        {kind === "MEMBER_SCOPED" ? (
+          <>
+            <div className="placement-rows">
+              {members.map((member, index) => (
+                <div
+                  className="placement-row"
+                  key={`${member.memberId}-${index}`}
+                >
+                  <input
+                    aria-label={`Member ID ${index + 1}`}
+                    value={member.memberId}
+                    placeholder={`${row.serviceType}-1`}
+                    onChange={(event) =>
+                      setMembers((current) =>
+                        current.map((value, i) =>
+                          i === index
+                            ? { ...value, memberId: event.target.value }
+                            : value,
+                        ),
+                      )
+                    }
+                  />
+                  <select
+                    aria-label={`Сервер ${index + 1}`}
+                    value={member.hostId}
+                    onChange={(event) =>
+                      setMembers((current) =>
+                        current.map((value, i) =>
+                          i === index
+                            ? { ...value, hostId: event.target.value }
+                            : value,
+                        ),
+                      )
+                    }
+                  >
+                    {selectable.map((server) => (
+                      <option key={server.hostId} value={server.hostId}>
+                        {server.hostId}
+                      </option>
+                    ))}
+                  </select>
+                  <RoleSelector
+                    roles={roleOptions}
+                    value={member.roles}
+                    onChange={(roles) =>
+                      setMembers((current) =>
+                        current.map((value, i) =>
+                          i === index ? { ...value, roles } : value,
+                        ),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="outline"
+                    onClick={() =>
+                      setMembers((current) =>
+                        current.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    Удалить
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="outline"
+              onClick={addMember}
+              disabled={!selectable.length}
+            >
+              Добавить member
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="placement-rows">
+              {hosts.map((host, index) => (
+                <div className="placement-row" key={`${host.hostId}-${index}`}>
+                  <select
+                    aria-label={`Сервер ${index + 1}`}
+                    value={host.hostId}
+                    onChange={(event) =>
+                      setHosts((current) =>
+                        current.map((value, i) =>
+                          i === index
+                            ? { ...value, hostId: event.target.value }
+                            : value,
+                        ),
+                      )
+                    }
+                  >
+                    {selectable.map((server) => (
+                      <option key={server.hostId} value={server.hostId}>
+                        {server.hostId}
+                      </option>
+                    ))}
+                  </select>
+                  <RoleSelector
+                    roles={roleOptions}
+                    value={host.roles}
+                    onChange={(roles) =>
+                      setHosts((current) =>
+                        current.map((value, i) =>
+                          i === index ? { ...value, roles } : value,
+                        ),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="outline"
+                    onClick={() =>
+                      setHosts((current) =>
+                        current.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    Удалить
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="outline"
+              onClick={() =>
+                setHosts((current) => [
+                  ...current,
+                  {
+                    hostId: preferredHostId || selectable[0]?.hostId || "",
+                    roles: [],
+                  },
+                ])
+              }
+              disabled={!selectable.length}
+            >
+              Добавить сервер
+            </button>
+          </>
+        )}
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className="outline"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Отмена
+          </button>
+          <button type="submit" disabled={busy}>
+            Применить
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
-function RoleSelector({ roles, value, onChange }: { roles: string[]; value: string[]; onChange: (roles: string[]) => void }) {
+function RoleSelector({
+  roles,
+  value,
+  onChange,
+}: {
+  roles: string[];
+  value: string[];
+  onChange: (roles: string[]) => void;
+}) {
   if (!roles.length) return <span className="muted">Без ролей</span>;
-  return <label className="role-selector">Роли<select multiple value={value} onChange={(event) => onChange([...event.currentTarget.selectedOptions].map((option) => option.value))}>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>;
+  return (
+    <label className="role-selector">
+      Роли
+      <select
+        multiple
+        value={value}
+        onChange={(event) =>
+          onChange(
+            [...event.currentTarget.selectedOptions].map(
+              (option) => option.value,
+            ),
+          )
+        }
+      >
+        {roles.map((role) => (
+          <option key={role} value={role}>
+            {role}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function AddDeploymentDialog({

@@ -313,9 +313,12 @@ projectIdentity
 
 The effective selection identity is the closed existing
 `ExecutionNodeContext` tuple (`selectionKind`, `selectionSource`,
-`selectedHostId`) plus an App-local selection generation. The generation is
-incremented on open/close and whenever the effective selected node changes; it
-is neither persisted nor added to a transport contract. Runtime evidence is
+`selectedHostId`) plus a frontend-local selection/request generation. The
+generation is incremented on open/close, accepted structural draft changes and
+whenever the effective selected node changes; it is neither persisted nor added
+to a transport contract. Go clears in-memory evidence under its App lock, and
+the frontend generation prevents an older asynchronous response from being
+published afterward. Runtime evidence is
 the existing closed `bundleDigest`, `coreVersion`, `catalogDigest` and
 `protocol` tuple. Empty or partial node/runtime evidence can never be
 `CURRENT` or `INVALID`.
@@ -607,5 +610,7 @@ UI-01F5 may be marked DONE only when:
 - docs, `CURRENT_STATE.md` and roadmap record F5 DONE and F6 NEXT;
 - one focused implementation commit exists and the worktree is clean.
 
-Until then UI-01F5 remains **NOT STARTED**. UI-01F6 and later milestones are
-not authorized by this plan.
+UI-01F5 is **DONE**. The focused implementation commit records the typed Go
+projection, Entry points UI, generated Wails binding, Go/frontend acceptance,
+Windows Wails build and RED OS race evidence. UI-01F6 is NEXT; later milestones
+remain separately authorized.

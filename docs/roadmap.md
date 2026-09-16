@@ -557,7 +557,7 @@ credentials, E4 Execution Node selection panel, E5 readiness/navigation gating
 and E6 final Windows/RED OS acceptance. UI-01E1 is DONE: v1alpha4 server CRUD
 intents use the existing edit/session/guarded-transaction lifecycle, Core projects desired
 hostname/normalized port and generic references, and focused Windows/RED OS
-gates passed. UI-01E2 through UI-01E6 and UI-01F1 through UI-01F4 are DONE; UI-01F5 is NEXT. E6 evidence is
+gates passed. UI-01E2 through UI-01E6 and UI-01F1 through UI-01F5 are DONE; UI-01F6 is NEXT. E6 evidence is
 recorded in `docs/ui-01e6.md`.
 
 ADR-027 changes the target architecture without changing milestone statuses:
@@ -651,7 +651,7 @@ the pre-E5 ADR-027 Save/Verify separation is implemented without advancing E5.
 UI-01E5 is DONE: the application-owned trusted Execution Node binding now
 supports read-only readiness, explicit-confirmation preparation and fresh
 post-Prepare Verify, while candidates remain transport-free. UI-01E6 is DONE;
-UI-01F1 through UI-01F4 are DONE, UI-01F5 is NEXT and UI-01 overall is NOT DONE.
+UI-01F1 through UI-01F5 are DONE, UI-01F6 is NEXT and UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
