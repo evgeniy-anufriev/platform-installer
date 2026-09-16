@@ -446,7 +446,7 @@ Status: **DONE**. Evidence: `docs/ui-01f3-architecture.md`.
 
 ### UI-01F4 — placement UI
 
-Status: **NEXT**; separate owner gate.
+Status: **DONE**. Evidence: `docs/ui-01f4-architecture.md`.
 
 - catalog-driven `MEMBER_SCOPED` members/roles form;
 - catalog-driven `HOST_SCOPED` direct hosts/optional roles form;
@@ -457,12 +457,17 @@ Status: **NEXT**; separate owner gate.
 
 ### UI-01F5 — endpoint groups and projections
 
+Status: **NEXT**; separate owner gate. Plan: `docs/ui-01f5-architecture.md`.
+
 - Entry points view, endpoint-group CRUD and assignment;
 - generic consumer/delete UX;
 - provider relation and VIP fields read-only from fresh Core evidence, with
-  explicit UI-01G ownership for editing;
+  explicit UI-01G ownership for editing, through a minimal typed/bounded Go
+  projection rather than raw ProjectSnapshot maps in React;
+- INVALID verification exposes safe findings but no authoritative
+  FQDN/provider/VIP preview;
 - revision-bound Core preview and honest stale/unavailable states;
-- service-editor navigation context, still read-only until H.
+- service editor and its navigation remain outside F5.
 
 ### UI-01F6 — acceptance and regression
 
