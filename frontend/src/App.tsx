@@ -11,11 +11,15 @@ import type {
 } from "./backend";
 import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
-import { type DeploymentIntent, TopologyPage } from "./TopologyPage";
+import {
+  type DeploymentIntent,
+  type PlacementIntent,
+  TopologyPage,
+} from "./TopologyPage";
 import "./edit.css";
 
 type Page = "project" | "servers" | "topology" | "installation";
-type StructuralIntent = ServerIntent | DeploymentIntent;
+type StructuralIntent = ServerIntent | DeploymentIntent | PlacementIntent;
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -62,6 +66,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [sessionId, setSessionId] = useState("");
   const [commandCount, setCommandCount] = useState(0);
   const [intents, setIntents] = useState<StructuralIntent[]>([]);
+  const [topologyTab, setTopologyTab] = useState<"services" | "servers">(
+    "services",
+  );
+  const [selectedTopologyDeployment, setSelectedTopologyDeployment] =
+    useState("");
+  const [selectedTopologyHost, setSelectedTopologyHost] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [refreshRoot, setRefreshRoot] = useState("");
@@ -167,6 +177,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setIntents([]);
     setReviewOpen(false);
   };
+  const resetTopologySelection = () => {
+    setTopologyTab("services");
+    setSelectedTopologyDeployment("");
+    setSelectedTopologyHost("");
+  };
   const clearRefreshFailure = () => {
     setRefreshRequired(false);
     setRefreshRoot("");
@@ -178,6 +193,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       const next = await api.chooseProject();
       setResult(next);
       clearRefreshFailure();
+      resetTopologySelection();
       setPage("project");
     } finally {
       setLoading(false);
@@ -216,6 +232,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       });
       setResult(next);
       clearRefreshFailure();
+      resetTopologySelection();
       setProjectDialog(false);
       setPage("project");
       if (next.status === "OPEN") {
@@ -232,6 +249,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const close = async () => {
     setResult(await api.closeProject());
     clearRefreshFailure();
+    resetTopologySelection();
     setPage("project");
   };
 
@@ -328,6 +346,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           managed: undefined,
         } as OpenResult);
         clearDraft();
+        resetTopologySelection();
         setRefreshRequired(true);
         setRefreshRoot(rootToRefresh);
         setRefreshError("");
@@ -659,9 +678,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             managed={managed}
             catalog={result.catalog}
             intents={intents.filter(
-              (intent): intent is DeploymentIntent =>
+              (intent): intent is DeploymentIntent | PlacementIntent =>
                 intent.operation === "CreateServiceDeployment" ||
-                intent.operation === "DeleteServiceDeployment",
+                intent.operation === "DeleteServiceDeployment" ||
+                intent.operation === "ReconcileDeploymentPlacement" ||
+                intent.operation === "ReconcileHostScopedDeploymentPlacement",
+            )}
+            serverIntents={intents.filter(
+              (intent): intent is ServerIntent =>
+                intent.operation === "CreateServer" ||
+                intent.operation === "UpdateServer" ||
+                intent.operation === "DeleteServer",
             )}
             busy={editBusy}
             structuralDisabled={refreshRequired}
@@ -669,6 +696,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onAppend={appendStructuralIntent}
             onReview={review}
             onDiscard={discard}
+            activeTab={topologyTab}
+            onActiveTabChange={setTopologyTab}
+            selectedDeploymentId={selectedTopologyDeployment}
+            onSelectedDeploymentChange={setSelectedTopologyDeployment}
+            selectedHostId={selectedTopologyHost}
+            onSelectedHostChange={setSelectedTopologyHost}
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (

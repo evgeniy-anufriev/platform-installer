@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { OpenResult } from "./backend";
+import type { ServerIntent } from "./ServersPage";
 
 export type DeploymentIntent =
   | {
@@ -12,6 +13,19 @@ export type DeploymentIntent =
       operation: "DeleteServiceDeployment";
       deploymentId: string;
     };
+
+export type PlacementIntent =
+  | {
+      operation: "ReconcileDeploymentPlacement";
+      deploymentId: string;
+      members: Array<{ memberId: string; hostId: string; roles?: string[] }>;
+    }
+  | {
+      operation: "ReconcileHostScopedDeploymentPlacement";
+      deploymentId: string;
+      hosts: Array<{ hostId: string; roles?: string[] }>;
+    };
+type TopologyIntent = DeploymentIntent | PlacementIntent;
 
 type CatalogService = NonNullable<OpenResult["catalog"]>["services"] extends
   Array<infer Service> | undefined
@@ -28,7 +42,7 @@ type DeploymentRow = {
 
 function deploymentRows(
   managed: OpenResult["managed"],
-  intents: DeploymentIntent[],
+  intents: TopologyIntent[],
 ): DeploymentRow[] {
   const result = new Map<string, DeploymentRow>();
   for (const [deploymentId, deployment] of Object.entries(
@@ -50,6 +64,7 @@ function deploymentRows(
       });
       continue;
     }
+    if (intent.operation !== "DeleteServiceDeployment") continue;
     const existing = result.get(intent.deploymentId);
     if (existing)
       result.set(intent.deploymentId, { ...existing, state: "deleting" });
@@ -57,6 +72,70 @@ function deploymentRows(
   return [...result.values()].sort((left, right) =>
     left.deploymentId.localeCompare(right.deploymentId),
   );
+}
+
+type ServerRow = { hostId: string; label: string; state?: "new" | "deleting" };
+type MemberRow = { memberId: string; hostId: string; roles: string[] };
+type HostRow = { hostId: string; roles: string[] };
+type Placement =
+  | { kind: "MEMBER_SCOPED"; members: MemberRow[] }
+  | { kind: "HOST_SCOPED"; hosts: HostRow[] };
+
+function finalServers(
+  managed: OpenResult["managed"],
+  intents: ServerIntent[],
+): ServerRow[] {
+  const rows = new Map<string, ServerRow>();
+  for (const [hostId, host] of Object.entries(managed?.servers || {}))
+    rows.set(hostId, { hostId, label: host.address ? `${hostId} · ${host.address}` : hostId });
+  for (const intent of intents) {
+    const existing = rows.get(intent.hostId);
+    if (intent.operation === "CreateServer")
+      rows.set(intent.hostId, {
+        hostId: intent.hostId,
+        label: intent.address ? `${intent.hostId} · ${String(intent.address)}` : intent.hostId,
+        state: "new",
+      });
+    else if (intent.operation === "DeleteServer" && existing)
+      rows.set(intent.hostId, { ...existing, state: "deleting" });
+  }
+  return [...rows.values()].sort((a, b) => a.hostId.localeCompare(b.hostId));
+}
+
+function finalPlacements(
+  managed: OpenResult["managed"],
+  intents: TopologyIntent[],
+): Map<string, Placement> {
+  const result = new Map<string, Placement>();
+  for (const item of managed?.memberPlacements || []) {
+    const current = result.get(item.deploymentId);
+    const members = current?.kind === "MEMBER_SCOPED" ? current.members : [];
+    result.set(item.deploymentId, {
+      kind: "MEMBER_SCOPED",
+      members: [...members, { memberId: item.memberId, hostId: item.hostId, roles: item.roles || [] }],
+    });
+  }
+  for (const item of managed?.hostPlacements || []) {
+    const current = result.get(item.deploymentId);
+    const hosts = current?.kind === "HOST_SCOPED" ? current.hosts : [];
+    result.set(item.deploymentId, {
+      kind: "HOST_SCOPED",
+      hosts: [...hosts, { hostId: item.hostId, roles: item.roles || [] }],
+    });
+  }
+  for (const intent of intents) {
+    if (intent.operation === "ReconcileDeploymentPlacement")
+      result.set(intent.deploymentId, {
+        kind: "MEMBER_SCOPED",
+        members: intent.members.map((item) => ({ ...item, roles: item.roles || [] })),
+      });
+    if (intent.operation === "ReconcileHostScopedDeploymentPlacement")
+      result.set(intent.deploymentId, {
+        kind: "HOST_SCOPED",
+        hosts: intent.hosts.map((item) => ({ ...item, roles: item.roles || [] })),
+      });
+  }
+  return result;
 }
 
 function catalogService(
@@ -89,28 +168,51 @@ export function TopologyPage({
   managed,
   catalog,
   intents,
+  serverIntents,
   busy,
   structuralDisabled,
   commandCount,
   onAppend,
   onReview,
   onDiscard,
+  activeTab,
+  onActiveTabChange,
+  selectedDeploymentId,
+  onSelectedDeploymentChange,
+  selectedHostId,
+  onSelectedHostChange,
 }: {
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
-  intents: DeploymentIntent[];
+  intents: TopologyIntent[];
+  serverIntents: ServerIntent[];
   busy: boolean;
   structuralDisabled: boolean;
   commandCount: number;
-  onAppend: (intent: DeploymentIntent) => Promise<boolean>;
+  onAppend: (intent: TopologyIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
+  activeTab: "services" | "servers";
+  onActiveTabChange: (tab: "services" | "servers") => void;
+  selectedDeploymentId: string;
+  onSelectedDeploymentChange: (id: string) => void;
+  selectedHostId: string;
+  onSelectedHostChange: (id: string) => void;
 }) {
-  const [dialog, setDialog] = useState<"add" | "delete" | null>(null);
-  const [selectedID, setSelectedID] = useState("");
+  const [dialog, setDialog] = useState<"add" | "delete" | "placement" | null>(null);
+  const [placementHostContext, setPlacementHostContext] = useState("");
+  const [placementDeploymentId, setPlacementDeploymentId] = useState("");
   const [filter, setFilter] = useState("");
   const rows = useMemo(
     () => deploymentRows(managed, intents),
+    [managed, intents],
+  );
+  const servers = useMemo(
+    () => finalServers(managed, serverIntents),
+    [managed, serverIntents],
+  );
+  const placements = useMemo(
+    () => finalPlacements(managed, intents),
     [managed, intents],
   );
   const normalizedFilter = filter.trim().toLocaleLowerCase("ru");
@@ -120,9 +222,9 @@ export function TopologyPage({
       .toLocaleLowerCase("ru")
       .includes(normalizedFilter);
   });
-  const selected = rows.find((row) => row.deploymentId === selectedID);
+  const selected = rows.find((row) => row.deploymentId === selectedDeploymentId);
   const selectedVisible = filteredRows.some(
-    (row) => row.deploymentId === selectedID,
+    (row) => row.deploymentId === selectedDeploymentId,
   );
   const selectedService = selected
     ? catalogService(catalog, selected.serviceType)
@@ -135,10 +237,23 @@ export function TopologyPage({
   const crudDisabled = busy || structuralDisabled;
 
   useEffect(() => {
-    if (selectedID && rows.some((row) => row.deploymentId === selectedID))
+    if (selectedDeploymentId && rows.some((row) => row.deploymentId === selectedDeploymentId))
       return;
-    setSelectedID(rows[0]?.deploymentId || "");
-  }, [rows, selectedID]);
+    onSelectedDeploymentChange(rows[0]?.deploymentId || "");
+  }, [rows, selectedDeploymentId, onSelectedDeploymentChange]);
+
+  useEffect(() => {
+    if (selectedHostId && servers.some((row) => row.hostId === selectedHostId)) return;
+    onSelectedHostChange(servers[0]?.hostId || "");
+  }, [servers, selectedHostId, onSelectedHostChange]);
+
+  const placementLocked = !!selected && intents.some(
+    (intent) =>
+      (intent.operation === "ReconcileDeploymentPlacement" ||
+        intent.operation === "ReconcileHostScopedDeploymentPlacement") &&
+      intent.deploymentId === selected.deploymentId,
+  );
+  const placementTarget = rows.find((row) => row.deploymentId === placementDeploymentId);
 
   return (
     <>
@@ -161,10 +276,18 @@ export function TopologyPage({
       </section>
 
       <nav className="topology-tabs" aria-label="Представления топологии">
-        <button className="active" aria-selected="true">
+        <button
+          className={activeTab === "services" ? "active" : "outline"}
+          aria-selected={activeTab === "services"}
+          onClick={() => onActiveTabChange("services")}
+        >
           По сервисам
         </button>
-        <button disabled title="Будет реализовано в UI-01F4">
+        <button
+          className={activeTab === "servers" ? "active" : "outline"}
+          aria-selected={activeTab === "servers"}
+          onClick={() => onActiveTabChange("servers")}
+        >
           По серверам
         </button>
         <button disabled title="Будет реализовано в UI-01F5">
@@ -182,7 +305,7 @@ export function TopologyPage({
         </section>
       )}
 
-      <div className="topology-grid">
+      {activeTab === "services" ? <div className="topology-grid">
         <section className="card topology-list">
           <h2>Deployments</h2>
           <label>
@@ -206,8 +329,8 @@ export function TopologyPage({
                 return (
                   <button
                     key={row.deploymentId}
-                    className={`topology-row ${selectedID === row.deploymentId ? "selected" : ""} ${row.state ? `draft-${row.state}` : ""}`}
-                    onClick={() => setSelectedID(row.deploymentId)}
+                    className={`topology-row ${selectedDeploymentId === row.deploymentId ? "selected" : ""} ${row.state ? `draft-${row.state}` : ""}`}
+                    onClick={() => onSelectedDeploymentChange(row.deploymentId)}
                   >
                     <b>{row.deploymentId}</b>
                     <span>{service?.displayName || row.serviceType}</span>
@@ -256,6 +379,36 @@ export function TopologyPage({
               </dl>
               <div className="actions topology-actions">
                 <button
+                  onClick={() => {
+                    setPlacementHostContext("");
+                    setPlacementDeploymentId(selected.deploymentId);
+                    setDialog("placement");
+                  }}
+                  disabled={
+                    crudDisabled ||
+                    !!selected.state ||
+                    placementLocked ||
+                    commandLimitReached ||
+                    (!catalogReady && !placements.has(selected.deploymentId))
+                  }
+                  title={placementLocked ? "Размещение этого deployment уже добавлено в текущий черновик." : undefined}
+                >
+                  {placements.has(selected.deploymentId) ? "Изменить размещение" : "Добавить размещение"}
+                </button>
+                {placements.has(selected.deploymentId) && (
+                  <button
+                    className="outline"
+                    onClick={() => {
+                      setPlacementHostContext("");
+                      setPlacementDeploymentId(selected.deploymentId);
+                      setDialog("placement");
+                    }}
+                    disabled={crudDisabled || !!selected.state || placementLocked || commandLimitReached}
+                  >
+                    Очистить размещение
+                  </button>
+                )}
+                <button
                   className="outline"
                   disabled
                   title="Редактор сервиса будет реализован отдельным milestone"
@@ -292,7 +445,24 @@ export function TopologyPage({
             F3 не рассчитывает members, роли, cardinality или результат Core.
           </p>
         </section>
-      </div>
+      </div> : <ByServersView
+        servers={servers}
+        rows={rows}
+        placements={placements}
+        selectedHostId={selectedHostId}
+        onSelectedHostChange={onSelectedHostChange}
+        onSelectedDeploymentChange={onSelectedDeploymentChange}
+        onEdit={(deploymentId, hostId) => {
+          onSelectedDeploymentChange(deploymentId);
+          setPlacementHostContext(hostId);
+          setPlacementDeploymentId(deploymentId);
+          setDialog("placement");
+        }}
+        disabled={crudDisabled || commandLimitReached}
+        placementLocked={(deploymentId) => intents.some((intent) =>
+          (intent.operation === "ReconcileDeploymentPlacement" || intent.operation === "ReconcileHostScopedDeploymentPlacement") && intent.deploymentId === deploymentId,
+        )}
+      />}
 
       {commandCount > 0 && (
         <section className="card draft-actions">
@@ -318,7 +488,7 @@ export function TopologyPage({
           onAppend={async (intent) => {
             const accepted = await onAppend(intent);
             if (accepted) {
-              setSelectedID(intent.deploymentId);
+              onSelectedDeploymentChange(intent.deploymentId);
               setDialog(null);
             }
             return accepted;
@@ -338,8 +508,152 @@ export function TopologyPage({
           }}
         />
       )}
+      {dialog === "placement" && placementTarget && (
+        <PlacementDialog
+          row={placementTarget}
+          mode={catalogMode(catalogService(catalog, placementTarget.serviceType), placementTarget.mode)}
+          placement={placements.get(placementTarget.deploymentId)}
+          servers={servers}
+          preferredHostId={placementHostContext}
+          busy={busy}
+          onClose={() => setDialog(null)}
+          onAppend={async (intent) => {
+            const accepted = await onAppend(intent);
+            if (accepted) setDialog(null);
+            return accepted;
+          }}
+        />
+      )}
     </>
   );
+}
+
+function ByServersView({
+  servers,
+  rows,
+  placements,
+  selectedHostId,
+  onSelectedHostChange,
+  onSelectedDeploymentChange,
+  onEdit,
+  disabled,
+  placementLocked,
+}: {
+  servers: ServerRow[];
+  rows: DeploymentRow[];
+  placements: Map<string, Placement>;
+  selectedHostId: string;
+  onSelectedHostChange: (id: string) => void;
+  onSelectedDeploymentChange: (id: string) => void;
+  onEdit: (deploymentId: string, hostId: string) => void;
+  disabled: boolean;
+  placementLocked: (deploymentId: string) => boolean;
+}) {
+  const selected = servers.find((server) => server.hostId === selectedHostId);
+  const assignments = rows.flatMap((deployment) => {
+    const placement = placements.get(deployment.deploymentId);
+    if (placement?.kind === "MEMBER_SCOPED")
+      return placement.members
+        .filter((member) => member.hostId === selectedHostId)
+        .map((member) => ({ deployment, text: `${member.memberId}${member.roles.length ? ` · ${member.roles.join(", ")}` : ""}` }));
+    if (placement?.kind === "HOST_SCOPED")
+      return placement.hosts
+        .filter((host) => host.hostId === selectedHostId)
+        .map((host) => ({ deployment, text: host.roles.join(", ") || "без ролей" }));
+    return [];
+  });
+  return (
+    <div className="topology-grid topology-servers-grid">
+      <section className="card topology-list">
+        <h2>Серверы</h2>
+        <div className="topology-list-scroll">
+          {servers.map((server) => (
+            <button key={server.hostId} className={`topology-row ${server.hostId === selectedHostId ? "selected" : ""}`} onClick={() => onSelectedHostChange(server.hostId)}>
+              <b>{server.hostId}</b><span>{server.label}</span>
+              {server.state && <small>{server.state === "new" ? "Новый" : "Будет удалён"}</small>}
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="card topology-detail">
+        <h2>Размещение на сервере</h2>
+        {!selected ? <p className="muted">Добавьте сервер или выберите его в списке.</p> : selected.state === "deleting" ? <p className="muted">Сервер будет удалён и не предлагается для нового размещения.</p> : <><div className="topology-list-scroll">{assignments.length === 0 ? <p className="muted">На этом сервере пока нет размещений.</p> : assignments.map(({ deployment, text }) => <article className="topology-assignment" key={deployment.deploymentId}><b>{deployment.deploymentId}</b><span>{text}</span><button className="outline" onClick={() => { onSelectedDeploymentChange(deployment.deploymentId); onEdit(deployment.deploymentId, selected.hostId); }} disabled={disabled || !!deployment.state || placementLocked(deployment.deploymentId)}>Изменить</button></article>)}</div><label className="topology-add-placement">Добавить размещение<select aria-label="Deployment для размещения" defaultValue="" onChange={(event) => { const deploymentId = event.target.value; if (deploymentId) { onSelectedDeploymentChange(deploymentId); onEdit(deploymentId, selected.hostId); event.currentTarget.value = ""; } }} disabled={disabled}><option value="">Выберите deployment</option>{rows.filter((row) => !row.state && !placements.has(row.deploymentId)).map((deployment) => <option key={deployment.deploymentId} value={deployment.deploymentId}>{deployment.deploymentId}</option>)}</select></label></>}
+      </section>
+      <section className="card topology-summary">
+        <h2>Сводка</h2>
+        <dl><dt>Сервер</dt><dd>{selected?.hostId || "—"}</dd><dt>Размещений</dt><dd>{assignments.length}</dd><dt>Проверка Core</dt><dd>После сохранения</dd></dl>
+        <p className="muted">Изменение открывает общий editor deployment; отдельной команды для сервера нет.</p>
+      </section>
+    </div>
+  );
+}
+
+function normalizedMemberBase(serviceType: string, suffixLength: number) {
+  const normalized = serviceType.toLowerCase().replace(/[_.]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+  return normalized.slice(0, Math.max(0, 63 - suffixLength));
+}
+
+function candidateMemberId(serviceType: string, members: MemberRow[]) {
+  const used = new Set(members.map((member) => member.memberId));
+  for (let n = 1; n < 10000; n += 1) {
+    const suffix = `-${n}`;
+    const base = normalizedMemberBase(serviceType, suffix.length);
+    if (!base) return "";
+    const candidate = `${base}${suffix}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return "";
+}
+
+function PlacementDialog({
+  row,
+  mode,
+  placement,
+  servers,
+  preferredHostId,
+  busy,
+  onClose,
+  onAppend,
+}: {
+  row: DeploymentRow;
+  mode: CatalogMode | undefined;
+  placement: Placement | undefined;
+  servers: ServerRow[];
+  preferredHostId: string;
+  busy: boolean;
+  onClose: () => void;
+  onAppend: (intent: PlacementIntent) => Promise<boolean>;
+}) {
+  const kind = mode?.placementKind as "MEMBER_SCOPED" | "HOST_SCOPED" | undefined;
+  const [members, setMembers] = useState<MemberRow[]>(placement?.kind === "MEMBER_SCOPED" ? placement.members : []);
+  const [hosts, setHosts] = useState<HostRow[]>(placement?.kind === "HOST_SCOPED" ? placement.hosts : []);
+  const [error, setError] = useState("");
+  const selectable = servers.filter((server) => server.state !== "deleting");
+  const roleOptions = mode?.roles || [];
+  const addMember = () => {
+    const hostId = preferredHostId && selectable.some((server) => server.hostId === preferredHostId) ? preferredHostId : selectable[0]?.hostId || "";
+    setMembers((current) => [...current, { memberId: candidateMemberId(row.serviceType, current), hostId, roles: [] }]);
+  };
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!kind) { setError("Для непустого размещения требуется READY catalog."); return; }
+    if (kind === "MEMBER_SCOPED") {
+      const ids = new Set<string>();
+      if (members.some((member) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(member.memberId) || !member.hostId || ids.has(member.memberId) || (ids.add(member.memberId), false))) { setError("Укажите уникальные member ID и сервер для каждой строки."); return; }
+      if (!(await onAppend({ operation: "ReconcileDeploymentPlacement", deploymentId: row.deploymentId, members }))) setError("Размещение не добавлено в общий черновик.");
+      return;
+    }
+    const seen = new Set<string>();
+    if (hosts.some((host) => !host.hostId || seen.has(host.hostId) || (seen.add(host.hostId), false))) { setError("Серверы в host-scoped размещении должны быть уникальны."); return; }
+    if (!(await onAppend({ operation: "ReconcileHostScopedDeploymentPlacement", deploymentId: row.deploymentId, hosts }))) setError("Размещение не добавлено в общий черновик.");
+  };
+  if (!kind) return <div className="modal"><section className="card dialog"><h1>Размещение недоступно</h1><p>Для нового размещения требуется READY catalog.</p>{placement && <button onClick={async () => { const accepted = await onAppend(placement.kind === "MEMBER_SCOPED" ? { operation: "ReconcileDeploymentPlacement", deploymentId: row.deploymentId, members: [] } : { operation: "ReconcileHostScopedDeploymentPlacement", deploymentId: row.deploymentId, hosts: [] }); if (!accepted) setError("Очистка размещения не добавлена в общий черновик."); }} disabled={busy}>Очистить существующее размещение</button>}{error && <p className="field-error" role="alert">{error}</p>}<button className="outline" onClick={onClose}>Закрыть</button></section></div>;
+  return <div className="modal" role="presentation"><form className="card dialog topology-dialog" onSubmit={submit}><h1>Размещение: {row.deploymentId}</h1><p className="muted">{kind === "MEMBER_SCOPED" ? "Members и роли" : "Серверы и роли"}. Apply заменяет полное размещение deployment.</p>{kind === "MEMBER_SCOPED" ? <><div className="placement-rows">{members.map((member, index) => <div className="placement-row" key={`${member.memberId}-${index}`}><input aria-label={`Member ID ${index + 1}`} value={member.memberId} placeholder={`${row.serviceType}-1`} onChange={(event) => setMembers((current) => current.map((value, i) => i === index ? { ...value, memberId: event.target.value } : value))}/><select aria-label={`Сервер ${index + 1}`} value={member.hostId} onChange={(event) => setMembers((current) => current.map((value, i) => i === index ? { ...value, hostId: event.target.value } : value))}>{selectable.map((server) => <option key={server.hostId} value={server.hostId}>{server.hostId}</option>)}</select><RoleSelector roles={roleOptions} value={member.roles} onChange={(roles) => setMembers((current) => current.map((value, i) => i === index ? { ...value, roles } : value))}/><button type="button" className="outline" onClick={() => setMembers((current) => current.filter((_, i) => i !== index))}>Удалить</button></div>)}</div><button type="button" className="outline" onClick={addMember} disabled={!selectable.length}>Добавить member</button></> : <><div className="placement-rows">{hosts.map((host, index) => <div className="placement-row" key={`${host.hostId}-${index}`}><select aria-label={`Сервер ${index + 1}`} value={host.hostId} onChange={(event) => setHosts((current) => current.map((value, i) => i === index ? { ...value, hostId: event.target.value } : value))}>{selectable.map((server) => <option key={server.hostId} value={server.hostId}>{server.hostId}</option>)}</select><RoleSelector roles={roleOptions} value={host.roles} onChange={(roles) => setHosts((current) => current.map((value, i) => i === index ? { ...value, roles } : value))}/><button type="button" className="outline" onClick={() => setHosts((current) => current.filter((_, i) => i !== index))}>Удалить</button></div>)}</div><button type="button" className="outline" onClick={() => setHosts((current) => [...current, { hostId: preferredHostId || selectable[0]?.hostId || "", roles: [] }])} disabled={!selectable.length}>Добавить сервер</button></>}{error && <p className="field-error" role="alert">{error}</p>}<div className="actions"><button type="button" className="outline" onClick={onClose} disabled={busy}>Отмена</button><button type="submit" disabled={busy}>Применить</button></div></form></div>;
+}
+
+function RoleSelector({ roles, value, onChange }: { roles: string[]; value: string[]; onChange: (roles: string[]) => void }) {
+  if (!roles.length) return <span className="muted">Без ролей</span>;
+  return <label className="role-selector">Роли<select multiple value={value} onChange={(event) => onChange([...event.currentTarget.selectedOptions].map((option) => option.value))}>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>;
 }
 
 function AddDeploymentDialog({

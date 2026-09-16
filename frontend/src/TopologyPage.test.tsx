@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OpenResult } from "./backend";
 import { TopologyPage } from "./TopologyPage";
+import type { ServerIntent } from "./ServersPage";
 
 const managed = {
   projectRevision: "sha256:revision",
@@ -50,17 +52,41 @@ const props = () => ({
   managed,
   catalog,
   intents: [],
+  serverIntents: [] as ServerIntent[],
   busy: false,
   structuralDisabled: false,
   commandCount: 0,
   onAppend: vi.fn().mockResolvedValue(true),
   onReview: vi.fn(),
   onDiscard: vi.fn(),
+  activeTab: "services" as "services" | "servers",
+  onActiveTabChange: vi.fn(),
+  selectedDeploymentId: "",
+  onSelectedDeploymentChange: vi.fn(),
+  selectedHostId: "",
+  onSelectedHostChange: vi.fn(),
 });
+
+function ControlledTopology(input: ReturnType<typeof props>) {
+  const [tab, setTab] = useState<"services" | "servers">(input.activeTab);
+  const [deployment, setDeployment] = useState(input.selectedDeploymentId);
+  const [host, setHost] = useState(input.selectedHostId);
+  return (
+    <TopologyPage
+      {...input}
+      activeTab={tab}
+      onActiveTabChange={(value) => { setTab(value); input.onActiveTabChange(value); }}
+      selectedDeploymentId={deployment}
+      onSelectedDeploymentChange={(value) => { setDeployment(value); input.onSelectedDeploymentChange(value); }}
+      selectedHostId={host}
+      onSelectedHostChange={(value) => { setHost(value); input.onSelectedHostChange(value); }}
+    />
+  );
+}
 
 describe("UI-01F3 TopologyPage", () => {
   it("keeps explicit selection while search temporarily hides it", async () => {
-    render(<TopologyPage {...props()} />);
+    render(<ControlledTopology {...props()} />);
     await userEvent.click(screen.getByRole("button", { name: /beta/ }));
     expect(
       screen.getByText("Неизвестный сохранённый тип (removed-service)"),
@@ -78,7 +104,7 @@ describe("UI-01F3 TopologyPage", () => {
   });
 
   it("enforces the common 16-command presentation bound", () => {
-    render(<TopologyPage {...props()} commandCount={16} />);
+    render(<ControlledTopology {...props()} commandCount={16} />);
     expect(
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     ).toHaveProperty("disabled", true);
@@ -86,12 +112,74 @@ describe("UI-01F3 TopologyPage", () => {
   });
 
   it("blocks all structural CRUD in refresh-required state", () => {
-    render(<TopologyPage {...props()} structuralDisabled />);
+    render(<ControlledTopology {...props()} structuralDisabled />);
     expect(
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     ).toHaveProperty("disabled", true);
     expect(
       screen.getByRole("button", { name: "Удалить deployment" }),
     ).toHaveProperty("disabled", true);
+  });
+
+  it("uses one complete member placement intent with an editable generated ID", async () => {
+    const onAppend = vi.fn().mockResolvedValue(true);
+    render(
+      <ControlledTopology
+        {...props()}
+        selectedDeploymentId="alpha"
+        serverIntents={[
+          {
+            operation: "CreateServer",
+            hostId: "node1",
+            type: "linux",
+            address: "192.0.2.10",
+            desiredHostname: "node1",
+          },
+        ] as ServerIntent[]}
+        onAppend={onAppend}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Добавить размещение" }));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить member" }));
+    expect((screen.getByLabelText("Member ID 1") as HTMLInputElement).value).toBe("known-1");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(onAppend).toHaveBeenCalledWith({
+      operation: "ReconcileDeploymentPlacement",
+      deploymentId: "alpha",
+      members: [{ memberId: "known-1", hostId: "node1", roles: [] }],
+    });
+  });
+
+  it("opens the same complete editor from the By servers entry point", async () => {
+    const onAppend = vi.fn().mockResolvedValue(true);
+    render(
+      <ControlledTopology
+        {...props()}
+        activeTab="servers"
+        selectedHostId="node1"
+        serverIntents={[
+          {
+            operation: "CreateServer",
+            hostId: "node1",
+            type: "linux",
+            address: "192.0.2.10",
+            desiredHostname: "node1",
+          },
+        ] as ServerIntent[]}
+        onAppend={onAppend}
+      />,
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Deployment для размещения"),
+      "alpha",
+    );
+    expect(screen.getByRole("heading", { name: "Размещение: alpha" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Добавить member" }));
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(onAppend).toHaveBeenCalledWith({
+      operation: "ReconcileDeploymentPlacement",
+      deploymentId: "alpha",
+      members: [{ memberId: "known-1", hostId: "node1", roles: [] }],
+    });
   });
 });

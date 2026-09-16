@@ -291,6 +291,58 @@
   border-radius: 7px;
   background: #f2f6fb;
 }
+.topology-assignment {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  padding: 10px;
+  border: 1px solid #d7dee8;
+  border-radius: 7px;
+}
+.topology-assignment span {
+  color: #667085;
+}
+.topology-assignment button {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+}
+.topology-add-placement {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  font-weight: 650;
+}
+.topology-add-placement select,
+.placement-row input,
+.placement-row select,
+.role-selector select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+  background: #fff;
+}
+.placement-rows {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+.placement-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(110px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.role-selector {
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+.role-selector select {
+  min-height: 42px;
+}
 @media (max-width: 860px) {
   .servers-title {
     align-items: flex-start;
@@ -307,6 +359,9 @@
     flex-direction: column;
   }
   .topology-grid {
+    grid-template-columns: 1fr;
+  }
+  .placement-row {
     grid-template-columns: 1fr;
   }
 }
