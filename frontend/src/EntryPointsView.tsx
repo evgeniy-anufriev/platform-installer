@@ -21,6 +21,18 @@ export type EndpointIntent =
     }
   | { operation: "ClearServiceEndpointGroup"; deploymentId: string };
 
+export type ProviderIntent =
+  | {
+      operation: "ReconcileEndpointProvider";
+      deploymentId: string;
+      endpointGroupId: string;
+      virtualRouterId: number;
+      virtualAddresses: Array<{ address: string; interface: string }>;
+    }
+  | { operation: "ClearEndpointProvider"; deploymentId: string };
+
+type EntryPointsIntent = EndpointIntent | ProviderIntent;
+
 type Group = {
   id: string;
   domain: string;
@@ -32,6 +44,10 @@ type Deployment = {
   serviceType: string;
   mode: string;
   endpointGroup?: string;
+  endpointGroupRef?: string;
+  virtualRouterId?: number;
+  virtualAddresses?: Array<{ address: string; interface: string }>;
+  providerEditState?: "NONE" | "EDITABLE" | "INCOMPLETE" | "UNSUPPORTED";
   state?: "new" | "deleting";
 };
 const idPattern = /^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/;
@@ -71,6 +87,7 @@ function finalDeployments(
   managed: OpenResult["managed"],
   deploymentIntents: DeploymentIntent[],
   intents: EndpointIntent[],
+  providerIntents: ProviderIntent[],
 ) {
   const values = new Map<string, Deployment>();
   for (const [id, item] of Object.entries(managed?.deployments || {}))
@@ -79,6 +96,10 @@ function finalDeployments(
       serviceType: item.serviceType,
       mode: item.mode,
       endpointGroup: item.endpointGroup,
+      endpointGroupRef: item.endpointGroupRef,
+      virtualRouterId: item.virtualRouterId,
+      virtualAddresses: item.virtualAddresses,
+      providerEditState: item.providerEditState,
     });
   for (const intent of deploymentIntents) {
     if (intent.operation === "CreateServiceDeployment")
@@ -112,6 +133,26 @@ function finalDeployments(
         });
     }
   }
+  for (const intent of providerIntents) {
+    const current = values.get(intent.deploymentId);
+    if (!current) continue;
+    if (intent.operation === "ReconcileEndpointProvider")
+      values.set(intent.deploymentId, {
+        ...current,
+        endpointGroupRef: intent.endpointGroupId,
+        virtualRouterId: intent.virtualRouterId,
+        virtualAddresses: intent.virtualAddresses,
+        providerEditState: "EDITABLE",
+      });
+    if (intent.operation === "ClearEndpointProvider")
+      values.set(intent.deploymentId, {
+        ...current,
+        endpointGroupRef: undefined,
+        virtualRouterId: undefined,
+        virtualAddresses: undefined,
+        providerEditState: "NONE",
+      });
+  }
   return [...values.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
@@ -119,6 +160,7 @@ export function EntryPointsView({
   managed,
   catalog,
   intents,
+  providerIntents,
   deploymentIntents,
   preview,
   busy,
@@ -129,24 +171,27 @@ export function EntryPointsView({
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
   intents: EndpointIntent[];
+  providerIntents: ProviderIntent[];
   deploymentIntents: DeploymentIntent[];
   preview?: EndpointPreview;
   busy: boolean;
   disabled: boolean;
   commandCount: number;
-  onAppend: (intent: EndpointIntent) => Promise<boolean>;
+  onAppend: (intent: EntryPointsIntent) => Promise<boolean>;
 }) {
   const [dialog, setDialog] = useState<{
     mode: "add" | "edit";
     group?: Group;
   } | null>(null);
+  const [providerDialog, setProviderDialog] = useState<Deployment | null>(null);
   const groups = useMemo(
     () => finalGroups(managed, intents),
     [managed, intents],
   );
   const deployments = useMemo(
-    () => finalDeployments(managed, deploymentIntents, intents),
-    [managed, deploymentIntents, intents],
+    () =>
+      finalDeployments(managed, deploymentIntents, intents, providerIntents),
+    [managed, deploymentIntents, intents, providerIntents],
   );
   const catalogReady = catalog?.status === "READY";
   const limit = commandCount >= 16;
@@ -164,6 +209,20 @@ export function EntryPointsView({
   const eligible = (serviceType: string) =>
     catalog?.services?.find((item) => item.id === serviceType)
       ?.endpointConsumer === true;
+  const providerEligible = (serviceType: string) =>
+    catalog?.services?.find((item) => item.id === serviceType)
+      ?.endpointProvider === true;
+  const providerLocked = (id: string) =>
+    providerIntents.some((item) => item.deploymentId === id);
+  const providerDeployments = deployments.filter((item) =>
+    item.state === "deleting"
+      ? false
+      : catalogReady
+        ? providerEligible(item.serviceType)
+        : !!item.endpointGroupRef ||
+          item.providerEditState === "INCOMPLETE" ||
+          item.providerEditState === "UNSUPPORTED",
+  );
   const previewStatus = preview?.status || "NOT_VERIFIED";
   return (
     <>
@@ -321,6 +380,87 @@ export function EntryPointsView({
             </div>
           )}
         </section>
+        <section className="card">
+          <h2>Provider / VIP</h2>
+          {providerDeployments.length === 0 ? (
+            <p className="muted">Нет доступных provider deployments.</p>
+          ) : (
+            <div className="entry-list">
+              {providerDeployments.map((deployment) => {
+                const supported = providerEligible(deployment.serviceType);
+                const readOnly = !catalogReady || !supported;
+                const canClear =
+                  !!deployment.endpointGroupRef &&
+                  !providerLocked(deployment.id);
+                return (
+                  <div key={deployment.id} className="entry-row">
+                    <div>
+                      <b>{deployment.id}</b>
+                      <span>
+                        {deployment.endpointGroupRef
+                          ? `${deployment.endpointGroupRef} · VRID ${deployment.virtualRouterId || "—"}`
+                          : "Provider не настроен"}
+                      </span>
+                      {deployment.virtualAddresses?.map((address) => (
+                        <small key={`${address.address}-${address.interface}`}>
+                          {address.address} · {address.interface}
+                        </small>
+                      ))}
+                      {deployment.providerEditState === "INCOMPLETE" && (
+                        <small>
+                          Неполная конфигурация: завершите или очистите.
+                        </small>
+                      )}
+                      {deployment.providerEditState === "UNSUPPORTED" && (
+                        <small>
+                          Legacy-конфигурация вне безопасных границ редактора.
+                        </small>
+                      )}
+                      {!catalogReady && (
+                        <small>
+                          Каталог недоступен: редактирование выключено.
+                        </small>
+                      )}
+                      {catalogReady && !supported && (
+                        <small>Сервис не поддерживает endpoint provider.</small>
+                      )}
+                    </div>
+                    <div className="actions">
+                      <button
+                        className="outline"
+                        onClick={() => setProviderDialog(deployment)}
+                        disabled={
+                          busy ||
+                          disabled ||
+                          limit ||
+                          readOnly ||
+                          providerLocked(deployment.id)
+                        }
+                      >
+                        {deployment.providerEditState === "UNSUPPORTED"
+                          ? "Заменить"
+                          : "Настроить"}
+                      </button>
+                      <button
+                        className="outline danger"
+                        onClick={() =>
+                          void onAppend({
+                            operation: "ClearEndpointProvider",
+                            deploymentId: deployment.id,
+                          })
+                        }
+                        disabled={busy || disabled || limit || !canClear}
+                        title="Удаляет provider tuple из черновика. После сохранения Core потребует complete tuple или удаления deployment."
+                      >
+                        Очистить
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
         <PreviewCard preview={preview} status={previewStatus} />
       </div>
       {dialog && (
@@ -332,6 +472,19 @@ export function EntryPointsView({
           onAppend={async (intent) => {
             const accepted = await onAppend(intent);
             if (accepted) setDialog(null);
+            return accepted;
+          }}
+        />
+      )}
+      {providerDialog && (
+        <ProviderDialog
+          deployment={providerDialog}
+          groups={groups.filter((group) => !group.state)}
+          busy={busy}
+          onClose={() => setProviderDialog(null)}
+          onAppend={async (intent) => {
+            const accepted = await onAppend(intent);
+            if (accepted) setProviderDialog(null);
             return accepted;
           }}
         />
@@ -492,6 +645,182 @@ function EndpointGroupDialog({
           </button>
           <button onClick={() => void submit()} disabled={busy}>
             {group ? "Сохранить" : "Добавить"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProviderDialog({
+  deployment,
+  groups,
+  busy,
+  onClose,
+  onAppend,
+}: {
+  deployment: Deployment;
+  groups: Group[];
+  busy: boolean;
+  onClose: () => void;
+  onAppend: (intent: ProviderIntent) => Promise<boolean>;
+}) {
+  const [endpointGroupId, setEndpointGroupID] = useState(
+    deployment.endpointGroupRef || "",
+  );
+  const [vrid, setVRID] = useState(
+    deployment.virtualRouterId ? String(deployment.virtualRouterId) : "",
+  );
+  const [addresses, setAddresses] = useState(
+    deployment.providerEditState === "UNSUPPORTED"
+      ? [{ address: "", interface: "" }]
+      : deployment.virtualAddresses?.length
+        ? deployment.virtualAddresses
+        : [{ address: "", interface: "" }],
+  );
+  const [error, setError] = useState("");
+  const submit = async () => {
+    const normalized = addresses.map((item) => ({
+      address: item.address.trim(),
+      interface: item.interface.trim(),
+    }));
+    const parsedVRID = Number(vrid);
+    const ipv4 =
+      /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+    if (
+      !endpointGroupId ||
+      !Number.isInteger(parsedVRID) ||
+      parsedVRID < 1 ||
+      parsedVRID > 255
+    )
+      return setError("Выберите группу и укажите VRID от 1 до 255.");
+    if (
+      normalized.length === 0 ||
+      normalized.length > 64 ||
+      normalized.some(
+        (item) =>
+          !ipv4.test(item.address) ||
+          !item.interface ||
+          item.interface.length > 128,
+      ) ||
+      new Set(
+        normalized.map((item) => `${item.address}\\u0000${item.interface}`),
+      ).size !== normalized.length
+    )
+      return setError(
+        "Добавьте до 64 уникальных IPv4-адресов с interface длиной не более 128 символов.",
+      );
+    await onAppend({
+      operation: "ReconcileEndpointProvider",
+      deploymentId: deployment.id,
+      endpointGroupId,
+      virtualRouterId: parsedVRID,
+      virtualAddresses: normalized,
+    });
+  };
+  return (
+    <div
+      className="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Настроить provider"
+    >
+      <section className="card dialog provider-dialog">
+        <h2>Provider: {deployment.id}</h2>
+        <p className="muted">
+          Настройка сохраняется в общий черновик и будет проверена Core только
+          после сохранения.
+        </p>
+        <label>
+          Endpoint group
+          <select
+            value={endpointGroupId}
+            onChange={(event) => setEndpointGroupID(event.target.value)}
+          >
+            <option value="">Выберите группу</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          VRID
+          <input
+            value={vrid}
+            inputMode="numeric"
+            onChange={(event) => setVRID(event.target.value)}
+          />
+        </label>
+        <h3>Virtual IP addresses</h3>
+        <div className="provider-addresses">
+          {addresses.map((item, index) => (
+            <div className="provider-address" key={index}>
+              <input
+                aria-label={`IPv4 ${index + 1}`}
+                value={item.address}
+                placeholder="192.0.2.42"
+                onChange={(event) =>
+                  setAddresses((current) =>
+                    current.map((row, rowIndex) =>
+                      rowIndex === index
+                        ? { ...row, address: event.target.value }
+                        : row,
+                    ),
+                  )
+                }
+              />
+              <input
+                aria-label={`Interface ${index + 1}`}
+                value={item.interface}
+                placeholder="eth0"
+                maxLength={128}
+                onChange={(event) =>
+                  setAddresses((current) =>
+                    current.map((row, rowIndex) =>
+                      rowIndex === index
+                        ? { ...row, interface: event.target.value }
+                        : row,
+                    ),
+                  )
+                }
+              />
+              <button
+                className="outline danger"
+                aria-label={`Удалить адрес ${index + 1}`}
+                onClick={() =>
+                  setAddresses((current) =>
+                    current.filter((_, rowIndex) => rowIndex !== index),
+                  )
+                }
+                disabled={addresses.length === 1}
+              >
+                Удалить
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className="outline"
+          onClick={() =>
+            setAddresses((current) =>
+              current.length < 64
+                ? [...current, { address: "", interface: "" }]
+                : current,
+            )
+          }
+          disabled={addresses.length >= 64}
+        >
+          Добавить адрес
+        </button>
+        {error && <p className="field-error">{error}</p>}
+        <div className="actions">
+          <button className="outline" onClick={onClose} disabled={busy}>
+            Отмена
+          </button>
+          <button onClick={() => void submit()} disabled={busy}>
+            Применить к черновику
           </button>
         </div>
       </section>

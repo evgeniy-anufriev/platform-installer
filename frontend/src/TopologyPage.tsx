@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EndpointPreview, OpenResult } from "./backend";
-import { type EndpointIntent, EntryPointsView } from "./EntryPointsView";
+import {
+  type EndpointIntent,
+  type ProviderIntent,
+  EntryPointsView,
+} from "./EntryPointsView";
 import type { ServerIntent } from "./ServersPage";
 
 export type { EndpointIntent } from "./EntryPointsView";
+export type { ProviderIntent } from "./EntryPointsView";
 
 export type DeploymentIntent =
   | {
@@ -28,7 +33,8 @@ export type PlacementIntent =
       deploymentId: string;
       hosts: Array<{ hostId: string; roles?: string[] }>;
     };
-type TopologyIntent = DeploymentIntent | PlacementIntent | EndpointIntent;
+type TopologyIntent =
+  DeploymentIntent | PlacementIntent | EndpointIntent | ProviderIntent;
 
 type CatalogService = NonNullable<OpenResult["catalog"]>["services"] extends
   Array<infer Service> | undefined
@@ -355,6 +361,11 @@ export function TopologyPage({
               intent.operation === "DeleteEndpointGroup" ||
               intent.operation === "SetServiceEndpointGroup" ||
               intent.operation === "ClearServiceEndpointGroup",
+          )}
+          providerIntents={intents.filter(
+            (intent): intent is ProviderIntent =>
+              intent.operation === "ReconcileEndpointProvider" ||
+              intent.operation === "ClearEndpointProvider",
           )}
           deploymentIntents={intents.filter(
             (intent): intent is DeploymentIntent =>

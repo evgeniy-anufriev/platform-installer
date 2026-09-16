@@ -169,6 +169,118 @@ describe("UI-01F3 TopologyPage", () => {
     expect(screen.queryByText("FQDN")).toBeNull();
   });
 
+  it("appends one complete provider reconcile intent from Entry points", async () => {
+    const onAppend = vi.fn().mockResolvedValue(true);
+    const providerManaged = {
+      ...managed,
+      deployments: {
+        provider: {
+          deploymentId: "provider",
+          serviceType: "keepalived",
+          mode: "vrrp",
+          providerEditState: "NONE",
+        },
+      },
+      endpointGroups: {
+        edge: {
+          endpointGroupId: "edge",
+          domain: "edge.example.test",
+          wildcard: false,
+        },
+      },
+    } as unknown as OpenResult["managed"];
+    const providerCatalog = {
+      status: "READY",
+      expectedBundleDigest: "sha256:bundle",
+      expectedCatalogDigest: "sha256:catalog",
+      services: [
+        {
+          id: "keepalived",
+          definitionVersion: "1",
+          displayName: "Keepalived",
+          ui: {},
+          endpointConsumer: false,
+          endpointProvider: true,
+          modes: [
+            {
+              id: "vrrp",
+              displayName: "VRRP",
+              placementKind: "HOST_SCOPED",
+              roles: [],
+              guidance: { minParticipants: 1, distinctHosts: false },
+            },
+          ],
+        },
+      ],
+    } as unknown as OpenResult["catalog"];
+    render(
+      <ControlledTopology
+        {...props()}
+        activeTab="entryPoints"
+        managed={providerManaged}
+        catalog={providerCatalog}
+        onAppend={onAppend}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Настроить" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Endpoint group"),
+      "edge",
+    );
+    await userEvent.type(screen.getByLabelText("VRID"), "42");
+    await userEvent.type(screen.getByLabelText("IPv4 1"), "192.0.2.42");
+    await userEvent.type(screen.getByLabelText("Interface 1"), "eth0");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Применить к черновику" }),
+    );
+    expect(onAppend).toHaveBeenCalledWith({
+      operation: "ReconcileEndpointProvider",
+      deploymentId: "provider",
+      endpointGroupId: "edge",
+      virtualRouterId: 42,
+      virtualAddresses: [{ address: "192.0.2.42", interface: "eth0" }],
+    });
+  });
+
+  it("keeps provider clear available when the catalog is unavailable", async () => {
+    const onAppend = vi.fn().mockResolvedValue(true);
+    render(
+      <ControlledTopology
+        {...props()}
+        activeTab="entryPoints"
+        managed={
+          {
+            ...managed,
+            deployments: {
+              provider: {
+                deploymentId: "provider",
+                serviceType: "keepalived",
+                mode: "vrrp",
+                endpointGroupRef: "edge",
+                virtualRouterId: 42,
+                virtualAddresses: [
+                  { address: "192.0.2.42", interface: "eth0" },
+                ],
+                providerEditState: "EDITABLE",
+              },
+            },
+          } as unknown as OpenResult["managed"]
+        }
+        catalog={{ status: "UNAVAILABLE" } as OpenResult["catalog"]}
+        onAppend={onAppend}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Настроить" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Очистить" }));
+    expect(onAppend).toHaveBeenCalledWith({
+      operation: "ClearEndpointProvider",
+      deploymentId: "provider",
+    });
+  });
+
   it("blocks all structural CRUD in refresh-required state", () => {
     render(<ControlledTopology {...props()} structuralDisabled />);
     expect(

@@ -64,6 +64,10 @@ export type ManagedProjectView = {
       serviceType: string;
       mode: string;
       endpointGroup?: string;
+      endpointGroupRef?: string;
+      virtualRouterId?: number;
+      virtualAddresses?: Array<{ address: string; interface: string }>;
+      providerEditState?: "NONE" | "EDITABLE" | "INCOMPLETE" | "UNSUPPORTED";
     }
   >;
   endpointGroups?: Record<

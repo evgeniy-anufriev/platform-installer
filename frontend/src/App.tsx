@@ -16,13 +16,18 @@ import {
   type DeploymentIntent,
   type EndpointIntent,
   type PlacementIntent,
+  type ProviderIntent,
   TopologyPage,
 } from "./TopologyPage";
 import "./edit.css";
 
 type Page = "project" | "servers" | "topology" | "installation";
 type StructuralIntent =
-  ServerIntent | DeploymentIntent | PlacementIntent | EndpointIntent;
+  | ServerIntent
+  | DeploymentIntent
+  | PlacementIntent
+  | EndpointIntent
+  | ProviderIntent;
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -704,7 +709,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               (
                 intent,
               ): intent is
-                DeploymentIntent | PlacementIntent | EndpointIntent =>
+                | DeploymentIntent
+                | PlacementIntent
+                | EndpointIntent
+                | ProviderIntent =>
                 intent.operation === "CreateServiceDeployment" ||
                 intent.operation === "DeleteServiceDeployment" ||
                 intent.operation === "ReconcileDeploymentPlacement" ||
@@ -713,7 +721,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 intent.operation === "UpdateEndpointGroup" ||
                 intent.operation === "DeleteEndpointGroup" ||
                 intent.operation === "SetServiceEndpointGroup" ||
-                intent.operation === "ClearServiceEndpointGroup",
+                intent.operation === "ClearServiceEndpointGroup" ||
+                intent.operation === "ReconcileEndpointProvider" ||
+                intent.operation === "ClearEndpointProvider",
             )}
             serverIntents={intents.filter(
               (intent): intent is ServerIntent =>

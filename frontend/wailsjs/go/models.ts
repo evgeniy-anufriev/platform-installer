@@ -223,6 +223,20 @@ export namespace installer {
     }
   }
 
+  export class VirtualAddress {
+    address: string;
+    interface: string;
+
+    static createFrom(source: any = {}) {
+      return new VirtualAddress(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.address = source["address"];
+      this.interface = source["interface"];
+    }
+  }
   export class PlacementHost {
     hostId: string;
     roles?: string[];
@@ -280,6 +294,8 @@ export namespace installer {
     property?: string;
     deployment?: Record<string, any>;
     endpointGroup?: Record<string, any>;
+    virtualRouterId?: number;
+    virtualAddresses?: VirtualAddress[];
     placement?: Record<string, any>;
     backend?: Record<string, any>;
     commands?: EditCommand[];
@@ -314,6 +330,11 @@ export namespace installer {
       this.property = source["property"];
       this.deployment = source["deployment"];
       this.endpointGroup = source["endpointGroup"];
+      this.virtualRouterId = source["virtualRouterId"];
+      this.virtualAddresses = this.convertValues(
+        source["virtualAddresses"],
+        VirtualAddress,
+      );
       this.placement = source["placement"];
       this.backend = source["backend"];
       this.commands = this.convertValues(source["commands"], EditCommand);
@@ -392,6 +413,10 @@ export namespace installer {
     serviceType: string;
     mode: string;
     endpointGroup?: string;
+    endpointGroupRef?: string;
+    virtualRouterId?: number;
+    virtualAddresses?: VirtualAddress[];
+    providerEditState: string;
 
     static createFrom(source: any = {}) {
       return new ManagedDeployment(source);
@@ -403,6 +428,31 @@ export namespace installer {
       this.serviceType = source["serviceType"];
       this.mode = source["mode"];
       this.endpointGroup = source["endpointGroup"];
+      this.endpointGroupRef = source["endpointGroupRef"];
+      this.virtualRouterId = source["virtualRouterId"];
+      this.virtualAddresses = this.convertValues(
+        source["virtualAddresses"],
+        VirtualAddress,
+      );
+      this.providerEditState = source["providerEditState"];
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
     }
   }
   export class ManagedServer {

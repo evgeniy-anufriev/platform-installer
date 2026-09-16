@@ -1,6 +1,6 @@
 # UI-NET-01 — Endpoint provider and virtual address editor architecture
 
-Status: **UI-NET-01A DONE; UI-NET-01B NEXT**.
+Status: **UI-NET-01A and UI-NET-01B DONE; UI-NET-01C NEXT**.
 
 Owner decision: UI-NET-01 precedes UI-01G because Core may include provider
 virtual addresses in certificate SAN when `sanPolicy.includeEndpointVip=true`.
@@ -325,13 +325,13 @@ material remains usable after a VIP change.
   `EDIT_OPERATION_UNAVAILABLE`; a published decoder must never permit a silent
   no-op Save.
 
-### UI-NET-01B — reducer and guarded local Save — NEXT
+### UI-NET-01B — reducer and guarded local Save — DONE
 
 - reconcile/clear final-state reducer;
 - catalog-dependent reconcile and catalog-independent clear;
 - generic reference guard, preservation and transaction tests.
 
-### UI-NET-01C — Entry points provider editor
+### UI-NET-01C — Entry points provider editor — NEXT
 
 - catalog-driven eligible provider list;
 - provider modal/panel and shared draft integration;

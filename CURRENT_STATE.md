@@ -17,13 +17,13 @@ are preserved without backfill; unknown configured types produce only a
 nonblocking Installer diagnostic and do not alter Core status, validation or
 fingerprint. Type has no service, topology, placement, Execution Node or source
 selection semantics. UI-01E1 through UI-01E6 and UI-01F1 through UI-01F3 are
-DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01A is DONE and UI-NET-01B is NEXT, UI-01G remains the following Certificates milestone and UI-01H remains not started.
+DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01A and UI-NET-01B are DONE and UI-NET-01C is NEXT, UI-01G remains the following Certificates milestone and UI-01H remains not started.
 
 ## UI-01 implementation status (2026-09-07)
 
 UI-01A through UI-01D are DONE. UI-01D was accepted by the owner without a
 final revision-bound review. UI-01 overall remains NOT DONE; UI-01E1 through
-UI-01E6 and UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE and UI-NET-01A is DONE while UI-NET-01B is NEXT behind a separate owner gate. UI-01G follows as the Certificates milestone. UI-01B adds only the Wails/React read-only
+UI-01E6 and UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE and UI-NET-01A/UI-NET-01B are DONE while UI-NET-01C is NEXT behind a separate owner gate. UI-01G follows as the Certificates milestone. UI-01B adds only the Wails/React read-only
 shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
 edit/session, candidate, save or apply path.
 
@@ -577,5 +577,5 @@ UI-BE-04 overall, EXEC-OBS-01, documentation-only UI-01A, UI-01B, UI-01C and
 UI-01D are DONE. UI-01D was owner-accepted without final revision-bound
 review. UI-01E is decomposed into E1-E6; UI-01E1 server CRUD integration is
 DONE; UI-01E2 through UI-01E6 and UI-01F1 through UI-01F6 are DONE. UI-01F
-overall is DONE; UI-NET-01A is DONE, UI-NET-01B is NEXT, UI-01G follows,
+overall is DONE; UI-NET-01A and UI-NET-01B are DONE, UI-NET-01C is NEXT, UI-01G follows,
 and UI-01 overall remains not done.
