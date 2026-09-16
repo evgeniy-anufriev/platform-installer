@@ -354,7 +354,10 @@ type roleCardinality struct {
 	Maximum *int `yaml:"maximum"`
 }
 
-var catalogIdentifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+// Catalog identifiers follow the published service-manifest/v1alpha1
+// identifier grammar. This deliberately differs from the narrower deployment
+// ID grammar used by Installer edit commands.
+var catalogIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 
 func readCatalog(verified executionbundle.Verified) (catalog, error) {
 	var value catalog

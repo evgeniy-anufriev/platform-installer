@@ -94,6 +94,7 @@ export function ServersPage({
   serverTypes,
   configError,
   busy,
+  structuralDisabled,
   onAppend,
   onReview,
   onDiscard,
@@ -114,6 +115,7 @@ export function ServersPage({
   serverTypes: ServerType[];
   configError: string | null;
   busy: boolean;
+  structuralDisabled: boolean;
   onAppend: (intent: ServerIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
@@ -132,6 +134,7 @@ export function ServersPage({
   const [dialog, setDialog] = useState<Dialog>(null);
   const visible = rows(snapshot, managed, intents);
   const firstSave = empty;
+  const crudDisabled = busy || structuralDisabled;
   return (
     <>
       <section className="title servers-title">
@@ -141,7 +144,7 @@ export function ServersPage({
         </div>
         <button
           onClick={() => setDialog({ mode: "add" })}
-          disabled={busy || !!configError}
+          disabled={crudDisabled || !!configError}
         >
           Добавить сервер
         </button>
@@ -167,7 +170,7 @@ export function ServersPage({
             </p>
             <button
               onClick={() => setDialog({ mode: "add" })}
-              disabled={busy || !!configError}
+              disabled={crudDisabled || !!configError}
             >
               Добавить первый сервер
             </button>
@@ -190,7 +193,9 @@ export function ServersPage({
                 {visible.map((row) => {
                   const created = row.state === "new";
                   const disableCrud =
-                    busy || row.state === "deleting" || (firstSave && created);
+                    crudDisabled ||
+                    row.state === "deleting" ||
+                    (firstSave && created);
                   return (
                     <tr
                       key={row.hostId}
@@ -271,7 +276,7 @@ export function ServersPage({
           mode="add"
           serverTypes={serverTypes}
           configError={configError}
-          busy={busy}
+          busy={crudDisabled}
           onClose={() => setDialog(null)}
           onAppend={async (intent) => {
             const ok = await onAppend(intent);
@@ -286,7 +291,7 @@ export function ServersPage({
           row={dialog.row}
           serverTypes={serverTypes}
           configError={configError}
-          busy={busy}
+          busy={crudDisabled}
           onClose={() => setDialog(null)}
           onAppend={async (intent) => {
             const ok = await onAppend(intent);
@@ -298,7 +303,7 @@ export function ServersPage({
       {dialog?.mode === "delete" && (
         <DeleteDialog
           row={dialog.row}
-          busy={busy}
+          busy={crudDisabled}
           onClose={() => setDialog(null)}
           onAppend={async (intent) => {
             const ok = await onAppend(intent);
@@ -332,8 +337,11 @@ function ExecutionNodePanel({
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [readiness, setReadiness] = useState<ExecutionNodeReadiness | null>(null);
-  const [preparation, setPreparation] = useState<ExecutionNodePreparation | null>(null);
+  const [readiness, setReadiness] = useState<ExecutionNodeReadiness | null>(
+    null,
+  );
+  const [preparation, setPreparation] =
+    useState<ExecutionNodePreparation | null>(null);
   const effective: Partial<ExecutionNodeContext> & {
     status: string;
     selectionSource: string;
@@ -378,15 +386,23 @@ function ExecutionNodePanel({
         не изменяет узел. Подготовка выполняется только после подтверждения.
       </p>
       {readiness && (
-        <p className={readiness.error ? "field-error" : "muted"} role={readiness.error ? "alert" : undefined}>
+        <p
+          className={readiness.error ? "field-error" : "muted"}
+          role={readiness.error ? "alert" : undefined}
+        >
           Проверка: <b>{readiness.status}</b>
           {readiness.error ? ` · ${readiness.error.message}` : ""}
         </p>
       )}
       {preparation && (
-        <p className={preparation.error ? "field-error" : "muted"} role={preparation.error ? "alert" : undefined}>
+        <p
+          className={preparation.error ? "field-error" : "muted"}
+          role={preparation.error ? "alert" : undefined}
+        >
           Подготовка: <b>{preparation.status}</b>
-          {preparation.verification ? ` · Проверка проекта: ${preparation.verification.status}` : ""}
+          {preparation.verification
+            ? ` · Проверка проекта: ${preparation.verification.status}`
+            : ""}
           {preparation.error ? ` · ${preparation.error.message}` : ""}
         </p>
       )}
@@ -394,9 +410,15 @@ function ExecutionNodePanel({
         <button
           className="outline"
           onClick={async () => {
-            setBusy(true); setError("");
-            try { setReadiness(await onCheck()); } catch { setError("EXECUTION_NODE_CHECK_UNAVAILABLE"); }
-            finally { setBusy(false); }
+            setBusy(true);
+            setError("");
+            try {
+              setReadiness(await onCheck());
+            } catch {
+              setError("EXECUTION_NODE_CHECK_UNAVAILABLE");
+            } finally {
+              setBusy(false);
+            }
           }}
           disabled={disabled || busy}
         >
@@ -405,29 +427,47 @@ function ExecutionNodePanel({
         <button
           className="outline"
           onClick={async () => {
-            setBusy(true); setError("");
-            try { setPreparation(await onPlan()); } catch { setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE"); }
-            finally { setBusy(false); }
+            setBusy(true);
+            setError("");
+            try {
+              setPreparation(await onPlan());
+            } catch {
+              setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
+            } finally {
+              setBusy(false);
+            }
           }}
           disabled={disabled || busy}
         >
           Спланировать подготовку
         </button>
-        {preparation?.status === "CONFIRMATION_REQUIRED" && preparation.planId && (
-          <button
-            onClick={async () => {
-              const planId = preparation.planId;
-              if (!planId) return;
-              if (!window.confirm("Подготовить выбранный Execution Node? Это может активировать проверенный runtime.")) return;
-              setBusy(true); setError("");
-              try { setPreparation(await onPrepare(planId)); } catch { setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE"); }
-              finally { setBusy(false); }
-            }}
-            disabled={disabled || busy}
-          >
-            Подтвердить подготовку
-          </button>
-        )}
+        {preparation?.status === "CONFIRMATION_REQUIRED" &&
+          preparation.planId && (
+            <button
+              onClick={async () => {
+                const planId = preparation.planId;
+                if (!planId) return;
+                if (
+                  !window.confirm(
+                    "Подготовить выбранный Execution Node? Это может активировать проверенный runtime.",
+                  )
+                )
+                  return;
+                setBusy(true);
+                setError("");
+                try {
+                  setPreparation(await onPrepare(planId));
+                } catch {
+                  setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={disabled || busy}
+            >
+              Подтвердить подготовку
+            </button>
+          )}
       </div>
       {!changing ? (
         <button

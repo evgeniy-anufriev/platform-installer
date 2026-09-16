@@ -508,4 +508,27 @@ UI-01F3 may be marked DONE only when:
 - docs, `CURRENT_STATE.md` and roadmap record F3 DONE and F4 NEXT;
 - one focused implementation commit exists and the worktree is clean.
 
-Until then UI-01F3 remains **NOT STARTED** and UI-01F4 is not authorized.
+## 15. Implementation evidence
+
+Status: **DONE**, 2026-09-16. UI-01F4 is **NEXT** and remains a separate owner
+gate.
+
+- the Wails executable created two Kafka deployments without an Execution
+  Node, preserved the shared draft across Servers and Topology, committed once
+  through the common Review/Save flow and restored both deployments after a
+  native-dialog close/reopen;
+- focused frontend coverage proves Add/Delete, stable selection, duplicate-ID
+  presentation validation, the shared 16-command limit, conflict recovery and
+  `COMMITTED_REFRESH_FAILED` invalidation/reopen behavior;
+- the acceptance run exposed and fixed one pre-existing F1 contract defect:
+  the catalog reader now accepts the exact published service-manifest
+  identifier grammar, including `pg_auto_failover`;
+- frontend tests (33), lint, typecheck, production build, `go test ./...`,
+  `go vet ./...`, Wails production build, changed-scope secret audit and
+  `git diff --check` passed;
+- generated catalog/schema inputs were unchanged; the narrow Go grammar fix
+  additionally passed `CGO_ENABLED=1 go test -race
+  ./internal/projectlifecycle` on RED OS in an isolated workspace, which was
+  removed and its absence verified;
+- no Core operation, Execution Node or target host was contacted during the
+  Windows Save/reopen acceptance.

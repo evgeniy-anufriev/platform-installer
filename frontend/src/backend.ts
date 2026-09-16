@@ -56,6 +56,34 @@ export type ManagedProjectView = {
       sshPort?: number;
     }
   >;
+  deployments: Record<
+    string,
+    {
+      deploymentId: string;
+      serviceType: string;
+      mode: string;
+      endpointGroup?: string;
+    }
+  >;
+  endpointGroups?: Record<
+    string,
+    {
+      endpointGroupId: string;
+      domain: string;
+      wildcard: boolean;
+    }
+  >;
+  memberPlacements?: Array<{
+    deploymentId: string;
+    memberId: string;
+    hostId: string;
+    roles: string[];
+  }>;
+  hostPlacements?: Array<{
+    deploymentId: string;
+    hostId: string;
+    roles: string[];
+  }>;
 };
 export type OpenResult = main.ProjectOpenResult & {
   managed?: ManagedProjectView;
@@ -187,7 +215,9 @@ export const backend: ProjectBackend = {
   planExecutionNodePreparation: () =>
     PlanExecutionNodePreparation() as unknown as Promise<ExecutionNodePreparation>,
   prepareExecutionNode: (planId) =>
-    PrepareExecutionNode(planId) as unknown as Promise<ExecutionNodePreparation>,
+    PrepareExecutionNode(
+      planId,
+    ) as unknown as Promise<ExecutionNodePreparation>,
   verifyProject: () =>
     VerifyProject() as unknown as Promise<VerificationStatus>,
 };

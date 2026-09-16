@@ -11,9 +11,11 @@ import type {
 } from "./backend";
 import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
+import { type DeploymentIntent, TopologyPage } from "./TopologyPage";
 import "./edit.css";
 
-type Page = "project" | "servers" | "installation";
+type Page = "project" | "servers" | "topology" | "installation";
+type StructuralIntent = ServerIntent | DeploymentIntent;
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -59,8 +61,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [editBusy, setEditBusy] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [commandCount, setCommandCount] = useState(0);
-  const [intents, setIntents] = useState<ServerIntent[]>([]);
+  const [intents, setIntents] = useState<StructuralIntent[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const [refreshRoot, setRefreshRoot] = useState("");
+  const [refreshError, setRefreshError] = useState("");
   const [serverTypes, setServerTypes] = useState<
     Array<{ id: string; displayName: string }>
   >([]);
@@ -81,6 +86,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     local &&
     !snapshot;
   const projectOpen = result.status === "OPEN";
+  const topologyAvailable =
+    projectOpen &&
+    (result.classification === "EMPTY_MANAGED_PROJECT" ||
+      result.classification === "MANAGED_PROJECT");
   const executionReady = executionNode?.status === "READY";
   const title = empty
     ? local.name
@@ -158,11 +167,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setIntents([]);
     setReviewOpen(false);
   };
+  const clearRefreshFailure = () => {
+    setRefreshRequired(false);
+    setRefreshRoot("");
+    setRefreshError("");
+  };
   const open = async () => {
     setLoading(true);
     try {
       const next = await api.chooseProject();
       setResult(next);
+      clearRefreshFailure();
       setPage("project");
     } finally {
       setLoading(false);
@@ -200,6 +215,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         compatibilitySourceId: "default",
       });
       setResult(next);
+      clearRefreshFailure();
       setProjectDialog(false);
       setPage("project");
       if (next.status === "OPEN") {
@@ -215,10 +231,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   };
   const close = async () => {
     setResult(await api.closeProject());
+    clearRefreshFailure();
     setPage("project");
   };
 
-  const appendServerIntent = async (intent: ServerIntent): Promise<boolean> => {
+  const appendStructuralIntent = async (
+    intent: StructuralIntent,
+  ): Promise<boolean> => {
+    if (commandCount >= 16) {
+      setEditError({
+        code: "EDIT_COMMAND_LIMIT_EXCEEDED",
+        message: "В одном черновике допускается не более 16 изменений.",
+      });
+      return false;
+    }
     setEditBusy(true);
     let id = sessionId;
     let created = false;
@@ -294,6 +320,19 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         clearDraft();
         return;
       }
+      if (next.status === "COMMITTED_REFRESH_FAILED") {
+        const rootToRefresh = next.current?.root || result.root || "";
+        setResult({
+          ...(next.current || result),
+          snapshot: undefined,
+          managed: undefined,
+        } as OpenResult);
+        clearDraft();
+        setRefreshRequired(true);
+        setRefreshRoot(rootToRefresh);
+        setRefreshError("");
+        return;
+      }
       setEdit(next);
       setEditError(
         next.commit?.finding
@@ -306,6 +345,29 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               message: "Сохранение изменений заблокировано.",
             },
       );
+    } finally {
+      setEditBusy(false);
+    }
+  };
+  const refreshCommittedProject = async () => {
+    if (!refreshRoot) return;
+    setEditBusy(true);
+    setRefreshError("");
+    try {
+      const next = await api.openProject(refreshRoot);
+      if (
+        next.status === "OPEN" &&
+        (next.classification === "EMPTY_MANAGED_PROJECT" || !!next.managed)
+      ) {
+        setResult(next);
+        clearRefreshFailure();
+        return;
+      }
+      setRefreshError(
+        next.error?.message || "Текущее представление проекта не обновлено.",
+      );
+    } catch {
+      setRefreshError("Текущее представление проекта не обновлено.");
     } finally {
       setEditBusy(false);
     }
@@ -358,22 +420,44 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     return context;
   };
   const checkExecutionNode = async (): Promise<ExecutionNodeReadiness> => {
-    if (!api.checkExecutionNode) throw new Error("EXECUTION_NODE_CHECK_UNAVAILABLE");
+    if (!api.checkExecutionNode)
+      throw new Error("EXECUTION_NODE_CHECK_UNAVAILABLE");
     const readiness = await api.checkExecutionNode();
-    setExecutionNode((current) => current ? { ...current, status: readiness.status } : current);
+    setExecutionNode((current) =>
+      current ? { ...current, status: readiness.status } : current,
+    );
     return readiness;
   };
-  const planExecutionNodePreparation = async (): Promise<ExecutionNodePreparation> => {
-    if (!api.planExecutionNodePreparation) throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
-    return api.planExecutionNodePreparation();
-  };
-  const prepareExecutionNode = async (planId: string): Promise<ExecutionNodePreparation> => {
-    if (!api.prepareExecutionNode) throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
+  const planExecutionNodePreparation =
+    async (): Promise<ExecutionNodePreparation> => {
+      if (!api.planExecutionNodePreparation)
+        throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
+      return api.planExecutionNodePreparation();
+    };
+  const prepareExecutionNode = async (
+    planId: string,
+  ): Promise<ExecutionNodePreparation> => {
+    if (!api.prepareExecutionNode)
+      throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
     const preparation = await api.prepareExecutionNode(planId);
     if (preparation.verification) {
-      setResult((current) => ({ ...current, verification: preparation.verification }) as OpenResult);
+      setResult(
+        (current) =>
+          ({
+            ...current,
+            verification: preparation.verification,
+          }) as OpenResult,
+      );
     }
-    setExecutionNode((current) => current ? { ...current, status: preparation.status === "PREPARED" ? "READY" : preparation.status } : current);
+    setExecutionNode((current) =>
+      current
+        ? {
+            ...current,
+            status:
+              preparation.status === "PREPARED" ? "READY" : preparation.status,
+          }
+        : current,
+    );
     return preparation;
   };
 
@@ -390,6 +474,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             const enabled =
               item.id === "project" ||
               (item.id === "servers" && projectOpen) ||
+              (item.id === "topology" && topologyAvailable) ||
               (item.id === "installation" && projectOpen && executionReady);
             return (
               <button
@@ -397,7 +482,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 className={item.id === page ? "active" : "future"}
                 disabled={!enabled}
                 onClick={() =>
-                  (item.id === "project" || item.id === "servers" || item.id === "installation") &&
+                  (item.id === "project" ||
+                    item.id === "servers" ||
+                    item.id === "topology" ||
+                    item.id === "installation") &&
                   setPage(item.id)
                 }
               >
@@ -442,14 +530,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           <button
             className="outline"
             onClick={() => setProjectDialog(true)}
-            disabled={loading || creating || !!sessionId}
+            disabled={loading || creating || !!sessionId || refreshRequired}
           >
             Создать проект
           </button>
           <button
             className="outline"
             onClick={open}
-            disabled={loading || creating || !!sessionId}
+            disabled={loading || creating || !!sessionId || refreshRequired}
           >
             Открыть проект
           </button>
@@ -462,7 +550,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <button
               className="outline"
               onClick={verify}
-              disabled={editBusy || verification.status === "VERIFYING"}
+              disabled={
+                editBusy ||
+                refreshRequired ||
+                verification.status === "VERIFYING"
+              }
             >
               Проверить
             </button>
@@ -472,6 +564,22 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           Сохранение выполняется локально. Проверка последней сохранённой
           ревизии через Core запускается отдельно.
         </section>
+        {refreshRequired && (
+          <section className="card refresh-required" role="alert">
+            <h2>Проект сохранён, но текущее представление не обновлено</h2>
+            <p>
+              Канонические файлы уже записаны. Повторное сохранение недоступно,
+              пока проект не будет безопасно перечитан.
+            </p>
+            {refreshError && <p className="field-error">{refreshError}</p>}
+            <button
+              onClick={refreshCommittedProject}
+              disabled={editBusy || !refreshRoot}
+            >
+              Обновить проект
+            </button>
+          </section>
+        )}
         {(loading || creating) && (
           <section className="card">
             {creating ? "Безопасное создание проекта…" : "Открытие проекта…"}
@@ -514,7 +622,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             local={local}
             onClose={close}
             onServers={() => setPage("servers")}
-            closeDisabled={!!sessionId}
+            closeDisabled={!!sessionId || refreshRequired}
           />
         )}
         {!loading && !creating && projectOpen && page === "servers" && (
@@ -522,11 +630,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             snapshot={snapshot}
             managed={managed}
             empty={!!empty}
-            intents={intents}
+            intents={intents.filter(
+              (intent): intent is ServerIntent =>
+                intent.operation === "CreateServer" ||
+                intent.operation === "UpdateServer" ||
+                intent.operation === "DeleteServer",
+            )}
             serverTypes={serverTypes}
             configError={configError}
             busy={editBusy}
-            onAppend={appendServerIntent}
+            structuralDisabled={refreshRequired}
+            onAppend={appendStructuralIntent}
             onReview={review}
             onDiscard={discard}
             commandCount={commandCount}
@@ -538,6 +652,23 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onCheckExecutionNode={checkExecutionNode}
             onPlanExecutionNodePreparation={planExecutionNodePreparation}
             onPrepareExecutionNode={prepareExecutionNode}
+          />
+        )}
+        {!loading && !creating && projectOpen && page === "topology" && (
+          <TopologyPage
+            managed={managed}
+            catalog={result.catalog}
+            intents={intents.filter(
+              (intent): intent is DeploymentIntent =>
+                intent.operation === "CreateServiceDeployment" ||
+                intent.operation === "DeleteServiceDeployment",
+            )}
+            busy={editBusy}
+            structuralDisabled={refreshRequired}
+            commandCount={commandCount}
+            onAppend={appendStructuralIntent}
+            onReview={review}
+            onDiscard={discard}
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (
@@ -552,9 +683,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               Проверка не является разрешением на запуск.
             </p>
             <p className="muted">
-              Перед выполнением будет обязателен свежий authoritative DeploymentPlan
-              для сохранённой ревизии и текущего runtime. Подготовка Execution Node
-              доступна только на странице Серверы.
+              Перед выполнением будет обязателен свежий authoritative
+              DeploymentPlan для сохранённой ревизии и текущего runtime.
+              Подготовка Execution Node доступна только на странице Серверы.
             </p>
             <button className="outline" onClick={() => setPage("servers")}>
               Открыть Execution Node
@@ -718,7 +849,7 @@ function ProjectPage({
         />
         <Stat
           label="Развёртывания"
-          value={count(snapshot?.serviceDeployments)}
+          value={count(managed?.deployments || snapshot?.serviceDeployments)}
         />
         <Stat label="PKI профили" value={count(snapshot?.pki)} />
         <Stat label="Findings" value={snapshot?.findings?.length ?? 0} />
@@ -754,6 +885,9 @@ function ReviewDialog({
   onDiscard: () => void;
 }) {
   const plan = edit?.plan;
+  const conflict =
+    error?.code === "EDIT_COMMAND_CONFLICT" ||
+    plan?.finding?.code === "EDIT_COMMAND_CONFLICT";
   return (
     <div className="modal" role="presentation">
       <section
@@ -812,11 +946,11 @@ function ReviewDialog({
             <button onClick={onSave} disabled={busy}>
               Сохранить проект
             </button>
-          ) : (
+          ) : !conflict ? (
             <button onClick={onReview} disabled={busy}>
               Повторить проверку
             </button>
-          )}
+          ) : null}
         </div>
       </section>
     </div>

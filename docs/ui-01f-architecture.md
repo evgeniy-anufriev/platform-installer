@@ -438,13 +438,15 @@ Status: **DONE**. Detailed architecture and evidence:
 
 ### UI-01F3 — deployment UI
 
-Status: **NOT STARTED**; separate owner gate.
+Status: **DONE**. Evidence: `docs/ui-01f3-architecture.md`.
 
 - Topology navigation and catalog-driven Add/Delete deployment;
 - By services view and stable selection;
 - common draft and Review/Save integration.
 
 ### UI-01F4 — placement UI
+
+Status: **NEXT**; separate owner gate.
 
 - catalog-driven `MEMBER_SCOPED` members/roles form;
 - catalog-driven `HOST_SCOPED` direct hosts/optional roles form;

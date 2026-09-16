@@ -87,6 +87,21 @@ func TestProjectCatalogViewIsClosedStableAndPreservesRoleOrder(t *testing.T) {
 	}
 }
 
+func TestReadCatalogAcceptsPublishedIdentifierGrammar(t *testing.T) {
+	bundle := testBundleWithCatalog(t, "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  postgresql:\n    metadata: {id: postgresql, version: 1.0.0, displayName: PostgreSQL}\n    modes:\n      pg_auto_failover:\n        displayName: pg_auto_failover\n        memberRoles: [data_member]\n        placement:\n          minMembers: 1\n          roleCardinality:\n            data_member: {minimum: 1}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n")
+	verified, err := executionbundle.ValidateRoot(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := readCatalog(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := value.view(verified).Services[0].Modes[0].ID; got != "pg_auto_failover" {
+		t.Fatalf("mode=%q", got)
+	}
+}
+
 func TestReadCatalogRejectsMalformedKnownFieldsAndDuplicateRoles(t *testing.T) {
 	for name, catalogText := range map[string]string{
 		"duplicate role":           "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      single: {displayName: Single, memberRoles: [broker, broker], placement: {minMembers: 1}}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",

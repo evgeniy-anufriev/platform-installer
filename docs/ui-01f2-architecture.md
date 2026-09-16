@@ -611,4 +611,5 @@ UI-01F2 is DONE only when:
 8. documentation/state/roadmap are updated, one focused implementation commit
    is created and the worktree is clean.
 
-F3 remains NOT STARTED until the owner explicitly starts it.
+At F2 completion, F3 remained separately gated; it was subsequently
+authorized and completed under `docs/ui-01f3-architecture.md`.

@@ -191,6 +191,106 @@
 .review-dialog {
   max-width: 720px;
 }
+.refresh-required {
+  border-color: #d97706;
+  background: #fffaf0;
+}
+.topology-title {
+  align-items: center;
+}
+.topology-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.topology-tabs button {
+  background: #fff;
+  color: #29415e;
+  border-color: #cbd5e1;
+}
+.topology-tabs button.active {
+  background: #e9f0ff;
+  color: #1f4f91;
+  border-color: #8fb0df;
+}
+.topology-warning {
+  border-color: #e0b866;
+  background: #fffaf0;
+}
+.topology-grid {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.85fr) minmax(310px, 1.25fr) minmax(
+      240px,
+      0.9fr
+    );
+  gap: 14px;
+}
+.topology-grid .card {
+  margin: 0;
+  min-width: 0;
+}
+.topology-list label,
+.topology-dialog label {
+  display: grid;
+  gap: 6px;
+  font-weight: 650;
+}
+.topology-list input,
+.topology-dialog input,
+.topology-dialog select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+  background: #fff;
+}
+.topology-list-scroll {
+  display: grid;
+  gap: 7px;
+  max-height: 430px;
+  overflow: auto;
+  margin-top: 12px;
+}
+.topology-row {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 11px;
+  text-align: left;
+  color: #29415e;
+  background: #fff;
+  border-color: #d7dee8;
+}
+.topology-row span,
+.topology-row small {
+  color: #667085;
+}
+.topology-row.selected {
+  color: #173f70;
+  background: #e9f0ff;
+  border-color: #8fb0df;
+}
+.topology-row.draft-deleting {
+  opacity: 0.62;
+}
+.topology-detail dl,
+.topology-summary dl {
+  grid-template-columns: minmax(105px, 145px) 1fr;
+}
+.topology-actions {
+  margin-top: 20px;
+  justify-content: flex-start;
+}
+.topology-dialog {
+  max-width: 620px;
+}
+.topology-guidance {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: #f2f6fb;
+}
 @media (max-width: 860px) {
   .servers-title {
     align-items: flex-start;
@@ -200,6 +300,13 @@
     grid-template-columns: 1fr;
   }
   .execution-node-detail {
+    grid-template-columns: 1fr;
+  }
+  .topology-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .topology-grid {
     grid-template-columns: 1fr;
   }
 }

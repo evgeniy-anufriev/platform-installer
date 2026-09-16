@@ -20,6 +20,54 @@ const project = {
         sshPort: 2222,
       },
     },
+    deployments: {
+      "kafka-main": {
+        deploymentId: "kafka-main",
+        serviceType: "kafka",
+        mode: "kraft",
+      },
+    },
+  },
+  catalog: {
+    status: "READY",
+    expectedBundleDigest: "sha256:bundle",
+    expectedCatalogDigest: "sha256:catalog",
+    services: [
+      {
+        id: "kafka",
+        definitionVersion: "1",
+        displayName: "Apache Kafka",
+        category: "Messaging",
+        ui: {},
+        endpointConsumer: false,
+        endpointProvider: false,
+        modes: [
+          {
+            id: "kraft",
+            displayName: "KRaft",
+            placementKind: "MEMBER_SCOPED",
+            roles: ["broker", "controller"],
+            guidance: {
+              minParticipants: 1,
+              distinctHosts: false,
+              roleCardinality: [],
+            },
+          },
+          {
+            id: "single",
+            displayName: "Single node",
+            placementKind: "MEMBER_SCOPED",
+            roles: ["broker"],
+            guidance: {
+              minParticipants: 1,
+              maxParticipants: 1,
+              distinctHosts: false,
+              roleCardinality: [],
+            },
+          },
+        ],
+      },
+    ],
   },
   verification: { status: "NOT_VERIFIED" },
   snapshot: {
@@ -50,6 +98,7 @@ const emptyProject = {
     name: "Test",
     source: { bundleDigest: "sha256:bundle" },
   },
+  catalog: project.catalog,
   counts: { servers: 0, deployments: 0, runs: 0 },
 };
 
@@ -123,6 +172,18 @@ async function openServers(
   await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
 }
 
+async function openTopology(
+  value: MockApi,
+  open: OpenResult = project as unknown as OpenResult,
+) {
+  value.chooseProject.mockResolvedValue(open);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Топология" }));
+}
+
 describe("UI-01E2 server editor", () => {
   it("shows saved and verification state separately before editing", async () => {
     const value = api();
@@ -136,7 +197,7 @@ describe("UI-01E2 server editor", () => {
     expect(
       (screen.getByRole("button", { name: "Топология" }) as HTMLButtonElement)
         .disabled,
-    ).toBe(true);
+    ).toBe(false);
     expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
   });
 
@@ -160,14 +221,29 @@ describe("UI-01E2 server editor", () => {
       }),
     });
     await openServers(value);
-    expect((await screen.findByRole("button", { name: "Установка" })) as HTMLButtonElement).toHaveProperty("disabled", true);
-    await userEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+    expect(
+      (await screen.findByRole("button", {
+        name: "Установка",
+      })) as HTMLButtonElement,
+    ).toHaveProperty("disabled", true);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Проверить узел" }),
+    );
     expect(value.checkExecutionNode).toHaveBeenCalledOnce();
-    expect((screen.getByRole("button", { name: "Установка" }) as HTMLButtonElement).disabled).toBe(false);
-    await userEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
-    expect(await screen.findByRole("button", { name: "Подтвердить подготовку" })).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Установка" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Спланировать подготовку" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Подтвердить подготовку" }),
+    ).toBeTruthy();
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    await userEvent.click(screen.getByRole("button", { name: "Подтвердить подготовку" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Подтвердить подготовку" }),
+    );
     expect(value.prepareExecutionNode).toHaveBeenCalledWith("prepare-plan");
     expect(await screen.findByText(/Проверка проекта: VERIFIED/)).toBeTruthy();
   });
@@ -472,6 +548,273 @@ describe("UI-01E2 server editor", () => {
     await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
     expect(value.verifyProject).toHaveBeenCalledOnce();
     expect(await screen.findByText("Проверено")).toBeTruthy();
+  });
+});
+
+describe("UI-01F3 deployment editor", () => {
+  it("opens Topology without an Execution Node and renders saved deployments", async () => {
+    const value = api();
+    await openTopology(value);
+    expect(
+      await screen.findByRole("heading", { name: "Топология" }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("kafka-main").length).toBeGreaterThan(0);
+    expect(screen.getByText("Apache Kafka (kafka)")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Настроить сервис" }),
+    ).toHaveProperty("disabled", true);
+    expect(value.getExecutionNodeContext).toBeUndefined();
+    await userEvent.click(screen.getByRole("button", { name: "Проект" }));
+    expect(
+      screen.getByText("Развёртывания").parentElement?.querySelector("strong")
+        ?.textContent,
+    ).toBe("1");
+  });
+
+  it("appends one catalog-backed Create intent and selects the new deployment", async () => {
+    const value = api();
+    await openTopology(value);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Технический ID deployment"),
+      "kafka-extra",
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Режим"), "single");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить в черновик" }),
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "CreateServiceDeployment",
+      deploymentId: "kafka-extra",
+      serviceType: "kafka",
+      mode: "single",
+    });
+    expect(await screen.findByText("Новый черновик")).toBeTruthy();
+    expect(screen.getByText("1 / 16 изменений")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Удалить deployment" }),
+    ).toHaveProperty("disabled", true);
+  });
+
+  it("rejects a duplicate deployment ID before calling the backend", async () => {
+    const value = api();
+    await openTopology(value);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Технический ID deployment"),
+      "kafka-main",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить в черновик" }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Deployment с таким ID уже есть",
+    );
+    expect(value.startEditSession).not.toHaveBeenCalled();
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+  });
+
+  it("keeps guarded Delete available when the exact catalog is unavailable", async () => {
+    const unavailable = {
+      ...project,
+      catalog: {
+        status: "UNAVAILABLE",
+        expectedBundleDigest: "sha256:bundle",
+        expectedCatalogDigest: "sha256:catalog",
+        error: { code: "CATALOG_UNAVAILABLE", message: "Catalog unavailable" },
+      },
+    };
+    const value = api();
+    await openTopology(value, unavailable as unknown as OpenResult);
+    expect(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    ).toHaveProperty("disabled", true);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Удалить deployment" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Удалить deployment" }).at(-1)!,
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "DeleteServiceDeployment",
+      deploymentId: "kafka-main",
+    });
+  });
+
+  it("shares one EditSession and command count between Servers and Topology", async () => {
+    const value = api({
+      appendEditCommand: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: "EDITING",
+          session: { sessionId: sessionID, commandCount: 1 },
+        })
+        .mockResolvedValueOnce({
+          status: "EDITING",
+          session: { sessionId: sessionID, commandCount: 2 },
+        }),
+    });
+    await openServers(value);
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    await userEvent.clear(screen.getByLabelText("Желаемое имя хоста"));
+    await userEvent.type(
+      screen.getByLabelText("Желаемое имя хоста"),
+      "node1.changed.internal",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await userEvent.click(screen.getByRole("button", { name: "Топология" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Технический ID deployment"),
+      "kafka-extra",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить в черновик" }),
+    );
+    expect(value.startEditSession).toHaveBeenCalledOnce();
+    expect(value.appendEditCommand).toHaveBeenLastCalledWith(sessionID, {
+      operation: "CreateServiceDeployment",
+      deploymentId: "kafka-extra",
+      serviceType: "kafka",
+      mode: "kraft",
+    });
+    expect(screen.getByText("2 / 16 изменений")).toBeTruthy();
+  });
+
+  it("treats COMMITTED_REFRESH_FAILED as committed and recovers only by reopen", async () => {
+    const planID = "abcdef0123456789abcdef0123456789";
+    const invalidated = {
+      ...project,
+      managed: undefined,
+      snapshot: undefined,
+      verification: { status: "UNVERIFIED" },
+    };
+    const refreshed = {
+      ...project,
+      managed: {
+        ...project.managed,
+        projectRevision: "sha256:new",
+        deployments: {
+          "kafka-main": project.managed.deployments["kafka-main"],
+          "kafka-extra": {
+            deploymentId: "kafka-extra",
+            serviceType: "kafka",
+            mode: "kraft",
+          },
+        },
+      },
+    };
+    const value = api({
+      reviewEditSession: vi.fn().mockResolvedValue({
+        status: "READY",
+        plan: {
+          planId: planID,
+          saveAllowed: true,
+          semanticChanges: [],
+          affectedDocuments: [],
+        },
+      }),
+      commitEditPlan: vi.fn().mockResolvedValue({
+        status: "COMMITTED_REFRESH_FAILED",
+        commit: {
+          status: "COMMITTED_REFRESH_FAILED",
+          newProjectRevision: "sha256:new",
+        },
+        current: invalidated,
+      }),
+      openProject: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: "ERROR",
+          error: { code: "PROJECT_CHANGED", message: "Project changed" },
+        })
+        .mockResolvedValueOnce(refreshed),
+    });
+    await openTopology(value);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Технический ID deployment"),
+      "kafka-extra",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить в черновик" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить проект" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: "Проект сохранён, но текущее представление не обновлено",
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByText("kafka-main")).toBeNull();
+    expect(screen.queryByText("kafka-extra")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    ).toHaveProperty("disabled", true);
+    expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
+    expect(value.commitEditPlan).toHaveBeenCalledOnce();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Обновить проект" }),
+    );
+    expect(value.openProject).toHaveBeenCalledWith("C:/Projects/test");
+    expect(await screen.findByText("Project changed")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    ).toHaveProperty("disabled", true);
+    expect(value.commitEditPlan).toHaveBeenCalledOnce();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Обновить проект" }),
+    );
+    expect((await screen.findAllByText("kafka-extra")).length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    ).toHaveProperty("disabled", false);
+    expect(value.commitEditPlan).toHaveBeenCalledOnce();
+  });
+
+  it("does not offer Review retry for EDIT_COMMAND_CONFLICT", async () => {
+    const value = api({
+      reviewEditSession: vi.fn().mockResolvedValue({
+        status: "BLOCKED",
+        error: {
+          code: "EDIT_COMMAND_CONFLICT",
+          message: "Conflicting deployment lifecycle intents",
+        },
+      }),
+    });
+    await openTopology(value);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Удалить deployment" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Удалить deployment" }).at(-1)!,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Просмотреть изменения" }),
+    );
+    expect(await screen.findByText("EDIT_COMMAND_CONFLICT")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Повторить проверку" }),
+    ).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Отменить все изменения" }).length,
+    ).toBeGreaterThan(0);
   });
 });
 
