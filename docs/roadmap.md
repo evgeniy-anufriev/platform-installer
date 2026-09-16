@@ -651,9 +651,11 @@ the pre-E5 ADR-027 Save/Verify separation is implemented without advancing E5.
 UI-01E5 is DONE: the application-owned trusted Execution Node binding now
 supports read-only readiness, explicit-confirmation preparation and fresh
 post-Prepare Verify, while candidates remain transport-free. UI-01E6 is DONE;
-UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE. UI-NET-01A is DONE;
-UI-NET-01B is NEXT behind a separate owner gate. UI-01G remains the following
-Certificates milestone and UI-01 overall is NOT DONE.
+UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE. UI-NET-01 is DONE:
+provider tuples are edited through v1alpha6, the existing guarded local
+Save/reopen lifecycle and the Topology → Entry points UI. Its Core-derived
+preview never infers PKI/SAN impact locally; see `docs/ui-net-01.md`.
+UI-01G is the next Certificates milestone and UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
