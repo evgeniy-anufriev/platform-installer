@@ -469,12 +469,17 @@ Status: **NEXT**; separate owner gate. Plan: `docs/ui-01f5-architecture.md`.
 - revision-bound Core preview and honest stale/unavailable states;
 - service editor and its navigation remain outside F5.
 
-### UI-01F6 — acceptance and regression
+### UI-01F6 — acceptance and regression — DONE
 
 - Windows desktop end-to-end acceptance;
 - RED OS target-free Core verification and affected race tests;
 - contract/catalog reproducibility, safety and regression gates;
 - docs/state/roadmap update only after all acceptance criteria pass.
+
+Acceptance evidence is recorded in `docs/ui-01f6.md`. It passed the built
+Windows desktop check, deterministic web-view acceptance, RED OS target-free
+Core and race gates, catalog/schema reproducibility and hygiene checks. UI-01F
+is complete; UI-01G and UI-01H remain out of scope.
 
 Before each slice, compare its screens and flows with the mockup and record any
 material discrepancy. A discrepancy that changes ownership, contract or user

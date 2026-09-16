@@ -612,5 +612,6 @@ UI-01F5 may be marked DONE only when:
 
 UI-01F5 is **DONE**. The focused implementation commit records the typed Go
 projection, Entry points UI, generated Wails binding, Go/frontend acceptance,
-Windows Wails build and RED OS race evidence. UI-01F6 is NEXT; later milestones
-remain separately authorized.
+Windows Wails build and RED OS race evidence. UI-01F6 subsequently completed;
+its final evidence is `docs/ui-01f6.md`. Later milestones remain separately
+authorized.
