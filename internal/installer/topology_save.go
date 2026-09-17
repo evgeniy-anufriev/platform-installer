@@ -26,6 +26,9 @@ type topologyMutationSet struct {
 	deletedDeployments map[string]bool
 	deletedGroups      map[string]bool
 	reconciled         map[string]bool
+	deletedAuthorities map[string]bool
+	deletedProfiles    map[string]bool
+	deletedTLSProfiles map[string]bool
 }
 
 func topologyOperation(operation string) bool {
@@ -35,6 +38,11 @@ func topologyOperation(operation string) bool {
 		"CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",
 		"SetServiceEndpointGroup", "ClearServiceEndpointGroup",
 		"ReconcileEndpointProvider", "ClearEndpointProvider":
+		return true
+	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "DeleteCertificateAuthority",
+		"CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile",
+		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
+		"CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
 		return true
 	default:
 		return false
@@ -226,13 +234,13 @@ func (candidate *structuralCandidate) desired() (map[string]any, map[string]any,
 }
 
 func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *projectlifecycle.ProjectCatalogView) ([]SemanticChange, topologyMutationSet, error) {
-	mutations := topologyMutationSet{deletedServers: make(map[string]bool), deletedDeployments: make(map[string]bool), deletedGroups: make(map[string]bool), reconciled: make(map[string]bool)}
+	mutations := topologyMutationSet{deletedServers: make(map[string]bool), deletedDeployments: make(map[string]bool), deletedGroups: make(map[string]bool), reconciled: make(map[string]bool), deletedAuthorities: make(map[string]bool), deletedProfiles: make(map[string]bool), deletedTLSProfiles: make(map[string]bool)}
 	changes := make([]SemanticChange, 0, len(commands))
 	inventory, err := candidate.inventory()
 	if err != nil {
 		return nil, mutations, err
 	}
-	_, deployments, groups, err := candidate.desired()
+	state, deployments, groups, err := candidate.desired()
 	if err != nil {
 		return nil, mutations, err
 	}
@@ -247,6 +255,16 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 		if command.Operation == "DeleteServer" {
 			mutations.deletedServers[command.HostID] = true
 		}
+		changes = append(changes, commandSummary(command))
+	}
+	for _, command := range commands {
+		if !pkiOperation(command.Operation) {
+			continue
+		}
+		if err := reducePKICommand(state, command, mutations); err != nil {
+			return nil, mutations, err
+		}
+		candidate.dirty[desiredDocument] = true
 		changes = append(changes, commandSummary(command))
 	}
 	for _, command := range commands {
@@ -698,6 +716,113 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 	if err := validateCertificateScopeReferences(state["certificateScopes"], inventory, deployments, members, mutations); err != nil {
 		return err
 	}
+	if err := validatePKIReferences(state, deployments, mutations); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePKIReferences(state map[string]any, deployments map[string]any, mutations topologyMutationSet) error {
+	authorities := asMap(state["certificateAuthorities"])
+	profiles := asMap(state["certificateProfiles"])
+	tlsProfiles := asMap(state["tlsProfiles"])
+	scopes := asMap(state["certificateScopes"])
+	if authorities == nil {
+		authorities = map[string]any{}
+	}
+	if profiles == nil {
+		profiles = map[string]any{}
+	}
+	if tlsProfiles == nil {
+		tlsProfiles = map[string]any{}
+	}
+	if scopes == nil {
+		scopes = map[string]any{}
+	}
+	for id, raw := range authorities {
+		if !validDesiredStateIdentifier(id) || validPKIEntity("CreateCertificateAuthority", asMap(raw)) != nil {
+			return managedReadError("Managed certificate authority is malformed", desiredDocument)
+		}
+	}
+	for id, raw := range profiles {
+		profile := asMap(raw)
+		if !validDesiredStateIdentifier(id) {
+			return managedReadError("Managed certificate profile identifier is malformed", desiredDocument)
+		}
+		if err := validPKIEntity("CreateCertificateProfile", profile); err != nil {
+			return managedReadError("Managed certificate profile is malformed", desiredDocument)
+		}
+		ref, ok := profile["authorityRef"].(string)
+		if profile == nil || !ok || !validDesiredStateIdentifier(ref) {
+			return managedReadError("Managed certificate profile is malformed", desiredDocument)
+		}
+		if authorities[ref] == nil {
+			if mutations.deletedAuthorities[ref] {
+				return referenceInUse("authorityRef")
+			}
+			return referenceNotFound("authorityRef")
+		}
+		_ = id
+	}
+	for id, raw := range tlsProfiles {
+		profile := asMap(raw)
+		if !validDesiredStateIdentifier(id) {
+			return managedReadError("Managed TLS profile identifier is malformed", desiredDocument)
+		}
+		if err := validPKIEntity("CreateTLSProfile", profile); err != nil {
+			return managedReadError("Managed TLS profile is malformed", desiredDocument)
+		}
+		ref, ok := profile["certificateProfileRef"].(string)
+		if profile == nil || !ok || !validDesiredStateIdentifier(ref) {
+			return managedReadError("Managed TLS profile is malformed", desiredDocument)
+		}
+		if profiles[ref] == nil {
+			if mutations.deletedProfiles[ref] {
+				return referenceInUse("certificateProfileRef")
+			}
+			return referenceNotFound("certificateProfileRef")
+		}
+	}
+	for id, raw := range scopes {
+		scope := asMap(raw)
+		if !validDesiredStateIdentifier(id) {
+			return managedReadError("Managed certificate scope identifier is malformed", desiredDocument)
+		}
+		if err := validPKIEntity("CreateCertificateScope", scope); err != nil {
+			return managedReadError("Managed certificate scope is malformed", desiredDocument)
+		}
+		ref, ok := scope["profile"].(string)
+		if scope == nil || !ok || !validDesiredStateIdentifier(ref) {
+			return managedReadError("Managed certificate scope is malformed", desiredDocument)
+		}
+		if profiles[ref] == nil {
+			if mutations.deletedProfiles[ref] {
+				return referenceInUse("profile")
+			}
+			return referenceNotFound("profile")
+		}
+	}
+	for _, raw := range deployments {
+		deployment := asMap(raw)
+		configuration := asMap(deployment["configuration"])
+		if configuration == nil {
+			continue
+		}
+		ref, present := configuration["tlsProfile"]
+		if !present {
+			continue
+		}
+		id, ok := ref.(string)
+		if !ok || !validDesiredStateIdentifier(id) {
+			return managedReadError("Managed TLS-profile reference is malformed", desiredDocument)
+		}
+		if tlsProfiles[id] == nil {
+			if mutations.deletedTLSProfiles[id] {
+				return referenceInUse("configuration.tlsProfile")
+			}
+			return referenceNotFound("configuration.tlsProfile")
+		}
+	}
 	return nil
 }
 
@@ -722,7 +847,7 @@ func validateCertificateScopeReferences(raw any, inventory *managedServerInvento
 		seenHosts := make(map[string]bool, len(hostValues))
 		for _, rawHost := range hostValues {
 			hostID, ok := rawHost.(string)
-			if !ok || !identifierPattern.MatchString(hostID) || seenHosts[hostID] {
+			if !ok || !validDesiredStateIdentifier(hostID) || seenHosts[hostID] {
 				return managedReadError("Managed certificate-scope host reference is malformed", desiredDocument)
 			}
 			seenHosts[hostID] = true
@@ -740,7 +865,7 @@ func validateCertificateScopeReferences(raw any, inventory *managedServerInvento
 		seenDeployments := make(map[string]bool, len(deploymentValues))
 		for _, rawDeployment := range deploymentValues {
 			deploymentID, ok := rawDeployment.(string)
-			if !ok || !identifierPattern.MatchString(deploymentID) || seenDeployments[deploymentID] {
+			if !ok || !validDesiredStateIdentifier(deploymentID) || seenDeployments[deploymentID] {
 				return managedReadError("Managed certificate-scope deployment reference is malformed", desiredDocument)
 			}
 			seenDeployments[deploymentID] = true
@@ -761,7 +886,7 @@ func validateCertificateScopeReferences(raw any, inventory *managedServerInvento
 			deploymentID, deploymentOK := member["deploymentId"].(string)
 			memberID, memberOK := member["memberId"].(string)
 			key := deploymentID + "\x00" + memberID
-			if member == nil || len(member) != 2 || !deploymentOK || !memberOK || !identifierPattern.MatchString(deploymentID) || !identifierPattern.MatchString(memberID) || seenMembers[key] {
+			if member == nil || len(member) != 2 || !deploymentOK || !memberOK || !validDesiredStateIdentifier(deploymentID) || !validDesiredStateIdentifier(memberID) || seenMembers[key] {
 				return managedReadError("Managed certificate-scope member reference is malformed", desiredDocument)
 			}
 			seenMembers[key] = true

@@ -10,7 +10,7 @@ import (
 )
 
 func providerCommand(revision, operation string) EditCommand {
-	return EditCommand{APIVersion: EditCommandAPIVersionV6, Kind: "EditCommand", BaseProjectRevision: revision, Operation: operation}
+	return EditCommand{APIVersion: EditCommandAPIVersionV7, Kind: "EditCommand", BaseProjectRevision: revision, Operation: operation}
 }
 
 func providerProject(t *testing.T, configured bool) (string, string) {

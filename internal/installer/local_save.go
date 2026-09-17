@@ -38,7 +38,7 @@ func ReadManagedProjectView(projectRoot string) (*ManagedProjectView, error) {
 	if all == nil || hosts == nil || targets == nil {
 		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed inventory roots are missing or malformed", managedInventoryDocument)
 	}
-	view := &ManagedProjectView{Servers: make(map[string]ManagedServer), Deployments: make(map[string]ManagedDeployment), EndpointGroups: make(map[string]ManagedEndpointGroup), MemberPlacements: []ManagedMemberPlacement{}, HostPlacements: []ManagedHostPlacement{}}
+	view := &ManagedProjectView{Servers: make(map[string]ManagedServer), Deployments: make(map[string]ManagedDeployment), EndpointGroups: make(map[string]ManagedEndpointGroup), MemberPlacements: []ManagedMemberPlacement{}, HostPlacements: []ManagedHostPlacement{}, PKI: ManagedPKI{Authorities: map[string]map[string]any{}, Profiles: map[string]map[string]any{}, TLSProfiles: map[string]map[string]any{}, Scopes: map[string]map[string]any{}}}
 	for hostID := range targets {
 		if len(view.Servers) >= maxManagedEntities || !identifierPattern.MatchString(hostID) {
 			return nil, managedReadError("Managed server collection is invalid or exceeds its limit", managedInventoryDocument)
@@ -164,6 +164,27 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 			return managedReadError("Managed endpoint group is malformed", desiredDocument)
 		}
 		view.EndpointGroups[id] = ManagedEndpointGroup{EndpointGroupID: id, Domain: domain, Wildcard: wildcard}
+	}
+	for _, entry := range []struct {
+		key       string
+		target    map[string]map[string]any
+		operation string
+	}{{"certificateAuthorities", view.PKI.Authorities, "CreateCertificateAuthority"}, {"certificateProfiles", view.PKI.Profiles, "CreateCertificateProfile"}, {"tlsProfiles", view.PKI.TLSProfiles, "CreateTLSProfile"}, {"certificateScopes", view.PKI.Scopes, "CreateCertificateScope"}} {
+		rawValues := state[entry.key]
+		if rawValues == nil {
+			continue
+		}
+		values := asMap(rawValues)
+		if values == nil || len(values) > maxManagedEntities {
+			return managedReadError("Managed PKI collection is malformed or exceeds its limit", desiredDocument)
+		}
+		for id, raw := range values {
+			entity := asMap(raw)
+			if !validDesiredStateIdentifier(id) || validPKIEntity(entry.operation, entity) != nil {
+				return managedReadError("Managed PKI entity is malformed", desiredDocument)
+			}
+			entry.target[id] = deepCopy(entity).(map[string]any)
+		}
 	}
 	return nil
 }

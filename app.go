@@ -665,7 +665,12 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		"CreateServiceDeployment", "DeleteServiceDeployment",
 		"ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement",
 		"CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",
-		"SetServiceEndpointGroup", "ClearServiceEndpointGroup":
+		"SetServiceEndpointGroup", "ClearServiceEndpointGroup",
+		"ReconcileEndpointProvider", "ClearEndpointProvider",
+		"CreateCertificateAuthority", "UpdateCertificateAuthority", "DeleteCertificateAuthority",
+		"CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile",
+		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
+		"CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
 	default:
 		return a.editFailure(errors.New("EDIT_OPERATION_NOT_AVAILABLE"))
 	}

@@ -12,6 +12,7 @@ const (
 	EditCommandAPIVersionV4    = "platform.installer/edit-command/v1alpha4"
 	EditCommandAPIVersionV5    = "platform.installer/edit-command/v1alpha5"
 	EditCommandAPIVersionV6    = "platform.installer/edit-command/v1alpha6"
+	EditCommandAPIVersionV7    = "platform.installer/edit-command/v1alpha7"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -261,6 +262,16 @@ type ManagedProjectView struct {
 	EndpointGroups   map[string]ManagedEndpointGroup `json:"endpointGroups"`
 	MemberPlacements []ManagedMemberPlacement        `json:"memberPlacements"`
 	HostPlacements   []ManagedHostPlacement          `json:"hostPlacements"`
+	PKI              ManagedPKI                      `json:"pki"`
+}
+
+// ManagedPKI contains direct Installer-owned desired input only; it never
+// represents Core-resolved certificate identity, SAN or runtime material.
+type ManagedPKI struct {
+	Authorities map[string]map[string]any `json:"authorities"`
+	Profiles    map[string]map[string]any `json:"profiles"`
+	TLSProfiles map[string]map[string]any `json:"tlsProfiles"`
+	Scopes      map[string]map[string]any `json:"scopes"`
 }
 
 type ManagedServer struct {

@@ -655,7 +655,10 @@ UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE. UI-NET-01 is DONE:
 provider tuples are edited through v1alpha6, the existing guarded local
 Save/reopen lifecycle and the Topology → Entry points UI. Its Core-derived
 preview never infers PKI/SAN impact locally; see `docs/ui-net-01.md`.
-UI-01G is the next Certificates milestone and UI-01 overall is NOT DONE.
+UI-01G1 is DONE: additive v1alpha7 PKI intents, direct bounded managed-state
+reopen, generic final-state references and guarded local Save passed Go and
+RED OS gates; see `docs/ui-01g1.md`. UI-01G2 is NEXT, and UI-01 overall is NOT
+DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

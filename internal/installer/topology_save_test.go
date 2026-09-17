@@ -379,6 +379,8 @@ func TestF2CertificateScopeMemberIdentityIsDeploymentScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := asMap(document["platform_desired_state"])
+	state["certificateAuthorities"] = map[string]any{"ca": map[string]any{"mode": "MANAGED", "commonName": "Test CA"}}
+	state["certificateProfiles"] = map[string]any{"server": map[string]any{"authorityRef": "ca", "sanPolicy": map[string]any{}}}
 	state["certificateScopes"] = map[string]any{"scope": map[string]any{"profile": "server", "sources": map[string]any{"members": []any{map[string]any{"deploymentId": "kafka-a", "memberId": "member-1"}}}}}
 	content, _ := deterministicYAML(document)
 	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(desiredDocument)), content, 0o600); err != nil {

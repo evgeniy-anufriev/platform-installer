@@ -102,11 +102,11 @@ func validateCommand(command EditCommand) error {
 }
 
 func isEditCommandV2OrLater(version string) bool {
-	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6
+	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7
 }
 
 func isEditCommandV5OrLater(version string) bool {
-	return version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6
+	return version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7
 }
 
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
@@ -183,6 +183,16 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	}
 	fieldsV6["ReconcileEndpointProvider"] = []string{"deploymentId", "endpointGroupId", "virtualRouterId", "virtualAddresses"}
 	fieldsV6["ClearEndpointProvider"] = []string{"deploymentId"}
+	fieldsV7 := make(map[string][]string, len(fieldsV6)+12)
+	for operation, operationFields := range fieldsV6 {
+		fieldsV7[operation] = operationFields
+	}
+	for _, operation := range []string{"CreateCertificateAuthority", "UpdateCertificateAuthority", "CreateCertificateProfile", "UpdateCertificateProfile", "CreateTLSProfile", "UpdateTLSProfile", "CreateCertificateScope", "UpdateCertificateScope"} {
+		fieldsV7[operation] = []string{"entityId", "entity"}
+	}
+	for _, operation := range []string{"DeleteCertificateAuthority", "DeleteCertificateProfile", "DeleteTLSProfile", "DeleteCertificateScope"} {
+		fieldsV7[operation] = []string{"entityId"}
+	}
 	fieldsV1 := map[string][]string{
 		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
 		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
@@ -202,6 +212,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		fields = fieldsV5
 	} else if command.APIVersion == EditCommandAPIVersionV6 {
 		fields = fieldsV6
+	} else if command.APIVersion == EditCommandAPIVersionV7 {
+		fields = fieldsV7
 	}
 	allowedFields, allowed := fields[command.Operation]
 	if !allowed {
@@ -313,7 +325,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "Endpoint-group identifier is required", "command.endpointGroupId")
 		}
 	case "ReconcileEndpointProvider":
-		if command.APIVersion != EditCommandAPIVersionV6 || !identifierPattern.MatchString(command.DeploymentID) || !identifierPattern.MatchString(command.EndpointGroupID) || command.VirtualRouterID < 1 || command.VirtualRouterID > 255 || len(command.VirtualAddresses) == 0 || len(command.VirtualAddresses) > 64 {
+		if (command.APIVersion != EditCommandAPIVersionV6 && command.APIVersion != EditCommandAPIVersionV7) || !identifierPattern.MatchString(command.DeploymentID) || !identifierPattern.MatchString(command.EndpointGroupID) || command.VirtualRouterID < 1 || command.VirtualRouterID > 255 || len(command.VirtualAddresses) == 0 || len(command.VirtualAddresses) > 64 {
 			return blocked("INVALID_EDIT_COMMAND", "Provider reconcile requires a complete bounded provider tuple", "command")
 		}
 		seen := make(map[string]bool, len(command.VirtualAddresses))
@@ -329,7 +341,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			seen[key] = true
 		}
 	case "ClearEndpointProvider":
-		if command.APIVersion != EditCommandAPIVersionV6 || !identifierPattern.MatchString(command.DeploymentID) {
+		if (command.APIVersion != EditCommandAPIVersionV6 && command.APIVersion != EditCommandAPIVersionV7) || !identifierPattern.MatchString(command.DeploymentID) {
 			return blocked("INVALID_EDIT_COMMAND", "Provider clear requires a deployment identifier", "command.deploymentId")
 		}
 	case "AssignServiceToHost", "RemoveServiceFromHost":

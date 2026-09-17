@@ -115,7 +115,7 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 	if state.busy {
 		return EditSession{}, blocked("EDIT_SESSION_BUSY", "Edit session review is in progress", "sessionId")
 	}
-	command.APIVersion = EditCommandAPIVersionV6
+	command.APIVersion = EditCommandAPIVersionV7
 	command.Kind = "EditCommand"
 	command.BaseProjectRevision = state.public.BaseProjectRevision
 	if backend == nil {

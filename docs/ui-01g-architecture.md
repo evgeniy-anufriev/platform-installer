@@ -1,8 +1,11 @@
 # UI-01G — Certificates: managed PKI intent editor architecture
 
-Status: **PLAN**. This document is a design only. It does not authorize
-implementation, certificate issuance, reissue, materialization, service apply,
-or a change to standalone Ansible/Core PKI behavior.
+Status: **UI-01G1 DONE; UI-01G2 NEXT**. This document remains the governing
+architecture for the remaining slices. UI-01G1 added only the additive command
+contract, bounded local desired-state projection, final-state references and
+guarded local Save; it did not authorize certificate issuance, reissue,
+materialization, service apply, or a change to standalone Ansible/Core PKI
+behavior. Evidence: [ui-01g1.md](ui-01g1.md).
 
 Prerequisites: UI-01F and UI-NET-01 are DONE. UI-NET-01 precedes this
 milestone because a provider VIP can contribute to a certificate SAN only when
@@ -226,6 +229,10 @@ creates a TLS consumer by merely creating an authority/profile/TLS-profile.
 - additive schema, decoder and narrow validators;
 - managed PKI projection/read bounds and direct owned-state reopen;
 - candidate reducer, generic reference graph and guarded local Save tests.
+
+**DONE (2026-09-17).** The post-review schema-parity correction is recorded
+as owner-authorized DIFF-002 evidence in `ui-01g1.md`; it did not alter a
+published schema or introduce another review cycle.
 
 ### UI-01G2 — Certificates page and shared draft
 
