@@ -48,6 +48,8 @@ export function GetExecutionNodeContext(): Promise<main.ExecutionNodeContext>;
 
 export function GetSessionCredentialStatus(): Promise<runtimesecret.Status>;
 
+export function GetVerifiedPKIView(): Promise<main.VerifiedPKIView>;
+
 export function OpenProject(arg1: string): Promise<main.ProjectOpenResult>;
 
 export function PlanExecutionNodePreparation(): Promise<main.ExecutionNodePreparation>;

@@ -219,6 +219,34 @@
   gap: 8px;
   margin-top: 14px;
 }
+.certificate-verification {
+  display: grid;
+  gap: 10px;
+}
+.certificate-verification p {
+  margin: 0;
+}
+.verified-identities {
+  display: grid;
+  gap: 9px;
+}
+.verified-identity {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #6b9ed6;
+  padding: 8px 10px;
+  background: #f8fbff;
+  overflow-wrap: anywhere;
+}
+.verified-identity small,
+.verified-identity span {
+  color: #667085;
+}
+.verification-findings {
+  margin: 0;
+  padding-left: 20px;
+  color: #8a2a20;
+}
 .certificate-row {
   padding: 10px 0;
   border-top: 1px solid #e2e8f0;

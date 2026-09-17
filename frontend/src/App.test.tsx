@@ -213,6 +213,36 @@ it("adds a certificate authority through the shared structural draft", async () 
   expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
 });
 
+it("loads revision-bound PKI evidence only after an explicit Core verification", async () => {
+  const getVerifiedPKIView = vi.fn().mockResolvedValue({
+    status: "CURRENT",
+    identities: [
+      {
+        id: "platform-tls--kafka-main",
+        scope: "DEPLOYMENT",
+        tlsProfileId: "platform-tls",
+        dnsNames: ["kafka.example.test"],
+        ipAddresses: ["192.0.2.44"],
+        consumers: [
+          {
+            deploymentId: "kafka-main",
+            memberId: "kafka-kafka-1",
+            hostId: "node1",
+          },
+        ],
+      },
+    ],
+  });
+  const value = api({ getVerifiedPKIView });
+  await openCertificates(value);
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "Проверить" })[1],
+  );
+  expect(value.verifyProject).toHaveBeenCalledOnce();
+  expect(getVerifiedPKIView).toHaveBeenCalledOnce();
+  expect(screen.getByText("kafka.example.test")).toBeTruthy();
+});
+
 /**
  * Deterministic UI acceptance backend.  It deliberately models only the
  * public ProjectBackend edit/review/commit/reopen lifecycle: Core, an

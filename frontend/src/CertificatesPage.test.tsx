@@ -132,4 +132,67 @@ describe("UI-01G2 CertificatesPage", () => {
     await userEvent.selectOptions(selector, "");
     expect(selector.value).toBe("");
   });
+
+  it("renders only current Core identity evidence and keeps Core findings visible", () => {
+    render(
+      <CertificatesPage
+        {...props({
+          verification: { status: "VERIFIED" },
+          verifiedPKI: {
+            status: "CURRENT",
+            identities: [
+              {
+                id: "platform-tls--kafka-main",
+                scope: "DEPLOYMENT",
+                tlsProfileId: "platform-tls",
+                dnsNames: ["kafka.example.test"],
+                ipAddresses: ["192.0.2.44"],
+                consumers: [
+                  {
+                    deploymentId: "kafka-main",
+                    memberId: "kafka-kafka-1",
+                    hostId: "node1",
+                  },
+                ],
+              },
+            ],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("kafka.example.test")).toBeTruthy();
+    expect(screen.getByText("192.0.2.44")).toBeTruthy();
+    expect(screen.getByText(/kafka-main\/kafka-kafka-1 @ node1/)).toBeTruthy();
+  });
+
+  it("does not render identity or SAN rows from invalid evidence", () => {
+    render(
+      <CertificatesPage
+        {...props({
+          verification: {
+            status: "INVALID",
+            findings: [
+              {
+                code: "CERTIFICATE_REISSUE_REQUIRED",
+                severity: "BLOCKED",
+                summary: "Certificate reissue is required",
+              },
+            ],
+          },
+          verifiedPKI: {
+            status: "INVALID",
+            findings: [
+              {
+                code: "CERTIFICATE_REISSUE_REQUIRED",
+                severity: "BLOCKED",
+                summary: "Certificate reissue is required",
+              },
+            ],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/CERTIFICATE_REISSUE_REQUIRED/)).toBeTruthy();
+    expect(screen.queryByText("kafka.example.test")).toBeNull();
+  });
 });

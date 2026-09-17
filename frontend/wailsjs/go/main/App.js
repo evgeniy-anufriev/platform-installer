@@ -62,6 +62,10 @@ export function GetSessionCredentialStatus() {
   return window["go"]["main"]["App"]["GetSessionCredentialStatus"]();
 }
 
+export function GetVerifiedPKIView() {
+  return window["go"]["main"]["App"]["GetVerifiedPKIView"]();
+}
+
 export function OpenProject(arg1) {
   return window["go"]["main"]["App"]["OpenProject"](arg1);
 }

@@ -1,6 +1,6 @@
 # UI-01G — Certificates: managed PKI intent editor architecture
 
-Status: **UI-01G1 and UI-01G2 DONE; UI-01G3 NEXT**. This document remains the governing
+Status: **UI-01G1 through UI-01G3 DONE; UI-01G4 NEXT**. This document remains the governing
 architecture for the remaining slices. UI-01G1 added only the additive command
 contract, bounded local desired-state projection, final-state references and
 guarded local Save; it did not authorize certificate issuance, reissue,
@@ -252,6 +252,13 @@ direct inputs. Evidence: `ui-01g2.md`.
   navigation;
 - UI-01H selector seam only, without implementing the Services editor;
 - explicit stale state after PKI semantic Save.
+
+**DONE (2026-09-17).** `VerifiedPKIView` is an in-memory, bounded, typed
+projection of the existing revision/node/runtime-attested Core snapshot. It
+never exposes raw `pki`, and displays identity/SAN values only for `CURRENT`
+evidence. Saved TLS-profile IDs remain the existing managed desired-state
+selector seam for UI-01H; no Services editor or service TLS assignment was
+introduced. Evidence: `ui-01g3.md`.
 
 ### UI-01G4 — Windows/RED OS acceptance and regressions
 

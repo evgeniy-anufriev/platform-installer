@@ -1,5 +1,9 @@
 import { useMemo, useState } from "react";
-import type { OpenResult } from "./backend";
+import type {
+  OpenResult,
+  VerificationStatus,
+  VerifiedPKIView,
+} from "./backend";
 
 export type CertificateIntent =
   | {
@@ -125,9 +129,12 @@ export function CertificatesPage({
   structuralDisabled,
   commandCount,
   sourceOptions,
+  verification,
+  verifiedPKI,
   onAppend,
   onReview,
   onDiscard,
+  onVerify,
 }: {
   managed: OpenResult["managed"];
   intents: CertificateIntent[];
@@ -135,9 +142,12 @@ export function CertificatesPage({
   structuralDisabled: boolean;
   commandCount: number;
   sourceOptions: CertificateSourceOptions;
+  verification?: VerificationStatus;
+  verifiedPKI?: VerifiedPKIView;
   onAppend: (intent: CertificateIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
+  onVerify?: () => void;
 }) {
   const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
     null,
@@ -207,6 +217,17 @@ export function CertificatesPage({
           />
         </article>
       ))}
+      <CoreVerification
+        verification={verification || { status: "UNVERIFIED" }}
+        view={verifiedPKI}
+        disabled={
+          busy ||
+          commandCount > 0 ||
+          verification?.status === "VERIFYING" ||
+          !onVerify
+        }
+        onVerify={onVerify || (() => undefined)}
+      />
       {editor && (
         <CertificateDialog
           key={`${editor.kind}:${editor.id || "new"}`}
@@ -235,6 +256,111 @@ export function CertificatesPage({
       )}
     </section>
   );
+}
+
+function CoreVerification({
+  verification,
+  view,
+  disabled,
+  onVerify,
+}: {
+  verification: VerificationStatus;
+  view?: VerifiedPKIView;
+  disabled: boolean;
+  onVerify: () => void;
+}) {
+  const status =
+    view?.status ||
+    (verification.status === "INVALID"
+      ? "INVALID"
+      : verification.status === "VERIFIED"
+        ? "STALE"
+        : verification.status === "VERIFYING"
+          ? "NOT_VERIFIED"
+          : "NOT_VERIFIED");
+  const findings = view?.findings || verification.findings || [];
+  return (
+    <article className="card certificate-verification">
+      <div className="section-head">
+        <div>
+          <h2>Проверка Core</h2>
+          <small>
+            Identity и SAN отображаются только из текущего Core evidence.
+          </small>
+        </div>
+        <button disabled={disabled} onClick={onVerify}>
+          {verification.status === "VERIFYING" ? "Проверка…" : "Проверить"}
+        </button>
+      </div>
+      <p className="muted">
+        Влияние provider VIP определяет Core после сохранения и проверки. Этот
+        экран не создаёт сертификаты и не запускает reissue.
+      </p>
+      {status === "CURRENT" && view?.identities?.length ? (
+        <div className="verified-identities">
+          {view.identities.map((identity) => (
+            <section key={identity.id} className="verified-identity">
+              <b>{identity.id}</b>
+              <small>
+                {identity.scope} · TLS profile: {identity.tlsProfileId}
+              </small>
+              <div>
+                <span>DNS: </span>
+                {identity.dnsNames.join(", ") || "—"}
+              </div>
+              <div>
+                <span>IP: </span>
+                {identity.ipAddresses.join(", ") || "—"}
+              </div>
+              <div>
+                <span>Consumers: </span>
+                {identity.consumers
+                  .map(
+                    (consumer) =>
+                      `${consumer.deploymentId}/${consumer.memberId} @ ${consumer.hostId}`,
+                  )
+                  .join(", ") || "—"}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : status === "CURRENT" ? (
+        <p className="muted">
+          Core подтвердил проект; сертификатных consumers нет.
+        </p>
+      ) : (
+        <p className={status === "INVALID" ? "field-error" : "muted"}>
+          {verificationMessage(
+            status,
+            view?.error?.message || verification.error?.message,
+          )}
+        </p>
+      )}
+      {!!findings.length && (
+        <ul className="verification-findings">
+          {findings.map((finding, index) => (
+            <li key={`${finding.code}:${finding.subjectId || index}`}>
+              <b>{finding.code}</b>: {finding.summary}
+              {finding.subjectId ? ` (${finding.subjectId})` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
+function verificationMessage(status: string, error?: string) {
+  switch (status) {
+    case "INVALID":
+      return "Core обнаружил ошибки проверки. Сохранённый проект не откатывается.";
+    case "STALE":
+      return "Проверка устарела: сохраните изменения и запустите проверку снова.";
+    case "UNAVAILABLE":
+      return error || "Для проверки нужен READY Execution Node.";
+    default:
+      return "Проект ещё не проверен Core.";
+  }
 }
 
 function sectionHint(kind: PKIKind) {

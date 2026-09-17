@@ -9,6 +9,7 @@ import type {
   ProjectBackend,
   SessionCredentialInput,
   SessionCredentialStatus,
+  VerifiedPKIView,
 } from "./backend";
 import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
@@ -147,6 +148,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [endpointPreview, setEndpointPreview] = useState<
     EndpointPreview | undefined
   >(undefined);
+  const [verifiedPKI, setVerifiedPKI] = useState<VerifiedPKIView | undefined>(
+    undefined,
+  );
   const endpointPreviewRequest = useRef(0);
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
   const snapshot = result.snapshot;
@@ -248,6 +252,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setSelectedTopologyHost("");
     endpointPreviewRequest.current += 1;
     setEndpointPreview(undefined);
+    setVerifiedPKI(undefined);
   };
   const clearRefreshFailure = () => {
     setRefreshRequired(false);
@@ -374,6 +379,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setIntents((current) => [...current, intent]);
       endpointPreviewRequest.current += 1;
       setEndpointPreview({ status: "STALE" });
+      setVerifiedPKI({ status: "STALE" });
       return true;
     } finally {
       setEditBusy(false);
@@ -405,6 +411,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       if (next.status === "COMMITTED") {
         if (next.current) setResult(next.current);
         setEndpointPreview(undefined);
+        setVerifiedPKI(undefined);
         clearDraft();
         return;
       }
@@ -469,6 +476,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       clearDraft();
       endpointPreviewRequest.current += 1;
       setEndpointPreview({ status: "STALE" });
+      setVerifiedPKI({ status: "STALE" });
     } finally {
       setEditBusy(false);
     }
@@ -491,6 +499,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         const preview = await api.getEndpointPreview();
         if (requestToken !== endpointPreviewRequest.current) return;
         setEndpointPreview(preview);
+      }
+      if (api.getVerifiedPKIView) {
+        const view = await api.getVerifiedPKIView();
+        if (requestToken !== endpointPreviewRequest.current) return;
+        setVerifiedPKI(view);
       }
     } finally {
       setEditBusy(false);
@@ -517,6 +530,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setExecutionNode(context);
     endpointPreviewRequest.current += 1;
     setEndpointPreview({ status: "STALE" });
+    setVerifiedPKI({ status: "STALE" });
     return context;
   };
   const checkExecutionNode = async (): Promise<ExecutionNodeReadiness> => {
@@ -548,6 +562,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             verification: preparation.verification,
           }) as OpenResult,
       );
+      if (api.getVerifiedPKIView) {
+        const view = await api.getVerifiedPKIView();
+        setVerifiedPKI(view);
+      }
     }
     setExecutionNode((current) =>
       current
@@ -824,9 +842,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             structuralDisabled={refreshRequired}
             commandCount={commandCount}
             sourceOptions={certificateSources}
+            verification={verification}
+            verifiedPKI={verifiedPKI}
             onAppend={appendStructuralIntent}
             onReview={review}
             onDiscard={discard}
+            onVerify={verify}
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (

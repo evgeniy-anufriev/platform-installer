@@ -659,7 +659,9 @@ UI-01G1 is DONE: additive v1alpha7 PKI intents, direct bounded managed-state
 reopen, generic final-state references and guarded local Save passed Go and
 RED OS gates; see `docs/ui-01g1.md`. UI-01G2 is DONE: the Certificates page
 uses the shared draft and typed intents with no local PKI derivation; see
-`docs/ui-01g2.md`. UI-01G3 is NEXT, and UI-01 overall is NOT DONE.
+`docs/ui-01g2.md`. UI-01G3 is DONE: revision/node/runtime-bound Core PKI
+evidence is projected to Certificates without local SAN/VIP calculation; see
+`docs/ui-01g3.md`. UI-01G4 is NEXT, and UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

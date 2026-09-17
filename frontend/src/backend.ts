@@ -8,6 +8,7 @@ import {
   DiscardEditSession,
   GetApplicationConfig,
   GetEndpointPreview,
+  GetVerifiedPKIView,
   GetExecutionNodeContext,
   GetSessionCredentialStatus,
   CheckExecutionNode,
@@ -159,6 +160,24 @@ export type EndpointPreview = {
   truncated?: boolean;
   error?: { code: string; message: string };
 };
+export type VerifiedPKIView = {
+  status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
+  identities?: Array<{
+    id: string;
+    scope: "HOST" | "MEMBER" | "DEPLOYMENT";
+    tlsProfileId: string;
+    dnsNames: string[];
+    ipAddresses: string[];
+    consumers: Array<{
+      deploymentId: string;
+      memberId: string;
+      hostId: string;
+    }>;
+  }>;
+  findings?: VerificationStatus["findings"];
+  findingsTruncated?: boolean;
+  error?: { code: string; message: string };
+};
 export type ExecutionNodeReadiness = {
   status: string;
   nodeId?: string;
@@ -202,6 +221,7 @@ export interface ProjectBackend {
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
   getEndpointPreview?(): Promise<EndpointPreview>;
+  getVerifiedPKIView?(): Promise<VerifiedPKIView>;
   selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
   checkExecutionNode?(): Promise<ExecutionNodeReadiness>;
   planExecutionNodePreparation?(): Promise<ExecutionNodePreparation>;
@@ -238,6 +258,8 @@ export const backend: ProjectBackend = {
   getExecutionNodeContext: GetExecutionNodeContext,
   getEndpointPreview: () =>
     GetEndpointPreview() as unknown as Promise<EndpointPreview>,
+  getVerifiedPKIView: () =>
+    GetVerifiedPKIView() as unknown as Promise<VerifiedPKIView>,
   selectExecutionNode: SelectExecutionNode,
   checkExecutionNode: () =>
     CheckExecutionNode() as unknown as Promise<ExecutionNodeReadiness>,
