@@ -1,6 +1,6 @@
 # UI-01G — Certificates: managed PKI intent editor architecture
 
-Status: **UI-01G1 through UI-01G3 DONE; UI-01G4 NEXT**. This document remains the governing
+Status: **UI-01G DONE**. This document remains the governing
 architecture for the remaining slices. UI-01G1 added only the additive command
 contract, bounded local desired-state projection, final-state references and
 guarded local Save; it did not authorize certificate issuance, reissue,
@@ -265,6 +265,12 @@ introduced. Evidence: `ui-01g3.md`.
 - built desktop flow, close/reopen and shared-draft behavior;
 - target-free Core Verify evidence, RED OS regression/race and hygiene gates.
 
+**DONE (2026-09-17).** Windows frontend/Wails and Go gates passed. A fresh
+RED OS workspace passed root, Installer and Core adapter race tests, target-free
+Core regression, catalog/schema reproducibility and ProjectSnapshot acceptance
+both normally and under `sudo unshare -n`. The workspace was removed and its
+absence confirmed. Evidence: `ui-01g4.md`.
+
 Every slice requires a separate owner start request and mockup comparison.
 
 ## 7. Acceptance and non-negotiable safety checks
@@ -303,7 +309,7 @@ architecture review specified by repository rules.
 
 ## 8. Design constraints and completion
 
-UI-01G is complete only after all slices and final gates pass, the Core/PKI
+UI-01G is complete after all slices and final gates passed, the Core/PKI
 boundaries above remain intact, documentation/state/roadmap are synchronized,
 a focused commit exists and the worktree is clean. UI-01H does not start as part
 of UI-01G.

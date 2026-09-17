@@ -661,7 +661,9 @@ RED OS gates; see `docs/ui-01g1.md`. UI-01G2 is DONE: the Certificates page
 uses the shared draft and typed intents with no local PKI derivation; see
 `docs/ui-01g2.md`. UI-01G3 is DONE: revision/node/runtime-bound Core PKI
 evidence is projected to Certificates without local SAN/VIP calculation; see
-`docs/ui-01g3.md`. UI-01G4 is NEXT, and UI-01 overall is NOT DONE.
+`docs/ui-01g3.md`. UI-01G4 is DONE: Windows/RED OS target-free acceptance,
+race gates and hygiene passed; see `docs/ui-01g4.md`. UI-01G overall is DONE,
+UI-01H has not started, and UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

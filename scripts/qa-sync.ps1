@@ -48,9 +48,14 @@ $ErrorActionPreference = 'Stop'
 
 $sourceDirectories = @('ansible-core', 'services', 'examples', 'contracts', 'config')
 $sourceFiles = @()
+$goEmbedDirectory = $null
 if ($IncludeGo) {
     $sourceDirectories += @('cmd', 'internal')
     $sourceFiles += @('go.mod', 'go.sum')
+    $goEmbedDirectory = 'frontend/dist'
+    # Root-level Go sources contain the Wails application boundary and its
+    # focused tests. Keep this shallow so qa-sync never scans dependencies.
+    $sourceFiles += @(Get-ChildItem -LiteralPath (Get-Location) -File -Filter '*.go' | ForEach-Object { $_.Name })
 }
 $sourceEntries = $sourceDirectories + $sourceFiles
 
@@ -98,6 +103,9 @@ function Test-RemoteSourceTree {
     Assert-SafeRemotePath -Path $Workspace
     $checks = ($sourceDirectories | ForEach-Object { "test -d '$Workspace/$_'" }) -join ' && '
     $checks += " && test -f '$Workspace/ansible-core/tools/build_fixture_catalog.py'"
+    if ($goEmbedDirectory) {
+        $checks += " && test -d '$Workspace/$goEmbedDirectory'"
+    }
     Invoke-Ssh -HostName $HostName -UserName $UserName -Identity $Identity -Command $checks
 }
 
@@ -122,6 +130,13 @@ try {
     & scp -q -o IdentitiesOnly=yes -i $KeyPath -r -- $sourceEntries $remote
     if ($LASTEXITCODE -ne 0) {
         throw "scp -r failed with exit code $LASTEXITCODE"
+    }
+    if ($goEmbedDirectory) {
+        Invoke-Ssh -HostName $TargetHost -UserName $TargetUser -Identity $KeyPath -Command "mkdir -p '$workspace/frontend'"
+        & scp -q -o IdentitiesOnly=yes -i $KeyPath -r -- $goEmbedDirectory "$TargetUser@$TargetHost`:$workspace/frontend/"
+        if ($LASTEXITCODE -ne 0) {
+            throw "scp -r frontend/dist failed with exit code $LASTEXITCODE"
+        }
     }
 
     Test-RemoteSourceTree -HostName $TargetHost -UserName $TargetUser -Identity $KeyPath -Workspace $workspace
