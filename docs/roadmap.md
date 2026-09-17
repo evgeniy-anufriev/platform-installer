@@ -657,8 +657,9 @@ Save/reopen lifecycle and the Topology → Entry points UI. Its Core-derived
 preview never infers PKI/SAN impact locally; see `docs/ui-net-01.md`.
 UI-01G1 is DONE: additive v1alpha7 PKI intents, direct bounded managed-state
 reopen, generic final-state references and guarded local Save passed Go and
-RED OS gates; see `docs/ui-01g1.md`. UI-01G2 is NEXT, and UI-01 overall is NOT
-DONE.
+RED OS gates; see `docs/ui-01g1.md`. UI-01G2 is DONE: the Certificates page
+uses the shared draft and typed intents with no local PKI derivation; see
+`docs/ui-01g2.md`. UI-01G3 is NEXT, and UI-01 overall is NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

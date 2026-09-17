@@ -1,6 +1,6 @@
 # UI-01G — Certificates: managed PKI intent editor architecture
 
-Status: **UI-01G1 DONE; UI-01G2 NEXT**. This document remains the governing
+Status: **UI-01G1 and UI-01G2 DONE; UI-01G3 NEXT**. This document remains the governing
 architecture for the remaining slices. UI-01G1 added only the additive command
 contract, bounded local desired-state projection, final-state references and
 guarded local Save; it did not authorize certificate issuance, reissue,
@@ -240,6 +240,11 @@ published schema or introduce another review cycle.
 - inherited/omitted treatment, runtime SecretRef reference-only UX and safe
   delete/error states;
 - no Materialize/Reissue navigation or service TLS assignment.
+
+**DONE (2026-09-17).** The Wails/React Certificates page uses only v1alpha7
+typed intents over the shared structural draft. Scope references are selected
+from final draft hosts/deployments/member placements; explicit DNS/IP remain
+direct inputs. Evidence: `ui-01g2.md`.
 
 ### UI-01G3 — verified Core evidence and cross-page hand-off
 

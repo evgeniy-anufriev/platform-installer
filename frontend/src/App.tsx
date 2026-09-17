@@ -13,6 +13,11 @@ import type {
 import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
 import {
+  type CertificateIntent,
+  type CertificateSourceOptions,
+  CertificatesPage,
+} from "./CertificatesPage";
+import {
   type DeploymentIntent,
   type EndpointIntent,
   type PlacementIntent,
@@ -21,13 +26,15 @@ import {
 } from "./TopologyPage";
 import "./edit.css";
 
-type Page = "project" | "servers" | "topology" | "installation";
+type Page =
+  "project" | "servers" | "topology" | "certificates" | "installation";
 type StructuralIntent =
   | ServerIntent
   | DeploymentIntent
   | PlacementIntent
   | EndpointIntent
-  | ProviderIntent;
+  | ProviderIntent
+  | CertificateIntent;
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -54,6 +61,51 @@ const verificationLabel = (status: string) => {
       return "Не проверено";
   }
 };
+
+function certificateSourceOptions(
+  managed: OpenResult["managed"],
+  intents: StructuralIntent[],
+): CertificateSourceOptions {
+  const hosts = new Set(Object.keys(managed?.servers || {}));
+  const deployments = new Set(Object.keys(managed?.deployments || {}));
+  const members = new Map<string, { deploymentId: string; memberId: string }>();
+  for (const placement of managed?.memberPlacements || [])
+    members.set(`${placement.deploymentId}\u0000${placement.memberId}`, {
+      deploymentId: placement.deploymentId,
+      memberId: placement.memberId,
+    });
+  for (const intent of intents) {
+    if (intent.operation === "CreateServer") hosts.add(intent.hostId);
+    if (intent.operation === "DeleteServer") hosts.delete(intent.hostId);
+    if (intent.operation === "CreateServiceDeployment")
+      deployments.add(intent.deploymentId);
+    if (intent.operation === "DeleteServiceDeployment") {
+      deployments.delete(intent.deploymentId);
+      for (const [key, member] of members)
+        if (member.deploymentId === intent.deploymentId) members.delete(key);
+    }
+    if (intent.operation === "ReconcileDeploymentPlacement") {
+      for (const [key, member] of members)
+        if (member.deploymentId === intent.deploymentId) members.delete(key);
+      for (const member of intent.members)
+        members.set(`${intent.deploymentId}\u0000${member.memberId}`, {
+          deploymentId: intent.deploymentId,
+          memberId: member.memberId,
+        });
+    }
+  }
+  return {
+    hosts: [...hosts].sort(),
+    deployments: [...deployments].sort(),
+    members: [...members.values()]
+      .filter((member) => deployments.has(member.deploymentId))
+      .sort((left, right) =>
+        `${left.deploymentId}\u0000${left.memberId}`.localeCompare(
+          `${right.deploymentId}\u0000${right.memberId}`,
+        ),
+      ),
+  };
+}
 
 export function App({ api = backend }: { api?: ProjectBackend }) {
   const [result, setResult] = useState<OpenResult>({
@@ -118,6 +170,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     : project?.name
       ? String(project.name)
       : local?.name || "Проект не открыт";
+  const certificateSources = certificateSourceOptions(managed, intents);
 
   useEffect(() => {
     let live = true;
@@ -522,6 +575,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               item.id === "project" ||
               (item.id === "servers" && projectOpen) ||
               (item.id === "topology" && topologyAvailable) ||
+              (item.id === "certificates" && topologyAvailable) ||
               (item.id === "installation" && projectOpen && executionReady);
             return (
               <button
@@ -532,6 +586,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   (item.id === "project" ||
                     item.id === "servers" ||
                     item.id === "topology" ||
+                    item.id === "certificates" ||
                     item.id === "installation") &&
                   setPage(item.id)
                 }
@@ -745,6 +800,33 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onSelectedHostChange={setSelectedTopologyHost}
             preview={endpointPreview}
             verificationStatus={verification.status}
+          />
+        )}
+        {!loading && !creating && projectOpen && page === "certificates" && (
+          <CertificatesPage
+            managed={managed}
+            intents={intents.filter(
+              (intent): intent is CertificateIntent =>
+                intent.operation === "CreateCertificateAuthority" ||
+                intent.operation === "UpdateCertificateAuthority" ||
+                intent.operation === "DeleteCertificateAuthority" ||
+                intent.operation === "CreateCertificateProfile" ||
+                intent.operation === "UpdateCertificateProfile" ||
+                intent.operation === "DeleteCertificateProfile" ||
+                intent.operation === "CreateTLSProfile" ||
+                intent.operation === "UpdateTLSProfile" ||
+                intent.operation === "DeleteTLSProfile" ||
+                intent.operation === "CreateCertificateScope" ||
+                intent.operation === "UpdateCertificateScope" ||
+                intent.operation === "DeleteCertificateScope",
+            )}
+            busy={editBusy}
+            structuralDisabled={refreshRequired}
+            commandCount={commandCount}
+            sourceOptions={certificateSources}
+            onAppend={appendStructuralIntent}
+            onReview={review}
+            onDiscard={discard}
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (

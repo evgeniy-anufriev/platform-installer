@@ -184,6 +184,35 @@ async function openTopology(
   await userEvent.click(screen.getByRole("button", { name: "Топология" }));
 }
 
+async function openCertificates(
+  value: MockApi,
+  open: OpenResult = project as unknown as OpenResult,
+) {
+  value.chooseProject.mockResolvedValue(open);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Сертификаты" }));
+}
+
+it("adds a certificate authority through the shared structural draft", async () => {
+  const value = api();
+  await openCertificates(value);
+  await userEvent.click(screen.getAllByRole("button", { name: "Добавить" })[0]);
+  await userEvent.type(screen.getByLabelText("ID"), "platform-ca");
+  await userEvent.type(screen.getByLabelText("Common Name"), "Platform CA");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Добавить в черновик" }),
+  );
+  expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+    operation: "CreateCertificateAuthority",
+    entityId: "platform-ca",
+    entity: { mode: "MANAGED", commonName: "Platform CA" },
+  });
+  expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
+});
+
 /**
  * Deterministic UI acceptance backend.  It deliberately models only the
  * public ProjectBackend edit/review/commit/reopen lifecycle: Core, an
@@ -222,14 +251,22 @@ function f4AcceptanceBackend() {
             displayName: "Daemon",
             placementKind: "HOST_SCOPED",
             roles: [],
-            guidance: { minParticipants: 1, distinctHosts: false, roleCardinality: [] },
+            guidance: {
+              minParticipants: 1,
+              distinctHosts: false,
+              roleCardinality: [],
+            },
           },
           {
             id: "observer",
             displayName: "Observer",
             placementKind: "HOST_SCOPED",
             roles: ["observer"],
-            guidance: { minParticipants: 1, distinctHosts: false, roleCardinality: [] },
+            guidance: {
+              minParticipants: 1,
+              distinctHosts: false,
+              roleCardinality: [],
+            },
           },
         ],
       },
@@ -287,9 +324,12 @@ function f4AcceptanceBackend() {
     openProject: async () => open(),
     chooseProjectParent: async () => "",
     createProject: async () => open(),
-    closeProject: async () => ({ status: "NO_PROJECT" } as never),
+    closeProject: async () => ({ status: "NO_PROJECT" }) as never,
     startEditSession: async () =>
-      ({ status: "EDITING", session: { sessionId: sessionID, commandCount: pending.length } }) as never,
+      ({
+        status: "EDITING",
+        session: { sessionId: sessionID, commandCount: pending.length },
+      }) as never,
     appendEditCommand: async (_sessionId, command) => {
       appended.push(command);
       pending.push(command);
@@ -314,41 +354,56 @@ function f4AcceptanceBackend() {
         if (command.operation === "ReconcileDeploymentPlacement") {
           const deploymentId = String(command.deploymentId);
           memberPlacements = [
-            ...memberPlacements.filter((item) => item.deploymentId !== deploymentId),
-            ...(command.members as Array<{
-            memberId: string;
-            hostId: string;
-            roles?: string[];
-            }>).map((item) => ({
-            deploymentId,
-            memberId: item.memberId,
-            hostId: item.hostId,
-            roles: item.roles || [],
+            ...memberPlacements.filter(
+              (item) => item.deploymentId !== deploymentId,
+            ),
+            ...(
+              command.members as Array<{
+                memberId: string;
+                hostId: string;
+                roles?: string[];
+              }>
+            ).map((item) => ({
+              deploymentId,
+              memberId: item.memberId,
+              hostId: item.hostId,
+              roles: item.roles || [],
             })),
           ];
-          hostPlacements = hostPlacements.filter((item) => item.deploymentId !== deploymentId);
+          hostPlacements = hostPlacements.filter(
+            (item) => item.deploymentId !== deploymentId,
+          );
         }
         if (command.operation === "ReconcileHostScopedDeploymentPlacement") {
           const deploymentId = String(command.deploymentId);
           hostPlacements = [
-            ...hostPlacements.filter((item) => item.deploymentId !== deploymentId),
-            ...(command.hosts as Array<{
-            hostId: string;
-            roles?: string[];
-            }>).map((item) => ({
-            deploymentId,
-            hostId: item.hostId,
-            roles: item.roles || [],
+            ...hostPlacements.filter(
+              (item) => item.deploymentId !== deploymentId,
+            ),
+            ...(
+              command.hosts as Array<{
+                hostId: string;
+                roles?: string[];
+              }>
+            ).map((item) => ({
+              deploymentId,
+              hostId: item.hostId,
+              roles: item.roles || [],
             })),
           ];
-          memberPlacements = memberPlacements.filter((item) => item.deploymentId !== deploymentId);
+          memberPlacements = memberPlacements.filter(
+            (item) => item.deploymentId !== deploymentId,
+          );
         }
       }
       pending = [];
       revision += 1;
       return {
         status: "COMMITTED",
-        commit: { status: "COMMITTED", newProjectRevision: `sha256:f4-${revision}` },
+        commit: {
+          status: "COMMITTED",
+          newProjectRevision: `sha256:f4-${revision}`,
+        },
         current: open(),
       } as never;
     },
@@ -1010,16 +1065,26 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Добавить размещение" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Добавить member" }));
-    await userEvent.click(screen.getByRole("button", { name: "Добавить member" }));
-    expect((screen.getByLabelText("Member ID 1") as HTMLInputElement).value).toBe(
-      "kafka-1",
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить member" }),
     );
-    expect((screen.getByLabelText("Member ID 2") as HTMLInputElement).value).toBe(
-      "kafka-2",
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить member" }),
     );
-    await userEvent.selectOptions(screen.getAllByLabelText("Роли")[0], "broker");
-    await userEvent.selectOptions(screen.getAllByLabelText("Роли")[1], "controller");
+    expect(
+      (screen.getByLabelText("Member ID 1") as HTMLInputElement).value,
+    ).toBe("kafka-1");
+    expect(
+      (screen.getByLabelText("Member ID 2") as HTMLInputElement).value,
+    ).toBe("kafka-2");
+    await userEvent.selectOptions(
+      screen.getAllByLabelText("Роли")[0],
+      "broker",
+    );
+    await userEvent.selectOptions(
+      screen.getAllByLabelText("Роли")[1],
+      "controller",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(appended).toEqual([
       {
@@ -1040,7 +1105,9 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Проект" }));
-    await userEvent.click(screen.getByRole("button", { name: "Закрыть проект" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Закрыть проект" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
@@ -1056,7 +1123,9 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
       screen.getByLabelText("Deployment для размещения"),
       "agent-main",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Добавить сервер" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить сервер" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(appended.at(-1)).toEqual({
       operation: "ReconcileHostScopedDeploymentPlacement",
@@ -1075,7 +1144,9 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
       screen.getByLabelText("Deployment для размещения"),
       "agent-role-main",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Добавить сервер" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить сервер" }),
+    );
     await userEvent.selectOptions(screen.getByLabelText("Роли"), "observer");
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(appended.at(-1)).toEqual({
@@ -1112,13 +1183,17 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
       await screen.findByRole("button", { name: "Сохранить проект" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Проект" }));
-    await userEvent.click(screen.getByRole("button", { name: "Закрыть проект" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Закрыть проект" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Топология" }));
 
-    expect(screen.getByRole("button", { name: "Добавить размещение" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Добавить размещение" }),
+    ).toBeTruthy();
     expect(appended).toHaveLength(4);
   });
 });

@@ -89,6 +89,12 @@ export type ManagedProjectView = {
     hostId: string;
     roles: string[];
   }>;
+  pki?: {
+    authorities: Record<string, Record<string, unknown>>;
+    profiles: Record<string, Record<string, unknown>>;
+    tlsProfiles: Record<string, Record<string, unknown>>;
+    scopes: Record<string, Record<string, unknown>>;
+  };
 };
 export type OpenResult = main.ProjectOpenResult & {
   managed?: ManagedProjectView;

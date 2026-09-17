@@ -358,6 +358,24 @@ export namespace installer {
       return a;
     }
   }
+  export class ManagedPKI {
+    authorities: Record<string, any>;
+    profiles: Record<string, any>;
+    tlsProfiles: Record<string, any>;
+    scopes: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new ManagedPKI(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.authorities = source["authorities"];
+      this.profiles = source["profiles"];
+      this.tlsProfiles = source["tlsProfiles"];
+      this.scopes = source["scopes"];
+    }
+  }
   export class ManagedHostPlacement {
     deploymentId: string;
     hostId: string;
@@ -482,6 +500,7 @@ export namespace installer {
     endpointGroups: Record<string, ManagedEndpointGroup>;
     memberPlacements: ManagedMemberPlacement[];
     hostPlacements: ManagedHostPlacement[];
+    pki: ManagedPKI;
 
     static createFrom(source: any = {}) {
       return new ManagedProjectView(source);
@@ -509,6 +528,7 @@ export namespace installer {
         source["hostPlacements"],
         ManagedHostPlacement,
       );
+      this.pki = this.convertValues(source["pki"], ManagedPKI);
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
