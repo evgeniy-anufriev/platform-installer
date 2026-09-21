@@ -671,7 +671,9 @@ the existing shared edit lifecycle without Core or target changes; see
 `docs/ui-01h2.md`. UI-01H3 is DONE: member-scoped configuration and trusted
 TLS-profile selection use the shared v1alpha8 session and contextual
 Certificates return without Core or target changes; see `docs/ui-01h3.md`.
-UI-01H4 is NEXT; UI-01 overall is NOT
+UI-01H4 is DONE: Windows desktop, RED OS target-free/race and regression gates
+passed with no target contact; see `docs/ui-01h4.md`. UI-01H overall is DONE;
+UI-01I is NEXT; UI-01 overall is NOT
 DONE.
 
 Accepted design input: [metadata-only project creation and progressive
