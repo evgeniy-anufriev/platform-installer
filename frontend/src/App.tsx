@@ -143,6 +143,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [servicesView, setServicesView] = useState<"list" | "detail">("list");
   const [selectedServiceDeployment, setSelectedServiceDeployment] =
     useState("");
+  const [selectedServiceMember, setSelectedServiceMember] = useState("");
+  const [certificateReturn, setCertificateReturn] = useState<{
+    deploymentId: string;
+    memberId?: string;
+  } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [refreshRoot, setRefreshRoot] = useState("");
@@ -262,6 +267,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setSelectedTopologyHost("");
     setServicesView("list");
     setSelectedServiceDeployment("");
+    setSelectedServiceMember("");
+    setCertificateReturn(null);
     endpointPreviewRequest.current += 1;
     setEndpointPreview(undefined);
     setVerifiedPKI(undefined);
@@ -853,6 +860,26 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 intent.operation === "CreateServiceDeployment" ||
                 intent.operation === "DeleteServiceDeployment",
             )}
+            placementIntents={intents.filter(
+              (intent): intent is PlacementIntent =>
+                intent.operation === "ReconcileDeploymentPlacement" ||
+                intent.operation === "ReconcileHostScopedDeploymentPlacement",
+            )}
+            certificateIntents={intents.filter(
+              (intent): intent is CertificateIntent =>
+                intent.operation === "CreateCertificateAuthority" ||
+                intent.operation === "UpdateCertificateAuthority" ||
+                intent.operation === "DeleteCertificateAuthority" ||
+                intent.operation === "CreateCertificateProfile" ||
+                intent.operation === "UpdateCertificateProfile" ||
+                intent.operation === "DeleteCertificateProfile" ||
+                intent.operation === "CreateTLSProfile" ||
+                intent.operation === "UpdateTLSProfile" ||
+                intent.operation === "DeleteTLSProfile" ||
+                intent.operation === "CreateCertificateScope" ||
+                intent.operation === "UpdateCertificateScope" ||
+                intent.operation === "DeleteCertificateScope",
+            )}
             configurationIntents={intents.filter(
               (intent): intent is ConfigurationIntent =>
                 intent.operation === "SetServiceConfigurationValue" ||
@@ -864,15 +891,26 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             error={editError?.message}
             view={servicesView}
             selectedDeploymentId={selectedServiceDeployment}
+            selectedMemberId={selectedServiceMember}
+            onSelectedMemberChange={setSelectedServiceMember}
             onOpenDeployment={(deploymentId) => {
               setSelectedServiceDeployment(deploymentId);
+              setSelectedServiceMember("");
               setServicesView("detail");
             }}
             onBackToList={() => {
               setServicesView("list");
               setSelectedServiceDeployment("");
+              setSelectedServiceMember("");
             }}
             onOpenTopology={() => setPage("topology")}
+            onManageCertificates={(memberId) => {
+              setCertificateReturn({
+                deploymentId: selectedServiceDeployment,
+                memberId,
+              });
+              setPage("certificates");
+            }}
             onAppend={appendStructuralIntent}
             onReview={review}
             onDiscard={discard}
@@ -906,6 +944,19 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onReview={review}
             onDiscard={discard}
             onVerify={verify}
+            onReturnToServices={
+              certificateReturn
+                ? () => {
+                    setSelectedServiceDeployment(
+                      certificateReturn.deploymentId,
+                    );
+                    setSelectedServiceMember(certificateReturn.memberId || "");
+                    setServicesView("detail");
+                    setPage("services");
+                    setCertificateReturn(null);
+                  }
+                : undefined
+            }
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (

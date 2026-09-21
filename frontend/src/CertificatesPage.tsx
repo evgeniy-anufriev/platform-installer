@@ -135,6 +135,7 @@ export function CertificatesPage({
   onReview,
   onDiscard,
   onVerify,
+  onReturnToServices,
 }: {
   managed: OpenResult["managed"];
   intents: CertificateIntent[];
@@ -148,6 +149,7 @@ export function CertificatesPage({
   onReview: () => void;
   onDiscard: () => void;
   onVerify?: () => void;
+  onReturnToServices?: () => void;
 }) {
   const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
     null,
@@ -176,6 +178,11 @@ export function CertificatesPage({
     <section className="certificates-page">
       <div className="title">
         <div>
+          {onReturnToServices && (
+            <button className="outline" onClick={onReturnToServices}>
+              Вернуться к настройке сервиса
+            </button>
+          )}
           <h1>Сертификаты</h1>
           <p>
             PKI intent проекта. Выпуск, materialization и применение здесь не

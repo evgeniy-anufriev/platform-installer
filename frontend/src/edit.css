@@ -191,6 +191,20 @@
 .review-dialog {
   max-width: 720px;
 }
+.services-member-picker {
+  display: grid;
+  gap: 6px;
+  max-width: 460px;
+  margin: 0 0 14px;
+  font-weight: 650;
+}
+.services-member-picker select {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fff;
+  font: inherit;
+}
 .certificates-page {
   display: grid;
   gap: 14px;

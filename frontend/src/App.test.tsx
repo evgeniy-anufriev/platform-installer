@@ -119,6 +119,55 @@ const emptyProject = {
   catalog: project.catalog,
   counts: { servers: 0, deployments: 0, runs: 0 },
 };
+const h3Project = {
+  ...project,
+  managed: {
+    ...project.managed,
+    memberPlacements: [
+      {
+        deploymentId: "kafka-main",
+        memberId: "kafka-kafka-1",
+        hostId: "node1",
+        roles: ["broker"],
+        configuration: [],
+      },
+      {
+        deploymentId: "kafka-main",
+        memberId: "kafka-kafka-2",
+        hostId: "node1",
+        roles: ["broker"],
+        configuration: [],
+      },
+    ],
+    pki: {
+      authorities: {},
+      profiles: {},
+      tlsProfiles: { "infrastructure-tls": {} },
+      scopes: {},
+    },
+  },
+  catalog: {
+    ...project.catalog,
+    services: project.catalog.services.map((service) =>
+      service.id === "kafka"
+        ? {
+            ...service,
+            configurationSettings: [
+              ...(service.configurationSettings || []),
+              {
+                id: "tlsProfile",
+                kind: "MANAGED",
+                scopes: ["deployment", "member"],
+                label: "TLS profile",
+                editorShape: "TLS_PROFILE",
+                referenceKind: "TLS_PROFILE",
+              },
+            ],
+          }
+        : service,
+    ),
+  },
+};
 
 type MockApi = ProjectBackend & {
   chooseProject: ReturnType<typeof vi.fn>;
@@ -1202,6 +1251,118 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(screen.queryByText("must-not-be-rendered")).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(value.startEditSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("UI-01H3 member settings and TLS navigation", () => {
+  it("uses the composite deployment/member target for a trusted member TLS override", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(h3Project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Member"),
+      "kafka-kafka-2",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("kafka-kafka-2: TLS profile"),
+      "infrastructure-tls",
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Применить" }).at(-1)!,
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "SetServiceConfigurationValue",
+      deploymentId: "kafka-main",
+      scope: "MEMBER",
+      memberId: "kafka-kafka-2",
+      setting: "tlsProfile",
+      value: "infrastructure-tls",
+    });
+    await userEvent.selectOptions(
+      screen.getByLabelText("Member"),
+      "kafka-kafka-1",
+    );
+    expect(
+      (screen.getByLabelText("kafka-kafka-1: TLS profile") as HTMLSelectElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  it("returns from Certificates to the same selected Services member without starting a session", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(h3Project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Member"),
+      "kafka-kafka-2",
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Настроить сертификаты" }).at(-1)!,
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Сертификаты" }),
+    ).toBeTruthy();
+    expect(value.startEditSession).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Вернуться к настройке сервиса" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Настройка сервиса" }),
+    ).toBeTruthy();
+    expect((screen.getByLabelText("Member") as HTMLSelectElement).value).toBe(
+      "kafka-kafka-2",
+    );
+  });
+
+  it("removes a member override through the same exact composite target", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue({
+      ...h3Project,
+      managed: {
+        ...h3Project.managed,
+        memberPlacements: h3Project.managed!.memberPlacements.map((member) =>
+          member.memberId === "kafka-kafka-1"
+            ? {
+                ...member,
+                configuration: [
+                  {
+                    setting: "tlsProfile",
+                    overridePresent: true,
+                    state: "EDITABLE" as const,
+                    value: "infrastructure-tls",
+                  },
+                ],
+              }
+            : member,
+        ),
+      },
+    });
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Сбросить" }).at(-1)!,
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "RemoveServiceConfigurationOverride",
+      deploymentId: "kafka-main",
+      scope: "MEMBER",
+      memberId: "kafka-kafka-1",
+      setting: "tlsProfile",
+    });
   });
 });
 

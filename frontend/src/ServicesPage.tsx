@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OpenResult } from "./backend";
-import type { DeploymentIntent } from "./TopologyPage";
+import type { CertificateIntent } from "./CertificatesPage";
+import type { DeploymentIntent, PlacementIntent } from "./TopologyPage";
 
 export type ConfigurationIntent =
   | {
       operation: "SetServiceConfigurationValue";
       deploymentId: string;
-      scope: "DEPLOYMENT";
+      scope: "DEPLOYMENT" | "MEMBER";
+      memberId?: string;
       setting: string;
       value: string | number | boolean;
     }
   | {
       operation: "RemoveServiceConfigurationOverride";
       deploymentId: string;
-      scope: "DEPLOYMENT";
+      scope: "DEPLOYMENT" | "MEMBER";
+      memberId?: string;
       setting: string;
     };
 
@@ -29,6 +32,19 @@ type Row = {
   state?: "new" | "deleting";
 };
 type Value = string | number | boolean;
+type Scope = "DEPLOYMENT" | "MEMBER";
+type MemberRow = {
+  deploymentId: string;
+  memberId: string;
+  hostId: string;
+  roles: string[];
+  configuration: Array<{
+    setting: string;
+    overridePresent: boolean;
+    state: string;
+    value?: Value;
+  }>;
+};
 
 const supportedShapes = new Set([
   "BOOLEAN",
@@ -75,14 +91,19 @@ function catalogService(
 }
 
 function settingValue(
-  managed: OpenResult["managed"],
+  overrides: Array<{
+    setting: string;
+    overridePresent: boolean;
+    state: string;
+    value?: Value;
+  }>,
   deploymentId: string,
+  scope: Scope,
+  memberId: string,
   setting: string,
   intents: ConfigurationIntent[],
 ): { overridePresent: boolean; state: string; value?: Value } {
-  const saved = managed?.deployments?.[deploymentId]?.configuration?.find(
-    (entry) => entry.setting === setting,
-  );
+  const saved = overrides.find((entry) => entry.setting === setting);
   let result = {
     overridePresent: saved?.overridePresent || false,
     state: saved?.state || "EDITABLE",
@@ -91,7 +112,8 @@ function settingValue(
   for (const intent of intents) {
     if (
       intent.deploymentId !== deploymentId ||
-      intent.scope !== "DEPLOYMENT" ||
+      intent.scope !== scope ||
+      (scope === "MEMBER" && intent.memberId !== memberId) ||
       intent.setting !== setting
     )
       continue;
@@ -107,9 +129,59 @@ function isEditable(setting: CatalogSetting, catalogReady: boolean) {
   return (
     catalogReady &&
     setting.kind === "MANAGED" &&
-    setting.scopes.includes("deployment") &&
-    supportedShapes.has(setting.editorShape)
+    (supportedShapes.has(setting.editorShape) ||
+      (setting.editorShape === "TLS_PROFILE" &&
+        setting.referenceKind === "TLS_PROFILE"))
   );
+}
+
+function finalMembers(
+  managed: OpenResult["managed"],
+  intents: PlacementIntent[],
+  deploymentId: string,
+): MemberRow[] {
+  const rows = new Map<string, MemberRow>();
+  for (const member of managed?.memberPlacements || []) {
+    if (member.deploymentId !== deploymentId) continue;
+    rows.set(member.memberId, {
+      ...member,
+      configuration: member.configuration || [],
+    });
+  }
+  for (const intent of intents) {
+    if (intent.deploymentId !== deploymentId) continue;
+    if (intent.operation === "ReconcileDeploymentPlacement") {
+      rows.clear();
+      for (const member of intent.members)
+        rows.set(member.memberId, {
+          ...member,
+          deploymentId,
+          roles: member.roles || [],
+          configuration: [],
+        });
+    }
+    if (intent.operation === "ReconcileHostScopedDeploymentPlacement")
+      rows.clear();
+  }
+  return [...rows.values()].sort((left, right) =>
+    left.memberId.localeCompare(right.memberId),
+  );
+}
+
+function finalTLSProfileIDs(
+  managed: OpenResult["managed"],
+  intents: CertificateIntent[],
+) {
+  const ids = new Set(Object.keys(managed?.pki?.tlsProfiles || {}));
+  for (const intent of intents) {
+    if (
+      intent.operation === "CreateTLSProfile" ||
+      intent.operation === "UpdateTLSProfile"
+    )
+      ids.add(intent.entityId);
+    if (intent.operation === "DeleteTLSProfile") ids.delete(intent.entityId);
+  }
+  return [...ids].sort();
 }
 
 function inputValue(value: Value | undefined, shape: string) {
@@ -135,6 +207,8 @@ export function ServicesPage({
   managed,
   catalog,
   deploymentIntents,
+  placementIntents,
+  certificateIntents,
   configurationIntents,
   busy,
   structuralDisabled,
@@ -142,9 +216,12 @@ export function ServicesPage({
   error,
   view,
   selectedDeploymentId,
+  selectedMemberId,
+  onSelectedMemberChange,
   onOpenDeployment,
   onBackToList,
   onOpenTopology,
+  onManageCertificates,
   onAppend,
   onReview,
   onDiscard,
@@ -152,6 +229,8 @@ export function ServicesPage({
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
   deploymentIntents: DeploymentIntent[];
+  placementIntents: PlacementIntent[];
+  certificateIntents: CertificateIntent[];
   configurationIntents: ConfigurationIntent[];
   busy: boolean;
   structuralDisabled: boolean;
@@ -159,9 +238,12 @@ export function ServicesPage({
   error?: string;
   view: "list" | "detail";
   selectedDeploymentId: string;
+  selectedMemberId: string;
+  onSelectedMemberChange: (memberId: string) => void;
   onOpenDeployment: (deploymentId: string) => void;
   onBackToList: () => void;
   onOpenTopology: () => void;
+  onManageCertificates: (memberId?: string) => void;
   onAppend: (intent: ConfigurationIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
@@ -190,6 +272,13 @@ export function ServicesPage({
       (left.order || 0) - (right.order || 0) ||
       left.id.localeCompare(right.id),
   );
+  const members = selected
+    ? finalMembers(managed, placementIntents, selected.deploymentId)
+    : [];
+  const selectedMember = members.find(
+    (member) => member.memberId === selectedMemberId,
+  );
+  const tlsProfileIDs = finalTLSProfileIDs(managed, certificateIntents);
   const normalizedFilter = filter.trim().toLocaleLowerCase("ru");
   const filteredRows = rows.filter((row) =>
     `${row.deploymentId} ${row.serviceType} ${catalogService(catalog, row.serviceType)?.displayName || ""}`
@@ -203,6 +292,17 @@ export function ServicesPage({
   useEffect(() => {
     if (view === "list") listHeading.current?.focus();
   }, [view]);
+  useEffect(() => {
+    if (view === "detail" && selectedDeploymentId && !selected) onBackToList();
+  }, [view, selectedDeploymentId, selected, onBackToList]);
+  useEffect(() => {
+    if (
+      selectedMemberId &&
+      members.some((member) => member.memberId === selectedMemberId)
+    )
+      return;
+    onSelectedMemberChange(members[0]?.memberId || "");
+  }, [members, selectedMemberId, onSelectedMemberChange]);
 
   if (view === "detail") {
     if (!selected)
@@ -276,18 +376,23 @@ export function ServicesPage({
             <div className="services-setting-list">
               {settings.map((setting) => {
                 const current = settingValue(
-                  managed,
+                  savedOverrides,
                   selected.deploymentId,
+                  "DEPLOYMENT",
+                  "",
                   setting.id,
                   configurationIntents,
                 );
                 const locked = configurationIntents.some(
                   (intent) =>
                     intent.deploymentId === selected.deploymentId &&
+                    intent.scope === "DEPLOYMENT" &&
                     intent.setting === setting.id,
                 );
                 const editable =
-                  isEditable(setting, catalogReady) && !selected.state;
+                  isEditable(setting, catalogReady) &&
+                  setting.scopes.includes("deployment") &&
+                  !selected.state;
                 const disabled =
                   busy ||
                   structuralDisabled ||
@@ -331,6 +436,39 @@ export function ServicesPage({
                             />
                             Включено
                           </label>
+                        ) : setting.editorShape === "TLS_PROFILE" ? (
+                          <>
+                            <select
+                              aria-label={settingTitle(setting)}
+                              value={raw}
+                              disabled={disabled || !tlsProfileIDs.length}
+                              onChange={(event) =>
+                                setDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [draftKey]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Выберите TLS profile</option>
+                              {tlsProfileIDs.map((id) => (
+                                <option key={id} value={id}>
+                                  {id}
+                                </option>
+                              ))}
+                            </select>
+                            {!tlsProfileIDs.length && (
+                              <small className="muted">
+                                Нет доступного managed TLS profile.
+                              </small>
+                            )}
+                            <button
+                              className="outline"
+                              disabled={busy || structuralDisabled}
+                              onClick={() => onManageCertificates()}
+                            >
+                              Настроить сертификаты
+                            </button>
+                          </>
                         ) : setting.editorShape === "ENUM" ? (
                           <select
                             aria-label={settingTitle(setting)}
@@ -427,6 +565,43 @@ export function ServicesPage({
             </div>
           )}
         </section>
+        {members.length > 0 && (
+          <section className="card services-settings">
+            <h2>Параметры member</h2>
+            <label className="services-member-picker">
+              Member
+              <select
+                value={selectedMemberId}
+                onChange={(event) => onSelectedMemberChange(event.target.value)}
+                disabled={busy || structuralDisabled || !!selected.state}
+              >
+                {members.map((member) => (
+                  <option key={member.memberId} value={member.memberId}>
+                    {member.memberId} · {member.hostId}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selectedMember && (
+              <MemberSettings
+                deploymentId={selected.deploymentId}
+                member={selectedMember}
+                settings={settings}
+                catalogReady={catalogReady}
+                tlsProfileIDs={tlsProfileIDs}
+                intents={configurationIntents}
+                busy={busy}
+                structuralDisabled={structuralDisabled}
+                commandCount={commandCount}
+                deleting={!!selected.state}
+                onManageCertificates={() =>
+                  onManageCertificates(selectedMember.memberId)
+                }
+                onAppend={onAppend}
+              />
+            )}
+          </section>
+        )}
         <SessionActions
           commandCount={commandCount}
           busy={busy}
@@ -527,6 +702,238 @@ function SavedOverrides({
         ))}
       </ul>
     </div>
+  );
+}
+
+function MemberSettings({
+  deploymentId,
+  member,
+  settings,
+  catalogReady,
+  tlsProfileIDs,
+  intents,
+  busy,
+  structuralDisabled,
+  commandCount,
+  deleting,
+  onManageCertificates,
+  onAppend,
+}: {
+  deploymentId: string;
+  member: MemberRow;
+  settings: CatalogSetting[];
+  catalogReady: boolean;
+  tlsProfileIDs: string[];
+  intents: ConfigurationIntent[];
+  busy: boolean;
+  structuralDisabled: boolean;
+  commandCount: number;
+  deleting: boolean;
+  onManageCertificates: () => void;
+  onAppend: (intent: ConfigurationIntent) => Promise<boolean>;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const memberSettings = settings.filter((setting) =>
+    setting.scopes.includes("member"),
+  );
+  if (!memberSettings.length)
+    return (
+      <p className="muted">Каталог не объявляет member-scoped параметров.</p>
+    );
+  return (
+    <>
+      <p className="muted">
+        Host: {member.hostId} · Роли: {member.roles.join(", ") || "не заданы"}
+      </p>
+      <div className="services-setting-list">
+        {memberSettings.map((setting) => {
+          const current = settingValue(
+            member.configuration,
+            deploymentId,
+            "MEMBER",
+            member.memberId,
+            setting.id,
+            intents,
+          );
+          const locked = intents.some(
+            (intent) =>
+              intent.deploymentId === deploymentId &&
+              intent.scope === "MEMBER" &&
+              intent.memberId === member.memberId &&
+              intent.setting === setting.id,
+          );
+          const editable = isEditable(setting, catalogReady) && !deleting;
+          const disabled =
+            busy ||
+            structuralDisabled ||
+            locked ||
+            !editable ||
+            commandCount >= 16;
+          const draftKey = `${deploymentId}\u0000${member.memberId}\u0000${setting.id}`;
+          const raw =
+            drafts[draftKey] ?? inputValue(current.value, setting.editorShape);
+          const value = valueFor(setting, raw);
+          const invalidNumber =
+            (setting.editorShape === "INTEGER" ||
+              setting.editorShape === "NUMBER") &&
+            raw.trim() !== "" &&
+            value === undefined;
+          return (
+            <div className="services-setting" key={setting.id}>
+              <div>
+                <strong>{settingTitle(setting)}</strong>
+                <small>{setting.id}</small>
+                {setting.description && (
+                  <p className="muted">{setting.description}</p>
+                )}
+              </div>
+              {editable ? (
+                <div className="services-control">
+                  {setting.editorShape === "BOOLEAN" ? (
+                    <label className="services-checkbox">
+                      <input
+                        aria-label={`${member.memberId}: ${settingTitle(setting)}`}
+                        type="checkbox"
+                        checked={raw === "true"}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [draftKey]: String(event.target.checked),
+                          }))
+                        }
+                      />
+                      Включено
+                    </label>
+                  ) : setting.editorShape === "TLS_PROFILE" ? (
+                    <>
+                      <select
+                        aria-label={`${member.memberId}: ${settingTitle(setting)}`}
+                        value={raw}
+                        disabled={disabled || !tlsProfileIDs.length}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [draftKey]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Выберите TLS profile</option>
+                        {tlsProfileIDs.map((id) => (
+                          <option key={id} value={id}>
+                            {id}
+                          </option>
+                        ))}
+                      </select>
+                      {!tlsProfileIDs.length && (
+                        <small className="muted">
+                          Нет доступного managed TLS profile.
+                        </small>
+                      )}
+                      <button
+                        className="outline"
+                        disabled={busy || structuralDisabled}
+                        onClick={onManageCertificates}
+                      >
+                        Настроить сертификаты
+                      </button>
+                    </>
+                  ) : setting.editorShape === "ENUM" ? (
+                    <select
+                      aria-label={`${member.memberId}: ${settingTitle(setting)}`}
+                      value={raw}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [draftKey]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Выберите значение</option>
+                      {(setting.enum || [])
+                        .filter(
+                          (item): item is string => typeof item === "string",
+                        )
+                        .map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <input
+                      aria-label={`${member.memberId}: ${settingTitle(setting)}`}
+                      type={
+                        setting.editorShape === "INTEGER" ||
+                        setting.editorShape === "NUMBER"
+                          ? "number"
+                          : "text"
+                      }
+                      value={raw}
+                      min={setting.minimum}
+                      max={setting.maximum}
+                      minLength={setting.minLength}
+                      maxLength={setting.maxLength}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [draftKey]: event.target.value,
+                        }))
+                      }
+                    />
+                  )}
+                  {invalidNumber && (
+                    <small className="field-error">Введите число.</small>
+                  )}
+                  <div className="actions">
+                    <button
+                      disabled={
+                        disabled || value === undefined || invalidNumber
+                      }
+                      onClick={() =>
+                        onAppend({
+                          operation: "SetServiceConfigurationValue",
+                          deploymentId,
+                          scope: "MEMBER",
+                          memberId: member.memberId,
+                          setting: setting.id,
+                          value: value as Value,
+                        })
+                      }
+                    >
+                      Применить
+                    </button>
+                    <button
+                      className="outline"
+                      disabled={disabled || !current.overridePresent}
+                      onClick={() =>
+                        onAppend({
+                          operation: "RemoveServiceConfigurationOverride",
+                          deploymentId,
+                          scope: "MEMBER",
+                          memberId: member.memberId,
+                          setting: setting.id,
+                        })
+                      }
+                    >
+                      Сбросить
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="muted">
+                  {locked
+                    ? "Изменение уже добавлено в текущий черновик."
+                    : "Этот параметр доступен только для просмотра в текущем интерфейсе."}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

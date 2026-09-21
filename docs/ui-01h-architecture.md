@@ -1,10 +1,10 @@
 # UI-01H — Service settings and PKI profile assignments architecture
 
-Status: **H1 IMPLEMENTED; H2 ARCHITECTURE REMAINS NEXT**
+Status: **H1–H3 IMPLEMENTED; H4 ARCHITECTURE REMAINS NEXT**
 
 Milestone: **UI-01H**
 
-Implementation status: **UI-01H1 DONE; UI-01H2 NOT STARTED**
+Implementation status: **UI-01H1, UI-01H2 and UI-01H3 DONE; UI-01H4 NEXT**
 
 Prerequisites: UI-01F, UI-NET-01 and UI-01G are DONE. This document is
 documentation-only. It does not authorize UI-01H implementation, service

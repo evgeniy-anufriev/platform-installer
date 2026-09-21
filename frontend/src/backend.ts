@@ -90,6 +90,12 @@ export type ManagedProjectView = {
     memberId: string;
     hostId: string;
     roles: string[];
+    configuration?: Array<{
+      setting: string;
+      overridePresent: boolean;
+      state: "EDITABLE" | "UNSUPPORTED" | "UNKNOWN";
+      value?: string | number | boolean;
+    }>;
   }>;
   hostPlacements?: Array<{
     deploymentId: string;
