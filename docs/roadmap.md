@@ -672,9 +672,11 @@ the existing shared edit lifecycle without Core or target changes; see
 TLS-profile selection use the shared v1alpha8 session and contextual
 Certificates return without Core or target changes; see `docs/ui-01h3.md`.
 UI-01H4 is DONE: Windows desktop, RED OS target-free/race and regression gates
-passed with no target contact; see `docs/ui-01h4.md`. UI-01H overall is DONE;
-UI-01I is NEXT; UI-01 overall is NOT
-DONE.
+passed with no target contact; see `docs/ui-01h4.md`. UI-01H overall is DONE.
+UI-01I is DONE: guarded portable export/reopen, Windows/Wails and RED OS
+target-free evidence, plus the one permitted DIFF targeted recheck, passed with
+zero blocking findings; see `docs/ui-01i.md`. UI-01J is NEXT; UI-01 overall is
+NOT DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

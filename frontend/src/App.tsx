@@ -384,6 +384,31 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setExportOperation(null);
     setExportDialog(true);
   };
+  const reopenExport = async () => {
+    const exportedRoot = exportOperation?.result?.destinationRoot;
+    if (!exportedRoot) return;
+    setExportBusy(true);
+    try {
+      const next = await api.openProject(exportedRoot);
+      if (next.status === "OPEN") {
+        setResult(next);
+        clearRefreshFailure();
+        resetTopologySelection();
+        setExportDialog(false);
+        setPage("project");
+        return;
+      }
+      setExportOperation((current) => current ? {
+        ...current,
+        error: next.error ?? {
+          code: "EXPORTED_PROJECT_OPEN_FAILED",
+          message: "Экспорт создан, но открыть его не удалось.",
+        },
+      } : current);
+    } finally {
+      setExportBusy(false);
+    }
+  };
 
   const appendStructuralIntent = async (
     intent: StructuralIntent,
@@ -1111,6 +1136,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onChooseParent={chooseExportParent}
             onPreview={previewExport}
             onCommit={commitExport}
+            onReopen={reopenExport}
             onClose={() => !exportBusy && setExportDialog(false)}
           />
         )}
@@ -1238,6 +1264,7 @@ function ProjectExportDialog({
   onChooseParent,
   onPreview,
   onCommit,
+  onReopen,
   onClose,
 }: {
   parent: string;
@@ -1249,6 +1276,7 @@ function ProjectExportDialog({
   onChooseParent: () => void;
   onPreview: (event: React.FormEvent) => void;
   onCommit: () => void;
+  onReopen: () => void;
   onClose: () => void;
 }) {
   const plan = operation?.plan;
@@ -1299,6 +1327,7 @@ function ProjectExportDialog({
           <button type="button" className="outline" onClick={onClose} disabled={busy}>{result?.status === "EXPORTED" ? "Готово" : "Отмена"}</button>
           {!plan && !result && <button type="submit" disabled={!canPreview}>{busy ? "Подготовка…" : "Проверить состав"}</button>}
           {plan && <button type="button" onClick={onCommit} disabled={busy}>{busy ? "Экспорт…" : "Экспортировать"}</button>}
+          {result?.status === "EXPORTED" && <button type="button" onClick={onReopen} disabled={busy}>{busy ? "Открытие…" : "Открыть экспортированный проект"}</button>}
         </footer>
       </form>
     </div>

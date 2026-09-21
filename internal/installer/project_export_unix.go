@@ -8,7 +8,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -50,10 +52,10 @@ func openExportDestinationDirectory(root string) (*exportDirectory, error) {
 }
 
 func openExportUnixRoot(root string) (*exportDirectory, error) {
-	if err := assertSafeExistingAncestors(root); err != nil {
-		return nil, err
+	if !filepath.IsAbs(root) {
+		return nil, errors.New("unsafe export root")
 	}
-	fd, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +64,14 @@ func openExportUnixRoot(root string) (*exportDirectory, error) {
 		directory.close()
 		return nil, err
 	}
-	return directory, nil
+	relative := strings.TrimPrefix(filepath.Clean(root), string(filepath.Separator))
+	if relative == "" {
+		directory.close()
+		return nil, errors.New("unsafe export root")
+	}
+	opened, err := directory.openDirectory(strings.Split(relative, string(filepath.Separator)))
+	directory.close()
+	return opened, err
 }
 
 func (directory *exportDirectory) close() {
@@ -282,38 +291,10 @@ func (directory *exportDirectory) removeOwnedTree(staging *exportDirectory, stag
 	if linkedIdentity != stagingIdentity {
 		return errors.New("unsafe export staging")
 	}
-	if err := removeExportUnixDirectory(staging); err != nil {
-		return err
-	}
-	return unix.Unlinkat(directory.fd, stagingName, unix.AT_REMOVEDIR)
-}
-
-func removeExportUnixDirectory(directory *exportDirectory) error {
-	entries, err := directory.entries()
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.kind == exportEntryDirectory {
-			child, openErr := directory.openDirectory([]string{entry.name})
-			if openErr != nil {
-				return openErr
-			}
-			err = removeExportUnixDirectory(child)
-			child.close()
-			if err != nil {
-				return err
-			}
-			if err := unix.Unlinkat(directory.fd, entry.name, unix.AT_REMOVEDIR); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := unix.Unlinkat(directory.fd, entry.name, 0); err != nil {
-			return err
-		}
-	}
-	return nil
+	// Linux has no unlink-by-open-directory-handle primitive. A pathname-based
+	// recursive cleanup could delete a sibling swapped in after the identity
+	// check above, so fail closed and leave staging for operator cleanup.
+	return errors.New("unsafe export staging cleanup")
 }
 
 func exportUnixFileIdentity(fd int) (exportFileIdentity, int64, error) {

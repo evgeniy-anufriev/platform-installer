@@ -87,12 +87,6 @@ func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*Pr
 	if rootsOverlap(sourceDisplay, destDisplay) {
 		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
 	}
-	if err := assertSafeExistingAncestors(sourceDisplay); err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	if err := assertSafeExistingAncestors(destDisplay); err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
-	}
 	source, err := openExportSourceDirectory(sourceDisplay)
 	if err != nil {
 		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
@@ -106,7 +100,7 @@ func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*Pr
 	observation, err := stableExportObservation(source)
 	if err != nil {
 		capability.Close()
-		return nil, ProjectExportPlan{}, err
+		return nil, ProjectExportPlan{}, errors.New(exportErrorCode(err, "EXPORT_SOURCE_UNSAFE"))
 	}
 	if exists, existErr := destination.exists(name); existErr != nil || exists {
 		capability.Close()

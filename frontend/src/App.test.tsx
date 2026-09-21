@@ -1536,6 +1536,7 @@ describe("UI-01I2 project export", () => {
       }),
     });
     value.chooseProject.mockResolvedValue(project);
+    value.openProject.mockResolvedValue(project);
     render(<App api={value} />);
     await userEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
     await userEvent.click(screen.getByRole("button", { name: "Экспортировать проект" }));
@@ -1547,6 +1548,8 @@ describe("UI-01I2 project export", () => {
     await userEvent.click(screen.getByRole("button", { name: "Экспортировать" }));
     expect(value.commitProjectExport).toHaveBeenCalledWith("sha256:plan");
     expect(await screen.findByText(/Экспорт завершён/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Открыть экспортированный проект" }));
+    expect(value.openProject).toHaveBeenCalledWith("C:/Exports/portable-project");
   });
 });
 

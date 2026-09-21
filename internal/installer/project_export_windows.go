@@ -8,7 +8,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -52,11 +54,20 @@ func openExportDestinationDirectory(root string) (*exportDirectory, error) {
 }
 
 func openExportWindowsRoot(root string, access uint32) (*exportDirectory, error) {
-	pointer, err := windows.UTF16PtrFromString(root)
+	volume := filepath.VolumeName(root)
+	if volume == "" || strings.HasPrefix(volume, `\\`) {
+		return nil, errors.New("unsafe export root")
+	}
+	logicalAnchor := volume + "\\"
+	anchor := `\\?\` + logicalAnchor
+	pointer, err := windows.UTF16PtrFromString(anchor)
 	if err != nil {
 		return nil, err
 	}
-	handle, err := windows.CreateFile(pointer, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	// A drive root is the trusted, non-replaceable traversal anchor. It is not a
+	// reparse point itself, so avoid OPEN_REPARSE_POINT here; every untrusted
+	// component below it is opened with the no-follow relative helper.
+	handle, err := windows.CreateFile(pointer, windows.FILE_GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +76,15 @@ func openExportWindowsRoot(root string, access uint32) (*exportDirectory, error)
 		directory.close()
 		return nil, err
 	}
-	return directory, nil
+	relative, err := filepath.Rel(logicalAnchor, root)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		directory.close()
+		return nil, errors.New("unsafe export root")
+	}
+	components := strings.Split(relative, string(filepath.Separator))
+	opened, err := directory.openDirectoryWithAccess(components, access)
+	directory.close()
+	return opened, err
 }
 
 func (directory *exportDirectory) close() {
@@ -92,13 +111,21 @@ func (directory *exportDirectory) identity() exportIdentity {
 }
 
 func (directory *exportDirectory) openDirectory(parts []string) (*exportDirectory, error) {
+	return directory.openDirectoryWithAccess(parts, windows.FILE_GENERIC_READ)
+}
+
+func (directory *exportDirectory) openDirectoryWithAccess(parts []string, access uint32) (*exportDirectory, error) {
 	if directory == nil || directory.handle == 0 {
 		return nil, errors.New("unsafe export directory")
 	}
 	current := directory.handle
 	owned := false
-	for _, part := range parts {
-		next, err := openExportWindowsRelative(current, part, true, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
+	for index, part := range parts {
+		partAccess := uint32(windows.FILE_GENERIC_READ)
+		if index == len(parts)-1 {
+			partAccess = access
+		}
+		next, err := openExportWindowsRelative(current, part, true, partAccess, windows.FILE_OPEN)
 		if err != nil {
 			if owned {
 				_ = windows.CloseHandle(current)
