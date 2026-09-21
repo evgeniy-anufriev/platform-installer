@@ -675,8 +675,9 @@ UI-01H4 is DONE: Windows desktop, RED OS target-free/race and regression gates
 passed with no target contact; see `docs/ui-01h4.md`. UI-01H overall is DONE.
 UI-01I is DONE: guarded portable export/reopen, Windows/Wails and RED OS
 target-free evidence, plus the one permitted DIFF targeted recheck, passed with
-zero blocking findings; see `docs/ui-01i.md`. UI-01J is NEXT; UI-01 overall is
-NOT DONE.
+zero blocking findings; see `docs/ui-01i.md`. UI-01J is DONE: final native,
+RED OS, Core-contract and safety acceptance passed; see `docs/ui-01j.md`.
+UI-01 overall is DONE. UI-02 remains separately authorized work.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

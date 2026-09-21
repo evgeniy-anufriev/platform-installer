@@ -17,13 +17,13 @@ are preserved without backfill; unknown configured types produce only a
 nonblocking Installer diagnostic and do not alter Core status, validation or
 fingerprint. Type has no service, topology, placement, Execution Node or source
 selection semantics. UI-01E1 through UI-01E6 and UI-01F1 through UI-01F3 are
-DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01 is DONE (evidence: `docs/ui-net-01.md`), UI-01G1 through UI-01G4 are DONE (evidence: `docs/ui-01g1.md`, `docs/ui-01g2.md`, `docs/ui-01g3.md`, `docs/ui-01g4.md`), UI-01G overall is DONE, and UI-01H overall is DONE (evidence: `docs/ui-01h4.md`); UI-01I is DONE (evidence: `docs/ui-01i.md`); UI-01J is NEXT.
+DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01 is DONE (evidence: `docs/ui-net-01.md`), UI-01G1 through UI-01G4 are DONE (evidence: `docs/ui-01g1.md`, `docs/ui-01g2.md`, `docs/ui-01g3.md`, `docs/ui-01g4.md`), UI-01G overall is DONE, and UI-01H overall is DONE (evidence: `docs/ui-01h4.md`); UI-01I is DONE (evidence: `docs/ui-01i.md`); UI-01J is DONE (evidence: `docs/ui-01j.md`); UI-01 overall is DONE.
 
 ## UI-01 implementation status (2026-09-07)
 
 UI-01A through UI-01D are DONE. UI-01D was accepted by the owner without a
-final revision-bound review. UI-01 overall remains NOT DONE; UI-01E1 through
-UI-01E6 and UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE and UI-NET-01 is DONE while UI-01G overall and UI-01H overall are DONE; UI-01I is DONE and UI-01J is NEXT. UI-01B adds only the Wails/React read-only
+final revision-bound review. UI-01 overall is DONE; UI-01E1 through
+UI-01E6 and UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE and UI-NET-01 is DONE while UI-01G overall and UI-01H overall are DONE; UI-01I and UI-01J are DONE, and UI-01 overall is DONE. UI-01B adds only the Wails/React read-only
 shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
 edit/session, candidate, save or apply path.
 
@@ -90,7 +90,8 @@ Servers UI, UI-01E3 shared runtime session credentials, UI-01E4 Execution Node s
 
 Status correction (2026-09-21): UI-01H overall is DONE; evidence is
 `docs/ui-01h4.md`. UI-01I is DONE; evidence is `docs/ui-01i.md`. UI-01J is
-NEXT. This supersedes the preceding historical H3-next sentence.
+DONE; evidence is `docs/ui-01j.md`. UI-01 overall is DONE. This supersedes the
+preceding historical H3-next sentence.
 
 ## Phase
 
@@ -581,5 +582,5 @@ UI-BE-04 overall, EXEC-OBS-01, documentation-only UI-01A, UI-01B, UI-01C and
 UI-01D are DONE. UI-01D was owner-accepted without final revision-bound
 review. UI-01E is decomposed into E1-E6; UI-01E1 server CRUD integration is
 DONE; UI-01E2 through UI-01E6 and UI-01F1 through UI-01F6 are DONE. UI-01F
-overall is DONE; UI-NET-01 is DONE, UI-01G overall and UI-01H overall are DONE, UI-01I is DONE,
-UI-01J is NEXT, and UI-01 overall remains not done.
+overall is DONE; UI-NET-01 is DONE, UI-01G overall and UI-01H overall are DONE, UI-01I and UI-01J
+are DONE, and UI-01 overall is DONE.

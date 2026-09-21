@@ -980,6 +980,8 @@ func projectErrorMessage(code string) string {
 		return "Проект или предварительный просмотр экспорта изменились. Создайте предварительный просмотр заново."
 	case "EXPORT_WRITE_FAILED", "EXPORT_PUBLISH_FAILED":
 		return "Экспорт не был опубликован. Исходный проект не изменён."
+	case "EXPORT_STAGING_RETAINED":
+		return "Экспорт не завершён. Временная папка сохранена, потому что безопасное автоматическое удаление не удалось доказать."
 	case "APPLICATION_CONFIG_NOT_FOUND", "APPLICATION_CONFIG_UNREADABLE", "APPLICATION_CONFIG_UNSAFE_PATH", "APPLICATION_CONFIG_INVALID", "APPLICATION_CONFIG_TOO_LARGE", "APPLICATION_CONFIG_VERSION_UNSUPPORTED", "APPLICATION_CONFIG_SERVER_TYPES_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_ID_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_DUPLICATE", "APPLICATION_CONFIG_UNAVAILABLE":
 		return "Конфигурация приложения недоступна или некорректна. Создание нового сервера заблокировано."
 	case "PROJECT_NOT_OPEN":

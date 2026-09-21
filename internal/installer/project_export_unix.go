@@ -289,12 +289,12 @@ func (directory *exportDirectory) removeOwnedTree(staging *exportDirectory, stag
 	linkedIdentity, stagingIdentity := linked.identity(), staging.identity()
 	linked.close()
 	if linkedIdentity != stagingIdentity {
-		return errors.New("unsafe export staging")
+		return errors.New("EXPORT_STAGING_RETAINED")
 	}
 	// Linux has no unlink-by-open-directory-handle primitive. A pathname-based
 	// recursive cleanup could delete a sibling swapped in after the identity
 	// check above, so fail closed and leave staging for operator cleanup.
-	return errors.New("unsafe export staging cleanup")
+	return errors.New("EXPORT_STAGING_RETAINED")
 }
 
 func exportUnixFileIdentity(fd int) (exportFileIdentity, int64, error) {

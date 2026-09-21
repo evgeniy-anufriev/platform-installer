@@ -59,16 +59,17 @@ type ProjectExportResult struct {
 // and exactly one commit attempt. It must be closed when the App invalidates
 // the preview or shuts down.
 type ProjectExport struct {
-	source         *exportDirectory
-	destination    *exportDirectory
-	sourceIdentity exportIdentity
-	destIdentity   exportIdentity
-	sourceDisplay  string
-	destDisplay    string
-	directoryName  string
-	plan           ProjectExportPlan
-	manifest       exportObservation
-	closed         bool
+	source           *exportDirectory
+	destination      *exportDirectory
+	sourceIdentity   exportIdentity
+	destIdentity     exportIdentity
+	sourceDisplay    string
+	destDisplay      string
+	directoryName    string
+	plan             ProjectExportPlan
+	manifest         exportObservation
+	writeObservation func(*exportDirectory, exportObservation) error
+	closed           bool
 }
 
 func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*ProjectExport, ProjectExportPlan, error) {
@@ -132,8 +133,8 @@ func (export *ProjectExport) Close() {
 	}
 }
 
-func (export *ProjectExport) Commit(planDigest string) ProjectExportResult {
-	result := ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "FAILED", ErrorCode: "EXPORT_PLAN_STALE"}
+func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResult) {
+	result = ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "FAILED", ErrorCode: "EXPORT_PLAN_STALE"}
 	if export == nil || export.closed || planDigest == "" || planDigest != export.plan.PlanDigest {
 		return result
 	}
@@ -167,11 +168,17 @@ func (export *ProjectExport) Commit(planDigest string) ProjectExportResult {
 	published := false
 	defer func() {
 		if !published {
-			_ = export.destination.removeOwnedTree(staging, stagingName)
+			if cleanupErr := export.destination.removeOwnedTree(staging, stagingName); cleanupErr != nil {
+				result.ErrorCode = exportErrorCode(cleanupErr, "EXPORT_STAGING_RETAINED")
+			}
 		}
 		staging.close()
 	}()
-	if err := writeExportObservation(staging, observation); err != nil {
+	write := writeExportObservation
+	if export.writeObservation != nil {
+		write = export.writeObservation
+	}
+	if err := write(staging, observation); err != nil {
 		result.ErrorCode = exportErrorCode(err, "EXPORT_WRITE_FAILED")
 		return result
 	}
@@ -493,7 +500,7 @@ func exportErrorCode(err error, fallback string) string {
 	if err == nil {
 		return fallback
 	}
-	for _, code := range []string{"PROJECT_CHANGED", "EXPORT_LIMIT_EXCEEDED", "EXPORT_SOURCE_UNSAFE", "EXPORT_DESTINATION_UNSAFE", "EXPORT_WRITE_FAILED"} {
+	for _, code := range []string{"PROJECT_CHANGED", "EXPORT_LIMIT_EXCEEDED", "EXPORT_SOURCE_UNSAFE", "EXPORT_DESTINATION_UNSAFE", "EXPORT_WRITE_FAILED", "EXPORT_STAGING_RETAINED"} {
 		if err.Error() == code {
 			return code
 		}
