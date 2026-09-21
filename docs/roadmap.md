@@ -665,7 +665,10 @@ evidence is projected to Certificates without local SAN/VIP calculation; see
 race gates and hygiene passed; see `docs/ui-01g4.md`. UI-01G overall is DONE.
 UI-01H1 is DONE: v1alpha8 safe configuration intents, bounded catalog and
 managed projections, local Save/reopen and descriptor-driven TLS reference
-integrity passed; see `docs/ui-01h1.md`. UI-01H2 is NEXT; UI-01 overall is NOT
+integrity passed; see `docs/ui-01h1.md`. UI-01H2 is DONE: the one Services
+list/detail route, Topology hand-off and descriptor-gated deployment forms use
+the existing shared edit lifecycle without Core or target changes; see
+`docs/ui-01h2.md`. UI-01H3 is NEXT; UI-01 overall is NOT
 DONE.
 
 Accepted design input: [metadata-only project creation and progressive

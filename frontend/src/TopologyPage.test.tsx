@@ -69,6 +69,7 @@ const props = () => ({
   onSelectedDeploymentChange: vi.fn(),
   selectedHostId: "",
   onSelectedHostChange: vi.fn(),
+  onConfigureDeployment: vi.fn(),
   preview: undefined as EndpointPreview | undefined,
   verificationStatus: "UNVERIFIED" as const,
 });

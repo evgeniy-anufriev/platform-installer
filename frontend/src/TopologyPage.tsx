@@ -208,6 +208,7 @@ export function TopologyPage({
   onSelectedDeploymentChange,
   selectedHostId,
   onSelectedHostChange,
+  onConfigureDeployment,
   preview,
   verificationStatus,
 }: {
@@ -227,6 +228,7 @@ export function TopologyPage({
   onSelectedDeploymentChange: (id: string) => void;
   selectedHostId: string;
   onSelectedHostChange: (id: string) => void;
+  onConfigureDeployment: (deploymentId: string) => void;
   preview?: EndpointPreview;
   verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
 }) {
@@ -500,8 +502,13 @@ export function TopologyPage({
                   )}
                   <button
                     className="outline"
-                    disabled
-                    title="Редактор сервиса будет реализован отдельным milestone"
+                    onClick={() => onConfigureDeployment(selected.deploymentId)}
+                    disabled={selected.state === "deleting"}
+                    title={
+                      selected.state === "deleting"
+                        ? "Настройка недоступна для deployment, который будет удалён."
+                        : "Открыть настройку сервиса."
+                    }
                   >
                     Настроить сервис
                   </button>

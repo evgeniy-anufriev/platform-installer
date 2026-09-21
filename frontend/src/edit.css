@@ -375,6 +375,53 @@
   margin-top: 20px;
   justify-content: flex-start;
 }
+.services-settings {
+  margin-top: 14px;
+}
+.services-setting-list {
+  display: grid;
+  gap: 14px;
+}
+.services-setting {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 1.2fr);
+  gap: 12px 20px;
+  padding-top: 14px;
+  border-top: 1px solid #e4e9f0;
+}
+.services-setting:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.services-setting small {
+  display: block;
+  color: #667085;
+  margin-top: 3px;
+}
+.services-setting p {
+  margin-bottom: 0;
+}
+.services-control {
+  display: grid;
+  gap: 8px;
+}
+.services-control input,
+.services-control select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 9px;
+  font: inherit;
+  background: #fff;
+}
+.services-saved-overrides ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.services-session-actions {
+  margin-top: 14px;
+  justify-content: flex-start;
+}
 .topology-dialog {
   max-width: 620px;
 }
@@ -524,6 +571,9 @@
     flex-direction: column;
   }
   .topology-grid {
+    grid-template-columns: 1fr;
+  }
+  .services-setting {
     grid-template-columns: 1fr;
   }
   .placement-row {

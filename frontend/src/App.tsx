@@ -25,17 +25,24 @@ import {
   type ProviderIntent,
   TopologyPage,
 } from "./TopologyPage";
+import { type ConfigurationIntent, ServicesPage } from "./ServicesPage";
 import "./edit.css";
 
 type Page =
-  "project" | "servers" | "topology" | "certificates" | "installation";
+  | "project"
+  | "servers"
+  | "topology"
+  | "certificates"
+  | "services"
+  | "installation";
 type StructuralIntent =
   | ServerIntent
   | DeploymentIntent
   | PlacementIntent
   | EndpointIntent
   | ProviderIntent
-  | CertificateIntent;
+  | CertificateIntent
+  | ConfigurationIntent;
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -133,6 +140,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [selectedTopologyDeployment, setSelectedTopologyDeployment] =
     useState("");
   const [selectedTopologyHost, setSelectedTopologyHost] = useState("");
+  const [servicesView, setServicesView] = useState<"list" | "detail">("list");
+  const [selectedServiceDeployment, setSelectedServiceDeployment] =
+    useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [refreshRoot, setRefreshRoot] = useState("");
@@ -250,6 +260,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setTopologyTab("services");
     setSelectedTopologyDeployment("");
     setSelectedTopologyHost("");
+    setServicesView("list");
+    setSelectedServiceDeployment("");
     endpointPreviewRequest.current += 1;
     setEndpointPreview(undefined);
     setVerifiedPKI(undefined);
@@ -594,20 +606,26 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               (item.id === "servers" && projectOpen) ||
               (item.id === "topology" && topologyAvailable) ||
               (item.id === "certificates" && topologyAvailable) ||
+              (item.id === "services" && topologyAvailable) ||
               (item.id === "installation" && projectOpen && executionReady);
             return (
               <button
                 key={item.id}
                 className={item.id === page ? "active" : "future"}
                 disabled={!enabled}
-                onClick={() =>
-                  (item.id === "project" ||
-                    item.id === "servers" ||
-                    item.id === "topology" ||
-                    item.id === "certificates" ||
-                    item.id === "installation") &&
-                  setPage(item.id)
-                }
+                onClick={() => {
+                  if (
+                    item.id !== "project" &&
+                    item.id !== "servers" &&
+                    item.id !== "topology" &&
+                    item.id !== "certificates" &&
+                    item.id !== "services" &&
+                    item.id !== "installation"
+                  )
+                    return;
+                  setPage(item.id);
+                  if (item.id === "services") setServicesView("list");
+                }}
               >
                 {item.label}
               </button>
@@ -816,8 +834,48 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onSelectedDeploymentChange={setSelectedTopologyDeployment}
             selectedHostId={selectedTopologyHost}
             onSelectedHostChange={setSelectedTopologyHost}
+            onConfigureDeployment={(deploymentId) => {
+              setSelectedTopologyDeployment(deploymentId);
+              setSelectedServiceDeployment(deploymentId);
+              setServicesView("detail");
+              setPage("services");
+            }}
             preview={endpointPreview}
             verificationStatus={verification.status}
+          />
+        )}
+        {!loading && !creating && projectOpen && page === "services" && (
+          <ServicesPage
+            managed={managed}
+            catalog={result.catalog}
+            deploymentIntents={intents.filter(
+              (intent): intent is DeploymentIntent =>
+                intent.operation === "CreateServiceDeployment" ||
+                intent.operation === "DeleteServiceDeployment",
+            )}
+            configurationIntents={intents.filter(
+              (intent): intent is ConfigurationIntent =>
+                intent.operation === "SetServiceConfigurationValue" ||
+                intent.operation === "RemoveServiceConfigurationOverride",
+            )}
+            busy={editBusy}
+            structuralDisabled={refreshRequired}
+            commandCount={commandCount}
+            error={editError?.message}
+            view={servicesView}
+            selectedDeploymentId={selectedServiceDeployment}
+            onOpenDeployment={(deploymentId) => {
+              setSelectedServiceDeployment(deploymentId);
+              setServicesView("detail");
+            }}
+            onBackToList={() => {
+              setServicesView("list");
+              setSelectedServiceDeployment("");
+            }}
+            onOpenTopology={() => setPage("topology")}
+            onAppend={appendStructuralIntent}
+            onReview={review}
+            onDiscard={discard}
           />
         )}
         {!loading && !creating && projectOpen && page === "certificates" && (

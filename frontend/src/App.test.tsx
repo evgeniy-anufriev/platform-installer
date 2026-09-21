@@ -66,6 +66,24 @@ const project = {
             },
           },
         ],
+        configurationSettings: [
+          {
+            id: "replicaCount",
+            kind: "MANAGED",
+            scopes: ["deployment"],
+            label: "Количество реплик",
+            editorShape: "INTEGER",
+            minimum: 1,
+            maximum: 9,
+          },
+          {
+            id: "advancedConfig",
+            kind: "MANAGED",
+            scopes: ["deployment"],
+            label: "Расширенная конфигурация",
+            editorShape: "UNSUPPORTED",
+          },
+        ],
       },
     ],
   },
@@ -821,9 +839,20 @@ describe("UI-01F3 deployment editor", () => {
     ).toBeTruthy();
     expect(screen.getAllByText("kafka-main").length).toBeGreaterThan(0);
     expect(screen.getByText("Apache Kafka (kafka)")).toBeTruthy();
-    expect(
+    await userEvent.click(
       screen.getByRole("button", { name: "Настроить сервис" }),
-    ).toHaveProperty("disabled", true);
+    );
+    const detailHeading = await screen.findByRole("heading", {
+      name: "Настройка сервиса",
+    });
+    expect(document.activeElement).toBe(detailHeading);
+    await userEvent.click(
+      screen.getByRole("button", { name: "К списку сервисов" }),
+    );
+    const listHeading = await screen.findByRole("heading", {
+      name: "Сервисы",
+    });
+    expect(document.activeElement).toBe(listHeading);
     expect(value.getExecutionNodeContext).toBeUndefined();
     await userEvent.click(screen.getByRole("button", { name: "Проект" }));
     expect(
@@ -1076,6 +1105,103 @@ describe("UI-01F3 deployment editor", () => {
     expect(
       screen.getAllByRole("button", { name: "Отменить все изменения" }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("UI-01H2 services navigation and safe settings", () => {
+  it("opens one Services list/detail view without an Execution Node and returns to the list", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    expect(
+      await screen.findByRole("heading", { name: "Сервисы" }),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(
+      await screen.findByRole("heading", { name: "Настройка сервиса" }),
+    ).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole("button", { name: "К списку сервисов" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Сервисы" }),
+    ).toBeTruthy();
+    expect(value.getExecutionNodeContext).toBeUndefined();
+  });
+
+  it("adds one deployment-scoped safe setting command through the shared session", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.type(screen.getByRole("spinbutton"), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(value.startEditSession).toHaveBeenCalledOnce();
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "SetServiceConfigurationValue",
+      deploymentId: "kafka-main",
+      scope: "DEPLOYMENT",
+      setting: "replicaCount",
+      value: 3,
+    });
+    expect(screen.getByRole("button", { name: "Применить" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByText("Изменений в черновике: 1 из 16")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Этот параметр доступен только для просмотра в текущем интерфейсе.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("keeps saved override identity read-only when the exact catalog is unavailable", async () => {
+    const unavailable = {
+      ...project,
+      managed: {
+        ...project.managed,
+        deployments: {
+          ...project.managed.deployments,
+          "kafka-main": {
+            ...project.managed.deployments["kafka-main"],
+            configuration: [
+              {
+                setting: "unknownSetting",
+                overridePresent: true,
+                state: "UNKNOWN",
+                value: "must-not-be-rendered",
+              },
+            ],
+          },
+        },
+      },
+      catalog: {
+        status: "UNAVAILABLE",
+        expectedBundleDigest: "sha256:bundle",
+        expectedCatalogDigest: "sha256:catalog",
+      },
+    };
+    const value = api();
+    value.chooseProject.mockResolvedValue(unavailable);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(await screen.findByText("unknownSetting")).toBeTruthy();
+    expect(screen.queryByText("must-not-be-rendered")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(value.startEditSession).not.toHaveBeenCalled();
   });
 });
 
