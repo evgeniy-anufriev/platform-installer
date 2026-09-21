@@ -1,9 +1,11 @@
 import {
   AppendEditCommand,
   ChooseProject,
+  ChooseProjectExportParent,
   ChooseProjectParent,
   CloseProject,
   CommitStructuralEditPlan,
+  CommitProjectExport,
   CreateProject,
   DiscardEditSession,
   GetApplicationConfig,
@@ -14,6 +16,7 @@ import {
   CheckExecutionNode,
   OpenProject,
   PlanExecutionNodePreparation,
+  PlanProjectExport,
   PrepareExecutionNode,
   ReviewStructuralEditSession,
   SetSessionCredential,
@@ -207,11 +210,37 @@ export type ExecutionNodePreparation = {
   error?: { code: string; message: string };
   verification?: VerificationStatus;
 };
+export type ProjectExportPlan = {
+  planDigest: string;
+  sourceProjectRoot: string;
+  sourceProjectRevision: string;
+  destinationParent: string;
+  directoryName: string;
+  destinationRoot: string;
+  documents: Array<{ logicalPath: string; size: number; digest: string }>;
+  aggregateSize: number;
+  excludedCategories: string[];
+};
+export type ProjectExportResult = {
+  status: "EXPORTED" | "FAILED";
+  destinationRoot?: string;
+  sourceProjectRevision?: string;
+  documentCount?: number;
+  aggregateSize?: number;
+  errorCode?: string;
+};
+export type ProjectExportOperationResult = {
+  status: "READY" | "EXPORTED" | "BLOCKED";
+  plan?: ProjectExportPlan;
+  result?: ProjectExportResult;
+  error?: { code: string; message: string };
+};
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
   openProject(root: string): Promise<OpenResult>;
   chooseProjectParent(): Promise<string>;
+  chooseProjectExportParent?(): Promise<string>;
   createProject(input: {
     projectRoot: string;
     displayName: string;
@@ -239,6 +268,11 @@ export interface ProjectBackend {
   planExecutionNodePreparation?(): Promise<ExecutionNodePreparation>;
   prepareExecutionNode?(planId: string): Promise<ExecutionNodePreparation>;
   verifyProject?(): Promise<VerificationStatus>;
+  planProjectExport?(
+    destinationParent: string,
+    directoryName: string,
+  ): Promise<ProjectExportOperationResult>;
+  commitProjectExport?(planDigest: string): Promise<ProjectExportOperationResult>;
 }
 
 export const backend: ProjectBackend = {
@@ -246,6 +280,7 @@ export const backend: ProjectBackend = {
   chooseProject: () => ChooseProject() as unknown as Promise<OpenResult>,
   openProject: (root) => OpenProject(root) as unknown as Promise<OpenResult>,
   chooseProjectParent: ChooseProjectParent,
+  chooseProjectExportParent: ChooseProjectExportParent,
   createProject: (input) =>
     CreateProject(input as never) as unknown as Promise<OpenResult>,
   closeProject: () => CloseProject() as unknown as Promise<OpenResult>,
@@ -283,4 +318,11 @@ export const backend: ProjectBackend = {
     ) as unknown as Promise<ExecutionNodePreparation>,
   verifyProject: () =>
     VerifyProject() as unknown as Promise<VerificationStatus>,
+  planProjectExport: (destinationParent, directoryName) =>
+    PlanProjectExport(
+      destinationParent,
+      directoryName,
+    ) as unknown as Promise<ProjectExportOperationResult>,
+  commitProjectExport: (planDigest) =>
+    CommitProjectExport(planDigest) as unknown as Promise<ProjectExportOperationResult>,
 };

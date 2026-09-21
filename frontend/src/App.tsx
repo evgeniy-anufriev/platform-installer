@@ -6,6 +6,7 @@ import type {
   ExecutionNodeReadiness,
   EndpointPreview,
   OpenResult,
+  ProjectExportOperationResult,
   ProjectBackend,
   SessionCredentialInput,
   SessionCredentialStatus,
@@ -123,6 +124,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [projectDialog, setProjectDialog] = useState(false);
+  const [exportDialog, setExportDialog] = useState(false);
+  const [exportParent, setExportParent] = useState("");
+  const [exportName, setExportName] = useState("");
+  const [exportOperation, setExportOperation] =
+    useState<ProjectExportOperationResult | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
   const [name, setName] = useState("");
   const [root, setRoot] = useState("");
   const [parent, setParent] = useState("");
@@ -342,6 +349,40 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     clearRefreshFailure();
     resetTopologySelection();
     setPage("project");
+  };
+  const chooseExportParent = async () => {
+    if (!api.chooseProjectExportParent) return;
+    const selected = await api.chooseProjectExportParent();
+    if (selected) setExportParent(selected);
+  };
+  const previewExport = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!api.planProjectExport) return;
+    setExportBusy(true);
+    try {
+      setExportOperation(await api.planProjectExport(exportParent, exportName));
+    } finally {
+      setExportBusy(false);
+    }
+  };
+  const commitExport = async () => {
+    const digest = exportOperation?.plan?.planDigest;
+    if (!api.commitProjectExport || !digest) return;
+    setExportBusy(true);
+    try {
+      const next = await api.commitProjectExport(digest);
+      setExportOperation(next);
+      if (next.status === "EXPORTED") {
+        setExportParent("");
+        setExportName("");
+      }
+    } finally {
+      setExportBusy(false);
+    }
+  };
+  const openExport = () => {
+    setExportOperation(null);
+    setExportDialog(true);
   };
 
   const appendStructuralIntent = async (
@@ -768,6 +809,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onClose={close}
             onServers={() => setPage("servers")}
             closeDisabled={!!sessionId || refreshRequired}
+            exportAvailable={
+              !sessionId &&
+              !refreshRequired &&
+              !!api.planProjectExport &&
+              !!api.commitProjectExport
+            }
+            onExport={openExport}
           />
         )}
         {!loading && !creating && projectOpen && page === "servers" && (
@@ -1052,6 +1100,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onDiscard={discard}
           />
         )}
+        {exportDialog && (
+          <ProjectExportDialog
+            parent={exportParent}
+            name={exportName}
+            operation={exportOperation}
+            busy={exportBusy}
+            onParentChange={setExportParent}
+            onNameChange={setExportName}
+            onChooseParent={chooseExportParent}
+            onPreview={previewExport}
+            onCommit={commitExport}
+            onClose={() => !exportBusy && setExportDialog(false)}
+          />
+        )}
       </main>
     </div>
   );
@@ -1066,6 +1128,8 @@ function ProjectPage({
   onClose,
   onServers,
   closeDisabled,
+  exportAvailable,
+  onExport,
 }: {
   empty: boolean;
   snapshot: OpenResult["snapshot"];
@@ -1075,6 +1139,8 @@ function ProjectPage({
   onClose: () => void;
   onServers: () => void;
   closeDisabled: boolean;
+  exportAvailable: boolean;
+  onExport: () => void;
 }) {
   if (empty && local)
     return (
@@ -1112,6 +1178,9 @@ function ProjectPage({
             <dd>{local.source?.bundleDigest}</dd>
           </dl>
           <button onClick={onServers}>Добавить первый сервер</button>
+          <button className="outline" onClick={onExport} disabled={!exportAvailable}>
+            Экспортировать проект
+          </button>
         </section>
       </>
     );
@@ -1151,10 +1220,91 @@ function ProjectPage({
           <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>
         </dl>
         <button onClick={onServers}>Открыть серверы</button>
+        <button className="outline" onClick={onExport} disabled={!exportAvailable}>
+          Экспортировать проект
+        </button>
       </section>
     </>
   );
 }
+
+function ProjectExportDialog({
+  parent,
+  name,
+  operation,
+  busy,
+  onParentChange,
+  onNameChange,
+  onChooseParent,
+  onPreview,
+  onCommit,
+  onClose,
+}: {
+  parent: string;
+  name: string;
+  operation: ProjectExportOperationResult | null;
+  busy: boolean;
+  onParentChange: (value: string) => void;
+  onNameChange: (value: string) => void;
+  onChooseParent: () => void;
+  onPreview: (event: React.FormEvent) => void;
+  onCommit: () => void;
+  onClose: () => void;
+}) {
+  const plan = operation?.plan;
+  const result = operation?.result;
+  const canPreview = !!parent && !!name.trim() && !busy && !plan;
+  return (
+    <div className="modal" role="presentation">
+      <form className="card dialog review-dialog" role="dialog" aria-modal="true" aria-labelledby="project-export-title" onSubmit={onPreview}>
+        <h1 id="project-export-title">Экспорт проекта</h1>
+        {!plan && !result && (
+          <>
+            <p>
+              Будет создана новая папка с полной portable-конфигурацией проекта.
+              Секреты, runtime-данные, факты, планы, журналы и результаты не экспортируются.
+            </p>
+            <label>
+              Папка назначения
+              <div className="inline-fields">
+                <input value={parent} onChange={(event) => onParentChange(event.target.value)} placeholder="C:\\Projects" required />
+                <button type="button" className="outline" onClick={onChooseParent} disabled={busy}>Выбрать</button>
+              </div>
+            </label>
+            <label>
+              Имя новой папки
+              <input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="portable-project" required maxLength={128} />
+            </label>
+          </>
+        )}
+        {operation?.error && (
+          <p className="field-error" role="alert"><code>{operation.error.code}</code> {operation.error.message}</p>
+        )}
+        {plan && (
+          <>
+            <p>Проверьте состав перед публикацией. Существующая папка назначения никогда не будет перезаписана.</p>
+            <dl>
+              <dt>Новая папка</dt><dd>{plan.destinationRoot}</dd>
+              <dt>Ревизия проекта</dt><dd>{plan.sourceProjectRevision}</dd>
+              <dt>Файлы</dt><dd>{plan.documents.length}</dd>
+              <dt>Размер</dt><dd>{plan.aggregateSize} байт</dd>
+            </dl>
+            <p className="readonly">Исключено: {plan.excludedCategories.join(", ")}</p>
+          </>
+        )}
+        {result?.status === "EXPORTED" && (
+          <p className="success" role="status">Экспорт завершён: {result.destinationRoot}</p>
+        )}
+        <footer className="dialog-actions">
+          <button type="button" className="outline" onClick={onClose} disabled={busy}>{result?.status === "EXPORTED" ? "Готово" : "Отмена"}</button>
+          {!plan && !result && <button type="submit" disabled={!canPreview}>{busy ? "Подготовка…" : "Проверить состав"}</button>}
+          {plan && <button type="button" onClick={onCommit} disabled={busy}>{busy ? "Экспорт…" : "Экспортировать"}</button>}
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function ReviewDialog({
   edit,
   error,

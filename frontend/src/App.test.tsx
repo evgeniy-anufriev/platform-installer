@@ -1515,6 +1515,41 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
   });
 });
 
+describe("UI-01I2 project export", () => {
+  it("previews before publishing a full portable configuration", async () => {
+    const value = api({
+      chooseProjectExportParent: vi.fn().mockResolvedValue("C:/Exports"),
+      planProjectExport: vi.fn().mockResolvedValue({
+        status: "READY",
+        plan: {
+          planDigest: "sha256:plan",
+          sourceProjectRevision: "sha256:project",
+          destinationRoot: "C:/Exports/portable-project",
+          documents: [{ logicalPath: "project.yml", size: 20, digest: "sha256:file" }],
+          aggregateSize: 20,
+          excludedCategories: ["RUNTIME_CREDENTIALS", "LOGS"],
+        },
+      }),
+      commitProjectExport: vi.fn().mockResolvedValue({
+        status: "EXPORTED",
+        result: { status: "EXPORTED", destinationRoot: "C:/Exports/portable-project" },
+      }),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
+    await userEvent.click(screen.getByRole("button", { name: "Экспортировать проект" }));
+    await userEvent.click(screen.getByRole("button", { name: "Выбрать" }));
+    await userEvent.type(screen.getByLabelText("Имя новой папки"), "portable-project");
+    await userEvent.click(screen.getByRole("button", { name: "Проверить состав" }));
+    expect(value.planProjectExport).toHaveBeenCalledWith("C:/Exports", "portable-project");
+    expect(await screen.findByText("C:/Exports/portable-project")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Экспортировать" }));
+    expect(value.commitProjectExport).toHaveBeenCalledWith("sha256:plan");
+    expect(await screen.findByText(/Экспорт завершён/)).toBeTruthy();
+  });
+});
+
 describe("UI-01E3 session credentials", () => {
   it("submits write-only credentials and clears transient fields after success", async () => {
     const value = api();
