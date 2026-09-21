@@ -116,6 +116,62 @@ class ProjectEditVersionTests(unittest.TestCase):
             payload["rawYaml"] = "unsafe"
             self.assertTrue(self.validate(payload, "v1alpha5"), fields["operation"])
 
+    def test_v1alpha8_is_v1alpha7_superset_with_closed_scoped_configuration(self):
+        inherited = {
+            "apiVersion": "platform.installer/edit-command/v1alpha8",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "ReconcileEndpointProvider",
+            "deploymentId": "edge-main",
+            "endpointGroupId": "edge",
+            "virtualRouterId": 42,
+            "virtualAddresses": [{"address": "192.0.2.42", "interface": "eth0"}],
+        }
+        self.assertEqual([], self.validate(inherited, "v1alpha8"))
+
+        deployment = {
+            "apiVersion": "platform.installer/edit-command/v1alpha8",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "SetServiceConfigurationValue",
+            "deploymentId": "kafka-main",
+            "scope": "DEPLOYMENT",
+            "setting": "tlsProfile",
+            "value": "infrastructure-tls",
+        }
+        self.assertEqual([], self.validate(deployment, "v1alpha8"))
+        deployment["memberId"] = "kafka-1"
+        self.assertTrue(self.validate(deployment, "v1alpha8"))
+
+        member = dict(deployment, scope="MEMBER")
+        self.assertEqual([], self.validate(member, "v1alpha8"))
+        member.pop("memberId")
+        self.assertTrue(self.validate(member, "v1alpha8"))
+        member["memberId"] = "kafka-1"
+        member["value"] = None
+        self.assertTrue(self.validate(member, "v1alpha8"))
+        member["value"] = {"raw": "unsupported"}
+        self.assertTrue(self.validate(member, "v1alpha8"))
+
+        remove = dict(member, operation="RemoveServiceConfigurationOverride")
+        remove.pop("value")
+        self.assertEqual([], self.validate(remove, "v1alpha8"))
+        remove["value"] = False
+        self.assertTrue(self.validate(remove, "v1alpha8"))
+
+    def test_v1alpha7_remains_immutable_and_does_not_admit_h1_commands(self):
+        payload = {
+            "apiVersion": "platform.installer/edit-command/v1alpha7",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "SetServiceConfigurationValue",
+            "deploymentId": "kafka-main",
+            "scope": "DEPLOYMENT",
+            "setting": "port",
+            "value": 9092,
+        }
+        self.assertTrue(self.validate(payload, "v1alpha7"))
+
 
 if __name__ == "__main__":
     unittest.main()

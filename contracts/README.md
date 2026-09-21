@@ -18,6 +18,8 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Server CRUD command with required desired hostname | `v1alpha4` | `project-edit/v1alpha4/schema.json` |
 | Server and topology edit commands | `v1alpha5` | `project-edit/v1alpha5/schema.json` |
 | Server, topology and provider edit commands | `v1alpha6` | `project-edit/v1alpha6/schema.json` |
+| Server, topology, provider and PKI edit commands | `v1alpha7` | `project-edit/v1alpha7/schema.json` |
+| Server, topology, provider, PKI and scoped service configuration edit commands | `v1alpha8` | `project-edit/v1alpha8/schema.json` |
 | Local structural Save plan/result | `v1alpha1` | `project-save/v1alpha1/schema.json` |
 | Derived saved-revision verification | `v1alpha1` | `project-verification/v1alpha1/schema.json` |
 | Service package manifest | `v1alpha1` | `service-manifest/v1alpha1/schema.json` |

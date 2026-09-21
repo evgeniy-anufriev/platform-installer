@@ -39,6 +39,8 @@ func topologyOperation(operation string) bool {
 		"SetServiceEndpointGroup", "ClearServiceEndpointGroup",
 		"ReconcileEndpointProvider", "ClearEndpointProvider":
 		return true
+	case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":
+		return true
 	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "DeleteCertificateAuthority",
 		"CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile",
 		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
@@ -51,7 +53,7 @@ func topologyOperation(operation string) bool {
 
 func commandNeedsCatalog(command EditCommand) bool {
 	switch command.Operation {
-	case "CreateServiceDeployment", "SetServiceEndpointGroup", "ReconcileEndpointProvider":
+	case "CreateServiceDeployment", "SetServiceEndpointGroup", "ReconcileEndpointProvider", "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride", "DeleteTLSProfile":
 		return true
 	case "ReconcileDeploymentPlacement":
 		return len(command.Members) != 0
@@ -99,7 +101,7 @@ func (b *Backend) planStructuralCandidate(ctx context.Context, root, classificat
 	if err != nil {
 		return blockedStructuralPlan(revision, err), nil
 	}
-	if err := candidate.validateFinalReferences(mutations); err != nil {
+	if err := candidate.validateFinalReferences(mutations, catalog); err != nil {
 		return blockedStructuralPlan(revision, err), nil
 	}
 	documents, err := candidate.storedDocuments()
@@ -153,6 +155,12 @@ func validateStructuralCommandConflicts(commands []EditCommand) error {
 				return blocked("EDIT_COMMAND_CONFLICT", "Edit session contains conflicting placement intents", "command")
 			}
 			placements[key] = true
+		case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":
+			key = "configuration/" + command.DeploymentID + "/" + command.Scope + "/" + command.MemberID + "/" + command.Setting
+			if relations[key] {
+				return blocked("EDIT_COMMAND_CONFLICT", "Edit session contains conflicting configuration intents", "command")
+			}
+			relations[key] = true
 		}
 	}
 	return nil
@@ -365,6 +373,18 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 				return nil, mutations, err
 			}
 			mutations.reconciled[command.DeploymentID] = true
+			changes = append(changes, commandSummary(command))
+		}
+	}
+	for _, command := range commands {
+		if command.Operation != "SetServiceConfigurationValue" && command.Operation != "RemoveServiceConfigurationOverride" {
+			continue
+		}
+		changed, applyErr := candidate.applyConfigurationCommand(command, deployments, catalog)
+		if applyErr != nil {
+			return nil, mutations, applyErr
+		}
+		if changed {
 			changes = append(changes, commandSummary(command))
 		}
 	}
@@ -585,7 +605,7 @@ func stringValues(values []string) []any {
 	return result
 }
 
-func (candidate *structuralCandidate) validateFinalReferences(mutations topologyMutationSet) error {
+func (candidate *structuralCandidate) validateFinalReferences(mutations topologyMutationSet, catalog *projectlifecycle.ProjectCatalogView) error {
 	inventory, err := candidate.inventory()
 	if err != nil {
 		return err
@@ -719,6 +739,69 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 	if err := validatePKIReferences(state, deployments, mutations); err != nil {
 		return err
 	}
+	tlsProfiles := asMap(state["tlsProfiles"])
+	if tlsProfiles == nil {
+		tlsProfiles = map[string]any{}
+	}
+	return candidate.validateCatalogConfigurationReferences(catalog, deployments, tlsProfiles, mutations)
+}
+
+func (candidate *structuralCandidate) validateCatalogConfigurationReferences(catalog *projectlifecycle.ProjectCatalogView, deployments, tlsProfiles map[string]any, mutations topologyMutationSet) error {
+	validate := func(configuration map[string]any, serviceType, field string) error {
+		for settingID, raw := range configuration {
+			descriptor, found := catalogConfigurationSetting(catalog, serviceType, settingID)
+			if !found || descriptor.ReferenceKind != "TLS_PROFILE" {
+				continue
+			}
+			id, ok := raw.(string)
+			if !ok || !validDesiredStateIdentifier(id) {
+				return managedReadError("Managed TLS-profile reference is malformed", field)
+			}
+			if tlsProfiles[id] == nil {
+				if mutations.deletedTLSProfiles[id] {
+					return referenceInUse("configuration." + settingID)
+				}
+				return referenceNotFound("configuration." + settingID)
+			}
+		}
+		return nil
+	}
+	for _, raw := range deployments {
+		deployment := asMap(raw)
+		serviceType, _ := deployment["serviceType"].(string)
+		if configurationRaw, present := deployment["configuration"]; present {
+			configuration := asMap(configurationRaw)
+			if configuration == nil {
+				return managedReadError("Managed configuration is malformed", desiredDocument)
+			}
+			if err := validate(configuration, serviceType, desiredDocument); err != nil {
+				return err
+			}
+		}
+	}
+	for logical, document := range candidate.documents {
+		if !strings.HasPrefix(logical, "inventory/host_vars/") {
+			continue
+		}
+		placements := asMap(document["platform_deployments"])
+		for deploymentID, rawPlacement := range placements {
+			deployment := asMap(deployments[deploymentID])
+			serviceType, _ := deployment["serviceType"].(string)
+			members := asMap(asMap(rawPlacement)["members"])
+			for _, rawMember := range members {
+				member := asMap(rawMember)
+				if configurationRaw, present := member["configuration"]; present {
+					configuration := asMap(configurationRaw)
+					if configuration == nil {
+						return managedReadError("Managed member configuration is malformed", logical)
+					}
+					if err := validate(configuration, serviceType, logical); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -800,27 +883,6 @@ func validatePKIReferences(state map[string]any, deployments map[string]any, mut
 				return referenceInUse("profile")
 			}
 			return referenceNotFound("profile")
-		}
-	}
-	for _, raw := range deployments {
-		deployment := asMap(raw)
-		configuration := asMap(deployment["configuration"])
-		if configuration == nil {
-			continue
-		}
-		ref, present := configuration["tlsProfile"]
-		if !present {
-			continue
-		}
-		id, ok := ref.(string)
-		if !ok || !validDesiredStateIdentifier(id) {
-			return managedReadError("Managed TLS-profile reference is malformed", desiredDocument)
-		}
-		if tlsProfiles[id] == nil {
-			if mutations.deletedTLSProfiles[id] {
-				return referenceInUse("configuration.tlsProfile")
-			}
-			return referenceNotFound("configuration.tlsProfile")
 		}
 	}
 	return nil

@@ -8,7 +8,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -80,8 +82,8 @@ type Counts struct {
 
 // ProjectCatalogView is a bounded local compatibility vocabulary derived only
 // from the immutable bundle explicitly locked by project.yml. It is not an
-// Ansible-resolved snapshot and it contains no service settings or runtime
-// semantics.
+// Ansible-resolved snapshot. Its service-setting descriptors are a closed,
+// bounded editing vocabulary and contain no raw schemas or runtime semantics.
 type ProjectCatalogView struct {
 	Status                string                  `json:"status"`
 	ExpectedBundleDigest  string                  `json:"expectedBundleDigest"`
@@ -97,15 +99,33 @@ type CatalogViewError struct {
 }
 
 type ProjectCatalogService struct {
-	ID                string               `json:"id"`
-	DefinitionVersion string               `json:"definitionVersion"`
-	DisplayName       string               `json:"displayName"`
-	Description       string               `json:"description,omitempty"`
-	Category          string               `json:"category,omitempty"`
-	UI                ProjectCatalogUI     `json:"ui"`
-	EndpointConsumer  bool                 `json:"endpointConsumer"`
-	EndpointProvider  bool                 `json:"endpointProvider"`
-	Modes             []ProjectCatalogMode `json:"modes"`
+	ID                    string                  `json:"id"`
+	DefinitionVersion     string                  `json:"definitionVersion"`
+	DisplayName           string                  `json:"displayName"`
+	Description           string                  `json:"description,omitempty"`
+	Category              string                  `json:"category,omitempty"`
+	UI                    ProjectCatalogUI        `json:"ui"`
+	EndpointConsumer      bool                    `json:"endpointConsumer"`
+	EndpointProvider      bool                    `json:"endpointProvider"`
+	Modes                 []ProjectCatalogMode    `json:"modes"`
+	ConfigurationSettings []ProjectCatalogSetting `json:"configurationSettings"`
+}
+
+type ProjectCatalogSetting struct {
+	ID            string   `json:"id"`
+	Kind          string   `json:"kind"`
+	Scopes        []string `json:"scopes"`
+	Label         string   `json:"label,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	Section       string   `json:"section,omitempty"`
+	Order         *int     `json:"order,omitempty"`
+	EditorShape   string   `json:"editorShape"`
+	ReferenceKind string   `json:"referenceKind,omitempty"`
+	Minimum       *float64 `json:"minimum,omitempty"`
+	Maximum       *float64 `json:"maximum,omitempty"`
+	MinLength     *int     `json:"minLength,omitempty"`
+	MaxLength     *int     `json:"maxLength,omitempty"`
+	Enum          []any    `json:"enum,omitempty"`
 }
 
 type ProjectCatalogUI struct {
@@ -334,6 +354,25 @@ type definition struct {
 	Modes            map[string]catalogMode `yaml:"modes"`
 	EndpointConsumer map[string]any         `yaml:"endpointConsumer"`
 	EndpointProvider map[string]any         `yaml:"endpointProvider"`
+	Configuration    struct {
+		Settings map[string]catalogSetting `yaml:"settings"`
+	} `yaml:"configuration"`
+}
+
+type catalogSetting struct {
+	Kind         string         `yaml:"kind"`
+	RoleVariable string         `yaml:"roleVariable"`
+	Type         string         `yaml:"type"`
+	Scopes       []string       `yaml:"scopes"`
+	Validation   map[string]any `yaml:"validation"`
+	Schema       map[string]any `yaml:"schema"`
+	UI           struct {
+		Label          string `yaml:"label"`
+		Description    string `yaml:"description"`
+		Section        string `yaml:"section"`
+		Order          *int   `yaml:"order"`
+		XReferenceKind string `yaml:"x-referenceKind"`
+	} `yaml:"ui"`
 }
 
 type catalogMode struct {
@@ -358,6 +397,8 @@ type roleCardinality struct {
 // identifier grammar. This deliberately differs from the narrower deployment
 // ID grammar used by Installer edit commands.
 var catalogIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
+var catalogRoleVariablePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+var catalogSettingIDPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,127}$`)
 
 func readCatalog(verified executionbundle.Verified) (catalog, error) {
 	var value catalog
@@ -366,7 +407,7 @@ func readCatalog(verified executionbundle.Verified) (catalog, error) {
 		return catalog{}, errors.New("catalog invalid")
 	}
 	for id, definition := range value.Definitions {
-		if !catalogIdentifierPattern.MatchString(id) || id != definition.Metadata.ID || definition.Metadata.Version == "" || definition.Metadata.DisplayName == "" || len(definition.Metadata.DisplayName) > 256 || len(definition.Metadata.Description) > 4096 || len(definition.Metadata.Category) > 128 || len(definition.Metadata.UI.Icon) > 256 || len(definition.Metadata.UI.DocumentationTopic) > 256 || !validDigest(definition.Digest) || len(definition.Modes) == 0 || len(definition.Modes) > 256 || !validEndpointCapability(definition.EndpointConsumer) || !validEndpointCapability(definition.EndpointProvider) {
+		if !catalogIdentifierPattern.MatchString(id) || id != definition.Metadata.ID || definition.Metadata.Version == "" || definition.Metadata.DisplayName == "" || len(definition.Metadata.DisplayName) > 256 || len(definition.Metadata.Description) > 4096 || len(definition.Metadata.Category) > 128 || len(definition.Metadata.UI.Icon) > 256 || len(definition.Metadata.UI.DocumentationTopic) > 256 || !validDigest(definition.Digest) || len(definition.Modes) == 0 || len(definition.Modes) > 256 || len(definition.Configuration.Settings) > 4096 || !validEndpointCapability(definition.EndpointConsumer) || !validEndpointCapability(definition.EndpointProvider) {
 			return catalog{}, errors.New("catalog definition invalid")
 		}
 		for modeID, mode := range definition.Modes {
@@ -374,8 +415,67 @@ func readCatalog(verified executionbundle.Verified) (catalog, error) {
 				return catalog{}, errors.New("catalog mode invalid")
 			}
 		}
+		for settingID, setting := range definition.Configuration.Settings {
+			if !validCatalogSetting(settingID, setting) {
+				return catalog{}, errors.New("catalog configuration setting invalid")
+			}
+		}
 	}
 	return value, nil
+}
+
+func validCatalogSetting(id string, value catalogSetting) bool {
+	if !catalogSettingIDPattern.MatchString(id) || (value.Kind != "MANAGED" && value.Kind != "ADVANCED") || !catalogRoleVariablePattern.MatchString(value.RoleVariable) || len(value.Scopes) == 0 || len(value.Scopes) > 2 || len(value.Validation) > 32 || len(value.Schema) > 128 || len(value.UI.Label) > 256 || len(value.UI.Description) > 4096 || len(value.UI.Section) > 256 || len(value.UI.XReferenceKind) > 128 {
+		return false
+	}
+	validType := map[string]bool{"string": true, "integer": true, "number": true, "boolean": true, "object": true, "array": true, "null": true}
+	if !validType[value.Type] {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, scope := range value.Scopes {
+		if (scope != "deployment" && scope != "member") || seen[scope] {
+			return false
+		}
+		seen[scope] = true
+	}
+	return boundedCatalogValue(value.Validation, 0) && boundedCatalogValue(value.Schema, 0)
+}
+
+func boundedCatalogValue(value any, depth int) bool {
+	if depth > 8 {
+		return false
+	}
+	switch typed := value.(type) {
+	case nil, bool, int, int64, uint64:
+		return true
+	case string:
+		return len(typed) <= 4096
+	case float64:
+		return !math.IsNaN(typed) && !math.IsInf(typed, 0)
+	case []any:
+		if len(typed) > 4096 {
+			return false
+		}
+		for _, item := range typed {
+			if !boundedCatalogValue(item, depth+1) {
+				return false
+			}
+		}
+		return true
+	case map[string]any:
+		if len(typed) > 4096 {
+			return false
+		}
+		for key, item := range typed {
+			if len(key) > 256 || !boundedCatalogValue(item, depth+1) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 func validCatalogRoles(roles []string) bool {
@@ -485,6 +585,13 @@ func catalogMatchesLock(value catalog, lock struct {
 func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView {
 	services := make([]ProjectCatalogService, 0, len(value.Definitions))
 	for id, definition := range value.Definitions {
+		settings := make([]ProjectCatalogSetting, 0, len(definition.Configuration.Settings))
+		for settingID, setting := range definition.Configuration.Settings {
+			settings = append(settings, projectCatalogSetting(settingID, setting))
+		}
+		sort.Slice(settings, func(left, right int) bool {
+			return catalogSettingOrderLess(settings[left], settings[right])
+		})
 		modes := make([]ProjectCatalogMode, 0, len(definition.Modes))
 		for modeID, mode := range definition.Modes {
 			roles := append([]string(nil), mode.MemberRoles...)
@@ -502,12 +609,163 @@ func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView
 		sort.Slice(modes, func(left, right int) bool {
 			return catalogOrderLess(nil, modes[left].DisplayName, modes[left].ID, nil, modes[right].DisplayName, modes[right].ID)
 		})
-		services = append(services, ProjectCatalogService{ID: id, DefinitionVersion: definition.Metadata.Version, DisplayName: definition.Metadata.DisplayName, Description: definition.Metadata.Description, Category: definition.Metadata.Category, UI: ProjectCatalogUI{Icon: definition.Metadata.UI.Icon, Order: definition.Metadata.UI.Order, DocumentationTopic: definition.Metadata.UI.DocumentationTopic}, EndpointConsumer: definition.EndpointConsumer != nil, EndpointProvider: definition.EndpointProvider != nil, Modes: modes})
+		services = append(services, ProjectCatalogService{ID: id, DefinitionVersion: definition.Metadata.Version, DisplayName: definition.Metadata.DisplayName, Description: definition.Metadata.Description, Category: definition.Metadata.Category, UI: ProjectCatalogUI{Icon: definition.Metadata.UI.Icon, Order: definition.Metadata.UI.Order, DocumentationTopic: definition.Metadata.UI.DocumentationTopic}, EndpointConsumer: definition.EndpointConsumer != nil, EndpointProvider: definition.EndpointProvider != nil, Modes: modes, ConfigurationSettings: settings})
 	}
 	sort.Slice(services, func(left, right int) bool {
 		return catalogOrderLess(services[left].UI.Order, services[left].DisplayName, services[left].ID, services[right].UI.Order, services[right].DisplayName, services[right].ID)
 	})
 	return &ProjectCatalogView{Status: "READY", ExpectedBundleDigest: verified.Digest, ExpectedCatalogDigest: verified.Manifest.CatalogDigest, BundleVersion: verified.Manifest.BundleVersion, Services: services}
+}
+
+func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetting {
+	result := ProjectCatalogSetting{ID: id, Kind: source.Kind, Scopes: append([]string(nil), source.Scopes...), Label: source.UI.Label, Description: source.UI.Description, Section: source.UI.Section, Order: source.UI.Order, EditorShape: "UNSUPPORTED"}
+	sort.Strings(result.Scopes)
+	if source.Kind != "MANAGED" || len(source.Schema) != 0 {
+		return result
+	}
+	if source.UI.XReferenceKind != "" {
+		if source.UI.XReferenceKind == "TLS_PROFILE" && source.Type == "string" && validationKeys(source.Validation, "minLength") && integerConstraint(source.Validation["minLength"]) == 1 {
+			result.EditorShape, result.ReferenceKind = "TLS_PROFILE", "TLS_PROFILE"
+		}
+		return result
+	}
+	if enum, ok := closedEnum(source.Type, source.Validation); ok {
+		result.EditorShape, result.Enum = "ENUM", enum
+		return result
+	}
+	switch source.Type {
+	case "boolean":
+		if len(source.Validation) == 0 {
+			result.EditorShape = "BOOLEAN"
+		}
+	case "integer", "number":
+		if validationKeys(source.Validation, "minimum", "maximum") {
+			minimum, minOK := finiteConstraint(source.Validation["minimum"])
+			maximum, maxOK := finiteConstraint(source.Validation["maximum"])
+			if minOK && maxOK && math.Abs(minimum) <= 1<<53 && math.Abs(maximum) <= 1<<53 && minimum <= maximum && (source.Type != "integer" || math.Trunc(minimum) == minimum && math.Trunc(maximum) == maximum) {
+				result.Minimum, result.Maximum = &minimum, &maximum
+				if source.Type == "integer" {
+					result.EditorShape = "INTEGER"
+				} else {
+					result.EditorShape = "NUMBER"
+				}
+			}
+		}
+	case "string":
+		if validationKeys(source.Validation, "minLength", "maxLength") {
+			minimum, maximum := integerConstraint(source.Validation["minLength"]), integerConstraint(source.Validation["maxLength"])
+			if minimum >= 0 && maximum >= minimum && maximum <= 4096 {
+				result.MinLength, result.MaxLength, result.EditorShape = &minimum, &maximum, "BOUNDED_STRING"
+			}
+		}
+	}
+	return result
+}
+
+func catalogSettingOrderLess(left, right ProjectCatalogSetting) bool {
+	if left.Section != right.Section {
+		return left.Section < right.Section
+	}
+	if left.Order != nil || right.Order != nil {
+		if left.Order == nil {
+			return false
+		}
+		if right.Order == nil {
+			return true
+		}
+		if *left.Order != *right.Order {
+			return *left.Order < *right.Order
+		}
+	}
+	if left.Label != right.Label {
+		return left.Label < right.Label
+	}
+	return left.ID < right.ID
+}
+
+func validationKeys(value map[string]any, allowed ...string) bool {
+	if len(value) != len(allowed) {
+		return false
+	}
+	set := make(map[string]bool, len(allowed))
+	for _, key := range allowed {
+		set[key] = true
+	}
+	for key := range value {
+		if !set[key] {
+			return false
+		}
+	}
+	return true
+}
+
+func finiteConstraint(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		if typed > 1<<53 || typed < -(1<<53) {
+			return 0, false
+		}
+		return float64(typed), true
+	case int64:
+		if typed > 1<<53 || typed < -(1<<53) {
+			return 0, false
+		}
+		return float64(typed), true
+	case uint64:
+		if typed > 1<<53 {
+			return 0, false
+		}
+		return float64(typed), true
+	case float64:
+		return typed, !math.IsNaN(typed) && !math.IsInf(typed, 0) && math.Abs(typed) <= 1<<53
+	default:
+		return 0, false
+	}
+}
+
+func integerConstraint(value any) int {
+	number, ok := finiteConstraint(value)
+	if !ok || math.Trunc(number) != number || number < math.MinInt || number > math.MaxInt {
+		return -1
+	}
+	return int(number)
+}
+
+func closedEnum(valueType string, validation map[string]any) ([]any, bool) {
+	if !validationKeys(validation, "enum") {
+		return nil, false
+	}
+	values, ok := validation["enum"].([]any)
+	if !ok || len(values) == 0 || len(values) > 256 {
+		return nil, false
+	}
+	result := make([]any, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		valid := false
+		switch valueType {
+		case "string":
+			_, valid = value.(string)
+		case "integer":
+			number, ok := finiteConstraint(value)
+			valid = ok && math.Trunc(number) == number
+		case "number":
+			_, ok := finiteConstraint(value)
+			valid = ok
+		case "boolean":
+			_, valid = value.(bool)
+		}
+		if !valid {
+			return nil, false
+		}
+		key := fmt.Sprint(value)
+		if seen[key] {
+			return nil, false
+		}
+		seen[key] = true
+		result = append(result, value)
+	}
+	return result, true
 }
 
 func catalogOrderLess(leftOrder *int, leftName, leftID string, rightOrder *int, rightName, rightID string) bool {

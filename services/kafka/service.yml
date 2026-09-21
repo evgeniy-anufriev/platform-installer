@@ -57,7 +57,7 @@ configuration:
       type: string
       scopes: [deployment, member]
       validation: {minLength: 1}
-      ui: {label: Kafka TLS profile, order: 22}
+      ui: {label: Kafka TLS profile, order: 22, x-referenceKind: TLS_PROFILE}
     listeners:
       kind: MANAGED
       roleVariable: platform_kafka_listeners

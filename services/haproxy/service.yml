@@ -20,7 +20,7 @@ configurationSchema: {$ref: configuration.schema.json}
 configuration:
   additionalProperties: false
   settings:
-    tlsProfile: {kind: MANAGED, roleVariable: platform_haproxy_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 10}}
+    tlsProfile: {kind: MANAGED, roleVariable: platform_haproxy_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 10, x-referenceKind: TLS_PROFILE}}
     advancedConfig: {kind: ADVANCED, roleVariable: platform_haproxy_advanced_config, type: object, scopes: [deployment], validation: {additionalProperties: false}, schema: {type: object, additionalProperties: false, properties: {global: {type: object, additionalProperties: false, properties: {maxconn: {type: integer, minimum: 1}}}}}, ui: {label: Advanced HAProxy settings, section: Advanced, order: 90}}
 x-reservedAdvancedProperties: [frontend, backend, bind, crt, stats, default_backend, use_backend]
 roleEntrypoints:

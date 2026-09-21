@@ -186,6 +186,28 @@ func TestApplicationConfigFailureBlocksNewServerWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestAppAppendAcceptsV8ServiceConfigurationOperations(t *testing.T) {
+	root := t.TempDir()
+	manifest := "apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-aaaaaaaaaaaaaaaa\n  name: Test\n  labels:\n    platform.installer/managed-project: v1alpha1\ndesiredStateContract: platform.installer/project-desired-state/v2alpha1\ncatalogLock:\n  apiVersion: platform.installer/catalog/v1alpha1\n  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  services: {}\nartifactLock:\n  apiVersion: platform.installer/artifacts/v1alpha1\n  digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n"
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(editorReaderStub{}, lifecycleStub{}, testApplicationConfig())
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}}
+	started := app.StartEditSession()
+	if started.Session == nil {
+		t.Fatalf("start=%#v", started)
+	}
+	set := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "SetServiceConfigurationValue", DeploymentID: "kafka-main", Scope: "DEPLOYMENT", Setting: "port", Value: 9092})
+	if set.Error != nil || set.Session == nil || set.Session.CommandCount != 1 {
+		t.Fatalf("set=%#v", set)
+	}
+	remove := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "RemoveServiceConfigurationOverride", DeploymentID: "kafka-main", Scope: "DEPLOYMENT", Setting: "enabled"})
+	if remove.Error != nil || remove.Session == nil || remove.Session.CommandCount != 2 {
+		t.Fatalf("remove=%#v", remove)
+	}
+}
+
 func TestUnknownAndLegacyServerTypesArePresentationDiagnosticsOnly(t *testing.T) {
 	snapshot := &coreadapter.Snapshot{Status: "PASS", ProjectRevision: "sha256:revision", SnapshotFingerprint: "sha256:unchanged", Validation: map[string]any{"status": "PASS"}, Hosts: map[string]map[string]any{"known": {"type": "infra"}, "unknown": {"type": "scada"}, "legacy": {}}}
 	app := NewApp(snapshotReaderStub{snapshot: snapshot}, lifecycleStub{result: projectlifecycle.Result{Root: t.TempDir(), Classification: "MANAGED_PROJECT"}}, testApplicationConfig())

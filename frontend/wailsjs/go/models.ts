@@ -275,6 +275,8 @@ export namespace installer {
     baseProjectRevision?: string;
     operation: string;
     deploymentId?: string;
+    scope?: string;
+    memberId?: string;
     setting?: string;
     value?: any;
     endpointGroupId?: string;
@@ -311,6 +313,8 @@ export namespace installer {
       this.baseProjectRevision = source["baseProjectRevision"];
       this.operation = source["operation"];
       this.deploymentId = source["deploymentId"];
+      this.scope = source["scope"];
+      this.memberId = source["memberId"];
       this.setting = source["setting"];
       this.value = source["value"];
       this.endpointGroupId = source["endpointGroupId"];
@@ -397,6 +401,7 @@ export namespace installer {
     memberId: string;
     hostId: string;
     roles: string[];
+    configuration: ManagedConfigurationOverride[];
 
     static createFrom(source: any = {}) {
       return new ManagedMemberPlacement(source);
@@ -408,6 +413,28 @@ export namespace installer {
       this.memberId = source["memberId"];
       this.hostId = source["hostId"];
       this.roles = source["roles"];
+      this.configuration = this.convertValues(
+        source["configuration"],
+        ManagedConfigurationOverride,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
     }
   }
   export class ManagedEndpointGroup {
@@ -426,6 +453,24 @@ export namespace installer {
       this.wildcard = source["wildcard"];
     }
   }
+  export class ManagedConfigurationOverride {
+    setting: string;
+    overridePresent: boolean;
+    state: string;
+    value?: any;
+
+    static createFrom(source: any = {}) {
+      return new ManagedConfigurationOverride(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.setting = source["setting"];
+      this.overridePresent = source["overridePresent"];
+      this.state = source["state"];
+      this.value = source["value"];
+    }
+  }
   export class ManagedDeployment {
     deploymentId: string;
     serviceType: string;
@@ -435,6 +480,7 @@ export namespace installer {
     virtualRouterId?: number;
     virtualAddresses?: VirtualAddress[];
     providerEditState: string;
+    configuration: ManagedConfigurationOverride[];
 
     static createFrom(source: any = {}) {
       return new ManagedDeployment(source);
@@ -453,6 +499,10 @@ export namespace installer {
         VirtualAddress,
       );
       this.providerEditState = source["providerEditState"];
+      this.configuration = this.convertValues(
+        source["configuration"],
+        ManagedConfigurationOverride,
+      );
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1826,6 +1876,44 @@ export namespace projectlifecycle {
     }
   }
 
+  export class ProjectCatalogSetting {
+    id: string;
+    kind: string;
+    scopes: string[];
+    label?: string;
+    description?: string;
+    section?: string;
+    order?: number;
+    editorShape: string;
+    referenceKind?: string;
+    minimum?: number;
+    maximum?: number;
+    minLength?: number;
+    maxLength?: number;
+    enum?: any[];
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogSetting(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.kind = source["kind"];
+      this.scopes = source["scopes"];
+      this.label = source["label"];
+      this.description = source["description"];
+      this.section = source["section"];
+      this.order = source["order"];
+      this.editorShape = source["editorShape"];
+      this.referenceKind = source["referenceKind"];
+      this.minimum = source["minimum"];
+      this.maximum = source["maximum"];
+      this.minLength = source["minLength"];
+      this.maxLength = source["maxLength"];
+      this.enum = source["enum"];
+    }
+  }
   export class ProjectCatalogUI {
     icon?: string;
     order?: number;
@@ -1852,6 +1940,7 @@ export namespace projectlifecycle {
     endpointConsumer: boolean;
     endpointProvider: boolean;
     modes: ProjectCatalogMode[];
+    configurationSettings: ProjectCatalogSetting[];
 
     static createFrom(source: any = {}) {
       return new ProjectCatalogService(source);
@@ -1868,6 +1957,10 @@ export namespace projectlifecycle {
       this.endpointConsumer = source["endpointConsumer"];
       this.endpointProvider = source["endpointProvider"];
       this.modes = this.convertValues(source["modes"], ProjectCatalogMode);
+      this.configurationSettings = this.convertValues(
+        source["configurationSettings"],
+        ProjectCatalogSetting,
+      );
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {

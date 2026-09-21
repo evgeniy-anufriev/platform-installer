@@ -3,6 +3,7 @@ package installer
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/netip"
 	"os"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 )
 
 var identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+var configurationSettingPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,127}$`)
 var virtualAddressInterfacePattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
 var serverAddressPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,252}$`)
 var desiredHostnamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$`)
@@ -102,11 +104,11 @@ func validateCommand(command EditCommand) error {
 }
 
 func isEditCommandV2OrLater(version string) bool {
-	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7
+	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7 || version == EditCommandAPIVersionV8
 }
 
 func isEditCommandV5OrLater(version string) bool {
-	return version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7
+	return version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7 || version == EditCommandAPIVersionV8
 }
 
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
@@ -193,6 +195,12 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	for _, operation := range []string{"DeleteCertificateAuthority", "DeleteCertificateProfile", "DeleteTLSProfile", "DeleteCertificateScope"} {
 		fieldsV7[operation] = []string{"entityId"}
 	}
+	fieldsV8 := make(map[string][]string, len(fieldsV7)+2)
+	for operation, operationFields := range fieldsV7 {
+		fieldsV8[operation] = operationFields
+	}
+	fieldsV8["SetServiceConfigurationValue"] = []string{"deploymentId", "scope", "memberId", "setting", "value"}
+	fieldsV8["RemoveServiceConfigurationOverride"] = []string{"deploymentId", "scope", "memberId", "setting"}
 	fieldsV1 := map[string][]string{
 		"CreateServiceDeployment": {"deploymentId", "deployment"}, "DeleteServiceDeployment": {"deploymentId"},
 		"SetServiceConfigurationValue": {"deploymentId", "setting", "value"}, "RemoveServiceConfigurationOverride": {"deploymentId", "setting"},
@@ -214,6 +222,8 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		fields = fieldsV6
 	} else if command.APIVersion == EditCommandAPIVersionV7 {
 		fields = fieldsV7
+	} else if command.APIVersion == EditCommandAPIVersionV8 {
+		fields = fieldsV8
 	}
 	allowedFields, allowed := fields[command.Operation]
 	if !allowed {
@@ -305,7 +315,15 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "Deployment identifier is required", "command.deploymentId")
 		}
 	case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":
-		if !identifierPattern.MatchString(command.DeploymentID) || command.Setting == "" {
+		if command.APIVersion != EditCommandAPIVersionV8 {
+			if !identifierPattern.MatchString(command.DeploymentID) || command.Setting == "" {
+				return blocked("INVALID_EDIT_COMMAND", "Configuration edit requires deployment and setting identifiers", "command")
+			}
+			break
+		}
+		memberValid := command.Scope == "DEPLOYMENT" && command.MemberID == "" || command.Scope == "MEMBER" && identifierPattern.MatchString(command.MemberID)
+		valuePresent := command.presentFields["value"] || command.Value != nil
+		if !identifierPattern.MatchString(command.DeploymentID) || len(command.Setting) > 128 || !configurationSettingPattern.MatchString(command.Setting) || !memberValid || command.Operation == "SetServiceConfigurationValue" && (!valuePresent || !configurationPrimitive(command.Value)) || command.Operation == "RemoveServiceConfigurationOverride" && valuePresent {
 			return blocked("INVALID_EDIT_COMMAND", "Configuration edit requires deployment and setting identifiers", "command")
 		}
 	case "SetServiceEndpointGroup":
@@ -325,7 +343,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "Endpoint-group identifier is required", "command.endpointGroupId")
 		}
 	case "ReconcileEndpointProvider":
-		if (command.APIVersion != EditCommandAPIVersionV6 && command.APIVersion != EditCommandAPIVersionV7) || !identifierPattern.MatchString(command.DeploymentID) || !identifierPattern.MatchString(command.EndpointGroupID) || command.VirtualRouterID < 1 || command.VirtualRouterID > 255 || len(command.VirtualAddresses) == 0 || len(command.VirtualAddresses) > 64 {
+		if (command.APIVersion != EditCommandAPIVersionV6 && command.APIVersion != EditCommandAPIVersionV7 && command.APIVersion != EditCommandAPIVersionV8) || !identifierPattern.MatchString(command.DeploymentID) || !identifierPattern.MatchString(command.EndpointGroupID) || command.VirtualRouterID < 1 || command.VirtualRouterID > 255 || len(command.VirtualAddresses) == 0 || len(command.VirtualAddresses) > 64 {
 			return blocked("INVALID_EDIT_COMMAND", "Provider reconcile requires a complete bounded provider tuple", "command")
 		}
 		seen := make(map[string]bool, len(command.VirtualAddresses))
@@ -341,7 +359,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			seen[key] = true
 		}
 	case "ClearEndpointProvider":
-		if (command.APIVersion != EditCommandAPIVersionV6 && command.APIVersion != EditCommandAPIVersionV7) || !identifierPattern.MatchString(command.DeploymentID) {
+		if (command.APIVersion != EditCommandAPIVersionV6 && command.APIVersion != EditCommandAPIVersionV7 && command.APIVersion != EditCommandAPIVersionV8) || !identifierPattern.MatchString(command.DeploymentID) {
 			return blocked("INVALID_EDIT_COMMAND", "Provider clear requires a deployment identifier", "command.deploymentId")
 		}
 	case "AssignServiceToHost", "RemoveServiceFromHost":
@@ -365,6 +383,17 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 		}
 	}
 	return nil
+}
+
+func configurationPrimitive(value any) bool {
+	switch typed := value.(type) {
+	case string, bool, int, int64, uint64:
+		return true
+	case float64:
+		return !math.IsNaN(typed) && !math.IsInf(typed, 0)
+	default:
+		return false
+	}
 }
 
 func validEndpointGroup(value map[string]any) bool {

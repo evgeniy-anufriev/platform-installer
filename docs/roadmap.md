@@ -662,8 +662,11 @@ uses the shared draft and typed intents with no local PKI derivation; see
 `docs/ui-01g2.md`. UI-01G3 is DONE: revision/node/runtime-bound Core PKI
 evidence is projected to Certificates without local SAN/VIP calculation; see
 `docs/ui-01g3.md`. UI-01G4 is DONE: Windows/RED OS target-free acceptance,
-race gates and hygiene passed; see `docs/ui-01g4.md`. UI-01G overall is DONE,
-UI-01H has not started, and UI-01 overall is NOT DONE.
+race gates and hygiene passed; see `docs/ui-01g4.md`. UI-01G overall is DONE.
+UI-01H1 is DONE: v1alpha8 safe configuration intents, bounded catalog and
+managed projections, local Save/reopen and descriptor-driven TLS reference
+integrity passed; see `docs/ui-01h1.md`. UI-01H2 is NEXT; UI-01 overall is NOT
+DONE.
 
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen

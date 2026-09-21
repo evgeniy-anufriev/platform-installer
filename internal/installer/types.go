@@ -13,6 +13,7 @@ const (
 	EditCommandAPIVersionV5    = "platform.installer/edit-command/v1alpha5"
 	EditCommandAPIVersionV6    = "platform.installer/edit-command/v1alpha6"
 	EditCommandAPIVersionV7    = "platform.installer/edit-command/v1alpha7"
+	EditCommandAPIVersionV8    = "platform.installer/edit-command/v1alpha8"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -28,6 +29,8 @@ type EditCommand struct {
 	BaseProjectRevision string            `json:"baseProjectRevision,omitempty"`
 	Operation           string            `json:"operation"`
 	DeploymentID        string            `json:"deploymentId,omitempty"`
+	Scope               string            `json:"scope,omitempty"`
+	MemberID            string            `json:"memberId,omitempty"`
 	Setting             string            `json:"setting,omitempty"`
 	Value               any               `json:"value,omitempty"`
 	EndpointGroupID     string            `json:"endpointGroupId,omitempty"`
@@ -70,7 +73,7 @@ func (command *EditCommand) UnmarshalJSON(content []byte) error {
 	command.presentFields = make(map[string]bool, len(fields))
 	known := map[string]bool{
 		"apiVersion": true, "kind": true, "baseProjectRevision": true, "operation": true,
-		"deploymentId": true, "setting": true, "value": true, "endpointGroupId": true,
+		"deploymentId": true, "scope": true, "memberId": true, "setting": true, "value": true, "endpointGroupId": true,
 		"haproxyDeploymentId": true, "hostId": true, "type": true, "desiredHostname": true, "address": true, "sshPort": true,
 		"clearSSHPort": true, "serviceType": true, "mode": true, "entityId": true,
 		"entity": true, "members": true, "hosts": true, "property": true, "deployment": true,
@@ -283,14 +286,15 @@ type ManagedServer struct {
 }
 
 type ManagedDeployment struct {
-	DeploymentID      string           `json:"deploymentId"`
-	ServiceType       string           `json:"serviceType"`
-	Mode              string           `json:"mode"`
-	EndpointGroup     string           `json:"endpointGroup,omitempty"`
-	EndpointGroupRef  string           `json:"endpointGroupRef,omitempty"`
-	VirtualRouterID   *int             `json:"virtualRouterId,omitempty"`
-	VirtualAddresses  []VirtualAddress `json:"virtualAddresses,omitempty"`
-	ProviderEditState string           `json:"providerEditState"`
+	DeploymentID      string                         `json:"deploymentId"`
+	ServiceType       string                         `json:"serviceType"`
+	Mode              string                         `json:"mode"`
+	EndpointGroup     string                         `json:"endpointGroup,omitempty"`
+	EndpointGroupRef  string                         `json:"endpointGroupRef,omitempty"`
+	VirtualRouterID   *int                           `json:"virtualRouterId,omitempty"`
+	VirtualAddresses  []VirtualAddress               `json:"virtualAddresses,omitempty"`
+	ProviderEditState string                         `json:"providerEditState"`
+	Configuration     []ManagedConfigurationOverride `json:"configuration"`
 }
 
 type ManagedEndpointGroup struct {
@@ -300,10 +304,21 @@ type ManagedEndpointGroup struct {
 }
 
 type ManagedMemberPlacement struct {
-	DeploymentID string   `json:"deploymentId"`
-	MemberID     string   `json:"memberId"`
-	HostID       string   `json:"hostId"`
-	Roles        []string `json:"roles"`
+	DeploymentID  string                         `json:"deploymentId"`
+	MemberID      string                         `json:"memberId"`
+	HostID        string                         `json:"hostId"`
+	Roles         []string                       `json:"roles"`
+	Configuration []ManagedConfigurationOverride `json:"configuration"`
+}
+
+// ManagedConfigurationOverride exposes only a stable setting identity and
+// override presence until an exact READY catalog descriptor safely admits a
+// copied primitive value. Unsupported raw YAML/JSON never crosses this view.
+type ManagedConfigurationOverride struct {
+	Setting         string `json:"setting"`
+	OverridePresent bool   `json:"overridePresent"`
+	State           string `json:"state"`
+	Value           any    `json:"value,omitempty"`
 }
 
 type ManagedHostPlacement struct {

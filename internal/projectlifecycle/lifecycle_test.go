@@ -3,6 +3,7 @@ package projectlifecycle
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -99,6 +100,128 @@ func TestReadCatalogAcceptsPublishedIdentifierGrammar(t *testing.T) {
 	}
 	if got := value.view(verified).Services[0].Modes[0].ID; got != "pg_auto_failover" {
 		t.Fatalf("mode=%q", got)
+	}
+}
+
+func TestH1CatalogSettingProjectionIsClosedAndMetadataDriven(t *testing.T) {
+	minimum, maximum := 1, 10
+	settings := map[string]catalogSetting{}
+	boolean := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_enabled", Type: "boolean", Scopes: []string{"deployment"}, Validation: map[string]any{}}
+	boolean.UI.Label = "Enabled"
+	integer := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_port", Type: "integer", Scopes: []string{"member", "deployment"}, Validation: map[string]any{"minimum": minimum, "maximum": maximum}}
+	freeString := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_password_secret_ref", Type: "string", Scopes: []string{"deployment"}, Validation: map[string]any{"minLength": 1}}
+	freeString.UI.Label = "Looks like a secret"
+	tls := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_profile", Type: "string", Scopes: []string{"deployment"}, Validation: map[string]any{"minLength": 1}}
+	tls.UI.XReferenceKind = "TLS_PROFILE"
+	unknownReference := tls
+	unknownReference.UI.XReferenceKind = "SERVICE_DEPLOYMENT"
+	objectNamedBoolean := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_boolean", Type: "object", Scopes: []string{"deployment"}, Validation: map[string]any{}}
+	settings["enabled"], settings["port"], settings["passwordSecretRef"], settings["opaqueName"], settings["tlsChoice"], settings["otherRef"] = boolean, integer, freeString, objectNamedBoolean, tls, unknownReference
+
+	want := map[string]string{"enabled": "BOOLEAN", "port": "INTEGER", "passwordSecretRef": "UNSUPPORTED", "opaqueName": "UNSUPPORTED", "tlsChoice": "TLS_PROFILE", "otherRef": "UNSUPPORTED"}
+	for id, source := range settings {
+		got := projectCatalogSetting(id, source)
+		if got.EditorShape != want[id] {
+			t.Fatalf("%s shape=%s want=%s", id, got.EditorShape, want[id])
+		}
+		if id == "tlsChoice" && got.ReferenceKind != "TLS_PROFILE" {
+			t.Fatalf("tls descriptor=%#v", got)
+		}
+	}
+}
+
+func TestH1CatalogSettingProjectionRejectsIncompleteBoundsAndArbitraryPattern(t *testing.T) {
+	for name, setting := range map[string]catalogSetting{
+		"integer without maximum": {Kind: "MANAGED", RoleVariable: "platform_value", Type: "integer", Scopes: []string{"deployment"}, Validation: map[string]any{"minimum": 1}},
+		"string without maximum":  {Kind: "MANAGED", RoleVariable: "platform_value", Type: "string", Scopes: []string{"deployment"}, Validation: map[string]any{"minLength": 1}},
+		"pattern":                 {Kind: "MANAGED", RoleVariable: "platform_value", Type: "string", Scopes: []string{"deployment"}, Validation: map[string]any{"minLength": 1, "maxLength": 10, "pattern": ".*"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := projectCatalogSetting("value", setting); got.EditorShape != "UNSUPPORTED" {
+				t.Fatalf("descriptor=%#v", got)
+			}
+		})
+	}
+}
+
+func TestH1ClosedEnumRequiresExactDeclaredJSONTypeAndSafeIntegers(t *testing.T) {
+	for name, input := range map[string]struct {
+		valueType string
+		values    []any
+		accepted  bool
+	}{
+		"string accepts strings":                  {valueType: "string", values: []any{"1", "enabled"}, accepted: true},
+		"string rejects integer":                  {valueType: "string", values: []any{1}},
+		"string rejects boolean":                  {valueType: "string", values: []any{true}},
+		"boolean rejects textual true":            {valueType: "boolean", values: []any{"true"}},
+		"integer accepts signed safe boundary":    {valueType: "integer", values: []any{int64(-(1 << 53)), int64(1 << 53)}, accepted: true},
+		"integer rejects fractional":              {valueType: "integer", values: []any{1.5}},
+		"integer rejects unsafe native precision": {valueType: "integer", values: []any{int64(1<<53 + 1)}},
+		"number accepts integral and decimal":     {valueType: "number", values: []any{1, 1.5}, accepted: true},
+		"boolean accepts boolean":                 {valueType: "boolean", values: []any{true, false}, accepted: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, ok := closedEnum(input.valueType, map[string]any{"enum": input.values})
+			if ok != input.accepted {
+				t.Fatalf("closedEnum(%q, %#v) accepted=%t", input.valueType, input.values, ok)
+			}
+		})
+	}
+}
+
+func TestH1VerifiedCatalogProjectsStableBoundedSettingsWithoutRawSchema(t *testing.T) {
+	catalogText := "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  kafka:\n    metadata: {id: kafka, version: 1.0.0, displayName: Kafka}\n    modes:\n      kraft: {displayName: KRaft, memberRoles: [broker], placement: {minMembers: 1}}\n    configuration:\n      settings:\n        tlsProfile:\n          kind: MANAGED\n          roleVariable: platform_kafka_tls_profile\n          type: string\n          scopes: [member, deployment]\n          validation: {minLength: 1}\n          ui: {label: TLS profile, section: TLS, order: 20, x-referenceKind: TLS_PROFILE}\n        port:\n          kind: MANAGED\n          roleVariable: platform_kafka_port\n          type: integer\n          scopes: [deployment]\n          validation: {minimum: 1, maximum: 65535}\n          ui: {label: Port, section: Network, order: 10}\n        listeners:\n          kind: MANAGED\n          roleVariable: platform_kafka_listeners\n          type: object\n          scopes: [deployment]\n          validation: {}\n          schema: {type: object, additionalProperties: true}\n          ui: {label: Listeners}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+	verified, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, catalogText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := readCatalog(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := value.view(verified).Services[0].ConfigurationSettings
+	if len(settings) != 3 || settings[0].ID != "listeners" || settings[1].ID != "port" || settings[2].ID != "tlsProfile" || settings[1].EditorShape != "INTEGER" || settings[2].ReferenceKind != "TLS_PROFILE" {
+		t.Fatalf("settings=%#v", settings)
+	}
+	encoded, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	if strings.Contains(text, "roleVariable") || strings.Contains(text, "platform_kafka") || strings.Contains(text, "additionalProperties") {
+		t.Fatalf("raw catalog leaked: %s", text)
+	}
+}
+
+func TestH1GeneratedCatalogSettingsAreAccepted(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "examples", "catalog", "service-catalog.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, string(content)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := readCatalog(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := value.view(verified)
+	var kafka *ProjectCatalogService
+	for index := range view.Services {
+		if view.Services[index].ID == "kafka" {
+			kafka = &view.Services[index]
+		}
+	}
+	if kafka == nil || len(kafka.ConfigurationSettings) == 0 {
+		t.Fatalf("kafka settings missing: %#v", kafka)
+	}
+	shapes := map[string]string{}
+	for _, setting := range kafka.ConfigurationSettings {
+		shapes[setting.ID] = setting.EditorShape
+	}
+	if shapes["quorumMode"] != "ENUM" || shapes["nodeId"] != "INTEGER" || shapes["tlsProfile"] != "TLS_PROFILE" || shapes["listeners"] != "UNSUPPORTED" || shapes["dataDirectory"] != "UNSUPPORTED" {
+		t.Fatalf("shapes=%#v", shapes)
 	}
 }
 

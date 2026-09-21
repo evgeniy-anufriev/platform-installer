@@ -17,13 +17,13 @@ are preserved without backfill; unknown configured types produce only a
 nonblocking Installer diagnostic and do not alter Core status, validation or
 fingerprint. Type has no service, topology, placement, Execution Node or source
 selection semantics. UI-01E1 through UI-01E6 and UI-01F1 through UI-01F3 are
-DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01 is DONE (evidence: `docs/ui-net-01.md`), UI-01G1 through UI-01G4 are DONE (evidence: `docs/ui-01g1.md`, `docs/ui-01g2.md`, `docs/ui-01g3.md`, `docs/ui-01g4.md`), UI-01G overall is DONE and UI-01H remains not started.
+DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01 is DONE (evidence: `docs/ui-net-01.md`), UI-01G1 through UI-01G4 are DONE (evidence: `docs/ui-01g1.md`, `docs/ui-01g2.md`, `docs/ui-01g3.md`, `docs/ui-01g4.md`), UI-01G overall is DONE, UI-01H1 is DONE (evidence: `docs/ui-01h1.md`) and UI-01H2 is NEXT.
 
 ## UI-01 implementation status (2026-09-07)
 
 UI-01A through UI-01D are DONE. UI-01D was accepted by the owner without a
 final revision-bound review. UI-01 overall remains NOT DONE; UI-01E1 through
-UI-01E6 and UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE and UI-NET-01 is DONE while UI-01G overall is DONE and UI-01H remains not started. UI-01B adds only the Wails/React read-only
+UI-01E6 and UI-01F1 through UI-01F6 are DONE; UI-01F overall is DONE and UI-NET-01 is DONE while UI-01G overall and UI-01H1 are DONE; UI-01H2 is NEXT. UI-01B adds only the Wails/React read-only
 shell and fixed `BuildProjectSnapshot` protocol operation; it adds no writer,
 edit/session, candidate, save or apply path.
 
@@ -86,7 +86,7 @@ acceptance. UI-01E1 is DONE: new sessions use v1alpha4 server CRUD intents;
 Core projects desired hostname, normalized SSH port and generic host references;
 the staged Core-backed review/commit lifecycle is retained as historical
 acceptance evidence, while ADR-027 defines the new local Save target. UI-01E2
-Servers UI, UI-01E3 shared runtime session credentials, UI-01E4 Execution Node selection, UI-01E5 readiness/preparation and UI-01E6 cross-platform acceptance are DONE. UI-01F1 is DONE: lock-bound catalog and managed local topology reads passed. UI-01F2 is DONE: additive v1alpha5 topology intents, both placement forms, the final-state reducer and existing guarded local Save/reopen path passed Windows and RED OS gates with zero blocking review findings. UI-01F3 is DONE: the catalog-driven deployment editor, shared structural draft, local Review/Save and node-free reopen passed Windows and regression gates. UI-01F4 is DONE: shared member- and host-scoped placement editors use the existing session/review/local Save lifecycle; deterministic Wails frontend acceptance covers Save/reopen/clear without Core, Execution Node or target contact. UI-01F5 is DONE: Entry points reuses the five v1alpha5 endpoint intents; strict typed/bounded Go projection keeps raw Core endpoint/provider maps out of React, and INVALID exposes findings only. UI-01F6 is DONE: built Windows desktop, deterministic web-view, RED OS target-free/race and reproducibility acceptance passed. UI-01F overall is DONE; evidence is `docs/ui-01f6.md`. UI-NET-01 is DONE: v1alpha6 provider intent, guarded Save/reopen, Entry points editor and Core-preview freshness passed Windows/RED OS acceptance; evidence is `docs/ui-net-01.md`. UI-01G overall is DONE (evidence: `docs/ui-01g4.md`); UI-01H remains not started.
+Servers UI, UI-01E3 shared runtime session credentials, UI-01E4 Execution Node selection, UI-01E5 readiness/preparation and UI-01E6 cross-platform acceptance are DONE. UI-01F1 is DONE: lock-bound catalog and managed local topology reads passed. UI-01F2 is DONE: additive v1alpha5 topology intents, both placement forms, the final-state reducer and existing guarded local Save/reopen path passed Windows and RED OS gates with zero blocking review findings. UI-01F3 is DONE: the catalog-driven deployment editor, shared structural draft, local Review/Save and node-free reopen passed Windows and regression gates. UI-01F4 is DONE: shared member- and host-scoped placement editors use the existing session/review/local Save lifecycle; deterministic Wails frontend acceptance covers Save/reopen/clear without Core, Execution Node or target contact. UI-01F5 is DONE: Entry points reuses the five v1alpha5 endpoint intents; strict typed/bounded Go projection keeps raw Core endpoint/provider maps out of React, and INVALID exposes findings only. UI-01F6 is DONE: built Windows desktop, deterministic web-view, RED OS target-free/race and reproducibility acceptance passed. UI-01F overall is DONE; evidence is `docs/ui-01f6.md`. UI-NET-01 is DONE: v1alpha6 provider intent, guarded Save/reopen, Entry points editor and Core-preview freshness passed Windows/RED OS acceptance; evidence is `docs/ui-net-01.md`. UI-01G overall is DONE (evidence: `docs/ui-01g4.md`); UI-01H1 is DONE (evidence: `docs/ui-01h1.md`) and UI-01H2 is NEXT.
 
 ## Phase
 
@@ -577,5 +577,5 @@ UI-BE-04 overall, EXEC-OBS-01, documentation-only UI-01A, UI-01B, UI-01C and
 UI-01D are DONE. UI-01D was owner-accepted without final revision-bound
 review. UI-01E is decomposed into E1-E6; UI-01E1 server CRUD integration is
 DONE; UI-01E2 through UI-01E6 and UI-01F1 through UI-01F6 are DONE. UI-01F
-overall is DONE; UI-NET-01 is DONE, UI-01G overall is DONE and UI-01H remains not started,
+overall is DONE; UI-NET-01 is DONE, UI-01G overall and UI-01H1 are DONE, UI-01H2 is NEXT,
 and UI-01 overall remains not done.

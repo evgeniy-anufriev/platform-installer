@@ -55,6 +55,19 @@ func TestV7SessionAcceptsInheritedProviderCommands(t *testing.T) {
 	}
 }
 
+func TestV8SessionAcceptsInheritedProviderCommands(t *testing.T) {
+	revision := "sha256:" + strings.Repeat("a", 64)
+	for _, command := range []EditCommand{
+		{APIVersion: EditCommandAPIVersionV8, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "ReconcileEndpointProvider", DeploymentID: "keepalived-main", EndpointGroupID: "edge", VirtualRouterID: 42, VirtualAddresses: []VirtualAddress{{Address: "192.0.2.42", Interface: "eth0"}}},
+		{APIVersion: EditCommandAPIVersionV8, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "ClearEndpointProvider", DeploymentID: "keepalived-main"},
+		{APIVersion: EditCommandAPIVersionV8, Kind: "EditCommand", BaseProjectRevision: revision, Operation: "CreateTLSProfile", EntityID: "tls", Entity: map[string]any{"certificateProfileRef": "server"}},
+	} {
+		if err := validateCommand(command); err != nil {
+			t.Fatalf("%s rejected by v1alpha8: %v", command.Operation, err)
+		}
+	}
+}
+
 func TestV6ProviderCommandRejectsUnknownNestedField(t *testing.T) {
 	revision := "sha256:" + strings.Repeat("a", 64)
 	content := `{"apiVersion":"platform.installer/edit-command/v1alpha6","kind":"EditCommand","baseProjectRevision":"` + revision + `","operation":"ReconcileEndpointProvider","deploymentId":"keepalived-main","endpointGroupId":"edge","virtualRouterId":42,"virtualAddresses":[{"address":"192.0.2.42","interface":"eth0","rawYaml":"unsafe"}]}`

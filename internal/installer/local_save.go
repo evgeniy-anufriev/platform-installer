@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"platform-installer/internal/projectlifecycle"
 )
 
 const (
@@ -23,6 +25,13 @@ const (
 // It does not implement Ansible precedence, service validation or derived
 // provider/VIP semantics.
 func ReadManagedProjectView(projectRoot string) (*ManagedProjectView, error) {
+	return ReadManagedProjectViewWithCatalog(projectRoot, nil)
+}
+
+// ReadManagedProjectViewWithCatalog joins direct owned values only with the
+// exact READY catalog selected by the caller. Without it the projection keeps
+// stable setting identities and presence, but never exposes raw values.
+func ReadManagedProjectViewWithCatalog(projectRoot string, catalog *projectlifecycle.ProjectCatalogView) (*ManagedProjectView, error) {
 	root, err := cleanRoot(projectRoot)
 	if err != nil {
 		return nil, err
@@ -61,10 +70,10 @@ func ReadManagedProjectView(projectRoot string) (*ManagedProjectView, error) {
 		}
 		view.Servers[hostID] = server
 	}
-	if err := readManagedDesiredState(root, &read, view); err != nil {
+	if err := readManagedDesiredState(root, &read, view, catalog); err != nil {
 		return nil, err
 	}
-	if err := readManagedHostPlacements(root, &read, view); err != nil {
+	if err := readManagedHostPlacements(root, &read, view, catalog); err != nil {
 		return nil, err
 	}
 	sortManagedView(view)
@@ -119,7 +128,7 @@ func managedReadError(message, field string) error {
 	return blocked("MANAGED_DOCUMENT_INVALID", message, field)
 }
 
-func readManagedDesiredState(root string, budget *managedReadBudget, view *ManagedProjectView) error {
+func readManagedDesiredState(root string, budget *managedReadBudget, view *ManagedProjectView, catalog *projectlifecycle.ProjectCatalogView) error {
 	document, _, err := budget.ownedDocument(root, desiredDocument)
 	if err != nil {
 		return err
@@ -148,9 +157,13 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		if providerErr != nil {
 			return providerErr
 		}
+		configuration, configurationErr := managedConfigurationProjection(deployment, serviceType, catalog, desiredDocument)
+		if configurationErr != nil {
+			return configurationErr
+		}
 		view.Deployments[id] = ManagedDeployment{DeploymentID: id, ServiceType: serviceType, Mode: mode, EndpointGroup: endpointGroup,
 			EndpointGroupRef: provider.endpointGroupRef, VirtualRouterID: provider.virtualRouterID,
-			VirtualAddresses: provider.virtualAddresses, ProviderEditState: provider.editState}
+			VirtualAddresses: provider.virtualAddresses, ProviderEditState: provider.editState, Configuration: configuration}
 	}
 	for id, raw := range groups {
 		if len(view.EndpointGroups) >= maxManagedEntities || !identifierPattern.MatchString(id) {
@@ -261,7 +274,7 @@ func managedProviderProjection(deployment map[string]any) (managedProviderView, 
 	return result, nil
 }
 
-func readManagedHostPlacements(root string, budget *managedReadBudget, view *ManagedProjectView) error {
+func readManagedHostPlacements(root string, budget *managedReadBudget, view *ManagedProjectView, catalog *projectlifecycle.ProjectCatalogView) error {
 	hostIDs := make([]string, 0, len(view.Servers))
 	for hostID := range view.Servers {
 		hostIDs = append(hostIDs, hostID)
@@ -304,11 +317,17 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 					return managedReadError("Managed member placement is malformed", logical)
 				}
 				for memberID, memberRaw := range memberMap {
-					roles, rolesErr := managedRoles(asMap(memberRaw)["roles"], logical)
+					member := asMap(memberRaw)
+					roles, rolesErr := managedRoles(member["roles"], logical)
 					if rolesErr != nil || !identifierPattern.MatchString(memberID) || len(view.MemberPlacements)+len(view.HostPlacements) >= maxManagedPlacements {
 						return managedReadError("Managed member placement is invalid or exceeds its limit", logical)
 					}
-					view.MemberPlacements = append(view.MemberPlacements, ManagedMemberPlacement{DeploymentID: deploymentID, MemberID: memberID, HostID: hostID, Roles: roles})
+					deployment := view.Deployments[deploymentID]
+					configuration, configurationErr := managedConfigurationProjection(member, deployment.ServiceType, catalog, logical)
+					if configurationErr != nil {
+						return configurationErr
+					}
+					view.MemberPlacements = append(view.MemberPlacements, ManagedMemberPlacement{DeploymentID: deploymentID, MemberID: memberID, HostID: hostID, Roles: roles, Configuration: configuration})
 				}
 				continue
 			}
@@ -320,6 +339,38 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 		}
 	}
 	return nil
+}
+
+func managedConfigurationProjection(owner map[string]any, serviceType string, catalog *projectlifecycle.ProjectCatalogView, field string) ([]ManagedConfigurationOverride, error) {
+	raw, present := owner["configuration"]
+	if !present {
+		return []ManagedConfigurationOverride{}, nil
+	}
+	configuration := asMap(raw)
+	if configuration == nil || len(configuration) > maxManagedEntities {
+		return nil, managedReadError("Managed configuration is malformed or exceeds its limit", field)
+	}
+	result := make([]ManagedConfigurationOverride, 0, len(configuration))
+	for settingID, value := range configuration {
+		if len(settingID) > 128 || !configurationSettingPattern.MatchString(settingID) {
+			return nil, managedReadError("Managed configuration setting identifier is invalid", field)
+		}
+		entry := ManagedConfigurationOverride{Setting: settingID, OverridePresent: true, State: "UNKNOWN"}
+		if catalog != nil && catalog.Status == "READY" {
+			descriptor, found := catalogConfigurationSetting(catalog, serviceType, settingID)
+			if !found || descriptor.Kind != "MANAGED" || descriptor.EditorShape == "UNSUPPORTED" {
+				entry.State = "UNSUPPORTED"
+			} else {
+				if err := validateConfigurationValue(descriptor, value); err != nil {
+					return nil, managedReadError("Managed configuration value does not match its catalog descriptor", field)
+				}
+				entry.State, entry.Value = "EDITABLE", deepCopy(value)
+			}
+		}
+		result = append(result, entry)
+	}
+	sort.Slice(result, func(left, right int) bool { return result[left].Setting < result[right].Setting })
+	return result, nil
 }
 
 func optionalString(value map[string]any, key string) (string, bool) {

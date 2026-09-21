@@ -329,7 +329,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 			return a.current
 		}
 		if local.Classification == projectlifecycle.ClassificationManaged && local.Project != nil {
-			managed, managedErr := installer.ReadManagedProjectView(local.Root)
+			managed, managedErr := installer.ReadManagedProjectViewWithCatalog(local.Root, local.Catalog)
 			if managedErr != nil {
 				return a.failure(projectErrorCode(managedErr))
 			}
@@ -671,6 +671,7 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		"CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile",
 		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
 		"CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
+	case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":
 	default:
 		return a.editFailure(errors.New("EDIT_OPERATION_NOT_AVAILABLE"))
 	}
@@ -725,6 +726,11 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
 	result := a.editor.CommitStructuralSave(ctx, planID)
+	if result.Status == "COMMITTED" && result.Managed != nil && a.current.Catalog != nil && a.current.Catalog.Status == "READY" {
+		if enriched, readErr := installer.ReadManagedProjectViewWithCatalog(a.current.Root, a.current.Catalog); readErr == nil && enriched.ProjectRevision == result.NewProjectRevision {
+			result.Managed = enriched
+		}
+	}
 	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
 			return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
