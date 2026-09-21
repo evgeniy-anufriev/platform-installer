@@ -104,6 +104,13 @@ func (editorReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Sna
 	return nil, errors.New("not used")
 }
 
+type exportReaderStub struct{ calls int }
+
+func (reader *exportReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
+	reader.calls++
+	return nil, errors.New("Core must not be called by project export")
+}
+
 func testApplicationConfig() AppOption {
 	return WithApplicationConfig(appconfig.Config{SchemaVersion: 1, ServerTypes: []appconfig.ServerType{{ID: "infra", DisplayName: "Инфраструктура"}}}, nil)
 }
@@ -255,6 +262,48 @@ func TestAppKeepsEmptyProjectLocalWithoutSnapshotCall(t *testing.T) {
 	created := app.CreateProject(projectlifecycle.CreateProjectRequest{ProjectRoot: t.TempDir(), DisplayName: "Empty", CompatibilitySourceID: "default"})
 	if created.Status != "OPEN" || created.Snapshot != nil {
 		t.Fatalf("created=%+v", created)
+	}
+}
+
+func TestAppProjectExportIsLocalAndBoundToPreview(t *testing.T) {
+	root := t.TempDir()
+	projectBytes := []byte("apiVersion: platform.installer/project/v1alpha1\nkind: Project\nid: project-0123456789abcdef\n")
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), projectBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	destination := t.TempDir()
+	reader := &exportReaderStub{}
+	app := NewApp(reader, lifecycleStub{})
+	app.current = ProjectOpenResult{
+		Status:         "OPEN",
+		Root:           root,
+		Classification: projectlifecycle.ClassificationEmpty,
+		Project:        &projectlifecycle.Project{ID: "project-0123456789abcdef", Name: "Empty"},
+	}
+	preview := app.PlanProjectExport(destination, "portable-project")
+	if preview.Status != "READY" || preview.Plan == nil || preview.Plan.PlanDigest == "" {
+		t.Fatalf("preview=%#v", preview)
+	}
+	if reader.calls != 0 {
+		t.Fatalf("export contacted Core %d times", reader.calls)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "portable-project")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("destination appeared before commit: %v", err)
+	}
+	committed := app.CommitProjectExport(preview.Plan.PlanDigest)
+	if committed.Status != "EXPORTED" || committed.Result == nil || committed.Result.DocumentCount != 1 {
+		t.Fatalf("commit=%#v", committed)
+	}
+	actual, err := os.ReadFile(filepath.Join(destination, "portable-project", "project.yml"))
+	if err != nil || string(actual) != string(projectBytes) {
+		t.Fatalf("exported bytes=%q err=%v", actual, err)
+	}
+	if reader.calls != 0 {
+		t.Fatalf("export contacted Core %d times", reader.calls)
+	}
+	stale := app.CommitProjectExport(preview.Plan.PlanDigest)
+	if stale.Status != "BLOCKED" || stale.Error == nil || stale.Error.Code != "EXPORT_PLAN_STALE" {
+		t.Fatalf("stale=%#v", stale)
 	}
 }
 

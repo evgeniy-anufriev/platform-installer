@@ -153,6 +153,7 @@ type App struct {
 	execution       *executionNodeContextStore
 	binding         *executionNodeBinding
 	continuation    *verificationContinuation
+	export          *installer.ProjectExport
 }
 
 type AppOption func(*App)
@@ -249,6 +250,7 @@ func (a *App) shutdown(context.Context) {
 	a.secrets.Close()
 	a.execution.clear()
 	a.continuation = nil
+	a.clearProjectExportLocked()
 }
 
 func (a *App) ChooseProject() ProjectOpenResult {
@@ -276,6 +278,19 @@ func (a *App) ChooseProjectParent() string {
 	return root
 }
 
+// ChooseProjectExportParent only selects a directory. It never creates,
+// validates or publishes an export destination.
+func (a *App) ChooseProjectExportParent() string {
+	if a.ctx == nil {
+		return ""
+	}
+	root, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Выбрать папку для экспорта проекта"})
+	if err != nil {
+		return ""
+	}
+	return root
+}
+
 func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) ProjectOpenResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
@@ -283,6 +298,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 	if a.activeSession != "" {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
+	a.clearProjectExportLocked()
 	if a.lifecycle == nil {
 		return a.failure("PROJECT_COMPATIBILITY_SOURCE_UNAVAILABLE")
 	}
@@ -303,6 +319,7 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 	if a.activeSession != "" {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
+	a.clearProjectExportLocked()
 	if a.lifecycle == nil {
 		return a.failure("PROJECT_OPEN_BLOCKED")
 	}
@@ -375,6 +392,7 @@ func (a *App) CloseProject() ProjectOpenResult {
 	if a.activeSession != "" {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
+	a.clearProjectExportLocked()
 	a.secrets.Clear()
 	a.execution.clear()
 	a.continuation = nil
@@ -608,6 +626,70 @@ type StructuralEditOperationResult struct {
 	Error       *ProjectOpenError               `json:"error,omitempty"`
 }
 
+type ProjectExportOperationResult struct {
+	Status string                         `json:"status"`
+	Plan   *installer.ProjectExportPlan   `json:"plan,omitempty"`
+	Result *installer.ProjectExportResult `json:"result,omitempty"`
+	Error  *ProjectOpenError              `json:"error,omitempty"`
+}
+
+func (a *App) projectExportFailure(err error) ProjectExportOperationResult {
+	code := projectErrorCode(err)
+	return ProjectExportOperationResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+}
+
+// PlanProjectExport creates one bounded in-memory export capability. It does
+// not write the project, call Core, contact an Execution Node, or expose file
+// contents to Wails.
+func (a *App) PlanProjectExport(destinationParent, directoryName string) ProjectExportOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if a.activeSession != "" {
+		return a.projectExportFailure(errors.New("EDIT_SESSION_ACTIVE"))
+	}
+	if a.current.Status != "OPEN" || a.current.Project == nil {
+		return a.projectExportFailure(errors.New("PROJECT_NOT_OPEN"))
+	}
+	if a.current.Classification != projectlifecycle.ClassificationEmpty && a.current.Classification != projectlifecycle.ClassificationManaged {
+		return a.projectExportFailure(errors.New("EXPORT_NOT_AVAILABLE"))
+	}
+	if a.current.Classification == projectlifecycle.ClassificationManaged && a.current.Managed == nil {
+		return a.projectExportFailure(errors.New("LOCAL_PROJECT_REFRESH_REQUIRED"))
+	}
+	a.clearProjectExportLocked()
+	capability, plan, err := installer.PlanProjectExport(a.current.Root, destinationParent, directoryName)
+	if err != nil {
+		return a.projectExportFailure(err)
+	}
+	a.export = capability
+	return ProjectExportOperationResult{Status: "READY", Plan: &plan}
+}
+
+// CommitProjectExport publishes only the manifest bound to the active preview.
+// It is synchronous by owner decision: no user-facing interruption path exists.
+func (a *App) CommitProjectExport(planDigest string) ProjectExportOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if a.export == nil {
+		return a.projectExportFailure(errors.New("EXPORT_PLAN_STALE"))
+	}
+	capability := a.export
+	a.export = nil
+	result := capability.Commit(planDigest)
+	if result.Status != "EXPORTED" {
+		return a.projectExportFailure(errors.New(result.ErrorCode))
+	}
+	return ProjectExportOperationResult{Status: "EXPORTED", Result: &result}
+}
+
+func (a *App) clearProjectExportLocked() {
+	if a.export != nil {
+		a.export.Close()
+		a.export = nil
+	}
+}
+
 func (a *App) editFailure(err error) EditOperationResult {
 	code := projectErrorCode(err)
 	return EditOperationResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
@@ -628,6 +710,7 @@ func (a *App) StartEditSession() EditOperationResult {
 	if a.current.Classification == projectlifecycle.ClassificationManaged && a.current.Managed == nil {
 		return a.editFailure(errors.New("LOCAL_PROJECT_REFRESH_REQUIRED"))
 	}
+	a.clearProjectExportLocked()
 	revision := ""
 	if a.current.Snapshot != nil {
 		revision = a.current.Snapshot.ProjectRevision
@@ -881,6 +964,22 @@ func projectErrorMessage(code string) string {
 		return "Нельзя безопасно создать проект в выбранной папке."
 	case "PROJECT_DISPLAY_NAME_INVALID":
 		return "Введите корректное название проекта."
+	case "EXPORT_NOT_AVAILABLE":
+		return "Экспорт доступен только для сохранённого Installer-managed проекта."
+	case "EXPORT_DESTINATION_INVALID":
+		return "Введите корректное имя новой папки экспорта и выберите отдельную папку назначения."
+	case "EXPORT_DESTINATION_EXISTS":
+		return "Папка экспорта уже существует и не будет изменена."
+	case "EXPORT_DESTINATION_UNSAFE":
+		return "Нельзя безопасно опубликовать экспорт в выбранной папке."
+	case "EXPORT_SOURCE_UNSAFE":
+		return "Сохранённый проект нельзя безопасно прочитать для экспорта."
+	case "EXPORT_LIMIT_EXCEEDED":
+		return "Экспорт превышает допустимые ограничения portable-проекта."
+	case "EXPORT_PLAN_STALE":
+		return "Проект или предварительный просмотр экспорта изменились. Создайте предварительный просмотр заново."
+	case "EXPORT_WRITE_FAILED", "EXPORT_PUBLISH_FAILED":
+		return "Экспорт не был опубликован. Исходный проект не изменён."
 	case "APPLICATION_CONFIG_NOT_FOUND", "APPLICATION_CONFIG_UNREADABLE", "APPLICATION_CONFIG_UNSAFE_PATH", "APPLICATION_CONFIG_INVALID", "APPLICATION_CONFIG_TOO_LARGE", "APPLICATION_CONFIG_VERSION_UNSUPPORTED", "APPLICATION_CONFIG_SERVER_TYPES_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_ID_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_DUPLICATE", "APPLICATION_CONFIG_UNAVAILABLE":
 		return "Конфигурация приложения недоступна или некорректна. Создание нового сервера заблокировано."
 	case "PROJECT_NOT_OPEN":
