@@ -1,10 +1,47 @@
 package executionbundle
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestValidateRootAcceptsOnlyComponentBoundArtifactSource(t *testing.T) {
+	root := t.TempDir()
+	artifact := []byte("kafka")
+	path := filepath.Join(root, "runtime", "artifacts", "kafka", "kafka.tgz")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, artifact, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(artifact)
+	digest := fmt.Sprintf("sha256:%x", sum)
+	manifest := "apiVersion: platform.installer/execution-bundle/v1alpha1\nkind: ExecutionRuntimeBundle\nbundleVersion: '1'\nbootstrapProtocol: v1alpha1\ncoreVersion: '0.1.0'\ncatalogDigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nschemaDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nplatforms:\n  - os: redos\n    version: '8'\n    architecture: x86_64\nartifactSources:\n  - serviceType: kafka\n    requirementId: kafka-binary\n    name: kafka\n    version: 4.3.1\n    os: redos\n    architecture: x86_64\n    digest: " + digest + "\n    ref: runtime/artifacts/kafka/kafka.tgz\n    sha256: " + digest + "\n    size: 5\n    type: archive\ncomponents:\n  - path: runtime/artifacts/kafka/kafka.tgz\n    sha256: " + digest + "\n    size: 5\n"
+	if err := os.WriteFile(filepath.Join(root, "manifest.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, broken := range []string{
+		strings.Replace(manifest, "runtime/artifacts/kafka/kafka.tgz", "runtime/artifacts/kafka/other.tgz", 1),
+		strings.Replace(manifest, "size: 5\n    type: archive", "size: 6\n    type: archive", 1),
+		strings.Replace(manifest, "digest: "+digest, "digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1),
+		strings.Replace(manifest, "sha256: "+digest+"\n    size: 5\n    type: archive", "sha256: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n    size: 5\n    type: archive", 1),
+	} {
+		if err := os.WriteFile(filepath.Join(root, "manifest.yaml"), []byte(broken), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ValidateRoot(root); err == nil || err.Error() != "EXECUTION_BUNDLE_ARTIFACT_SOURCE_INVALID" {
+			t.Fatalf("err=%v", err)
+		}
+	}
+}
 
 func writeBundle(t *testing.T, manifest string) string {
 	t.Helper()

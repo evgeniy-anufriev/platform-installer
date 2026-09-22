@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import tempfile
 
 from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, digest, retain
 import execution_secret_lease
@@ -46,7 +47,13 @@ def _command(release, journal, operation):
         projection = os.path.join(journal.directory, "runtime-projection.json")
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
-        return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "services", operation["serviceType"], "playbooks", action + ".yml"), "-e", "@" + projection]
+        deployment = operation.get("serviceDeployment")
+        if not isinstance(deployment, str) or not deployment or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" for char in deployment):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "services", operation["serviceType"], "playbooks", action + ".yml"), "-e", "@" + projection]
+        if operation.get("requiresArtifactSources") is True:
+            command.extend(["-e", "platform_execution_service_deployment=" + deployment, "-e", "platform_artifact_source_authority_active=true"])
+        return command
     if kind == "CORE_DELAY" and operation.get("operationId") == "core:delay":
         # A Core-owned, bounded safe fixture used only to prove detached unit
         # and process-group semantics; it is not supplied by a client.
@@ -89,15 +96,67 @@ def _validate_runtime_projection(journal, metadata, manifest):
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
     with open(projection_path, "r", encoding="utf-8") as stream:
         projection = json.load(stream)
-    if not isinstance(projection, dict) or projection.get("apiVersion") != "platform.installer/runtime-projection/v1alpha1":
+    if not isinstance(projection, dict) or projection.get("apiVersion") != "platform.installer/runtime-projection/v1alpha2":
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_INVALID")
     if (projection.get("platform_execution_run_id") != metadata.get("runId") or
             projection.get("platform_execution_project_identity") != metadata.get("projectIdentity") or
             projection.get("platform_execution_plan_fingerprint") != metadata.get("planFingerprint") or
+            projection.get("platform_execution_manifest_digest") != metadata.get("manifestDigest") or
             not isinstance(projection.get("platform_execution_requirements_fingerprint"), str) or
             not projection["platform_execution_requirements_fingerprint"].startswith("sha256:") or
-            not isinstance(projection.get("platform_resolved_artifact_sources_by_target"), dict)):
+            not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict)):
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
+
+
+def _materialize_runtime_projection(journal, metadata, manifest):
+    """Derive the controller-only projection from one digest-bound manifest."""
+    operations = manifest.get("operations")
+    requirements = manifest.get("artifactRequirements")
+    authorities = manifest.get("artifactSourceAuthorities")
+    if not isinstance(operations, list) or not isinstance(requirements, list) or not isinstance(authorities, list):
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    by_deployment = {}
+    for authority in authorities:
+        requirement = authority.get("requirement") if isinstance(authority, dict) else None
+        if not isinstance(requirement, dict):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        deployment, requirement_id = requirement.get("serviceDeployment"), requirement.get("requirementId")
+        if not isinstance(deployment, str) or not isinstance(requirement_id, str) or not deployment or not requirement_id:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        scoped = by_deployment.setdefault(deployment, {})
+        if requirement_id in scoped:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        scoped[requirement_id] = authority
+    required_deployments = set()
+    for requirement in requirements:
+        if not isinstance(requirement, dict) or not isinstance(requirement.get("serviceDeployment"), str):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        required_deployments.add(requirement["serviceDeployment"])
+    for operation in operations:
+        if isinstance(operation, dict) and operation.get("operation") in ("SERVICE_APPLY", "SERVICE_VERIFY") and operation.get("requiresArtifactSources") is True:
+            if operation.get("serviceDeployment") in required_deployments and operation.get("serviceDeployment") not in by_deployment:
+                raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    payload = {
+        "apiVersion": "platform.installer/runtime-projection/v1alpha2",
+        "platform_execution_run_id": metadata["runId"],
+        "platform_execution_project_identity": metadata["projectIdentity"],
+        "platform_execution_plan_fingerprint": metadata["planFingerprint"],
+        "platform_execution_manifest_digest": metadata["manifestDigest"],
+        "platform_execution_requirements_fingerprint": digest(requirements),
+        "platform_project_id": metadata["projectIdentity"],
+        "platform_service_catalog_path": "/var/lib/platform-installer/runtime/current/catalog/service-catalog.yml",
+        "platform_artifact_source_authorities_by_deployment": by_deployment,
+    }
+    descriptor, temporary = tempfile.mkstemp(prefix=".runtime-projection-", dir=journal.directory)
+    try:
+        with os.fdopen(descriptor, "w") as stream:
+            json.dump(payload, stream, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+            stream.flush(); os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, os.path.join(journal.directory, "runtime-projection.json"))
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def _dispatch(release, journal, manifest, stopped):
@@ -149,6 +208,7 @@ def main():
             return _terminal(journal, "FAILED", "EXECUTION_IDENTITY_MISMATCH", "Manifest identity does not match run ownership") and 2
         if not os.path.isdir(args.runtime_release) or os.path.islink(args.runtime_release):
             return _terminal(journal, "FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
+        _materialize_runtime_projection(journal, metadata, manifest)
         _validate_runtime_projection(journal, metadata, manifest)
         journal.transition("RUNNING", "Fixed Core controller started")
     finally:

@@ -1,0 +1,55 @@
+---
+- name: Require Core-authorized artifact sources for this deployment
+  ansible.builtin.assert:
+    that:
+      - platform_execution_service_deployment is string
+      - platform_artifact_source_authorities_by_deployment is mapping
+      - platform_artifact_source_authorities_by_deployment[platform_execution_service_deployment] is defined
+      - platform_artifact_source_authorities_by_deployment[platform_execution_service_deployment][item.id] is defined
+  loop: "{{ platform_artifact_requirements }}"
+  loop_control:
+    label: "{{ item.id }}"
+  no_log: true
+
+- name: Probe the existing target repository for Core-authorized requirements
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - -q
+      - repoquery
+      - --queryformat
+      - "%{name}\t%{version}\t%{arch}"
+      - "{{ platform_artifact_source_authorities_by_deployment[platform_execution_service_deployment][item.id].requirement.name }}"
+  loop: "{{ platform_artifact_requirements }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: platform_artifact_source_repository_probes
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Read the target operating-system ID for compatibility proof
+  ansible.builtin.command:
+    argv:
+      - awk
+      - -F=
+      - /^ID=/{gsub(/"/, "", $2); print $2; exit}
+      - /etc/os-release
+  register: platform_artifact_source_target_os
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Realize the closed Core-authorized repository then offline policy
+  ansible.builtin.set_fact:
+    platform_resolved_artifact_sources: >-
+      {{ platform_resolved_artifact_sources | default({}) | combine({
+          item.item.id: (platform_artifact_source_authorities_by_deployment[platform_execution_service_deployment][item.item.id]
+            | platform.core.platform_resolve_artifact_source(item.item, inventory_hostname,
+                platform_artifact_source_target_os.stdout | default(''),
+                item.stdout | default(''), item.rc | default(1)))
+        }) }}
+  loop: "{{ platform_artifact_source_repository_probes.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.id }}"
+  no_log: true

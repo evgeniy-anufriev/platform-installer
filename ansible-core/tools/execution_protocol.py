@@ -590,7 +590,15 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         # load the staged project inventory so snapshot receives its canonical
         # desired state, groups and host variables.
         playbook, inventory = "deployment-plan-machine.yml", os.path.join(project, "inventory", "hosts.yml")
-        extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"]}
+        try:
+            with open(os.path.join(release, "manifest.yaml"), "r", encoding="utf-8") as stream:
+                bundle_manifest = yaml.safe_load(stream)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+        sources = bundle_manifest.get("artifactSources", []) if isinstance(bundle_manifest, dict) else None
+        if not isinstance(sources, list):
+            raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+        extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources}
     diagnostic_path = os.path.join(journal.directory, "core-diagnostic.json")
     descriptor, vars_path = tempfile.mkstemp(prefix=".execution-vars-", dir=journal.directory)
     try:

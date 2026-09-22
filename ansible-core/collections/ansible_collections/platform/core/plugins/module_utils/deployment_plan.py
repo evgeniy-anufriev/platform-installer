@@ -7,14 +7,15 @@ import hashlib
 import json
 
 try:
-    from .project_validation import canonical_digest
+    from .project_validation import DIGEST_PATTERN, canonical_digest
 except ImportError:
-    from project_validation import canonical_digest
+    from project_validation import DIGEST_PATTERN, canonical_digest
 
 
 API_VERSION = "platform.installer/plan/v1alpha2"
 MANIFEST_API_VERSION = "platform.installer/execution-manifest/v1alpha1"
 PLANNING_PROTOCOL = "v1alpha1"
+SOURCE_POLICY = "REPOSITORY_THEN_OFFLINE"
 
 
 def _digest(value):
@@ -93,6 +94,64 @@ def _artifact_requirements(deployments, definitions):
     return requirements
 
 
+def _source_finding(code, requirement, message):
+    return _finding(code, "artifactRequirements.%s" % requirement.get("id", "unknown"), message)
+
+
+def _source_identity(value):
+    return tuple(value.get(key) for key in ("serviceType", "requirementId", "name", "version", "os", "architecture", "digest"))
+
+
+def _bundle_source_index(value):
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 256:
+        raise ValueError("DEPLOYMENT_PLAN_BUNDLE_SOURCE_INDEX_INVALID")
+    result = []
+    seen = set()
+    for source in value:
+        if not isinstance(source, dict) or set(source) != {"serviceType", "requirementId", "name", "version", "os", "architecture", "digest", "ref", "sha256", "size", "type"}:
+            raise ValueError("DEPLOYMENT_PLAN_BUNDLE_SOURCE_INDEX_INVALID")
+        if any(not isinstance(source.get(key), str) or not source[key] for key in ("serviceType", "requirementId", "name", "version", "os", "architecture", "digest", "ref", "sha256", "type")) or not isinstance(source.get("size"), int) or isinstance(source.get("size"), bool) or source["size"] < 0:
+            raise ValueError("DEPLOYMENT_PLAN_BUNDLE_SOURCE_INDEX_INVALID")
+        if DIGEST_PATTERN.fullmatch(source["digest"]) is None or DIGEST_PATTERN.fullmatch(source["sha256"]) is None or source["digest"] != source["sha256"] or not source["ref"].startswith("runtime/artifacts/") or ".." in source["ref"].split("/") or source["type"] not in ("archive", "package", "file"):
+            raise ValueError("DEPLOYMENT_PLAN_BUNDLE_SOURCE_INDEX_INVALID")
+        key = _source_identity(source) + (source["ref"], source["sha256"], source["size"], source["type"])
+        if key in seen:
+            raise ValueError("DEPLOYMENT_PLAN_BUNDLE_SOURCE_INDEX_INVALID")
+        seen.add(key)
+        result.append(copy.deepcopy(source))
+    return sorted(result, key=lambda item: _source_identity(item) + (item["ref"],))
+
+
+def _artifact_source_authorities(requirements, sources, bundle_digest):
+    by_identity = {}
+    for source in sources:
+        by_identity.setdefault(_source_identity(source), []).append(source)
+    authorities, findings = [], []
+    for requirement in requirements:
+        matches = by_identity.get(_source_identity(requirement), [])
+        if len(matches) > 1:
+            findings.append(_source_finding("ARTIFACT_SOURCE_AMBIGUOUS", requirement, "Offline bundle contains ambiguous artifact sources"))
+            continue
+        offline = None
+        if matches:
+            source = matches[0]
+            offline = {"kind": "OFFLINE_BUNDLE", "bundleDigest": bundle_digest, "ref": source["ref"], "sha256": source["sha256"], "size": source["size"], "type": source["type"]}
+        if requirement["requiredOffline"] and offline is None:
+            findings.append(_source_finding("ARTIFACT_SOURCE_OFFLINE_REQUIRED", requirement, "Required offline bundle artifact is unavailable"))
+            continue
+        authorities.append({
+            "apiVersion": "platform.installer/artifact-source-authority/v1alpha1",
+            "kind": "ArtifactSourceAuthority",
+            "requirement": copy.deepcopy(requirement),
+            "sourcePolicy": SOURCE_POLICY,
+            "repository": {"kind": "REPOSITORY"},
+            "offlineBundle": offline,
+        })
+    return authorities, findings
+
+
 def _service_dependencies(deployment_id, deployment, definitions, deployments):
     definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) and isinstance(definitions, dict) else {}
     required = definition.get("dependencies", []) if isinstance(definition, dict) else []
@@ -120,7 +179,7 @@ def _pki_consumers(snapshot):
     return sorted(deployments)
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z"):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
@@ -135,9 +194,11 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         findings.append(_finding("PROJECT_IDENTITY_REQUIRED", "project.metadata.id", "Installer-managed execution requires project.yml metadata.id"))
     if snapshot.get("validation", {}).get("status") != "PASS":
         findings.append(_finding("PROJECT_VALIDATION_BLOCKED", "validation", "Authoritative project validation is blocked"))
+    artifact_requirements = _artifact_requirements(deployments, definitions)
+    source_authorities, source_findings = _artifact_source_authorities(artifact_requirements, _bundle_source_index(bundle_artifact_sources), release["bundleDigest"])
+    findings.extend(source_findings)
     findings = _safe_findings(findings)
     executable = not findings
-    artifact_requirements = _artifact_requirements(deployments, definitions)
     artifact_digest = canonical_digest(artifact_requirements)
     targets = sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else []
     pki_consumers = _pki_consumers(snapshot)
@@ -190,9 +251,10 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     manifest = None
     if executable:
         manifest_operations = []
+        authority_deployments = set(item["requirement"]["serviceDeployment"] for item in source_authorities)
         for phase in phases:
             for action in phase["actions"]:
                 deployment = deployments.get(action.get("serviceDeployment"), {})
-                manifest_operations.append({"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None})
-        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations}
+                manifest_operations.append({"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments})
+        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": []}
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}

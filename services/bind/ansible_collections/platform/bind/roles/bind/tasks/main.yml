@@ -6,7 +6,7 @@
     platform_artifact_requirements:
       - {id: bind, name: bind}
       - {id: bind-utils, name: bind-utils}
-  when: platform_resolved_artifact_sources is defined
+  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
 
 - name: Deliver selected BIND offline artifacts
   ansible.builtin.include_role:

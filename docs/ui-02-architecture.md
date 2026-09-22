@@ -282,13 +282,57 @@ This is a fixed narrow protocol, not a vault, per-host credential map, generic u
 UI-02C acceptance includes protocol/schema compatibility; old/new/malformed capability replies; v1alpha2 caller-run rejection; request/Start retry and failure injection at every transition; password/private-key/no-log RED OS proof; terminal/cancel/expiry/interrupted recovery cleanup; and a production-boundary case proving target work cannot start without atomic lease attachment. It additionally proves no secret, private reference or filesystem path is present in Wails projections, journal, event mirror, diagnostics or terminal result.
 
 
-## 8. Presentation rules
+## 8. Core-owned artifact source authority
+
+The public `DeploymentPlan/v1alpha2` continues to expose only requirements;
+it never exposes repository choices, bundle paths or artifact metadata to
+Wails.  The optional `artifactSources` list in the immutable
+`execution-bundle/v1alpha1` manifest is an additive compatibility field, not a
+new manifest API version.  Each entry is bounded and contains the catalog
+requirement identity plus a bundle-relative `runtime/artifacts/...` ref,
+digest, size and type.  Bundle validation requires that exact ref to be a
+verified component with identical bytes and size, and that its logical
+artifact digest exactly equals the verified component SHA-256.  Both values
+use the shared canonical lowercase `sha256:<64 hex>` grammar before matching.
+Therefore an active bundle
+without the index remains valid for legacy operations, but a plan containing
+an offline-required requirement is safely BLOCKED until an indexed release is
+active.
+
+During target-free `BuildDeploymentPlan`, Core receives the already verified
+active-bundle index and resolves one private
+`ArtifactSourceAuthority/v1alpha1` per requirement.  The only current closed
+policy is `REPOSITORY_THEN_OFFLINE`: a target-compatible repository package is
+used first; otherwise the one compatible offline bundle artifact is allowed;
+otherwise execution is blocked.  An offline-required requirement with no
+exact bundle entry, or more than one exact offline match, produces a planning
+finding.  Go transports no candidates and makes no requirement-to-source
+decision.
+
+Authorities, all artifact requirements, project revision, operations and
+credential requirement remain solely in the digest-bound private
+`ExecutionManifest`.  After the authoritative Start commit, the controller
+derives `runtime-projection/v1alpha2` from that manifest.  It scopes authority
+by deployment and a common Core role performs the existing target-local
+repository probe only during lifecycle execution, then realizes precisely the
+Core-authorised fallback.  The mutable
+`platform_resolved_artifact_sources` map is deliberately not an Ansible
+extra-var: that role creates and updates it through `set_fact`, while the
+immutable authority remains the source-policy input.  Repository compatibility
+requires the exact target OS ID from `/etc/os-release`, in addition to the
+existing name/version/architecture proof; a missing or different OS rejects
+the repository candidate.  `StartService` and its `BundleCandidates` remain a
+separate compatibility path; generic UI-02 Start neither calls it nor accepts
+manual candidates.  Offline refs are resolved only beneath the active trusted
+bundle root and never cross Wails.
+
+## 9. Presentation rules
 
 Summary shows saved revision, optional Verify state, node prerequisite and one fresh-plan action. Plan shows exact revision/runtime binding, expiry, actions/dependencies/hosts, findings and acknowledgements. Execution prioritizes phase/action progress and current safe task/host; details are collapsed and a task start may omit host. Result binds outcomes and Verify to one runId and never reruns Verify on view.
 
 The terminal execution result is authoritative. Observer disconnect, history truncation, slow subscriber and local mirror failure are explicit diagnostics, not FAILED. For no_log, UI uses only existing safe task fields; it never reconstructs task details.
 
-## 9. Delivery slices
+## 10. Delivery slices
 
 | Slice | Boundary | Non-goals |
 | --- | --- | --- |
@@ -300,7 +344,7 @@ The terminal execution result is authoritative. Observer disconnect, history tru
 
 UI-02C precedes UI-02D so no UI Start reaches targets before capability negotiation, PUT idempotency, idempotent Start correlation, atomic attach, cleanup/recovery and attached-run expiry semantics are proven. UI-02B remains useful without target credentials because planning is target-free.
 
-## 10. Acceptance and owner decisions
+## 11. Acceptance and owner decisions
 
 - A/B: fresh revision/runtime binding; blocked plans cannot start; Verify never authorizes execution.
 - C: password/key bytes use only fixed bounded stdin lease transport. It proves complete/lost/conflicting PUT, definite/unknown Start outcomes, same-attempt Start replay, staged expiry, attached-run expiry, terminal/cancel/recovery cleanup, and no secret/reference in Wails DTOs, argv, environment, project, journal, mirror, diagnostics or result.

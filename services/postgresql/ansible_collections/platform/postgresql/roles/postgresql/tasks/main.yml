@@ -5,7 +5,7 @@
   vars:
     platform_artifact_requirements:
       - {id: postgresql-runtime, name: postgresql}
-  when: platform_resolved_artifact_sources is defined
+  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
 
 - name: Validate resolved pg_auto_failover source before mutation
   ansible.builtin.include_role:

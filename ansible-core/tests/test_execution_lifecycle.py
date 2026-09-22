@@ -321,6 +321,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
             Path(journal.directory, "project", "inventory").mkdir(parents=True)
             Path(journal.directory, "project", "inventory", "hosts.yml").write_text("all: {}\n", encoding="utf-8")
             Path(release, "ansible-core", "playbooks").mkdir(parents=True)
+            Path(release, "manifest.yaml").write_text("artifactSources: []\n", encoding="utf-8")
             plan = {"status": "BLOCKED", "findings": [{"code": "PROJECT_VALIDATION_BLOCKED"}]}
 
             def completed(_command, **kwargs):
@@ -341,6 +342,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
             Path(journal.directory, "project", "inventory").mkdir(parents=True)
             Path(journal.directory, "project", "inventory", "hosts.yml").write_text("all: {}\n", encoding="utf-8")
             Path(release, "ansible-core", "playbooks").mkdir(parents=True)
+            Path(release, "manifest.yaml").write_text("artifactSources: []\n", encoding="utf-8")
             diagnostic = {"errorCode": "PROJECT_SNAPSHOT_INPUT_INVALID", "findings": [{"code": "PROJECT_SNAPSHOT_INPUT_INVALID", "safeMessage": "Project snapshot inputs could not be loaded"}]}
 
             def failed(_command, **kwargs):
@@ -415,6 +417,15 @@ class ExecutionLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISSING"):
                 execution_controller._dispatch(root, journal, {"operations": [{"operationId": "apply:kafka", "operation": "SERVICE_APPLY", "serviceType": "kafka"}]}, [False])
 
+    def test_generic_source_authority_invocation_does_not_shadow_resolution_fact(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            Path(journal.directory, "runtime-projection.json").write_text("{}", encoding="utf-8")
+            command = execution_controller._command(root, journal, {"operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True})
+            self.assertIn("platform_artifact_source_authority_active=true", command)
+            self.assertNotIn("platform_resolved_artifact_sources={}", command)
+
     def test_controller_uses_prepared_execution_identity_and_known_hosts(self):
         environment = execution_controller._environment("/runtime/release")
         self.assertIn("IdentityFile=/var/lib/platform-installer/execution/identities/default/id_ed25519", environment["ANSIBLE_SSH_ARGS"])
@@ -424,22 +435,17 @@ class ExecutionLifecycleTests(unittest.TestCase):
     def test_service_projection_binding_is_verified_before_controller_start(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
-            journal.initialize(metadata())
-            projection = {
-                "apiVersion": "platform.installer/runtime-projection/v1alpha1",
-                "platform_execution_run_id": "run-1",
-                "platform_execution_project_identity": "project-1",
-                "platform_execution_plan_fingerprint": metadata()["planFingerprint"],
-                "platform_execution_requirements_fingerprint": "sha256:" + "a" * 64,
-                "platform_resolved_artifact_sources_by_target": {},
-            }
-            Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")
-            manifest = {"operations": [{"operation": "SERVICE_APPLY", "serviceType": "kafka"}]}
-            execution_controller._validate_runtime_projection(journal, metadata(), manifest)
+            manifest = {"operations": [{"operation": "PKI_APPLY", "operationId": "pki:apply"}, {"operation": "SERVICE_APPLY", "operationId": "apply:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}, {"operation": "SERVICE_VERIFY", "operationId": "verify:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}], "artifactRequirements": [{"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}], "artifactSourceAuthorities": [{"requirement": {"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}}]}
+            current = metadata(); current["manifestDigest"] = digest(manifest)
+            journal.initialize(current)
+            execution_controller._materialize_runtime_projection(journal, current, manifest)
+            execution_controller._validate_runtime_projection(journal, current, manifest)
+            projection = json.loads(Path(journal.directory, "runtime-projection.json").read_text(encoding="utf-8"))
+            self.assertIn("kafka-binary", projection["platform_artifact_source_authorities_by_deployment"]["kafka"])
             projection["platform_execution_run_id"] = "other-run"
             Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")
             with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISMATCH"):
-                execution_controller._validate_runtime_projection(journal, metadata(), manifest)
+                execution_controller._validate_runtime_projection(journal, current, manifest)
 
     def test_retention_only_removes_verified_terminal_runs(self):
         with tempfile.TemporaryDirectory() as root:
