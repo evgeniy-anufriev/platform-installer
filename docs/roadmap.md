@@ -730,7 +730,8 @@ may create and approve a fresh plan.
 UI-02B is DONE: the Installer invokes the existing target-free Core planning
 operation through `ExecutionService`, projects a bounded plan, and accepts
 only the exact acknowledgements for its saved revision/runtime binding. It has
-no Start, cancellation, secret or target-contact path. UI-02C is NEXT.
+no Start, cancellation, secret or target-contact path. UI-02C is DONE; UI-02D
+is NEXT.
 
 Deliverables:
 

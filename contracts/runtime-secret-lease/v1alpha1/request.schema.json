@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/runtime-secret-lease/v1alpha1/request.schema.json",
+  "title": "Platform target credential lease request",
+  "type": "object",
+  "required": ["apiVersion", "kind", "requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease", "payload"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/runtime-secret-lease/v1alpha1"},
+    "kind": {"const": "PutRuntimeSecretLeaseRequest"},
+    "requestId": {"$ref": "#/$defs/id"}, "startAttemptId": {"$ref": "#/$defs/id"},
+    "projectIdentity": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"},
+    "projectRevision": {"$ref": "#/$defs/digest"}, "planFingerprint": {"$ref": "#/$defs/digest"}, "executionManifestDigest": {"$ref": "#/$defs/digest"},
+    "runtimeRelease": {"$ref": "#/$defs/runtimeRelease"}, "payload": {"$ref": "#/$defs/payload"}
+  }, "additionalProperties": false,
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "runtimeRelease": {"type": "object", "required": ["bundleDigest", "coreVersion", "catalogDigest", "planningProtocol"], "properties": {"bundleDigest": {"$ref": "#/$defs/digest"}, "coreVersion": {"type": "string", "minLength": 1, "maxLength": 256}, "catalogDigest": {"$ref": "#/$defs/digest"}, "planningProtocol": {"type": "string", "minLength": 1, "maxLength": 256}}, "additionalProperties": false},
+    "payload": {"type": "object", "required": ["apiVersion", "kind", "username", "password", "privateKey", "sudoPassword"], "properties": {"apiVersion": {"const": "TargetCredentialLeasePayload/v1alpha1"}, "kind": {"const": "TargetCredentialLeasePayload"}, "username": {"type": "string", "minLength": 1, "maxLength": 255}, "password": {"type": ["string", "null"]}, "privateKey": {"type": ["string", "null"]}, "sudoPassword": {"type": ["string", "null"]}}, "additionalProperties": false, "oneOf": [{"properties": {"password": {"type": "string", "minLength": 1}, "privateKey": {"type": "null"}}}, {"properties": {"password": {"type": "null"}, "privateKey": {"type": "string", "minLength": 1}}}]}
+  }
+}

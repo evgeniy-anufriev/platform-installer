@@ -36,6 +36,8 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Credentialed execution runtime capabilities | `v1alpha2` | `execution-capabilities/v1alpha2/schema.json` |
 | Credentialed execution Start request | `v1alpha2` | `execution-start/v1alpha2/request.schema.json` |
 | Credentialed execution Start response | `v1alpha2` | `execution-start/v1alpha2/response.schema.json` |
+| Target credential lease request | `v1alpha1` | `runtime-secret-lease/v1alpha1/request.schema.json` |
+| Target credential lease response | `v1alpha1` | `runtime-secret-lease/v1alpha1/response.schema.json` |
 
 Execution selection is project/execution state, not service topology. Candidate
 eligibility is evaluated before preparation; `EXECUTION_READY` is reported only

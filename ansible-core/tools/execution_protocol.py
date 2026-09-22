@@ -21,9 +21,10 @@ from pathlib import Path
 import yaml
 
 from execution_lifecycle import ACTIVE, Journal, LifecycleError, digest, recover, validate_ownership
+import execution_secret_lease
 
 
-OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution")
+OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
 MAX_CANDIDATE_ARCHIVE_BYTES = 32 * 1024 * 1024
@@ -88,11 +89,76 @@ def owned(journal):
 
 def request():
     value = json.load(sys.stdin)
+    if isinstance(value, dict) and value.get("apiVersion") == "platform.installer/execution-start/v1alpha2" and value.get("kind") == "StartExecutionRequest":
+        return value
+    if isinstance(value, dict) and value.get("apiVersion") == "platform.installer/runtime-secret-lease/v1alpha1" and value.get("kind") == "PutRuntimeSecretLeaseRequest":
+        return value
     if not isinstance(value, dict) or value.get("apiVersion") != "platform.installer/execution-runtime/v1alpha1":
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
     return value
+
+
+def _capabilities_v2(args):
+    try:
+        with open(os.path.join(args.runtime_release, "manifest.yaml"), "r", encoding="utf-8") as stream:
+            manifest = yaml.safe_load(stream)
+    except (OSError, UnicodeError, yaml.YAMLError):
+        raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+    required = ("bundleVersion", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest")
+    if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
+        raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha2", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+
+
+def _v2_start_request(value):
+    required = {"apiVersion", "kind", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease", "leaseId"}
+    if not isinstance(value, dict) or set(value) not in (required, required - {"leaseId"}) or value.get("apiVersion") != "platform.installer/execution-start/v1alpha2" or value.get("kind") != "StartExecutionRequest":
+        raise LifecycleError("START_REQUEST_INVALID")
+    if re.fullmatch(r"[0-9a-f]{32}", value.get("startAttemptId", "")) is None or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", value.get("projectIdentity", "")) is None:
+        raise LifecycleError("START_REQUEST_INVALID")
+    for key in ("projectRevision", "planFingerprint", "executionManifestDigest"):
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", value.get(key, "")):
+            raise LifecycleError("START_REQUEST_INVALID")
+    release = value.get("runtimeRelease")
+    if not isinstance(release, dict) or set(release) != {"bundleDigest", "coreVersion", "catalogDigest", "planningProtocol"} or not re.fullmatch(r"sha256:[0-9a-f]{64}", release.get("bundleDigest", "")) or not re.fullmatch(r"sha256:[0-9a-f]{64}", release.get("catalogDigest", "")):
+        raise LifecycleError("START_REQUEST_INVALID")
+    if any(not isinstance(release.get(key), str) or not release[key] or len(release[key]) > 256 for key in ("coreVersion", "planningProtocol")):
+        raise LifecycleError("START_REQUEST_INVALID")
+    if "leaseId" in value and not re.fullmatch(r"[0-9a-f]{32}", value["leaseId"]):
+        raise LifecycleError("START_REQUEST_INVALID")
+    return value
+
+
+def _start_v2(value, state_root, runtime_release, controller, active_bundle_digest):
+    value = _v2_start_request(value)
+    plan = execution_secret_lease.resolve_plan(state_root, value)
+    run_id = plan.get("runId")
+    manifest_path = os.path.join(state_root, "runs", run_id, "manifest.json")
+    if not isinstance(run_id, str) or not os.path.isfile(manifest_path) or os.path.islink(manifest_path):
+        raise LifecycleError("EXECUTION_MANIFEST_MISSING")
+    with open(manifest_path, "r", encoding="utf-8") as stream:
+        manifest = json.load(stream)
+    if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]:
+        raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
+    attempt_binding = {"projectIdentity": value["projectIdentity"], "projectRevision": value["projectRevision"], "planFingerprint": value["planFingerprint"], "executionManifestDigest": value["executionManifestDigest"], "runtimeRelease": value["runtimeRelease"], "leaseId": value.get("leaseId")}
+    previous_run, known_attempt = execution_secret_lease.attempt(state_root, value["startAttemptId"], attempt_binding)
+    if known_attempt:
+        return {"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionResponse", "status": "ALREADY_STARTED", "startAttemptId": value["startAttemptId"], "runId": previous_run}
+    if value.get("leaseId"):
+        binding = {"requestId": None, "startAttemptId": value["startAttemptId"], "projectIdentity": value["projectIdentity"], "projectRevision": value["projectRevision"], "planFingerprint": value["planFingerprint"], "executionManifestDigest": value["executionManifestDigest"], "runtimeRelease": value["runtimeRelease"]}
+        # requestId is intentionally not known to Start; compare the immutable
+        # lease fields apart from that PUT-only idempotency key.
+        record = execution_secret_lease._read(os.path.join(execution_secret_lease._lease_dir(execution_secret_lease._root(state_root), value["leaseId"]), "record.json"))
+        stored = record.get("binding") if isinstance(record, dict) else None
+        if not isinstance(stored, dict) or any(stored.get(key) != binding[key] for key in binding if key != "requestId"):
+            raise LifecycleError("LEASE_BINDING_MISMATCH")
+        execution_secret_lease.attach(state_root, value["leaseId"], stored, run_id)
+    result = start({"runId": run_id, "projectIdentity": value["projectIdentity"], "planFingerprint": value["planFingerprint"], "runtimeRelease": value["runtimeRelease"]}, state_root, runtime_release, controller, active_bundle_digest)
+    execution_secret_lease.attempt(state_root, value["startAttemptId"], attempt_binding, run_id)
+    status = "ALREADY_STARTED" if result.get("idempotent") else "STARTED"
+    return {"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionResponse", "status": status, "startAttemptId": value["startAttemptId"], "runId": run_id}
 
 
 def _validated_snapshot_request(value):
@@ -529,7 +595,10 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         if plan.get("status") != "EXECUTABLE" or not os.path.isfile(os.path.join(journal.directory, "manifest.json")):
             raise LifecycleError("EXECUTION_MANIFEST_MISSING")
         with open(os.path.join(journal.directory, "manifest.json"), "r", encoding="utf-8") as stream:
-            return {"deploymentPlan": plan, "executionManifestDigest": digest(json.load(stream))}
+            manifest = json.load(stream)
+        manifest_digest = digest(manifest)
+        execution_secret_lease.register_plan(state_root, journal.run_id, manifest_digest, manifest)
+        return {"deploymentPlan": plan, "executionManifestDigest": manifest_digest}
     return {"validation": "PASS"}
 
 
@@ -550,6 +619,8 @@ def get(value, state_root):
     metadata = owned(journal)
     recover(state_root, active)
     result = {"run": journal.status(), "metadata": metadata}
+    if result["run"].get("state") not in ACTIVE:
+        execution_secret_lease.cleanup_run(state_root, journal.run_id)
     if os.path.exists(journal.result_path):
         with open(journal.result_path, "r", encoding="utf-8") as stream:
             result["result"] = json.load(stream)
@@ -620,8 +691,15 @@ def main():
             raise LifecycleError("PROJECT_CANDIDATE_CLEANUP_NOT_OWNED")
         return reply({"status": "CLEANED"})
     value = request()
+    if value.get("apiVersion") == "platform.installer/execution-start/v1alpha2":
+        return reply(_start_v2(value, args.state_root, args.runtime_release, args.controller, args.bundle_digest))
+    if value.get("apiVersion") == "platform.installer/runtime-secret-lease/v1alpha1":
+        if set(value) != {"apiVersion", "kind", "requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease", "payload"}:
+            raise LifecycleError("LEASE_REQUEST_INVALID")
+        metadata = {key: value.get(key) for key in ("requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease")}
+        return reply(execution_secret_lease.put(args.state_root, metadata, value.get("payload")))
     operation = value["operation"]
-    if operation == "GetCapabilities": return reply({"supportedOperations": list(OPERATIONS), "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]})
+    if operation == "GetCapabilities": return reply(_capabilities_v2(args))
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)

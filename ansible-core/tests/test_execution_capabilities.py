@@ -18,8 +18,11 @@ class ExecutionCapabilitiesTests(unittest.TestCase):
             "bundleDigest": "sha256:" + "c" * 64,
         }, "0.1.0")
         self.assertEqual("ExecutionCapabilities", result["kind"])
-        self.assertEqual(["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution"], result["supportedOperations"])
+        self.assertEqual("platform.installer/execution-capabilities/v1alpha2", result["apiVersion"])
+        self.assertEqual(["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease"], result["supportedOperations"])
         self.assertEqual(["platform.installer/project-snapshot-request/v1alpha1"], result["projectSnapshotRequestVersions"])
+        self.assertEqual("StartExecution/v1alpha2", result["executionStart"]["protocol"])
+        self.assertEqual("PutRuntimeSecretLease/v1alpha1", result["targetCredentialLease"]["protocol"])
         self.assertNotIn("secrets", str(result).lower())
 
     def test_incomplete_runtime_identity_is_blocked(self):

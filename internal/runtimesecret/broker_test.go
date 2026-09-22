@@ -72,6 +72,30 @@ func TestBrokerExpiresWithoutStatusActivity(t *testing.T) {
 	}
 }
 
+func TestBrokerExposesTargetCredentialOnlyToSynchronousCallback(t *testing.T) {
+	broker := NewBroker()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "not-reported", ElevationMode: ElevationSudo, ElevationPassword: "also-not-reported"}); err != nil {
+		t.Fatal(err)
+	}
+	var observed TargetCredential
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if value.Username != "installer" || value.SSHMode != SSHPassword || string(value.SSHSecret) != "not-reported" || string(value.SudoSecret) != "also-not-reported" {
+			t.Fatalf("unexpected callback value: %#v", value)
+		}
+		observed = value
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if observed.SSHSecret[0] != 0 || observed.SudoSecret[0] != 0 {
+		t.Fatal("callback copies were not zeroed")
+	}
+	if err := broker.WithTargetCredential(Binding{Root: "other", ID: "other"}, func(TargetCredential) error { return nil }); err == nil || err.Error() != "SESSION_CREDENTIAL_UNAVAILABLE" {
+		t.Fatalf("binding error=%v", err)
+	}
+}
+
 func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

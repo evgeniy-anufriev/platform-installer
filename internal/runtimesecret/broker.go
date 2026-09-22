@@ -62,6 +62,16 @@ type Status struct {
 	ExpiresAt          string `json:"expiresAt,omitempty"`
 }
 
+// TargetCredential is a short-lived copy supplied only to a synchronous
+// execution transport callback. It is intentionally not JSON serializable and
+// has no persistence or Wails-facing representation.
+type TargetCredential struct {
+	Username   string
+	SSHMode    string
+	SSHSecret  []byte
+	SudoSecret []byte
+}
+
 type lease struct {
 	binding    Binding
 	reference  []byte
@@ -146,6 +156,28 @@ func (b *Broker) Clear() {
 }
 
 func (b *Broker) Close() { b.Clear() }
+
+// WithTargetCredential exposes one in-memory credential to a synchronous
+// caller while the broker lease remains valid. The callback must not retain
+// the slices; they are zeroed immediately after it returns.
+func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential) error) error {
+	if use == nil {
+		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
+	}
+	b.mu.Lock()
+	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
+			b.expireLocked(b.lease.generation)
+		}
+		b.mu.Unlock()
+		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
+	}
+	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...)}
+	b.mu.Unlock()
+	defer zero(value.SSHSecret)
+	defer zero(value.SudoSecret)
+	return use(value)
+}
 
 func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 	username := stringTrimSpace(input.Username)

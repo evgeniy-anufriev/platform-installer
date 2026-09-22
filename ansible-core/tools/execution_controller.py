@@ -11,9 +11,18 @@ import sys
 import time
 
 from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, digest, retain
+import execution_secret_lease
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client"))
+
+
+def _terminal(journal, state, code, summary):
+    result = journal.terminal(state, code, summary)
+    # Lease cleanup is private node maintenance; it never changes the already
+    # authoritative terminal execution outcome or emits credential diagnostics.
+    execution_secret_lease.cleanup_run(journal.root, journal.run_id)
+    return result
 
 
 def _safe_service(value):
@@ -135,11 +144,11 @@ def main():
         with open(manifest_path, "r", encoding="utf-8") as stream:
             manifest = json.load(stream)
         if metadata.get("manifestDigest") != digest(manifest):
-            return journal.terminal("FAILED", "EXECUTION_MANIFEST_TAMPERED", "Private execution manifest digest does not match") and 2
+            return _terminal(journal, "FAILED", "EXECUTION_MANIFEST_TAMPERED", "Private execution manifest digest does not match") and 2
         if manifest.get("projectIdentity") != metadata.get("projectIdentity") or manifest.get("planFingerprint") != metadata.get("planFingerprint") or manifest.get("runtimeRelease", {}).get("bundleDigest") != args.bundle_digest or metadata.get("runtimeRelease") != args.bundle_digest:
-            return journal.terminal("FAILED", "EXECUTION_IDENTITY_MISMATCH", "Manifest identity does not match run ownership") and 2
+            return _terminal(journal, "FAILED", "EXECUTION_IDENTITY_MISMATCH", "Manifest identity does not match run ownership") and 2
         if not os.path.isdir(args.runtime_release) or os.path.islink(args.runtime_release):
-            return journal.terminal("FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
+            return _terminal(journal, "FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
         _validate_runtime_projection(journal, metadata, manifest)
         journal.transition("RUNNING", "Fixed Core controller started")
     finally:
@@ -151,18 +160,18 @@ def main():
     signal.signal(signal.SIGINT, stop)
     journal.event("RUN_STARTED", "RUNNING", "Execution controller is running", planFingerprint=metadata["planFingerprint"])
     if cancelled[0]:
-        journal.terminal("CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
+        _terminal(journal, "CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
         return 0
     try:
         terminal = _dispatch(args.runtime_release, journal, manifest, cancelled)
         if terminal == "CANCELLED":
-            journal.terminal("CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
+            _terminal(journal, "CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
         else:
-            journal.terminal("SUCCEEDED", "", "Execution controller completed")
+            _terminal(journal, "SUCCEEDED", "", "Execution controller completed")
         retain(args.state_root)
         return 0
     except LifecycleError as error:
-        journal.terminal("FAILED", str(error), "Trusted operation failed before completion")
+        _terminal(journal, "FAILED", str(error), "Trusted operation failed before completion")
         retain(args.state_root)
         return 2
 

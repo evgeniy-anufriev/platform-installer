@@ -1,6 +1,6 @@
 # UI-02 — Installation workflow architecture
 
-Status: **UI-02A and UI-02B DONE; UI-02C NEXT**. `UI02-PLAN-001` is
+Status: **UI-02A through UI-02C DONE; UI-02D NEXT**. `UI02-PLAN-001` is
 **RESOLVED BY OWNER DECISION**: credentialed Start uses versioned
 `StartExecution/v1alpha2` before capability negotiation through
 `ExecutionCapabilities/v1alpha2`. The initial PLAN review and its permitted

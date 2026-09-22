@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/runtime-secret-lease/v1alpha1/response.schema.json",
+  "title": "Platform target credential lease response",
+  "type": "object", "required": ["requestId", "startAttemptId", "status", "leaseId", "stagedExpiresAt"],
+  "properties": {"requestId": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "startAttemptId": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "status": {"enum": ["STORED", "ALREADY_STORED"]}, "leaseId": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "stagedExpiresAt": {"type": "string", "format": "date-time"}}, "additionalProperties": false
+}
