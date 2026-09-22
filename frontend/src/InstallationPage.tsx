@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { InstallationPlanOperation, InstallationState } from "./backend";
+import type { InstallationEventView, InstallationPlanOperation, InstallationRunOperation, InstallationState } from "./backend";
 
 type InstallationTab = "summary" | "plan" | "execution" | "result";
 
@@ -34,6 +34,10 @@ export function InstallationPage({
   busy,
   onCreatePlan,
   onApprovePlan,
+  run,
+  events = [],
+  onStart = () => {},
+  onCancel = () => {},
 }: {
   state?: InstallationState;
   tab: InstallationTab;
@@ -43,6 +47,10 @@ export function InstallationPage({
   busy: boolean;
   onCreatePlan: () => void;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
+  run?: InstallationRunOperation;
+  events?: InstallationEventView[];
+  onStart?: (planId: string) => void;
+  onCancel?: (runId: string) => void;
 }) {
   const prerequisites = state?.prerequisites || [];
   const node = state?.executionNode;
@@ -109,9 +117,9 @@ export function InstallationPage({
           </article>
         </>
       )}
-      {tab === "plan" && <PlanStage operation={plan} busy={busy} onCreatePlan={onCreatePlan} onApprovePlan={onApprovePlan} />}
-      {tab === "execution" && <ReadOnlyStage title="Выполнение" message="Нет известного запуска в текущем сеансе. UI‑02A не запускает выполнение и не обращается к целевым серверам." />}
-      {tab === "result" && <ReadOnlyStage title="Результат" message="Нет результата для отображения. UI‑02A не хранит историю запусков и не выполняет повторную проверку." />}
+      {tab === "plan" && <PlanStage operation={plan} busy={busy} onCreatePlan={onCreatePlan} onApprovePlan={onApprovePlan} onStart={onStart} />}
+      {tab === "execution" && <ExecutionStage run={run} events={events} busy={busy} onCancel={onCancel} />}
+      {tab === "result" && <ResultStage run={run} events={events} />}
     </section>
   );
 }
@@ -121,11 +129,13 @@ function PlanStage({
   busy,
   onCreatePlan,
   onApprovePlan,
+  onStart,
 }: {
   operation?: InstallationPlanOperation;
   busy: boolean;
   onCreatePlan: () => void;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
+  onStart: (planId: string) => void;
 }) {
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const plan = operation?.plan;
@@ -148,11 +158,14 @@ function PlanStage({
       {plan.findings && plan.findings.length > 0 && <article className="card"><h2>Findings</h2><ul className="safe-findings">{plan.findings.map((item) => <li key={item.code}><code>{item.code}</code> {item.safeMessage}</li>)}</ul></article>}
       <article className="card"><h2>Этапы плана</h2>{plan.phases.map((phase) => <section className="plan-phase" key={phase.id}><h3>{phase.order + 1}. {phase.id}</h3>{phase.actions.map((action) => <div className="plan-action-row" key={action.id}><b>{action.summary}</b><span>{action.targets.join(", ") || "без target hosts"}</span><small>{action.mutating ? "изменяет инфраструктуру" : "проверка"}{action.dependsOn.length ? ` · после ${action.dependsOn.join(", ")}` : ""}</small></div>)}</section>)}</article>
       {plan.status === "EXECUTABLE" && !plan.approved && <article className="card"><h2>Подтверждение</h2>{plan.acknowledgements.map((item) => <label className="acknowledgement" key={item.code}><input type="checkbox" checked={acknowledged.includes(item.code)} onChange={(event) => setAcknowledged((current) => event.target.checked ? [...current, item.code] : current.filter((code) => code !== item.code))} /> <span><b>{item.code}</b><br />{item.summary}</span></label>)}<p><button onClick={() => onApprovePlan(plan.id, requiredCodes)} disabled={busy || !canApprove}>Одобрить план</button></p></article>}
-      {plan.approved && <article className="card"><h2>План одобрен</h2><p>Запуск в UI‑02B недоступен. Он будет добавлен только после отдельного credential/runtime gate UI‑02C и UI‑02D.</p></article>}
+      {plan.approved && <article className="card"><h2>План одобрен</h2><p>Запуск создаёт один авторитетный run на выбранном Execution Node.</p><button onClick={() => onStart(plan.id)} disabled={busy}>Начать выполнение</button></article>}
     </section>
   );
 }
 
-function ReadOnlyStage({ title, message }: { title: string; message: string }) {
-  return <article className="card installation-empty"><h2>{title}</h2><p>{message}</p></article>;
+function ExecutionStage({ run, events, busy, onCancel }: { run?: InstallationRunOperation; events: InstallationEventView[]; busy: boolean; onCancel: (runId: string) => void }) {
+  if (!run?.run) return <article className="card installation-empty"><h2>Выполнение</h2><p>В этом сеансе запуск ещё не начат.</p></article>;
+  return <section><article className="card"><h2>Выполнение</h2><dl><dt>Run</dt><dd>{run.run.runId}</dd><dt>Состояние</dt><dd>{run.run.state}</dd></dl>{["STARTING","RUNNING","CANCELLING"].includes(run.run.state) && <button className="outline" disabled={busy} onClick={() => onCancel(run.run!.runId)}>Отменить выполнение</button>}</article><EventList events={events} /></section>;
 }
+function ResultStage({ run, events }: { run?: InstallationRunOperation; events: InstallationEventView[] }) { return <section><article className="card"><h2>Результат</h2><p>{run?.run ? `Последний известный статус: ${run.run.state}` : "Нет запуска в текущем сеансе."}</p></article><EventList events={events} /></section>; }
+function EventList({ events }: { events: InstallationEventView[] }) { return <article className="card"><h2>Ход выполнения</h2>{events.length === 0 ? <p>События ещё не получены.</p> : <ul className="safe-findings">{events.map((event) => <li key={event.sequence}><code>{event.sequence}</code> {event.safeMessage || event.eventType}{event.host ? ` · ${event.host}` : ""}</li>)}</ul>}</article>; }

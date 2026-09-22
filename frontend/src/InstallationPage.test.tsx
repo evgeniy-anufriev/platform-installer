@@ -35,7 +35,7 @@ describe("InstallationPage", () => {
     expect(onOpenServers).toHaveBeenCalledOnce();
   });
 
-  it("keeps plan, execution and result as read-only stages in UI-02A", async () => {
+  it("keeps secret material out of Installation navigation", async () => {
     const user = userEvent.setup();
     const onTabChange = vi.fn();
     render(<InstallationPage state={state} tab="summary" onTabChange={onTabChange} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} />);
@@ -56,5 +56,14 @@ describe("InstallationPage", () => {
     await user.click(screen.getByRole("checkbox"));
     await user.click(approve);
     expect(onApprovePlan).toHaveBeenCalledWith("plan-1", ["ACK_RISK"]);
+  });
+
+  it("starts only an already approved plan and renders safe execution state", async () => {
+    const user = userEvent.setup();
+    const onStart = vi.fn();
+    const plan = { status: "PLAN_APPROVED" as const, plan: { id: "plan-1", status: "EXECUTABLE" as const, projectRevision: "sha256:old", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-22T10:00:00Z", approved: true, acknowledgements: [], phases: [] } };
+    render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} onStart={onStart} plan={plan} />);
+    await user.click(screen.getByRole("button", { name: "Начать выполнение" }));
+    expect(onStart).toHaveBeenCalledWith("plan-1");
   });
 });

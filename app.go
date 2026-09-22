@@ -140,21 +140,23 @@ type App struct {
 	reader interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	projectRevision    func(string) (string, error)
-	lifecycle          projectLifecycle
-	current            ProjectOpenResult
-	sessions           *installer.EditSessionStore
-	editor             *installer.Backend
-	activeSession      string
-	editMu             sync.Mutex
-	config             appconfig.Config
-	configErr          error
-	secrets            *runtimesecret.Broker
-	execution          *executionNodeContextStore
-	binding            *executionNodeBinding
-	continuation       *verificationContinuation
-	export             *installer.ProjectExport
-	installationPlanID string
+	projectRevision        func(string) (string, error)
+	lifecycle              projectLifecycle
+	current                ProjectOpenResult
+	sessions               *installer.EditSessionStore
+	editor                 *installer.Backend
+	activeSession          string
+	editMu                 sync.Mutex
+	config                 appconfig.Config
+	configErr              error
+	secrets                *runtimesecret.Broker
+	execution              *executionNodeContextStore
+	binding                *executionNodeBinding
+	continuation           *verificationContinuation
+	export                 *installer.ProjectExport
+	installationPlanID     string
+	installationRuns       *installationRunRegistry
+	installationGeneration uint64
 }
 
 type AppOption func(*App)
@@ -197,10 +199,11 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate())}
+	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry()}
 	for _, option := range options {
 		option(app)
 	}
+	app.configureTargetCredentialLease()
 	return app
 }
 
@@ -249,6 +252,7 @@ func (a *App) shutdown(context.Context) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.secrets.Close()
+	a.installationRuns.clear()
 	a.execution.clear()
 	a.continuation = nil
 	a.clearProjectExportLocked()
@@ -308,6 +312,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 		return a.failure(projectErrorCode(err))
 	}
 	a.secrets.Clear()
+	a.installationRuns.clear()
 	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts, Catalog: result.Catalog, Verification: notVerified()}
 	a.bindExecutionLocked(result.Root, result.Project, nil)
 	return a.current
@@ -397,6 +402,9 @@ func (a *App) CloseProject() ProjectOpenResult {
 	a.secrets.Clear()
 	a.execution.clear()
 	a.continuation = nil
+	a.installationGeneration++
+	a.installationPlanID = ""
+	a.installationRuns.clear()
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
 }
@@ -585,6 +593,8 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 		a.current.Snapshot = nil
 		a.current.Verification = notVerified()
 		a.installationPlanID = ""
+		a.installationGeneration++
+		a.installationRuns.clear()
 	}
 	a.continuation = nil
 	return a.execution.context, nil
@@ -903,8 +913,10 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 }
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
+	a.installationGeneration++
 	a.continuation = nil
 	a.installationPlanID = ""
+	a.installationRuns.clear()
 	if project == nil || project.ID == "" {
 		a.execution.clear()
 		return

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { EventsOn } from "../wailsjs/runtime/runtime";
 import type {
   EditResult,
   ExecutionNodeContext,
@@ -7,6 +8,8 @@ import type {
   EndpointPreview,
   InstallationState,
   InstallationPlanOperation,
+  InstallationRunOperation,
+  InstallationEventView,
   OpenResult,
   ProjectExportOperationResult,
   ProjectBackend,
@@ -179,6 +182,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     InstallationPlanOperation | undefined
   >(undefined);
   const [installationBusy, setInstallationBusy] = useState(false);
+  const [installationRun, setInstallationRun] = useState<InstallationRunOperation | undefined>(undefined);
+  const [installationEvents, setInstallationEvents] = useState<InstallationEventView[]>([]);
+  const [installationSubscription, setInstallationSubscription] = useState("");
   const [endpointPreview, setEndpointPreview] = useState<
     EndpointPreview | undefined
   >(undefined);
@@ -418,6 +424,48 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setInstallationBusy(false);
     }
   };
+  const startApprovedInstallation = async (planId: string) => {
+    if (!api.startApprovedInstallation) return;
+    setInstallationBusy(true);
+    try {
+      const operation = await api.startApprovedInstallation(planId);
+      setInstallationRun(operation);
+      setInstallationEvents([]);
+      setInstallationTab("execution");
+      if (operation.run && api.subscribeInstallationRun) {
+        const subscription = await api.subscribeInstallationRun(operation.run.runId, 0);
+        setInstallationSubscription(subscription.subscriptionId || "");
+      }
+      await refreshInstallationState();
+    } finally { setInstallationBusy(false); }
+  };
+  const cancelInstallationRun = async (runId: string) => {
+    if (!api.cancelInstallationRun) return;
+    setInstallationBusy(true);
+    try { setInstallationRun(await api.cancelInstallationRun(runId)); } finally { setInstallationBusy(false); }
+  };
+  useEffect(() => {
+    if (!(window as unknown as { runtime?: unknown }).runtime) return undefined;
+    return EventsOn("installation-run-event", (value: { subscriptionId?: string; event?: InstallationEventView }) => {
+      if (value.subscriptionId !== installationSubscription || !value.event) return;
+      setInstallationEvents((current) => current.some((event) => event.sequence === value.event!.sequence) ? current : [...current, value.event!].slice(-512));
+      if (["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(value.event.status) && api.getInstallationRun) {
+        api.getInstallationRun(value.event.runId).then(setInstallationRun).catch(() => {});
+      }
+    });
+  }, [api, installationSubscription]);
+  useEffect(() => {
+    if (installationTab === "execution" || !installationSubscription || !api.unsubscribeInstallationRun) return;
+    void api.unsubscribeInstallationRun(installationSubscription);
+    setInstallationSubscription("");
+  }, [api, installationSubscription, installationTab]);
+  useEffect(() => () => {
+    if (installationSubscription && api.unsubscribeInstallationRun) void api.unsubscribeInstallationRun(installationSubscription);
+  }, [api, installationSubscription]);
+  useEffect(() => {
+    if (installationTab !== "result" || !installationRun?.run || !api.getInstallationRun) return;
+    api.getInstallationRun(installationRun.run.runId).then(setInstallationRun).catch(() => {});
+  }, [api, installationRun?.run?.runId, installationTab]);
   const chooseExportParent = async () => {
     if (!api.chooseProjectExportParent) return;
     const selected = await api.chooseProjectExportParent();
@@ -1110,6 +1158,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             busy={installationBusy}
             onCreatePlan={createInstallationPlan}
             onApprovePlan={approveInstallationPlan}
+            run={installationRun}
+            events={installationEvents}
+            onStart={startApprovedInstallation}
+            onCancel={cancelInstallationRun}
           />
         )}
         {projectDialog && (

@@ -733,7 +733,11 @@ only the exact acknowledgements for its saved revision/runtime binding. It has
 no Start, cancellation, secret or target-contact path. UI-02C is DONE: its
 single `ExecutionService` Start path uses v1alpha2, while the node owns the
 durable attempt-to-run binding, lease attachment and authoritative run ID
-before controller launch. UI-02D is NEXT.
+before controller launch. UI-02D is DONE: the App composes the runtime-only
+credential broker with `ExecutionService`, uses closed Wails event/result DTOs
+and bounded generation-bound observer subscriptions, and separates explicit
+cancel from navigation/unsubscribe. Focused Windows and RED OS race gates and
+the permitted targeted architecture recheck passed. UI-02E is NEXT.
 
 Deliverables:
 

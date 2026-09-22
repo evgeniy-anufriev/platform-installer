@@ -1,6 +1,6 @@
 # UI-02 — Installation workflow architecture
 
-Status: **UI-02A through UI-02C DONE; UI-02D NEXT**. UI-02C uses one
+Status: **UI-02A through UI-02D DONE; UI-02E NEXT**. UI-02C uses one
 `ExecutionService`-owned v1alpha2 Start path: plan-time staging is private and
 is never an authoritative run, and the Execution Node commits the node-owned
 run binding, attempt mapping and lease attachment before controller launch.
@@ -37,7 +37,7 @@ Out of scope: project editing; Execution Node selection/preparation; service-spe
 | Approval/freshness | ExecutionService.ApprovePlan and one-shot Start replan | Collect exact acknowledgements; never treat Verify as authorization. |
 | Execution | StartExecution, GetExecution, CancelExecution | Invoke only fixed lifecycle operations and render safe state. |
 | Progress | Journal -> GetEvents -> RunObserver | Subscribe through Go; never parse callback text or files. |
-| Operator mirror | .runtime/executions/<runId>/events.jsonl | Display path only as operator aid; React never opens it. |
+| Operator mirror | Internal `RunObserver` implementation detail | May support an operator-only local workflow outside UI-02; its path is never projected to Wails or React. |
 | Target credential | In-memory runtimesecret.Broker | Show safe availability only; trusted Go resolves it internally. |
 
 Incoming Core/protocol data is bounded and decoded by Go before a closed Wails projection. React receives no raw maps, Ansible stdout/stderr, callback data, secret values, private paths, or internal runtime-secret references.
@@ -102,7 +102,58 @@ CancelInstallationRun(runId)
 
 The facade checks that IDs belong to the current app/session object and node/runtime binding still agrees before every mutation. It maps lifecycle and observer errors to closed safe UI codes plus bounded findings. It exposes neither generic Core/RPC, arbitrary GetEvents, shell nor filesystem operation.
 
-SubscribeInstallationRun uses one existing RunObserver poller per node/run. It emits validated/redacted ExecutionEvent/v1alpha1 projections with increasing sequences, bounded subscriber capacity and separate EXECUTION_OBSERVER diagnostics. React may filter safe fields but may not infer terminal outcome or redact data itself.
+### 5.1 Credentialed Start composition
+
+The composition root owns the existing `runtimesecret.Broker` and configures
+the already-created `ExecutionService` once through its narrow
+`ConfigureTargetCredentialLease` seam. The private callback resolves the
+current open-project-bound broker lease only while `ExecutionService.Start`
+needs it, converts it to the fixed internal payload, and returns no secret,
+lease ID or attempt ID to App/Wails. App never calls PUT directly.
+
+Thus the sole credentialed path is:
+
+~~~text
+ExecutionService fresh Start -> configured Broker callback
+  -> PutRuntimeSecretLease/v1alpha1 -> StartExecution/v1alpha2
+~~~
+
+Missing/expired broker material, absent integration, incompatible capability or
+failed staging returns a typed safe error before Start. Planning and approval
+remain target-free and do not require a broker lease.
+
+### 5.2 Closed Wails projections
+
+`InstallationEventView` and `InstallationResultView` are narrow, closed Go
+application DTOs. They allow only bounded presentation fields: run ID,
+sequence, timestamp, closed event/state kind, bounded phase/action/task/host
+labels, terminal status and bounded safe findings/messages. Go validates and
+projects before Wails; React is never the redaction boundary.
+
+They never contain `MirrorPath`, `DiagnosticRef`, raw diagnostics,
+stdout/stderr, journal/controller/filesystem paths, `events.jsonl`, lease ID,
+start attempt ID, private protocol metadata, secrets or secret references.
+The operator mirror remains internal and is not displayed by UI-02.
+
+### 5.3 App-private observer registry
+
+App owns private `RunObserver` instances keyed by node/run and a bounded registry
+of at most **32** active local presentation subscriptions. A registry entry holds the current
+project generation/binding and run ID; its opaque random `subscriptionId` is
+not derived from a path or run ID. Multiple React subscribers for the same
+node/run reuse the existing observer poller and retain its bounded queue and
+`OBSERVABILITY_DEGRADED` behavior.
+
+`UnsubscribeInstallationRun` is idempotent and removes only the local
+subscriber. Project close/switch removes subscriptions for the old generation;
+application shutdown closes all local observer resources; tab navigation may
+unsubscribe its presentation view. None sends `CancelExecution`. Only explicit
+`CancelInstallationRun(runId)` requests remote cancellation. Reconnect uses
+known run ID plus `GetExecution`/RunObserver and never creates or infers a run.
+
+SubscribeInstallationRun uses this registry and emits only
+`InstallationEventView` projections with increasing sequences and separate
+closed observer diagnostics.
 
 ## 6. Plan, approval, start and cancellation
 
@@ -243,8 +294,8 @@ The terminal execution result is authoritative. Observer disconnect, history tru
 | --- | --- | --- |
 | UI-02A — DONE | Mockup reconciliation, closed Wails DTO/facade and read-only Installation state/plan display. | No Start, secrets or target contact. |
 | UI-02B — DONE | Fresh plan, bounded plan projection, acknowledgement and approval. | No Start/cancel or lease transport. |
-| UI-02C | Complete PutRuntimeSecretLease/v1alpha1 and idempotent Start correlation, capability gate, atomic attach, cleanup/recovery and RED OS security proof. | No UI Start, generic secret system/history. |
-| UI-02D | Approved Start, RunObserver Wails subscription, cancellation, Execution/Result views. | No raw log stream or durable run index. |
+| UI-02C — DONE | Complete PutRuntimeSecretLease/v1alpha1 and idempotent Start correlation, capability gate, atomic attach, cleanup/recovery and RED OS security proof. | No UI Start, generic secret system/history. |
+| UI-02D — DONE | App-wired broker → ExecutionService credentialed Start, closed event/result DTOs, bounded App-private RunObserver subscriptions, cancellation and Execution/Result views. | No raw log stream, mirror path, direct lease/Start transport or durable run index. |
 | UI-02E | Windows/RED OS production-shaped workflow, reconnect/degradation and secret/redaction acceptance. | No new service/editor feature. |
 
 UI-02C precedes UI-02D so no UI Start reaches targets before capability negotiation, PUT idempotency, idempotent Start correlation, atomic attach, cleanup/recovery and attached-run expiry semantics are proven. UI-02B remains useful without target credentials because planning is target-free.
@@ -253,7 +304,10 @@ UI-02C precedes UI-02D so no UI Start reaches targets before capability negotiat
 
 - A/B: fresh revision/runtime binding; blocked plans cannot start; Verify never authorizes execution.
 - C: password/key bytes use only fixed bounded stdin lease transport. It proves complete/lost/conflicting PUT, definite/unknown Start outcomes, same-attempt Start replay, staged expiry, attached-run expiry, terminal/cancel/recovery cleanup, and no secret/reference in Wails DTOs, argv, environment, project, journal, mirror, diagnostics or result.
-- D: Start is one-shot/replan-protected; navigation detaches without cancel; replay/reconnect preserves sequence; observer degradation cannot alter remote outcome.
+- D: Broker → ExecutionService → lease → v1alpha2 Start is the sole
+  credentialed path; closed Go projection precedes Wails/React; bounded opaque
+  App subscriptions detach on navigation/project switch/shutdown without
+  CancelExecution; explicit cancellation remains separate.
 - E: a supported full lifecycle proves plan, approval, apply, Verify, Result and repeat changed=0, without touching unrelated deployments.
 
 Before implementation, owner confirms: (1) A -> B -> C -> D -> E order; (2) no inferred current run or durable run index after process restart; and (3) whether first Result is lifecycle/terminal evidence only, with Logs retention deferred to a separately approved slice.

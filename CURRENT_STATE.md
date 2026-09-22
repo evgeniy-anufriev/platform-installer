@@ -68,8 +68,13 @@ secret or target-contact path. UI-02C is DONE: `ExecutionService` uses only
 the closed v1alpha2 credential-lease/Start lifecycle, while the Execution Node
 creates the authoritative run ID and durably binds attempt, run and lease
 before controller launch. Focused Windows and RED OS gates passed without a UI
-Start path, runtime activation or target contact. UI-02D is NEXT. Evidence:
-`docs/ui-02a.md`, `docs/ui-02b.md`, `docs/ui-02c.md` and
+Start path, runtime activation or target contact. UI-02D is DONE: the App
+wires the runtime-only broker to the existing credentialed Start seam, projects
+only closed execution event/result DTOs, and owns bounded local observer
+subscriptions that detach without remote cancellation. Its generation-bound
+publication prevents an old asynchronous Start/Subscribe result from binding
+to a replacement project or Execution Node. UI-02E is NEXT. Evidence:
+`docs/ui-02a.md`, `docs/ui-02b.md`, `docs/ui-02c.md`, `docs/ui-02d.md` and
 `docs/ui-02-architecture.md`.
 
 ## EXEC-OBS-01 completion (2026-09-05)

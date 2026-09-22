@@ -16,6 +16,11 @@ import {
   CreateInstallationPlan,
   GetInstallationPlan,
   ApproveInstallationPlan,
+  StartApprovedInstallation,
+  GetInstallationRun,
+  SubscribeInstallationRun,
+  UnsubscribeInstallationRun,
+  CancelInstallationRun,
   GetSessionCredentialStatus,
   CheckExecutionNode,
   OpenProject,
@@ -231,6 +236,11 @@ export type InstallationPlanOperation = {
   plan?: InstallationPlanView;
   error?: { code: string; message: string };
 };
+export type InstallationRunView = main.InstallationRunView;
+export type InstallationResultView = main.InstallationResultView;
+export type InstallationRunOperation = main.InstallationRunOperation;
+export type InstallationEventView = main.InstallationEventView;
+export type InstallationSubscriptionResult = main.InstallationSubscriptionResult;
 export type EndpointPreview = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
   endpoints?: Array<{ deploymentId: string; fqdn: string }>;
@@ -339,6 +349,11 @@ export interface ProjectBackend {
     planId: string,
     acknowledgements: string[],
   ): Promise<InstallationPlanOperation>;
+  startApprovedInstallation?(planId: string): Promise<InstallationRunOperation>;
+  getInstallationRun?(runId: string): Promise<InstallationRunOperation>;
+  subscribeInstallationRun?(runId: string, afterSequence: number): Promise<InstallationSubscriptionResult>;
+  unsubscribeInstallationRun?(subscriptionId: string): Promise<void>;
+  cancelInstallationRun?(runId: string): Promise<InstallationRunOperation>;
   getEndpointPreview?(): Promise<EndpointPreview>;
   getVerifiedPKIView?(): Promise<VerifiedPKIView>;
   selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
@@ -392,6 +407,11 @@ export const backend: ProjectBackend = {
       planId,
       acknowledgements,
     ) as unknown as Promise<InstallationPlanOperation>,
+  startApprovedInstallation: (planId) => StartApprovedInstallation(planId) as unknown as Promise<InstallationRunOperation>,
+  getInstallationRun: (runId) => GetInstallationRun(runId) as unknown as Promise<InstallationRunOperation>,
+  subscribeInstallationRun: (runId, afterSequence) => SubscribeInstallationRun(runId, afterSequence) as unknown as Promise<InstallationSubscriptionResult>,
+  unsubscribeInstallationRun: (subscriptionId) => UnsubscribeInstallationRun(subscriptionId),
+  cancelInstallationRun: (runId) => CancelInstallationRun(runId) as unknown as Promise<InstallationRunOperation>,
   getEndpointPreview: () =>
     GetEndpointPreview() as unknown as Promise<EndpointPreview>,
   getVerifiedPKIView: () =>
