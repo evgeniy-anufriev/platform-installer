@@ -32,6 +32,10 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Normalized execution event | `v1alpha1` | `event/v1alpha1/schema.json` |
 | Execution result | `v1alpha1` | `result/v1alpha1/schema.json` |
 | Execution node selection | `v1alpha1` | `execution/v1alpha1/schema.json` |
+| Execution runtime capabilities (compatibility) | `v1alpha1` | `execution-capabilities/v1alpha1/schema.json` |
+| Credentialed execution runtime capabilities | `v1alpha2` | `execution-capabilities/v1alpha2/schema.json` |
+| Credentialed execution Start request | `v1alpha2` | `execution-start/v1alpha2/request.schema.json` |
+| Credentialed execution Start response | `v1alpha2` | `execution-start/v1alpha2/response.schema.json` |
 
 Execution selection is project/execution state, not service topology. Candidate
 eligibility is evaluated before preparation; `EXECUTION_READY` is reported only
@@ -129,3 +133,21 @@ references. Secret values belong to the runtime provider and must never be
 written into project files, plans, events or results. JSON Schema establishes
 the data shape; Core also performs semantic redaction and forbidden-value
 checks.
+
+## Credentialed execution compatibility
+
+`ExecutionCapabilities/v1alpha1` remains immutable and supports existing
+readiness and planning behavior. It never authorizes credentialed execution.
+`ExecutionCapabilities/v1alpha2` adds only feature negotiation: it requires
+`executionStart.protocol = StartExecution/v1alpha2` and may advertise the
+closed `targetCredentialLease` capability. The latter names the fixed lease
+protocol, its sole payload version, a bounded maximum payload size and the
+required Start protocol; it does not carry a secret or redefine either wire
+protocol.
+
+`StartExecution/v1alpha2` rejects caller-supplied `runId`. The Execution Node
+generates that ID after durable start-attempt and lease attachment. A private
+lease ID is permitted only on the trusted Go-to-Execution-Node wire and is not
+a desired-state, Wails or React value. A v1alpha2 reply without a compatible
+lease capability remains usable for planning, but credentialed Start is
+blocked without fallback to v1alpha1 or direct workstation-to-target SSH.

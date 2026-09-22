@@ -716,6 +716,12 @@ Verify is displayed separately and never bypasses planning. Plan shows Core
 actions/dependencies and target hosts; Result shows observed per-action outcomes
 and verify for a specific run, without rerunning verification on view.
 
+The approved pre-implementation protocol design is
+[UI-02 architecture](ui-02-architecture.md). Credentialed Start requires the
+future closed `StartExecution/v1alpha2` and
+`ExecutionCapabilities/v1alpha2` contracts; legacy v1alpha1 remains valid for
+planning/readiness but cannot authorize credentialed Start.
+
 Deliverables:
 
 - readiness, plan, confirmation, execution and result views;

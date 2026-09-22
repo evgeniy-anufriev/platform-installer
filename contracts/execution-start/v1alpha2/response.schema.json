@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-start/v1alpha2/response.schema.json",
+  "title": "Platform Execution StartExecution v1alpha2 response",
+  "type": "object",
+  "required": ["apiVersion", "kind", "status", "startAttemptId", "runId"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-start/v1alpha2"},
+    "kind": {"const": "StartExecutionResponse"},
+    "status": {"enum": ["STARTED", "ALREADY_STARTED"]},
+    "startAttemptId": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "runId": {"type": "string", "pattern": "^installer-[0-9]+$"}
+  },
+  "additionalProperties": false
+}

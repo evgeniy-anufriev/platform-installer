@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-start/v1alpha2/request.schema.json",
+  "title": "Platform Execution StartExecution v1alpha2 request",
+  "type": "object",
+  "required": ["apiVersion", "kind", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-start/v1alpha2"},
+    "kind": {"const": "StartExecutionRequest"},
+    "startAttemptId": {"$ref": "#/$defs/opaqueId"},
+    "projectIdentity": {"$ref": "#/$defs/projectIdentity"},
+    "projectRevision": {"$ref": "#/$defs/digest"},
+    "planFingerprint": {"$ref": "#/$defs/digest"},
+    "executionManifestDigest": {"$ref": "#/$defs/digest"},
+    "runtimeRelease": {"$ref": "#/$defs/runtimeRelease"},
+    "leaseId": {"$ref": "#/$defs/opaqueId"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "opaqueId": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "projectIdentity": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "runtimeRelease": {
+      "type": "object",
+      "required": ["bundleDigest", "coreVersion", "catalogDigest", "planningProtocol"],
+      "properties": {
+        "bundleDigest": {"$ref": "#/$defs/digest"},
+        "coreVersion": {"type": "string", "minLength": 1, "maxLength": 256},
+        "catalogDigest": {"$ref": "#/$defs/digest"},
+        "planningProtocol": {"type": "string", "minLength": 1, "maxLength": 256}
+      },
+      "additionalProperties": false
+    }
+  }
+}
