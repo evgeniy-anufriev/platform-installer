@@ -11,7 +11,7 @@ run binding, attempt mapping and lease attachment before controller launch.
 targeted recheck are complete; no further architecture review is run for this
 exact owner-authorized correction.
 
-UI-02 adds the operational Installation experience after UI-01's editor has saved a portable project. It is not a second desired-state model, planner, Ansible-output viewer, or workstation-to-target execution path.
+UI-02 adds the operational Installation experience after UI-01's editor has saved a portable project. It is not a second desired-state model, planner, Ansible-output viewer, or workstation-to-target execution path.  The owner-approved, pending-review UI-02E correction for one PKI runtime store password is specified in [UI-02E PKI runtime-secret transport](ui-02e-pki-runtime-secret-transport.md); it keeps the published credential payload v1alpha1 immutable.
 
 ## 1. Goal and scope
 
@@ -192,7 +192,7 @@ Before durable run/attach commit, no run exists and STAGED remains or is revoked
 
 ExecutionCapabilities/v1alpha2 is a closed envelope with all v1alpha1 identity/operation semantics plus required executionStart.protocol = StartExecution/v1alpha2 and optional targetCredentialLease. When present, targetCredentialLease is closed and contains protocol = PutRuntimeSecretLease/v1alpha1, payloadVersions = [TargetCredentialLeasePayload/v1alpha1], positive bounded maxPayloadBytes, and requiredStartProtocol = StartExecution/v1alpha2. It does not carry a redundant idempotency flag because StartExecution/v1alpha2 normatively guarantees it.
 
-Credentialed UI-02 Start is permitted only with an attested v1alpha2 reply containing compatible executionStart, targetCredentialLease, Put protocol, payload version and a maxPayloadBytes value sufficient for the actual bounded payload. Valid v1alpha1 and v1alpha2 without targetCredentialLease may plan where otherwise valid but block credentialed Start. There is no fallback to StartExecution/v1alpha1 or workstation-to-target SSH.
+Credentialed UI-02 Start is permitted only with an attested v1alpha2 reply containing compatible executionStart, targetCredentialLease, Put protocol, payload version and a maxPayloadBytes value sufficient for the actual bounded payload. Valid v1alpha1 and v1alpha2 without targetCredentialLease may plan where otherwise valid but block credentialed Start. There is no fallback to StartExecution/v1alpha1 or workstation-to-target SSH.  The initial v1alpha1-only payload list remains the published UI-02C/D behavior; its owner-approved UI-02E v1alpha2 successor is defined separately and is selected only for an exactly attested PKI runtime-secret requirement.
 
 
 ### 7.3 Attempt and lease protocol identities
