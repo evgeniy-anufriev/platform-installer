@@ -107,6 +107,27 @@ func TestRuntimeSecretFilesAcceptOnlyRuntimeRefsAndCleanAbsolutePaths(t *testing
 	}
 }
 
+func TestPlanStagingAcceptsAnOmittedOptionalRequestID(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := &protocolRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	if err := transport.stagePlanProject(context.Background(), testNode(), root, "installer-123", "plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range runner.calls {
+		if call.name == "ssh" && strings.Contains(call.input, "purpose=$5") {
+			if !strings.Contains(call.input, "request_id=${6-}") {
+				t.Fatalf("plan staging did not safely default omitted requestId: %q", call.input)
+			}
+			return
+		}
+	}
+	t.Fatal("plan staging command was not issued")
+}
+
 func TestRuntimeProtocolIsTypedAndNeverCarriesClientCommandMaterial(t *testing.T) {
 	runner := &protocolRunner{}
 	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
