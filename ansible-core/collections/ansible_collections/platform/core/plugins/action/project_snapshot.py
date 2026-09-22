@@ -314,7 +314,10 @@ class ActionModule(ActionBase):
                 references={"hosts": self._generic_host_references(project_root)},
                 identity_source="PROJECT_MANIFEST" if metadata.get("id") else "PATH_FALLBACK",
             )
-            return {"changed": False, "snapshot": snapshot}
+            # This is controller-private Core plumbing for the immediately
+            # following plan action.  `snapshot` remains the redacted public
+            # read-only projection returned to Go/Wails.
+            return {"changed": False, "snapshot": snapshot, "pki_materialization": pki}
         except (AnsibleError, KeyError, OSError, TypeError, ValueError):
             return {
                 "failed": True,

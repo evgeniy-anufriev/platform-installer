@@ -109,7 +109,7 @@ def _capabilities_v2(args):
     required = ("bundleVersion", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest")
     if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
-    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha2", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha2", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.PAYLOAD_VERSION, execution_secret_lease.PKI_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
 
 
 def _v2_start_request(value):
@@ -150,6 +150,19 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
     if not isinstance(staging_id, str) or not os.path.isfile(manifest_path) or os.path.islink(manifest_path): raise LifecycleError("EXECUTION_MANIFEST_MISSING")
     with open(manifest_path, "r", encoding="utf-8") as stream: manifest = json.load(stream)
     if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]: raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
+    requirements = manifest.get("runtimeSecretRequirements", [])
+    expected = [{"requirementRef": "pki-store-password", "purpose": "PKI_STORE_PASSWORD", "runtimeReference": "runtime:pki-store-password"}]
+    if not isinstance(requirements, list) or len(requirements) > 1:
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    if requirements:
+        requirement = requirements[0]
+        if not isinstance(requirement, dict) or set(requirement) != {"requirementRef", "purpose", "hosts", "runtimeReference"} or any(requirement.get(key) != expected[0][key] for key in expected[0]) or not isinstance(requirement.get("hosts"), list):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        if not value.get("leaseId"):
+            raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+        execution_secret_lease.validate_staged_pki_store_password(state_root, value["leaseId"])
+    elif value.get("leaseId"):
+        execution_secret_lease.validate_staged_payload_without_pki_store_password(state_root, value["leaseId"])
     # The node, not planning or the caller, creates the authoritative run id.
     run_id = "installer-" + os.urandom(16).hex()
     run_dir = os.path.join(state_root, "runs", run_id)

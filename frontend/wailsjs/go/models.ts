@@ -1747,6 +1747,7 @@ export namespace main {
     acknowledgements: InstallationAcknowledgement[];
     phases: InstallationPlanPhase[];
     findings?: InstallationPlanFinding[];
+    pkiStorePasswordRequired: boolean;
 
     static createFrom(source: any = {}) {
       return new InstallationPlanView(source);
@@ -1774,6 +1775,7 @@ export namespace main {
         source["findings"],
         InstallationPlanFinding,
       );
+      this.pkiStorePasswordRequired = source["pkiStorePasswordRequired"];
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2731,6 +2733,7 @@ export namespace runtimesecret {
     username?: string;
     sshMode?: string;
     sudoPasswordStatus: string;
+    pkiStorePasswordStatus: string;
     expiresAt?: string;
 
     static createFrom(source: any = {}) {
@@ -2743,6 +2746,7 @@ export namespace runtimesecret {
       this.username = source["username"];
       this.sshMode = source["sshMode"];
       this.sudoPasswordStatus = source["sudoPasswordStatus"];
+      this.pkiStorePasswordStatus = source["pkiStorePasswordStatus"];
       this.expiresAt = source["expiresAt"];
     }
   }

@@ -9,27 +9,27 @@ The electron alternative for Go
 */
 
 export interface Position {
-  x: number;
-  y: number;
+    x: number;
+    y: number;
 }
 
 export interface Size {
-  w: number;
-  h: number;
+    w: number;
+    h: number;
 }
 
 export interface Screen {
-  isCurrent: boolean;
-  isPrimary: boolean;
-  width: number;
-  height: number;
+    isCurrent: boolean;
+    isPrimary: boolean;
+    width : number
+    height : number
 }
 
 // Environment information such as platform, buildtype, ...
 export interface EnvironmentInfo {
-  buildType: string;
-  platform: string;
-  arch: string;
+    buildType: string;
+    platform: string;
+    arch: string;
 }
 
 // [EventsEmit](https://wails.io/docs/reference/runtime/events#eventsemit)
@@ -38,32 +38,19 @@ export interface EnvironmentInfo {
 export function EventsEmit(eventName: string, ...data: any): void;
 
 // [EventsOn](https://wails.io/docs/reference/runtime/events#eventson) sets up a listener for the given event name.
-export function EventsOn(
-  eventName: string,
-  callback: (...data: any) => void,
-): () => void;
+export function EventsOn(eventName: string, callback: (...data: any) => void): () => void;
 
 // [EventsOnMultiple](https://wails.io/docs/reference/runtime/events#eventsonmultiple)
 // sets up a listener for the given event name, but will only trigger a given number times.
-export function EventsOnMultiple(
-  eventName: string,
-  callback: (...data: any) => void,
-  maxCallbacks: number,
-): () => void;
+export function EventsOnMultiple(eventName: string, callback: (...data: any) => void, maxCallbacks: number): () => void;
 
 // [EventsOnce](https://wails.io/docs/reference/runtime/events#eventsonce)
 // sets up a listener for the given event name, but will only trigger once.
-export function EventsOnce(
-  eventName: string,
-  callback: (...data: any) => void,
-): () => void;
+export function EventsOnce(eventName: string, callback: (...data: any) => void): () => void;
 
 // [EventsOff](https://wails.io/docs/reference/runtime/events#eventsoff)
 // unregisters the listener for the given event name.
-export function EventsOff(
-  eventName: string,
-  ...additionalEventNames: string[]
-): void;
+export function EventsOff(eventName: string, ...additionalEventNames: string[]): void;
 
 // [EventsOffAll](https://wails.io/docs/reference/runtime/events#eventsoffall)
 // unregisters all listeners.
@@ -213,12 +200,7 @@ export function WindowIsNormal(): Promise<boolean>;
 
 // [WindowSetBackgroundColour](https://wails.io/docs/reference/runtime/window#windowsetbackgroundcolour)
 // Sets the background colour of the window to the given RGBA colour definition. This colour will show through for all transparent pixels.
-export function WindowSetBackgroundColour(
-  R: number,
-  G: number,
-  B: number,
-  A: number,
-): void;
+export function WindowSetBackgroundColour(R: number, G: number, B: number, A: number): void;
 
 // [ScreenGetAll](https://wails.io/docs/reference/runtime/window#screengetall)
 // Gets the all screens. Call this anew each time you want to refresh data from the underlying windowing system.
@@ -254,43 +236,40 @@ export function ClipboardSetText(text: string): Promise<boolean>;
 
 // [OnFileDrop](https://wails.io/docs/reference/runtime/draganddrop#onfiledrop)
 // OnFileDrop listens to drag and drop events and calls the callback with the coordinates of the drop and an array of path strings.
-export function OnFileDrop(
-  callback: (x: number, y: number, paths: string[]) => void,
-  useDropTarget: boolean,
-): void;
+export function OnFileDrop(callback: (x: number, y: number ,paths: string[]) => void, useDropTarget: boolean) :void
 
 // [OnFileDropOff](https://wails.io/docs/reference/runtime/draganddrop#dragandddropoff)
 // OnFileDropOff removes the drag and drop listeners and handlers.
-export function OnFileDropOff(): void;
+export function OnFileDropOff() :void
 
 // Check if the file path resolver is available
 export function CanResolveFilePaths(): boolean;
 
 // Resolves file paths for an array of files
-export function ResolveFilePaths(files: File[]): void;
+export function ResolveFilePaths(files: File[]): void
 
 // Notification types
 export interface NotificationOptions {
-  id: string;
-  title: string;
-  subtitle?: string; // macOS and Linux only
-  body?: string;
-  categoryId?: string;
-  data?: { [key: string]: any };
+    id: string;
+    title: string;
+    subtitle?: string; // macOS and Linux only
+    body?: string;
+    categoryId?: string;
+    data?: { [key: string]: any };
 }
 
 export interface NotificationAction {
-  id?: string;
-  title?: string;
-  destructive?: boolean; // macOS-specific
+    id?: string;
+    title?: string;
+    destructive?: boolean; // macOS-specific
 }
 
 export interface NotificationCategory {
-  id?: string;
-  actions?: NotificationAction[];
-  hasReplyField?: boolean;
-  replyPlaceholder?: string;
-  replyButtonTitle?: string;
+    id?: string;
+    actions?: NotificationAction[];
+    hasReplyField?: boolean;
+    replyPlaceholder?: string;
+    replyButtonTitle?: string;
 }
 
 // [InitializeNotifications](https://wails.io/docs/reference/runtime/notification#initializenotifications)
@@ -320,15 +299,11 @@ export function SendNotification(options: NotificationOptions): Promise<void>;
 
 // [SendNotificationWithActions](https://wails.io/docs/reference/runtime/notification#sendnotificationwithactions)
 // Sends a notification with action buttons. Requires a registered category.
-export function SendNotificationWithActions(
-  options: NotificationOptions,
-): Promise<void>;
+export function SendNotificationWithActions(options: NotificationOptions): Promise<void>;
 
 // [RegisterNotificationCategory](https://wails.io/docs/reference/runtime/notification#registernotificationcategory)
 // Registers a notification category that can be used with SendNotificationWithActions.
-export function RegisterNotificationCategory(
-  category: NotificationCategory,
-): Promise<void>;
+export function RegisterNotificationCategory(category: NotificationCategory): Promise<void>;
 
 // [RemoveNotificationCategory](https://wails.io/docs/reference/runtime/notification#removenotificationcategory)
 // Removes a previously registered notification category.

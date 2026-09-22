@@ -11,7 +11,7 @@
 
     - name: Load legacy project for path projection
       ansible.builtin.include_vars:
-        file: "{{ platform_kafka_project_path | default(inventory_dir ~ '/../project.yml', true) }}"
+        file: "{{ platform_kafka_project_path | default(platform_project_manifest_path | default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true), true) }}"
         name: _kafka_discovery_project
       when: platform_desired_state | default({}) | length == 0
 

@@ -25,6 +25,12 @@ def payload(password="secret"):
     return {"apiVersion": execution_secret_lease.PAYLOAD_VERSION, "kind": "TargetCredentialLeasePayload", "username": "operator", "password": password, "privateKey": None, "sudoPassword": None}
 
 
+def pki_payload(store_password):
+    value = payload()
+    value.update({"apiVersion": execution_secret_lease.PKI_PAYLOAD_VERSION, "pkiStorePassword": store_password})
+    return value
+
+
 class ExecutionSecretLeaseTests(unittest.TestCase):
     def test_complete_put_is_idempotent_and_never_persists_request_secret(self):
         with tempfile.TemporaryDirectory() as root:
@@ -58,6 +64,15 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             self.assertFalse(execution_secret_lease.cleanup_run(root, "installer-123"))
             self.assertFalse(Path(root, "secret-leases", "leases", stored["leaseId"]).exists())
 
+    def test_controller_can_project_only_attached_target_username(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertIsNone(execution_secret_lease.target_username_for_run(root, "installer-123"))
+            stored = execution_secret_lease.put(root, request(), payload())
+            self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
+            self.assertEqual("operator", execution_secret_lease.target_username_for_run(root, "installer-123"))
+            self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
+            self.assertIsNone(execution_secret_lease.target_username_for_run(root, "installer-123"))
+
     def test_invalid_identity_or_payload_is_closed(self):
         with tempfile.TemporaryDirectory() as root:
             bad = request(); bad["projectIdentity"] = "-invalid"
@@ -66,6 +81,18 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             malformed = payload(); malformed["password"] = None; malformed["privateKey"] = None
             with self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
                 execution_secret_lease.put(root, request(), malformed)
+
+    def test_pki_payload_accepts_exact_utf8_byte_bound_and_staged_validation(self):
+        with tempfile.TemporaryDirectory() as root:
+            stored = execution_secret_lease.put(root, request(), pki_payload("\u044f" * 2048))
+            execution_secret_lease.validate_staged_pki_store_password(root, stored["leaseId"])
+            for invalid in ("", "a" * 4097):
+                with self.subTest(length=len(invalid)):
+                    with self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
+                        execution_secret_lease.put(root, request("%032x" % (len(invalid) + 7)), pki_payload(invalid))
+            legacy = execution_secret_lease.put(root, request("9" * 32), payload())
+            with self.assertRaisesRegex(LifecycleError, "PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED"):
+                execution_secret_lease.validate_staged_pki_store_password(root, legacy["leaseId"])
 
     def test_start_attempt_is_durable_and_conflicts_fail_closed(self):
         with tempfile.TemporaryDirectory() as root:

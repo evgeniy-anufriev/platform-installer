@@ -29,6 +29,7 @@ import {
   PrepareExecutionNode,
   ReviewStructuralEditSession,
   SetSessionCredential,
+  SetPKIStorePassword,
   SelectExecutionNode,
   StartEditSession,
   VerifyProject,
@@ -151,6 +152,7 @@ export type SessionCredentialStatus = {
   username?: string;
   sshMode?: string;
   sudoPasswordStatus: string;
+  pkiStorePasswordStatus?: string;
   expiresAt?: string;
 };
 export type SessionCredentialInput = {
@@ -214,6 +216,7 @@ export type InstallationPlanView = {
   };
   expiresAt: string;
   approved: boolean;
+  pkiStorePasswordRequired?: boolean;
   acknowledgements: Array<{ code: string; summary: string }>;
   phases: Array<{
     id: string;
@@ -340,6 +343,7 @@ export interface ProjectBackend {
   setSessionCredential?(
     input: SessionCredentialInput,
   ): Promise<SessionCredentialStatus>;
+  setPKIStorePassword?(value: string): Promise<SessionCredentialStatus>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
   getInstallationState?(): Promise<InstallationState>;
@@ -394,6 +398,7 @@ export const backend: ProjectBackend = {
     DiscardEditSession(sessionId) as unknown as Promise<EditResult>,
   getSessionCredentialStatus: GetSessionCredentialStatus,
   setSessionCredential: (input) => SetSessionCredential(input as never),
+  setPKIStorePassword: SetPKIStorePassword,
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
   getInstallationState: () =>

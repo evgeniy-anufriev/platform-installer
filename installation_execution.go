@@ -199,7 +199,7 @@ func (a *App) configureTargetCredentialLease() {
 	if a.binding == nil || a.binding.plans == nil {
 		return
 	}
-	a.binding.plans.ConfigureTargetCredentialLease(func(use func(executionnode.TargetCredentialLeasePayload) error) error {
+	a.binding.plans.ConfigureTargetCredentialLease(func(request executionnode.TargetCredentialLeaseRequest, use func(executionnode.TargetCredentialLeasePayload) error) error {
 		a.editMu.Lock()
 		defer a.editMu.Unlock()
 		binding, err := a.credentialBindingLocked()
@@ -212,6 +212,9 @@ func (a *App) configureTargetCredentialLease() {
 				payload.Password = string(credential.SSHSecret)
 			} else {
 				payload.PrivateKey = string(credential.SSHSecret)
+			}
+			if request.RequiresPKIStorePassword {
+				payload.PKIStorePassword = string(credential.PKIStorePassword)
 			}
 			return use(payload)
 		})

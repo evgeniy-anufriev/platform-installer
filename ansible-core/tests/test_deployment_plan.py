@@ -97,6 +97,26 @@ class DeploymentPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "BUNDLE_SOURCE_INDEX_INVALID"):
             PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=invalid_checksum)
 
+    def test_pki_store_password_requirement_uses_existing_public_schema_only(self):
+        pki = {"materializationPlans": [
+            {"hostId": "node2", "storePasswordSecretRef": "runtime:pki-store-password"},
+            {"hostId": "node1", "storePasswordSecretRef": "runtime:pki-store-password"},
+            {"hostId": "node1", "storePasswordSecretRef": "runtime:pki-store-password"},
+        ]}
+        result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization=pki)
+        plan, manifest = result["deploymentPlan"], result["executionManifest"]
+        self.assertEqual([{"requirementRef": "pki-store-password", "purpose": "PKI_STORE_PASSWORD", "hosts": ["node1", "node2"]}], plan["requiredCredentials"])
+        self.assertNotIn("runtime:pki-store-password", json.dumps(plan))
+        self.assertEqual("runtime:pki-store-password", manifest["runtimeSecretRequirements"][0]["runtimeReference"])
+        contracts = Path(__file__).resolve().parents[2] / "contracts"
+        self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(plan, contracts / "plan" / "v1alpha2" / "schema.json"))
+
+    def test_unsupported_pki_runtime_reference_blocks_without_exposure(self):
+        result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization={"materializationPlans": [{"hostId": "node1", "storePasswordSecretRef": "runtime:other"}]})
+        self.assertEqual("BLOCKED", result["deploymentPlan"]["status"])
+        self.assertIn("PKI_STORE_PASSWORD_REFERENCE_UNSUPPORTED", [item["code"] for item in result["deploymentPlan"]["findings"]])
+        self.assertNotIn("runtime:other", json.dumps(result["deploymentPlan"]))
+
     def test_semantic_changes_change_fingerprint_and_dependencies_are_core_ordered(self):
         first = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources())["deploymentPlan"]
         changed = copy.deepcopy(snapshot()); changed["serviceDeployments"]["consumer"]["serviceType"] = "provider"

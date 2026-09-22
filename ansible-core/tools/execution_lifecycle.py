@@ -406,6 +406,11 @@ class Journal(object):
             if current.get("state") in TERMINAL and current.get("state") != state:
                 raise LifecycleError("RUN_TERMINAL_CONFLICT")
             result = {"apiVersion": API_VERSION, "kind": "ExecutionResult", "runId": self.run_id, "state": state, "completedAt": utcnow(), "error": {"code": code, "summary": _safe_text(summary)} if code else None}
+            # A result is the public terminal observation used by callers to
+            # begin a later run.  Publish the matching terminal status first:
+            # otherwise a caller can observe result.json while start() still
+            # correctly admits this journal as RUNNING.
+            self._transition_locked(state, summary)
             try:
                 descriptor = os.open(self.result_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             except OSError:
@@ -417,7 +422,6 @@ class Journal(object):
             except Exception:
                 if os.path.exists(self.result_path): os.unlink(self.result_path)
                 raise
-            self._transition_locked(state, summary)
             return result
         finally:
             os.close(event_lock)

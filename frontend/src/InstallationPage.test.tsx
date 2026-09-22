@@ -66,4 +66,17 @@ describe("InstallationPage", () => {
     await user.click(screen.getByRole("button", { name: "Начать выполнение" }));
     expect(onStart).toHaveBeenCalledWith("plan-1");
   });
+
+  it("requires a write-only PKI password before starting a plan that needs it", async () => {
+    const user = userEvent.setup();
+    const onStart = vi.fn();
+    const onSetPKIStorePassword = vi.fn().mockResolvedValue({ status: "PRESENT", sudoPasswordStatus: "NOT_PROVIDED", pkiStorePasswordStatus: "PRESENT" });
+    const plan = { status: "PLAN_APPROVED" as const, plan: { id: "plan-pki", status: "EXECUTABLE" as const, projectRevision: "sha256:old", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-22T10:00:00Z", approved: true, pkiStorePasswordRequired: true, acknowledgements: [], phases: [] } };
+    render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} onStart={onStart} plan={plan} credentialStatus={{ status: "PRESENT", sudoPasswordStatus: "NOT_PROVIDED", pkiStorePasswordStatus: "MISSING" }} onSetPKIStorePassword={onSetPKIStorePassword} />);
+    expect(screen.getByRole("button", { name: "Начать выполнение" })).toHaveProperty("disabled", true);
+    await user.type(screen.getByLabelText("Пароль хранилища PKI"), "write-only");
+    await user.click(screen.getByRole("button", { name: "Добавить пароль в сеанс" }));
+    expect(onSetPKIStorePassword).toHaveBeenCalledWith("write-only");
+    expect(onStart).not.toHaveBeenCalled();
+  });
 });

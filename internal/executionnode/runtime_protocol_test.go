@@ -56,7 +56,7 @@ func TestDecodeBlockedDeploymentPlanPreservesSafeFindings(t *testing.T) {
 		"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"fingerprints":{"plan":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"runtimeRelease":{"bundleDigest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
-		"artifactRequirements":[],"phases":[],"acknowledgements":[],
+		"artifactRequirements":[],"requiredCredentials":[],"phases":[],"acknowledgements":[],
 		"findings":[{"code":"PROJECT_VALIDATION_BLOCKED","safeMessage":"Authoritative project validation is blocked"}]
 	}`), &value); err != nil {
 		t.Fatal(err)
@@ -68,6 +68,12 @@ func TestDecodeBlockedDeploymentPlanPreservesSafeFindings(t *testing.T) {
 	if plan.Status != "BLOCKED" || len(plan.Findings) != 1 || plan.Findings[0].Code != "PROJECT_VALIDATION_BLOCKED" {
 		t.Fatalf("plan=%#v", plan)
 	}
+	if err := bindExecutionManifest(&plan, map[string]any{"executionManifestDigest": nil}, "installer-plan"); err != nil {
+		t.Fatalf("blocked plan must not require an execution manifest: %v", err)
+	}
+	if plan.executionManifestDigest != "" || plan.stagingID != "" {
+		t.Fatalf("blocked plan acquired execution authority: %#v", plan)
+	}
 }
 
 func TestDecodeDeploymentPlanRetainsBoundedPhasesActionsAndAcknowledgements(t *testing.T) {
@@ -77,13 +83,13 @@ func TestDecodeDeploymentPlanRetainsBoundedPhasesActionsAndAcknowledgements(t *t
 		"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"fingerprints":{"plan":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"runtimeRelease":{"bundleDigest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","coreVersion":"core","catalogDigest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","planningProtocol":"protocol"},
-		"artifactRequirements":[],"acknowledgements":[{"code":"ACK_RISK","summary":"Review"}],
+		"artifactRequirements":[],"requiredCredentials":[{"requirementRef":"pki-store-password","purpose":"PKI_STORE_PASSWORD","hosts":["node1"]}],"acknowledgements":[{"code":"ACK_RISK","summary":"Review"}],
 		"phases":[{"id":"apply","order":0,"actions":[{"id":"apply:kafka","type":"SERVICE_APPLY","serviceDeployment":"kafka-main","targets":["node1"],"dependsOn":[],"mutating":true,"reboot":"NONE","summary":"Apply Kafka"}]}],"findings":[]
 	}`), &value); err != nil {
 		t.Fatal(err)
 	}
 	plan, err := decodeDeploymentPlan(value)
-	if err != nil || len(plan.Phases) != 1 || len(plan.Phases[0].Actions) != 1 || plan.Phases[0].Actions[0].ServiceDeployment != "kafka-main" || len(plan.AcknowledgementDetails) != 1 {
+	if err != nil || len(plan.Phases) != 1 || len(plan.Phases[0].Actions) != 1 || plan.Phases[0].Actions[0].ServiceDeployment != "kafka-main" || len(plan.AcknowledgementDetails) != 1 || !planRequiresPKIStorePassword(plan) {
 		t.Fatalf("plan=%#v err=%v", plan, err)
 	}
 	value["phases"].([]any)[0].(map[string]any)["actions"].([]any)[0].(map[string]any)["reboot"] = "MAYBE"
@@ -103,6 +109,22 @@ func TestRuntimeSecretFilesAcceptOnlyRuntimeRefsAndCleanAbsolutePaths(t *testing
 	} {
 		if validRemoteSecretFiles(invalid) {
 			t.Fatalf("invalid runtime secret file mapping was accepted: %#v", invalid)
+		}
+	}
+}
+
+func TestRuntimeTokenAcceptsLegacyDecimalAndNodeGeneratedHex(t *testing.T) {
+	for _, value := range []string{
+		"installer-1234567890",
+		"installer-f52a987bd1c9399624efdc5f7a2818d1",
+	} {
+		if !validRuntimeToken(value) {
+			t.Fatalf("valid runtime token rejected: %q", value)
+		}
+	}
+	for _, value := range []string{"installer-F52A", "installer-deadbeef!", "installer-"} {
+		if validRuntimeToken(value) {
+			t.Fatalf("invalid runtime token accepted: %q", value)
 		}
 	}
 }

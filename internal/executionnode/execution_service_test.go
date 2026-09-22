@@ -11,8 +11,9 @@ import (
 )
 
 type lifecycleBuilder struct {
-	calls int
-	stale bool
+	calls       int
+	stale       bool
+	requiresPKI bool
 }
 
 func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any) (DeploymentPlan, error) {
@@ -21,7 +22,11 @@ func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ stri
 	if b.stale && b.calls > 1 {
 		fp = "sha256:changed"
 	}
-	return DeploymentPlan{ID: "plan-1", Status: "EXECUTABLE", ProjectIdentity: "project-1", ProjectRevision: "sha256:revision", PlanFingerprint: fp, Acknowledgements: []string{"ACK_RISK"}, RuntimeRelease: release, stagingID: "staging-1", executionManifestDigest: "sha256:" + strings.Repeat("a", 64)}, nil
+	plan := DeploymentPlan{ID: "plan-1", Status: "EXECUTABLE", ProjectIdentity: "project-1", ProjectRevision: "sha256:revision", PlanFingerprint: fp, Acknowledgements: []string{"ACK_RISK"}, RuntimeRelease: release, stagingID: "staging-1", executionManifestDigest: "sha256:" + strings.Repeat("a", 64)}
+	if b.requiresPKI {
+		plan.RequiredCredentials = []RequiredCredential{{RequirementRef: "pki-store-password", Purpose: "PKI_STORE_PASSWORD", Hosts: []string{"node1"}}}
+	}
+	return plan, nil
 }
 
 type lifecycleClient struct {
@@ -33,7 +38,7 @@ type lifecycleClient struct {
 }
 
 func (c *lifecycleClient) CredentialStartCapability(context.Context, Node) (CredentialStartCapability, error) {
-	return CredentialStartCapability{MaxPayloadBytes: 1024}, nil
+	return CredentialStartCapability{MaxPayloadBytes: 1114112, PayloadVersions: []string{credentialPayloadVersion, credentialPayloadVersionV2}}, nil
 }
 func (c *lifecycleClient) StartExecutionV2(_ context.Context, _ Node, request ExecutionStartV2Request) (ExecutionStartV2Response, error) {
 	c.starts++
@@ -157,7 +162,7 @@ func TestExecutionServiceStagesCredentialLeaseBeforeV2Start(t *testing.T) {
 	b := &lifecycleBuilder{}
 	c := &lifecycleClient{}
 	s := NewExecutionService(b, c)
-	s.ConfigureTargetCredentialLease(func(use func(TargetCredentialLeasePayload) error) error {
+	s.ConfigureTargetCredentialLease(func(_ TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
 		return use(TargetCredentialLeasePayload{Username: "operator", Password: "secret"})
 	})
 	p, _ := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
@@ -170,6 +175,43 @@ func TestExecutionServiceStagesCredentialLeaseBeforeV2Start(t *testing.T) {
 	}
 	if len(c.requests) != 1 || c.requests[0].LeaseID == "" {
 		t.Fatalf("lease did not remain private to v2 request: %#v", c.requests)
+	}
+}
+
+func TestExecutionServiceRequiresBoundPKIStorePasswordBeforeLeasePut(t *testing.T) {
+	b := &lifecycleBuilder{requiresPKI: true}
+	c := &lifecycleClient{}
+	s := NewExecutionService(b, c)
+	s.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if !request.RequiresPKIStorePassword {
+			t.Fatal("PKI requirement was not passed to private provider")
+		}
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "secret", PKIStorePassword: "pki"})
+	})
+	p, _ := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	_ = s.ApprovePlan(p.ID, []string{"ACK_RISK"})
+	if _, err := s.Start(context.Background(), Node{}, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(c.ops, ","), "put-lease,start-v2"; got != want {
+		t.Fatalf("credentialed Start order=%s want=%s", got, want)
+	}
+}
+
+func TestExecutionServiceRejectsMissingPKIStorePasswordBeforeLeasePut(t *testing.T) {
+	b := &lifecycleBuilder{requiresPKI: true}
+	c := &lifecycleClient{}
+	s := NewExecutionService(b, c)
+	s.ConfigureTargetCredentialLease(func(_ TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "secret"})
+	})
+	p, _ := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	_ = s.ApprovePlan(p.ID, []string{"ACK_RISK"})
+	if _, err := s.Start(context.Background(), Node{}, p.ID); err == nil || err.Error() != "PKI_STORE_PASSWORD_UNAVAILABLE" {
+		t.Fatalf("start error=%v", err)
+	}
+	if len(c.ops) != 0 {
+		t.Fatalf("missing PKI password reached node: %v", c.ops)
 	}
 }
 
@@ -207,6 +249,32 @@ func TestExecutionServiceSyncReplayOverflowAndCancel(t *testing.T) {
 	}
 	if _, err := s.Cancel(context.Background(), Node{}, run.RunID); err != nil || c.cancels != 1 {
 		t.Fatalf("cancel err=%v", err)
+	}
+}
+
+func TestExecutionServiceSyncTerminalClearsProjectActiveRun(t *testing.T) {
+	c := &lifecycleClient{}
+	s := NewExecutionService(&lifecycleBuilder{}, c)
+	plan, err := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApprovePlan(plan.ID, []string{"ACK_RISK"}); err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.Start(context.Background(), Node{}, plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, _, err := s.Sync(context.Background(), Node{}, run.RunID)
+	if err != nil || current.State != "SUCCEEDED" {
+		t.Fatalf("terminal=%#v err=%v", current, err)
+	}
+	s.mu.Lock()
+	_, active := s.projects["project-1"]
+	s.mu.Unlock()
+	if active {
+		t.Fatal("terminal run remained active for its project")
 	}
 }
 

@@ -179,7 +179,47 @@ def _pki_consumers(snapshot):
     return sorted(deployments)
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None):
+_PKI_STORE_PASSWORD_REQUIREMENT_REF = "pki-store-password"
+_PKI_STORE_PASSWORD_PURPOSE = "PKI_STORE_PASSWORD"
+_PKI_STORE_PASSWORD_RUNTIME_REF = "runtime:pki-store-password"
+
+
+def _pki_store_password_requirements(pki_materialization):
+    """Return the public-safe requirement and private runtime binding.
+
+    The resolved materialization result is an internal Core input.  It never
+    becomes part of ProjectSnapshot or the public plan beyond the fixed safe
+    requirement convention below.
+    """
+    values = pki_materialization.get("materializationPlans", []) if isinstance(pki_materialization, dict) else []
+    if not isinstance(values, list):
+        raise ValueError("DEPLOYMENT_PLAN_PKI_MATERIALIZATION_INVALID")
+    hosts, unsupported = set(), False
+    for value in values:
+        if not isinstance(value, dict):
+            raise ValueError("DEPLOYMENT_PLAN_PKI_MATERIALIZATION_INVALID")
+        reference = value.get("storePasswordSecretRef")
+        if reference is None:
+            continue
+        if not isinstance(reference, str) or not reference:
+            raise ValueError("DEPLOYMENT_PLAN_PKI_MATERIALIZATION_INVALID")
+        if reference != _PKI_STORE_PASSWORD_RUNTIME_REF:
+            unsupported = True
+            continue
+        host_id = value.get("hostId")
+        if not isinstance(host_id, str) or not host_id:
+            raise ValueError("DEPLOYMENT_PLAN_PKI_MATERIALIZATION_INVALID")
+        hosts.add(host_id)
+    if unsupported:
+        return [], [], [_finding("PKI_STORE_PASSWORD_REFERENCE_UNSUPPORTED", "pki", "PKI store-password runtime reference is unsupported for Installer execution")]
+    if not hosts:
+        return [], [], []
+    public = {"requirementRef": _PKI_STORE_PASSWORD_REQUIREMENT_REF, "purpose": _PKI_STORE_PASSWORD_PURPOSE, "hosts": sorted(hosts)}
+    private = {"requirementRef": _PKI_STORE_PASSWORD_REQUIREMENT_REF, "purpose": _PKI_STORE_PASSWORD_PURPOSE, "hosts": sorted(hosts), "runtimeReference": _PKI_STORE_PASSWORD_RUNTIME_REF}
+    return [public], [private], []
+
+
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
@@ -197,6 +237,8 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     artifact_requirements = _artifact_requirements(deployments, definitions)
     source_authorities, source_findings = _artifact_source_authorities(artifact_requirements, _bundle_source_index(bundle_artifact_sources), release["bundleDigest"])
     findings.extend(source_findings)
+    required_credentials, runtime_secret_requirements, pki_secret_findings = _pki_store_password_requirements(pki_materialization)
+    findings.extend(pki_secret_findings)
     findings = _safe_findings(findings)
     executable = not findings
     artifact_digest = canonical_digest(artifact_requirements)
@@ -225,6 +267,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         "catalogDigest": catalog.get("digest"),
         "runtimeRelease": release,
         "artifactRequirements": artifact_requirements,
+        "requiredCredentials": required_credentials,
         "phases": phases,
         "acknowledgements": [],
         "status": "EXECUTABLE" if executable else "BLOCKED",
@@ -244,7 +287,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         "readiness": "REQUIRES_PREPARATION" if executable else "BLOCKED",
         "artifactRequirements": artifact_requirements,
         "phases": phases,
-        "requiredCredentials": [],
+        "requiredCredentials": required_credentials,
         "acknowledgements": [],
         "findings": findings,
     }
@@ -256,5 +299,5 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             for action in phase["actions"]:
                 deployment = deployments.get(action.get("serviceDeployment"), {})
                 manifest_operations.append({"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments})
-        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": []}
+        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements}
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}

@@ -20,7 +20,9 @@ from execution_lifecycle import LifecycleError
 
 LEASE_PROTOCOL = "PutRuntimeSecretLease/v1alpha1"
 PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha1"
+PKI_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha2"
 MAX_PAYLOAD_BYTES = 1088 * 1024
+MAX_PKI_STORE_PASSWORD_BYTES = 4096
 STAGED_TTL_SECONDS = 30 * 60
 _ID = re.compile(r"^[0-9a-f]{32}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -105,7 +107,11 @@ def _binding(value):
 
 
 def _payload(value):
-    if not isinstance(value, dict) or set(value) != {"apiVersion", "kind", "username", "password", "privateKey", "sudoPassword"} or value.get("apiVersion") != PAYLOAD_VERSION or value.get("kind") != "TargetCredentialLeasePayload":
+    base = {"apiVersion", "kind", "username", "password", "privateKey", "sudoPassword"}
+    v2 = base | {"pkiStorePassword"}
+    if not isinstance(value, dict) or set(value) not in (base, v2) or value.get("apiVersion") not in (PAYLOAD_VERSION, PKI_PAYLOAD_VERSION) or value.get("kind") != "TargetCredentialLeasePayload":
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    if (value.get("apiVersion") == PAYLOAD_VERSION) != (set(value) == base):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     username = value.get("username")
     password, key, sudo = value.get("password"), value.get("privateKey"), value.get("sudoPassword")
@@ -113,10 +119,106 @@ def _payload(value):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     if (password is None) == (key is None) or (password is not None and (not isinstance(password, str) or not password)) or (key is not None and (not isinstance(key, str) or not key)) or (sudo is not None and (not isinstance(sudo, str) or not sudo)):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    if value.get("apiVersion") == PKI_PAYLOAD_VERSION:
+        store = value.get("pkiStorePassword")
+        if store is not None:
+            if not isinstance(store, str):
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            try: size = len(store.encode("utf-8", "strict"))
+            except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            if size < 1 or size > MAX_PKI_STORE_PASSWORD_BYTES:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
     encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_PAYLOAD_BYTES:
         raise LifecycleError("LEASE_PAYLOAD_TOO_LARGE")
     return encoded
+
+
+def pki_store_password(state_root, lease_id, run_id):
+    """Return one attached v2 secret to the controller only, never a path."""
+    path = payload_path(state_root, lease_id, run_id)
+    try:
+        with open(path, "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    if value.get("apiVersion") != PKI_PAYLOAD_VERSION or value.get("pkiStorePassword") is None:
+        raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+    return value["pkiStorePassword"]
+
+
+def pki_store_password_for_run(state_root, run_id):
+    """Resolve the one private attached v2 password for a controller run."""
+    attached = _read(os.path.join(_root(state_root), "attached", run_id + ".json"))
+    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
+    if not _safe_id(lease_id):
+        raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+    return pki_store_password(state_root, lease_id, run_id)
+
+
+def target_username_for_run(state_root, run_id):
+    """Return only the attached target-login name for controller projection.
+
+    The value is safe connection metadata, unlike the password/private-key
+    fields that must remain inside the private lease.  A run without a lease
+    keeps the established persistent-identity execution behavior.
+    """
+    attached_path = os.path.join(_root(state_root), "attached", run_id + ".json")
+    if not os.path.exists(attached_path):
+        return None
+    attached = _read(attached_path)
+    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
+    if not _safe_id(lease_id):
+        raise LifecycleError("LEASE_ATTACH_INVALID")
+    path = payload_path(state_root, lease_id, run_id)
+    try:
+        with open(path, "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    return value["username"]
+
+
+def validate_staged_pki_store_password(state_root, lease_id):
+    """Prove a staged lease carries the one closed v2 PKI value without
+    returning it.  Start uses this before its durable commit."""
+    if not _safe_id(lease_id):
+        raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+    record = _read(os.path.join(_lease_dir(_root(state_root), lease_id), "record.json"))
+    if record.get("state") != "STAGED":
+        raise LifecycleError("LEASE_NOT_STAGED")
+    try:
+        with open(os.path.join(_lease_dir(_root(state_root), lease_id), "payload.json"), "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    if value.get("apiVersion") != PKI_PAYLOAD_VERSION or value.get("pkiStorePassword") is None:
+        raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+
+
+def validate_staged_payload_without_pki_store_password(state_root, lease_id):
+    """Reject a secret-bearing v2 lease when the private manifest did not
+    attest the closed PKI requirement."""
+    if not _safe_id(lease_id):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    record = _read(os.path.join(_lease_dir(_root(state_root), lease_id), "record.json"))
+    if record.get("state") != "STAGED":
+        raise LifecycleError("LEASE_NOT_STAGED")
+    try:
+        with open(os.path.join(_lease_dir(_root(state_root), lease_id), "payload.json"), "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    if value.get("apiVersion") == PKI_PAYLOAD_VERSION and value.get("pkiStorePassword") is not None:
+        raise LifecycleError("PKI_STORE_PASSWORD_UNEXPECTED")
 
 
 def _request_path(root, request_id): return os.path.join(root, "requests", request_id + ".json")

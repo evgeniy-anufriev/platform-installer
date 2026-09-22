@@ -20,17 +20,18 @@ type InstallationPlanOperation struct {
 }
 
 type InstallationPlanView struct {
-	ID               string                        `json:"id"`
-	Status           string                        `json:"status"`
-	ProjectRevision  string                        `json:"projectRevision"`
-	PlanFingerprint  string                        `json:"planFingerprint"`
-	ExecutionNodeID  string                        `json:"executionNodeId"`
-	Runtime          InstallationRuntimeBinding    `json:"runtime"`
-	ExpiresAt        string                        `json:"expiresAt"`
-	Approved         bool                          `json:"approved"`
-	Acknowledgements []InstallationAcknowledgement `json:"acknowledgements"`
-	Phases           []InstallationPlanPhase       `json:"phases"`
-	Findings         []InstallationPlanFinding     `json:"findings,omitempty"`
+	ID                       string                        `json:"id"`
+	Status                   string                        `json:"status"`
+	ProjectRevision          string                        `json:"projectRevision"`
+	PlanFingerprint          string                        `json:"planFingerprint"`
+	ExecutionNodeID          string                        `json:"executionNodeId"`
+	Runtime                  InstallationRuntimeBinding    `json:"runtime"`
+	ExpiresAt                string                        `json:"expiresAt"`
+	Approved                 bool                          `json:"approved"`
+	Acknowledgements         []InstallationAcknowledgement `json:"acknowledgements"`
+	Phases                   []InstallationPlanPhase       `json:"phases"`
+	Findings                 []InstallationPlanFinding     `json:"findings,omitempty"`
+	PKIStorePasswordRequired bool                          `json:"pkiStorePasswordRequired"`
 }
 
 type InstallationRuntimeBinding struct {
@@ -198,7 +199,8 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 		PlanFingerprint: record.Plan.PlanFingerprint, ExecutionNodeID: binding.node.ID, Runtime: runtime,
 		ExpiresAt: record.ExpiresAt.UTC().Format(time.RFC3339), Approved: record.Approved,
 		Acknowledgements: make([]InstallationAcknowledgement, 0, len(record.Plan.AcknowledgementDetails)),
-		Phases:           make([]InstallationPlanPhase, 0, len(record.Plan.Phases)), Findings: safeInstallationPlanFindings(record.Plan.Findings)}
+		Phases:           make([]InstallationPlanPhase, 0, len(record.Plan.Phases)), Findings: safeInstallationPlanFindings(record.Plan.Findings),
+		PKIStorePasswordRequired: executionnodePlanRequiresPKIStorePassword(record.Plan)}
 	for _, acknowledgement := range record.Plan.AcknowledgementDetails {
 		view.Acknowledgements = append(view.Acknowledgements, InstallationAcknowledgement{Code: acknowledgement.Code, Summary: acknowledgement.Summary})
 	}
@@ -211,6 +213,15 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 		view.Phases = append(view.Phases, projected)
 	}
 	return view, nil
+}
+
+func executionnodePlanRequiresPKIStorePassword(plan executionnode.DeploymentPlan) bool {
+	for _, requirement := range plan.RequiredCredentials {
+		if requirement.RequirementRef == "pki-store-password" && requirement.Purpose == "PKI_STORE_PASSWORD" {
+			return true
+		}
+	}
+	return false
 }
 
 func installationRuntimeBinding(release map[string]any) (InstallationRuntimeBinding, bool) {

@@ -24,19 +24,35 @@ func (r *leaseRunner) RunBounded(ctx context.Context, name string, args []string
 }
 
 func leaseCapabilityResponse() string {
-	return `{"apiVersion":"platform.installer/execution-capabilities/v1alpha2","kind":"ExecutionCapabilities","bootstrapProtocol":"v1alpha1","coreVersion":"core","catalogDigest":"sha256:` + strings.Repeat("a", 64) + `","schemaDigest":"sha256:` + strings.Repeat("b", 64) + `","runtime":{"bundleVersion":"bundle","bundleDigest":"sha256:` + strings.Repeat("c", 64) + `"},"supportedOperations":["PutRuntimeSecretLease"],"executionStart":{"protocol":"StartExecution/v1alpha2"},"targetCredentialLease":{"protocol":"PutRuntimeSecretLease/v1alpha1","payloadVersions":["TargetCredentialLeasePayload/v1alpha1"],"maxPayloadBytes":1114112,"requiredStartProtocol":"StartExecution/v1alpha2"},"projectSnapshotRequestVersions":[]}`
+	return `{"apiVersion":"platform.installer/execution-capabilities/v1alpha2","kind":"ExecutionCapabilities","bootstrapProtocol":"v1alpha1","coreVersion":"core","catalogDigest":"sha256:` + strings.Repeat("a", 64) + `","schemaDigest":"sha256:` + strings.Repeat("b", 64) + `","runtime":{"bundleVersion":"bundle","bundleDigest":"sha256:` + strings.Repeat("c", 64) + `"},"supportedOperations":["PutRuntimeSecretLease"],"executionStart":{"protocol":"StartExecution/v1alpha2"},"targetCredentialLease":{"protocol":"PutRuntimeSecretLease/v1alpha1","payloadVersions":["TargetCredentialLeasePayload/v1alpha1","TargetCredentialLeasePayload/v1alpha2"],"maxPayloadBytes":1114112,"requiredStartProtocol":"StartExecution/v1alpha2"},"projectSnapshotRequestVersions":[]}`
 }
 
 func TestCredentialStartCapabilityRequiresClosedV2LeaseEnvelope(t *testing.T) {
 	runner := &leaseRunner{response: leaseCapabilityResponse()}
 	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
 	capability, err := transport.CredentialStartCapability(context.Background(), testNode())
-	if err != nil || capability.MaxPayloadBytes != 1114112 {
+	if err != nil || capability.MaxPayloadBytes != 1114112 || !capability.supportsPayloadVersion(credentialPayloadVersionV2) {
 		t.Fatalf("capability=%+v err=%v", capability, err)
 	}
 	runner.response = strings.Replace(leaseCapabilityResponse(), `,"projectSnapshotRequestVersions":[]`, `,"unexpected":true,"projectSnapshotRequestVersions":[]`, 1)
 	if _, err := transport.CredentialStartCapability(context.Background(), testNode()); err == nil || err.Error() != "TARGET_CREDENTIAL_LEASE_UNSUPPORTED" {
 		t.Fatalf("malformed capability err=%v", err)
+	}
+}
+
+func TestPutRuntimeSecretLeaseUsesV2OnlyForBoundedPKIStorePassword(t *testing.T) {
+	id := strings.Repeat("1", 32)
+	runner := &leaseRunner{response: `{"requestId":"` + id + `","startAttemptId":"` + strings.Repeat("2", 32) + `","status":"STORED","leaseId":"` + strings.Repeat("3", 32) + `","stagedExpiresAt":"2026-09-22T12:00:00Z"}`}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	request := CredentialLeaseRequest{RequestID: id, StartAttemptID: strings.Repeat("2", 32), ProjectIdentity: "project-1", ProjectRevision: "sha256:" + strings.Repeat("a", 64), PlanFingerprint: "sha256:" + strings.Repeat("b", 64), ExecutionManifestDigest: "sha256:" + strings.Repeat("c", 64), RuntimeRelease: map[string]any{"bundleDigest": "sha256:" + strings.Repeat("d", 64), "coreVersion": "core", "catalogDigest": "sha256:" + strings.Repeat("e", 64), "planningProtocol": "v1alpha1"}}
+	if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, TargetCredentialLeasePayload{Username: "operator", Password: "secret", PKIStorePassword: strings.Repeat("я", 2048)}, 1114112); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(runner.calls[len(runner.calls)-1].input, `"apiVersion":"TargetCredentialLeasePayload/v1alpha2"`) {
+		t.Fatal("PKI payload did not select v1alpha2")
+	}
+	if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, TargetCredentialLeasePayload{Username: "operator", Password: "secret", PKIStorePassword: strings.Repeat("a", 4097)}, 1114112); err == nil {
+		t.Fatal("over-bound PKI password accepted")
 	}
 }
 

@@ -22,6 +22,11 @@ def _terminal(journal, state, code, summary):
     result = journal.terminal(state, code, summary)
     # Lease cleanup is private node maintenance; it never changes the already
     # authoritative terminal execution outcome or emits credential diagnostics.
+    secret = os.path.join(journal.directory, ".pki-store-password")
+    if os.path.lexists(secret):
+        details = os.lstat(secret)
+        if not os.path.islink(secret) and os.path.isfile(secret):
+            os.unlink(secret)
     execution_secret_lease.cleanup_run(journal.root, journal.run_id)
     return result
 
@@ -104,7 +109,8 @@ def _validate_runtime_projection(journal, metadata, manifest):
             projection.get("platform_execution_manifest_digest") != metadata.get("manifestDigest") or
             not isinstance(projection.get("platform_execution_requirements_fingerprint"), str) or
             not projection["platform_execution_requirements_fingerprint"].startswith("sha256:") or
-            not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict)):
+            not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict) or
+            not isinstance(projection.get("platform_pki_secret_files"), dict)):
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
 
 
@@ -113,7 +119,8 @@ def _materialize_runtime_projection(journal, metadata, manifest):
     operations = manifest.get("operations")
     requirements = manifest.get("artifactRequirements")
     authorities = manifest.get("artifactSourceAuthorities")
-    if not isinstance(operations, list) or not isinstance(requirements, list) or not isinstance(authorities, list):
+    secret_requirements = manifest.get("runtimeSecretRequirements", [])
+    if not isinstance(operations, list) or not isinstance(requirements, list) or not isinstance(authorities, list) or not isinstance(secret_requirements, list):
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     by_deployment = {}
     for authority in authorities:
@@ -136,6 +143,25 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         if isinstance(operation, dict) and operation.get("operation") in ("SERVICE_APPLY", "SERVICE_VERIFY") and operation.get("requiresArtifactSources") is True:
             if operation.get("serviceDeployment") in required_deployments and operation.get("serviceDeployment") not in by_deployment:
                 raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    secret_files = {}
+    target_username = execution_secret_lease.target_username_for_run(journal.root, journal.run_id)
+    if secret_requirements:
+        requirement = secret_requirements[0] if len(secret_requirements) == 1 else None
+        if (not isinstance(requirement, dict) or
+                set(requirement) != {"requirementRef", "purpose", "hosts", "runtimeReference"} or
+                requirement.get("requirementRef") != "pki-store-password" or
+                requirement.get("purpose") != "PKI_STORE_PASSWORD" or
+                requirement.get("runtimeReference") != "runtime:pki-store-password" or
+                not isinstance(requirement.get("hosts"), list)):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        password = execution_secret_lease.pki_store_password_for_run(journal.root, journal.run_id)
+        path = os.path.join(journal.directory, ".pki-store-password")
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(descriptor, password.encode("utf-8")); os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        secret_files["runtime:pki-store-password"] = path
     payload = {
         "apiVersion": "platform.installer/runtime-projection/v1alpha2",
         "platform_execution_run_id": metadata["runId"],
@@ -144,9 +170,14 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         "platform_execution_manifest_digest": metadata["manifestDigest"],
         "platform_execution_requirements_fingerprint": digest(requirements),
         "platform_project_id": metadata["projectIdentity"],
+        "platform_project_root": os.path.join(journal.directory, "project"),
+        "platform_project_manifest_path": os.path.join(journal.directory, "project", "project.yml"),
         "platform_service_catalog_path": "/var/lib/platform-installer/runtime/current/catalog/service-catalog.yml",
         "platform_artifact_source_authorities_by_deployment": by_deployment,
+        "platform_pki_secret_files": secret_files,
     }
+    if target_username is not None:
+        payload["ansible_user"] = target_username
     descriptor, temporary = tempfile.mkstemp(prefix=".runtime-projection-", dir=journal.directory)
     try:
         with os.fdopen(descriptor, "w") as stream:

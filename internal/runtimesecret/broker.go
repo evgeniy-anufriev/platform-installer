@@ -28,14 +28,18 @@ const (
 	ElevationNone = "NONE"
 	ElevationSudo = "SUDO_PASSWORD"
 
-	SudoNotProvided = "NOT_PROVIDED"
-	SudoPresent     = "PRESENT"
+	SudoNotProvided             = "NOT_PROVIDED"
+	SudoPresent                 = "PRESENT"
+	PKIStorePasswordNotRequired = "NOT_REQUIRED"
+	PKIStorePasswordMissing     = "MISSING"
+	PKIStorePasswordPresent     = "PRESENT"
 )
 
 const (
-	maxUsernameBytes = 255
-	maxPasswordBytes = 4 << 10
-	maxKeyBytes      = 1 << 20
+	maxUsernameBytes         = 255
+	maxPasswordBytes         = 4 << 10
+	maxPKIStorePasswordBytes = 4096
+	maxKeyBytes              = 1 << 20
 )
 
 // Binding prevents a lease for one open project being observed by another.
@@ -55,32 +59,55 @@ type Input struct {
 
 // Status intentionally includes safe metadata only.
 type Status struct {
-	Status             string `json:"status"`
-	Username           string `json:"username,omitempty"`
-	SSHMode            string `json:"sshMode,omitempty"`
-	SudoPasswordStatus string `json:"sudoPasswordStatus"`
-	ExpiresAt          string `json:"expiresAt,omitempty"`
+	Status                 string `json:"status"`
+	Username               string `json:"username,omitempty"`
+	SSHMode                string `json:"sshMode,omitempty"`
+	SudoPasswordStatus     string `json:"sudoPasswordStatus"`
+	PKIStorePasswordStatus string `json:"pkiStorePasswordStatus"`
+	ExpiresAt              string `json:"expiresAt,omitempty"`
 }
 
 // TargetCredential is a short-lived copy supplied only to a synchronous
 // execution transport callback. It is intentionally not JSON serializable and
 // has no persistence or Wails-facing representation.
 type TargetCredential struct {
-	Username   string
-	SSHMode    string
-	SSHSecret  []byte
-	SudoSecret []byte
+	Username         string
+	SSHMode          string
+	SSHSecret        []byte
+	SudoSecret       []byte
+	PKIStorePassword []byte
 }
 
 type lease struct {
-	binding    Binding
-	reference  []byte
-	username   string
-	sshMode    string
-	sshSecret  []byte
-	sudoSecret []byte
-	expiresAt  time.Time
-	generation uint64
+	binding          Binding
+	reference        []byte
+	username         string
+	sshMode          string
+	sshSecret        []byte
+	sudoSecret       []byte
+	pkiStorePassword []byte
+	expiresAt        time.Time
+	generation       uint64
+}
+
+// SetPKIStorePassword updates only the optional in-memory PKI password on the
+// current project-bound lease. It neither extends its TTL nor contacts a node.
+func (b *Broker) SetPKIStorePassword(binding Binding, value string) (Status, error) {
+	if !utf8.ValidString(value) || len([]byte(value)) < 1 || len([]byte(value)) > maxPKIStorePasswordBytes {
+		return Status{}, errors.New("PKI_STORE_PASSWORD_INPUT_INVALID")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
+			b.expireLocked(b.lease.generation)
+		}
+		return Status{}, errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
+	}
+	next := append([]byte(nil), value...)
+	zero(b.lease.pkiStorePassword)
+	b.lease.pkiStorePassword = next
+	return statusFromLease(b.lease), nil
 }
 
 type expiredMarker struct {
@@ -144,7 +171,7 @@ func (b *Broker) Status(binding Binding) Status {
 		}
 	}
 	if b.expired != nil && b.expired.binding == binding {
-		return Status{Status: StatusExpired, SudoPasswordStatus: SudoNotProvided}
+		return Status{Status: StatusExpired, SudoPasswordStatus: SudoNotProvided, PKIStorePasswordStatus: PKIStorePasswordMissing}
 	}
 	return missingStatus()
 }
@@ -172,10 +199,11 @@ func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential
 		b.mu.Unlock()
 		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
-	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...)}
+	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), PKIStorePassword: append([]byte(nil), b.lease.pkiStorePassword...)}
 	b.mu.Unlock()
 	defer zero(value.SSHSecret)
 	defer zero(value.SudoSecret)
+	defer zero(value.PKIStorePassword)
 	return use(value)
 }
 
@@ -333,6 +361,7 @@ func (b *Broker) clearLeaseLocked(clearExpired bool) {
 		zero(b.lease.reference)
 		zero(b.lease.sshSecret)
 		zero(b.lease.sudoSecret)
+		zero(b.lease.pkiStorePassword)
 		b.lease = nil
 	}
 	if clearExpired {
@@ -345,11 +374,15 @@ func statusFromLease(value *lease) Status {
 	if len(value.sudoSecret) != 0 {
 		sudo = SudoPresent
 	}
-	return Status{Status: StatusPresent, Username: value.username, SSHMode: value.sshMode, SudoPasswordStatus: sudo, ExpiresAt: value.expiresAt.UTC().Format(time.RFC3339)}
+	pki := PKIStorePasswordMissing
+	if len(value.pkiStorePassword) != 0 {
+		pki = PKIStorePasswordPresent
+	}
+	return Status{Status: StatusPresent, Username: value.username, SSHMode: value.sshMode, SudoPasswordStatus: sudo, PKIStorePasswordStatus: pki, ExpiresAt: value.expiresAt.UTC().Format(time.RFC3339)}
 }
 
 func missingStatus() Status {
-	return Status{Status: StatusMissing, SudoPasswordStatus: SudoNotProvided}
+	return Status{Status: StatusMissing, SudoPasswordStatus: SudoNotProvided, PKIStorePasswordStatus: PKIStorePasswordMissing}
 }
 func zero(value []byte) {
 	for i := range value {

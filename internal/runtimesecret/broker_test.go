@@ -96,6 +96,33 @@ func TestBrokerExposesTargetCredentialOnlyToSynchronousCallback(t *testing.T) {
 	}
 }
 
+func TestBrokerStoresBoundedPKIStorePasswordOnlyInMemory(t *testing.T) {
+	broker := NewBroker()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "transport-only", ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.SetPKIStorePassword(binding, string(make([]byte, maxPKIStorePasswordBytes))); err != nil {
+		t.Fatal(err)
+	}
+	if status := broker.Status(binding); status.PKIStorePasswordStatus != PKIStorePasswordPresent {
+		t.Fatalf("status=%#v", status)
+	}
+	var observed TargetCredential
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error { observed = value; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(observed.PKIStorePassword) != maxPKIStorePasswordBytes || observed.PKIStorePassword[0] != 0 {
+		t.Fatal("PKI callback value was not zeroed")
+	}
+	if _, err := broker.SetPKIStorePassword(binding, ""); err == nil || err.Error() != "PKI_STORE_PASSWORD_INPUT_INVALID" {
+		t.Fatalf("empty error=%v", err)
+	}
+	if _, err := broker.SetPKIStorePassword(binding, string(make([]byte, maxPKIStorePasswordBytes+1))); err == nil || err.Error() != "PKI_STORE_PASSWORD_INPUT_INVALID" {
+		t.Fatalf("oversize error=%v", err)
+	}
+}
+
 func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

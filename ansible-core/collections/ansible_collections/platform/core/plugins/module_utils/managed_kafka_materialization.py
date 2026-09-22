@@ -14,6 +14,30 @@ except ImportError:
     from identity_persistence import persist_generated_state, persist_identity_documents
 
 
+def _inventory_hosts_with_managed_deployments(inventory_path, inventory):
+    """Return inventory hosts with their canonical per-host deployment input.
+
+    The normal Ansible-native layout keeps ``platform_deployments`` in the
+    fixed ``inventory/host_vars/<host>.yml`` document, rather than duplicating
+    it into ``hosts.yml``.  Identity materialization reads only that owned
+    field; it neither scans arbitrary files nor writes host variables.
+    """
+    hosts = (inventory.get("all", {}).get("hosts", {}) or {}) if isinstance(inventory, dict) else {}
+    host_vars_root = os.path.join(os.path.dirname(os.fspath(inventory_path)), "host_vars")
+    for host, host_data in sorted(hosts.items()):
+        effective = copy.deepcopy(host_data) if isinstance(host_data, dict) else {}
+        if not isinstance(host, str) or not host:
+            yield host, effective
+            continue
+        host_vars_path = os.path.join(host_vars_root, host + ".yml")
+        if os.path.isfile(host_vars_path):
+            with open(host_vars_path, "r", encoding="utf-8") as source:
+                host_vars = yaml.safe_load(source) or {}
+            if isinstance(host_vars, dict) and "platform_deployments" in host_vars:
+                effective["platform_deployments"] = copy.deepcopy(host_vars["platform_deployments"])
+        yield host, effective
+
+
 def materialize_ansible_kafka(desired_state, inventory_path, state_path, discovery, project_id="ansible-project", random_bytes=None):
     """Materialize Kafka identities into machine-owned Ansible state only."""
     with open(inventory_path, "r", encoding="utf-8") as source:
@@ -38,7 +62,7 @@ def materialize_ansible_kafka(desired_state, inventory_path, state_path, discove
         effective = copy.deepcopy(declared)
         effective.setdefault("identity", {}).update(deployment_state.get("identity", {}))
         members = {}
-        for host, host_data in sorted((inventory.get("all", {}).get("hosts", {}) or {}).items()):
+        for host, host_data in _inventory_hosts_with_managed_deployments(inventory_path, inventory):
             owned = (host_data.get("platform_deployments", {}) if isinstance(host_data, dict) else {}).get(deployment_id, {})
             for member_id, member in sorted((owned.get("members", {}) if isinstance(owned, dict) else {}).items()):
                 normalized = copy.deepcopy(member)
@@ -94,7 +118,7 @@ def materialize_managed_kafka(project_path, inventory_path, discovery, random_by
         if not isinstance(deployment, dict) or deployment.get("serviceType") != "kafka":
             continue
         members = {}
-        for host, host_data in sorted((inventory.get("all", {}).get("hosts", {}) or {}).items()):
+        for host, host_data in _inventory_hosts_with_managed_deployments(inventory_path, inventory):
             owned = (host_data.get("platform_deployments", {}) if isinstance(host_data, dict) else {}).get(deployment_id, {})
             for member_id, member in sorted((owned.get("members", {}) if isinstance(owned, dict) else {}).items()):
                 members[member_id] = member

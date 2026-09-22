@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { InstallationEventView, InstallationPlanOperation, InstallationRunOperation, InstallationState } from "./backend";
+import type { InstallationEventView, InstallationPlanOperation, InstallationRunOperation, InstallationState, SessionCredentialStatus } from "./backend";
 
 type InstallationTab = "summary" | "plan" | "execution" | "result";
 
@@ -38,6 +38,8 @@ export function InstallationPage({
   events = [],
   onStart = () => {},
   onCancel = () => {},
+  credentialStatus = null,
+  onSetPKIStorePassword = async () => { throw new Error("PKI_STORE_PASSWORD_UNAVAILABLE"); },
 }: {
   state?: InstallationState;
   tab: InstallationTab;
@@ -51,6 +53,8 @@ export function InstallationPage({
   events?: InstallationEventView[];
   onStart?: (planId: string) => void;
   onCancel?: (runId: string) => void;
+  credentialStatus?: SessionCredentialStatus | null;
+  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
 }) {
   const prerequisites = state?.prerequisites || [];
   const node = state?.executionNode;
@@ -117,7 +121,7 @@ export function InstallationPage({
           </article>
         </>
       )}
-      {tab === "plan" && <PlanStage operation={plan} busy={busy} onCreatePlan={onCreatePlan} onApprovePlan={onApprovePlan} onStart={onStart} />}
+      {tab === "plan" && <PlanStage operation={plan} busy={busy} onCreatePlan={onCreatePlan} onApprovePlan={onApprovePlan} onStart={onStart} credentialStatus={credentialStatus} onSetPKIStorePassword={onSetPKIStorePassword} />}
       {tab === "execution" && <ExecutionStage run={run} events={events} busy={busy} onCancel={onCancel} />}
       {tab === "result" && <ResultStage run={run} events={events} />}
     </section>
@@ -130,12 +134,16 @@ function PlanStage({
   onCreatePlan,
   onApprovePlan,
   onStart,
+  credentialStatus,
+  onSetPKIStorePassword,
 }: {
   operation?: InstallationPlanOperation;
   busy: boolean;
   onCreatePlan: () => void;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
   onStart: (planId: string) => void;
+  credentialStatus: SessionCredentialStatus | null;
+  onSetPKIStorePassword: (value: string) => Promise<SessionCredentialStatus>;
 }) {
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const plan = operation?.plan;
@@ -158,9 +166,26 @@ function PlanStage({
       {plan.findings && plan.findings.length > 0 && <article className="card"><h2>Findings</h2><ul className="safe-findings">{plan.findings.map((item) => <li key={item.code}><code>{item.code}</code> {item.safeMessage}</li>)}</ul></article>}
       <article className="card"><h2>Этапы плана</h2>{plan.phases.map((phase) => <section className="plan-phase" key={phase.id}><h3>{phase.order + 1}. {phase.id}</h3>{phase.actions.map((action) => <div className="plan-action-row" key={action.id}><b>{action.summary}</b><span>{action.targets.join(", ") || "без target hosts"}</span><small>{action.mutating ? "изменяет инфраструктуру" : "проверка"}{action.dependsOn.length ? ` · после ${action.dependsOn.join(", ")}` : ""}</small></div>)}</section>)}</article>
       {plan.status === "EXECUTABLE" && !plan.approved && <article className="card"><h2>Подтверждение</h2>{plan.acknowledgements.map((item) => <label className="acknowledgement" key={item.code}><input type="checkbox" checked={acknowledged.includes(item.code)} onChange={(event) => setAcknowledged((current) => event.target.checked ? [...current, item.code] : current.filter((code) => code !== item.code))} /> <span><b>{item.code}</b><br />{item.summary}</span></label>)}<p><button onClick={() => onApprovePlan(plan.id, requiredCodes)} disabled={busy || !canApprove}>Одобрить план</button></p></article>}
-      {plan.approved && <article className="card"><h2>План одобрен</h2><p>Запуск создаёт один авторитетный run на выбранном Execution Node.</p><button onClick={() => onStart(plan.id)} disabled={busy}>Начать выполнение</button></article>}
+      {plan.approved && <StartApproval plan={plan} busy={busy} onStart={onStart} credentialStatus={credentialStatus} onSetPKIStorePassword={onSetPKIStorePassword} />}
     </section>
   );
+}
+
+function StartApproval({ plan, busy, onStart, credentialStatus, onSetPKIStorePassword }: { plan: NonNullable<InstallationPlanOperation["plan"]>; busy: boolean; onStart: (planId: string) => void; credentialStatus: SessionCredentialStatus | null; onSetPKIStorePassword: (value: string) => Promise<SessionCredentialStatus> }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const required = plan.pkiStorePasswordRequired;
+  const present = credentialStatus?.pkiStorePasswordStatus === "PRESENT";
+  const save = async () => {
+    setError("");
+    try {
+      await onSetPKIStorePassword(password);
+      setPassword("");
+    } catch (reason) {
+      setError(typeof reason === "string" ? reason : "PKI_STORE_PASSWORD_UNAVAILABLE");
+    }
+  };
+  return <article className="card"><h2>План одобрен</h2><p>Запуск создаёт один авторитетный run на выбранном Execution Node.</p>{required && !present && <><p className="muted">Для этого плана требуется пароль хранилища PKI. Он хранится только в памяти сеанса.</p><label>Пароль хранилища PKI<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={busy} autoComplete="off" /></label><p><button type="button" onClick={save} disabled={busy || password.length === 0}>Добавить пароль в сеанс</button></p>{error && <p className="field-error" role="alert">{error}</p>}</>}{required && present && <p className="muted">Пароль хранилища PKI доступен только для этого сеанса.</p>}<button onClick={() => onStart(plan.id)} disabled={busy || (required && !present)}>Начать выполнение</button></article>;
 }
 
 function ExecutionStage({ run, events, busy, onCancel }: { run?: InstallationRunOperation; events: InstallationEventView[]; busy: boolean; onCancel: (runId: string) => void }) {

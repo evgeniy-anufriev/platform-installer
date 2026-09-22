@@ -556,6 +556,18 @@ func (a *App) GetSessionCredentialStatus() (runtimesecret.Status, error) {
 	return a.secrets.Status(binding), nil
 }
 
+// SetPKIStorePassword stores the one approved runtime-only PKI password on
+// the current in-memory session credential. The return value is status-only.
+func (a *App) SetPKIStorePassword(value string) (runtimesecret.Status, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return runtimesecret.Status{}, err
+	}
+	return a.secrets.SetPKIStorePassword(binding, value)
+}
+
 func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
@@ -563,7 +575,7 @@ func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 		return runtimesecret.Status{}, err
 	}
 	a.secrets.Clear()
-	return runtimesecret.Status{Status: runtimesecret.StatusMissing, SudoPasswordStatus: runtimesecret.SudoNotProvided}, nil
+	return runtimesecret.Status{Status: runtimesecret.StatusMissing, SudoPasswordStatus: runtimesecret.SudoNotProvided, PKIStorePasswordStatus: runtimesecret.PKIStorePasswordMissing}, nil
 }
 
 // GetExecutionNodeContext exposes only app-memory, non-secret selection state.

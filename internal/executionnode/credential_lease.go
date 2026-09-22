@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	credentialLeaseProtocol  = "PutRuntimeSecretLease/v1alpha1"
-	credentialPayloadVersion = "TargetCredentialLeasePayload/v1alpha1"
-	startProtocolV2          = "StartExecution/v1alpha2"
+	credentialLeaseProtocol    = "PutRuntimeSecretLease/v1alpha1"
+	credentialPayloadVersion   = "TargetCredentialLeasePayload/v1alpha1"
+	credentialPayloadVersionV2 = "TargetCredentialLeasePayload/v1alpha2"
+	startProtocolV2            = "StartExecution/v1alpha2"
 )
 
 type CredentialLeaseRequest struct {
@@ -23,14 +24,17 @@ type CredentialLeaseRequest struct {
 }
 
 type TargetCredentialLeasePayload struct {
-	Username, Password, PrivateKey, SudoPassword string
+	Username, Password, PrivateKey, SudoPassword, PKIStorePassword string
 }
 
 type CredentialLeaseResponse struct {
 	RequestID, StartAttemptID, Status, LeaseID, StagedExpiresAt string
 }
 
-type CredentialStartCapability struct{ MaxPayloadBytes int }
+type CredentialStartCapability struct {
+	MaxPayloadBytes int
+	PayloadVersions []string
+}
 
 type ExecutionStartV2Request struct {
 	StartAttemptID, ProjectIdentity, ProjectRevision, PlanFingerprint, ExecutionManifestDigest, LeaseID string
@@ -52,22 +56,56 @@ func (t OpenSSHTransport) CredentialStartCapability(ctx context.Context, node No
 	if !startOK || !leaseOK || !closedKeys(start, "protocol") || start["protocol"] != startProtocolV2 || !closedKeys(lease, "protocol", "payloadVersions", "maxPayloadBytes", "requiredStartProtocol") || lease["protocol"] != credentialLeaseProtocol || lease["requiredStartProtocol"] != startProtocolV2 {
 		return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
 	}
-	versions, ok := lease["payloadVersions"].([]any)
-	if !ok || len(versions) != 1 || versions[0] != credentialPayloadVersion {
+	versions, ok := decodeCredentialPayloadVersions(lease["payloadVersions"])
+	if !ok {
 		return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
 	}
 	maximum, ok := exactPositiveInt(lease["maxPayloadBytes"])
 	if !ok || maximum > 1088*1024 || !contains(response["supportedOperations"], "PutRuntimeSecretLease") {
 		return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
 	}
-	return CredentialStartCapability{MaxPayloadBytes: maximum}, nil
+	return CredentialStartCapability{MaxPayloadBytes: maximum, PayloadVersions: versions}, nil
+}
+
+func decodeCredentialPayloadVersions(raw any) ([]string, bool) {
+	values, ok := raw.([]any)
+	if !ok || len(values) < 1 || len(values) > 2 {
+		return nil, false
+	}
+	result := make([]string, len(values))
+	for index, value := range values {
+		text, ok := value.(string)
+		if !ok || (text != credentialPayloadVersion && text != credentialPayloadVersionV2) || (index > 0 && text <= result[index-1]) {
+			return nil, false
+		}
+		result[index] = text
+	}
+	if result[0] != credentialPayloadVersion || (len(result) == 2 && result[1] != credentialPayloadVersionV2) {
+		return nil, false
+	}
+	return result, true
+}
+
+func (c CredentialStartCapability) supportsPayloadVersion(version string) bool {
+	for _, candidate := range c.PayloadVersions {
+		if candidate == version {
+			return true
+		}
+	}
+	return false
 }
 
 func (t OpenSSHTransport) PutRuntimeSecretLease(ctx context.Context, node Node, request CredentialLeaseRequest, payload TargetCredentialLeasePayload, maxPayloadBytes int) (CredentialLeaseResponse, error) {
-	if !validCredentialLeaseRequest(request) || maxPayloadBytes < 1 || maxPayloadBytes > 1088*1024 || (payload.Password == "") == (payload.PrivateKey == "") || payload.Username == "" {
+	if !validCredentialLeaseRequest(request) || maxPayloadBytes < 1 || maxPayloadBytes > 1088*1024 || (payload.Password == "") == (payload.PrivateKey == "") || payload.Username == "" || !validPKIStorePassword(payload.PKIStorePassword) {
 		return CredentialLeaseResponse{}, errors.New("TARGET_CREDENTIAL_LEASE_INPUT_INVALID")
 	}
-	body := map[string]any{"apiVersion": credentialPayloadVersion, "kind": "TargetCredentialLeasePayload", "username": payload.Username, "password": nil, "privateKey": nil, "sudoPassword": nil}
+	version := credentialPayloadVersion
+	body := map[string]any{"apiVersion": version, "kind": "TargetCredentialLeasePayload", "username": payload.Username, "password": nil, "privateKey": nil, "sudoPassword": nil}
+	if payload.PKIStorePassword != "" {
+		version = credentialPayloadVersionV2
+		body["apiVersion"] = version
+		body["pkiStorePassword"] = payload.PKIStorePassword
+	}
 	if payload.Password != "" {
 		body["password"] = payload.Password
 	} else {
@@ -99,6 +137,13 @@ func (t OpenSSHTransport) PutRuntimeSecretLease(ctx context.Context, node Node, 
 		return CredentialLeaseResponse{}, errors.New("TARGET_CREDENTIAL_LEASE_RESPONSE_INVALID")
 	}
 	return result, nil
+}
+
+func validPKIStorePassword(value string) bool {
+	if value == "" {
+		return true
+	}
+	return len([]byte(value)) <= 4096 && strings.ToValidUTF8(value, "") == value
 }
 
 func (t OpenSSHTransport) StartExecutionV2(ctx context.Context, node Node, request ExecutionStartV2Request) (ExecutionStartV2Response, error) {

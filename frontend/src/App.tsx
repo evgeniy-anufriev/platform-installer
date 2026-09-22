@@ -724,6 +724,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setCredentialStatus(status);
     return status;
   };
+  const setPKIStorePassword = async (value: string) => {
+    if (!api.setPKIStorePassword)
+      throw new Error("PKI_STORE_PASSWORD_UNAVAILABLE");
+    const status = await api.setPKIStorePassword(value);
+    setCredentialStatus(status);
+    return status;
+  };
   const selectExecutionNode = async (hostId: string) => {
     if (!api.selectExecutionNode)
       throw new Error("EXECUTION_NODE_SELECTION_UNAVAILABLE");
@@ -1160,6 +1167,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onApprovePlan={approveInstallationPlan}
             run={installationRun}
             events={installationEvents}
+            credentialStatus={credentialStatus}
+            onSetPKIStorePassword={setPKIStorePassword}
             onStart={startApprovedInstallation}
             onCancel={cancelInstallationRun}
           />

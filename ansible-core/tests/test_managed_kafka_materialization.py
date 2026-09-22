@@ -45,6 +45,29 @@ class ManagedKafkaMaterializationTests(unittest.TestCase):
             self.assertEqual(before, (root / "hosts.yml").read_bytes())
             self.assertEqual(opaque_before, (opaque_group.read_bytes(), opaque_host.read_bytes()))
 
+    def test_ansible_native_materialization_reads_canonical_host_vars_members(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desired = {"serviceDeployments": {"k": {"serviceType": "kafka", "identity": {}}}}
+            inventory = {"all": {"hosts": {"n": {"ansible_host": "192.0.2.10"}}}}
+            (root / "hosts.yml").write_text(yaml.safe_dump(inventory, sort_keys=False), encoding="utf-8")
+            host_vars = root / "host_vars"
+            host_vars.mkdir()
+            (host_vars / "n.yml").write_text(yaml.safe_dump({
+                "platform_deployments": {"k": {"members": {"c": {"roles": ["controller"], "configuration": {"nodeId": 1}}}}}
+            }, sort_keys=False), encoding="utf-8")
+            result = module.materialize_ansible_kafka(
+                desired,
+                root / "hosts.yml",
+                root / "platform-state.yml",
+                {"n": [{"deploymentId": "k", "memberId": "c", "state": "UNINITIALIZED"}]},
+                "p",
+                lambda _: b"a" * 16,
+            )
+            self.assertTrue(result["changed"])
+            state = result["stateDocument"]["platform_generated_state"]
+            self.assertIn("directoryId", state["serviceDeployments"]["k"]["members"]["c"]["identity"])
+
     def test_generate_persist_reload_and_noop(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

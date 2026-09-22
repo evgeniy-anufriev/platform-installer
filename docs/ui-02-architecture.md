@@ -1,6 +1,6 @@
 # UI-02 — Installation workflow architecture
 
-Status: **UI-02A through UI-02D DONE; UI-02E NEXT**. UI-02C uses one
+Status: **UI-02A through UI-02E DONE; UI-02 overall DONE**. UI-02C uses one
 `ExecutionService`-owned v1alpha2 Start path: plan-time staging is private and
 is never an authoritative run, and the Execution Node commits the node-owned
 run binding, attempt mapping and lease attachment before controller launch.
@@ -340,7 +340,7 @@ The terminal execution result is authoritative. Observer disconnect, history tru
 | UI-02B — DONE | Fresh plan, bounded plan projection, acknowledgement and approval. | No Start/cancel or lease transport. |
 | UI-02C — DONE | Complete PutRuntimeSecretLease/v1alpha1 and idempotent Start correlation, capability gate, atomic attach, cleanup/recovery and RED OS security proof. | No UI Start, generic secret system/history. |
 | UI-02D — DONE | App-wired broker → ExecutionService credentialed Start, closed event/result DTOs, bounded App-private RunObserver subscriptions, cancellation and Execution/Result views. | No raw log stream, mirror path, direct lease/Start transport or durable run index. |
-| UI-02E | Windows/RED OS production-shaped workflow, reconnect/degradation and secret/redaction acceptance. | No new service/editor feature. |
+| UI-02E — DONE | Windows/RED OS production-shaped workflow, reconnect/degradation and secret/redaction acceptance. Two real Kafka cycles passed with repeat `changed=0`; see [UI-02E evidence](ui-02e-pki-runtime-secret-transport.md#8-completion-evidence). | No new service/editor feature. |
 
 UI-02C precedes UI-02D so no UI Start reaches targets before capability negotiation, PUT idempotency, idempotent Start correlation, atomic attach, cleanup/recovery and attached-run expiry semantics are proven. UI-02B remains useful without target credentials because planning is target-free.
 

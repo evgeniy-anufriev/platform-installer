@@ -56,9 +56,18 @@ type DeploymentPlan struct {
 	Phases                  []DeploymentPlanPhase
 	RuntimeRelease          map[string]any
 	ArtifactRequirements    []artifactsource.Requirement
+	RequiredCredentials     []RequiredCredential
 	Findings                []Finding
 	stagingID               string
 	executionManifestDigest string
+}
+
+// RequiredCredential is the bounded public-plan requirement projection. It
+// carries no runtime secret reference, lease identity, or secret material.
+type RequiredCredential struct {
+	RequirementRef string
+	Purpose        string
+	Hosts          []string
 }
 
 // PlanAcknowledgement and DeploymentPlanPhase retain the closed, Core-owned
@@ -116,7 +125,9 @@ type CredentialedExecutionClient interface {
 // TargetCredentialLeaseProvider exposes a credential only to the synchronous
 // trusted Start flow. Its closure is deliberately private to Go; neither the
 // Wails facade nor plan/session state receives the credential or lease id.
-type TargetCredentialLeaseProvider func(func(TargetCredentialLeasePayload) error) error
+type TargetCredentialLeaseRequest struct{ RequiresPKIStorePassword bool }
+
+type TargetCredentialLeaseProvider func(TargetCredentialLeaseRequest, func(TargetCredentialLeasePayload) error) error
 
 type pendingStart struct {
 	attemptID string
@@ -371,6 +382,13 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	provider := s.credentialProvider
 	s.mu.Unlock()
 	if !hasPending {
+		requiresPKIStorePassword := planRequiresPKIStorePassword(fresh)
+		if requiresPKIStorePassword && (!capability.supportsPayloadVersion(credentialPayloadVersionV2) || capability.MaxPayloadBytes < 4096) {
+			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_RUNTIME_UNSUPPORTED")
+		}
+		if requiresPKIStorePassword && provider == nil {
+			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
+		}
 		attempt, err := newStartAttemptID()
 		if err != nil {
 			return ExecutionRun{}, err
@@ -381,7 +399,10 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 			if err != nil {
 				return ExecutionRun{}, err
 			}
-			err = provider(func(payload TargetCredentialLeasePayload) error {
+			err = provider(TargetCredentialLeaseRequest{RequiresPKIStorePassword: requiresPKIStorePassword}, func(payload TargetCredentialLeasePayload) error {
+				if requiresPKIStorePassword != (payload.PKIStorePassword != "") {
+					return errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
+				}
 				lease, leaseErr := client.PutRuntimeSecretLease(ctx, node, CredentialLeaseRequest{RequestID: requestID, StartAttemptID: attempt, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease}, payload, capability.MaxPayloadBytes)
 				if leaseErr == nil {
 					pending.leaseID = lease.LeaseID
@@ -413,6 +434,15 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	s.sessions[run.RunID] = &session{run: run, project: fresh.ProjectIdentity, lastSequence: run.Sequence, subs: map[uint64]*Subscription{}}
 	s.mu.Unlock()
 	return run, nil
+}
+
+func planRequiresPKIStorePassword(plan DeploymentPlan) bool {
+	for _, requirement := range plan.RequiredCredentials {
+		if requirement.RequirementRef == "pki-store-password" && requirement.Purpose == "PKI_STORE_PASSWORD" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ExecutionService) invalidate(id string) {
@@ -579,6 +609,7 @@ func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
 	p.AcknowledgementDetails = append([]PlanAcknowledgement(nil), p.AcknowledgementDetails...)
 	p.Phases = clonePlanPhases(p.Phases)
 	p.ArtifactRequirements = append([]artifactsource.Requirement(nil), p.ArtifactRequirements...)
+	p.RequiredCredentials = cloneRequiredCredentials(p.RequiredCredentials)
 	p.Findings = append([]Finding(nil), p.Findings...)
 	if p.RuntimeRelease != nil {
 		runtimeRelease := p.RuntimeRelease
@@ -588,6 +619,15 @@ func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
 		}
 	}
 	return p
+}
+
+func cloneRequiredCredentials(values []RequiredCredential) []RequiredCredential {
+	result := make([]RequiredCredential, len(values))
+	for index, value := range values {
+		result[index] = value
+		result[index].Hosts = append([]string(nil), value.Hosts...)
+	}
+	return result
 }
 
 func clonePlanPhases(phases []DeploymentPlanPhase) []DeploymentPlanPhase {

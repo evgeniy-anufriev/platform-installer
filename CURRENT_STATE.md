@@ -73,8 +73,17 @@ wires the runtime-only broker to the existing credentialed Start seam, projects
 only closed execution event/result DTOs, and owns bounded local observer
 subscriptions that detach without remote cancellation. Its generation-bound
 publication prevents an old asynchronous Start/Subscribe result from binding
-to a replacement project or Execution Node. UI-02E is NEXT. Evidence:
-`docs/ui-02a.md`, `docs/ui-02b.md`, `docs/ui-02c.md`, `docs/ui-02d.md` and
+to a replacement project or Execution Node. UI-02E is DONE: the immutable
+release `sha256:6d85afb53c6994f2f1b152e29b39a329ed35a9af7ed3e9c802be0e888993dca0`
+completed two production-shaped one-host/three-member Kafka lifecycle cycles
+through `CreatePlan -> ApprovePlan -> Start`. Runs
+`installer-a21c3eed1d053ac7ef073e13214349a6` (12m16s) and
+`installer-a3a4bba6fb97f41b21080ae22c00bcbb` (12m42s) both returned
+`SUCCEEDED`; the repeat apply returned `changed=0`. PKI/Kafka apply and verify,
+local Go/frontend/Wails gates, RED OS Core/race gates, reproducibility and
+hygiene passed. UI-02 overall is DONE. Evidence: `docs/ui-02a.md`,
+`docs/ui-02b.md`, `docs/ui-02c.md`, `docs/ui-02d.md`,
+`docs/ui-02e-pki-runtime-secret-transport.md` and
 `docs/ui-02-architecture.md`.
 
 ## EXEC-OBS-01 completion (2026-09-05)

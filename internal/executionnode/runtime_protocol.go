@@ -89,7 +89,9 @@ func validRuntimeToken(value string) bool {
 		return false
 	}
 	for _, r := range value[len(prefix):] {
-		if r < '0' || r > '9' {
+		// Legacy workstation-created IDs are decimal, while v1alpha2 Start
+		// returns the Execution Node's lowercase hexadecimal identifier.
+		if !(r >= '0' && r <= '9') && !(r >= 'a' && r <= 'f') {
 			return false
 		}
 	}
@@ -232,15 +234,28 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
-	if err == nil {
-		manifestDigest, ok := response["executionManifestDigest"].(string)
-		if !ok || !validSHA256(manifestDigest) {
-			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
-		}
-		plan.stagingID = runID
-		plan.executionManifestDigest = manifestDigest
+	if err != nil {
+		return DeploymentPlan{}, err
 	}
-	return plan, err
+	if err := bindExecutionManifest(&plan, response, runID); err != nil {
+		return DeploymentPlan{}, err
+	}
+	return plan, nil
+}
+
+// A blocked plan has no execution manifest by design: it cannot enter Start.
+// Only an executable plan is bound to a staged manifest and may be approved.
+func bindExecutionManifest(plan *DeploymentPlan, response map[string]any, stagingID string) error {
+	if plan == nil || plan.Status == "BLOCKED" {
+		return nil
+	}
+	manifestDigest, ok := response["executionManifestDigest"].(string)
+	if !ok || !validSHA256(manifestDigest) {
+		return errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	plan.stagingID = stagingID
+	plan.executionManifestDigest = manifestDigest
+	return nil
 }
 
 // BuildProjectSnapshot is a read-only, controller-only Core query. Its project
@@ -797,6 +812,11 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.ArtifactRequirements = append(plan.ArtifactRequirements, requirement)
 		}
 	}
+	credentials, err := decodeRequiredCredentials(value["requiredCredentials"])
+	if err != nil {
+		return DeploymentPlan{}, err
+	}
+	plan.RequiredCredentials = credentials
 	if r, ok := value["runtimeRelease"].(map[string]any); ok {
 		plan.RuntimeRelease = r
 	}
@@ -804,6 +824,40 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	return plan, nil
+}
+
+func decodeRequiredCredentials(raw any) ([]RequiredCredential, error) {
+	values, ok := raw.([]any)
+	if !ok || len(values) > 32 {
+		return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	result := make([]RequiredCredential, 0, len(values))
+	seen := map[string]bool{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok || !closedKeys(value, "requirementRef", "purpose", "hosts") {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		ref, refOK := value["requirementRef"].(string)
+		purpose, purposeOK := value["purpose"].(string)
+		hostValues, hostsOK := value["hosts"].([]any)
+		if !refOK || !purposeOK || !hostsOK || ref == "" || len(ref) > 128 || purpose == "" || len(purpose) > 128 || seen[ref] || len(hostValues) > maxDeploymentPlanTargets {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		credential := RequiredCredential{RequirementRef: ref, Purpose: purpose, Hosts: make([]string, 0, len(hostValues))}
+		prior := ""
+		for _, rawHost := range hostValues {
+			host, ok := rawHost.(string)
+			if !ok || !candidateIdentityPattern.MatchString(host) || host <= prior {
+				return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+			}
+			credential.Hosts = append(credential.Hosts, host)
+			prior = host
+		}
+		seen[ref] = true
+		result = append(result, credential)
+	}
+	return result, nil
 }
 
 const (

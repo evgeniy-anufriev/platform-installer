@@ -22,21 +22,39 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Select effective Kafka desired state for controller-side materialization
+      ansible.builtin.set_fact:
+        _platform_kafka_materialization_desired_state: >-
+          {{ platform_desired_state |
+             default(hostvars[(groups['platform_targets'] | default([]) | sort | first)].platform_desired_state |
+                     default({}, true), true) }}
+
     - name: Materialize managed Kafka identities before mutation
       platform.core.materialize_kafka_identities:
-        project_path: "{{ platform_kafka_project_path | default(inventory_dir ~ '/../project.yml', true) if (platform_desired_state | default({}) | length == 0) else omit }}"
-        inventory_path: "{{ platform_kafka_inventory_path | default(inventory_dir ~ '/hosts.yml', true) }}"
-        state_path: "{{ platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true) if (platform_desired_state | default({}) | length > 0) else omit }}"
-        desired_state: "{{ platform_desired_state | default({}) }}"
+        project_path: "{{ platform_kafka_project_path | default(platform_project_manifest_path | default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true), true) if (_platform_kafka_materialization_desired_state | length == 0) else omit }}"
+        inventory_path: "{{ platform_kafka_inventory_path | default((platform_project_root | default((inventory_dir | default('/project/inventory', true)) | dirname, true)) ~ '/inventory/hosts.yml', true) }}"
+        state_path: "{{ platform_generated_state_path | default((platform_project_root | default((inventory_dir | default('/project/inventory', true)) | dirname, true)) ~ '/inventory/group_vars/all/platform-state.yml', true) if (_platform_kafka_materialization_desired_state | length > 0) else omit }}"
+        desired_state: "{{ _platform_kafka_materialization_desired_state }}"
         project_id: >-
           {{ platform_project_id |
              default(platform_project_manifest_document.metadata.id |
-                     default((inventory_dir | dirname | basename), true), true) }}
+                     default((inventory_dir | default('/project/inventory', true) | dirname | basename), true), true) }}
         discovery: "{{ hostvars['localhost'].platform_kafka_discovery_by_host | default({}) }}"
       register: platform_kafka_materialization
+      # This only creates run-local derived state for the following play. It
+      # neither mutates canonical desired state nor a target host, so it must
+      # not make a repeat service apply appear changed.
+      changed_when: false
 
-    - name: Refresh inventory after canonical identity persistence
-      ansible.builtin.meta: refresh_inventory
+- name: Kafka generated identity projection
+  hosts: platform_targets
+  gather_facts: false
+  tasks:
+    - name: Project machine-owned Kafka identity state onto target hosts
+      ansible.builtin.set_fact:
+        platform_generated_state: >-
+          {{ hostvars['localhost'].platform_kafka_materialization.materialization.stateDocument.platform_generated_state |
+             default({}, true) }}
 
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 

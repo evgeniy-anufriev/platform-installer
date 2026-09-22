@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import os
 import sys
 from pathlib import Path
 import tarfile
@@ -12,6 +13,7 @@ from unittest import mock
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 from execution_lifecycle import Journal, LifecycleError, digest, recover, retain
+import execution_lifecycle
 import execution_controller
 import execution_protocol
 
@@ -35,6 +37,22 @@ def runtime_evidence():
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_terminal_status_is_published_before_result_becomes_observable(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            original_open = execution_lifecycle.os.open
+
+            def checked_open(path, *args, **kwargs):
+                if path == journal.result_path:
+                    self.assertEqual("SUCCEEDED", journal.status()["state"])
+                return original_open(path, *args, **kwargs)
+
+            with mock.patch.object(execution_lifecycle.os, "open", side_effect=checked_open):
+                result = journal.terminal("SUCCEEDED", "", "done")
+            self.assertEqual("SUCCEEDED", result["state"])
+            self.assertEqual("SUCCEEDED", journal.status()["state"])
+
     def test_protocol_rejects_malformed_candidate_request_as_typed_json(self):
         script = str(TOOLS / "execution_protocol.py")
         bundle_digest = "sha256:" + "a" * 64
@@ -441,6 +459,8 @@ class ExecutionLifecycleTests(unittest.TestCase):
             execution_controller._materialize_runtime_projection(journal, current, manifest)
             execution_controller._validate_runtime_projection(journal, current, manifest)
             projection = json.loads(Path(journal.directory, "runtime-projection.json").read_text(encoding="utf-8"))
+            self.assertEqual(projection["platform_project_root"], os.path.join(journal.directory, "project"))
+            self.assertEqual(projection["platform_project_manifest_path"], os.path.join(journal.directory, "project", "project.yml"))
             self.assertIn("kafka-binary", projection["platform_artifact_source_authorities_by_deployment"]["kafka"])
             projection["platform_execution_run_id"] = "other-run"
             Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")

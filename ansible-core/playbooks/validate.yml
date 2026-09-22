@@ -9,7 +9,7 @@
       ansible.builtin.stat:
         path: >-
           {{ platform_project_manifest_path |
-             default(inventory_dir ~ '/../project.yml', true) }}
+             default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true) }}
       register: platform_project_manifest_stat
       run_once: true
 
@@ -22,7 +22,7 @@
       ansible.builtin.include_vars:
         file: >-
           {{ platform_project_manifest_path |
-             default(inventory_dir ~ '/../project.yml', true) }}
+             default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true) }}
         name: platform_project_manifest_document
       when: platform_project_manifest_stat.stat.exists
       run_once: true
@@ -90,7 +90,7 @@
         project_id: >-
           {{ platform_project_id |
              default(platform_project_manifest_document.metadata.id |
-                     default((inventory_dir | dirname | basename), true), true) }}
+                     default((inventory_dir | default('/project/inventory', true) | dirname | basename), true), true) }}
         inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
         inventory_host_addresses: "{{ platform_inventory_host_addresses | default({}) }}"
         desired_hosts: "{{ platform_desired_hosts }}"
