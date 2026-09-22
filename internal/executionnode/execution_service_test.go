@@ -2,6 +2,8 @@ package executionnode
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,12 +21,32 @@ func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ stri
 	if b.stale && b.calls > 1 {
 		fp = "sha256:changed"
 	}
-	return DeploymentPlan{ID: "plan-1", Status: "EXECUTABLE", ProjectIdentity: "project-1", ProjectRevision: "sha256:revision", PlanFingerprint: fp, Acknowledgements: []string{"ACK_RISK"}, RuntimeRelease: release}, nil
+	return DeploymentPlan{ID: "plan-1", Status: "EXECUTABLE", ProjectIdentity: "project-1", ProjectRevision: "sha256:revision", PlanFingerprint: fp, Acknowledgements: []string{"ACK_RISK"}, RuntimeRelease: release, stagingID: "staging-1", executionManifestDigest: "sha256:" + strings.Repeat("a", 64)}, nil
 }
 
 type lifecycleClient struct {
 	starts, cancels int
 	events          []ExecutionEvent
+	requests        []ExecutionStartV2Request
+	startErr        error
+	ops             []string
+}
+
+func (c *lifecycleClient) CredentialStartCapability(context.Context, Node) (CredentialStartCapability, error) {
+	return CredentialStartCapability{MaxPayloadBytes: 1024}, nil
+}
+func (c *lifecycleClient) StartExecutionV2(_ context.Context, _ Node, request ExecutionStartV2Request) (ExecutionStartV2Response, error) {
+	c.starts++
+	c.ops = append(c.ops, "start-v2")
+	c.requests = append(c.requests, request)
+	if c.startErr != nil {
+		return ExecutionStartV2Response{}, c.startErr
+	}
+	return ExecutionStartV2Response{Status: "STARTED", StartAttemptID: "attempt", RunID: "installer-1"}, nil
+}
+func (c *lifecycleClient) PutRuntimeSecretLease(context.Context, Node, CredentialLeaseRequest, TargetCredentialLeasePayload, int) (CredentialLeaseResponse, error) {
+	c.ops = append(c.ops, "put-lease")
+	return CredentialLeaseResponse{LeaseID: strings.Repeat("a", 32)}, nil
 }
 
 type syncPageClient struct {
@@ -107,6 +129,47 @@ func TestExecutionServiceApprovalFreshPlanAndOneShotStart(t *testing.T) {
 	}
 	if c.starts != 1 || b.calls != 2 {
 		t.Fatalf("calls builder=%d starts=%d", b.calls, c.starts)
+	}
+	if len(c.requests) != 1 || c.requests[0].StartAttemptID == "" || c.requests[0].LeaseID != "" {
+		t.Fatalf("UI-02 Start did not use the closed v2 request: %#v", c.requests)
+	}
+}
+
+func TestExecutionServiceRetriesUnknownStartWithSameAttempt(t *testing.T) {
+	b := &lifecycleBuilder{}
+	c := &lifecycleClient{startErr: errors.New("transport unknown")}
+	s := NewExecutionService(b, c)
+	p, _ := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	_ = s.ApprovePlan(p.ID, []string{"ACK_RISK"})
+	if _, err := s.Start(context.Background(), Node{}, p.ID); err == nil {
+		t.Fatal("unknown Start unexpectedly succeeded")
+	}
+	c.startErr = nil
+	if _, err := s.Start(context.Background(), Node{}, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.requests) != 2 || c.requests[0].StartAttemptID == "" || c.requests[0].StartAttemptID != c.requests[1].StartAttemptID {
+		t.Fatalf("retry generated a new start attempt: %#v", c.requests)
+	}
+}
+
+func TestExecutionServiceStagesCredentialLeaseBeforeV2Start(t *testing.T) {
+	b := &lifecycleBuilder{}
+	c := &lifecycleClient{}
+	s := NewExecutionService(b, c)
+	s.ConfigureTargetCredentialLease(func(use func(TargetCredentialLeasePayload) error) error {
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "secret"})
+	})
+	p, _ := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	_ = s.ApprovePlan(p.ID, []string{"ACK_RISK"})
+	if _, err := s.Start(context.Background(), Node{}, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(c.ops, ","), "put-lease,start-v2"; got != want {
+		t.Fatalf("credentialed Start order=%s want=%s", got, want)
+	}
+	if len(c.requests) != 1 || c.requests[0].LeaseID == "" {
+		t.Fatalf("lease did not remain private to v2 request: %#v", c.requests)
 	}
 }
 
@@ -209,7 +272,7 @@ type servicePlanBuilder struct {
 
 func (b *servicePlanBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any) (DeploymentPlan, error) {
 	b.calls++
-	return DeploymentPlan{ID: "service-plan", Status: "EXECUTABLE", ProjectIdentity: "service-project", ProjectRevision: "revision", PlanFingerprint: "plan-fingerprint", RuntimeRelease: release, ArtifactRequirements: b.requirements}, nil
+	return DeploymentPlan{ID: "service-plan", Status: "EXECUTABLE", ProjectIdentity: "service-project", ProjectRevision: "revision", PlanFingerprint: "plan-fingerprint", RuntimeRelease: release, ArtifactRequirements: b.requirements, stagingID: "staging-1", executionManifestDigest: "sha256:test"}, nil
 }
 
 func TestExecutionServiceKeepsBlockedPlanReviewableButNotApprovable(t *testing.T) {

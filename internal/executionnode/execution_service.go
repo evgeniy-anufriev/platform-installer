@@ -46,18 +46,19 @@ const (
 )
 
 type DeploymentPlan struct {
-	ID                     string
-	Status                 string
-	ProjectIdentity        string
-	ProjectRevision        string
-	PlanFingerprint        string
-	Acknowledgements       []string
-	AcknowledgementDetails []PlanAcknowledgement
-	Phases                 []DeploymentPlanPhase
-	RuntimeRelease         map[string]any
-	ArtifactRequirements   []artifactsource.Requirement
-	Findings               []Finding
-	executionID            string
+	ID                      string
+	Status                  string
+	ProjectIdentity         string
+	ProjectRevision         string
+	PlanFingerprint         string
+	Acknowledgements        []string
+	AcknowledgementDetails  []PlanAcknowledgement
+	Phases                  []DeploymentPlanPhase
+	RuntimeRelease          map[string]any
+	ArtifactRequirements    []artifactsource.Requirement
+	Findings                []Finding
+	stagingID               string
+	executionManifestDigest string
 }
 
 // PlanAcknowledgement and DeploymentPlanPhase retain the closed, Core-owned
@@ -105,6 +106,23 @@ type ExecutionClient interface {
 	CancelExecution(context.Context, Node, string) (ExecutionRun, error)
 }
 
+type CredentialedExecutionClient interface {
+	ExecutionClient
+	StartExecutionV2(context.Context, Node, ExecutionStartV2Request) (ExecutionStartV2Response, error)
+	CredentialStartCapability(context.Context, Node) (CredentialStartCapability, error)
+	PutRuntimeSecretLease(context.Context, Node, CredentialLeaseRequest, TargetCredentialLeasePayload, int) (CredentialLeaseResponse, error)
+}
+
+// TargetCredentialLeaseProvider exposes a credential only to the synchronous
+// trusted Start flow. Its closure is deliberately private to Go; neither the
+// Wails facade nor plan/session state receives the credential or lease id.
+type TargetCredentialLeaseProvider func(func(TargetCredentialLeasePayload) error) error
+
+type pendingStart struct {
+	attemptID string
+	leaseID   string
+}
+
 // ServicePlanRequest contains only operator/project routing and approved
 // bundle candidates. Artifact requirements are read from the fresh Core plan.
 type ServicePlanRequest struct {
@@ -142,23 +160,33 @@ func (s *Subscription) Close() {
 }
 
 type ExecutionService struct {
-	startMu          sync.Mutex
-	builder          PlanBuilder
-	client           ExecutionClient
-	now              func() time.Time
-	ttl              time.Duration
-	mu               sync.Mutex
-	plans            map[string]PlanRecord
-	sessions         map[string]*session
-	projects         map[string]string
-	projectRoots     map[string]string
-	serviceRequests  map[string]ServicePlanRequest
-	probe            TargetRepositoryProbe
-	projectionStager RuntimeProjectionStager
+	startMu            sync.Mutex
+	builder            PlanBuilder
+	client             ExecutionClient
+	now                func() time.Time
+	ttl                time.Duration
+	mu                 sync.Mutex
+	plans              map[string]PlanRecord
+	sessions           map[string]*session
+	projects           map[string]string
+	projectRoots       map[string]string
+	serviceRequests    map[string]ServicePlanRequest
+	probe              TargetRepositoryProbe
+	projectionStager   RuntimeProjectionStager
+	credentialProvider TargetCredentialLeaseProvider
+	pendingStarts      map[string]pendingStart
 }
 
 func NewExecutionService(builder PlanBuilder, client ExecutionClient) *ExecutionService {
-	return &ExecutionService{builder: builder, client: client, now: time.Now, ttl: 15 * time.Minute, plans: map[string]PlanRecord{}, sessions: map[string]*session{}, projects: map[string]string{}, projectRoots: map[string]string{}, serviceRequests: map[string]ServicePlanRequest{}}
+	return &ExecutionService{builder: builder, client: client, now: time.Now, ttl: 15 * time.Minute, plans: map[string]PlanRecord{}, sessions: map[string]*session{}, projects: map[string]string{}, projectRoots: map[string]string{}, serviceRequests: map[string]ServicePlanRequest{}, pendingStarts: map[string]pendingStart{}}
+}
+
+// ConfigureTargetCredentialLease installs the existing runtime-only
+// credential seam. A nil provider selects the non-credentialed v2 path.
+func (s *ExecutionService) ConfigureTargetCredentialLease(provider TargetCredentialLeaseProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.credentialProvider = provider
 }
 
 func (s *ExecutionService) ConfigureServiceExecution(probe TargetRepositoryProbe, stager RuntimeProjectionStager) {
@@ -315,12 +343,8 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		s.invalidate(planID)
 		return ExecutionRun{}, &ExecutionError{Code: PlanStale}
 	}
-	runID := fresh.executionID
-	if runID == "" {
-		runID, err = newRunID()
-		if err != nil {
-			return ExecutionRun{}, err
-		}
+	if fresh.stagingID == "" || fresh.executionManifestDigest == "" {
+		return ExecutionRun{}, errors.New("EXECUTION_START_BINDING_MISSING")
 	}
 	if prepare != nil {
 		s.mu.Lock()
@@ -330,17 +354,57 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		if !ok || projectRoot == "" {
 			return ExecutionRun{}, errors.New("SERVICE_PLAN_NOT_FOUND")
 		}
-		if err := prepare(fresh, request, runID); err != nil {
+		if err := prepare(fresh, request, fresh.stagingID); err != nil {
 			return ExecutionRun{}, err
 		}
 	}
-	run, err := s.client.StartExecution(ctx, node, ExecutionStartRequest{RunID: runID, ProjectIdentity: fresh.ProjectIdentity, PlanFingerprint: fresh.PlanFingerprint, RuntimeRelease: fresh.RuntimeRelease})
+	client, ok := s.client.(CredentialedExecutionClient)
+	if !ok {
+		return ExecutionRun{}, errors.New("EXECUTION_START_V2_UNSUPPORTED")
+	}
+	capability, err := client.CredentialStartCapability(ctx, node)
 	if err != nil {
 		return ExecutionRun{}, err
 	}
 	s.mu.Lock()
+	pending, hasPending := s.pendingStarts[planID]
+	provider := s.credentialProvider
+	s.mu.Unlock()
+	if !hasPending {
+		attempt, err := newStartAttemptID()
+		if err != nil {
+			return ExecutionRun{}, err
+		}
+		pending = pendingStart{attemptID: attempt}
+		if provider != nil {
+			requestID, err := newStartAttemptID()
+			if err != nil {
+				return ExecutionRun{}, err
+			}
+			err = provider(func(payload TargetCredentialLeasePayload) error {
+				lease, leaseErr := client.PutRuntimeSecretLease(ctx, node, CredentialLeaseRequest{RequestID: requestID, StartAttemptID: attempt, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease}, payload, capability.MaxPayloadBytes)
+				if leaseErr == nil {
+					pending.leaseID = lease.LeaseID
+				}
+				return leaseErr
+			})
+			if err != nil {
+				return ExecutionRun{}, err
+			}
+		}
+		s.mu.Lock()
+		s.pendingStarts[planID] = pending
+		s.mu.Unlock()
+	}
+	response, err := client.StartExecutionV2(ctx, node, ExecutionStartV2Request{StartAttemptID: pending.attemptID, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease, LeaseID: pending.leaseID})
+	if err != nil {
+		return ExecutionRun{}, err
+	}
+	run := ExecutionRun{RunID: response.RunID, ProjectIdentity: fresh.ProjectIdentity, State: "STARTING"}
+	s.mu.Lock()
 	record.Consumed = true
 	s.plans[planID] = record
+	delete(s.pendingStarts, planID)
 	if prior := s.projects[fresh.ProjectIdentity]; prior != "" && prior != run.RunID {
 		s.mu.Unlock()
 		return ExecutionRun{}, &ExecutionError{Code: ActiveRunExists, RunID: prior}
@@ -358,6 +422,7 @@ func (s *ExecutionService) invalidate(id string) {
 		p.Consumed = true
 		s.plans[id] = p
 	}
+	delete(s.pendingStarts, id)
 	s.mu.Unlock()
 }
 
@@ -557,4 +622,12 @@ func newRunID() (string, error) {
 		return "", err
 	}
 	return "installer-" + new(big.Int).SetBytes(value).String(), nil
+}
+
+func newStartAttemptID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value), nil
 }

@@ -3,18 +3,29 @@
 Status: **DONE**.
 
 UI-02C adds the closed node-side `PutRuntimeSecretLease/v1alpha1` protocol,
-`ExecutionCapabilities/v1alpha2` gate and `StartExecution/v1alpha2`
-correlation. It adds no Wails/React Start, generic secret system or target
-execution path. The bounded payload travels only through SSH stdin and is
-stored only in private Execution Node state. It is never exposed in desired
-state, journals, events, results or diagnostics.
+`ExecutionCapabilities/v1alpha2` gate and the one approved
+`StartExecution/v1alpha2` path through `ExecutionService`. It adds no
+Wails/React Start, generic secret system or target execution path. The bounded
+payload travels only through SSH stdin and is stored only in private Execution
+Node state. It is never exposed in desired state, journals, events, results or
+diagnostics.
 
-The node binds a lease to the exact project/revision/plan/manifest/runtime,
-persists retry correlation by `startAttemptId`, rejects caller run IDs and
-removes attached material on terminal/recovered terminal lifecycle. No runtime
-release was activated and no target host was contacted.
+An executable plan owns only opaque private staging, never an authoritative
+run ID. After a fresh approved-plan recheck, `ExecutionService` creates and
+retains one `startAttemptId`; for a credentialed Start it performs PUT with
+that attempt, keeps the returned lease ID private, and calls v1alpha2 only.
+The Execution Node creates the authoritative run ID, persists its immutable
+journal binding and the durable attempt-to-run mapping, attaches the exact
+non-expired STAGED lease, and only then launches the controller. A lost Start
+response is retried with the same attempt; a post-commit controller-launch
+failure records terminal `FAILED` evidence on the same node-owned run.
 
-Evidence: focused Go, `go test ./...`, `go vet ./...`, and RED OS Python
-protocol tests plus affected Go `-race`/vet passed.
+Evidence: focused Go and node protocol tests, `go test ./...`, `go vet ./...`,
+and RED OS Core suite (257, 4 skipped), catalog/schema reproducibility and
+affected Go `-race` passed. Fault injection proves that PREPARED recovery
+metadata left after final attempt-to-run publication cannot roll back the
+authoritative run, lease attachment or journal; retry returns the same run
+without a second launch. No runtime release was activated and no target host
+was contacted.
 
 UI-02D is next.

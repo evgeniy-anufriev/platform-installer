@@ -121,6 +121,7 @@ def _payload(value):
 
 def _request_path(root, request_id): return os.path.join(root, "requests", request_id + ".json")
 def _lease_dir(root, lease_id): return os.path.join(root, "leases", lease_id)
+def _prepared_path(root, start_attempt_id): return os.path.join(root, "prepared", start_attempt_id + ".json")
 
 
 def put(state_root, request_value, payload_value):
@@ -221,9 +222,13 @@ def cleanup_run(state_root, run_id):
         os.close(lock)
 
 
-def register_plan(state_root, run_id, manifest_digest, manifest):
-    """Persist the opaque run staging selected by one executable Core plan."""
-    if not isinstance(manifest, dict) or not isinstance(run_id, str) or not run_id or not _DIGEST.fullmatch(manifest_digest or ""):
+def register_plan(state_root, staging_id, manifest_digest, manifest):
+    """Persist opaque pre-start staging selected by one executable Core plan.
+
+    A staging id is deliberately not an execution run id.  Only Start v2 on
+    the Execution Node allocates an authoritative run id.
+    """
+    if not isinstance(manifest, dict) or not isinstance(staging_id, str) or not staging_id or not _DIGEST.fullmatch(manifest_digest or ""):
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     binding = {"projectIdentity": manifest.get("projectIdentity"), "planFingerprint": manifest.get("planFingerprint"), "runtimeRelease": manifest.get("runtimeRelease")}
     if not isinstance(binding["projectIdentity"], str) or _PROJECT.fullmatch(binding["projectIdentity"]) is None or not _DIGEST.fullmatch(binding["planFingerprint"] or "") or not isinstance(binding["runtimeRelease"], dict):
@@ -231,7 +236,7 @@ def register_plan(state_root, run_id, manifest_digest, manifest):
     key = hashlib.sha256((manifest_digest + "\n" + binding["projectIdentity"] + "\n" + binding["planFingerprint"]).encode("ascii")).hexdigest()
     lock = _locked(state_root)
     try:
-        _write(os.path.join(_root(state_root), "plans", key + ".json"), {"runId": run_id, "executionManifestDigest": manifest_digest, "binding": binding})
+        _write(os.path.join(_root(state_root), "plans", key + ".json"), {"stagingId": staging_id, "executionManifestDigest": manifest_digest, "binding": binding})
     finally:
         os.close(lock)
 
@@ -269,5 +274,120 @@ def attempt(state_root, start_attempt_id, binding, run_id=None):
             return None, False
         _write(path, {"binding": binding, "runId": run_id})
         return run_id, False
+    finally:
+        os.close(lock)
+
+
+def prepared_start(state_root, start_attempt_id, attempt_binding):
+    """Read one uncommitted private Start transaction without mutating it."""
+    if not _safe_id(start_attempt_id) or not isinstance(attempt_binding, dict):
+        raise LifecycleError("START_REQUEST_INVALID")
+    lock = _locked(state_root)
+    try:
+        path = _prepared_path(_root(state_root), start_attempt_id)
+        if not os.path.exists(path):
+            return None
+        value = _read(path)
+        if not isinstance(value, dict) or value.get("state") != "PREPARED" or value.get("binding") != attempt_binding or not isinstance(value.get("runId"), str) or not isinstance(value.get("stagingId"), str):
+            raise LifecycleError("START_ATTEMPT_CONFLICT")
+        return value
+    finally:
+        os.close(lock)
+
+
+def _rollback_prepared_locked(root, start_attempt_id, attempt_binding):
+    path = _prepared_path(root, start_attempt_id)
+    if not os.path.exists(path):
+        return False
+    prepared = _read(path)
+    if not isinstance(prepared, dict) or prepared.get("state") != "PREPARED" or prepared.get("binding") != attempt_binding:
+        raise LifecycleError("START_ATTEMPT_CONFLICT")
+    attempt_path = os.path.join(root, "attempts", start_attempt_id + ".json")
+    if os.path.exists(attempt_path):
+        # G already happened: the immutable mapping is authoritative and
+        # must never be rolled back by recovery.
+        return False
+    lease_id = prepared.get("leaseId")
+    if lease_id is not None:
+        if not _safe_id(lease_id):
+            raise LifecycleError("LEASE_STORAGE_INVALID")
+        record_path = os.path.join(_lease_dir(root, lease_id), "record.json")
+        record = _read(record_path)
+        if record.get("binding") != prepared.get("leaseBinding"):
+            raise LifecycleError("LEASE_BINDING_MISMATCH")
+        if record.get("state") == "ATTACHED" and record.get("runId") == prepared.get("runId"):
+            record.pop("runId", None); record["state"] = "STAGED"
+            _write(record_path, record)
+        attached = os.path.join(root, "attached", prepared["runId"] + ".json")
+        if os.path.exists(attached):
+            index = _read(attached)
+            if index.get("leaseId") != lease_id:
+                raise LifecycleError("LEASE_STORAGE_INVALID")
+            os.unlink(attached)
+    os.unlink(path)
+    return True
+
+
+def rollback_prepared_start(state_root, start_attempt_id, attempt_binding):
+    """Undo only a private PREPARED transaction with no published mapping."""
+    lock = _locked(state_root)
+    try:
+        return _rollback_prepared_locked(_root(state_root), start_attempt_id, attempt_binding)
+    finally:
+        os.close(lock)
+
+
+def commit_start(state_root, start_attempt_id, attempt_binding, run_id, staging_id, lease_id=None, lease_binding=None):
+    """Prepare lease state, then publish attempt->run as the final commit.
+
+    The private PREPARED record makes each pre-commit write recoverable.  The
+    attempt mapping is deliberately the only authoritative commit point.
+    """
+    if not _safe_id(start_attempt_id) or not isinstance(attempt_binding, dict) or not isinstance(run_id, str) or not run_id or not isinstance(staging_id, str) or not staging_id:
+        raise LifecycleError("START_REQUEST_INVALID")
+    lock = _locked(state_root)
+    try:
+        root = _root(state_root)
+        attempt_path = os.path.join(root, "attempts", start_attempt_id + ".json")
+        if os.path.exists(attempt_path):
+            existing = _read(attempt_path)
+            if existing.get("binding") != attempt_binding or existing.get("runId") != run_id:
+                raise LifecycleError("START_ATTEMPT_CONFLICT")
+            return False
+        prepared_path = _prepared_path(root, start_attempt_id)
+        if os.path.exists(prepared_path):
+            raise LifecycleError("START_ATTEMPT_CONFLICT")
+        if lease_id is not None:
+            if not _safe_id(lease_id) or not isinstance(lease_binding, dict):
+                raise LifecycleError("LEASE_ATTACH_INVALID")
+            record_path = os.path.join(_lease_dir(root, lease_id), "record.json")
+            record = _read(record_path)
+            if record.get("binding") != lease_binding or record.get("state") != "STAGED":
+                raise LifecycleError("LEASE_BINDING_MISMATCH")
+            if _parse_stamp(record.get("stagedExpiresAt")) <= _now():
+                raise LifecycleError("LEASE_EXPIRED")
+        prepared = {"state": "PREPARED", "binding": attempt_binding, "runId": run_id, "stagingId": staging_id, "leaseId": lease_id, "leaseBinding": lease_binding}
+        _write(prepared_path, prepared)
+        try:
+            if lease_id is not None:
+                record.update({"state": "ATTACHED", "runId": run_id})
+                _write(record_path, record)
+                _write(os.path.join(root, "attached", run_id + ".json"), {"leaseId": lease_id})
+                # Verify every durable precondition before publication.
+                if _read(record_path).get("state") != "ATTACHED" or _read(os.path.join(root, "attached", run_id + ".json")).get("leaseId") != lease_id:
+                    raise LifecycleError("LEASE_STORAGE_INVALID")
+            # Final durable publication: after this write the identity is
+            # authoritative and must not be returned to staging.
+            _write(attempt_path, {"binding": attempt_binding, "runId": run_id})
+        except Exception:
+            _rollback_prepared_locked(root, start_attempt_id, attempt_binding)
+            raise
+        try:
+            os.unlink(prepared_path)
+        except OSError:
+            # The mapping is already authoritative; a stale private recovery
+            # record cannot change that and is ignored by normal retries.
+            pass
+        return True
     finally:
         os.close(lock)

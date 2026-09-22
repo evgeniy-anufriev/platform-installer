@@ -233,7 +233,12 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	}
 	plan, err := decodeDeploymentPlan(value)
 	if err == nil {
-		plan.executionID = runID
+		manifestDigest, ok := response["executionManifestDigest"].(string)
+		if !ok || !validSHA256(manifestDigest) {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		plan.stagingID = runID
+		plan.executionManifestDigest = manifestDigest
 	}
 	return plan, err
 }

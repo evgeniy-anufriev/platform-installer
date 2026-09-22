@@ -1,6 +1,10 @@
 # UI-02 — Installation workflow architecture
 
-Status: **UI-02A through UI-02C DONE; UI-02D NEXT**. `UI02-PLAN-001` is
+Status: **UI-02A through UI-02C DONE; UI-02D NEXT**. UI-02C uses one
+`ExecutionService`-owned v1alpha2 Start path: plan-time staging is private and
+is never an authoritative run, and the Execution Node commits the node-owned
+run binding, attempt mapping and lease attachment before controller launch.
+`UI02-PLAN-001` is
 **RESOLVED BY OWNER DECISION**: credentialed Start uses versioned
 `StartExecution/v1alpha2` before capability negotiation through
 `ExecutionCapabilities/v1alpha2`. The initial PLAN review and its permitted

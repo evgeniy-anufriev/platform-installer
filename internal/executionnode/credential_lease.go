@@ -105,7 +105,11 @@ func (t OpenSSHTransport) StartExecutionV2(ctx context.Context, node Node, reque
 	if !validExecutionStartV2Request(request) {
 		return ExecutionStartV2Response{}, errors.New("EXECUTION_START_INPUT_INVALID")
 	}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionRequest", "startAttemptId": request.StartAttemptID, "projectIdentity": request.ProjectIdentity, "projectRevision": request.ProjectRevision, "planFingerprint": request.PlanFingerprint, "executionManifestDigest": request.ExecutionManifestDigest, "runtimeRelease": request.RuntimeRelease, "leaseId": request.LeaseID})
+	body := map[string]any{"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionRequest", "startAttemptId": request.StartAttemptID, "projectIdentity": request.ProjectIdentity, "projectRevision": request.ProjectRevision, "planFingerprint": request.PlanFingerprint, "executionManifestDigest": request.ExecutionManifestDigest, "runtimeRelease": request.RuntimeRelease}
+	if request.LeaseID != "" {
+		body["leaseId"] = request.LeaseID
+	}
+	response, err := t.runtimeProtocol(ctx, node, body)
 	if err != nil {
 		return ExecutionStartV2Response{}, err
 	}
@@ -126,7 +130,7 @@ func validCredentialLeaseRequest(r CredentialLeaseRequest) bool {
 	return validLowerHex(r.RequestID, 32) && validLowerHex(r.StartAttemptID, 32) && candidateIdentityPattern.MatchString(r.ProjectIdentity) && validSHA256(r.ProjectRevision) && validSHA256(r.PlanFingerprint) && validSHA256(r.ExecutionManifestDigest) && validRuntimeRelease(r.RuntimeRelease)
 }
 func validExecutionStartV2Request(r ExecutionStartV2Request) bool {
-	return validLowerHex(r.StartAttemptID, 32) && candidateIdentityPattern.MatchString(r.ProjectIdentity) && validSHA256(r.ProjectRevision) && validSHA256(r.PlanFingerprint) && validSHA256(r.ExecutionManifestDigest) && validLowerHex(r.LeaseID, 32) && validRuntimeRelease(r.RuntimeRelease)
+	return validLowerHex(r.StartAttemptID, 32) && candidateIdentityPattern.MatchString(r.ProjectIdentity) && validSHA256(r.ProjectRevision) && validSHA256(r.PlanFingerprint) && validSHA256(r.ExecutionManifestDigest) && (r.LeaseID == "" || validLowerHex(r.LeaseID, 32)) && validRuntimeRelease(r.RuntimeRelease)
 }
 func validRuntimeRelease(raw map[string]any) bool {
 	if len(raw) != 4 {

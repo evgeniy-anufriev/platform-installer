@@ -133,19 +133,26 @@ def _v2_start_request(value):
 
 def _start_v2(value, state_root, runtime_release, controller, active_bundle_digest):
     value = _v2_start_request(value)
-    plan = execution_secret_lease.resolve_plan(state_root, value)
-    run_id = plan.get("runId")
-    manifest_path = os.path.join(state_root, "runs", run_id, "manifest.json")
-    if not isinstance(run_id, str) or not os.path.isfile(manifest_path) or os.path.islink(manifest_path):
-        raise LifecycleError("EXECUTION_MANIFEST_MISSING")
-    with open(manifest_path, "r", encoding="utf-8") as stream:
-        manifest = json.load(stream)
-    if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]:
-        raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
     attempt_binding = {"projectIdentity": value["projectIdentity"], "projectRevision": value["projectRevision"], "planFingerprint": value["planFingerprint"], "executionManifestDigest": value["executionManifestDigest"], "runtimeRelease": value["runtimeRelease"], "leaseId": value.get("leaseId")}
+    prepared = execution_secret_lease.prepared_start(state_root, value["startAttemptId"], attempt_binding)
+    if prepared is not None:
+        _, published = execution_secret_lease.attempt(state_root, value["startAttemptId"], attempt_binding)
+        if not published:
+            _rollback_prepared_start(state_root, prepared)
+            execution_secret_lease.rollback_prepared_start(state_root, value["startAttemptId"], attempt_binding)
     previous_run, known_attempt = execution_secret_lease.attempt(state_root, value["startAttemptId"], attempt_binding)
     if known_attempt:
         return {"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionResponse", "status": "ALREADY_STARTED", "startAttemptId": value["startAttemptId"], "runId": previous_run}
+    plan = execution_secret_lease.resolve_plan(state_root, value)
+    staging_id = plan.get("stagingId")
+    staging_dir = os.path.join(state_root, "runs", staging_id)
+    manifest_path = os.path.join(staging_dir, "manifest.json")
+    if not isinstance(staging_id, str) or not os.path.isfile(manifest_path) or os.path.islink(manifest_path): raise LifecycleError("EXECUTION_MANIFEST_MISSING")
+    with open(manifest_path, "r", encoding="utf-8") as stream: manifest = json.load(stream)
+    if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]: raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
+    # The node, not planning or the caller, creates the authoritative run id.
+    run_id = "installer-" + os.urandom(16).hex()
+    run_dir = os.path.join(state_root, "runs", run_id)
     if value.get("leaseId"):
         binding = {"requestId": None, "startAttemptId": value["startAttemptId"], "projectIdentity": value["projectIdentity"], "projectRevision": value["projectRevision"], "planFingerprint": value["planFingerprint"], "executionManifestDigest": value["executionManifestDigest"], "runtimeRelease": value["runtimeRelease"]}
         # requestId is intentionally not known to Start; compare the immutable
@@ -154,11 +161,62 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
         stored = record.get("binding") if isinstance(record, dict) else None
         if not isinstance(stored, dict) or any(stored.get(key) != binding[key] for key in binding if key != "requestId"):
             raise LifecycleError("LEASE_BINDING_MISMATCH")
-        execution_secret_lease.attach(state_root, value["leaseId"], stored, run_id)
-    result = start({"runId": run_id, "projectIdentity": value["projectIdentity"], "planFingerprint": value["planFingerprint"], "runtimeRelease": value["runtimeRelease"]}, state_root, runtime_release, controller, active_bundle_digest)
-    execution_secret_lease.attempt(state_root, value["startAttemptId"], attempt_binding, run_id)
+    else: stored = None
+    committed = [False]
+    def commit_binding(_metadata, _journal):
+        execution_secret_lease.commit_start(state_root, value["startAttemptId"], attempt_binding, run_id, staging_id, value.get("leaseId"), stored)
+        committed[0] = True
+    try:
+        os.replace(staging_dir, run_dir)
+        # start() serializes active-run admission, persists the immutable
+        # journal binding, then invokes this callback before controller launch.
+        result = start({"runId": run_id, "projectIdentity": value["projectIdentity"], "planFingerprint": value["planFingerprint"], "runtimeRelease": value["runtimeRelease"]}, state_root, runtime_release, controller, active_bundle_digest, prelaunch=commit_binding)
+    except Exception:
+        if committed[0]:
+            # From this point a durable node-owned run exists. Every ordinary
+            # launch failure, not only CalledProcessError, becomes lifecycle
+            # evidence for that same id; retry resolves the mapping.
+            Journal(state_root, run_id).terminal("FAILED", "EXECUTION_CONTROLLER_START_FAILED", "Controller launch failed")
+            result = {"idempotent": False}
+        else:
+            # No durable attempt/run association exists yet. Remove only
+            # lifecycle files created by start(), retaining the already
+            # validated private plan staging for an allowed retry.
+            _rollback_uncommitted_start(run_dir)
+            if os.path.isdir(run_dir) and not os.path.exists(staging_dir):
+                os.replace(run_dir, staging_dir)
+            raise
     status = "ALREADY_STARTED" if result.get("idempotent") else "STARTED"
     return {"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionResponse", "status": status, "startAttemptId": value["startAttemptId"], "runId": run_id}
+
+
+def _rollback_uncommitted_start(run_dir):
+    """Remove only journal artifacts made before an uncommitted Start.
+
+    The directory still contains the original verified staging manifest and
+    project.  All removed names are fixed Journal-owned files; a symlink or an
+    unexpected directory fails closed rather than deleting an unproven path.
+    """
+    names = ("metadata.json", "status.json", "events.jsonl", "result.json", ".lock", ".events.lock", "task-observability.json", ".task-observability.reported")
+    for name in names:
+        path = os.path.join(run_dir, name)
+        if not os.path.lexists(path):
+            continue
+        details = os.lstat(path)
+        if os.path.islink(path) or not os.path.isfile(path):
+            raise LifecycleError("EXECUTION_START_ROLLBACK_UNSAFE")
+        os.unlink(path)
+
+
+def _rollback_prepared_start(state_root, prepared):
+    """Restore exact pre-start staging for a PREPARED, uncommitted record."""
+    run_id, staging_id = prepared["runId"], prepared["stagingId"]
+    run_dir = os.path.join(state_root, "runs", run_id)
+    staging_dir = os.path.join(state_root, "runs", staging_id)
+    if os.path.isdir(run_dir):
+        _rollback_uncommitted_start(run_dir)
+        if not os.path.exists(staging_dir):
+            os.replace(run_dir, staging_dir)
 
 
 def _validated_snapshot_request(value):
@@ -432,7 +490,7 @@ def _candidate_ansible_environment(project, release, output_path):
     )
 
 
-def start(value, state_root, runtime_release, controller, active_bundle_digest=""):
+def start(value, state_root, runtime_release, controller, active_bundle_digest="", prelaunch=None):
     run_id = value.get("runId")
     journal = Journal(state_root, run_id)
     manifest_path = os.path.join(journal.directory, "manifest.json")
@@ -471,6 +529,8 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
                 continue
         journal.initialize(metadata)
         journal.transition("STARTING", "Detached controller accepted")
+        if prelaunch is not None:
+            prelaunch(metadata, journal)
         # The bundle intentionally stores content with deterministic bytes, not
         # host executable bits.  Interpreter and controller are both fixed by
         # this node-side protocol, never supplied by a client.
