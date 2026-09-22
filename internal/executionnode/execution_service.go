@@ -46,16 +46,43 @@ const (
 )
 
 type DeploymentPlan struct {
-	ID                   string
-	Status               string
-	ProjectIdentity      string
-	ProjectRevision      string
-	PlanFingerprint      string
-	Acknowledgements     []string
-	RuntimeRelease       map[string]any
-	ArtifactRequirements []artifactsource.Requirement
-	Findings             []Finding
-	executionID          string
+	ID                     string
+	Status                 string
+	ProjectIdentity        string
+	ProjectRevision        string
+	PlanFingerprint        string
+	Acknowledgements       []string
+	AcknowledgementDetails []PlanAcknowledgement
+	Phases                 []DeploymentPlanPhase
+	RuntimeRelease         map[string]any
+	ArtifactRequirements   []artifactsource.Requirement
+	Findings               []Finding
+	executionID            string
+}
+
+// PlanAcknowledgement and DeploymentPlanPhase retain the closed, Core-owned
+// planning vocabulary needed by the Installation facade. They do not describe
+// desired state and are never persisted by the Installer.
+type PlanAcknowledgement struct {
+	Code    string
+	Summary string
+}
+
+type DeploymentPlanPhase struct {
+	ID      string
+	Order   int
+	Actions []DeploymentPlanAction
+}
+
+type DeploymentPlanAction struct {
+	ID                string
+	Type              string
+	ServiceDeployment string
+	Targets           []string
+	DependsOn         []string
+	Mutating          bool
+	Reboot            string
+	Summary           string
 }
 
 type PlanRecord struct {
@@ -484,6 +511,8 @@ func sameStrings(a, b []string) bool {
 }
 func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
 	p.Acknowledgements = append([]string(nil), p.Acknowledgements...)
+	p.AcknowledgementDetails = append([]PlanAcknowledgement(nil), p.AcknowledgementDetails...)
+	p.Phases = clonePlanPhases(p.Phases)
 	p.ArtifactRequirements = append([]artifactsource.Requirement(nil), p.ArtifactRequirements...)
 	p.Findings = append([]Finding(nil), p.Findings...)
 	if p.RuntimeRelease != nil {
@@ -494,6 +523,20 @@ func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
 		}
 	}
 	return p
+}
+
+func clonePlanPhases(phases []DeploymentPlanPhase) []DeploymentPlanPhase {
+	result := make([]DeploymentPlanPhase, len(phases))
+	for index, phase := range phases {
+		result[index] = phase
+		result[index].Actions = make([]DeploymentPlanAction, len(phase.Actions))
+		for actionIndex, action := range phase.Actions {
+			result[index].Actions[actionIndex] = action
+			result[index].Actions[actionIndex].Targets = append([]string(nil), action.Targets...)
+			result[index].Actions[actionIndex].DependsOn = append([]string(nil), action.DependsOn...)
+		}
+	}
+	return result
 }
 func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
 	r.ArtifactTargets = append([]Node(nil), r.ArtifactTargets...)

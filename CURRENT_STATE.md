@@ -61,9 +61,12 @@ remain separate.
 UI-02A is DONE. It adds the closed local `InstallationState` Wails projection
 and the read-only Summary → Plan → Execution → Result Installation surface.
 It performs no Core, Execution Node or target call and has no plan creation,
-approval, Start, cancellation or secret path. UI-02B is NEXT: fresh bounded
-plan creation, projection, acknowledgement and approval. Evidence:
-`docs/ui-02a.md` and `docs/ui-02-architecture.md`.
+approval, Start, cancellation or secret path. UI-02B is DONE: it adds fresh
+target-free planning, closed plan projection and exact acknowledgement approval
+for the current saved revision/runtime binding, with no Start, cancellation,
+secret or target-contact path. UI-02C is NEXT: the closed target credential
+lease and idempotent Start correlation protocol. Evidence: `docs/ui-02a.md`,
+`docs/ui-02b.md` and `docs/ui-02-architecture.md`.
 
 ## EXEC-OBS-01 completion (2026-09-05)
 

@@ -6,6 +6,7 @@ import type {
   ExecutionNodeReadiness,
   EndpointPreview,
   InstallationState,
+  InstallationPlanOperation,
   OpenResult,
   ProjectExportOperationResult,
   ProjectBackend,
@@ -174,6 +175,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [installationTab, setInstallationTab] = useState<
     "summary" | "plan" | "execution" | "result"
   >("summary");
+  const [installationPlan, setInstallationPlan] = useState<
+    InstallationPlanOperation | undefined
+  >(undefined);
+  const [installationBusy, setInstallationBusy] = useState(false);
   const [endpointPreview, setEndpointPreview] = useState<
     EndpointPreview | undefined
   >(undefined);
@@ -271,6 +276,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     let live = true;
     if (!projectOpen || !api.getInstallationState) {
       setInstallationState(undefined);
+      setInstallationPlan(undefined);
       return () => { live = false; };
     }
     api.getInstallationState()
@@ -278,6 +284,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       .catch(() => live && setInstallationState(undefined));
     return () => { live = false; };
   }, [api, projectOpen, result.root, commandCount, executionNode?.status]);
+
+  useEffect(() => {
+    let live = true;
+    const planId = installationState?.plan.planId;
+    if (!planId || !api.getInstallationPlan) return () => { live = false; };
+    api.getInstallationPlan(planId)
+      .then((value) => live && setInstallationPlan(value))
+      .catch(() => live && setInstallationPlan(undefined));
+    return () => { live = false; };
+  }, [api, installationState?.plan.planId]);
 
   const clearDraft = () => {
     setEdit(null);
@@ -299,6 +315,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setEndpointPreview(undefined);
     setVerifiedPKI(undefined);
     setInstallationTab("summary");
+    setInstallationPlan(undefined);
   };
   const clearRefreshFailure = () => {
     setRefreshRequired(false);
@@ -369,6 +386,37 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     clearRefreshFailure();
     resetTopologySelection();
     setPage("project");
+  };
+  const refreshInstallationState = async () => {
+    if (!api.getInstallationState) return;
+    const next = await api.getInstallationState();
+    setInstallationState(next);
+  };
+  const createInstallationPlan = async () => {
+    if (!api.createInstallationPlan) return;
+    setInstallationBusy(true);
+    try {
+      const operation = await api.createInstallationPlan();
+      setInstallationPlan(operation);
+      await refreshInstallationState();
+      setInstallationTab("plan");
+    } finally {
+      setInstallationBusy(false);
+    }
+  };
+  const approveInstallationPlan = async (
+    planId: string,
+    acknowledgements: string[],
+  ) => {
+    if (!api.approveInstallationPlan) return;
+    setInstallationBusy(true);
+    try {
+      const operation = await api.approveInstallationPlan(planId, acknowledgements);
+      setInstallationPlan(operation);
+      await refreshInstallationState();
+    } finally {
+      setInstallationBusy(false);
+    }
   };
   const chooseExportParent = async () => {
     if (!api.chooseProjectExportParent) return;
@@ -1058,6 +1106,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             tab={installationTab}
             onTabChange={setInstallationTab}
             onOpenServers={() => setPage("servers")}
+            plan={installationPlan}
+            busy={installationBusy}
+            onCreatePlan={createInstallationPlan}
+            onApprovePlan={approveInstallationPlan}
           />
         )}
         {projectDialog && (

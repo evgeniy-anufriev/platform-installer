@@ -140,20 +140,21 @@ type App struct {
 	reader interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	projectRevision func(string) (string, error)
-	lifecycle       projectLifecycle
-	current         ProjectOpenResult
-	sessions        *installer.EditSessionStore
-	editor          *installer.Backend
-	activeSession   string
-	editMu          sync.Mutex
-	config          appconfig.Config
-	configErr       error
-	secrets         *runtimesecret.Broker
-	execution       *executionNodeContextStore
-	binding         *executionNodeBinding
-	continuation    *verificationContinuation
-	export          *installer.ProjectExport
+	projectRevision    func(string) (string, error)
+	lifecycle          projectLifecycle
+	current            ProjectOpenResult
+	sessions           *installer.EditSessionStore
+	editor             *installer.Backend
+	activeSession      string
+	editMu             sync.Mutex
+	config             appconfig.Config
+	configErr          error
+	secrets            *runtimesecret.Broker
+	execution          *executionNodeContextStore
+	binding            *executionNodeBinding
+	continuation       *verificationContinuation
+	export             *installer.ProjectExport
+	installationPlanID string
 }
 
 type AppOption func(*App)
@@ -583,6 +584,7 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 	if !sameExecutionNodeTarget(before, a.execution.context) {
 		a.current.Snapshot = nil
 		a.current.Verification = notVerified()
+		a.installationPlanID = ""
 	}
 	a.continuation = nil
 	return a.execution.context, nil
@@ -902,6 +904,7 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
 	a.continuation = nil
+	a.installationPlanID = ""
 	if project == nil || project.ID == "" {
 		a.execution.clear()
 		return
@@ -945,7 +948,21 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_UNAVAILABLE":
 		return "Execution Node недоступен. Проект на диске не изменён."
 	case "EXECUTION_NODE_READY_REQUIRED":
-		return "Для проверки требуется READY Execution Node. Проверьте или подготовьте его на странице Серверы."
+		return "Требуется READY Execution Node. Проверьте или подготовьте его на странице Серверы."
+	case "EXECUTION_NODE_BINDING_REQUIRED":
+		return "Выбранный Execution Node не имеет доверенного runtime binding. Откройте страницу Серверы."
+	case "PROJECT_CHANGES_UNSAVED":
+		return "Сначала сохраните или отмените несохранённые изменения проекта."
+	case "PROJECT_REVISION_UNAVAILABLE":
+		return "Не удалось безопасно прочитать сохранённую ревизию проекта."
+	case "INSTALLATION_PLAN_NOT_FOUND":
+		return "Этот план не принадлежит текущему открытому проекту или уже истёк. Создайте свежий план."
+	case "PLAN_BLOCKED":
+		return "План заблокирован findings Core и не может быть одобрен."
+	case "PLAN_STALE":
+		return "Сохранённый проект или runtime binding изменились. Создайте свежий план."
+	case "DEPLOYMENT_PLAN_RESPONSE_INVALID":
+		return "Execution Node вернул некорректный план. Выполнение не начиналось."
 	case "BINDING_REQUIRED":
 		return "Выбранный кандидат не имеет доверенного Execution Node binding. Настройте узел через поддерживаемый trusted path."
 	case "EXECUTION_NODE_PLAN_INVALID":

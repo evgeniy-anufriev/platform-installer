@@ -56,7 +56,7 @@ func TestDecodeBlockedDeploymentPlanPreservesSafeFindings(t *testing.T) {
 		"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"fingerprints":{"plan":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"runtimeRelease":{"bundleDigest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
-		"artifactRequirements":[],"acknowledgements":[],
+		"artifactRequirements":[],"phases":[],"acknowledgements":[],
 		"findings":[{"code":"PROJECT_VALIDATION_BLOCKED","safeMessage":"Authoritative project validation is blocked"}]
 	}`), &value); err != nil {
 		t.Fatal(err)
@@ -67,6 +67,28 @@ func TestDecodeBlockedDeploymentPlanPreservesSafeFindings(t *testing.T) {
 	}
 	if plan.Status != "BLOCKED" || len(plan.Findings) != 1 || plan.Findings[0].Code != "PROJECT_VALIDATION_BLOCKED" {
 		t.Fatalf("plan=%#v", plan)
+	}
+}
+
+func TestDecodeDeploymentPlanRetainsBoundedPhasesActionsAndAcknowledgements(t *testing.T) {
+	var value map[string]any
+	if err := json.Unmarshal([]byte(`{
+		"id":"plan-1","status":"EXECUTABLE","projectIdentity":"project-1",
+		"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"fingerprints":{"plan":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+		"runtimeRelease":{"bundleDigest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","coreVersion":"core","catalogDigest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","planningProtocol":"protocol"},
+		"artifactRequirements":[],"acknowledgements":[{"code":"ACK_RISK","summary":"Review"}],
+		"phases":[{"id":"apply","order":0,"actions":[{"id":"apply:kafka","type":"SERVICE_APPLY","serviceDeployment":"kafka-main","targets":["node1"],"dependsOn":[],"mutating":true,"reboot":"NONE","summary":"Apply Kafka"}]}],"findings":[]
+	}`), &value); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := decodeDeploymentPlan(value)
+	if err != nil || len(plan.Phases) != 1 || len(plan.Phases[0].Actions) != 1 || plan.Phases[0].Actions[0].ServiceDeployment != "kafka-main" || len(plan.AcknowledgementDetails) != 1 {
+		t.Fatalf("plan=%#v err=%v", plan, err)
+	}
+	value["phases"].([]any)[0].(map[string]any)["actions"].([]any)[0].(map[string]any)["reboot"] = "MAYBE"
+	if _, err := decodeDeploymentPlan(value); err == nil || err.Error() != "DEPLOYMENT_PLAN_RESPONSE_INVALID" {
+		t.Fatalf("invalid reboot err=%v", err)
 	}
 }
 

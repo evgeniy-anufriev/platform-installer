@@ -13,6 +13,9 @@ import {
   GetVerifiedPKIView,
   GetExecutionNodeContext,
   GetInstallationState,
+  CreateInstallationPlan,
+  GetInstallationPlan,
+  ApproveInstallationPlan,
   GetSessionCredentialStatus,
   CheckExecutionNode,
   OpenProject,
@@ -164,7 +167,12 @@ export type ExecutionNodeContext = {
 export type InstallationState = {
   apiVersion: "platform.installer/installation-state/v1alpha1";
   kind: "InstallationState";
-  status: "PREREQUISITES_REQUIRED" | "READY_TO_PLAN";
+  status:
+    | "PREREQUISITES_REQUIRED"
+    | "READY_TO_PLAN"
+    | "PLAN_BLOCKED"
+    | "PLAN_REVIEW"
+    | "PLAN_APPROVED";
   project?: {
     id: string;
     revision: string;
@@ -172,12 +180,56 @@ export type InstallationState = {
     hasUnsavedChanges: boolean;
   };
   executionNode: { status: string; safeLabel?: string };
-  plan: { status: "NOT_CREATED" };
+  plan: {
+    status:
+      | "NOT_CREATED"
+      | "PLAN_STALE_OR_EXPIRED"
+      | "PLAN_BLOCKED"
+      | "PLAN_REVIEW"
+      | "PLAN_APPROVED";
+    planId?: string;
+  };
   prerequisites?: Array<{
     code: string;
     destination: "project" | "servers";
     safeMessage: string;
   }>;
+};
+export type InstallationPlanView = {
+  id: string;
+  status: "EXECUTABLE" | "BLOCKED";
+  projectRevision: string;
+  planFingerprint: string;
+  executionNodeId: string;
+  runtime: {
+    bundleDigest: string;
+    coreVersion: string;
+    catalogDigest: string;
+    protocol: string;
+  };
+  expiresAt: string;
+  approved: boolean;
+  acknowledgements: Array<{ code: string; summary: string }>;
+  phases: Array<{
+    id: string;
+    order: number;
+    actions: Array<{
+      id: string;
+      type: string;
+      serviceDeployment?: string;
+      targets: string[];
+      dependsOn: string[];
+      mutating: boolean;
+      reboot: string;
+      summary: string;
+    }>;
+  }>;
+  findings?: Array<{ code: string; safeMessage: string }>;
+};
+export type InstallationPlanOperation = {
+  status: "BLOCKED" | "PLAN_BLOCKED" | "PLAN_REVIEW" | "PLAN_APPROVED";
+  plan?: InstallationPlanView;
+  error?: { code: string; message: string };
 };
 export type EndpointPreview = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
@@ -281,6 +333,12 @@ export interface ProjectBackend {
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
   getInstallationState?(): Promise<InstallationState>;
+  createInstallationPlan?(): Promise<InstallationPlanOperation>;
+  getInstallationPlan?(planId: string): Promise<InstallationPlanOperation>;
+  approveInstallationPlan?(
+    planId: string,
+    acknowledgements: string[],
+  ): Promise<InstallationPlanOperation>;
   getEndpointPreview?(): Promise<EndpointPreview>;
   getVerifiedPKIView?(): Promise<VerifiedPKIView>;
   selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
@@ -325,6 +383,15 @@ export const backend: ProjectBackend = {
   getExecutionNodeContext: GetExecutionNodeContext,
   getInstallationState: () =>
     GetInstallationState() as unknown as Promise<InstallationState>,
+  createInstallationPlan: () =>
+    CreateInstallationPlan() as unknown as Promise<InstallationPlanOperation>,
+  getInstallationPlan: (planId) =>
+    GetInstallationPlan(planId) as unknown as Promise<InstallationPlanOperation>,
+  approveInstallationPlan: (planId, acknowledgements) =>
+    ApproveInstallationPlan(
+      planId,
+      acknowledgements,
+    ) as unknown as Promise<InstallationPlanOperation>,
   getEndpointPreview: () =>
     GetEndpointPreview() as unknown as Promise<EndpointPreview>,
   getVerifiedPKIView: () =>

@@ -727,6 +727,11 @@ read-only state and shows Summary, Plan, Execution and Result without a plan,
 Core call, node/target contact, secret or Start path. UI-02B is NEXT and alone
 may create and approve a fresh plan.
 
+UI-02B is DONE: the Installer invokes the existing target-free Core planning
+operation through `ExecutionService`, projects a bounded plan, and accepts
+only the exact acknowledgements for its saved revision/runtime binding. It has
+no Start, cancellation, secret or target-contact path. UI-02C is NEXT.
+
 Deliverables:
 
 - readiness, plan, confirmation, execution and result views;

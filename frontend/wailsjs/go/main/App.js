@@ -6,6 +6,10 @@ export function AppendEditCommand(arg1, arg2) {
   return window['go']['main']['App']['AppendEditCommand'](arg1, arg2);
 }
 
+export function ApproveInstallationPlan(arg1, arg2) {
+  return window['go']['main']['App']['ApproveInstallationPlan'](arg1, arg2);
+}
+
 export function CheckExecutionNode() {
   return window['go']['main']['App']['CheckExecutionNode']();
 }
@@ -46,6 +50,10 @@ export function CreateProject(arg1) {
   return window['go']['main']['App']['CreateProject'](arg1);
 }
 
+export function CreateInstallationPlan() {
+  return window['go']['main']['App']['CreateInstallationPlan']();
+}
+
 export function CurrentProject() {
   return window['go']['main']['App']['CurrentProject']();
 }
@@ -68,6 +76,10 @@ export function GetExecutionNodeContext() {
 
 export function GetInstallationState() {
   return window['go']['main']['App']['GetInstallationState']();
+}
+
+export function GetInstallationPlan(arg1) {
+  return window['go']['main']['App']['GetInstallationPlan'](arg1);
 }
 
 export function GetSessionCredentialStatus() {

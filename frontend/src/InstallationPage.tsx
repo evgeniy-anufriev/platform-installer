@@ -1,4 +1,5 @@
-import type { InstallationState } from "./backend";
+import { useState } from "react";
+import type { InstallationPlanOperation, InstallationState } from "./backend";
 
 type InstallationTab = "summary" | "plan" | "execution" | "result";
 
@@ -29,11 +30,19 @@ export function InstallationPage({
   tab,
   onTabChange,
   onOpenServers,
+  plan,
+  busy,
+  onCreatePlan,
+  onApprovePlan,
 }: {
   state?: InstallationState;
   tab: InstallationTab;
   onTabChange: (tab: InstallationTab) => void;
   onOpenServers: () => void;
+  plan?: InstallationPlanOperation;
+  busy: boolean;
+  onCreatePlan: () => void;
+  onApprovePlan: (planId: string, acknowledgements: string[]) => void;
 }) {
   const prerequisites = state?.prerequisites || [];
   const node = state?.executionNode;
@@ -88,7 +97,10 @@ export function InstallationPage({
           <article className="card">
             <h2>Следующее действие</h2>
             {state?.status === "READY_TO_PLAN" ? (
-              <p>Предпосылки для свежего плана выполнены. Создание плана будет добавлено в UI‑02B.</p>
+              <>
+                <p>Предпосылки для свежего плана выполнены. Проверка проекта не заменяет свежий DeploymentPlan.</p>
+                <button onClick={onCreatePlan} disabled={busy}>Сформировать свежий план</button>
+              </>
             ) : (
               <ul className="safe-findings">
                 {prerequisites.map((item) => <li key={item.code}><code>{item.code}</code> {item.safeMessage}</li>)}
@@ -97,9 +109,46 @@ export function InstallationPage({
           </article>
         </>
       )}
-      {tab === "plan" && <ReadOnlyStage title="План" message="Свежий план ещё не создан. UI‑02A отображает только безопасное состояние; создание и одобрение плана появятся в UI‑02B." />}
+      {tab === "plan" && <PlanStage operation={plan} busy={busy} onCreatePlan={onCreatePlan} onApprovePlan={onApprovePlan} />}
       {tab === "execution" && <ReadOnlyStage title="Выполнение" message="Нет известного запуска в текущем сеансе. UI‑02A не запускает выполнение и не обращается к целевым серверам." />}
       {tab === "result" && <ReadOnlyStage title="Результат" message="Нет результата для отображения. UI‑02A не хранит историю запусков и не выполняет повторную проверку." />}
+    </section>
+  );
+}
+
+function PlanStage({
+  operation,
+  busy,
+  onCreatePlan,
+  onApprovePlan,
+}: {
+  operation?: InstallationPlanOperation;
+  busy: boolean;
+  onCreatePlan: () => void;
+  onApprovePlan: (planId: string, acknowledgements: string[]) => void;
+}) {
+  const [acknowledged, setAcknowledged] = useState<string[]>([]);
+  const plan = operation?.plan;
+  if (!plan) {
+    return <article className="card installation-empty"><h2>План</h2><p>{operation?.error?.message || "Свежий план ещё не создан."}</p><button onClick={onCreatePlan} disabled={busy}>Сформировать свежий план</button></article>;
+  }
+  const requiredCodes = plan.acknowledgements.map((item) => item.code);
+  const canApprove = plan.status === "EXECUTABLE" && !plan.approved && requiredCodes.every((code) => acknowledged.includes(code));
+  return (
+    <section>
+      <article className="card">
+        <h2>Свежий DeploymentPlan</h2>
+        <dl>
+          <dt>Статус</dt><dd>{operation.status}</dd>
+          <dt>Ревизия проекта</dt><dd>{plan.projectRevision}</dd>
+          <dt>Execution Node</dt><dd>{plan.executionNodeId}</dd>
+          <dt>Истекает</dt><dd>{plan.expiresAt}</dd>
+        </dl>
+      </article>
+      {plan.findings && plan.findings.length > 0 && <article className="card"><h2>Findings</h2><ul className="safe-findings">{plan.findings.map((item) => <li key={item.code}><code>{item.code}</code> {item.safeMessage}</li>)}</ul></article>}
+      <article className="card"><h2>Этапы плана</h2>{plan.phases.map((phase) => <section className="plan-phase" key={phase.id}><h3>{phase.order + 1}. {phase.id}</h3>{phase.actions.map((action) => <div className="plan-action-row" key={action.id}><b>{action.summary}</b><span>{action.targets.join(", ") || "без target hosts"}</span><small>{action.mutating ? "изменяет инфраструктуру" : "проверка"}{action.dependsOn.length ? ` · после ${action.dependsOn.join(", ")}` : ""}</small></div>)}</section>)}</article>
+      {plan.status === "EXECUTABLE" && !plan.approved && <article className="card"><h2>Подтверждение</h2>{plan.acknowledgements.map((item) => <label className="acknowledgement" key={item.code}><input type="checkbox" checked={acknowledged.includes(item.code)} onChange={(event) => setAcknowledged((current) => event.target.checked ? [...current, item.code] : current.filter((code) => code !== item.code))} /> <span><b>{item.code}</b><br />{item.summary}</span></label>)}<p><button onClick={() => onApprovePlan(plan.id, requiredCodes)} disabled={busy || !canApprove}>Одобрить план</button></p></article>}
+      {plan.approved && <article className="card"><h2>План одобрен</h2><p>Запуск в UI‑02B недоступен. Он будет добавлен только после отдельного credential/runtime gate UI‑02C и UI‑02D.</p></article>}
     </section>
   );
 }

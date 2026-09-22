@@ -7,6 +7,8 @@ import {projectlifecycle} from '../models';
 
 export function AppendEditCommand(arg1:string,arg2:installer.EditCommand):Promise<main.EditOperationResult>;
 
+export function ApproveInstallationPlan(arg1:string,arg2:Array<string>):Promise<main.InstallationPlanOperation>;
+
 export function CheckExecutionNode():Promise<main.ExecutionNodeReadiness>;
 
 export function ChooseProject():Promise<main.ProjectOpenResult>;
@@ -27,6 +29,8 @@ export function CommitStructuralEditPlan(arg1:string,arg2:string):Promise<main.S
 
 export function CreateProject(arg1:projectlifecycle.CreateProjectRequest):Promise<main.ProjectOpenResult>;
 
+export function CreateInstallationPlan():Promise<main.InstallationPlanOperation>;
+
 export function CurrentProject():Promise<main.ProjectOpenResult>;
 
 export function DiscardEditSession(arg1:string):Promise<main.EditOperationResult>;
@@ -38,6 +42,8 @@ export function GetEndpointPreview():Promise<main.EndpointPreview>;
 export function GetExecutionNodeContext():Promise<main.ExecutionNodeContext>;
 
 export function GetInstallationState():Promise<main.InstallationState>;
+
+export function GetInstallationPlan(arg1:string):Promise<main.InstallationPlanOperation>;
 
 export function GetSessionCredentialStatus():Promise<runtimesecret.Status>;
 

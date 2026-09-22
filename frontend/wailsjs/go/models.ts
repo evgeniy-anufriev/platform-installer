@@ -1338,10 +1338,12 @@ export namespace main {
 	}
 	export class InstallationPlanState {
 		status: string;
+		planId?: string;
 		static createFrom(source: any = {}) { return new InstallationPlanState(source); }
 		constructor(source: any = {}) {
 			if ('string' === typeof source) source = JSON.parse(source);
 			this.status = source["status"];
+			this.planId = source["planId"];
 		}
 	}
 	export class InstallationPrerequisite {
@@ -1376,6 +1378,67 @@ export namespace main {
 			this.plan = new InstallationPlanState(source["plan"]);
 			this.prerequisites = Array.isArray(source["prerequisites"]) ? source["prerequisites"].map((item: any) => new InstallationPrerequisite(item)) : undefined;
 		}
+	}
+	export class InstallationRuntimeBinding {
+		bundleDigest: string;
+		coreVersion: string;
+		catalogDigest: string;
+		protocol: string;
+		static createFrom(source: any = {}) { return new InstallationRuntimeBinding(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.bundleDigest = source["bundleDigest"]; this.coreVersion = source["coreVersion"]; this.catalogDigest = source["catalogDigest"]; this.protocol = source["protocol"]; }
+	}
+	export class InstallationAcknowledgement {
+		code: string;
+		summary: string;
+		static createFrom(source: any = {}) { return new InstallationAcknowledgement(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.code = source["code"]; this.summary = source["summary"]; }
+	}
+	export class InstallationPlanAction {
+		id: string;
+		type: string;
+		serviceDeployment?: string;
+		targets: string[];
+		dependsOn: string[];
+		mutating: boolean;
+		reboot: string;
+		summary: string;
+		static createFrom(source: any = {}) { return new InstallationPlanAction(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.id = source["id"]; this.type = source["type"]; this.serviceDeployment = source["serviceDeployment"]; this.targets = source["targets"]; this.dependsOn = source["dependsOn"]; this.mutating = source["mutating"]; this.reboot = source["reboot"]; this.summary = source["summary"]; }
+	}
+	export class InstallationPlanPhase {
+		id: string;
+		order: number;
+		actions: InstallationPlanAction[];
+		static createFrom(source: any = {}) { return new InstallationPlanPhase(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.id = source["id"]; this.order = source["order"]; this.actions = Array.isArray(source["actions"]) ? source["actions"].map((item: any) => new InstallationPlanAction(item)) : []; }
+	}
+	export class InstallationPlanFinding {
+		code: string;
+		safeMessage: string;
+		static createFrom(source: any = {}) { return new InstallationPlanFinding(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.code = source["code"]; this.safeMessage = source["safeMessage"]; }
+	}
+	export class InstallationPlanView {
+		id: string;
+		status: string;
+		projectRevision: string;
+		planFingerprint: string;
+		executionNodeId: string;
+		runtime: InstallationRuntimeBinding;
+		expiresAt: string;
+		approved: boolean;
+		acknowledgements: InstallationAcknowledgement[];
+		phases: InstallationPlanPhase[];
+		findings?: InstallationPlanFinding[];
+		static createFrom(source: any = {}) { return new InstallationPlanView(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.id = source["id"]; this.status = source["status"]; this.projectRevision = source["projectRevision"]; this.planFingerprint = source["planFingerprint"]; this.executionNodeId = source["executionNodeId"]; this.runtime = new InstallationRuntimeBinding(source["runtime"]); this.expiresAt = source["expiresAt"]; this.approved = source["approved"]; this.acknowledgements = Array.isArray(source["acknowledgements"]) ? source["acknowledgements"].map((item: any) => new InstallationAcknowledgement(item)) : []; this.phases = Array.isArray(source["phases"]) ? source["phases"].map((item: any) => new InstallationPlanPhase(item)) : []; this.findings = Array.isArray(source["findings"]) ? source["findings"].map((item: any) => new InstallationPlanFinding(item)) : undefined; }
+	}
+	export class InstallationPlanOperation {
+		status: string;
+		plan?: InstallationPlanView;
+		error?: ProjectOpenError;
+		static createFrom(source: any = {}) { return new InstallationPlanOperation(source); }
+		constructor(source: any = {}) { if ('string' === typeof source) source = JSON.parse(source); this.status = source["status"]; this.plan = source["plan"] ? new InstallationPlanView(source["plan"]) : undefined; this.error = source["error"] ? new ProjectOpenError(source["error"]) : undefined; }
 	}
 	export class ProjectVerification {
 	    apiVersion: string;

@@ -59,8 +59,9 @@ func main() {
 			release := map[string]any{"bundleDigest": verified.Digest, "coreVersion": verified.Manifest.CoreVersion, "catalogDigest": verified.Manifest.CatalogDigest, "planningProtocol": executionbundle.ProtocolVersion}
 			transport := executionnode.OpenSSHTransport{Identity: desktopIdentity{*identity}}
 			projectReadBinding := projectReader{transport: transport, node: node, runtimeRelease: release}
+			planService := executionnode.NewExecutionService(transport, transport)
 			reader = projectReadBinding
-			appOptions = append(appOptions, WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: projectReadBinding, service: executionnode.NewService(transport), bundleRoot: bundleRoot}))
+			appOptions = append(appOptions, WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: projectReadBinding, service: executionnode.NewService(transport), plans: planService, bundleRoot: bundleRoot}))
 		}
 	}
 	applicationConfig, applicationConfigErr := loadApplicationConfig()

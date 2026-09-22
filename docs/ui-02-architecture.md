@@ -1,6 +1,6 @@
 # UI-02 — Installation workflow architecture
 
-Status: **UI-02A DONE; UI-02B NEXT**. `UI02-PLAN-001` is
+Status: **UI-02A and UI-02B DONE; UI-02C NEXT**. `UI02-PLAN-001` is
 **RESOLVED BY OWNER DECISION**: credentialed Start uses versioned
 `StartExecution/v1alpha2` before capability negotiation through
 `ExecutionCapabilities/v1alpha2`. The initial PLAN review and its permitted
@@ -238,7 +238,7 @@ The terminal execution result is authoritative. Observer disconnect, history tru
 | Slice | Boundary | Non-goals |
 | --- | --- | --- |
 | UI-02A — DONE | Mockup reconciliation, closed Wails DTO/facade and read-only Installation state/plan display. | No Start, secrets or target contact. |
-| UI-02B | Fresh plan, bounded plan projection, acknowledgement and approval. | No Start/cancel or lease transport. |
+| UI-02B — DONE | Fresh plan, bounded plan projection, acknowledgement and approval. | No Start/cancel or lease transport. |
 | UI-02C | Complete PutRuntimeSecretLease/v1alpha1 and idempotent Start correlation, capability gate, atomic attach, cleanup/recovery and RED OS security proof. | No UI Start, generic secret system/history. |
 | UI-02D | Approved Start, RunObserver Wails subscription, cancellation, Execution/Result views. | No raw log stream or durable run index. |
 | UI-02E | Windows/RED OS production-shaped workflow, reconnect/degradation and secret/redaction acceptance. | No new service/editor feature. |

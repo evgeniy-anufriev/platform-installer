@@ -36,6 +36,7 @@ type InstallationNodeState struct {
 
 type InstallationPlanState struct {
 	Status string `json:"status"`
+	PlanID string `json:"planId,omitempty"`
 }
 
 type InstallationPrerequisite struct {
@@ -56,7 +57,7 @@ func (a *App) GetInstallationState() InstallationState {
 		Kind:          "InstallationState",
 		Status:        installationStatePrerequisitesRequired,
 		ExecutionNode: installationNodeState(a.execution.context),
-		Plan:          InstallationPlanState{Status: installationPlanNotCreated},
+		Plan:          a.installationPlanStateLocked(),
 	}
 	if a.current.Status != "OPEN" || a.current.Root == "" || a.current.Project == nil || a.current.Project.ID == "" {
 		return state.withPrerequisite("PROJECT_NOT_OPEN", "project", "Open or create a project before installation.")
@@ -81,8 +82,35 @@ func (a *App) GetInstallationState() InstallationState {
 	if _, err := a.resolveSelectedExecutionNodeBindingLocked(); err != nil {
 		return state.withPrerequisite("EXECUTION_NODE_BINDING_REQUIRED", "servers", "The selected Execution Node has no trusted runtime binding.")
 	}
+	if state.Plan.Status != installationPlanNotCreated && state.Plan.Status != "PLAN_STALE_OR_EXPIRED" {
+		state.Status = state.Plan.Status
+		return state
+	}
 	state.Status = installationStateReadyToPlan
 	return state
+}
+
+func (a *App) installationPlanStateLocked() InstallationPlanState {
+	if a.installationPlanID == "" {
+		return InstallationPlanState{Status: installationPlanNotCreated}
+	}
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	if err != nil || binding.plans == nil {
+		a.installationPlanID = ""
+		return InstallationPlanState{Status: "PLAN_STALE_OR_EXPIRED"}
+	}
+	record, err := binding.plans.GetPlan(a.installationPlanID)
+	if err != nil {
+		a.installationPlanID = ""
+		return InstallationPlanState{Status: "PLAN_STALE_OR_EXPIRED"}
+	}
+	status := "PLAN_REVIEW"
+	if record.Plan.Status == "BLOCKED" {
+		status = "PLAN_BLOCKED"
+	} else if record.Approved {
+		status = "PLAN_APPROVED"
+	}
+	return InstallationPlanState{Status: status, PlanID: record.ID}
 }
 
 func installationNodeState(context ExecutionNodeContext) InstallationNodeState {

@@ -22,6 +22,7 @@ type executionNodeBinding struct {
 	node       executionnode.Node
 	reader     projectReader
 	service    executionNodeLifecycle
+	plans      *executionnode.ExecutionService
 	bundleRoot string
 }
 

@@ -750,15 +750,19 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.PlanFingerprint = v
 		}
 	}
-	if a, ok := value["acknowledgements"].([]any); ok {
-		for _, raw := range a {
-			if item, ok := raw.(map[string]any); ok {
-				if code, ok := item["code"].(string); ok {
-					plan.Acknowledgements = append(plan.Acknowledgements, code)
-				}
-			}
-		}
+	acknowledgements, err := decodePlanAcknowledgements(value["acknowledgements"])
+	if err != nil {
+		return DeploymentPlan{}, err
 	}
+	plan.AcknowledgementDetails = acknowledgements
+	for _, acknowledgement := range acknowledgements {
+		plan.Acknowledgements = append(plan.Acknowledgements, acknowledgement.Code)
+	}
+	phases, err := decodeDeploymentPlanPhases(value["phases"])
+	if err != nil {
+		return DeploymentPlan{}, err
+	}
+	plan.Phases = phases
 	plan.Findings = decodeFindings(value["findings"])
 	if requirements, ok := value["artifactRequirements"].([]any); ok {
 		for _, raw := range requirements {
@@ -795,6 +799,138 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	return plan, nil
+}
+
+const (
+	maxDeploymentPlanPhases           = 32
+	maxDeploymentPlanActions          = 512
+	maxDeploymentPlanTargets          = 256
+	maxDeploymentPlanDependencies     = 256
+	maxDeploymentPlanAcknowledgements = 64
+	maxDeploymentPlanText             = 512
+)
+
+func decodePlanAcknowledgements(raw any) ([]PlanAcknowledgement, error) {
+	values, ok := raw.([]any)
+	if !ok || len(values) > maxDeploymentPlanAcknowledgements {
+		return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	result := make([]PlanAcknowledgement, 0, len(values))
+	seen := map[string]bool{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok || len(value) != 2 {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		code, codeOK := value["code"].(string)
+		summary, summaryOK := value["summary"].(string)
+		if !codeOK || !summaryOK || !validEventCode(code) || len(summary) == 0 || len(summary) > maxDeploymentPlanText || seen[code] {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		seen[code] = true
+		result = append(result, PlanAcknowledgement{Code: code, Summary: summary})
+	}
+	return result, nil
+}
+
+func decodeDeploymentPlanPhases(raw any) ([]DeploymentPlanPhase, error) {
+	values, ok := raw.([]any)
+	if !ok || len(values) > maxDeploymentPlanPhases {
+		return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	result := make([]DeploymentPlanPhase, 0, len(values))
+	seenPhases, seenActions := map[string]bool{}, map[string]bool{}
+	actionCount := 0
+	for index, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok || len(value) != 3 {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		id, idOK := value["id"].(string)
+		order, orderOK := exactNonNegativeInteger(value["order"])
+		rawActions, actionsOK := value["actions"].([]any)
+		if !idOK || !orderOK || order != index || len(id) == 0 || len(id) > maxDeploymentPlanText || seenPhases[id] {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		if !actionsOK || actionCount+len(rawActions) > maxDeploymentPlanActions {
+			return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		seenPhases[id] = true
+		phase := DeploymentPlanPhase{ID: id, Order: order, Actions: make([]DeploymentPlanAction, 0, len(rawActions))}
+		for _, rawAction := range rawActions {
+			action, err := decodeDeploymentPlanAction(rawAction, seenActions)
+			if err != nil {
+				return nil, err
+			}
+			phase.Actions = append(phase.Actions, action)
+			actionCount++
+		}
+		result = append(result, phase)
+	}
+	return result, nil
+}
+
+func decodeDeploymentPlanAction(raw any, seen map[string]bool) (DeploymentPlanAction, error) {
+	value, ok := raw.(map[string]any)
+	if !ok {
+		return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	allowed := len(value) == 7 || len(value) == 8
+	if !allowed {
+		return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	action := DeploymentPlanAction{}
+	var idOK, typeOK, summaryOK, mutatingOK bool
+	action.ID, idOK = value["id"].(string)
+	action.Type, typeOK = value["type"].(string)
+	action.Summary, summaryOK = value["summary"].(string)
+	action.Mutating, mutatingOK = value["mutating"].(bool)
+	if deployment, present := value["serviceDeployment"]; present {
+		var deploymentOK bool
+		action.ServiceDeployment, deploymentOK = deployment.(string)
+		if !deploymentOK || action.ServiceDeployment == "" || len(action.ServiceDeployment) > maxDeploymentPlanText {
+			return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+	}
+	if reboot, ok := value["reboot"].(string); ok && (reboot == "NONE" || reboot == "RECOMMENDED" || reboot == "REQUIRED") {
+		action.Reboot = reboot
+	} else {
+		return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	targets, targetOK := decodePlanStringList(value["targets"], maxDeploymentPlanTargets)
+	dependsOn, dependsOK := decodePlanStringList(value["dependsOn"], maxDeploymentPlanDependencies)
+	if !idOK || !typeOK || !summaryOK || !mutatingOK || !validEventCode(action.Type) || len(action.ID) == 0 || len(action.ID) > maxDeploymentPlanText || len(action.Summary) == 0 || len(action.Summary) > maxDeploymentPlanText || !targetOK || !dependsOK || seen[action.ID] {
+		return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	seen[action.ID] = true
+	action.Targets, action.DependsOn = targets, dependsOn
+	return action, nil
+}
+
+func decodePlanStringList(raw any, limit int) ([]string, bool) {
+	values, ok := raw.([]any)
+	if !ok || len(values) > limit {
+		return nil, false
+	}
+	result := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(string)
+		if !ok || value == "" || len(value) > maxDeploymentPlanText || seen[value] {
+			return nil, false
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result, true
+}
+
+func exactNonNegativeInteger(raw any) (int, bool) {
+	value, ok := raw.(float64)
+	if !ok || value < 0 || value != float64(int(value)) || int(value) < 0 {
+		return 0, false
+	}
+	return int(value), true
 }
 
 func decodeFindings(raw any) []Finding {
