@@ -722,6 +722,11 @@ future closed `StartExecution/v1alpha2` and
 `ExecutionCapabilities/v1alpha2` contracts; legacy v1alpha1 remains valid for
 planning/readiness but cannot authorize credentialed Start.
 
+UI-02A is DONE: it reconciles the Installation mockup, exposes a closed local
+read-only state and shows Summary, Plan, Execution and Result without a plan,
+Core call, node/target contact, secret or Start path. UI-02B is NEXT and alone
+may create and approve a fresh plan.
+
 Deliverables:
 
 - readiness, plan, confirmation, execution and result views;

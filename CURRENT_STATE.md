@@ -56,6 +56,15 @@ Editor order is Servers → Topology → Certificates (PKI intent) → Service
 settings. UI-02 execution/task-stream UI and target secret lease transport
 remain separate.
 
+## UI-02 installation workflow (2026-09-22)
+
+UI-02A is DONE. It adds the closed local `InstallationState` Wails projection
+and the read-only Summary → Plan → Execution → Result Installation surface.
+It performs no Core, Execution Node or target call and has no plan creation,
+approval, Start, cancellation or secret path. UI-02B is NEXT: fresh bounded
+plan creation, projection, acknowledgement and approval. Evidence:
+`docs/ui-02a.md` and `docs/ui-02-architecture.md`.
+
 ## EXEC-OBS-01 completion (2026-09-05)
 
 EXEC-OBS-01A through 01D are DONE. Managed Ansible task events use the existing

@@ -12,6 +12,7 @@ import {
   GetEndpointPreview,
   GetVerifiedPKIView,
   GetExecutionNodeContext,
+  GetInstallationState,
   GetSessionCredentialStatus,
   CheckExecutionNode,
   OpenProject,
@@ -160,6 +161,24 @@ export type ExecutionNodeContext = {
   safeLabel?: string;
   locked: boolean;
 };
+export type InstallationState = {
+  apiVersion: "platform.installer/installation-state/v1alpha1";
+  kind: "InstallationState";
+  status: "PREREQUISITES_REQUIRED" | "READY_TO_PLAN";
+  project?: {
+    id: string;
+    revision: string;
+    verificationStatus: string;
+    hasUnsavedChanges: boolean;
+  };
+  executionNode: { status: string; safeLabel?: string };
+  plan: { status: "NOT_CREATED" };
+  prerequisites?: Array<{
+    code: string;
+    destination: "project" | "servers";
+    safeMessage: string;
+  }>;
+};
 export type EndpointPreview = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
   endpoints?: Array<{ deploymentId: string; fqdn: string }>;
@@ -261,6 +280,7 @@ export interface ProjectBackend {
   ): Promise<SessionCredentialStatus>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
+  getInstallationState?(): Promise<InstallationState>;
   getEndpointPreview?(): Promise<EndpointPreview>;
   getVerifiedPKIView?(): Promise<VerifiedPKIView>;
   selectExecutionNode?(hostId: string): Promise<ExecutionNodeContext>;
@@ -303,6 +323,8 @@ export const backend: ProjectBackend = {
   setSessionCredential: (input) => SetSessionCredential(input as never),
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
+  getInstallationState: () =>
+    GetInstallationState() as unknown as Promise<InstallationState>,
   getEndpointPreview: () =>
     GetEndpointPreview() as unknown as Promise<EndpointPreview>,
   getVerifiedPKIView: () =>

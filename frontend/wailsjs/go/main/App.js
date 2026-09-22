@@ -66,6 +66,10 @@ export function GetExecutionNodeContext() {
   return window['go']['main']['App']['GetExecutionNodeContext']();
 }
 
+export function GetInstallationState() {
+  return window['go']['main']['App']['GetInstallationState']();
+}
+
 export function GetSessionCredentialStatus() {
   return window['go']['main']['App']['GetSessionCredentialStatus']();
 }

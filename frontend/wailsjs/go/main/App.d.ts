@@ -37,6 +37,8 @@ export function GetEndpointPreview():Promise<main.EndpointPreview>;
 
 export function GetExecutionNodeContext():Promise<main.ExecutionNodeContext>;
 
+export function GetInstallationState():Promise<main.InstallationState>;
+
 export function GetSessionCredentialStatus():Promise<runtimesecret.Status>;
 
 export function GetVerifiedPKIView():Promise<main.VerifiedPKIView>;

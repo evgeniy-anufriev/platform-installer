@@ -263,6 +263,40 @@ async function openCertificates(
   await userEvent.click(screen.getByRole("button", { name: "Сертификаты" }));
 }
 
+it("shows the read-only Installation state without requesting a deployment plan", async () => {
+  const getInstallationState = vi.fn().mockResolvedValue({
+    apiVersion: "platform.installer/installation-state/v1alpha1",
+    kind: "InstallationState",
+    status: "PREREQUISITES_REQUIRED",
+    project: {
+      id: "project-aaaaaaaaaaaaaaaa",
+      revision: "sha256:old",
+      verificationStatus: "UNVERIFIED",
+      hasUnsavedChanges: false,
+    },
+    executionNode: { status: "READY", safeLabel: "node1 · 192.0.2.10" },
+    plan: { status: "NOT_CREATED" },
+    prerequisites: [{
+      code: "EXECUTION_NODE_BINDING_REQUIRED",
+      destination: "servers",
+      safeMessage: "The selected Execution Node has no trusted runtime binding.",
+    }],
+  });
+  const value = api({
+    getExecutionNodeContext: vi.fn().mockResolvedValue({ status: "READY" }),
+    getInstallationState,
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Установка" }));
+
+  expect(screen.getByText("EXECUTION_NODE_BINDING_REQUIRED")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "План" })).toBeTruthy();
+  expect(getInstallationState).toHaveBeenCalled();
+});
+
 it("adds a certificate authority through the shared structural draft", async () => {
   const value = api();
   await openCertificates(value);

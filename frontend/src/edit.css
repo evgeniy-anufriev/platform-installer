@@ -601,3 +601,4 @@
     grid-template-columns: 1fr;
   }
 }
+.installation-page{max-width:980px}.installation-tabs{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}.installation-tabs button.active{background:#1f6feb;color:#fff;border-color:#1f6feb}.workflow-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.workflow-strip>div{padding:12px 14px;border:1px solid #d9e1ec;border-radius:8px;color:#64748b;background:#fff}.workflow-strip .workflow-current{border-color:#1f6feb;color:#174ea6;background:#edf5ff;font-weight:650}.safe-findings{margin:0;padding-left:20px;display:grid;gap:10px}.safe-findings code{display:inline;margin:0;color:#a33}.installation-empty{min-height:180px;display:grid;align-content:center}@media(max-width:720px){.workflow-strip{grid-template-columns:1fr}}

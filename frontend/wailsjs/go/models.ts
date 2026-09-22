@@ -1311,6 +1311,72 @@ export namespace main {
 	        this.locked = source["locked"];
 	    }
 	}
+	export class InstallationProjectState {
+		id: string;
+		revision: string;
+		verificationStatus: string;
+		hasUnsavedChanges: boolean;
+
+		static createFrom(source: any = {}) { return new InstallationProjectState(source); }
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.id = source["id"];
+			this.revision = source["revision"];
+			this.verificationStatus = source["verificationStatus"];
+			this.hasUnsavedChanges = source["hasUnsavedChanges"];
+		}
+	}
+	export class InstallationNodeState {
+		status: string;
+		safeLabel?: string;
+		static createFrom(source: any = {}) { return new InstallationNodeState(source); }
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.status = source["status"];
+			this.safeLabel = source["safeLabel"];
+		}
+	}
+	export class InstallationPlanState {
+		status: string;
+		static createFrom(source: any = {}) { return new InstallationPlanState(source); }
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.status = source["status"];
+		}
+	}
+	export class InstallationPrerequisite {
+		code: string;
+		destination: string;
+		safeMessage: string;
+		static createFrom(source: any = {}) { return new InstallationPrerequisite(source); }
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.code = source["code"];
+			this.destination = source["destination"];
+			this.safeMessage = source["safeMessage"];
+		}
+	}
+	export class InstallationState {
+		apiVersion: string;
+		kind: string;
+		status: string;
+		project?: InstallationProjectState;
+		executionNode: InstallationNodeState;
+		plan: InstallationPlanState;
+		prerequisites?: InstallationPrerequisite[];
+
+		static createFrom(source: any = {}) { return new InstallationState(source); }
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.apiVersion = source["apiVersion"];
+			this.kind = source["kind"];
+			this.status = source["status"];
+			this.project = source["project"] ? new InstallationProjectState(source["project"]) : undefined;
+			this.executionNode = new InstallationNodeState(source["executionNode"]);
+			this.plan = new InstallationPlanState(source["plan"]);
+			this.prerequisites = Array.isArray(source["prerequisites"]) ? source["prerequisites"].map((item: any) => new InstallationPrerequisite(item)) : undefined;
+		}
+	}
 	export class ProjectVerification {
 	    apiVersion: string;
 	    kind: string;

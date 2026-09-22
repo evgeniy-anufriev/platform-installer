@@ -5,6 +5,7 @@ import type {
   ExecutionNodePreparation,
   ExecutionNodeReadiness,
   EndpointPreview,
+  InstallationState,
   OpenResult,
   ProjectExportOperationResult,
   ProjectBackend,
@@ -27,6 +28,7 @@ import {
   TopologyPage,
 } from "./TopologyPage";
 import { type ConfigurationIntent, ServicesPage } from "./ServicesPage";
+import { InstallationPage } from "./InstallationPage";
 import "./edit.css";
 
 type Page =
@@ -167,6 +169,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     useState<SessionCredentialStatus | null>(null);
   const [executionNode, setExecutionNode] =
     useState<ExecutionNodeContext | null>(null);
+  const [installationState, setInstallationState] =
+    useState<InstallationState | undefined>(undefined);
+  const [installationTab, setInstallationTab] = useState<
+    "summary" | "plan" | "execution" | "result"
+  >("summary");
   const [endpointPreview, setEndpointPreview] = useState<
     EndpointPreview | undefined
   >(undefined);
@@ -260,6 +267,18 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     };
   }, [api, projectOpen, result.root, commandCount]);
 
+  useEffect(() => {
+    let live = true;
+    if (!projectOpen || !api.getInstallationState) {
+      setInstallationState(undefined);
+      return () => { live = false; };
+    }
+    api.getInstallationState()
+      .then((value) => live && setInstallationState(value))
+      .catch(() => live && setInstallationState(undefined));
+    return () => { live = false; };
+  }, [api, projectOpen, result.root, commandCount, executionNode?.status]);
+
   const clearDraft = () => {
     setEdit(null);
     setEditError(null);
@@ -279,6 +298,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     endpointPreviewRequest.current += 1;
     setEndpointPreview(undefined);
     setVerifiedPKI(undefined);
+    setInstallationTab("summary");
   };
   const clearRefreshFailure = () => {
     setRefreshRequired(false);
@@ -1033,25 +1053,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           />
         )}
         {!loading && !creating && projectOpen && page === "installation" && (
-          <section className="card">
-            <h1>Установка</h1>
-            <p>
-              Execution Node: <b>{executionNode?.status || "NOT_CONFIGURED"}</b>
-              {executionNode?.safeLabel ? ` · ${executionNode.safeLabel}` : ""}
-            </p>
-            <p>
-              Проверка проекта: <b>{verificationLabel(verification.status)}</b>.
-              Проверка не является разрешением на запуск.
-            </p>
-            <p className="muted">
-              Перед выполнением будет обязателен свежий authoritative
-              DeploymentPlan для сохранённой ревизии и текущего runtime.
-              Подготовка Execution Node доступна только на странице Серверы.
-            </p>
-            <button className="outline" onClick={() => setPage("servers")}>
-              Открыть Execution Node
-            </button>
-          </section>
+          <InstallationPage
+            state={installationState}
+            tab={installationTab}
+            onTabChange={setInstallationTab}
+            onOpenServers={() => setPage("servers")}
+          />
         )}
         {projectDialog && (
           <div className="modal" role="presentation">

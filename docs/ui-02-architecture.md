@@ -1,6 +1,6 @@
 # UI-02 — Installation workflow architecture
 
-Status: **FINALIZED — implementation NOT STARTED**. `UI02-PLAN-001` is
+Status: **UI-02A DONE; UI-02B NEXT**. `UI02-PLAN-001` is
 **RESOLVED BY OWNER DECISION**: credentialed Start uses versioned
 `StartExecution/v1alpha2` before capability negotiation through
 `ExecutionCapabilities/v1alpha2`. The initial PLAN review and its permitted
@@ -19,7 +19,7 @@ Summary -> Plan -> Execution -> Result
 
 An operator builds and reviews one fresh Core deployment plan, supplies its required acknowledgements, starts exactly that approved plan, follows typed progress, requests cancellation through the lifecycle contract, and inspects the terminal result for that exact runId.
 
-The UI-01 mockup already contains Installation and its persistent Plan -> Execute -> Result strip. Its local tabs currently omit standalone Plan and Result views. UI-02A updates the design reference before implementing the screen, without adding Execution Node preparation to Installation.
+The UI-01 mockup contains Installation and its persistent Plan -> Execute -> Result strip. UI-02A makes all four local tabs explicit in the design reference and implementation, without adding Execution Node preparation to Installation.
 
 Out of scope: project editing; Execution Node selection/preparation; service-specific panels; React file tailing; a generic secret store; direct workstation-to-target SSH; Core/Ansible semantic validation; and a durable global run-history database. The existing Logs page is a future retention slice; UI-02 Result covers a known run in the current application session.
 
@@ -237,7 +237,7 @@ The terminal execution result is authoritative. Observer disconnect, history tru
 
 | Slice | Boundary | Non-goals |
 | --- | --- | --- |
-| UI-02A | Mockup reconciliation, closed Wails DTO/facade and read-only Installation state/plan display. | No Start, secrets or target contact. |
+| UI-02A — DONE | Mockup reconciliation, closed Wails DTO/facade and read-only Installation state/plan display. | No Start, secrets or target contact. |
 | UI-02B | Fresh plan, bounded plan projection, acknowledgement and approval. | No Start/cancel or lease transport. |
 | UI-02C | Complete PutRuntimeSecretLease/v1alpha1 and idempotent Start correlation, capability gate, atomic attach, cleanup/recovery and RED OS security proof. | No UI Start, generic secret system/history. |
 | UI-02D | Approved Start, RunObserver Wails subscription, cancellation, Execution/Result views. | No raw log stream or durable run index. |
