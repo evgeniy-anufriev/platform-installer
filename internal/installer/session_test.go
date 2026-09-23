@@ -185,7 +185,7 @@ func TestSessionAppendInvalidatesReviewedPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV8 {
+	if got := store.sessions[session.SessionID].commands[0].APIVersion; got != EditCommandAPIVersionV9 {
 		t.Fatalf("new session emitted %s", got)
 	}
 	encoded, err := json.Marshal(store.sessions[session.SessionID].commands[0])

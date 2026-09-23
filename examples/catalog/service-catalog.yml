@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:28d63a38673aa98039d1f9e59aa4714dd46eb2db469cd773978f6161ee1a3fe9
+digest: sha256:e1b66282beb4a804a93bf0f44a2661e713443216b45cb74a245d973fa6a1f151
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -698,7 +698,9 @@ definitions:
           scopes:
           - deployment
           validation:
-            minLength: 3
+            minLength: 4
+            maxLength: 253
+            pattern: ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$
           ui:
             label: Zone
             section: Authoritative zone
@@ -760,7 +762,7 @@ definitions:
         variablesPrefix: platform_bind_
     artifacts: []
     compatibilityRef: ../../services/bind/compatibility.yml
-    x-definitionDigest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611
+    x-definitionDigest: sha256:e7a9f94c42c5af24e601e819b2e764b8b7e57231cd0882ed24a40533b02ff8e0
     x-sourceManifest: services/bind/service.yml
   dns-client:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -803,6 +805,7 @@ definitions:
             label: Authoritative DNS deployment
             section: Split DNS
             order: 10
+            x-referenceKind: SERVICE_DEPLOYMENT
     roleEntrypoints:
       apply:
         fqcn: platform.dns_client.dns_client
@@ -812,7 +815,7 @@ definitions:
         variablesPrefix: platform_dns_client_
     artifacts: []
     compatibilityRef: ../../services/dns-client/compatibility.yml
-    x-definitionDigest: sha256:a313a05fadd9dc701f226a91ee942c5a8e04e9768202ba6d644d26ee0a2f1590
+    x-definitionDigest: sha256:716d24621f57a17be8658cf4b7b846706dcfa2115b1b9393837e14e2c680b162
     x-sourceManifest: services/dns-client/service.yml
   haproxy:
     apiVersion: platform.installer/service-manifest/v1alpha1

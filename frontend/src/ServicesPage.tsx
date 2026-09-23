@@ -52,7 +52,15 @@ const supportedShapes = new Set([
   "NUMBER",
   "ENUM",
   "BOUNDED_STRING",
+  "DNS_DOMAIN",
 ]);
+
+const dnsDomainPattern =
+  /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/;
+
+function invalidText(setting: CatalogSetting, raw: string) {
+  return setting.editorShape === "DNS_DOMAIN" && !dnsDomainPattern.test(raw);
+}
 
 function rowsFor(
   managed: OpenResult["managed"],
@@ -131,7 +139,9 @@ function isEditable(setting: CatalogSetting, catalogReady: boolean) {
     setting.kind === "MANAGED" &&
     (supportedShapes.has(setting.editorShape) ||
       (setting.editorShape === "TLS_PROFILE" &&
-        setting.referenceKind === "TLS_PROFILE"))
+        setting.referenceKind === "TLS_PROFILE") ||
+      (setting.editorShape === "SERVICE_DEPLOYMENT" &&
+        setting.referenceKind === "SERVICE_DEPLOYMENT"))
   );
 }
 
@@ -182,6 +192,18 @@ function finalTLSProfileIDs(
     if (intent.operation === "DeleteTLSProfile") ids.delete(intent.entityId);
   }
   return [...ids].sort();
+}
+
+function finalDeploymentIDs(
+  managed: OpenResult["managed"],
+  intents: DeploymentIntent[],
+) {
+  const ids = new Set(Object.keys(managed?.deployments || {}));
+  for (const intent of intents) {
+    if (intent.operation === "CreateServiceDeployment") ids.add(intent.deploymentId);
+    else ids.delete(intent.deploymentId);
+  }
+  return [...ids].sort((left, right) => left.localeCompare(right));
 }
 
 function inputValue(value: Value | undefined, shape: string) {
@@ -279,6 +301,7 @@ export function ServicesPage({
     (member) => member.memberId === selectedMemberId,
   );
   const tlsProfileIDs = finalTLSProfileIDs(managed, certificateIntents);
+  const deploymentIDs = finalDeploymentIDs(managed, deploymentIntents);
   const normalizedFilter = filter.trim().toLocaleLowerCase("ru");
   const filteredRows = rows.filter((row) =>
     `${row.deploymentId} ${row.serviceType} ${catalogService(catalog, row.serviceType)?.displayName || ""}`
@@ -409,6 +432,7 @@ export function ServicesPage({
                     setting.editorShape === "NUMBER") &&
                   raw.trim() !== "" &&
                   value === undefined;
+                const invalidTextValue = invalidText(setting, raw);
                 return (
                   <div className="services-setting" key={setting.id}>
                     <div>
@@ -469,6 +493,32 @@ export function ServicesPage({
                               Настроить сертификаты
                             </button>
                           </>
+                        ) : setting.editorShape === "SERVICE_DEPLOYMENT" ? (
+                          <>
+                            <select
+                              aria-label={settingTitle(setting)}
+                              value={raw}
+                              disabled={disabled || !deploymentIDs.length}
+                              onChange={(event) =>
+                                setDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [draftKey]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Выберите deployment</option>
+                              {deploymentIDs.map((id) => (
+                                <option key={id} value={id}>
+                                  {id}
+                                </option>
+                              ))}
+                            </select>
+                            {!deploymentIDs.length && (
+                              <small className="muted">
+                                Нет доступного managed deployment.
+                              </small>
+                            )}
+                          </>
                         ) : setting.editorShape === "ENUM" ? (
                           <select
                             aria-label={settingTitle(setting)}
@@ -507,6 +557,11 @@ export function ServicesPage({
                             max={setting.maximum}
                             minLength={setting.minLength}
                             maxLength={setting.maxLength}
+                            pattern={
+                              setting.editorShape === "DNS_DOMAIN"
+                                ? dnsDomainPattern.source
+                                : undefined
+                            }
                             disabled={disabled}
                             onChange={(event) =>
                               setDrafts((currentDrafts) => ({
@@ -519,10 +574,19 @@ export function ServicesPage({
                         {invalidNumber && (
                           <small className="field-error">Введите число.</small>
                         )}
+                        {invalidTextValue && (
+                          <small className="field-error">
+                            Введите доменное имя в нижнем регистре, например
+                            scada.local.
+                          </small>
+                        )}
                         <div className="actions">
                           <button
                             disabled={
-                              disabled || value === undefined || invalidNumber
+                              disabled ||
+                              value === undefined ||
+                              invalidNumber ||
+                              invalidTextValue
                             }
                             onClick={() =>
                               onAppend({
@@ -589,6 +653,7 @@ export function ServicesPage({
                 settings={settings}
                 catalogReady={catalogReady}
                 tlsProfileIDs={tlsProfileIDs}
+                deploymentIDs={deploymentIDs}
                 intents={configurationIntents}
                 busy={busy}
                 structuralDisabled={structuralDisabled}
@@ -711,6 +776,7 @@ function MemberSettings({
   settings,
   catalogReady,
   tlsProfileIDs,
+  deploymentIDs,
   intents,
   busy,
   structuralDisabled,
@@ -724,6 +790,7 @@ function MemberSettings({
   settings: CatalogSetting[];
   catalogReady: boolean;
   tlsProfileIDs: string[];
+  deploymentIDs: string[];
   intents: ConfigurationIntent[];
   busy: boolean;
   structuralDisabled: boolean;
@@ -778,6 +845,7 @@ function MemberSettings({
               setting.editorShape === "NUMBER") &&
             raw.trim() !== "" &&
             value === undefined;
+          const invalidTextValue = invalidText(setting, raw);
           return (
             <div className="services-setting" key={setting.id}>
               <div>
@@ -838,6 +906,32 @@ function MemberSettings({
                         Настроить сертификаты
                       </button>
                     </>
+                  ) : setting.editorShape === "SERVICE_DEPLOYMENT" ? (
+                    <>
+                      <select
+                        aria-label={`${member.memberId}: ${settingTitle(setting)}`}
+                        value={raw}
+                        disabled={disabled || !deploymentIDs.length}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [draftKey]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Выберите deployment</option>
+                        {deploymentIDs.map((id) => (
+                          <option key={id} value={id}>
+                            {id}
+                          </option>
+                        ))}
+                      </select>
+                      {!deploymentIDs.length && (
+                        <small className="muted">
+                          Нет доступного managed deployment.
+                        </small>
+                      )}
+                    </>
                   ) : setting.editorShape === "ENUM" ? (
                     <select
                       aria-label={`${member.memberId}: ${settingTitle(setting)}`}
@@ -875,6 +969,11 @@ function MemberSettings({
                       max={setting.maximum}
                       minLength={setting.minLength}
                       maxLength={setting.maxLength}
+                      pattern={
+                        setting.editorShape === "DNS_DOMAIN"
+                          ? dnsDomainPattern.source
+                          : undefined
+                      }
                       disabled={disabled}
                       onChange={(event) =>
                         setDrafts((current) => ({
@@ -887,10 +986,19 @@ function MemberSettings({
                   {invalidNumber && (
                     <small className="field-error">Введите число.</small>
                   )}
+                  {invalidTextValue && (
+                    <small className="field-error">
+                      Введите доменное имя в нижнем регистре, например
+                      scada.local.
+                    </small>
+                  )}
                   <div className="actions">
                     <button
                       disabled={
-                        disabled || value === undefined || invalidNumber
+                        disabled ||
+                        value === undefined ||
+                        invalidNumber ||
+                        invalidTextValue
                       }
                       onClick={() =>
                         onAppend({

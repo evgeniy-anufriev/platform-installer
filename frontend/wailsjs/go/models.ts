@@ -240,6 +240,7 @@ export namespace installer {
   export class PlacementHost {
     hostId: string;
     roles?: string[];
+    priority: number;
 
     static createFrom(source: any = {}) {
       return new PlacementHost(source);
@@ -249,6 +250,7 @@ export namespace installer {
       if ("string" === typeof source) source = JSON.parse(source);
       this.hostId = source["hostId"];
       this.roles = source["roles"];
+      this.priority = source["priority"];
     }
   }
   export class PlacementMember {
@@ -384,6 +386,7 @@ export namespace installer {
     deploymentId: string;
     hostId: string;
     roles: string[];
+    priority?: number;
 
     static createFrom(source: any = {}) {
       return new ManagedHostPlacement(source);
@@ -394,6 +397,7 @@ export namespace installer {
       this.deploymentId = source["deploymentId"];
       this.hostId = source["hostId"];
       this.roles = source["roles"];
+      this.priority = source["priority"];
     }
   }
   export class ManagedMemberPlacement {

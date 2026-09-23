@@ -169,6 +169,60 @@ const h3Project = {
   },
 };
 
+const dnsClientReferenceProject = {
+  ...project,
+  managed: {
+    ...project.managed,
+    deployments: {
+      ...project.managed.deployments,
+      "bind-main": {
+        deploymentId: "bind-main",
+        serviceType: "bind",
+        mode: "primary-secondary",
+      },
+      "dns-client-main": {
+        deploymentId: "dns-client-main",
+        serviceType: "dns-client",
+        mode: "host-resolver",
+      },
+    },
+  },
+  catalog: {
+    ...project.catalog,
+    services: [
+      ...project.catalog.services,
+      {
+        id: "dns-client",
+        definitionVersion: "1",
+        displayName: "DNS client",
+        category: "Network",
+        ui: {},
+        endpointConsumer: false,
+        endpointProvider: false,
+        modes: [
+          {
+            id: "host-resolver",
+            displayName: "Host resolver",
+            placementKind: "HOST_SCOPED",
+            roles: [],
+            guidance: { minParticipants: 1, distinctHosts: false },
+          },
+        ],
+        configurationSettings: [
+          {
+            id: "dnsServerRef",
+            kind: "MANAGED",
+            scopes: ["deployment"],
+            label: "Authoritative DNS deployment",
+            editorShape: "SERVICE_DEPLOYMENT",
+            referenceKind: "SERVICE_DEPLOYMENT",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 type MockApi = ProjectBackend & {
   chooseProject: ReturnType<typeof vi.fn>;
   openProject: ReturnType<typeof vi.fn>;
@@ -363,6 +417,7 @@ function f4AcceptanceBackend() {
     deploymentId: string;
     hostId: string;
     roles: string[];
+    priority?: number;
   }> = [];
   const catalog = {
     ...project.catalog,
@@ -491,14 +546,16 @@ function f4AcceptanceBackend() {
             ...(
               command.members as Array<{
                 memberId: string;
-                hostId: string;
-                roles?: string[];
+              hostId: string;
+              roles?: string[];
+              priority: number;
               }>
             ).map((item) => ({
               deploymentId,
               memberId: item.memberId,
               hostId: item.hostId,
               roles: item.roles || [],
+              priority: item.priority,
             })),
           ];
           hostPlacements = hostPlacements.filter(
@@ -1286,6 +1343,30 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(value.startEditSession).not.toHaveBeenCalled();
   });
+
+  it("uses a trusted deployment selector for a service-deployment reference", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(dnsClientReferenceProject);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /^dns-client-main/ }),
+    );
+    const select = screen.getByLabelText("Authoritative DNS deployment");
+    expect((select as HTMLSelectElement).options).toHaveLength(4);
+    await userEvent.selectOptions(select, "bind-main");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "SetServiceConfigurationValue",
+      deploymentId: "dns-client-main",
+      scope: "DEPLOYMENT",
+      setting: "dnsServerRef",
+      value: "bind-main",
+    });
+  });
 });
 
 describe("UI-01H3 member settings and TLS navigation", () => {
@@ -1478,10 +1559,15 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
       screen.getByRole("button", { name: "Добавить сервер" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(screen.getByLabelText("Приоритет 1")).toBeTruthy();
+    expect(appended).toHaveLength(1);
+    await userEvent.clear(screen.getByLabelText("Приоритет 1"));
+    await userEvent.type(screen.getByLabelText("Приоритет 1"), "120");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(appended.at(-1)).toEqual({
       operation: "ReconcileHostScopedDeploymentPlacement",
       deploymentId: "agent-main",
-      hosts: [{ hostId: "node1", roles: [] }],
+      hosts: [{ hostId: "node1", roles: [], priority: 120 }],
     });
 
     await userEvent.click(
@@ -1498,12 +1584,14 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Добавить сервер" }),
     );
+    await userEvent.clear(screen.getByLabelText("Приоритет 1"));
+    await userEvent.type(screen.getByLabelText("Приоритет 1"), "121");
     await userEvent.selectOptions(screen.getByLabelText("Роли"), "observer");
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(appended.at(-1)).toEqual({
       operation: "ReconcileHostScopedDeploymentPlacement",
       deploymentId: "agent-role-main",
-      hosts: [{ hostId: "node1", roles: ["observer"] }],
+      hosts: [{ hostId: "node1", roles: ["observer"], priority: 121 }],
     });
     await userEvent.click(
       screen.getByRole("button", { name: "Просмотреть изменения" }),

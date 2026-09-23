@@ -118,7 +118,7 @@ func TestH1CatalogSettingProjectionIsClosedAndMetadataDriven(t *testing.T) {
 	objectNamedBoolean := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_boolean", Type: "object", Scopes: []string{"deployment"}, Validation: map[string]any{}}
 	settings["enabled"], settings["port"], settings["passwordSecretRef"], settings["opaqueName"], settings["tlsChoice"], settings["otherRef"] = boolean, integer, freeString, objectNamedBoolean, tls, unknownReference
 
-	want := map[string]string{"enabled": "BOOLEAN", "port": "INTEGER", "passwordSecretRef": "UNSUPPORTED", "opaqueName": "UNSUPPORTED", "tlsChoice": "TLS_PROFILE", "otherRef": "UNSUPPORTED"}
+	want := map[string]string{"enabled": "BOOLEAN", "port": "INTEGER", "passwordSecretRef": "UNSUPPORTED", "opaqueName": "UNSUPPORTED", "tlsChoice": "TLS_PROFILE", "otherRef": "SERVICE_DEPLOYMENT"}
 	for id, source := range settings {
 		got := projectCatalogSetting(id, source)
 		if got.EditorShape != want[id] {
@@ -126,6 +126,9 @@ func TestH1CatalogSettingProjectionIsClosedAndMetadataDriven(t *testing.T) {
 		}
 		if id == "tlsChoice" && got.ReferenceKind != "TLS_PROFILE" {
 			t.Fatalf("tls descriptor=%#v", got)
+		}
+		if id == "otherRef" && got.ReferenceKind != "SERVICE_DEPLOYMENT" {
+			t.Fatalf("service deployment descriptor=%#v", got)
 		}
 	}
 }
@@ -141,6 +144,41 @@ func TestH1CatalogSettingProjectionRejectsIncompleteBoundsAndArbitraryPattern(t 
 				t.Fatalf("descriptor=%#v", got)
 			}
 		})
+	}
+}
+
+func TestDNSDomainEditorShapeRequiresExactClosedMetadata(t *testing.T) {
+	exact := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_bind_zone", Type: "string", Scopes: []string{"deployment"}, Validation: map[string]any{"minLength": 4, "maxLength": 253, "pattern": dnsDomainValidationPattern}}
+	projected := projectCatalogSetting("zone", exact)
+	if projected.EditorShape != "DNS_DOMAIN" || projected.MinLength == nil || *projected.MinLength != 4 || projected.MaxLength == nil || *projected.MaxLength != 253 {
+		t.Fatalf("exact descriptor=%#v", projected)
+	}
+	for name, validation := range map[string]map[string]any{
+		"different pattern": {"minLength": 4, "maxLength": 253, "pattern": ".*"},
+		"different lower":   {"minLength": 3, "maxLength": 253, "pattern": dnsDomainValidationPattern},
+		"different upper":   {"minLength": 4, "maxLength": 254, "pattern": dnsDomainValidationPattern},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := exact
+			candidate.Validation = validation
+			if got := projectCatalogSetting("zone", candidate); got.EditorShape != "UNSUPPORTED" {
+				t.Fatalf("descriptor=%#v", got)
+			}
+		})
+	}
+}
+
+func TestValidDNSDomainMatchesClosedCoreShape(t *testing.T) {
+	valid := []string{"a.aa", "scada.local", "site-1.scada.local", strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61)}
+	for _, value := range valid {
+		if !ValidDNSDomain(value) {
+			t.Fatalf("valid domain rejected: %q", value)
+		}
+	}
+	for _, value := range []string{"", "abc", "SCADA.local", "-scada.local", "scada-.local", "scada..local", "scada.1ocal", strings.Repeat("a", 254) + ".zz"} {
+		if ValidDNSDomain(value) {
+			t.Fatalf("invalid domain accepted: %q", value)
+		}
 	}
 }
 

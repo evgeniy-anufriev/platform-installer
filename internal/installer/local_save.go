@@ -335,7 +335,15 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 			if rolesErr != nil || len(view.MemberPlacements)+len(view.HostPlacements) >= maxManagedPlacements {
 				return managedReadError("Managed host placement is invalid or exceeds its limit", logical)
 			}
-			view.HostPlacements = append(view.HostPlacements, ManagedHostPlacement{DeploymentID: deploymentID, HostID: hostID, Roles: roles})
+			var priority *int
+			if rawPriority, present := placement["priority"]; present {
+				value, valid := yamlInteger(rawPriority)
+				if !valid || value < 1 || value > 254 {
+					return managedReadError("Managed host placement priority is invalid", logical)
+				}
+				priority = &value
+			}
+			view.HostPlacements = append(view.HostPlacements, ManagedHostPlacement{DeploymentID: deploymentID, HostID: hostID, Roles: roles, Priority: priority})
 		}
 	}
 	return nil

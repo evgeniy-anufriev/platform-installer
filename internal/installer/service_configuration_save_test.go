@@ -352,3 +352,17 @@ func TestH1ConfigurationValidatorKeepsExactEnumAndIntegerSemantics(t *testing.T)
 		})
 	}
 }
+
+func TestConfigurationValidatorAcceptsOnlyClosedDNSDomainShape(t *testing.T) {
+	setting := &projectlifecycle.ProjectCatalogSetting{EditorShape: "DNS_DOMAIN"}
+	for _, value := range []any{"scada.local", "site-1.scada.local"} {
+		if err := validateConfigurationValue(setting, value); err != nil {
+			t.Fatalf("valid value=%#v err=%v", value, err)
+		}
+	}
+	for _, value := range []any{"SCADA.local", "scada", "scada..local", 42} {
+		if err := validateConfigurationValue(setting, value); err == nil {
+			t.Fatalf("invalid value accepted: %#v", value)
+		}
+	}
+}

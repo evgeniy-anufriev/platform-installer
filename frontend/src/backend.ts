@@ -114,6 +114,7 @@ export type ManagedProjectView = {
     deploymentId: string;
     hostId: string;
     roles: string[];
+    priority?: number;
   }>;
   pki?: {
     authorities: Record<string, Record<string, unknown>>;

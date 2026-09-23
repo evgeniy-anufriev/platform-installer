@@ -765,6 +765,39 @@ Not ready when:
 - UI can mutate without an approved plan;
 - passwords or internal URIs are rendered.
 
+## Post-UI-02 service installation acceptance
+
+Status: SERVICE-INSTALL-01 Keepalived DONE (2026-09-23); SERVICE-INSTALL-02
+BIND DONE (2026-09-23); SERVICE-INSTALL-03 dns-client DONE (2026-09-23);
+SERVICE-INSTALL-04 HAProxy is NEXT.
+The completed UI-02E one-host Kafka evidence remains historical evidence.
+Milestones and individual acceptance criteria:
+[SERVICE-INSTALL-01…07](service-install-acceptance.md).
+
+The sequence uses one Git-ignored cumulative Installer-managed QA project:
+01 created it, 02–06 open and extend its exact saved revision, and 07 builds
+the final single plan from that same project. A milestone may remove only the
+old attributable runtime installation of its own service; it must not replace
+the cumulative project or discard accepted preceding services.
+
+Order: 01 Keepalived → 02 BIND → 03 dns-client → 04 HAProxy → 05 Kafka
+(replace the isolated one-target QA deployment with a three-target deployment)
+→ 06 PostgreSQL/pg_auto_failover → 07 all six services from one shared plan.
+Before each service installation, identify and remove only its attributable
+old QA installation through a proven narrow cleanup path. Record exact targets
+and check ports, paths, unit names and neighboring deployment state first.
+Core determines dependency ordering and permitted parallelism inside a plan;
+one plan does not require simultaneous launch of every service.
+
+Every installation uses `CreatePlan -> ApprovePlan -> Start`, reaches an
+authoritative `SUCCEEDED` result with apply/verify PASS, and is repeated through
+a fresh plan to prove `changed=0`. Record run IDs, actual placement, observed
+service health, relevant PKI/network integration, and secret-safe events/results.
+For Kafka, verify cluster membership/quorum and TLS on all three target hosts.
+For the final shared plan, verify cross-service dependencies and integrations.
+Record before/after evidence that unrelated QA deployments were not changed.
+The final shared-plan test starts only after the individual service tests pass.
+
 ## Phase G — Expansion
 
 ### SERVICE-N: Additional production services

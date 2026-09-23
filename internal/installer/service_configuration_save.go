@@ -80,7 +80,12 @@ func validateConfigurationValue(setting *projectlifecycle.ProjectCatalogSetting,
 		if length < *setting.MinLength || length > *setting.MaxLength {
 			return invalidConfigurationValue()
 		}
-	case "TLS_PROFILE":
+	case "DNS_DOMAIN":
+		text, ok := value.(string)
+		if !ok || !utf8.ValidString(text) || !projectlifecycle.ValidDNSDomain(text) {
+			return invalidConfigurationValue()
+		}
+	case "TLS_PROFILE", "SERVICE_DEPLOYMENT":
 		text, ok := value.(string)
 		if !ok || !validDesiredStateIdentifier(text) {
 			return invalidConfigurationValue()

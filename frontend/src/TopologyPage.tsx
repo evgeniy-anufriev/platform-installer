@@ -31,7 +31,7 @@ export type PlacementIntent =
   | {
       operation: "ReconcileHostScopedDeploymentPlacement";
       deploymentId: string;
-      hosts: Array<{ hostId: string; roles?: string[] }>;
+      hosts: Array<{ hostId: string; roles?: string[]; priority: number }>;
     };
 export type TopologyIntent =
   DeploymentIntent | PlacementIntent | EndpointIntent | ProviderIntent;
@@ -85,7 +85,7 @@ function deploymentRows(
 
 type ServerRow = { hostId: string; label: string; state?: "new" | "deleting" };
 type MemberRow = { memberId: string; hostId: string; roles: string[] };
-type HostRow = { hostId: string; roles: string[] };
+type HostRow = { hostId: string; roles: string[]; priority: number };
 type Placement =
   | { kind: "MEMBER_SCOPED"; members: MemberRow[] }
   | { kind: "HOST_SCOPED"; hosts: HostRow[] };
@@ -141,7 +141,16 @@ function finalPlacements(
     const hosts = current?.kind === "HOST_SCOPED" ? current.hosts : [];
     result.set(item.deploymentId, {
       kind: "HOST_SCOPED",
-      hosts: [...hosts, { hostId: item.hostId, roles: item.roles || [] }],
+      hosts: [
+        ...hosts,
+        {
+          hostId: item.hostId,
+          roles: item.roles || [],
+          // A legacy project has no host priority.  Keep that absence visible
+          // as an invalid form field: v1alpha9 requires an explicit choice.
+          priority: item.priority ?? 0,
+        },
+      ],
     });
   }
   for (const intent of intents) {
@@ -893,11 +902,16 @@ function PlacementDialog({
       hosts.some(
         (host) =>
           !host.hostId ||
+          !Number.isInteger(host.priority) ||
+          host.priority < 1 ||
+          host.priority > 254 ||
           seen.has(host.hostId) ||
           (seen.add(host.hostId), false),
       )
     ) {
-      setError("Серверы в host-scoped размещении должны быть уникальны.");
+      setError(
+        "Укажите уникальные серверы и приоритет каждого от 1 до 254.",
+      );
       return;
     }
     if (
@@ -1068,6 +1082,23 @@ function PlacementDialog({
                       )
                     }
                   />
+                  <input
+                    aria-label={`Приоритет ${index + 1}`}
+                    type="number"
+                    min={1}
+                    max={254}
+                    required
+                    value={host.priority}
+                    onChange={(event) =>
+                      setHosts((current) =>
+                        current.map((value, i) =>
+                          i === index
+                            ? { ...value, priority: Number(event.target.value) }
+                            : value,
+                        ),
+                      )
+                    }
+                  />
                   <button
                     type="button"
                     className="outline"
@@ -1091,6 +1122,7 @@ function PlacementDialog({
                   {
                     hostId: preferredHostId || selectable[0]?.hostId || "",
                     roles: [],
+                    priority: 0,
                   },
                 ])
               }

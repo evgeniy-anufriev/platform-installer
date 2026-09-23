@@ -461,11 +461,37 @@ class ExecutionLifecycleTests(unittest.TestCase):
             projection = json.loads(Path(journal.directory, "runtime-projection.json").read_text(encoding="utf-8"))
             self.assertEqual(projection["platform_project_root"], os.path.join(journal.directory, "project"))
             self.assertEqual(projection["platform_project_manifest_path"], os.path.join(journal.directory, "project", "project.yml"))
+            self.assertEqual(projection["platform_generated_state_path"], os.path.join(root, "projects", "project-1", "generated", "platform-state.yml"))
             self.assertIn("kafka-binary", projection["platform_artifact_source_authorities_by_deployment"]["kafka"])
             projection["platform_execution_run_id"] = "other-run"
             Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")
             with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISMATCH"):
                 execution_controller._validate_runtime_projection(journal, current, manifest)
+
+    def test_generated_state_path_is_stable_per_project_not_run(self):
+        with tempfile.TemporaryDirectory() as root:
+            first = execution_controller._generated_state_path(root, metadata("run-1")["projectIdentity"])
+            second = execution_controller._generated_state_path(root, metadata("run-2")["projectIdentity"])
+            other = execution_controller._generated_state_path(root, metadata("run-3", "project-2")["projectIdentity"])
+            self.assertEqual(first, second)
+            self.assertNotEqual(first, other)
+            self.assertNotIn("run-1", first)
+            self.assertNotIn("run-2", second)
+
+    def test_generated_state_path_rejects_symlink_or_untrusted_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = execution_controller._generated_state_path(root, "project-1")
+            self.assertTrue(path.endswith("projects/project-1/generated/platform-state.yml"))
+            Path(path).write_text("state", encoding="utf-8")
+            os.chmod(path, 0o644)
+            with self.assertRaisesRegex(LifecycleError, "GENERATED_STATE_UNSAFE"):
+                execution_controller._generated_state_path(root, "project-1")
+            os.unlink(path)
+            target = os.path.join(root, "foreign-state.yml")
+            Path(target).write_text("foreign", encoding="utf-8")
+            os.symlink(target, path)
+            with self.assertRaisesRegex(LifecycleError, "GENERATED_STATE_UNSAFE"):
+                execution_controller._generated_state_path(root, "project-1")
 
     def test_retention_only_removes_verified_terminal_runs(self):
         with tempfile.TemporaryDirectory() as root:

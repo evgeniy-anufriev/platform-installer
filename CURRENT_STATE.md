@@ -86,6 +86,29 @@ hygiene passed. UI-02 overall is DONE. Evidence: `docs/ui-02a.md`,
 `docs/ui-02e-pki-runtime-secret-transport.md` and
 `docs/ui-02-architecture.md`.
 
+## Next acceptance sequence (2026-09-23)
+
+SERVICE-INSTALL-01 Keepalived is DONE: two production-shaped lifecycle runs
+through the cumulative QA project completed `SUCCEEDED`; the repeat applied
+`changed=0`. The current VIP owner is node2. SERVICE-INSTALL-02 BIND is DONE:
+two production-shaped lifecycle runs completed `SUCCEEDED`; the first wrote
+machine-owned generated state once and the fresh repeat applied `changed=0`
+after reading the same project-identity-bound state outside its run workspace.
+SERVICE-INSTALL-03 dns-client is DONE: two fresh production-shaped lifecycle
+runs completed `SUCCEEDED` through the cumulative project; both recorded
+`changed=0` after the corrected DNS-client verify task. SERVICE-INSTALL-04
+HAProxy is NEXT. Replace the isolated QA Kafka
+three-member / one-target installation only at
+SERVICE-INSTALL-05, then test the remaining services individually. The last test installs all tested
+services from one shared project and one approved plan, followed by verify
+and a fresh repeat plan proving `changed=0`. Deployment-scoped cleanup and
+before/after isolation checks must preserve other QA deployments. Exact target
+addresses and resource ownership must be established before execution.
+Ordered milestones: SERVICE-INSTALL-01 Keepalived, 02 BIND, 03 dns-client,
+04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover, 07 one
+plan for all six. Conditions: `docs/service-install-acceptance.md` and
+`docs/roadmap.md`, "Post-UI-02 service installation acceptance".
+
 ## EXEC-OBS-01 completion (2026-09-05)
 
 EXEC-OBS-01A through 01D are DONE. Managed Ansible task events use the existing

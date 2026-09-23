@@ -16,7 +16,7 @@ project/
   inventory/
     hosts.yml
     group_vars/all/platform.yml       # user-owned desired state
-    group_vars/all/platform-state.yml # machine-owned generated state
+    group_vars/all/platform-state.yml # optional standalone machine-owned state
     group_vars/<service-or-operator-group>.yml
     host_vars/<host>.yml
   ansible.cfg
@@ -68,7 +68,12 @@ all:
 Machine materialization writes only generated state, for example Kafka
 `clusterId` and `directoryId`, under `platform_generated_state`. It must not
 write service configuration, placement or secrets. The generated-state schema
-enforces this boundary. `project.yml.desiredState` and legacy
+enforces this boundary. In Installer-managed execution, that document is
+machine-owned persistent Execution Node data at
+`<execution-state-root>/projects/<projectIdentity>/generated/platform-state.yml`,
+not part of the portable project or its ephemeral run workspace. Standalone
+Ansible may continue to pass an explicit local generated-state path. See
+`docs/exec-generated-state.md`. `project.yml.desiredState` and legacy
 `platform_project` are bounded readers for older projects: identical duplicate
 input is deprecated, conflicting input is blocked, and new writers emit only
 the Ansible-native shape.

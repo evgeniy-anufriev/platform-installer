@@ -31,7 +31,7 @@
   ansible.builtin.assert:
     that:
       - item in _platform_dns_client_resolvectl_status.stdout
-      - ('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_resolvectl_status.stdout
+      - "('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_resolvectl_status.stdout"
     fail_msg: DNS_CLIENT_RESOLVED_EFFECTIVE_STATE_INVALID
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'systemd-resolved'
@@ -47,8 +47,8 @@
   ansible.builtin.assert:
     that:
       - item in _platform_dns_client_nm_verify.stdout
-      - ('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_nm_verify.stdout
-      - 'no' in _platform_dns_client_nm_verify.stdout
+      - "('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_nm_verify.stdout"
+      - "'no' in _platform_dns_client_nm_verify.stdout"
     fail_msg: DNS_CLIENT_NM_EFFECTIVE_STATE_INVALID
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'NetworkManager'

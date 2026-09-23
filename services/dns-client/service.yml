@@ -19,7 +19,7 @@ configurationSchema: {$ref: configuration.schema.json}
 configuration:
   additionalProperties: false
   settings:
-    dnsServerRef: {kind: MANAGED, roleVariable: platform_dns_client_server_ref, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: Authoritative DNS deployment, section: Split DNS, order: 10}}
+    dnsServerRef: {kind: MANAGED, roleVariable: platform_dns_client_server_ref, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: Authoritative DNS deployment, section: Split DNS, order: 10, x-referenceKind: SERVICE_DEPLOYMENT}}
 roleEntrypoints:
   apply: {fqcn: platform.dns_client.dns_client, variablesPrefix: platform_dns_client_}
   verify: {fqcn: platform.dns_client.dns_client, variablesPrefix: platform_dns_client_}

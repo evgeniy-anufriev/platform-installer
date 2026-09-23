@@ -5,7 +5,9 @@ from __future__ import print_function
 import argparse
 import json
 import os
+import re
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -16,6 +18,8 @@ import execution_secret_lease
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client"))
+PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
+MAX_GENERATED_STATE_BYTES = 1024 * 1024
 
 
 def _terminal(journal, state, code, summary):
@@ -38,6 +42,35 @@ def _safe_service(value):
 def _context_value(operation, key):
     value = operation.get(key)
     return value if isinstance(value, str) else ""
+
+
+def _generated_state_path(state_root, project_identity):
+    """Return the one controller-owned generated-state path for a project.
+
+    This state is deliberately outside ephemeral run workspaces and is never
+    derived from a project-supplied pathname. The controller serializes active
+    runs, while these checks prevent a substituted filesystem object from being
+    supplied to an Ansible service playbook.
+    """
+    if not isinstance(project_identity, str) or PROJECT_ID.fullmatch(project_identity) is None:
+        raise LifecycleError("EXECUTION_PROJECT_ID_INVALID")
+    root = os.path.join(state_root, "projects")
+    for path in (root, os.path.join(root, project_identity), os.path.join(root, project_identity, "generated")):
+        try:
+            os.mkdir(path, 0o700)
+        except FileExistsError:
+            pass
+        except OSError:
+            raise LifecycleError("EXECUTION_GENERATED_STATE_UNSAFE")
+        details = os.lstat(path)
+        if stat.S_ISLNK(details.st_mode) or not stat.S_ISDIR(details.st_mode) or (stat.S_IMODE(details.st_mode) & 0o077):
+            raise LifecycleError("EXECUTION_GENERATED_STATE_UNSAFE")
+    path = os.path.join(root, project_identity, "generated", "platform-state.yml")
+    if os.path.lexists(path):
+        details = os.lstat(path)
+        if stat.S_ISLNK(details.st_mode) or not stat.S_ISREG(details.st_mode) or details.st_size > MAX_GENERATED_STATE_BYTES or (stat.S_IMODE(details.st_mode) & 0o077):
+            raise LifecycleError("EXECUTION_GENERATED_STATE_UNSAFE")
+    return path
 
 
 def _command(release, journal, operation):
@@ -103,12 +136,14 @@ def _validate_runtime_projection(journal, metadata, manifest):
         projection = json.load(stream)
     if not isinstance(projection, dict) or projection.get("apiVersion") != "platform.installer/runtime-projection/v1alpha2":
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_INVALID")
+    expected_generated_state_path = _generated_state_path(journal.root, metadata.get("projectIdentity"))
     if (projection.get("platform_execution_run_id") != metadata.get("runId") or
             projection.get("platform_execution_project_identity") != metadata.get("projectIdentity") or
             projection.get("platform_execution_plan_fingerprint") != metadata.get("planFingerprint") or
             projection.get("platform_execution_manifest_digest") != metadata.get("manifestDigest") or
             not isinstance(projection.get("platform_execution_requirements_fingerprint"), str) or
             not projection["platform_execution_requirements_fingerprint"].startswith("sha256:") or
+            projection.get("platform_generated_state_path") != expected_generated_state_path or
             not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict) or
             not isinstance(projection.get("platform_pki_secret_files"), dict)):
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
@@ -172,6 +207,7 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         "platform_project_id": metadata["projectIdentity"],
         "platform_project_root": os.path.join(journal.directory, "project"),
         "platform_project_manifest_path": os.path.join(journal.directory, "project", "project.yml"),
+        "platform_generated_state_path": _generated_state_path(journal.root, metadata["projectIdentity"]),
         "platform_service_catalog_path": "/var/lib/platform-installer/runtime/current/catalog/service-catalog.yml",
         "platform_artifact_source_authorities_by_deployment": by_deployment,
         "platform_pki_secret_files": secret_files,

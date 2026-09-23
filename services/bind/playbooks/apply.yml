@@ -6,16 +6,76 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Load persistent generated state for BIND lifecycle reconciliation
+    - name: Resolve controller-safe BIND generated-state path
+      ansible.builtin.set_fact:
+        _platform_bind_generated_state_path: >-
+          {{ platform_generated_state_path |
+             default((platform_project_root |
+                      default((inventory_dir | default('/project/inventory', true)) | dirname, true)) ~
+                     '/inventory/group_vars/all/platform-state.yml', true) }}
+
+    - name: Resolve BIND generated-state project identity
+      ansible.builtin.set_fact:
+        _platform_bind_project_id: >-
+          {{ platform_project_id
+             if platform_project_id is defined and (platform_project_id | string | length > 0)
+             else (platform_project_root | basename
+                   if platform_project_root is defined
+                   else ((inventory_dir | dirname | basename)
+                         if inventory_dir is defined else 'project')) }}
+
+    - name: Initialize absent BIND generated state safely
+      ansible.builtin.set_fact:
+        _platform_bind_persisted_state_file: {}
+
+    - name: Inspect persistent BIND generated state before reconciliation
+      ansible.builtin.stat:
+        path: "{{ _platform_bind_generated_state_path }}"
+      register: _platform_bind_persisted_state_stat
+
+    - name: Load existing persistent BIND generated state for reconciliation
       ansible.builtin.include_vars:
-        file: "{{ platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true) }}"
+        file: "{{ _platform_bind_generated_state_path }}"
         name: _platform_bind_persisted_state_file
-      failed_when: false
+      when: _platform_bind_persisted_state_stat.stat.exists | bool
 
     - name: Select persistent generated state for BIND lifecycle reconciliation
       ansible.builtin.set_fact:
         _platform_bind_persisted_generated_state: >-
           {{ _platform_bind_persisted_state_file.platform_generated_state | default(platform_generated_state | default({}), true) }}
+
+    - name: Bind persistent BIND generated state to this project identity
+      ansible.builtin.assert:
+        that:
+          - _platform_bind_persisted_generated_state.metadata | default({}) is mapping
+          - _platform_bind_persisted_generated_state.metadata.projectId | default('') == _platform_bind_project_id
+        fail_msg: BIND_GENERATED_STATE_PROJECT_MISMATCH
+      when: _platform_bind_persisted_generated_state | length > 0
+
+    - name: Validate loaded BIND generated state before reconciliation
+      platform.core.validate_project:
+        manifest: "{{ platform_project_manifest_document }}"
+        topology: "{{ platform_project | default({}) }}"
+        ansible_desired_state: "{{ platform_desired_state | default({}) }}"
+        generated_state: "{{ _platform_bind_persisted_generated_state }}"
+        project_id: "{{ _platform_bind_project_id }}"
+        desired_hosts: "{{ platform_desired_hosts }}"
+        service_catalog: >-
+          {{ platform_catalog_artifact.platform_service_catalog |
+             default(platform_catalog_artifact, true) }}
+        inventory_hosts: "{{ groups['platform_targets'] | default([]) }}"
+        inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
+        inventory_host_addresses: "{{ platform_inventory_host_addresses | default({}) }}"
+        artifact_path: >-
+          {{ (platform_validation_artifact |
+              default(playbook_dir ~ '/../../../ansible-core/.runtime/validation-result.json', true)) ~
+             '.bind-persisted-state' }}
+        contracts_root: >-
+          {{ platform_contracts_root |
+             default(playbook_dir ~ '/../../../contracts', true) }}
+      changed_when: false
+      become: false
+      when: _platform_bind_persisted_generated_state | length > 0
 
     - name: Load published service catalog for BIND serial resolution
       ansible.builtin.include_vars:
@@ -55,9 +115,7 @@
           {{ {
                'apiVersion': 'platform.installer/generated-state/v1alpha1',
                'kind': 'PlatformGeneratedState',
-               'metadata': {'projectId': (platform_project_id |
-                                          default(platform_project_manifest_document.metadata.id |
-                                                  default((inventory_dir | dirname | basename), true), true))},
+               'metadata': {'projectId': _platform_bind_project_id},
                'serviceDeployments': {}
              } | combine(
                    (_platform_bind_lifecycle_recovery.recovered_dns_lifecycle.generatedState
@@ -98,6 +156,32 @@
         label: "{{ item.key }}"
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
+    - name: Validate BIND generated state against the published project contract
+      platform.core.validate_project:
+        manifest: "{{ platform_project_manifest_document }}"
+        topology: "{{ platform_project | default({}) }}"
+        ansible_desired_state: "{{ platform_desired_state | default({}) }}"
+        generated_state: >-
+          {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
+             else _platform_bind_next_state }}
+        project_id: "{{ _platform_bind_project_id }}"
+        desired_hosts: "{{ platform_desired_hosts }}"
+        service_catalog: >-
+          {{ platform_catalog_artifact.platform_service_catalog |
+             default(platform_catalog_artifact, true) }}
+        inventory_hosts: "{{ groups['platform_targets'] | default([]) }}"
+        inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
+        inventory_host_addresses: "{{ platform_inventory_host_addresses | default({}) }}"
+        artifact_path: >-
+          {{ (platform_validation_artifact |
+              default(playbook_dir ~ '/../../../ansible-core/.runtime/validation-result.json', true)) ~
+             '.bind-generated-state' }}
+        contracts_root: >-
+          {{ platform_contracts_root |
+             default(playbook_dir ~ '/../../../contracts', true) }}
+      changed_when: false
+      become: false
+
     - name: Publish BIND runtime projection for this apply
       ansible.builtin.set_fact:
         platform_bind_runtime_projection:
@@ -108,7 +192,7 @@
 
     - name: Create persistent generated-state directory for BIND serial lifecycle
       ansible.builtin.file:
-        path: "{{ (platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true)) | dirname }}"
+        path: "{{ _platform_bind_generated_state_path | dirname }}"
         state: directory
         mode: '0700'
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
@@ -116,7 +200,7 @@
     - name: Persist BIND generated serial state atomically
       ansible.builtin.copy:
         content: "{{ {'platform_generated_state': _platform_bind_next_state} | to_nice_yaml(indent=2) }}"
-        dest: "{{ platform_generated_state_path | default(inventory_dir ~ '/group_vars/all/platform-state.yml', true) }}"
+        dest: "{{ _platform_bind_generated_state_path }}"
         mode: '0600'
       register: platform_bind_generated_state_write
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)

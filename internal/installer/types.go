@@ -14,6 +14,7 @@ const (
 	EditCommandAPIVersionV6    = "platform.installer/edit-command/v1alpha6"
 	EditCommandAPIVersionV7    = "platform.installer/edit-command/v1alpha7"
 	EditCommandAPIVersionV8    = "platform.installer/edit-command/v1alpha8"
+	EditCommandAPIVersionV9    = "platform.installer/edit-command/v1alpha9"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -146,6 +147,7 @@ func (value *PlacementMember) UnmarshalJSON(content []byte) error {
 type PlacementHost struct {
 	HostID        string   `json:"hostId"`
 	Roles         []string `json:"roles,omitempty"`
+	Priority      int      `json:"priority,omitempty"`
 	unknownFields []string
 }
 
@@ -161,7 +163,7 @@ func (value *PlacementHost) UnmarshalJSON(content []byte) error {
 	}
 	*value = PlacementHost(decoded)
 	for field := range fields {
-		if field != "hostId" && field != "roles" {
+		if field != "hostId" && field != "roles" && field != "priority" {
 			value.unknownFields = append(value.unknownFields, field)
 		}
 	}
@@ -325,6 +327,7 @@ type ManagedHostPlacement struct {
 	DeploymentID string   `json:"deploymentId"`
 	HostID       string   `json:"hostId"`
 	Roles        []string `json:"roles"`
+	Priority     *int     `json:"priority,omitempty"`
 }
 
 type PlanTiming struct {

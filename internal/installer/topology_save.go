@@ -591,6 +591,12 @@ func (candidate *structuralCandidate) reconcilePlacement(command EditCommand, de
 		} else {
 			value["roles"] = stringValues(host.Roles)
 		}
+		if command.APIVersion == EditCommandAPIVersionV9 {
+			// v1alpha9 makes priority a required part of each final host-scoped
+			// placement entry. Earlier immutable contracts retain their existing
+			// preservation behavior for fields they cannot express.
+			value["priority"] = host.Priority
+		}
 		placements[command.DeploymentID] = value
 		candidate.dirty[managedHostDocument(host.HostID)] = true
 	}
@@ -750,18 +756,28 @@ func (candidate *structuralCandidate) validateCatalogConfigurationReferences(cat
 	validate := func(configuration map[string]any, serviceType, field string) error {
 		for settingID, raw := range configuration {
 			descriptor, found := catalogConfigurationSetting(catalog, serviceType, settingID)
-			if !found || descriptor.ReferenceKind != "TLS_PROFILE" {
+			if !found || (descriptor.ReferenceKind != "TLS_PROFILE" && descriptor.ReferenceKind != "SERVICE_DEPLOYMENT") {
 				continue
 			}
 			id, ok := raw.(string)
 			if !ok || !validDesiredStateIdentifier(id) {
-				return managedReadError("Managed TLS-profile reference is malformed", field)
+				return managedReadError("Managed configuration reference is malformed", field)
 			}
-			if tlsProfiles[id] == nil {
-				if mutations.deletedTLSProfiles[id] {
-					return referenceInUse("configuration." + settingID)
+			switch descriptor.ReferenceKind {
+			case "TLS_PROFILE":
+				if tlsProfiles[id] == nil {
+					if mutations.deletedTLSProfiles[id] {
+						return referenceInUse("configuration." + settingID)
+					}
+					return referenceNotFound("configuration." + settingID)
 				}
-				return referenceNotFound("configuration." + settingID)
+			case "SERVICE_DEPLOYMENT":
+				if deployments[id] == nil {
+					if mutations.deletedDeployments[id] {
+						return referenceInUse("configuration." + settingID)
+					}
+					return referenceNotFound("configuration." + settingID)
+				}
 			}
 		}
 		return nil

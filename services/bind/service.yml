@@ -19,7 +19,7 @@ configurationSchema: {$ref: configuration.schema.json}
 configuration:
   additionalProperties: false
   settings:
-    zone: {kind: MANAGED, roleVariable: platform_bind_zone, type: string, scopes: [deployment], validation: {minLength: 3}, ui: {label: Zone, section: Authoritative zone, order: 10}}
+    zone: {kind: MANAGED, roleVariable: platform_bind_zone, type: string, scopes: [deployment], validation: {minLength: 4, maxLength: 253, pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$'}, ui: {label: Zone, section: Authoritative zone, order: 10}}
     defaultTtl: {kind: MANAGED, roleVariable: platform_bind_default_ttl, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 2147483647}, ui: {label: Default TTL, section: Authoritative zone, order: 20}}
     advancedConfig:
       kind: ADVANCED

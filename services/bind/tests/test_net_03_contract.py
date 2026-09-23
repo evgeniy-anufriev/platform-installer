@@ -18,6 +18,10 @@ class Net03BindContractTests(unittest.TestCase):
         role = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
         self.assertIn("Publish BIND runtime projection for this apply", apply)
         self.assertEqual(1, apply.count("Persist BIND generated serial state atomically"))
+        self.assertIn("platform_generated_state_path", apply)
+        self.assertIn("Bind persistent BIND generated state to this project identity", apply)
+        self.assertIn("Validate loaded BIND generated state before reconciliation", apply)
+        self.assertIn("Validate BIND generated state against the published project contract", apply)
         self.assertIn("hostvars['localhost'].platform_bind_runtime_projection", role)
         self.assertNotIn("platform_generated_state.serviceDeployments[item.key].dns.currentSerial", role)
 

@@ -36,7 +36,10 @@ const (
 	classificationBlocked        = "PROJECT_OPEN_BLOCKED"
 	managedProjectLabel          = "platform.installer/managed-project"
 	managedProjectMarker         = "v1alpha1"
+	dnsDomainValidationPattern   = `^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$`
 )
+
+var dnsDomainPattern = regexp.MustCompile(dnsDomainValidationPattern)
 
 // FirstSaveEligible revalidates the portable managed-project marker and lock
 // envelope without relying on process-local creation state.
@@ -303,6 +306,39 @@ func (s *Service) ResolveProjectCatalog(ctx context.Context, root string) (*Proj
 		return nil, errors.New("MANAGED_PROJECT_INVALID")
 	}
 	return s.resolveProjectCatalog(project), nil
+}
+
+// ValidateArtifactLockCandidate proves that bundleRoot is an exact, compatible
+// replacement for the artifact lock currently declared by a managed project.
+// It is deliberately read-only: the guarded Installer writer owns the narrow
+// compare-and-swap update of project.yml.
+func ValidateArtifactLockCandidate(ctx context.Context, root, bundleRoot, digest string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !validDigest(digest) {
+		return errors.New("ARTIFACT_LOCK_DIGEST_INVALID")
+	}
+	root, err := existingRoot(root)
+	if err != nil {
+		return err
+	}
+	project, err := readManifest(root)
+	if err != nil || project.Metadata.Labels[managedProjectLabel] != managedProjectMarker || !validEmptyManifest(project) {
+		return errors.New("MANAGED_PROJECT_INVALID")
+	}
+	verified, err := executionbundle.ValidateRoot(bundleRoot)
+	if err != nil {
+		return errors.New("ARTIFACT_LOCK_BUNDLE_UNAVAILABLE")
+	}
+	if verified.Digest != digest {
+		return errors.New("ARTIFACT_LOCK_BUNDLE_DIGEST_MISMATCH")
+	}
+	catalog, err := readCatalog(verified)
+	if err != nil || verified.Manifest.CatalogDigest != project.CatalogLock.Digest || !catalogMatchesLock(catalog, project.CatalogLock) {
+		return errors.New("ARTIFACT_LOCK_COMPATIBILITY_INVALID")
+	}
+	return nil
 }
 
 func (s *Service) compatibilitySource(id string) (compatibility, error) {
@@ -624,8 +660,13 @@ func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetti
 		return result
 	}
 	if source.UI.XReferenceKind != "" {
-		if source.UI.XReferenceKind == "TLS_PROFILE" && source.Type == "string" && validationKeys(source.Validation, "minLength") && integerConstraint(source.Validation["minLength"]) == 1 {
-			result.EditorShape, result.ReferenceKind = "TLS_PROFILE", "TLS_PROFILE"
+		if source.Type == "string" && validationKeys(source.Validation, "minLength") && integerConstraint(source.Validation["minLength"]) == 1 {
+			switch source.UI.XReferenceKind {
+			case "TLS_PROFILE":
+				result.EditorShape, result.ReferenceKind = "TLS_PROFILE", "TLS_PROFILE"
+			case "SERVICE_DEPLOYMENT":
+				result.EditorShape, result.ReferenceKind = "SERVICE_DEPLOYMENT", "SERVICE_DEPLOYMENT"
+			}
 		}
 		return result
 	}
@@ -652,6 +693,11 @@ func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetti
 			}
 		}
 	case "string":
+		if exactDNSDomainValidation(source.Validation) {
+			minimum, maximum := 4, 253
+			result.MinLength, result.MaxLength, result.EditorShape = &minimum, &maximum, "DNS_DOMAIN"
+			break
+		}
 		if validationKeys(source.Validation, "minLength", "maxLength") {
 			minimum, maximum := integerConstraint(source.Validation["minLength"]), integerConstraint(source.Validation["maxLength"])
 			if minimum >= 0 && maximum >= minimum && maximum <= 4096 {
@@ -660,6 +706,20 @@ func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetti
 		}
 	}
 	return result
+}
+
+// ValidDNSDomain is the closed DNS domain shape admitted to the Installer
+// setting editor. It intentionally does not execute catalog-supplied regexes.
+func ValidDNSDomain(value string) bool {
+	return len(value) >= 4 && len(value) <= 253 && dnsDomainPattern.MatchString(value)
+}
+
+func exactDNSDomainValidation(validation map[string]any) bool {
+	pattern, patternOK := validation["pattern"].(string)
+	return validationKeys(validation, "minLength", "maxLength", "pattern") &&
+		patternOK && pattern == dnsDomainValidationPattern &&
+		integerConstraint(validation["minLength"]) == 4 &&
+		integerConstraint(validation["maxLength"]) == 253
 }
 
 func catalogSettingOrderLess(left, right ProjectCatalogSetting) bool {
@@ -810,6 +870,60 @@ type manifest struct {
 type serviceLock struct {
 	DefinitionVersion string `yaml:"definitionVersion"`
 	Digest            string `yaml:"digest"`
+}
+
+// RuntimeLockUpgradeCandidate is the closed replacement lock pair derived
+// only from one verified immutable runtime bundle. It is not desired state and
+// callers cannot provide its catalog service entries independently.
+type RuntimeLockUpgradeCandidate struct {
+	ArtifactDigest  string
+	CatalogDigest   string
+	CatalogServices map[string]RuntimeCatalogServiceLock
+}
+
+type RuntimeCatalogServiceLock struct {
+	DefinitionVersion string `yaml:"definitionVersion"`
+	Digest            string `yaml:"digest"`
+}
+
+// ResolveRuntimeLockUpgradeCandidate admits a verified new runtime/catalog
+// pair for a managed project. Unlike ValidateArtifactLockCandidate it is for
+// the explicit catalog-changing upgrade operation, so it deliberately proves
+// the new complete catalog lock rather than requiring the old catalog digest.
+func ResolveRuntimeLockUpgradeCandidate(ctx context.Context, root, bundleRoot, digest string) (RuntimeLockUpgradeCandidate, error) {
+	if err := ctx.Err(); err != nil {
+		return RuntimeLockUpgradeCandidate{}, err
+	}
+	if !validDigest(digest) {
+		return RuntimeLockUpgradeCandidate{}, errors.New("ARTIFACT_LOCK_DIGEST_INVALID")
+	}
+	root, err := existingRoot(root)
+	if err != nil {
+		return RuntimeLockUpgradeCandidate{}, err
+	}
+	project, err := readManifest(root)
+	if err != nil || project.Metadata.Labels[managedProjectLabel] != managedProjectMarker || !validEmptyManifest(project) {
+		return RuntimeLockUpgradeCandidate{}, errors.New("MANAGED_PROJECT_INVALID")
+	}
+	verified, err := executionbundle.ValidateRoot(bundleRoot)
+	if err != nil {
+		return RuntimeLockUpgradeCandidate{}, errors.New("ARTIFACT_LOCK_BUNDLE_UNAVAILABLE")
+	}
+	if verified.Digest != digest {
+		return RuntimeLockUpgradeCandidate{}, errors.New("ARTIFACT_LOCK_BUNDLE_DIGEST_MISMATCH")
+	}
+	catalog, err := readCatalog(verified)
+	if err != nil || catalog.Digest != verified.Manifest.CatalogDigest || len(catalog.Definitions) == 0 {
+		return RuntimeLockUpgradeCandidate{}, errors.New("ARTIFACT_LOCK_COMPATIBILITY_INVALID")
+	}
+	services := make(map[string]RuntimeCatalogServiceLock, len(catalog.Definitions))
+	for id, definition := range catalog.Definitions {
+		if id == "" || definition.Metadata.Version == "" || !validDigest(definition.Digest) {
+			return RuntimeLockUpgradeCandidate{}, errors.New("ARTIFACT_LOCK_COMPATIBILITY_INVALID")
+		}
+		services[id] = RuntimeCatalogServiceLock{DefinitionVersion: definition.Metadata.Version, Digest: definition.Digest}
+	}
+	return RuntimeLockUpgradeCandidate{ArtifactDigest: verified.Digest, CatalogDigest: verified.Manifest.CatalogDigest, CatalogServices: services}, nil
 }
 
 func marshalManifest(id, name string, source compatibility) ([]byte, error) {

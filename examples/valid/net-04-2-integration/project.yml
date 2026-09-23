@@ -9,11 +9,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:28d63a38673aa98039d1f9e59aa4714dd46eb2db469cd773978f6161ee1a3fe9
+  digest: sha256:e1b66282beb4a804a93bf0f44a2661e713443216b45cb74a245d973fa6a1f151
   services:
     bind:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:215a3c9a4c073db277a8bfba4dde135ee641612d39f3edf94623a19591642611
+      digest: sha256:e7a9f94c42c5af24e601e819b2e764b8b7e57231cd0882ed24a40533b02ff8e0
     haproxy:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e

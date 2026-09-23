@@ -159,6 +159,39 @@ class ProjectEditVersionTests(unittest.TestCase):
         remove["value"] = False
         self.assertTrue(self.validate(remove, "v1alpha8"))
 
+    def test_v1alpha9_requires_closed_host_priority_and_preserves_v1alpha8_operations(self):
+        base = {
+            "apiVersion": "platform.installer/edit-command/v1alpha9",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "ReconcileHostScopedDeploymentPlacement",
+            "deploymentId": "keepalived-main",
+            "hosts": [{"hostId": "node1", "priority": 150}],
+        }
+        self.assertEqual([], self.validate(base, "v1alpha9"))
+        for invalid in [
+            {"hostId": "node1"},
+            {"hostId": "node1", "priority": None},
+            {"hostId": "node1", "priority": 0},
+            {"hostId": "node1", "priority": 255},
+            {"hostId": "node1", "priority": 1.5},
+            {"hostId": "node1", "priority": 150, "rawYaml": "unsafe"},
+        ]:
+            payload = dict(base, hosts=[invalid])
+            self.assertTrue(self.validate(payload, "v1alpha9"), invalid)
+
+        inherited = {
+            "apiVersion": "platform.installer/edit-command/v1alpha9",
+            "kind": "EditCommand",
+            "baseProjectRevision": REVISION,
+            "operation": "ReconcileEndpointProvider",
+            "deploymentId": "edge-main",
+            "endpointGroupId": "edge",
+            "virtualRouterId": 42,
+            "virtualAddresses": [{"address": "192.0.2.42", "interface": "eth0"}],
+        }
+        self.assertEqual([], self.validate(inherited, "v1alpha9"))
+
     def test_v1alpha7_remains_immutable_and_does_not_admit_h1_commands(self):
         payload = {
             "apiVersion": "platform.installer/edit-command/v1alpha7",
