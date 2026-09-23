@@ -453,7 +453,8 @@ class ExecutionLifecycleTests(unittest.TestCase):
     def test_service_projection_binding_is_verified_before_controller_start(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
-            manifest = {"operations": [{"operation": "PKI_APPLY", "operationId": "pki:apply"}, {"operation": "SERVICE_APPLY", "operationId": "apply:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}, {"operation": "SERVICE_VERIFY", "operationId": "verify:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}], "artifactRequirements": [{"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}], "artifactSourceAuthorities": [{"requirement": {"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}}]}
+            plans = [{"id": "scope--node1", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": "runtime:pki-store-password", "materializationFingerprint": digest("scope")}]
+            manifest = {"operations": [{"operation": "PKI_APPLY", "operationId": "pki:apply"}, {"operation": "SERVICE_APPLY", "operationId": "apply:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}, {"operation": "SERVICE_VERIFY", "operationId": "verify:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}], "artifactRequirements": [{"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}], "artifactSourceAuthorities": [{"requirement": {"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}}], "pkiMaterializationPlans": plans}
             current = metadata(); current["manifestDigest"] = digest(manifest)
             journal.initialize(current)
             execution_controller._materialize_runtime_projection(journal, current, manifest)
@@ -463,10 +464,30 @@ class ExecutionLifecycleTests(unittest.TestCase):
             self.assertEqual(projection["platform_project_manifest_path"], os.path.join(journal.directory, "project", "project.yml"))
             self.assertEqual(projection["platform_generated_state_path"], os.path.join(root, "projects", "project-1", "generated", "platform-state.yml"))
             self.assertIn("kafka-binary", projection["platform_artifact_source_authorities_by_deployment"]["kafka"])
+            self.assertEqual(plans, projection["platform_pki_materialization_plans"])
             projection["platform_execution_run_id"] = "other-run"
             Path(journal.directory, "runtime-projection.json").write_text(json.dumps(projection), encoding="utf-8")
             with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISMATCH"):
                 execution_controller._validate_runtime_projection(journal, current, manifest)
+
+    def test_runtime_projection_rejects_malformed_or_tampered_pki_materialization_plans(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            valid = {"id": "scope--node1", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": None, "materializationFingerprint": digest("scope")}
+            manifest = {"operations": [{"operation": "SERVICE_APPLY", "operationId": "apply:haproxy", "serviceType": "haproxy", "serviceDeployment": "haproxy"}], "artifactRequirements": [], "artifactSourceAuthorities": [], "pkiMaterializationPlans": [valid]}
+            current = metadata(); current["manifestDigest"] = digest(manifest)
+            journal.initialize(current)
+            execution_controller._materialize_runtime_projection(journal, current, manifest)
+            projection_path = Path(journal.directory, "runtime-projection.json")
+            projection = json.loads(projection_path.read_text(encoding="utf-8"))
+            projection["platform_pki_materialization_plans"] = []
+            projection_path.write_text(json.dumps(projection), encoding="utf-8")
+            with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISMATCH"):
+                execution_controller._validate_runtime_projection(journal, current, manifest)
+            invalid = dict(valid); invalid["targetDirectory"] = "relative"
+            invalid_manifest = dict(manifest); invalid_manifest["pkiMaterializationPlans"] = [invalid]
+            with self.assertRaisesRegex(LifecycleError, "EXECUTION_MANIFEST_INVALID"):
+                execution_controller._materialize_runtime_projection(journal, current, invalid_manifest)
 
     def test_generated_state_path_is_stable_per_project_not_run(self):
         with tempfile.TemporaryDirectory() as root:

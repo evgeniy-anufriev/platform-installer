@@ -367,6 +367,116 @@ func TestServiceInstall03DNSClientLifecycle(t *testing.T) {
 	}
 }
 
+// TestServiceInstall04HAProxyLifecycle proves the next cumulative service uses
+// the ordinary credentialed Start path for its PKI requirement and remains
+// idempotent after all previously accepted network services are present.
+func TestServiceInstall04HAProxyLifecycle(t *testing.T) {
+	if os.Getenv("PLATFORM_SERVICE_INSTALL_04_E2E") != "1" {
+		t.Skip("set PLATFORM_SERVICE_INSTALL_04_E2E=1 for SERVICE-INSTALL-04 HAProxy acceptance")
+	}
+	address, user, identity, knownHosts := os.Getenv("PLATFORM_EXEC01A_ADDRESS"), os.Getenv("PLATFORM_EXEC01A_USER"), os.Getenv("PLATFORM_EXEC01A_IDENTITY"), os.Getenv("PLATFORM_EXEC01A_KNOWN_HOSTS")
+	targetUser, targetPassword, targetSudoPassword, pkiStorePassword := os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_USER"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_SUDO_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_PKI_STORE_PASSWORD")
+	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiStorePassword == "" {
+		t.Fatal("SERVICE_INSTALL_04_E2E_PREREQUISITE_MISSING")
+	}
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
+	if cacheRoot == "" {
+		cacheRoot = filepath.Join(repo, "bundle")
+	}
+	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, projectIdentity := configureHAProxyProjectThroughGo(t, repo, bundle, cumulativeProjectRoot(t, repo))
+	node := Node{ID: "service-install-04-node1", Address: address, User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: HostKeyPolicy{State: "TRUSTED", KnownHosts: knownHosts, Fingerprint: "operator-approved"}}
+	transport := OpenSSHTransport{Identity: e2eIdentity{path: identity}}
+	service := NewExecutionService(transport, transport)
+	service.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if request.RequiresPKIStorePassword != true {
+			return os.ErrInvalid
+		}
+		return use(TargetCredentialLeasePayload{Username: targetUser, Password: targetPassword, SudoPassword: targetSudoPassword, PKIStorePassword: pkiStorePassword})
+	})
+	release := map[string]any{"bundleDigest": bundle.Digest, "coreVersion": bundle.Manifest.CoreVersion, "catalogDigest": bundle.Manifest.CatalogDigest, "planningProtocol": "v1alpha1"}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	for cycle := 1; cycle <= 2; cycle++ {
+		started := time.Now()
+		record, err := service.CreatePlan(ctx, node, project, release)
+		if err != nil {
+			t.Fatalf("cycle=%d plan: %v", cycle, err)
+		}
+		if record.Plan.Status != "EXECUTABLE" || record.Plan.ProjectIdentity != projectIdentity {
+			t.Fatalf("cycle=%d unexpected plan: %#v", cycle, record.Plan)
+		}
+		if err := service.ApprovePlan(record.ID, record.Plan.Acknowledgements); err != nil {
+			t.Fatalf("cycle=%d approve: %v", cycle, err)
+		}
+		run, err := service.Start(ctx, node, record.ID)
+		if err != nil {
+			t.Fatalf("cycle=%d start: %v", cycle, err)
+		}
+		observer, err := NewRunObserver(transport, filepath.Join(repo, ".runtime"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		subscription, err := observer.Observe(ctx, node, run.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for subscription.Events != nil || subscription.Errors != nil {
+			select {
+			case _, ok := <-subscription.Events:
+				if !ok {
+					subscription.Events = nil
+				}
+			case observeErr, ok := <-subscription.Errors:
+				if !ok {
+					subscription.Errors = nil
+				} else {
+					t.Fatalf("cycle=%d observer: %v", cycle, observeErr)
+				}
+			case <-ctx.Done():
+				t.Fatalf("cycle=%d timeout", cycle)
+			}
+		}
+		current, _, err := service.Sync(ctx, node, run.RunID)
+		if err != nil || current.State != "SUCCEEDED" {
+			t.Fatalf("cycle=%d terminal=%#v err=%v", cycle, current, err)
+		}
+		events, err := observer.Replay(ctx, node, run.RunID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		apply, verify, changed := false, false, 0
+		for _, event := range events {
+			apply = apply || (event.EventType == "ACTION_COMPLETED" && event.Status == "SUCCESS" && event.ActionID == "apply:service-install-04-haproxy")
+			verify = verify || (event.EventType == "ACTION_COMPLETED" && event.Status == "SUCCESS" && event.ActionID == "verify:service-install-04-haproxy")
+			if event.EventType == "TASK_COMPLETED" && event.Status == "CHANGED" {
+				changed++
+			}
+		}
+		if !apply || !verify {
+			t.Fatalf("cycle=%d missing HAProxy apply/verify success: apply=%t verify=%t", cycle, apply, verify)
+		}
+		if cycle == 2 && changed != 0 {
+			t.Fatalf("repeat apply changed=%d", changed)
+		}
+		mirror, err := EventMirrorPath(filepath.Join(repo, ".runtime"), run.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info, err := os.Stat(mirror); err != nil || info.Size() == 0 {
+			t.Fatalf("cycle=%d mirror=%q stat=%v", cycle, mirror, err)
+		}
+		t.Logf("cycle=%d runId=%s terminal=%s duration=%s events=%d changed=%d mirror=%s", cycle, run.RunID, current.State, time.Since(started).Round(time.Second), len(events), changed, strings.ReplaceAll(mirror, "\\", "/"))
+	}
+}
+
 // TestServiceInstall01PrepareCumulativeProject materializes only the first
 // service's canonical Core/Ansible inputs. It deliberately has no Execution
 // Node, credential, plan or target-contact path, so Wails can reopen the
@@ -647,6 +757,96 @@ func configureDNSClientProjectThroughGo(t *testing.T, repository string, bundle 
 	}
 	deployment, exists := reopened.Deployments["service-install-03-dns-client"]
 	if !exists || len(reopened.Servers) != 3 || len(reopened.Deployments) != 3 || len(reopened.HostPlacements) != 9 || deployment.ServiceType != "dns-client" || deployment.Mode != "host-resolver" || len(deployment.Configuration) != 1 {
+		t.Fatalf("reopen=%#v", reopened)
+	}
+	return opened.Root, opened.Project.ID
+}
+
+// configureHAProxyProjectThroughGo extends the cumulative project with the
+// complete, typed PKI prerequisite and one host-scoped HAProxy deployment.
+// The runtime-only store password is represented solely by the closed
+// reference; no password is stored in the portable project.
+func configureHAProxyProjectThroughGo(t *testing.T, repository string, bundle executionbundle.Verified, root string) (string, string) {
+	t.Helper()
+	config, err := appconfig.Load(filepath.Join(repository, "config", "application.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTypes := make([]string, len(config.ServerTypes))
+	for index, serverType := range config.ServerTypes {
+		serverTypes[index] = serverType.ID
+	}
+	lifecycle := projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle.Root})
+	opened, err := lifecycle.OpenProject(t.Context(), root)
+	if err != nil || opened.Project == nil || opened.Catalog == nil || opened.Catalog.Status != "READY" || opened.Classification != projectlifecycle.ClassificationManaged {
+		t.Fatalf("open cumulative project=%#v err=%v", opened, err)
+	}
+	view, err := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deployment, exists := view.Deployments["service-install-04-haproxy"]; exists {
+		if len(view.Servers) != 3 || len(view.Deployments) != 4 || deployment.ServiceType != "haproxy" || deployment.Mode != "https-host-routing" || len(view.HostPlacements) != 12 || view.PKI.TLSProfiles["service-install-haproxy-tls"] == nil {
+			t.Fatalf("existing cumulative haproxy state=%#v", view)
+		}
+		return opened.Root, opened.Project.ID
+	}
+	if len(view.Servers) != 3 || len(view.Deployments) != 3 || view.Deployments["service-install-03-dns-client"].ServiceType != "dns-client" {
+		t.Fatalf("unexpected cumulative base=%#v", view)
+	}
+	revision, err := installer.ProjectRevision(opened.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := installer.NewBackend(nil,
+		installer.WithServerTypes(serverTypes),
+		installer.WithProjectCatalogResolver(func(ctx context.Context, projectRoot string) (*projectlifecycle.ProjectCatalogView, error) {
+			return lifecycle.ResolveProjectCatalog(ctx, projectRoot)
+		}),
+	)
+	sessions := installer.NewEditSessionStore()
+	session, err := sessions.Start(opened.Project.ID, opened.Root, opened.Classification, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := []installer.EditCommand{
+		{Operation: "CreateCertificateAuthority", EntityID: "service-install-ca", Entity: map[string]any{"mode": "MANAGED", "commonName": "Service Install QA CA"}},
+		{Operation: "CreateCertificateProfile", EntityID: "service-install-server", Entity: map[string]any{"authorityRef": "service-install-ca", "keyAlgorithm": "RSA", "keySize": 2048, "usages": []any{"serverAuth", "clientAuth"}, "sanPolicy": map[string]any{"includeHostDns": true, "includeHostIp": true}}},
+		{Operation: "CreateTLSProfile", EntityID: "service-install-haproxy-tls", Entity: map[string]any{"certificateProfileRef": "service-install-server", "scope": "DEPLOYMENT", "storePasswordSecretRef": "runtime:pki-store-password"}},
+		{Operation: "CreateCertificateScope", EntityID: "service-install-haproxy-scope", Entity: map[string]any{"displayName": "Service Install HAProxy", "profile": "service-install-server", "scope": "DEPLOYMENT", "sources": map[string]any{"hosts": []any{"node1", "node2", "node3"}}}},
+		{Operation: "CreateServiceDeployment", DeploymentID: "service-install-04-haproxy", ServiceType: "haproxy", Mode: "https-host-routing"},
+		{Operation: "ReconcileHostScopedDeploymentPlacement", DeploymentID: "service-install-04-haproxy", Hosts: []installer.PlacementHost{{HostID: "node1", Priority: 150}, {HostID: "node2", Priority: 120}, {HostID: "node3", Priority: 100}}},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-04-haproxy", Scope: "DEPLOYMENT", Setting: "tlsProfile", Value: "service-install-haproxy-tls"},
+	}
+	for _, command := range commands {
+		if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
+			t.Fatalf("append %s: %v", command.Operation, err)
+		}
+	}
+	plan, err := sessions.ReviewStructural(t.Context(), backend, session.SessionID)
+	if err != nil || plan == nil || !plan.SaveAllowed {
+		if plan != nil && plan.Finding != nil {
+			t.Fatalf("review finding=%s field=%s message=%s err=%v", plan.Finding.Code, plan.Finding.Field, plan.Finding.SafeMessage, err)
+		}
+		t.Fatalf("review=%#v err=%v", plan, err)
+	}
+	if _, err := sessions.BeginCommit(session.SessionID, plan.PlanID); err != nil {
+		t.Fatal(err)
+	}
+	committed := backend.CommitStructuralSave(t.Context(), plan.PlanID)
+	if committed.Status != "COMMITTED" || !committed.Changed || committed.Managed == nil || !sessions.FinishCommit(session.SessionID, plan.PlanID, true) {
+		t.Fatalf("commit=%#v", committed)
+	}
+	reopened, err := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployment, exists := reopened.Deployments["service-install-04-haproxy"]
+	tlsProfileConfigured := false
+	for _, setting := range deployment.Configuration {
+		tlsProfileConfigured = tlsProfileConfigured || (setting.Setting == "tlsProfile" && setting.OverridePresent && setting.Value == "service-install-haproxy-tls")
+	}
+	if !exists || len(reopened.Servers) != 3 || len(reopened.Deployments) != 4 || len(reopened.HostPlacements) != 12 || deployment.ServiceType != "haproxy" || deployment.Mode != "https-host-routing" || !tlsProfileConfigured || reopened.PKI.TLSProfiles["service-install-haproxy-tls"] == nil {
 		t.Fatalf("reopen=%#v", reopened)
 	}
 	return opened.Root, opened.Project.ID

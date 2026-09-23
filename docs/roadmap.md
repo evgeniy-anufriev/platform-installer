@@ -769,7 +769,8 @@ Not ready when:
 
 Status: SERVICE-INSTALL-01 Keepalived DONE (2026-09-23); SERVICE-INSTALL-02
 BIND DONE (2026-09-23); SERVICE-INSTALL-03 dns-client DONE (2026-09-23);
-SERVICE-INSTALL-04 HAProxy is NEXT.
+SERVICE-INSTALL-04 HAProxy DONE (2026-09-23); SERVICE-INSTALL-05 Kafka is
+NEXT.
 The completed UI-02E one-host Kafka evidence remains historical evidence.
 Milestones and individual acceptance criteria:
 [SERVICE-INSTALL-01…07](service-install-acceptance.md).

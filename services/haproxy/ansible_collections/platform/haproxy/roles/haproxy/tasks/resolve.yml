@@ -5,6 +5,24 @@
     name: _platform_haproxy_catalog_file
   run_once: true
 
+- name: Select the one local HAProxy deployment from canonical desired state
+  ansible.builtin.set_fact:
+    _platform_haproxy_local_deployments: >-
+      {{ platform_desired_state.serviceDeployments | dict2items |
+         selectattr('value.serviceType', 'equalto', 'haproxy') |
+         selectattr('key', 'in', platform_deployments | default({})) | list }}
+
+- name: Require one local HAProxy deployment for role-variable projection
+  ansible.builtin.assert:
+    that: _platform_haproxy_local_deployments | length == 1
+    fail_msg: HAPROXY_LOCAL_DEPLOYMENT_AMBIGUOUS
+
+- name: Project the configured HAProxy TLS profile for this deployment
+  ansible.builtin.set_fact:
+    platform_haproxy_tls_profile: >-
+      {{ _platform_haproxy_local_deployments[0].value.configuration.tlsProfile |
+         default(platform_haproxy_tls_profile, true) }}
+
 - name: Collect safe inventory projection for HAProxy
   ansible.builtin.set_fact:
     _platform_haproxy_hosts: "{{ _platform_haproxy_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}"

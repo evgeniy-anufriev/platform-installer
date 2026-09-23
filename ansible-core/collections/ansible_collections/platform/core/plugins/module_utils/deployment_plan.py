@@ -299,5 +299,12 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             for action in phase["actions"]:
                 deployment = deployments.get(action.get("serviceDeployment"), {})
                 manifest_operations.append({"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments})
-        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements}
+        # Materialization plans are Core-derived, private execution inputs.  A
+        # controller starts each approved Ansible operation in a fresh process,
+        # so PKI-consuming service operations must receive the same plans that
+        # the preceding PKI operation resolved.  They are deliberately bound
+        # only into the digest-protected private manifest, never the portable
+        # project, public DeploymentPlan, UI projection, journal or result.
+        materialization_plans = pki_materialization.get("materializationPlans", []) if isinstance(pki_materialization, dict) else []
+        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "pkiMaterializationPlans": materialization_plans}
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}

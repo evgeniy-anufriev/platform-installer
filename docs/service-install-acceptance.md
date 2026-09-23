@@ -1,7 +1,7 @@
 # SERVICE-INSTALL — последовательная приёмка установки
 
 Статус: SERVICE-INSTALL-01 DONE; SERVICE-INSTALL-02 DONE; SERVICE-INSTALL-03 DONE;
-SERVICE-INSTALL-04 NEXT. Исторический UI-02E
+SERVICE-INSTALL-04 DONE. SERVICE-INSTALL-05 NEXT. Исторический UI-02E
 тест Kafka (три экземпляра на одном target) остаётся завершённым и не заменяет
 SERVICE-INSTALL-05 (три target).
 
@@ -162,6 +162,33 @@ deployment. Удалить старый resolver drop-in тестового depl
 HAProxy конфигурацию. Проверить candidate/active barriers, HTTPS routing,
 TLS hostname validation, фактические backend ответы, apply/verify и repeat
 `changed=0`. Проверить, что работа Keepalived, BIND и dns-client не нарушена.
+
+### Evidence (2026-09-23)
+
+- Cumulative project added `service-install-04-haproxy` solely through the
+  typed Go EditSession → Review → local Save lifecycle. It uses the existing
+  three target hosts, isolated priorities 150/120/100, and the managed TLS
+  profile `service-install-haproxy-tls`; no inventory or host-vars file was
+  hand-authored.
+- The immutable runtime
+  `sha256:ecb5342cf4a1000d72c0a792bf56f48569fd198447700e98941170485401df7f`
+  binds Core-derived PKI materialization plans into the digest-protected
+  private ExecutionManifest and controller-only runtime projection, and makes
+  the HAProxy role project its one local deployment's configured TLS profile.
+  Neither change adds PKI plans, SecretRefs or passwords to the portable
+  project, public plan, events or UI.
+- Fresh Go-mediated `CreatePlan → ApprovePlan → Start` runs
+  `installer-12b577ff3cd57e17a6a69e61560b88a7` (14m04s) and
+  `installer-3dfe62bccd8a15dcbb9893b268a41fd2` (15m44s) both reached terminal
+  `SUCCEEDED`. Each recorded HAProxy apply and verify success; the repeat
+  complete cumulative lifecycle recorded real `changed=0`.
+- `haproxy.service` is `active` on node1, node2 and node3. Keepalived, BIND
+  and dns-client stayed part of both cumulative plans and completed without
+  regression. `TASK_EVENT_STREAM_TRUNCATED` late in verify was
+  observability-only and did not alter either terminal result.
+- RED OS Core suite passed (284 tests, 4 expected skips), HAProxy syntax check
+  passed, and fixture catalog plus service configuration schemas remained
+  reproducible.
 
 ## SERVICE-INSTALL-05 — Kafka, три экземпляра на трёх target hosts
 

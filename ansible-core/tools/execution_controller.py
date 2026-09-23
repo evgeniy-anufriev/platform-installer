@@ -20,6 +20,43 @@ import execution_secret_lease
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client"))
 PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
+MAX_PKI_MATERIALIZATION_PLANS = 4096
+MAX_PKI_PLAN_STRING_BYTES = 4096
+_PKI_PLAN_FIELDS = frozenset(("id", "requestId", "tlsProfileId", "authorityId", "hostId", "targetDirectory", "formats", "keyAlias", "trustAlias", "storePasswordSecretRef", "materializationFingerprint"))
+_PKI_PLAN_FORMATS = ("PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE")
+
+
+def _safe_pki_plan_string(value):
+    return isinstance(value, str) and 0 < len(value.encode("utf-8")) <= MAX_PKI_PLAN_STRING_BYTES and not any(ord(character) < 32 for character in value)
+
+
+def _pki_materialization_plans(manifest):
+    """Return the bounded Core-derived plans carried by one private manifest.
+
+    This is intentionally a narrow controller boundary, not another PKI
+    resolver.  Core already owns all certificate and SAN semantics; the
+    controller only admits the fixed data shape required by the independent
+    PKI and service Ansible processes.
+    """
+    values = manifest.get("pkiMaterializationPlans", [])
+    if not isinstance(values, list) or len(values) > MAX_PKI_MATERIALIZATION_PLANS:
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    identities = set()
+    for value in values:
+        if not isinstance(value, dict) or set(value) != _PKI_PLAN_FIELDS:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        for field in ("id", "requestId", "tlsProfileId", "authorityId", "hostId", "targetDirectory", "keyAlias", "trustAlias", "materializationFingerprint"):
+            if not _safe_pki_plan_string(value.get(field)):
+                raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        if value["id"] in identities or not value["targetDirectory"].startswith("/"):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        identities.add(value["id"])
+        if value.get("formats") != list(_PKI_PLAN_FORMATS):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        reference = value.get("storePasswordSecretRef")
+        if reference is not None and reference != "runtime:pki-store-password":
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    return values
 
 
 def _terminal(journal, state, code, summary):
@@ -137,6 +174,7 @@ def _validate_runtime_projection(journal, metadata, manifest):
     if not isinstance(projection, dict) or projection.get("apiVersion") != "platform.installer/runtime-projection/v1alpha2":
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_INVALID")
     expected_generated_state_path = _generated_state_path(journal.root, metadata.get("projectIdentity"))
+    plans = _pki_materialization_plans(manifest)
     if (projection.get("platform_execution_run_id") != metadata.get("runId") or
             projection.get("platform_execution_project_identity") != metadata.get("projectIdentity") or
             projection.get("platform_execution_plan_fingerprint") != metadata.get("planFingerprint") or
@@ -145,6 +183,7 @@ def _validate_runtime_projection(journal, metadata, manifest):
             not projection["platform_execution_requirements_fingerprint"].startswith("sha256:") or
             projection.get("platform_generated_state_path") != expected_generated_state_path or
             not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict) or
+            projection.get("platform_pki_materialization_plans") != plans or
             not isinstance(projection.get("platform_pki_secret_files"), dict)):
         raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
 
@@ -155,6 +194,7 @@ def _materialize_runtime_projection(journal, metadata, manifest):
     requirements = manifest.get("artifactRequirements")
     authorities = manifest.get("artifactSourceAuthorities")
     secret_requirements = manifest.get("runtimeSecretRequirements", [])
+    plans = _pki_materialization_plans(manifest)
     if not isinstance(operations, list) or not isinstance(requirements, list) or not isinstance(authorities, list) or not isinstance(secret_requirements, list):
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     by_deployment = {}
@@ -210,6 +250,7 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         "platform_generated_state_path": _generated_state_path(journal.root, metadata["projectIdentity"]),
         "platform_service_catalog_path": "/var/lib/platform-installer/runtime/current/catalog/service-catalog.yml",
         "platform_artifact_source_authorities_by_deployment": by_deployment,
+        "platform_pki_materialization_plans": plans,
         "platform_pki_secret_files": secret_files,
     }
     if target_username is not None:

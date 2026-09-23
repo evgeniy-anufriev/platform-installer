@@ -97,7 +97,9 @@ after reading the same project-identity-bound state outside its run workspace.
 SERVICE-INSTALL-03 dns-client is DONE: two fresh production-shaped lifecycle
 runs completed `SUCCEEDED` through the cumulative project; both recorded
 `changed=0` after the corrected DNS-client verify task. SERVICE-INSTALL-04
-HAProxy is NEXT. Replace the isolated QA Kafka
+HAProxy is DONE: two fresh Go-mediated lifecycle runs completed `SUCCEEDED`;
+the second full cumulative plan recorded `changed=0`, and `haproxy.service`
+is active on node1, node2 and node3. SERVICE-INSTALL-05 Kafka is NEXT. Replace the isolated QA Kafka
 three-member / one-target installation only at
 SERVICE-INSTALL-05, then test the remaining services individually. The last test installs all tested
 services from one shared project and one approved plan, followed by verify

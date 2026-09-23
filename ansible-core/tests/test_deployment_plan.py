@@ -65,6 +65,14 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertEqual(first["deploymentPlan"]["fingerprints"]["plan"], changed["deploymentPlan"]["fingerprints"]["plan"])
         self.assertNotEqual(first["executionManifestDigest"], changed["executionManifestDigest"])
 
+    def test_private_manifest_digest_binds_pki_materialization_plans(self):
+        plan = {"materializationPlans": [{"id": "scope--node1", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": None, "materializationFingerprint": DIGEST}]}
+        first = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization=plan)
+        changed_plan = copy.deepcopy(plan); changed_plan["materializationPlans"][0]["targetDirectory"] = "/etc/platform/project/other"
+        changed = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization=changed_plan)
+        self.assertEqual(first["deploymentPlan"]["fingerprints"]["plan"], changed["deploymentPlan"]["fingerprints"]["plan"])
+        self.assertNotEqual(first["executionManifestDigest"], changed["executionManifestDigest"])
+
     def test_unsafe_bundle_ref_is_rejected_before_manifest_creation(self):
         unsafe = copy.deepcopy(sources()); unsafe[0]["ref"] = "runtime/artifacts/../escape.tgz"
         with self.assertRaisesRegex(ValueError, "BUNDLE_SOURCE_INDEX_INVALID"):
@@ -99,15 +107,16 @@ class DeploymentPlanTests(unittest.TestCase):
 
     def test_pki_store_password_requirement_uses_existing_public_schema_only(self):
         pki = {"materializationPlans": [
-            {"hostId": "node2", "storePasswordSecretRef": "runtime:pki-store-password"},
-            {"hostId": "node1", "storePasswordSecretRef": "runtime:pki-store-password"},
-            {"hostId": "node1", "storePasswordSecretRef": "runtime:pki-store-password"},
+            {"id": "scope--node2", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node2", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": "runtime:pki-store-password", "materializationFingerprint": DIGEST},
+            {"id": "scope--node1", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": "runtime:pki-store-password", "materializationFingerprint": DIGEST},
         ]}
         result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization=pki)
         plan, manifest = result["deploymentPlan"], result["executionManifest"]
         self.assertEqual([{"requirementRef": "pki-store-password", "purpose": "PKI_STORE_PASSWORD", "hosts": ["node1", "node2"]}], plan["requiredCredentials"])
         self.assertNotIn("runtime:pki-store-password", json.dumps(plan))
         self.assertEqual("runtime:pki-store-password", manifest["runtimeSecretRequirements"][0]["runtimeReference"])
+        self.assertEqual(pki["materializationPlans"], manifest["pkiMaterializationPlans"])
+        self.assertNotIn("pkiMaterializationPlans", plan)
         contracts = Path(__file__).resolve().parents[2] / "contracts"
         self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(plan, contracts / "plan" / "v1alpha2" / "schema.json"))
 
