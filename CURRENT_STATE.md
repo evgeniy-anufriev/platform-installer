@@ -81,7 +81,12 @@ through `CreatePlan -> ApprovePlan -> Start`. Runs
 `installer-a3a4bba6fb97f41b21080ae22c00bcbb` (12m42s) both returned
 `SUCCEEDED`; the repeat apply returned `changed=0`. PKI/Kafka apply and verify,
 local Go/frontend/Wails gates, RED OS Core/race gates, reproducibility and
-hygiene passed. UI-02 overall is DONE. Evidence: `docs/ui-02a.md`,
+hygiene passed. UI-02F is DONE: it adds bounded Core-derived service-secret
+descriptors, descriptor-bound session-only values, v1alpha3 lease admission
+and the generic Services-page Secrets dialog without secret persistence or
+projection. RED OS Core full suite (292 PASS, 4 skipped), lifecycle suite
+(31 PASS), Go/frontend/Wails gates and catalog reproducibility passed. UI-02
+overall is DONE. Evidence: `docs/ui-02a.md`,
 `docs/ui-02b.md`, `docs/ui-02c.md`, `docs/ui-02d.md`,
 `docs/ui-02e-pki-runtime-secret-transport.md` and
 `docs/ui-02-architecture.md`.

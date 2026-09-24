@@ -742,7 +742,9 @@ immutable QA runtime completed two production-shaped one-host/three-member
 Kafka cycles through the generic lifecycle, both `SUCCEEDED`, with repeat
 apply `changed=0`; see
 [UI-02E completion evidence](ui-02e-pki-runtime-secret-transport.md#8-completion-evidence).
-UI-02 overall is DONE.
+UI-02F is DONE: bounded Core-derived service-secret descriptors,
+session-only descriptor-bound values and v1alpha3 runtime transport are
+complete. UI-02 overall is DONE.
 
 Deliverables:
 
