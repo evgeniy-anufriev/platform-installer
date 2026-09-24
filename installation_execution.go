@@ -216,6 +216,12 @@ func (a *App) configureTargetCredentialLease() {
 			if request.RequiresPKIStorePassword {
 				payload.PKIStorePassword = string(credential.PKIStorePassword)
 			}
+			if len(request.RuntimeSecretRequirements) > 0 {
+				payload.RuntimeSecretValues = make(map[string]string, len(credential.RuntimeSecretValues))
+				for reference, value := range credential.RuntimeSecretValues {
+					payload.RuntimeSecretValues[reference] = string(value)
+				}
+			}
 			return use(payload)
 		})
 	})

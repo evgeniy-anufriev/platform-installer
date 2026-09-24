@@ -24,7 +24,7 @@ from execution_lifecycle import ACTIVE, Journal, LifecycleError, digest, recover
 import execution_secret_lease
 
 
-OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
+OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
 MAX_CANDIDATE_ARCHIVE_BYTES = 32 * 1024 * 1024
@@ -100,7 +100,7 @@ def request():
     return value
 
 
-def _capabilities_v2(args):
+def _capabilities_v3(args):
     try:
         with open(os.path.join(args.runtime_release, "manifest.yaml"), "r", encoding="utf-8") as stream:
             manifest = yaml.safe_load(stream)
@@ -109,7 +109,7 @@ def _capabilities_v2(args):
     required = ("bundleVersion", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest")
     if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
-    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha2", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.PAYLOAD_VERSION, execution_secret_lease.PKI_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha3", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.PAYLOAD_VERSION, execution_secret_lease.PKI_PAYLOAD_VERSION, execution_secret_lease.RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha1", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
 
 
 def _v2_start_request(value):
@@ -151,17 +151,33 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
     with open(manifest_path, "r", encoding="utf-8") as stream: manifest = json.load(stream)
     if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]: raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
     requirements = manifest.get("runtimeSecretRequirements", [])
-    expected = [{"requirementRef": "pki-store-password", "purpose": "PKI_STORE_PASSWORD", "runtimeReference": "runtime:pki-store-password"}]
-    if not isinstance(requirements, list) or len(requirements) > 1:
+    if not isinstance(requirements, list) or len(requirements) > 16:
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
-    if requirements:
-        requirement = requirements[0]
-        if not isinstance(requirement, dict) or set(requirement) != {"requirementRef", "purpose", "hosts", "runtimeReference"} or any(requirement.get(key) != expected[0][key] for key in expected[0]) or not isinstance(requirement.get("hosts"), list):
+    pki, service = [], []
+    references, requirement_refs = set(), set()
+    for requirement in requirements:
+        reference = requirement.get("runtimeReference") if isinstance(requirement, dict) else None
+        requirement_ref = requirement.get("requirementRef") if isinstance(requirement, dict) else None
+        if not isinstance(requirement, dict) or not isinstance(requirement.get("hosts"), list) or len(requirement["hosts"]) > 256 or not isinstance(reference, str) or not isinstance(requirement_ref, str) or reference in references or requirement_ref in requirement_refs:
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        references.add(reference); requirement_refs.add(requirement_ref)
+        if requirement.get("purpose") == "PKI_STORE_PASSWORD" and set(requirement) == {"requirementRef", "purpose", "hosts", "runtimeReference"} and requirement.get("requirementRef") == "pki-store-password" and requirement.get("runtimeReference") == "runtime:pki-store-password":
+            pki.append(requirement)
+        elif requirement.get("purpose") == "SERVICE_PASSWORD" and set(requirement) == {"requirementRef", "purpose", "hosts", "runtimeReference", "serviceDeployment"} and re.fullmatch(r"[a-z][a-z0-9-]{0,63}", requirement.get("requirementRef", "")) and re.fullmatch(r"runtime:[a-z][a-z0-9-]{0,127}", requirement.get("runtimeReference", "")) and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", requirement.get("serviceDeployment", "")):
+            service.append(requirement)
+        else:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    if len(pki) > 1:
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    if pki:
         if not value.get("leaseId"):
             raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
         execution_secret_lease.validate_staged_pki_store_password(state_root, value["leaseId"])
-    elif value.get("leaseId"):
+    if service:
+        if not value.get("leaseId"):
+            raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
+        execution_secret_lease.validate_staged_runtime_secret_values(state_root, value["leaseId"], service)
+    if not requirements and value.get("leaseId"):
         execution_secret_lease.validate_staged_payload_without_pki_store_password(state_root, value["leaseId"])
     # The node, not planning or the caller, creates the authoritative run id.
     run_id = "installer-" + os.urandom(16).hex()
@@ -598,7 +614,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             if not isinstance(release_manifest, dict) or release_manifest.get("catalogDigest") != snapshot_request.get("catalogLockDigest"):
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_installer_owned_paths": owned_paths}
-    else:
+    elif operation in ("BuildDeploymentPlan", "BuildRuntimeSecretDescriptors"):
         # Core remains target-free (the playbook runs on localhost), but it must
         # load the staged project inventory so snapshot receives its canonical
         # desired state, groups and host variables.
@@ -612,6 +628,10 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         if not isinstance(sources, list):
             raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources}
+        if operation == "BuildRuntimeSecretDescriptors":
+            playbook = "runtime-secret-descriptors.yml"
+    else:
+        raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
     diagnostic_path = os.path.join(journal.directory, "core-diagnostic.json")
     descriptor, vars_path = tempfile.mkstemp(prefix=".execution-vars-", dir=journal.directory)
     try:
@@ -623,6 +643,8 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
                 environment = _candidate_ansible_environment(project, release, os.path.join(journal.directory, "project-snapshot.json"))
             else:
                 environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json", PLATFORM_PROJECT_SNAPSHOT_OUTPUT=os.path.join(journal.directory, "project-snapshot.json"))
+        elif operation == "BuildRuntimeSecretDescriptors":
+            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.runtime_secret_descriptors_json", PLATFORM_RUNTIME_SECRET_DESCRIPTORS_OUTPUT=os.path.join(journal.directory, "runtime-secret-descriptors.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         else:
             environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         command = ["ansible-playbook"]
@@ -668,6 +690,17 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         if runtime_identity is None:
             raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
         return {"projectSnapshot": snapshot, "runtimeEvidence": runtime_identity}
+    if operation == "BuildRuntimeSecretDescriptors":
+        result_path = os.path.join(journal.directory, "runtime-secret-descriptors.json")
+        if not os.path.isfile(result_path) or os.path.islink(result_path):
+            raise LifecycleError("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_MISSING")
+        with open(result_path, "r", encoding="utf-8") as stream:
+            result = json.load(stream)
+        if not isinstance(result, dict) or not isinstance(result.get("descriptors"), list):
+            raise LifecycleError("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
+        if runtime_identity is None:
+            raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+        return {"runtimeSecretDescriptors": result, "runtimeEvidence": runtime_identity}
     if operation == "BuildDeploymentPlan":
         with open(os.path.join(journal.directory, "deployment-plan.json"), "r", encoding="utf-8") as stream:
             plan = json.load(stream)
@@ -691,6 +724,18 @@ def snapshot(value, state_root, runtime_release, runtime_identity):
         raise LifecycleError("PROJECT_SNAPSHOT_STAGING_NOT_OWNED")
     try:
         return core_operation(value, state_root, runtime_release, "BuildProjectSnapshot", runtime_identity)
+    finally:
+        _cleanup_snapshot_staging(value, journal, stage_identity)
+
+
+def runtime_secret_descriptors(value, state_root, runtime_release, runtime_identity):
+    """Read only the request-owned staged project and always remove it."""
+    journal = Journal(state_root, value["runId"])
+    stage_identity = _snapshot_stage_identity(value, journal)
+    if stage_identity is None:
+        raise LifecycleError("RUNTIME_SECRET_DESCRIPTORS_STAGING_NOT_OWNED")
+    try:
+        return core_operation(value, state_root, runtime_release, "BuildRuntimeSecretDescriptors", runtime_identity)
     finally:
         _cleanup_snapshot_staging(value, journal, stage_identity)
 
@@ -780,7 +825,7 @@ def main():
         metadata = {key: value.get(key) for key in ("requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease")}
         return reply(execution_secret_lease.put(args.state_root, metadata, value.get("payload")))
     operation = value["operation"]
-    if operation == "GetCapabilities": return reply(_capabilities_v2(args))
+    if operation == "GetCapabilities": return reply(_capabilities_v3(args))
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)
@@ -791,6 +836,11 @@ def main():
             if candidate.get("artifactLockDigest") != args.bundle_digest or runtime_release.get("bundleDigest") != args.bundle_digest:
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         return reply(snapshot(value, args.state_root, args.runtime_release, runtime_evidence(args)))
+    if operation == "BuildRuntimeSecretDescriptors":
+        runtime_release = value.get("runtimeRelease")
+        if not isinstance(runtime_release, dict) or runtime_release.get("bundleDigest") != args.bundle_digest or _validated_snapshot_request(value) is None:
+            raise LifecycleError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
+        return reply(runtime_secret_descriptors(value, args.state_root, args.runtime_release, runtime_evidence(args)))
     if operation == "StartExecution": return reply(start(value, args.state_root, args.runtime_release, args.controller, args.bundle_digest))
     if operation == "GetExecution": return reply(get(value, args.state_root))
     if operation == "GetEvents": return reply(events(value, args.state_root))

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -125,7 +126,10 @@ type CredentialedExecutionClient interface {
 // TargetCredentialLeaseProvider exposes a credential only to the synchronous
 // trusted Start flow. Its closure is deliberately private to Go; neither the
 // Wails facade nor plan/session state receives the credential or lease id.
-type TargetCredentialLeaseRequest struct{ RequiresPKIStorePassword bool }
+type TargetCredentialLeaseRequest struct {
+	RequiresPKIStorePassword  bool
+	RuntimeSecretRequirements []string
+}
 
 type TargetCredentialLeaseProvider func(TargetCredentialLeaseRequest, func(TargetCredentialLeasePayload) error) error
 
@@ -383,11 +387,15 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	s.mu.Unlock()
 	if !hasPending {
 		requiresPKIStorePassword := planRequiresPKIStorePassword(fresh)
+		runtimeSecretRequirements := planRuntimeSecretRequirements(fresh)
 		if requiresPKIStorePassword && (!capability.supportsPayloadVersion(credentialPayloadVersionV2) || capability.MaxPayloadBytes < 4096) {
 			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_RUNTIME_UNSUPPORTED")
 		}
 		if requiresPKIStorePassword && provider == nil {
 			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
+		}
+		if len(runtimeSecretRequirements) > 0 && (!capability.supportsPayloadVersion(credentialPayloadVersionV3) || provider == nil) {
+			return ExecutionRun{}, errors.New("RUNTIME_SECRET_VALUES_UNAVAILABLE")
 		}
 		attempt, err := newStartAttemptID()
 		if err != nil {
@@ -399,8 +407,8 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 			if err != nil {
 				return ExecutionRun{}, err
 			}
-			err = provider(TargetCredentialLeaseRequest{RequiresPKIStorePassword: requiresPKIStorePassword}, func(payload TargetCredentialLeasePayload) error {
-				if requiresPKIStorePassword != (payload.PKIStorePassword != "") {
+			err = provider(TargetCredentialLeaseRequest{RequiresPKIStorePassword: requiresPKIStorePassword, RuntimeSecretRequirements: append([]string(nil), runtimeSecretRequirements...)}, func(payload TargetCredentialLeasePayload) error {
+				if requiresPKIStorePassword != (payload.PKIStorePassword != "") || !sameRuntimeSecretRequirementSet(runtimeSecretRequirements, payload.RuntimeSecretValues) {
 					return errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
 				}
 				lease, leaseErr := client.PutRuntimeSecretLease(ctx, node, CredentialLeaseRequest{RequestID: requestID, StartAttemptID: attempt, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease}, payload, capability.MaxPayloadBytes)
@@ -443,6 +451,32 @@ func planRequiresPKIStorePassword(plan DeploymentPlan) bool {
 		}
 	}
 	return false
+}
+
+func planRuntimeSecretRequirements(plan DeploymentPlan) []string {
+	result := []string{}
+	for _, requirement := range plan.RequiredCredentials {
+		if requirement.Purpose == "SERVICE_PASSWORD" && runtimeSecretRequirementPattern.MatchString(requirement.RequirementRef) {
+			result = append(result, requirement.RequirementRef)
+		}
+	}
+	slices.Sort(result)
+	return result
+}
+
+func sameRuntimeSecretRequirementSet(required []string, values map[string]string) bool {
+	if len(required) == 0 {
+		return values == nil
+	}
+	if len(required) != len(values) {
+		return false
+	}
+	for _, reference := range required {
+		if _, ok := values[reference]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *ExecutionService) invalidate(id string) {
@@ -671,3 +705,7 @@ func newStartAttemptID() (string, error) {
 	}
 	return hex.EncodeToString(value), nil
 }
+
+// NewRequestID returns one opaque bounded id for a request-owned remote
+// staging operation. It has no run identity semantics.
+func NewRequestID() (string, error) { return newStartAttemptID() }

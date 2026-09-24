@@ -11,6 +11,7 @@ import {
   GetApplicationConfig,
   GetEndpointPreview,
   GetVerifiedPKIView,
+  GetRuntimeSecretDescriptors,
   GetExecutionNodeContext,
   GetInstallationState,
   CreateInstallationPlan,
@@ -30,6 +31,7 @@ import {
   ReviewStructuralEditSession,
   SetSessionCredential,
   SetPKIStorePassword,
+  SetDeploymentRuntimeSecretValues,
   SelectExecutionNode,
   StartEditSession,
   VerifyProject,
@@ -320,6 +322,26 @@ export type ProjectExportOperationResult = {
   result?: ProjectExportResult;
   error?: { code: string; message: string };
 };
+export type RuntimeSecretDescriptor = {
+  requirementRef: string;
+  purpose: "PKI_STORE_PASSWORD" | "SERVICE_PASSWORD";
+  serviceDeployment?: string;
+  displayLabel: string;
+  hosts: string[];
+};
+export type RuntimeSecretDescriptorOperation = {
+  status: "READY" | "UNAVAILABLE";
+  projectRevision?: string;
+  descriptorSetFingerprint?: string;
+  descriptors?: RuntimeSecretDescriptor[];
+  error?: { code: string; message: string };
+};
+export type RuntimeSecretValuesInput = {
+  projectRevision: string;
+  descriptorSetFingerprint: string;
+  serviceDeployment: string;
+  values: Record<string, string>;
+};
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
@@ -345,6 +367,8 @@ export interface ProjectBackend {
     input: SessionCredentialInput,
   ): Promise<SessionCredentialStatus>;
   setPKIStorePassword?(value: string): Promise<SessionCredentialStatus>;
+  getRuntimeSecretDescriptors?(): Promise<RuntimeSecretDescriptorOperation>;
+  setDeploymentRuntimeSecretValues?(input: RuntimeSecretValuesInput): Promise<void>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
   getInstallationState?(): Promise<InstallationState>;
@@ -400,6 +424,8 @@ export const backend: ProjectBackend = {
   getSessionCredentialStatus: GetSessionCredentialStatus,
   setSessionCredential: (input) => SetSessionCredential(input as never),
   setPKIStorePassword: SetPKIStorePassword,
+  getRuntimeSecretDescriptors: () => GetRuntimeSecretDescriptors() as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  setDeploymentRuntimeSecretValues: (input) => SetDeploymentRuntimeSecretValues(input as never),
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
   getInstallationState: () =>

@@ -119,6 +119,23 @@ type ProjectVerificationSnapshot struct {
 	Runtime  RuntimeEvidence
 }
 
+// RuntimeSecretDescriptorRequest carries only archive/provenance proof.  Core
+// derives descriptors from the staged desired state; Go never parses settings.
+type RuntimeSecretDescriptorRequest struct {
+	RequestID, ProjectIdentity, ProjectRevision, ArtifactLockDigest, CatalogLockDigest string
+}
+
+type RuntimeSecretDescriptor struct {
+	RequirementRef, Purpose, ServiceDeployment, DisplayLabel string
+	Hosts                                                    []string
+}
+
+type RuntimeSecretDescriptorResult struct {
+	ProjectIdentity, ProjectRevision, DescriptorSetFingerprint string
+	Descriptors                                                []RuntimeSecretDescriptor
+	Runtime                                                    RuntimeEvidence
+}
+
 type ExecutionRun struct {
 	RunID           string `json:"runId"`
 	ProjectIdentity string `json:"projectIdentity,omitempty"`
@@ -399,6 +416,49 @@ func (t OpenSSHTransport) BuildCandidateProjectSnapshot(ctx context.Context, nod
 		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
 	}
 	return snapshot, nil
+}
+
+// BuildRuntimeSecretDescriptors stages a verified candidate archive through
+// the existing request-owned path, then asks only Core for safe prompts.
+func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, request RuntimeSecretDescriptorRequest) (RuntimeSecretDescriptorResult, error) {
+	if projectRoot == "" || len(runtimeRelease) == 0 || !validLowerHex(request.RequestID, 32) || !candidateIdentityPattern.MatchString(request.ProjectIdentity) || !validSHA256(request.ProjectRevision) || !validSHA256(request.ArtifactLockDigest) || !validSHA256(request.CatalogLockDigest) {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
+	}
+	capability, err := t.CredentialStartCapability(ctx, node)
+	if err != nil || capability.APIVersion != "platform.installer/execution-capabilities/v1alpha3" || !capability.supportsPayloadVersion(credentialPayloadVersionV3) {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED")
+	}
+	runID, err := newRunID()
+	if err != nil {
+		return RuntimeSecretDescriptorResult{}, err
+	}
+	archiveDigest, err := t.stageCandidateProject(ctx, node, projectRoot, runID, request.RequestID)
+	if err != nil {
+		return RuntimeSecretDescriptorResult{}, err
+	}
+	defer t.cleanupSnapshotStaging(node, runID, request.RequestID, archiveDigest)
+	payload := map[string]any{"apiVersion": "platform.installer/project-snapshot-request/v1alpha1", "kind": "BuildProjectSnapshotRequest", "requestId": request.RequestID, "projectIdentity": request.ProjectIdentity, "candidateProjectRevision": request.ProjectRevision, "projectArchiveDigest": archiveDigest, "artifactLockDigest": request.ArtifactLockDigest, "catalogLockDigest": request.CatalogLockDigest, "installerOwnedLogicalPaths": []string{}, "projectContract": "v2alpha1", "snapshotContract": "v1alpha1", "editContract": "v1alpha2"}
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildRuntimeSecretDescriptors", "runId": runID, "runtimeRelease": runtimeRelease, "snapshotRequest": payload})
+	if err != nil {
+		return RuntimeSecretDescriptorResult{}, err
+	}
+	value, ok := response["runtimeSecretDescriptors"].(map[string]any)
+	if !ok {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
+	}
+	data, err := json.Marshal(value)
+	if err != nil || len(data) > 65536 {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
+	}
+	var result RuntimeSecretDescriptorResult
+	if err := json.Unmarshal(data, &result); err != nil || result.ProjectIdentity != request.ProjectIdentity || result.ProjectRevision != request.ProjectRevision || !validSHA256(result.DescriptorSetFingerprint) || len(result.Descriptors) > 16 {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
+	}
+	result.Runtime, ok = decodeRuntimeEvidence(response["runtimeEvidence"])
+	if !ok {
+		return RuntimeSecretDescriptorResult{}, errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED")
+	}
+	return result, nil
 }
 
 func (t OpenSSHTransport) CheckCandidateProjectSnapshotCapability(ctx context.Context, node Node, expectedRuntime map[string]any) error {

@@ -439,8 +439,10 @@ class ExecutionLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
             journal.initialize(metadata())
-            Path(journal.directory, "runtime-projection.json").write_text("{}", encoding="utf-8")
-            command = execution_controller._command(root, journal, {"operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True})
+            operation = {"operationId": "apply:kafka", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}
+            digest_id = hashlib.sha256(operation["operationId"].encode("utf-8")).hexdigest()
+            Path(journal.directory, ".runtime-projection-" + digest_id + ".json").write_text("{}", encoding="utf-8")
+            command = execution_controller._command(root, journal, operation)
             self.assertIn("platform_artifact_source_authority_active=true", command)
             self.assertNotIn("platform_resolved_artifact_sources={}", command)
 
@@ -454,7 +456,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
             plans = [{"id": "scope--node1", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": "runtime:pki-store-password", "materializationFingerprint": digest("scope")}]
-            manifest = {"operations": [{"operation": "PKI_APPLY", "operationId": "pki:apply"}, {"operation": "SERVICE_APPLY", "operationId": "apply:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}, {"operation": "SERVICE_VERIFY", "operationId": "verify:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}], "artifactRequirements": [{"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}], "artifactSourceAuthorities": [{"requirement": {"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}}], "pkiMaterializationPlans": plans}
+            manifest = {"operations": [{"operation": "PKI_APPLY", "operationId": "pki:apply"}, {"operation": "SERVICE_APPLY", "operationId": "apply:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "roleVariablesPrefix": "platform_kafka_", "requiresArtifactSources": True}, {"operation": "SERVICE_VERIFY", "operationId": "verify:kafka", "serviceType": "kafka", "serviceDeployment": "kafka", "roleVariablesPrefix": "platform_kafka_", "requiresArtifactSources": True}], "artifactRequirements": [{"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}], "artifactSourceAuthorities": [{"requirement": {"id": "kafka:kafka-binary", "serviceDeployment": "kafka", "requirementId": "kafka-binary"}}], "pkiMaterializationPlans": plans}
             current = metadata(); current["manifestDigest"] = digest(manifest)
             journal.initialize(current)
             execution_controller._materialize_runtime_projection(journal, current, manifest)
@@ -474,7 +476,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
             valid = {"id": "scope--node1", "requestId": "scope", "tlsProfileId": "tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/scope", "formats": ["PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE"], "keyAlias": "platform-scope", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": None, "materializationFingerprint": digest("scope")}
-            manifest = {"operations": [{"operation": "SERVICE_APPLY", "operationId": "apply:haproxy", "serviceType": "haproxy", "serviceDeployment": "haproxy"}], "artifactRequirements": [], "artifactSourceAuthorities": [], "pkiMaterializationPlans": [valid]}
+            manifest = {"operations": [{"operation": "SERVICE_APPLY", "operationId": "apply:haproxy", "serviceType": "haproxy", "serviceDeployment": "haproxy", "roleVariablesPrefix": "platform_haproxy_"}], "artifactRequirements": [], "artifactSourceAuthorities": [], "pkiMaterializationPlans": [valid]}
             current = metadata(); current["manifestDigest"] = digest(manifest)
             journal.initialize(current)
             execution_controller._materialize_runtime_projection(journal, current, manifest)

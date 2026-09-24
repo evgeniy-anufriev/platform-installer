@@ -90,6 +90,10 @@ export function GetInstallationState() {
   return window['go']['main']['App']['GetInstallationState']();
 }
 
+export function GetRuntimeSecretDescriptors() {
+  return window['go']['main']['App']['GetRuntimeSecretDescriptors']();
+}
+
 export function GetSessionCredentialStatus() {
   return window['go']['main']['App']['GetSessionCredentialStatus']();
 }
@@ -124,6 +128,10 @@ export function ReviewStructuralEditSession(arg1) {
 
 export function SelectExecutionNode(arg1) {
   return window['go']['main']['App']['SelectExecutionNode'](arg1);
+}
+
+export function SetDeploymentRuntimeSecretValues(arg1) {
+  return window['go']['main']['App']['SetDeploymentRuntimeSecretValues'](arg1);
 }
 
 export function SetPKIStorePassword(arg1) {

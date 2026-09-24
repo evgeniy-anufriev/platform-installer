@@ -2355,6 +2355,29 @@ export namespace main {
       return a;
     }
   }
+
+  export class RuntimeSecretDescriptorView {
+    RequirementRef!: string;
+    Purpose!: string;
+    ServiceDeployment!: string;
+    DisplayLabel!: string;
+    Hosts!: string[];
+  }
+
+  export class RuntimeSecretDescriptorOperation {
+    Status!: string;
+    ProjectRevision!: string;
+    DescriptorSetFingerprint!: string;
+    Descriptors!: RuntimeSecretDescriptorView[];
+    Error?: ProjectOpenError;
+  }
+
+  export class RuntimeSecretValuesInput {
+    projectRevision!: string;
+    descriptorSetFingerprint!: string;
+    serviceDeployment!: string;
+    values!: { [key: string]: string };
+  }
 }
 
 export namespace projectlifecycle {

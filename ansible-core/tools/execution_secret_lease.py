@@ -21,8 +21,12 @@ from execution_lifecycle import LifecycleError
 LEASE_PROTOCOL = "PutRuntimeSecretLease/v1alpha1"
 PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha1"
 PKI_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha2"
+RUNTIME_SECRET_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha3"
 MAX_PAYLOAD_BYTES = 1088 * 1024
 MAX_PKI_STORE_PASSWORD_BYTES = 4096
+MAX_RUNTIME_SECRET_VALUES = 16
+MAX_RUNTIME_SECRET_VALUE_BYTES = 4096
+MAX_RUNTIME_SECRET_TOTAL_BYTES = 65536
 STAGED_TTL_SECONDS = 30 * 60
 _ID = re.compile(r"^[0-9a-f]{32}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -109,7 +113,8 @@ def _binding(value):
 def _payload(value):
     base = {"apiVersion", "kind", "username", "password", "privateKey", "sudoPassword"}
     v2 = base | {"pkiStorePassword"}
-    if not isinstance(value, dict) or set(value) not in (base, v2) or value.get("apiVersion") not in (PAYLOAD_VERSION, PKI_PAYLOAD_VERSION) or value.get("kind") != "TargetCredentialLeasePayload":
+    v3 = v2 | {"runtimeSecretValues"}
+    if not isinstance(value, dict) or set(value) not in (base, v2, v3) or value.get("apiVersion") not in (PAYLOAD_VERSION, PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("kind") != "TargetCredentialLeasePayload":
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     if (value.get("apiVersion") == PAYLOAD_VERSION) != (set(value) == base):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
@@ -127,6 +132,29 @@ def _payload(value):
             try: size = len(store.encode("utf-8", "strict"))
             except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
             if size < 1 or size > MAX_PKI_STORE_PASSWORD_BYTES:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION:
+        store = value.get("pkiStorePassword")
+        if store is not None:
+            if not isinstance(store, str):
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            try: size = len(store.encode("utf-8", "strict"))
+            except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            if size < 1 or size > MAX_PKI_STORE_PASSWORD_BYTES:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+        values = value.get("runtimeSecretValues")
+        if not isinstance(values, dict) or not values or len(values) > MAX_RUNTIME_SECRET_VALUES:
+            raise LifecycleError("LEASE_PAYLOAD_INVALID")
+        total = 0
+        for reference, secret in values.items():
+            if not isinstance(reference, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", reference) is None or not isinstance(secret, str):
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            try: size = len(secret.encode("utf-8", "strict"))
+            except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            if size < 1 or size > MAX_RUNTIME_SECRET_VALUE_BYTES:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            total += size
+            if total > MAX_RUNTIME_SECRET_TOTAL_BYTES:
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
     encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_PAYLOAD_BYTES:
@@ -183,6 +211,24 @@ def target_username_for_run(state_root, run_id):
     return value["username"]
 
 
+def runtime_secret_values_for_run(state_root, run_id):
+    """Return attached v1alpha3 values only to the controller process."""
+    attached = _read(os.path.join(_root(state_root), "attached", run_id + ".json"))
+    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
+    if not _safe_id(lease_id):
+        raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
+    path = payload_path(state_root, lease_id, run_id)
+    try:
+        with open(path, "rb") as stream: raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    values = value.get("runtimeSecretValues") if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION else None
+    if not isinstance(values, dict): raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
+    return values
+
+
 def validate_staged_pki_store_password(state_root, lease_id):
     """Prove a staged lease carries the one closed v2 PKI value without
     returning it.  Start uses this before its durable commit."""
@@ -219,6 +265,28 @@ def validate_staged_payload_without_pki_store_password(state_root, lease_id):
     _payload(value)
     if value.get("apiVersion") == PKI_PAYLOAD_VERSION and value.get("pkiStorePassword") is not None:
         raise LifecycleError("PKI_STORE_PASSWORD_UNEXPECTED")
+    if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION and (value.get("pkiStorePassword") is not None or value.get("runtimeSecretValues")):
+        raise LifecycleError("RUNTIME_SECRET_VALUES_UNEXPECTED")
+
+
+def validate_staged_runtime_secret_values(state_root, lease_id, requirements):
+    """Prove the v1alpha3 key set before attaching a service-secret lease."""
+    if not _safe_id(lease_id) or not isinstance(requirements, list) or not requirements:
+        raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
+    record = _read(os.path.join(_lease_dir(_root(state_root), lease_id), "record.json"))
+    if record.get("state") != "STAGED":
+        raise LifecycleError("LEASE_NOT_STAGED")
+    try:
+        with open(os.path.join(_lease_dir(_root(state_root), lease_id), "payload.json"), "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    values = value.get("runtimeSecretValues") if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION else None
+    expected = {item.get("requirementRef") for item in requirements if isinstance(item, dict)}
+    if not expected or len(expected) != len(requirements) or not isinstance(values, dict) or set(values) != expected:
+        raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
 
 
 def _request_path(root, request_id): return os.path.join(root, "requests", request_id + ".json")

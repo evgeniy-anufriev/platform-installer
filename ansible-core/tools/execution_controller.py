@@ -3,9 +3,11 @@
 from __future__ import print_function
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import select
 import signal
 import stat
 import subprocess
@@ -22,12 +24,54 @@ PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096
 MAX_PKI_PLAN_STRING_BYTES = 4096
+MAX_OPERATION_FAILURE_CAPTURE_BYTES = 32768
+OPERATION_ERROR_CODE = re.compile(br'(?:"error_code"\s*:\s*"|error_code\s*[=:]\s*)([A-Z][A-Z0-9_]{2,127})')
 _PKI_PLAN_FIELDS = frozenset(("id", "requestId", "tlsProfileId", "authorityId", "hostId", "targetDirectory", "formats", "keyAlias", "trustAlias", "storePasswordSecretRef", "materializationFingerprint"))
 _PKI_PLAN_FORMATS = ("PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE")
 
 
 def _safe_pki_plan_string(value):
     return isinstance(value, str) and 0 < len(value.encode("utf-8")) <= MAX_PKI_PLAN_STRING_BYTES and not any(ord(character) < 32 for character in value)
+
+
+def _operation_error_code(output):
+    """Return only the final bounded machine error token from child output."""
+    matches = OPERATION_ERROR_CODE.findall(output if isinstance(output, bytes) else b"")
+    return matches[-1].decode("ascii") if matches else ""
+
+
+def _wait_for_operation(process, stopped):
+    """Drain child output without persisting it or allowing an output flood.
+
+    The retained rolling window exists only in memory and is reduced to a
+    strictly-shaped ``error_code`` token before it reaches the journal.
+    """
+    captured = bytearray()
+    descriptor = process.stdout.fileno()
+    while True:
+        if stopped[0]:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            return None
+        readable, _, _ = select.select([descriptor], [], [], 0.1)
+        if readable:
+            chunk = os.read(descriptor, 8192)
+            if chunk:
+                captured.extend(chunk)
+                if len(captured) > MAX_OPERATION_FAILURE_CAPTURE_BYTES:
+                    del captured[:-MAX_OPERATION_FAILURE_CAPTURE_BYTES]
+            elif process.poll() is not None:
+                break
+        if process.poll() is not None and not readable:
+            break
+    try:
+        process.stdout.close()
+    except OSError:
+        pass
+    return process.returncode, _operation_error_code(bytes(captured))
 
 
 def _pki_materialization_plans(manifest):
@@ -68,6 +112,13 @@ def _terminal(journal, state, code, summary):
         details = os.lstat(secret)
         if not os.path.islink(secret) and os.path.isfile(secret):
             os.unlink(secret)
+    for name in os.listdir(journal.directory):
+        if not name.startswith(".runtime-secret-"):
+            continue
+        path = os.path.join(journal.directory, name)
+        details = os.lstat(path)
+        if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
+            os.unlink(path)
     execution_secret_lease.cleanup_run(journal.root, journal.run_id)
     return result
 
@@ -119,7 +170,10 @@ def _command(release, journal, operation):
         return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-apply.yml"), "-e", "@" + projection]
     if kind in ("SERVICE_APPLY", "SERVICE_VERIFY") and _safe_service(operation.get("serviceType")):
         action = "apply" if kind == "SERVICE_APPLY" else "verify"
-        projection = os.path.join(journal.directory, "runtime-projection.json")
+        operation_id = operation.get("operationId")
+        if not isinstance(operation_id, str) or not operation_id:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        projection = os.path.join(journal.directory, ".runtime-projection-" + hashlib.sha256(operation_id.encode("utf-8")).hexdigest() + ".json")
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
         deployment = operation.get("serviceDeployment")
@@ -219,9 +273,11 @@ def _materialize_runtime_projection(journal, metadata, manifest):
             if operation.get("serviceDeployment") in required_deployments and operation.get("serviceDeployment") not in by_deployment:
                 raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     secret_files = {}
+    service_secret_files = {}
     target_username = execution_secret_lease.target_username_for_run(journal.root, journal.run_id)
-    if secret_requirements:
-        requirement = secret_requirements[0] if len(secret_requirements) == 1 else None
+    pki_requirements = [item for item in secret_requirements if isinstance(item, dict) and item.get("purpose") == "PKI_STORE_PASSWORD"]
+    if pki_requirements:
+        requirement = pki_requirements[0] if len(pki_requirements) == 1 else None
         if (not isinstance(requirement, dict) or
                 set(requirement) != {"requirementRef", "purpose", "hosts", "runtimeReference"} or
                 requirement.get("requirementRef") != "pki-store-password" or
@@ -237,6 +293,22 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         finally:
             os.close(descriptor)
         secret_files["runtime:pki-store-password"] = path
+    service_requirements = [item for item in secret_requirements if isinstance(item, dict) and item.get("purpose") == "SERVICE_PASSWORD"]
+    if service_requirements:
+        values = execution_secret_lease.runtime_secret_values_for_run(journal.root, journal.run_id)
+        for requirement in service_requirements:
+            if set(requirement) != {"requirementRef", "purpose", "hosts", "runtimeReference", "serviceDeployment"}:
+                raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+            deployment, reference = requirement.get("serviceDeployment"), requirement.get("runtimeReference")
+            if not isinstance(deployment, str) or not isinstance(reference, str) or reference not in values:
+                raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+            path = os.path.join(journal.directory, ".runtime-secret-" + hashlib.sha256((deployment + "\0" + reference).encode("utf-8")).hexdigest())
+            descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            try:
+                os.write(descriptor, values[reference].encode("utf-8")); os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            service_secret_files.setdefault(deployment, {})[reference] = path
     payload = {
         "apiVersion": "platform.installer/runtime-projection/v1alpha2",
         "platform_execution_run_id": metadata["runId"],
@@ -262,6 +334,24 @@ def _materialize_runtime_projection(journal, metadata, manifest):
             stream.flush(); os.fsync(stream.fileno())
         os.chmod(temporary, 0o600)
         os.replace(temporary, os.path.join(journal.directory, "runtime-projection.json"))
+        for operation in operations:
+            if not isinstance(operation, dict) or operation.get("operation") not in ("SERVICE_APPLY", "SERVICE_VERIFY"):
+                continue
+            prefix = operation.get("roleVariablesPrefix")
+            deployment = operation.get("serviceDeployment")
+            operation_id = operation.get("operationId")
+            if not isinstance(prefix, str) or re.fullmatch(r"platform_[a-z0-9_]{1,96}_", prefix) is None or not isinstance(deployment, str) or not isinstance(operation_id, str):
+                raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+            scoped = dict(payload)
+            scoped[prefix + "secret_files"] = service_secret_files.get(deployment, {})
+            destination = os.path.join(journal.directory, ".runtime-projection-" + hashlib.sha256(operation_id.encode("utf-8")).hexdigest() + ".json")
+            descriptor, operation_temporary = tempfile.mkstemp(prefix=".runtime-projection-", dir=journal.directory)
+            try:
+                with os.fdopen(descriptor, "w") as stream:
+                    json.dump(scoped, stream, ensure_ascii=True, sort_keys=True, separators=(",", ":")); stream.flush(); os.fsync(stream.fileno())
+                os.chmod(operation_temporary, 0o600); os.replace(operation_temporary, destination)
+            finally:
+                if os.path.exists(operation_temporary): os.unlink(operation_temporary)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -281,16 +371,14 @@ def _dispatch(release, journal, manifest, stopped):
         if stopped[0]:
             return "CANCELLED"
         journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_environment(release, journal, operation))
-        while process.poll() is None:
-            if stopped[0]:
-                process.terminate()
-                try: process.wait(timeout=3)
-                except subprocess.TimeoutExpired: process.kill()
-                return "CANCELLED"
-            time.sleep(0.1)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_environment(release, journal, operation))
+        completed = _wait_for_operation(process, stopped)
+        if completed is None:
+            return "CANCELLED"
+        returncode, error_code = completed
         journal.emit_task_observability_diagnostic(phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        if process.returncode:
+        if returncode:
+            journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
     return "SUCCEEDED"

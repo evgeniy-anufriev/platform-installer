@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha3/schema.json",
+  "title": "Platform Execution runtime capabilities with bounded service secret descriptors",
+  "type": "object",
+  "required": ["apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "runtimeSecretDescriptors"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-capabilities/v1alpha3"}, "kind": {"const": "ExecutionCapabilities"}, "bootstrapProtocol": {"const": "v1alpha1"}, "coreVersion": {"type": "string", "minLength": 1}, "catalogDigest": {"$ref": "#/$defs/digest"}, "schemaDigest": {"$ref": "#/$defs/digest"}, "runtime": {"$ref": "#/$defs/runtime"},
+    "supportedOperations": {"type": "array", "items": {"enum": ["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease"]}, "uniqueItems": true},
+    "projectSnapshotRequestVersions": {"type": "array", "items": {"const": "platform.installer/project-snapshot-request/v1alpha1"}, "uniqueItems": true},
+    "executionStart": {"type": "object", "required": ["protocol"], "properties": {"protocol": {"const": "StartExecution/v1alpha2"}}, "additionalProperties": false},
+    "targetCredentialLease": {"$ref": "#/$defs/targetCredentialLease"}, "runtimeSecretDescriptors": {"$ref": "#/$defs/runtimeSecretDescriptors"}
+  },
+  "allOf": [{"properties": {"supportedOperations": {"allOf": [{"contains": {"const": "BuildRuntimeSecretDescriptors"}}, {"contains": {"const": "PutRuntimeSecretLease"}}]}}}], "additionalProperties": false,
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "runtime": {"type": "object", "required": ["bundleVersion", "bundleDigest"], "properties": {"bundleVersion": {"type": "string", "minLength": 1}, "bundleDigest": {"$ref": "#/$defs/digest"}}, "additionalProperties": false},
+    "targetCredentialLease": {"type": "object", "required": ["protocol", "payloadVersions", "maxPayloadBytes", "requiredStartProtocol"], "properties": {"protocol": {"const": "PutRuntimeSecretLease/v1alpha1"}, "payloadVersions": {"const": ["TargetCredentialLeasePayload/v1alpha1", "TargetCredentialLeasePayload/v1alpha2", "TargetCredentialLeasePayload/v1alpha3"]}, "maxPayloadBytes": {"type": "integer", "minimum": 1, "maximum": 1114112}, "requiredStartProtocol": {"const": "StartExecution/v1alpha2"}}, "additionalProperties": false},
+    "runtimeSecretDescriptors": {"type": "object", "required": ["protocol", "maxDescriptors", "maxHostsPerDescriptor", "maxResponseBytes"], "properties": {"protocol": {"const": "BuildRuntimeSecretDescriptors/v1alpha1"}, "maxDescriptors": {"const": 16}, "maxHostsPerDescriptor": {"const": 256}, "maxResponseBytes": {"const": 65536}}, "additionalProperties": false}
+  }
+}

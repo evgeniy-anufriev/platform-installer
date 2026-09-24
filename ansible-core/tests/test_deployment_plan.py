@@ -120,6 +120,16 @@ class DeploymentPlanTests(unittest.TestCase):
         contracts = Path(__file__).resolve().parents[2] / "contracts"
         self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(plan, contracts / "plan" / "v1alpha2" / "schema.json"))
 
+    def test_service_secret_requirement_is_catalog_declared_and_private_bound(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["provider"].update({"configuration": {"settings": {"credential": {"schema": {"type": "object", "additionalProperties": False, "required": ["passwordSecretRef"], "properties": {"passwordSecretRef": {"type": "string"}}}, "ui": {"label": "Provider password", "x-runtimeSecretRequirement": {"requirementRef": "provider-password", "purpose": "SERVICE_PASSWORD"}}}}}, "roleEntrypoints": {"apply": {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_"}, "verify": {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_"}}})
+        state["serviceDeployments"]["provider"]["configuration"] = {"credential": {"passwordSecretRef": "runtime:provider-password"}}
+        result = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=sources())
+        self.assertIn({"requirementRef": "provider-password", "purpose": "SERVICE_PASSWORD", "hosts": ["node1"]}, result["deploymentPlan"]["requiredCredentials"])
+        private = next(item for item in result["executionManifest"]["runtimeSecretRequirements"] if item["requirementRef"] == "provider-password")
+        self.assertEqual(("provider", "runtime:provider-password"), (private["serviceDeployment"], private["runtimeReference"]))
+        self.assertNotIn("runtime:provider-password", json.dumps(result["deploymentPlan"]))
+
     def test_unsupported_pki_runtime_reference_blocks_without_exposure(self):
         result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization={"materializationPlans": [{"hostId": "node1", "storePasswordSecretRef": "runtime:other"}]})
         self.assertEqual("BLOCKED", result["deploymentPlan"]["status"])

@@ -96,6 +96,40 @@ func TestBrokerExposesTargetCredentialOnlyToSynchronousCallback(t *testing.T) {
 	}
 }
 
+func TestBrokerReplacesOnlyAcknowledgedRuntimeSecretSubset(t *testing.T) {
+	broker := NewBroker()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "transport-only", ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.SetRuntimeSecretValuesForRequirements(binding, []string{"service-a-password"}, map[string]string{"service-a-password": "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.SetRuntimeSecretValuesForRequirements(binding, []string{"service-b-password"}, map[string]string{"service-b-password": "second"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.SetRuntimeSecretValuesForRequirements(binding, []string{"service-a-password"}, map[string]string{"service-a-password": "replacement"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 2 || string(value.RuntimeSecretValues["service-a-password"]) != "replacement" || string(value.RuntimeSecretValues["service-b-password"]) != "second" {
+			t.Fatalf("unexpected scoped secret set")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	broker.ClearRuntimeSecretValues(binding)
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 0 {
+			t.Fatal("runtime secrets were not cleared")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBrokerStoresBoundedPKIStorePasswordOnlyInMemory(t *testing.T) {
 	broker := NewBroker()
 	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -135,6 +136,34 @@ type ApplicationConfigResult struct {
 	Error  *ProjectOpenError `json:"error,omitempty"`
 }
 
+type RuntimeSecretDescriptorView struct {
+	RequirementRef, Purpose, ServiceDeployment, DisplayLabel string
+	Hosts                                                    []string
+}
+
+type RuntimeSecretDescriptorOperation struct {
+	Status, ProjectRevision, DescriptorSetFingerprint string
+	Descriptors                                       []RuntimeSecretDescriptorView
+	Error                                             *ProjectOpenError `json:"error,omitempty"`
+}
+
+// RuntimeSecretValuesInput is one non-persistent submission for a single
+// Core-derived service deployment. Values are accepted but never returned.
+type RuntimeSecretValuesInput struct {
+	ProjectRevision          string            `json:"projectRevision"`
+	DescriptorSetFingerprint string            `json:"descriptorSetFingerprint"`
+	ServiceDeployment        string            `json:"serviceDeployment"`
+	Values                   map[string]string `json:"values"`
+}
+
+type runtimeSecretDescriptorEvidence struct {
+	projectID, projectRevision, nodeID, fingerprint string
+	runtime                                         executionnode.RuntimeEvidence
+	descriptors                                     []RuntimeSecretDescriptorView
+}
+
+var runtimeSecretDescriptorRequirement = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+
 type App struct {
 	ctx    context.Context
 	reader interface {
@@ -157,6 +186,7 @@ type App struct {
 	installationPlanID     string
 	installationRuns       *installationRunRegistry
 	installationGeneration uint64
+	runtimeSecretEvidence  *runtimeSecretDescriptorEvidence
 }
 
 type AppOption func(*App)
@@ -568,6 +598,98 @@ func (a *App) SetPKIStorePassword(value string) (runtimesecret.Status, error) {
 	return a.secrets.SetPKIStorePassword(binding, value)
 }
 
+// SetDeploymentRuntimeSecretValues accepts values only for the current,
+// Core-derived descriptor set. It never persists or returns secret values.
+func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) error {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return err
+	}
+	evidence := a.runtimeSecretEvidence
+	if evidence == nil || a.binding == nil || a.current.Project == nil || input.ProjectRevision == "" || input.ProjectRevision != evidence.projectRevision || input.DescriptorSetFingerprint == "" || input.DescriptorSetFingerprint != evidence.fingerprint || evidence.projectID != a.current.Project.ID || evidence.nodeID != a.execution.context.SelectedHostID || !runtimeEvidenceMatchesExpected(evidence.runtime, a.binding.reader.runtimeRelease) {
+		return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+	}
+	requirements := make([]string, 0)
+	for _, descriptor := range evidence.descriptors {
+		if descriptor.Purpose == "SERVICE_PASSWORD" && descriptor.ServiceDeployment == input.ServiceDeployment {
+			requirements = append(requirements, descriptor.RequirementRef)
+		}
+	}
+	if len(requirements) == 0 {
+		return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+	}
+	return a.secrets.SetRuntimeSecretValuesForRequirements(binding, requirements, input.Values)
+}
+
+// GetRuntimeSecretDescriptors is a target-free Core query. It exposes only
+// bounded prompt metadata and never exposes the runtime reference or value.
+func (a *App) GetRuntimeSecretDescriptors() RuntimeSecretDescriptorOperation {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Root == "" || a.execution.context.Status != "READY" {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "EXECUTION_NODE_READY_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_READY_REQUIRED")}}
+	}
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	if err != nil {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
+	}
+	transport, ok := binding.reader.transport.(interface {
+		BuildRuntimeSecretDescriptors(context.Context, executionnode.Node, string, map[string]any, executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error)
+	})
+	if !ok {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED", Message: "Execution Node does not support service secret descriptors."}}
+	}
+	revision, err := installer.ProjectRevision(a.current.Root)
+	if err != nil {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "PROJECT_REVISION_UNAVAILABLE", Message: projectErrorMessage("PROJECT_REVISION_UNAVAILABLE")}}
+	}
+	requestID, err := executionnode.NewRequestID()
+	if err != nil {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Could not create a bounded secret descriptor request."}}
+	}
+	ctx, cancel := a.operationContext(2 * time.Minute)
+	defer cancel()
+	result, err := transport.BuildRuntimeSecretDescriptors(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, executionnode.RuntimeSecretDescriptorRequest{RequestID: requestID, ProjectIdentity: a.current.Project.ID, ProjectRevision: revision, ArtifactLockDigest: a.current.Project.Source.BundleDigest, CatalogLockDigest: a.current.Project.Source.CatalogDigest})
+	if err != nil || result.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(result.Runtime, binding.reader.runtimeRelease) {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core could not safely build service secret descriptors."}}
+	}
+	view := RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: result.ProjectRevision, DescriptorSetFingerprint: result.DescriptorSetFingerprint}
+	for _, item := range result.Descriptors {
+		if !validRuntimeSecretDescriptor(item) {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe service secret descriptor."}}
+		}
+		view.Descriptors = append(view.Descriptors, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment, DisplayLabel: item.DisplayLabel, Hosts: append([]string(nil), item.Hosts...)})
+	}
+	if len(view.Descriptors) > 16 {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned too many service secret descriptors."}}
+	}
+	a.clearRuntimeSecretDescriptorEvidenceLocked()
+	a.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{projectID: a.current.Project.ID, projectRevision: revision, nodeID: binding.node.ID, runtime: result.Runtime, fingerprint: result.DescriptorSetFingerprint, descriptors: append([]RuntimeSecretDescriptorView(nil), view.Descriptors...)}
+	return view
+}
+
+func validRuntimeSecretDescriptor(item executionnode.RuntimeSecretDescriptor) bool {
+	if !runtimeSecretDescriptorRequirement.MatchString(item.RequirementRef) || item.DisplayLabel == "" || len([]byte(item.DisplayLabel)) > 160 || len(item.Hosts) == 0 || len(item.Hosts) > 256 {
+		return false
+	}
+	seenHosts := make(map[string]struct{}, len(item.Hosts))
+	for _, host := range item.Hosts {
+		if host == "" {
+			return false
+		}
+		if _, duplicate := seenHosts[host]; duplicate {
+			return false
+		}
+		seenHosts[host] = struct{}{}
+	}
+	if item.Purpose == "PKI_STORE_PASSWORD" {
+		return item.RequirementRef == "pki-store-password" && item.ServiceDeployment == ""
+	}
+	return item.Purpose == "SERVICE_PASSWORD" && item.ServiceDeployment != ""
+}
+
 func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
@@ -575,6 +697,7 @@ func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 		return runtimesecret.Status{}, err
 	}
 	a.secrets.Clear()
+	a.runtimeSecretEvidence = nil
 	return runtimesecret.Status{Status: runtimesecret.StatusMissing, SudoPasswordStatus: runtimesecret.SudoNotProvided, PKIStorePasswordStatus: runtimesecret.PKIStorePasswordMissing}, nil
 }
 
@@ -602,6 +725,7 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 		return ExecutionNodeContext{}, err
 	}
 	if !sameExecutionNodeTarget(before, a.execution.context) {
+		a.clearRuntimeSecretDescriptorEvidenceLocked()
 		a.current.Snapshot = nil
 		a.current.Verification = notVerified()
 		a.installationPlanID = ""
@@ -624,8 +748,16 @@ func (a *App) credentialBindingLocked() (runtimesecret.Binding, error) {
 }
 
 func (a *App) clearCredentialForReplacementLocked(root string, project *projectlifecycle.Project) {
+	a.clearRuntimeSecretDescriptorEvidenceLocked()
 	if a.current.Status != "OPEN" || a.current.Project == nil || project == nil || a.current.Root != root || a.current.Project.ID != project.ID {
 		a.secrets.Clear()
+	}
+}
+
+func (a *App) clearRuntimeSecretDescriptorEvidenceLocked() {
+	a.runtimeSecretEvidence = nil
+	if binding, err := a.credentialBindingLocked(); err == nil {
+		a.secrets.ClearRuntimeSecretValues(binding)
 	}
 }
 
@@ -839,6 +971,7 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 		}
 	}
 	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
+		a.clearRuntimeSecretDescriptorEvidenceLocked()
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
 			return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
 		}
@@ -925,6 +1058,7 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 }
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
+	a.clearRuntimeSecretDescriptorEvidenceLocked()
 	a.installationGeneration++
 	a.continuation = nil
 	a.installationPlanID = ""

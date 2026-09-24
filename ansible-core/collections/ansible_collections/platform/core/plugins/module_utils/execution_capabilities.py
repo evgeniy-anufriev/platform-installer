@@ -10,7 +10,7 @@ def build_capabilities(manifest, core_version):
     if any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required):
         raise ValueError("runtime manifest identity is incomplete")
     return {
-        "apiVersion": "platform.installer/execution-capabilities/v1alpha2",
+        "apiVersion": "platform.installer/execution-capabilities/v1alpha3",
         "kind": "ExecutionCapabilities",
         "bootstrapProtocol": manifest["bootstrapProtocol"],
         "coreVersion": core_version,
@@ -20,15 +20,16 @@ def build_capabilities(manifest, core_version):
             "bundleVersion": manifest["bundleVersion"],
             "bundleDigest": manifest.get("bundleDigest", ""),
         },
-        "supportedOperations": ["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease"],
+        "supportedOperations": ["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease"],
         "projectSnapshotRequestVersions": ["platform.installer/project-snapshot-request/v1alpha1"],
         "executionStart": {"protocol": "StartExecution/v1alpha2"},
         "targetCredentialLease": {
             "protocol": "PutRuntimeSecretLease/v1alpha1",
-            "payloadVersions": ["TargetCredentialLeasePayload/v1alpha1"],
+            "payloadVersions": ["TargetCredentialLeasePayload/v1alpha1", "TargetCredentialLeasePayload/v1alpha2", "TargetCredentialLeasePayload/v1alpha3"],
             "maxPayloadBytes": 1088 * 1024,
             "requiredStartProtocol": "StartExecution/v1alpha2",
         },
+        "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha1", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536},
     }
 
 

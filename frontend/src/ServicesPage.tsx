@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OpenResult } from "./backend";
+import type { OpenResult, RuntimeSecretDescriptorOperation, RuntimeSecretValuesInput } from "./backend";
 import type { CertificateIntent } from "./CertificatesPage";
 import type { DeploymentIntent, PlacementIntent } from "./TopologyPage";
 
@@ -247,6 +247,8 @@ export function ServicesPage({
   onAppend,
   onReview,
   onDiscard,
+  onGetRuntimeSecretDescriptors,
+  onSetDeploymentRuntimeSecretValues,
 }: {
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
@@ -269,9 +271,15 @@ export function ServicesPage({
   onAppend: (intent: ConfigurationIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
+  onGetRuntimeSecretDescriptors?: () => Promise<RuntimeSecretDescriptorOperation>;
+  onSetDeploymentRuntimeSecretValues?: (input: RuntimeSecretValuesInput) => Promise<void>;
 }) {
   const [filter, setFilter] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [secretOperation, setSecretOperation] = useState<RuntimeSecretDescriptorOperation | null>(null);
+  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
+  const [secretBusy, setSecretBusy] = useState(false);
+  const [secretError, setSecretError] = useState("");
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const rows = useMemo(
@@ -327,6 +335,54 @@ export function ServicesPage({
     onSelectedMemberChange(members[0]?.memberId || "");
   }, [members, selectedMemberId, onSelectedMemberChange]);
 
+  const closeSecrets = () => {
+    setSecretValues({});
+    setSecretError("");
+    setSecretOperation(null);
+  };
+  const openSecrets = async () => {
+    if (!onGetRuntimeSecretDescriptors || !selected) return;
+    setSecretBusy(true);
+    setSecretError("");
+    try {
+      const operation = await onGetRuntimeSecretDescriptors();
+      const descriptors = (operation.descriptors || []).filter(
+        (item) => item.purpose === "SERVICE_PASSWORD" && item.serviceDeployment === selected.deploymentId,
+      );
+      if (operation.status !== "READY" || !operation.projectRevision || !operation.descriptorSetFingerprint || !descriptors.length) {
+        setSecretError(operation.error?.message || "Для этого deployment нет доступных требований к секретам.");
+        return;
+      }
+      setSecretOperation({ ...operation, descriptors });
+    } catch {
+      setSecretError("Не удалось безопасно получить требования к секретам.");
+    } finally {
+      setSecretBusy(false);
+    }
+  };
+  const submitSecrets = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected || !secretOperation?.projectRevision || !secretOperation.descriptorSetFingerprint || !onSetDeploymentRuntimeSecretValues) return;
+    const descriptors = secretOperation.descriptors || [];
+    const values: Record<string, string> = {};
+    for (const descriptor of descriptors) values[descriptor.requirementRef] = secretValues[descriptor.requirementRef] || "";
+    if (Object.values(values).some((value) => !value)) {
+      setSecretError("Заполните все обязательные значения.");
+      return;
+    }
+    setSecretBusy(true);
+    setSecretError("");
+    try {
+      await onSetDeploymentRuntimeSecretValues({ projectRevision: secretOperation.projectRevision, descriptorSetFingerprint: secretOperation.descriptorSetFingerprint, serviceDeployment: selected.deploymentId, values });
+      closeSecrets();
+    } catch {
+      setSecretValues({});
+      setSecretError("Значения не приняты: обновите требования и повторите ввод.");
+    } finally {
+      setSecretBusy(false);
+    }
+  };
+
   if (view === "detail") {
     if (!selected)
       return (
@@ -374,6 +430,16 @@ export function ServicesPage({
             {error}
           </p>
         )}
+        <section className="card service-secrets-action">
+          <div>
+            <h2>Секреты</h2>
+            <p className="muted">Требования определяются Core для текущей сохранённой версии проекта. Значения не сохраняются в проекте и не отображаются после ввода.</p>
+          </div>
+          <button className="outline" disabled={busy || structuralDisabled || !!selected.state || secretBusy || !onGetRuntimeSecretDescriptors || !onSetDeploymentRuntimeSecretValues} onClick={() => void openSecrets()}>
+            Секреты
+          </button>
+          {secretError && <p className="error" role="alert">{secretError}</p>}
+        </section>
         <section className="card services-settings">
           <h2>Параметры deployment</h2>
           {!service ? (
@@ -673,6 +739,25 @@ export function ServicesPage({
           onReview={onReview}
           onDiscard={onDiscard}
         />
+        {secretOperation && (
+          <dialog className="runtime-secret-dialog" open aria-label="Секреты сервиса">
+            <form method="dialog" onSubmit={submitSecrets}>
+              <h2>Секреты: {selected.deploymentId}</h2>
+              <p className="muted">Введите значения только для текущего запуска. После отправки поля будут очищены.</p>
+              {(secretOperation.descriptors || []).map((descriptor) => (
+                <label key={descriptor.requirementRef}>
+                  {descriptor.displayLabel}
+                  <input type="password" autoComplete="new-password" value={secretValues[descriptor.requirementRef] || ""} disabled={secretBusy} onChange={(event) => setSecretValues((current) => ({ ...current, [descriptor.requirementRef]: event.target.value }))} />
+                </label>
+              ))}
+              {secretError && <p className="error" role="alert">{secretError}</p>}
+              <div className="actions">
+                <button type="submit" disabled={secretBusy}>Сохранить в сессии</button>
+                <button type="button" className="outline" disabled={secretBusy} onClick={closeSecrets}>Отмена</button>
+              </div>
+            </form>
+          </dialog>
+        )}
       </section>
     );
   }

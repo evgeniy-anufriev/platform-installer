@@ -731,6 +731,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setCredentialStatus(status);
     return status;
   };
+  const getRuntimeSecretDescriptors = async () => {
+    if (!api.getRuntimeSecretDescriptors)
+      throw new Error("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED");
+    return api.getRuntimeSecretDescriptors();
+  };
+  const setDeploymentRuntimeSecretValues = async (input: Parameters<NonNullable<ProjectBackend["setDeploymentRuntimeSecretValues"]>>[0]) => {
+    if (!api.setDeploymentRuntimeSecretValues)
+      throw new Error("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED");
+    await api.setDeploymentRuntimeSecretValues(input);
+  };
   const selectExecutionNode = async (hostId: string) => {
     if (!api.selectExecutionNode)
       throw new Error("EXECUTION_NODE_SELECTION_UNAVAILABLE");
@@ -1110,6 +1120,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onAppend={appendStructuralIntent}
             onReview={review}
             onDiscard={discard}
+            onGetRuntimeSecretDescriptors={getRuntimeSecretDescriptors}
+            onSetDeploymentRuntimeSecretValues={setDeploymentRuntimeSecretValues}
           />
         )}
         {!loading && !creating && projectOpen && page === "certificates" && (

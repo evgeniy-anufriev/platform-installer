@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -71,23 +72,25 @@ type Status struct {
 // execution transport callback. It is intentionally not JSON serializable and
 // has no persistence or Wails-facing representation.
 type TargetCredential struct {
-	Username         string
-	SSHMode          string
-	SSHSecret        []byte
-	SudoSecret       []byte
-	PKIStorePassword []byte
+	Username            string
+	SSHMode             string
+	SSHSecret           []byte
+	SudoSecret          []byte
+	PKIStorePassword    []byte
+	RuntimeSecretValues map[string][]byte
 }
 
 type lease struct {
-	binding          Binding
-	reference        []byte
-	username         string
-	sshMode          string
-	sshSecret        []byte
-	sudoSecret       []byte
-	pkiStorePassword []byte
-	expiresAt        time.Time
-	generation       uint64
+	binding             Binding
+	reference           []byte
+	username            string
+	sshMode             string
+	sshSecret           []byte
+	sudoSecret          []byte
+	pkiStorePassword    []byte
+	runtimeSecretValues map[string][]byte
+	expiresAt           time.Time
+	generation          uint64
 }
 
 // SetPKIStorePassword updates only the optional in-memory PKI password on the
@@ -108,6 +111,78 @@ func (b *Broker) SetPKIStorePassword(binding Binding, value string) (Status, err
 	zero(b.lease.pkiStorePassword)
 	b.lease.pkiStorePassword = next
 	return statusFromLease(b.lease), nil
+}
+
+// SetRuntimeSecretValues replaces the session-only service-secret set.  The
+// caller supplies only safe requirement IDs; values never enter Status or a
+// serializable DTO.
+func (b *Broker) SetRuntimeSecretValues(binding Binding, values map[string]string) error {
+	if len(values) == 0 || len(values) > 16 {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	next, total := make(map[string][]byte, len(values)), 0
+	for reference, value := range values {
+		if !runtimeSecretID(reference) || !utf8.ValidString(value) || len([]byte(value)) < 1 || len([]byte(value)) > 4096 {
+			zeroSecretMap(next)
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		total += len([]byte(value))
+		if total > 65536 {
+			zeroSecretMap(next)
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		next[reference] = []byte(value)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		zeroSecretMap(next)
+		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
+	}
+	zeroSecretMap(b.lease.runtimeSecretValues)
+	b.lease.runtimeSecretValues = next
+	return nil
+}
+
+// SetRuntimeSecretValuesForRequirements replaces only one descriptor-bound
+// subset. Other acknowledged service values remain in the same short-lived
+// lease, so separate service dialogs cannot erase each other.
+func (b *Broker) SetRuntimeSecretValuesForRequirements(binding Binding, requirements []string, values map[string]string) error {
+	if !sameRuntimeSecretRequirements(requirements, values) {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
+	}
+	next := cloneSecretMap(b.lease.runtimeSecretValues)
+	for _, reference := range requirements {
+		zero(next[reference])
+		delete(next, reference)
+	}
+	for reference, value := range values {
+		next[reference] = []byte(value)
+	}
+	if !validRuntimeSecretMap(next) {
+		zeroSecretMap(next)
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	zeroSecretMap(b.lease.runtimeSecretValues)
+	b.lease.runtimeSecretValues = next
+	return nil
+}
+
+// ClearRuntimeSecretValues leaves the target credential and optional PKI
+// password intact while invalidating descriptor-bound service values.
+func (b *Broker) ClearRuntimeSecretValues(binding Binding) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.lease == nil || b.lease.binding != binding {
+		return
+	}
+	zeroSecretMap(b.lease.runtimeSecretValues)
+	b.lease.runtimeSecretValues = nil
 }
 
 type expiredMarker struct {
@@ -199,11 +274,12 @@ func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential
 		b.mu.Unlock()
 		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
-	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), PKIStorePassword: append([]byte(nil), b.lease.pkiStorePassword...)}
+	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), PKIStorePassword: append([]byte(nil), b.lease.pkiStorePassword...), RuntimeSecretValues: cloneSecretMap(b.lease.runtimeSecretValues)}
 	b.mu.Unlock()
 	defer zero(value.SSHSecret)
 	defer zero(value.SudoSecret)
 	defer zero(value.PKIStorePassword)
+	defer zeroSecretMap(value.RuntimeSecretValues)
 	return use(value)
 }
 
@@ -362,6 +438,7 @@ func (b *Broker) clearLeaseLocked(clearExpired bool) {
 		zero(b.lease.sshSecret)
 		zero(b.lease.sudoSecret)
 		zero(b.lease.pkiStorePassword)
+		zeroSecretMap(b.lease.runtimeSecretValues)
 		b.lease = nil
 	}
 	if clearExpired {
@@ -387,6 +464,76 @@ func missingStatus() Status {
 func zero(value []byte) {
 	for i := range value {
 		value[i] = 0
+	}
+}
+
+var runtimeSecretRequirementPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+
+func runtimeSecretID(value string) bool { return runtimeSecretRequirementPattern.MatchString(value) }
+
+func sameRuntimeSecretRequirements(requirements []string, values map[string]string) bool {
+	if len(requirements) == 0 || len(requirements) != len(values) || len(requirements) > 16 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(requirements))
+	for _, reference := range requirements {
+		if !runtimeSecretID(reference) {
+			return false
+		}
+		if _, duplicate := seen[reference]; duplicate {
+			return false
+		}
+		seen[reference] = struct{}{}
+		if _, present := values[reference]; !present {
+			return false
+		}
+	}
+	return validRuntimeSecretMapFromStrings(values)
+}
+
+func validRuntimeSecretMap(values map[string][]byte) bool {
+	if len(values) == 0 || len(values) > 16 {
+		return false
+	}
+	total := 0
+	for reference, value := range values {
+		if !runtimeSecretID(reference) || !utf8.Valid(value) || len(value) < 1 || len(value) > 4096 {
+			return false
+		}
+		total += len(value)
+		if total > 65536 {
+			return false
+		}
+	}
+	return true
+}
+
+func validRuntimeSecretMapFromStrings(values map[string]string) bool {
+	if len(values) == 0 || len(values) > 16 {
+		return false
+	}
+	total := 0
+	for reference, value := range values {
+		if !runtimeSecretID(reference) || !utf8.ValidString(value) || len([]byte(value)) < 1 || len([]byte(value)) > 4096 {
+			return false
+		}
+		total += len([]byte(value))
+		if total > 65536 {
+			return false
+		}
+	}
+	return true
+}
+func cloneSecretMap(value map[string][]byte) map[string][]byte {
+	result := make(map[string][]byte, len(value))
+	for key, item := range value {
+		result[key] = append([]byte(nil), item...)
+	}
+	return result
+}
+func zeroSecretMap(value map[string][]byte) {
+	for _, item := range value {
+		zero(item)
 	}
 }
 func stringTrimSpace(value string) string { return strings.TrimSpace(value) }

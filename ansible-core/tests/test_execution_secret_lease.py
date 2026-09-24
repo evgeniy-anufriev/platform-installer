@@ -31,6 +31,12 @@ def pki_payload(store_password):
     return value
 
 
+def runtime_secret_payload(values, store_password=None):
+    value = payload()
+    value.update({"apiVersion": execution_secret_lease.RUNTIME_SECRET_PAYLOAD_VERSION, "pkiStorePassword": store_password, "runtimeSecretValues": values})
+    return value
+
+
 class ExecutionSecretLeaseTests(unittest.TestCase):
     def test_complete_put_is_idempotent_and_never_persists_request_secret(self):
         with tempfile.TemporaryDirectory() as root:
@@ -93,6 +99,22 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             legacy = execution_secret_lease.put(root, request("9" * 32), payload())
             with self.assertRaisesRegex(LifecycleError, "PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED"):
                 execution_secret_lease.validate_staged_pki_store_password(root, legacy["leaseId"])
+
+    def test_runtime_secret_payload_requires_closed_bounded_values(self):
+        with tempfile.TemporaryDirectory() as root:
+            valid = runtime_secret_payload({"postgresql-admin-password": "\u044f" * 2048}, "pki")
+            stored = execution_secret_lease.put(root, request(), valid)
+            self.assertTrue(stored["leaseId"])
+            invalid = [
+                runtime_secret_payload({}),
+                runtime_secret_payload({"invalid_ref": "value"}),
+                runtime_secret_payload({"postgresql-admin-password": ""}),
+                runtime_secret_payload({"postgresql-admin-password": "a" * 4097}),
+                runtime_secret_payload({"postgresql-admin-password": "a", "postgresql-monitor-password": "b" * 65536}),
+            ]
+            for index, candidate in enumerate(invalid):
+                with self.subTest(index=index), self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
+                    execution_secret_lease.put(root, request("%032x" % (index + 9)), candidate)
 
     def test_start_attempt_is_durable_and_conflicts_fail_closed(self):
         with tempfile.TemporaryDirectory() as root:

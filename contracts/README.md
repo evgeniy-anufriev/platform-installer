@@ -35,6 +35,7 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Execution node selection | `v1alpha1` | `execution/v1alpha1/schema.json` |
 | Execution runtime capabilities (compatibility) | `v1alpha1` | `execution-capabilities/v1alpha1/schema.json` |
 | Credentialed execution runtime capabilities | `v1alpha2` | `execution-capabilities/v1alpha2/schema.json` |
+| Runtime service-secret descriptor capabilities | `v1alpha3` | `execution-capabilities/v1alpha3/schema.json` |
 | Credentialed execution Start request | `v1alpha2` | `execution-start/v1alpha2/request.schema.json` |
 | Credentialed execution Start response | `v1alpha2` | `execution-start/v1alpha2/response.schema.json` |
 | Target credential lease request | `v1alpha1` | `runtime-secret-lease/v1alpha1/request.schema.json` |
@@ -154,3 +155,8 @@ lease ID is permitted only on the trusted Go-to-Execution-Node wire and is not
 a desired-state, Wails or React value. A v1alpha2 reply without a compatible
 lease capability remains usable for planning, but credentialed Start is
 blocked without fallback to v1alpha1 or direct workstation-to-target SSH.
+
+`ExecutionCapabilities/v1alpha3` preserves v1alpha2 and adds only the closed
+`runtimeSecretDescriptors` capability and the fixed v1alpha1/v1alpha2/v1alpha3
+lease-payload sequence. Older envelopes remain immutable and cannot authorize
+descriptor retrieval or a service-secret Start path.

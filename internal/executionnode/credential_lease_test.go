@@ -56,6 +56,26 @@ func TestPutRuntimeSecretLeaseUsesV2OnlyForBoundedPKIStorePassword(t *testing.T)
 	}
 }
 
+func TestPutRuntimeSecretLeaseUsesV3ForBoundedRuntimeSecretValues(t *testing.T) {
+	id := strings.Repeat("1", 32)
+	runner := &leaseRunner{response: `{"requestId":"` + id + `","startAttemptId":"` + strings.Repeat("2", 32) + `","status":"STORED","leaseId":"` + strings.Repeat("3", 32) + `","stagedExpiresAt":"2026-09-22T12:00:00Z"}`}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	request := CredentialLeaseRequest{RequestID: id, StartAttemptID: strings.Repeat("2", 32), ProjectIdentity: "project-1", ProjectRevision: "sha256:" + strings.Repeat("a", 64), PlanFingerprint: "sha256:" + strings.Repeat("b", 64), ExecutionManifestDigest: "sha256:" + strings.Repeat("c", 64), RuntimeRelease: map[string]any{"bundleDigest": "sha256:" + strings.Repeat("d", 64), "coreVersion": "core", "catalogDigest": "sha256:" + strings.Repeat("e", 64), "planningProtocol": "v1alpha1"}}
+	payload := TargetCredentialLeasePayload{Username: "operator", Password: "secret", PKIStorePassword: "pki", RuntimeSecretValues: map[string]string{"postgresql-admin-password": strings.Repeat("я", 2048)}}
+	if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, payload, 1114112); err != nil {
+		t.Fatal(err)
+	}
+	input := runner.calls[len(runner.calls)-1].input
+	if !strings.Contains(input, `"apiVersion":"TargetCredentialLeasePayload/v1alpha3"`) || !strings.Contains(input, `"runtimeSecretValues":{"postgresql-admin-password":`) {
+		t.Fatalf("v3 runtime secret payload missing: %s", input)
+	}
+	for _, invalid := range []map[string]string{{}, {"invalid_ref": "value"}, {"postgresql-admin-password": ""}, {"postgresql-admin-password": strings.Repeat("a", 4097)}} {
+		if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, TargetCredentialLeasePayload{Username: "operator", Password: "secret", RuntimeSecretValues: invalid}, 1114112); err == nil {
+			t.Fatalf("invalid runtime secrets accepted: %#v", invalid)
+		}
+	}
+}
+
 func TestPutRuntimeSecretLeaseUsesStdinOnlyAndNeverReturnsPayload(t *testing.T) {
 	id := strings.Repeat("1", 32)
 	runner := &leaseRunner{response: `{"requestId":"` + id + `","startAttemptId":"` + strings.Repeat("2", 32) + `","status":"STORED","leaseId":"` + strings.Repeat("3", 32) + `","stagedExpiresAt":"2026-09-22T12:00:00Z"}`}

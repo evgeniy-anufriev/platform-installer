@@ -58,7 +58,7 @@ configuration:
         properties:
           username: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,62}$'}
           passwordSecretRef: {type: string, minLength: 1}
-      ui: {label: Administrator, section: Administrator, order: 40}
+      ui: {label: Administrator password, section: Administrator, order: 40, x-runtimeSecretRequirement: {requirementRef: postgresql-admin-password, purpose: SERVICE_PASSWORD}}
     monitorCredential:
       kind: MANAGED
       roleVariable: platform_postgresql_monitor_credential
@@ -71,7 +71,7 @@ configuration:
         required: [passwordSecretRef]
         properties:
           passwordSecretRef: {type: string, minLength: 1}
-      ui: {label: Monitor credential, section: High Availability, order: 50}
+      ui: {label: Monitor credential password, section: High Availability, order: 50, x-runtimeSecretRequirement: {requirementRef: postgresql-monitor-password, purpose: SERVICE_PASSWORD}}
     replicationCredential:
       kind: MANAGED
       roleVariable: platform_postgresql_replication_credential
@@ -84,7 +84,7 @@ configuration:
         required: [passwordSecretRef]
         properties:
           passwordSecretRef: {type: string, minLength: 1}
-      ui: {label: Replication credential, section: High Availability, order: 51}
+      ui: {label: Replication credential password, section: High Availability, order: 51, x-runtimeSecretRequirement: {requirementRef: postgresql-replication-password, purpose: SERVICE_PASSWORD}}
     healthcheckCredential:
       kind: MANAGED
       roleVariable: platform_postgresql_healthcheck_credential
@@ -97,7 +97,7 @@ configuration:
         required: [passwordSecretRef]
         properties:
           passwordSecretRef: {type: string, minLength: 1}
-      ui: {label: Monitor healthcheck credential, section: High Availability, order: 52}
+      ui: {label: Monitor healthcheck credential password, section: High Availability, order: 52, x-runtimeSecretRequirement: {requirementRef: postgresql-healthcheck-password, purpose: SERVICE_PASSWORD}}
     advancedConfig: {kind: ADVANCED, roleVariable: platform_postgresql_advanced_config, type: object, scopes: [deployment], validation: {additionalProperties: true}, ui: {label: Advanced PostgreSQL settings, section: Advanced, order: 90}}
 x-reservedAdvancedProperties: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
 roleEntrypoints:

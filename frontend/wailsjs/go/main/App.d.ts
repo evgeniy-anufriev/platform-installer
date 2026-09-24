@@ -49,6 +49,8 @@ export function GetInstallationRun(arg1:string):Promise<main.InstallationRunOper
 
 export function GetInstallationState():Promise<main.InstallationState>;
 
+export function GetRuntimeSecretDescriptors():Promise<main.RuntimeSecretDescriptorOperation>;
+
 export function GetSessionCredentialStatus():Promise<runtimesecret.Status>;
 
 export function GetVerifiedPKIView():Promise<main.VerifiedPKIView>;
@@ -66,6 +68,8 @@ export function ReviewEditSession(arg1:string):Promise<main.EditOperationResult>
 export function ReviewStructuralEditSession(arg1:string):Promise<main.StructuralEditOperationResult>;
 
 export function SelectExecutionNode(arg1:string):Promise<main.ExecutionNodeContext>;
+
+export function SetDeploymentRuntimeSecretValues(arg1:main.RuntimeSecretValuesInput):Promise<void>;
 
 export function SetPKIStorePassword(arg1:string):Promise<runtimesecret.Status>;
 

@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 import copy
 import hashlib
 import json
+import re
 
 try:
     from .project_validation import DIGEST_PATTERN, canonical_digest
@@ -182,6 +183,7 @@ def _pki_consumers(snapshot):
 _PKI_STORE_PASSWORD_REQUIREMENT_REF = "pki-store-password"
 _PKI_STORE_PASSWORD_PURPOSE = "PKI_STORE_PASSWORD"
 _PKI_STORE_PASSWORD_RUNTIME_REF = "runtime:pki-store-password"
+_RUNTIME_SECRET_REQUIREMENT = re.compile(r"[a-z][a-z0-9-]{0,63}")
 
 
 def _pki_store_password_requirements(pki_materialization):
@@ -219,6 +221,58 @@ def _pki_store_password_requirements(pki_materialization):
     return [public], [private], []
 
 
+def _service_runtime_secret_requirements(deployments, definitions, hosts):
+    """Collect only catalog-declared runtime secret references.
+
+    This intentionally knows no service or setting name.  The trusted closed
+    manifest extension, the final desired configuration and the setting's
+    closed object schema jointly prove the one runtime reference.
+    """
+    public, private, findings = [], [], []
+    for deployment_id, deployment in sorted(deployments.items()):
+        service_type = deployment.get("serviceType") if isinstance(deployment, dict) else None
+        definition = definitions.get(service_type) if isinstance(definitions, dict) else None
+        settings = ((definition.get("configuration") or {}).get("settings") if isinstance(definition, dict) else None)
+        values = deployment.get("configuration") if isinstance(deployment, dict) else None
+        if not isinstance(settings, dict) or not isinstance(values, dict):
+            continue
+        for setting_id, setting in sorted(settings.items()):
+            ui = setting.get("ui") if isinstance(setting, dict) else None
+            extension = ui.get("x-runtimeSecretRequirement") if isinstance(ui, dict) else None
+            if extension is None:
+                continue
+            if (not isinstance(extension, dict) or set(extension) != {"requirementRef", "purpose"} or
+                    not isinstance(extension.get("requirementRef"), str) or _RUNTIME_SECRET_REQUIREMENT.fullmatch(extension["requirementRef"]) is None or
+                    extension.get("purpose") != "SERVICE_PASSWORD"):
+                findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_INVALID", "catalog.definitions.%s.configuration.settings.%s" % (service_type, setting_id), "Runtime secret requirement metadata is invalid"))
+                continue
+            schema = setting.get("schema") if isinstance(setting, dict) else None
+            required = schema.get("required") if isinstance(schema, dict) else None
+            properties = schema.get("properties") if isinstance(schema, dict) else None
+            value = values.get(setting_id)
+            if (not isinstance(schema, dict) or schema.get("type") != "object" or schema.get("additionalProperties") is not False or
+                    not isinstance(required, list) or "passwordSecretRef" not in required or not isinstance(properties, dict) or
+                    not isinstance(properties.get("passwordSecretRef"), dict) or properties["passwordSecretRef"].get("type") != "string"):
+                findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_SCHEMA_INVALID", "catalog.definitions.%s.configuration.settings.%s" % (service_type, setting_id), "Runtime secret requirement setting schema is incompatible"))
+                continue
+            if value is None:
+                continue
+            reference = value.get("passwordSecretRef") if isinstance(value, dict) else None
+            if not isinstance(reference, str) or re.fullmatch(r"runtime:[a-z][a-z0-9-]{0,127}", reference) is None:
+                findings.append(_finding("RUNTIME_SECRET_REFERENCE_INVALID", "serviceDeployments.%s.configuration.%s" % (deployment_id, setting_id), "Runtime secret reference is invalid"))
+                continue
+            item = {"requirementRef": extension["requirementRef"], "purpose": "SERVICE_PASSWORD", "hosts": sorted(hosts)}
+            public.append(item)
+            private.append(dict(item, runtimeReference=reference, serviceDeployment=deployment_id))
+    refs, runtime_refs = set(), set()
+    for item in private:
+        if item["requirementRef"] in refs or item["runtimeReference"] in runtime_refs:
+            findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "serviceDeployments", "Runtime secret requirements must be unique"))
+            return [], [], findings
+        refs.add(item["requirementRef"]); runtime_refs.add(item["runtimeReference"])
+    return public, private, findings
+
+
 def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
@@ -237,8 +291,14 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     artifact_requirements = _artifact_requirements(deployments, definitions)
     source_authorities, source_findings = _artifact_source_authorities(artifact_requirements, _bundle_source_index(bundle_artifact_sources), release["bundleDigest"])
     findings.extend(source_findings)
-    required_credentials, runtime_secret_requirements, pki_secret_findings = _pki_store_password_requirements(pki_materialization)
-    findings.extend(pki_secret_findings)
+    pki_public, pki_private, pki_secret_findings = _pki_store_password_requirements(pki_materialization)
+    service_public, service_private, service_secret_findings = _service_runtime_secret_requirements(deployments, definitions, sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else [])
+    required_credentials, runtime_secret_requirements = pki_public + service_public, pki_private + service_private
+    if len({item["requirementRef"] for item in runtime_secret_requirements}) != len(runtime_secret_requirements) or len({item["runtimeReference"] for item in runtime_secret_requirements}) != len(runtime_secret_requirements):
+        service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
+    findings.extend(pki_secret_findings + service_secret_findings)
+    required_credentials.sort(key=lambda item: item["requirementRef"])
+    runtime_secret_requirements.sort(key=lambda item: (item.get("serviceDeployment") or "", item["requirementRef"]))
     findings = _safe_findings(findings)
     executable = not findings
     artifact_digest = canonical_digest(artifact_requirements)
@@ -298,7 +358,14 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         for phase in phases:
             for action in phase["actions"]:
                 deployment = deployments.get(action.get("serviceDeployment"), {})
-                manifest_operations.append({"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments})
+                definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) else {}
+                entrypoint = "apply" if action["type"] == "SERVICE_APPLY" else "verify"
+                prefix = (((definition.get("roleEntrypoints") or {}).get(entrypoint) or {}).get("variablesPrefix") if isinstance(definition, dict) else None)
+                item = {"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments}
+                if action["type"] in ("SERVICE_APPLY", "SERVICE_VERIFY"):
+                    if isinstance(prefix, str) and re.fullmatch(r"platform_[a-z0-9_]{1,96}_", prefix) is not None:
+                        item["roleVariablesPrefix"] = prefix
+                manifest_operations.append(item)
         # Materialization plans are Core-derived, private execution inputs.  A
         # controller starts each approved Ansible operation in a fresh process,
         # so PKI-consuming service operations must receive the same plans that
@@ -306,5 +373,9 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         # only into the digest-protected private manifest, never the portable
         # project, public DeploymentPlan, UI projection, journal or result.
         materialization_plans = pki_materialization.get("materializationPlans", []) if isinstance(pki_materialization, dict) else []
-        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "pkiMaterializationPlans": materialization_plans}
+        # The descriptor fingerprint has one closed shape.  PKI has no
+        # service deployment and therefore uses the explicit null value rather
+        # than a second, ambiguously shaped descriptor form.
+        descriptor_set = [{key: item.get(key) for key in ("requirementRef", "purpose", "serviceDeployment", "hosts")} for item in runtime_secret_requirements]
+        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "runtimeSecretDescriptorSetFingerprint": canonical_digest(descriptor_set), "pkiMaterializationPlans": materialization_plans}
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}
