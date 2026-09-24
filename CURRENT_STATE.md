@@ -104,15 +104,17 @@ runs completed `SUCCEEDED` through the cumulative project; both recorded
 `changed=0` after the corrected DNS-client verify task. SERVICE-INSTALL-04
 HAProxy is DONE: two fresh Go-mediated lifecycle runs completed `SUCCEEDED`;
 the second full cumulative plan recorded `changed=0`, and `haproxy.service`
-is active on node1, node2 and node3. SERVICE-INSTALL-05 Kafka is NEXT. Replace the isolated QA Kafka
-three-member / one-target installation only at
-SERVICE-INSTALL-05, then test the remaining services individually. The last test installs all tested
+is active on node1, node2 and node3. SERVICE-INSTALL-05 Kafka is DONE: the
+canonical three-member deployment was accepted on three distinct target hosts;
+the historical one-target QA deployment is not current deployment evidence.
+SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover is NEXT, then the final one-plan
+acceptance installs all tested
 services from one shared project and one approved plan, followed by verify
 and a fresh repeat plan proving `changed=0`. Deployment-scoped cleanup and
 before/after isolation checks must preserve other QA deployments. Exact target
 addresses and resource ownership must be established before execution.
 Ordered milestones: SERVICE-INSTALL-01 Keepalived, 02 BIND, 03 dns-client,
-04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover, 07 one
+04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover NEXT, 07 one
 plan for all six. Conditions: `docs/service-install-acceptance.md` and
 `docs/roadmap.md`, "Post-UI-02 service installation acceptance".
 
