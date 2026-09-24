@@ -30,6 +30,8 @@
       - --bootstrap-controller
       - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
     kafka_cli_command_suffix: [describe, --status]
+    kafka_cli_expected_controller_ids: >-
+      {{ _platform_kafka_controller_instances | map(attribute='node_id') | list }}
   when: inventory_hostname == _platform_kafka_verify_controller.host
 
 - name: Require projected controller quorum diagnostic command to succeed
@@ -76,6 +78,7 @@
       - --bootstrap-server
       - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
     kafka_cli_command_suffix: []
+    kafka_cli_expected_unfenced_broker_count: "{{ _platform_kafka_broker_instances | length }}"
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
 - name: Require projected broker registration diagnostic command to succeed

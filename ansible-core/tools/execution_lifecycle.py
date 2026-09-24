@@ -396,6 +396,37 @@ class Journal(object):
         finally:
             os.close(event_lock)
 
+    def emit_operation_failure_diagnostic(self, error_code="", **context):
+        """Publish one bounded, redacted reason after an Ansible action fails.
+
+        Controller output is never retained.  ``error_code`` is an optional
+        machine-shaped token extracted from the bounded in-memory stream; it
+        lets an operator distinguish a known Core failure without exposing an
+        Ansible result payload, command, variable, diff, or secret.
+        """
+        event_lock = self.event_lock()
+        try:
+            current = self.status()
+            suffix = " (%s)" % error_code if isinstance(error_code, str) and error_code else ""
+            event = {
+                "apiVersion": "platform.installer/event/v1alpha1",
+                "kind": "ExecutionEvent",
+                "runId": self.run_id,
+                "sequence": 0,
+                "timestamp": utcnow(),
+                "eventType": "DIAGNOSTIC",
+                "status": "FAILED",
+                "safeMessage": "Ansible operation failed",
+                "error": {"code": "ANSIBLE_OPERATION_FAILED", "summary": _safe_text("Ansible operation failed" + suffix)},
+                "redaction": {"applied": True, "fields": ["stdout", "stderr", "args", "vars", "diff", "invocation", "cmd"]},
+            }
+            for key in ("phaseId", "actionId", "serviceDeployment"):
+                if isinstance(context.get(key), str) and context[key]:
+                    event[key] = _bounded_text(context[key], MAX_MESSAGE)
+            return self._append_event_locked(current, event)
+        finally:
+            os.close(event_lock)
+
     def terminal(self, state, code, summary):
         event_lock = self.event_lock()
         try:

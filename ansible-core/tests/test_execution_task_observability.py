@@ -288,7 +288,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             journal = _active_journal(root)
             journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
             operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
-            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()):
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             events = journal.events()
             diagnostics = [event for event in events if event.get("error", {}).get("code") == "TASK_EVENT_STREAM_TRUNCATED"]
@@ -300,6 +300,26 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual("SUCCESS", events[-1]["status"])
             self.assert_events_match_contract(events)
             self.assertIsNone(journal.emit_task_observability_diagnostic(actionId="apply:kafka-main"))
+
+    def test_controller_emits_redacted_failure_code_after_task_stream_truncation(self):
+        class _FailedProcess(object):
+            returncode = 2
+
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
+            operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_FailedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(2, "KAFKA_IDENTITY_MATERIALIZATION_BLOCKED")):
+                with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "EXECUTION_OPERATION_FAILED"):
+                    execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False])
+            events = journal.events()
+            diagnostic = next(event for event in events if event.get("error", {}).get("code") == "ANSIBLE_OPERATION_FAILED")
+            self.assertEqual("FAILED", diagnostic["status"])
+            self.assertEqual("Ansible operation failed", diagnostic["safeMessage"])
+            self.assertEqual("Ansible operation failed (KAFKA_IDENTITY_MATERIALIZATION_BLOCKED)", diagnostic["error"]["summary"])
+            self.assertEqual(["stdout", "stderr", "args", "vars", "diff", "invocation", "cmd"], diagnostic["redaction"]["fields"])
+            self.assertNotIn("trusted", str(diagnostic))
+            self.assert_events_match_contract(events)
 
     def test_invalid_degradation_marker_does_not_change_execution_result(self):
         with tempfile.TemporaryDirectory() as root:

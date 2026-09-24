@@ -51,9 +51,9 @@ class ManagedKafkaMaterializationTests(unittest.TestCase):
             desired = {"serviceDeployments": {"k": {"serviceType": "kafka", "identity": {}}}}
             inventory = {"all": {"hosts": {"n": {"ansible_host": "192.0.2.10"}}}}
             (root / "hosts.yml").write_text(yaml.safe_dump(inventory, sort_keys=False), encoding="utf-8")
-            host_vars = root / "host_vars"
-            host_vars.mkdir()
-            (host_vars / "n.yml").write_text(yaml.safe_dump({
+            host_vars = root / "host_vars" / "n"
+            host_vars.mkdir(parents=True)
+            (host_vars / "platform-installer.yml").write_text(yaml.safe_dump({
                 "platform_deployments": {"k": {"members": {"c": {"roles": ["controller"], "configuration": {"nodeId": 1}}}}}
             }, sort_keys=False), encoding="utf-8")
             result = module.materialize_ansible_kafka(
@@ -67,6 +67,30 @@ class ManagedKafkaMaterializationTests(unittest.TestCase):
             self.assertTrue(result["changed"])
             state = result["stateDocument"]["platform_generated_state"]
             self.assertIn("directoryId", state["serviceDeployments"]["k"]["members"]["c"]["identity"])
+
+    def test_installer_managed_host_document_precedes_legacy_flat_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desired = {"serviceDeployments": {"k": {"serviceType": "kafka", "identity": {}}}}
+            inventory = {"all": {"hosts": {"n": {"ansible_host": "192.0.2.10"}}}}
+            (root / "hosts.yml").write_text(yaml.safe_dump(inventory, sort_keys=False), encoding="utf-8")
+            host_vars = root / "host_vars"
+            managed = host_vars / "n"
+            managed.mkdir(parents=True)
+            (host_vars / "n.yml").write_text(yaml.safe_dump({
+                "platform_deployments": {"k": {"members": {"legacy": {"roles": ["controller"]}}}}
+            }, sort_keys=False), encoding="utf-8")
+            (managed / "platform-installer.yml").write_text(yaml.safe_dump({
+                "platform_deployments": {"k": {"members": {"managed": {"roles": ["controller"], "configuration": {"nodeId": 1}}}}}
+            }, sort_keys=False), encoding="utf-8")
+            result = module.materialize_ansible_kafka(
+                desired, root / "hosts.yml", root / "platform-state.yml",
+                {"n": [{"deploymentId": "k", "memberId": "managed", "state": "UNINITIALIZED"}]},
+                "p", lambda _: b"a" * 16,
+            )
+            self.assertEqual("PASS", result["status"])
+            members = result["stateDocument"]["platform_generated_state"]["serviceDeployments"]["k"]["members"]
+            self.assertEqual(["managed"], sorted(members))
 
     def test_generate_persist_reload_and_noop(self):
         with tempfile.TemporaryDirectory() as directory:

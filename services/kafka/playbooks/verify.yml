@@ -1,11 +1,18 @@
 - import_playbook: discover.yml
 
+- import_playbook: load_generated_state.yml
+
 - import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
 
 - name: Verify Kafka KRaft members
   hosts: platform_targets
   become: true
   gather_facts: false
+  pre_tasks:
+    - name: Project controller-owned Kafka generated state onto verification hosts
+      ansible.builtin.set_fact:
+        platform_generated_state: "{{ hostvars['localhost'].platform_generated_state }}"
+      when: platform_generated_state_path is defined
   roles:
     - role: platform.kafka.kafka_kraft
       platform_kafka_verify_only: true

@@ -10,12 +10,7 @@
   gather_facts: false
   tasks:
     - name: Aggregate normalized read-only discovery
-      ansible.builtin.set_fact:
-        platform_kafka_discovery_by_host: "{{ platform_kafka_discovery_by_host | default({}) | combine({item: (hostvars[item].platform_kafka_identity_discovery | default([]))}) }}"
-      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
-      delegate_to: localhost
-      delegate_facts: true
-      run_once: true
+      ansible.builtin.include_tasks: aggregate_discovery.yml
 
 - name: Kafka identity materialization
   hosts: localhost

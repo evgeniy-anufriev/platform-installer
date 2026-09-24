@@ -1,25 +1,52 @@
 ---
-- name: Resolve PKI-01 plan for Kafka TLS runtime projection
+- name: Select effective PKI-01 request and plan collections
   ansible.builtin.set_fact:
-    _platform_kafka_tls_runtime_plans: >-
+    _platform_kafka_tls_runtime_all_requests: >-
+      {{ platform_pki_requests
+         | default(hostvars['localhost'].platform_pki_requests | default([]), true) }}
+    _platform_kafka_tls_runtime_candidate_plans: >-
       {{ (platform_pki_materialization_plans
           | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
           | selectattr('hostId', 'equalto', kafka_tls_member.host)
           | selectattr('tlsProfileId', 'equalto', kafka_tls_member.tls_profile)
           | list) }}
+    _platform_kafka_tls_runtime_request_ids: >-
+      {{ ([] if kafka_tls_member.deployment_id is defined
+          else (platform_pki_materialization_plans
+                | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+                | selectattr('hostId', 'equalto', kafka_tls_member.host)
+                | selectattr('tlsProfileId', 'equalto', kafka_tls_member.tls_profile)
+                | map(attribute='requestId') | unique | list)) }}
+  changed_when: false
+
+- name: Bind managed Kafka TLS to its exact PKI consumer request
+  ansible.builtin.set_fact:
+    _platform_kafka_tls_runtime_request_ids: >-
+      {{ _platform_kafka_tls_runtime_request_ids + [item.id] }}
+  loop: "{{ _platform_kafka_tls_runtime_all_requests }}"
+  loop_control:
+    label: "{{ item.id | default('unknown') }}"
+  when:
+    - kafka_tls_member.deployment_id is defined
+    - >-
+      item.consumers | default([])
+      | selectattr('deploymentId', 'equalto', kafka_tls_member.deployment_id)
+      | selectattr('memberId', 'equalto', kafka_tls_member.id)
+      | selectattr('hostId', 'equalto', kafka_tls_member.host)
+      | selectattr('tlsProfileRef', 'equalto', kafka_tls_member.tls_profile)
+      | list | length == 1
+  changed_when: false
+
+- name: Resolve exact PKI-01 plan for Kafka TLS runtime projection
+  ansible.builtin.set_fact:
+    _platform_kafka_tls_runtime_plans: >-
+      {{ _platform_kafka_tls_runtime_candidate_plans
+         | selectattr('requestId', 'in', _platform_kafka_tls_runtime_request_ids)
+         | list }}
     _platform_kafka_tls_runtime_requests: >-
-      {{ (platform_pki_requests
-          | default(hostvars['localhost'].platform_pki_requests | default([]), true)
-          | selectattr('id', 'equalto',
-              (platform_pki_materialization_plans
-               | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
-               | selectattr('hostId', 'equalto', kafka_tls_member.host)
-               | selectattr('tlsProfileId', 'equalto', kafka_tls_member.tls_profile)
-               | map(attribute='requestId')
-               | list
-               | first
-               | default('')))
-          | list) }}
+      {{ _platform_kafka_tls_runtime_all_requests
+         | selectattr('id', 'in', _platform_kafka_tls_runtime_request_ids)
+         | list }}
   changed_when: false
 
 - name: Require Kafka TLS runtime projection inputs

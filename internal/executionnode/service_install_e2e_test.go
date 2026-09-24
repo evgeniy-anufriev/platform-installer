@@ -477,6 +477,120 @@ func TestServiceInstall04HAProxyLifecycle(t *testing.T) {
 	}
 }
 
+// TestServiceInstall05KafkaLifecycle extends the same cumulative project with
+// one distributed Kafka deployment. Each combined broker/controller member is
+// deliberately placed on a different target host; the test is not a replay of
+// the historical UI-02E three-members-on-one-host fixture.
+func TestServiceInstall05KafkaLifecycle(t *testing.T) {
+	if os.Getenv("PLATFORM_SERVICE_INSTALL_05_E2E") != "1" {
+		t.Skip("set PLATFORM_SERVICE_INSTALL_05_E2E=1 for SERVICE-INSTALL-05 Kafka acceptance")
+	}
+	address, user, identity, knownHosts := os.Getenv("PLATFORM_EXEC01A_ADDRESS"), os.Getenv("PLATFORM_EXEC01A_USER"), os.Getenv("PLATFORM_EXEC01A_IDENTITY"), os.Getenv("PLATFORM_EXEC01A_KNOWN_HOSTS")
+	targetUser, targetPassword, targetSudoPassword, pkiStorePassword := os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_USER"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_SUDO_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_PKI_STORE_PASSWORD")
+	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiStorePassword == "" {
+		t.Fatal("SERVICE_INSTALL_05_E2E_PREREQUISITE_MISSING")
+	}
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
+	if cacheRoot == "" {
+		cacheRoot = filepath.Join(repo, "bundle")
+	}
+	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, projectIdentity := configureKafkaProjectThroughGo(t, repo, bundle, cumulativeProjectRoot(t, repo))
+	node := Node{ID: "service-install-05-node1", Address: address, User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: HostKeyPolicy{State: "TRUSTED", KnownHosts: knownHosts, Fingerprint: "operator-approved"}}
+	transport := OpenSSHTransport{Identity: e2eIdentity{path: identity}}
+	service := NewExecutionService(transport, transport)
+	service.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if !request.RequiresPKIStorePassword {
+			return os.ErrInvalid
+		}
+		return use(TargetCredentialLeasePayload{Username: targetUser, Password: targetPassword, SudoPassword: targetSudoPassword, PKIStorePassword: pkiStorePassword})
+	})
+	release := map[string]any{"bundleDigest": bundle.Digest, "coreVersion": bundle.Manifest.CoreVersion, "catalogDigest": bundle.Manifest.CatalogDigest, "planningProtocol": "v1alpha1"}
+	// One cycle intentionally executes the entire cumulative five-service plan,
+	// not only Kafka. Keep production operation timeouts unchanged and give the
+	// two real cycles enough acceptance-test wall time.
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
+	defer cancel()
+	for cycle := 1; cycle <= 2; cycle++ {
+		started := time.Now()
+		record, err := service.CreatePlan(ctx, node, project, release)
+		if err != nil {
+			t.Fatalf("cycle=%d plan: %v", cycle, err)
+		}
+		if record.Plan.Status != "EXECUTABLE" || record.Plan.ProjectIdentity != projectIdentity {
+			t.Fatalf("cycle=%d unexpected plan: %#v", cycle, record.Plan)
+		}
+		if err := service.ApprovePlan(record.ID, record.Plan.Acknowledgements); err != nil {
+			t.Fatalf("cycle=%d approve: %v", cycle, err)
+		}
+		run, err := service.Start(ctx, node, record.ID)
+		if err != nil {
+			t.Fatalf("cycle=%d start: %v", cycle, err)
+		}
+		observer, err := NewRunObserver(transport, filepath.Join(repo, ".runtime"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		subscription, err := observer.Observe(ctx, node, run.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for subscription.Events != nil || subscription.Errors != nil {
+			select {
+			case _, ok := <-subscription.Events:
+				if !ok {
+					subscription.Events = nil
+				}
+			case observeErr, ok := <-subscription.Errors:
+				if !ok {
+					subscription.Errors = nil
+				} else {
+					t.Fatalf("cycle=%d observer: %v", cycle, observeErr)
+				}
+			case <-ctx.Done():
+				t.Fatalf("cycle=%d timeout", cycle)
+			}
+		}
+		current, _, err := service.Sync(ctx, node, run.RunID)
+		if err != nil || current.State != "SUCCEEDED" {
+			t.Fatalf("cycle=%d terminal=%#v err=%v", cycle, current, err)
+		}
+		events, err := observer.Replay(ctx, node, run.RunID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		apply, verify, changed := false, false, 0
+		for _, event := range events {
+			apply = apply || (event.EventType == "ACTION_COMPLETED" && event.Status == "SUCCESS" && event.ActionID == "apply:service-install-05-kafka")
+			verify = verify || (event.EventType == "ACTION_COMPLETED" && event.Status == "SUCCESS" && event.ActionID == "verify:service-install-05-kafka")
+			if event.EventType == "TASK_COMPLETED" && event.Status == "CHANGED" {
+				changed++
+			}
+		}
+		if !apply || !verify {
+			t.Fatalf("cycle=%d missing Kafka apply/verify success: apply=%t verify=%t", cycle, apply, verify)
+		}
+		if cycle == 2 && changed != 0 {
+			t.Fatalf("repeat apply changed=%d", changed)
+		}
+		mirror, err := EventMirrorPath(filepath.Join(repo, ".runtime"), run.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info, err := os.Stat(mirror); err != nil || info.Size() == 0 {
+			t.Fatalf("cycle=%d mirror=%q stat=%v", cycle, mirror, err)
+		}
+		t.Logf("cycle=%d runId=%s terminal=%s duration=%s events=%d changed=%d mirror=%s", cycle, run.RunID, current.State, time.Since(started).Round(time.Second), len(events), changed, strings.ReplaceAll(mirror, "\\", "/"))
+	}
+}
+
 // TestServiceInstall01PrepareCumulativeProject materializes only the first
 // service's canonical Core/Ansible inputs. It deliberately has no Execution
 // Node, credential, plan or target-contact path, so Wails can reopen the
@@ -847,6 +961,92 @@ func configureHAProxyProjectThroughGo(t *testing.T, repository string, bundle ex
 		tlsProfileConfigured = tlsProfileConfigured || (setting.Setting == "tlsProfile" && setting.OverridePresent && setting.Value == "service-install-haproxy-tls")
 	}
 	if !exists || len(reopened.Servers) != 3 || len(reopened.Deployments) != 4 || len(reopened.HostPlacements) != 12 || deployment.ServiceType != "haproxy" || deployment.Mode != "https-host-routing" || !tlsProfileConfigured || reopened.PKI.TLSProfiles["service-install-haproxy-tls"] == nil {
+		t.Fatalf("reopen=%#v", reopened)
+	}
+	return opened.Root, opened.Project.ID
+}
+
+// configureKafkaProjectThroughGo adds the distributed, three-host Kafka
+// topology via the existing typed editor lifecycle. Explicit node IDs make the
+// first runtime projection unambiguous, while the existing PKI scope already
+// covers the same three hosts and is reused through its TLS profile.
+func configureKafkaProjectThroughGo(t *testing.T, repository string, bundle executionbundle.Verified, root string) (string, string) {
+	t.Helper()
+	config, err := appconfig.Load(filepath.Join(repository, "config", "application.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTypes := make([]string, len(config.ServerTypes))
+	for index, serverType := range config.ServerTypes {
+		serverTypes[index] = serverType.ID
+	}
+	lifecycle := projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle.Root})
+	opened, err := lifecycle.OpenProject(t.Context(), root)
+	if err != nil || opened.Project == nil || opened.Catalog == nil || opened.Catalog.Status != "READY" || opened.Classification != projectlifecycle.ClassificationManaged {
+		t.Fatalf("open cumulative project=%#v err=%v", opened, err)
+	}
+	view, err := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deployment, exists := view.Deployments["service-install-05-kafka"]; exists {
+		if len(view.Servers) != 3 || len(view.Deployments) != 5 || len(view.MemberPlacements) != 3 || deployment.ServiceType != "kafka" || deployment.Mode != "kraft-distributed" || len(deployment.Configuration) != 2 {
+			t.Fatalf("existing cumulative Kafka state=%#v", view)
+		}
+		return opened.Root, opened.Project.ID
+	}
+	if len(view.Servers) != 3 || len(view.Deployments) != 4 || view.Deployments["service-install-04-haproxy"].ServiceType != "haproxy" || view.PKI.TLSProfiles["service-install-haproxy-tls"] == nil {
+		t.Fatalf("unexpected cumulative base=%#v", view)
+	}
+	revision, err := installer.ProjectRevision(opened.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := installer.NewBackend(nil,
+		installer.WithServerTypes(serverTypes),
+		installer.WithProjectCatalogResolver(func(ctx context.Context, projectRoot string) (*projectlifecycle.ProjectCatalogView, error) {
+			return lifecycle.ResolveProjectCatalog(ctx, projectRoot)
+		}),
+	)
+	sessions := installer.NewEditSessionStore()
+	session, err := sessions.Start(opened.Project.ID, opened.Root, opened.Classification, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := []installer.EditCommand{
+		{Operation: "CreateServiceDeployment", DeploymentID: "service-install-05-kafka", ServiceType: "kafka", Mode: "kraft-distributed"},
+		{Operation: "ReconcileDeploymentPlacement", DeploymentID: "service-install-05-kafka", Members: []installer.PlacementMember{{MemberID: "kafka-1", HostID: "node1", Roles: []string{"broker", "controller"}}, {MemberID: "kafka-2", HostID: "node2", Roles: []string{"broker", "controller"}}, {MemberID: "kafka-3", HostID: "node3", Roles: []string{"broker", "controller"}}}},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-05-kafka", Scope: "DEPLOYMENT", Setting: "quorumMode", Value: "dynamic"},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-05-kafka", Scope: "DEPLOYMENT", Setting: "tlsProfile", Value: "service-install-haproxy-tls"},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-05-kafka", Scope: "MEMBER", MemberID: "kafka-1", Setting: "nodeId", Value: 1},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-05-kafka", Scope: "MEMBER", MemberID: "kafka-2", Setting: "nodeId", Value: 2},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-05-kafka", Scope: "MEMBER", MemberID: "kafka-3", Setting: "nodeId", Value: 3},
+	}
+	for _, command := range commands {
+		if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
+			t.Fatalf("append %s: %v", command.Operation, err)
+		}
+	}
+	plan, err := sessions.ReviewStructural(t.Context(), backend, session.SessionID)
+	if err != nil || plan == nil || !plan.SaveAllowed {
+		if plan != nil && plan.Finding != nil {
+			t.Fatalf("review finding=%s field=%s message=%s err=%v", plan.Finding.Code, plan.Finding.Field, plan.Finding.SafeMessage, err)
+		}
+		t.Fatalf("review=%#v err=%v", plan, err)
+	}
+	if _, err := sessions.BeginCommit(session.SessionID, plan.PlanID); err != nil {
+		t.Fatal(err)
+	}
+	committed := backend.CommitStructuralSave(t.Context(), plan.PlanID)
+	if committed.Status != "COMMITTED" || !committed.Changed || committed.Managed == nil || !sessions.FinishCommit(session.SessionID, plan.PlanID, true) {
+		t.Fatalf("commit=%#v", committed)
+	}
+	reopened, err := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployment, exists := reopened.Deployments["service-install-05-kafka"]
+	if !exists || len(reopened.Servers) != 3 || len(reopened.Deployments) != 5 || len(reopened.MemberPlacements) != 3 || deployment.ServiceType != "kafka" || deployment.Mode != "kraft-distributed" || len(deployment.Configuration) != 2 {
 		t.Fatalf("reopen=%#v", reopened)
 	}
 	return opened.Root, opened.Project.ID

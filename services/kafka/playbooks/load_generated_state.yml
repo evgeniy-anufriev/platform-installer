@@ -1,0 +1,31 @@
+---
+- name: Load controller-owned Kafka generated state for a read-only lifecycle
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Inspect controller-owned Kafka generated state
+      ansible.builtin.stat:
+        path: "{{ platform_generated_state_path }}"
+      register: _platform_kafka_generated_state_stat
+      when: platform_generated_state_path is defined
+
+    - name: Require persisted Kafka generated state for managed verification
+      ansible.builtin.assert:
+        that:
+          - _platform_kafka_generated_state_stat.stat.exists
+          - _platform_kafka_generated_state_stat.stat.isreg
+        fail_msg: KAFKA_GENERATED_STATE_REQUIRED
+      when: platform_generated_state_path is defined
+
+    - name: Read controller-owned Kafka generated state
+      ansible.builtin.include_vars:
+        file: "{{ platform_generated_state_path }}"
+        name: _platform_kafka_generated_state_document
+      when: platform_generated_state_path is defined
+
+    - name: Publish controller-owned Kafka generated state
+      ansible.builtin.set_fact:
+        platform_generated_state: >-
+          {{ _platform_kafka_generated_state_document.platform_generated_state | default({}) }}
+      when: platform_generated_state_path is defined

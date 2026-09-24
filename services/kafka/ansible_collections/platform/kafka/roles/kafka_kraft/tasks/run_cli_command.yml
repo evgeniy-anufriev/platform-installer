@@ -49,6 +49,20 @@
       changed_when: false
       register: platform_kafka_cli_command_result
       failed_when: false
+      until:
+        - platform_kafka_cli_command_result.rc == 0
+        - >-
+          kafka_cli_expected_controller_ids is not defined or
+          (platform_kafka_cli_command_result.stdout
+           | regex_findall('"id":\\s*([0-9]+),') | map('int') | unique | sort)
+          == (kafka_cli_expected_controller_ids | map('int') | unique | sort)
+        - >-
+          kafka_cli_expected_unfenced_broker_count is not defined or
+          (platform_kafka_cli_command_result.stdout_lines
+           | select('search', 'isFenced:\\s*false\\)\\s*->\\s*\\(')
+           | list | length) == (kafka_cli_expected_unfenced_broker_count | int)
+      retries: "{{ platform_kafka_startup_readiness_retries }}"
+      delay: "{{ platform_kafka_startup_readiness_delay }}"
   always:
     - name: Remove ephemeral Kafka CLI command configuration
       ansible.builtin.file:

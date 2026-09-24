@@ -17,10 +17,12 @@ except ImportError:
 def _inventory_hosts_with_managed_deployments(inventory_path, inventory):
     """Return inventory hosts with their canonical per-host deployment input.
 
-    The normal Ansible-native layout keeps ``platform_deployments`` in the
-    fixed ``inventory/host_vars/<host>.yml`` document, rather than duplicating
-    it into ``hosts.yml``.  Identity materialization reads only that owned
-    field; it neither scans arbitrary files nor writes host variables.
+    Installer-managed projects own the fixed
+    ``inventory/host_vars/<host>/platform-installer.yml`` document.  The flat
+    ``inventory/host_vars/<host>.yml`` form remains a standalone-Ansible
+    compatibility input when the managed document is absent.  Identity
+    materialization reads only ``platform_deployments``; it neither scans
+    arbitrary files nor writes host variables.
     """
     hosts = (inventory.get("all", {}).get("hosts", {}) or {}) if isinstance(inventory, dict) else {}
     host_vars_root = os.path.join(os.path.dirname(os.fspath(inventory_path)), "host_vars")
@@ -29,7 +31,9 @@ def _inventory_hosts_with_managed_deployments(inventory_path, inventory):
         if not isinstance(host, str) or not host:
             yield host, effective
             continue
-        host_vars_path = os.path.join(host_vars_root, host + ".yml")
+        managed_path = os.path.join(host_vars_root, host, "platform-installer.yml")
+        legacy_path = os.path.join(host_vars_root, host + ".yml")
+        host_vars_path = managed_path if os.path.isfile(managed_path) else legacy_path
         if os.path.isfile(host_vars_path):
             with open(host_vars_path, "r", encoding="utf-8") as source:
                 host_vars = yaml.safe_load(source) or {}

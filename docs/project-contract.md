@@ -10,6 +10,11 @@ Ansible-only user does not need to create or understand `project.yml`.
 
 ## Physical layout
 
+Standalone Ansible projects may use ordinary variable files such as
+`group_vars/all/platform.yml` and `host_vars/<host>.yml`. Installer-managed
+projects use one fixed owned document per scope so readers and writers do not
+guess Ansible file precedence:
+
 ```text
 project/
   project.yml                         # optional compatibility/machine metadata
@@ -19,8 +24,17 @@ project/
     group_vars/all/platform-state.yml # optional standalone machine-owned state
     group_vars/<service-or-operator-group>.yml
     host_vars/<host>.yml
+    group_vars/all/platform-installer.yml             # Installer-owned desired state
+    host_vars/<host>/platform-installer.yml            # Installer-owned host placement
   ansible.cfg
 ```
+
+For an Installer-managed field, the `platform-installer.yml` document is the
+canonical input. A flat `host_vars/<host>.yml` is accepted by bounded Core
+readers only as a standalone compatibility fallback when the managed document
+does not exist. New Installer writes always use the managed directory form.
+Readers must not recursively scan `host_vars` or independently invent another
+precedence rule.
 
 The contract covers the directory as a whole. Inventory declares desired
 hosts; platform topology and policy live in ordinary variable documents;

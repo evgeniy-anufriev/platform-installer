@@ -65,6 +65,12 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("Select effective Kafka desired state for controller-side materialization", apply_tasks)
         self.assertIn("Project machine-owned Kafka identity state onto target hosts", apply_tasks)
         self.assertNotIn("Refresh inventory after canonical identity persistence", apply_tasks)
+        aggregate = os.path.join(ROOT, "services/kafka/playbooks/aggregate_discovery.yml")
+        with open(aggregate, encoding="utf-8") as handle:
+            aggregate_tasks = handle.read()
+        self.assertIn("dict((groups['platform_targets'] | default([]) | sort) | zip", aggregate_tasks)
+        self.assertIn("map('extract', hostvars, 'platform_kafka_identity_discovery')", aggregate_tasks)
+        self.assertNotIn("platform_kafka_discovery_by_host | default({}) | combine", apply_tasks)
         materializer = apply_tasks[apply_tasks.index("Materialize managed Kafka identities before mutation"):apply_tasks.index("Kafka generated identity projection")]
         self.assertIn("changed_when: false", materializer)
 
@@ -81,6 +87,19 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             self.assertIn(pki_import, playbook)
             self.assertNotIn("platform_pki_service_types:", playbook)
             self.assertLess(playbook.index(pki_import), playbook.index("roles:"))
+
+    def test_kafka_verify_reloads_controller_owned_generated_state(self):
+        verify = os.path.join(ROOT, "services/kafka/playbooks/verify.yml")
+        loader = os.path.join(ROOT, "services/kafka/playbooks/load_generated_state.yml")
+        with open(verify, encoding="utf-8") as handle:
+            verify_tasks = handle.read()
+        with open(loader, encoding="utf-8") as handle:
+            loader_tasks = handle.read()
+        self.assertIn("import_playbook: load_generated_state.yml", verify_tasks)
+        self.assertIn("Project controller-owned Kafka generated state onto verification hosts", verify_tasks)
+        self.assertIn("platform_generated_state_path", loader_tasks)
+        self.assertIn("KAFKA_GENERATED_STATE_REQUIRED", loader_tasks)
+        self.assertIn("_platform_kafka_generated_state_document.platform_generated_state", loader_tasks)
 
 
 if __name__ == "__main__":
