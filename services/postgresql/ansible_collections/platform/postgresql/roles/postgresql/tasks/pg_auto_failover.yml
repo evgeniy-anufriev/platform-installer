@@ -14,24 +14,24 @@
   ansible.builtin.set_fact:
     _platform_postgresql_member_port: "{{ _platform_postgresql_member.port | default(platform_postgresql_port) }}"
     _platform_postgresql_monitor_port: "{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}"
-    _platform_postgresql_monitor_uri: "postgres://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.hostname }}:{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}/pg_auto_failover"
+    _platform_postgresql_monitor_uri: "postgres://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}/pg_auto_failover"
 
 - name: Require one current pg_auto_failover member
   ansible.builtin.assert:
     that:
       - _platform_postgresql_member is mapping
-      - _platform_postgresql_member.hostname is defined
+      - _platform_postgresql_member.address is defined
       - _platform_postgresql_monitor is mapping
-      - _platform_postgresql_monitor.hostname is defined
+      - _platform_postgresql_monitor.address is defined
     fail_msg: POSTGRES_AUTO_FAILOVER_MEMBER_TOPOLOGY_REQUIRED
 
 - name: Install pg_auto_failover runtime password file
   ansible.builtin.copy:
     content: |
-      {{ _platform_postgresql_monitor.hostname }}:{{ _platform_postgresql_monitor_port }}:pg_auto_failover:{{ platform_postgresql_monitor_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_monitor_credential.passwordSecretRef]) | trim }}
-      {% if 'monitor' in _platform_postgresql_member.roles %}{% for member in platform_postgresql_instances | selectattr('roles', 'contains', 'database') %}{{ member.hostname }}:{{ member.port | default(platform_postgresql_port) }}:postgres:{{ platform_postgresql_healthcheck_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_healthcheck_credential.passwordSecretRef]) | trim }}
+      {{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor_port }}:pg_auto_failover:{{ platform_postgresql_monitor_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_monitor_credential.passwordSecretRef]) | trim }}
+      {% if 'monitor' in _platform_postgresql_member.roles %}{% for member in platform_postgresql_instances | selectattr('roles', 'contains', 'database') %}{{ member.address }}:{{ member.port | default(platform_postgresql_port) }}:postgres:{{ platform_postgresql_healthcheck_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_healthcheck_credential.passwordSecretRef]) | trim }}
       {% endfor %}{% endif %}
-      {% for member in platform_postgresql_instances | selectattr('roles', 'contains', 'database') %}{{ member.hostname }}:{{ member.port | default(platform_postgresql_port) }}:*:{{ platform_postgresql_replication_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_replication_credential.passwordSecretRef]) | trim }}
+      {% for member in platform_postgresql_instances | selectattr('roles', 'contains', 'database') %}{{ member.address }}:{{ member.port | default(platform_postgresql_port) }}:*:{{ platform_postgresql_replication_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_replication_credential.passwordSecretRef]) | trim }}
       {% endfor %}
     dest: "{{ platform_postgresql_pgpass_file }}"
     owner: "{{ platform_postgresql_user }}"
@@ -110,7 +110,7 @@
       - --pgport
       - "{{ _platform_postgresql_member_port }}"
       - --hostname
-      - "{{ _platform_postgresql_member.hostname }}"
+      - "{{ _platform_postgresql_member.address }}"
       - --auth
       - "{{ platform_postgresql_failover_auth }}"
       - --ssl-mode=verify-full
@@ -142,7 +142,7 @@
       - --pgport
       - "{{ _platform_postgresql_member_port }}"
       - --hostname
-      - "{{ _platform_postgresql_member.hostname }}"
+      - "{{ _platform_postgresql_member.address }}"
       - --username
       - "{{ platform_postgresql_user }}"
       - --auth

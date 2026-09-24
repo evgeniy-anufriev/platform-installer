@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 import tarfile
@@ -452,6 +453,29 @@ class ExecutionLifecycleTests(unittest.TestCase):
         self.assertIn("UserKnownHostsFile=/var/lib/platform-installer/execution/known_hosts", environment["ANSIBLE_SSH_ARGS"])
         self.assertIn("StrictHostKeyChecking=yes", environment["ANSIBLE_SSH_ARGS"])
 
+    def test_controller_wraps_password_lease_only_in_ephemeral_runner_and_removes_input(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1"); journal.initialize(metadata())
+            operation = {"operation": "CORE_DELAY", "operationId": "core:delay", "phaseId": "apply"}
+            captured = {}
+
+            class Completed(object):
+                returncode = 0
+                stdout = type("Out", (), {"fileno": lambda self: 0, "close": lambda self: None})()
+                def poll(self): return 0
+
+            def opened(command, **_kwargs):
+                captured["command"] = command
+                credential_path = Path(command[command.index("--credentials-file") + 1])
+                captured["credentials"] = json.loads(credential_path.read_text(encoding="utf-8"))
+                self.assertEqual(0o600, stat.S_IMODE(credential_path.stat().st_mode))
+                return Completed()
+
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_password_credentials_for_run", return_value={"ansible_password": "test", "ansible_become_password": "test"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+                self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
+            self.assertEqual({"ansible_password": "test", "ansible_become_password": "test"}, captured["credentials"])
+            self.assertFalse(Path(journal.directory, ".ansible-runtime-credentials.json").exists())
+
     def test_service_projection_binding_is_verified_before_controller_start(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
@@ -490,6 +514,26 @@ class ExecutionLifecycleTests(unittest.TestCase):
             invalid_manifest = dict(manifest); invalid_manifest["pkiMaterializationPlans"] = [invalid]
             with self.assertRaisesRegex(LifecycleError, "EXECUTION_MANIFEST_INVALID"):
                 execution_controller._materialize_runtime_projection(journal, current, invalid_manifest)
+
+    def test_runtime_projection_resolves_v3_service_values_by_requirement_ref_and_projects_runtime_ref(self):
+        """The lease payload and service configuration intentionally use distinct keys."""
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            manifest = {
+                "operations": [{"operation": "SERVICE_APPLY", "operationId": "apply:postgres", "serviceType": "postgresql", "serviceDeployment": "postgres", "roleVariablesPrefix": "platform_postgresql_"}],
+                "artifactRequirements": [], "artifactSourceAuthorities": [], "pkiMaterializationPlans": [],
+                "runtimeSecretRequirements": [{"requirementRef": "postgresql-admin-password", "purpose": "SERVICE_PASSWORD", "hosts": ["node1"], "runtimeReference": "runtime:postgresql-admin-password", "serviceDeployment": "postgres"}],
+            }
+            current = metadata(); current["manifestDigest"] = digest(manifest)
+            journal.initialize(current)
+            values = {"postgresql-admin-password": "test-only-value"}
+            with mock.patch.object(execution_controller.execution_secret_lease, "target_username_for_run", return_value="qa"), mock.patch.object(execution_controller.execution_secret_lease, "runtime_secret_values_for_run", return_value=values):
+                execution_controller._materialize_runtime_projection(journal, current, manifest)
+            projection_name = ".runtime-projection-" + hashlib.sha256(b"apply:postgres").hexdigest() + ".json"
+            projection = json.loads(Path(journal.directory, projection_name).read_text(encoding="utf-8"))
+            path = projection["platform_postgresql_secret_files"]["runtime:postgresql-admin-password"]
+            self.assertEqual("test-only-value", Path(path).read_text(encoding="utf-8"))
+            self.assertNotIn("postgresql-admin-password", projection["platform_postgresql_secret_files"])
 
     def test_generated_state_path_is_stable_per_project_not_run(self):
         with tempfile.TemporaryDirectory() as root:

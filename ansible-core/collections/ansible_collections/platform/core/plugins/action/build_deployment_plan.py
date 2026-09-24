@@ -14,7 +14,7 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         del tmp, task_vars
         try:
-            result = build_deployment_plan(self._task.args.get("snapshot"), self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), self._task.args.get("pki_materialization"))
+            result = build_deployment_plan(self._task.args.get("snapshot"), self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), self._task.args.get("pki_materialization"), self._task.args.get("execution_configuration"))
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
             if destination and manifest:

@@ -128,6 +128,16 @@ class ServiceConfigurationResolutionTests(unittest.TestCase):
         self.assertEqual({"state": "RESOLVED", "value": "/var/lib/kafka", "source": "ROLE_DEFAULT"}, config["dataDirectory"])
         self.assertEqual("PASS", result["status"])
 
+    def test_object_override_preserves_declared_role_default_members(self):
+        result = CONFIGURATION._merge_mapping_defaults(
+            {"username": "autoctl_node", "passwordSecretRef": ""},
+            {"passwordSecretRef": "runtime:monitor-password"},
+        )
+        self.assertEqual(
+            {"username": "autoctl_node", "passwordSecretRef": "runtime:monitor-password"},
+            result,
+        )
+
     def test_non_literal_default_is_deferred(self):
         result = self.resolve(topology(), {
             "platform_kafka_client_port": "{{ platform_kafka_default_port | default(9092) }}",

@@ -294,11 +294,12 @@
   ansible.builtin.command:
     argv:
       - psql
-      - "postgresql://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.hostname }}:{{ _platform_postgresql_monitor.port }}/pg_auto_failover?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - "postgresql://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor_port }}/pg_auto_failover?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
       - -Atqc
       - SELECT 1
   environment:
     PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  become_user: "{{ platform_postgresql_user }}"
   register: platform_postgresql_monitor_credential_login
   changed_when: false
   failed_when: false
@@ -361,11 +362,12 @@
   ansible.builtin.command:
     argv:
       - psql
-      - "postgresql://{{ platform_postgresql_replication_credential.username }}@{{ _platform_postgresql_member.hostname }}:{{ _platform_postgresql_effective_port }}/postgres?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - "postgresql://{{ platform_postgresql_replication_credential.username }}@{{ _platform_postgresql_member.address }}:{{ _platform_postgresql_effective_port }}/postgres?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
       - -Atqc
       - SELECT 1
   environment:
     PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  become_user: "{{ platform_postgresql_user }}"
   register: platform_postgresql_replication_login
   changed_when: false
   failed_when: false
@@ -427,11 +429,12 @@
   ansible.builtin.command:
     argv:
       - psql
-      - "postgresql://{{ platform_postgresql_healthcheck_credential.username }}@{{ _platform_postgresql_member.hostname }}:{{ _platform_postgresql_effective_port }}/postgres?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - "postgresql://{{ platform_postgresql_healthcheck_credential.username }}@{{ _platform_postgresql_member.address }}:{{ _platform_postgresql_effective_port }}/postgres?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
       - -Atqc
       - SELECT 1
   environment:
     PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  become_user: "{{ platform_postgresql_user }}"
   delegate_to: "{{ _platform_postgresql_monitor.host }}"
   register: platform_postgresql_healthcheck_login
   changed_when: false

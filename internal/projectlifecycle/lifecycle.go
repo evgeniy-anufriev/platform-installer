@@ -115,20 +115,22 @@ type ProjectCatalogService struct {
 }
 
 type ProjectCatalogSetting struct {
-	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`
-	Scopes        []string `json:"scopes"`
-	Label         string   `json:"label,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	Section       string   `json:"section,omitempty"`
-	Order         *int     `json:"order,omitempty"`
-	EditorShape   string   `json:"editorShape"`
-	ReferenceKind string   `json:"referenceKind,omitempty"`
-	Minimum       *float64 `json:"minimum,omitempty"`
-	Maximum       *float64 `json:"maximum,omitempty"`
-	MinLength     *int     `json:"minLength,omitempty"`
-	MaxLength     *int     `json:"maxLength,omitempty"`
-	Enum          []any    `json:"enum,omitempty"`
+	ID                            string   `json:"id"`
+	Kind                          string   `json:"kind"`
+	Scopes                        []string `json:"scopes"`
+	Label                         string   `json:"label,omitempty"`
+	Description                   string   `json:"description,omitempty"`
+	Section                       string   `json:"section,omitempty"`
+	Order                         *int     `json:"order,omitempty"`
+	EditorShape                   string   `json:"editorShape"`
+	ReferenceKind                 string   `json:"referenceKind,omitempty"`
+	RuntimeSecretRequirementRef   string   `json:"runtimeSecretRequirementRef,omitempty"`
+	RuntimeSecretUsernameRequired bool     `json:"runtimeSecretUsernameRequired,omitempty"`
+	Minimum                       *float64 `json:"minimum,omitempty"`
+	Maximum                       *float64 `json:"maximum,omitempty"`
+	MinLength                     *int     `json:"minLength,omitempty"`
+	MaxLength                     *int     `json:"maxLength,omitempty"`
+	Enum                          []any    `json:"enum,omitempty"`
 }
 
 type ProjectCatalogUI struct {
@@ -403,11 +405,12 @@ type catalogSetting struct {
 	Validation   map[string]any `yaml:"validation"`
 	Schema       map[string]any `yaml:"schema"`
 	UI           struct {
-		Label          string `yaml:"label"`
-		Description    string `yaml:"description"`
-		Section        string `yaml:"section"`
-		Order          *int   `yaml:"order"`
-		XReferenceKind string `yaml:"x-referenceKind"`
+		Label                     string         `yaml:"label"`
+		Description               string         `yaml:"description"`
+		Section                   string         `yaml:"section"`
+		Order                     *int           `yaml:"order"`
+		XReferenceKind            string         `yaml:"x-referenceKind"`
+		XRuntimeSecretRequirement map[string]any `yaml:"x-runtimeSecretRequirement"`
 	} `yaml:"ui"`
 }
 
@@ -656,7 +659,15 @@ func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView
 func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetting {
 	result := ProjectCatalogSetting{ID: id, Kind: source.Kind, Scopes: append([]string(nil), source.Scopes...), Label: source.UI.Label, Description: source.UI.Description, Section: source.UI.Section, Order: source.UI.Order, EditorShape: "UNSUPPORTED"}
 	sort.Strings(result.Scopes)
-	if source.Kind != "MANAGED" || len(source.Schema) != 0 {
+	if source.Kind != "MANAGED" {
+		return result
+	}
+	if len(source.Schema) != 0 {
+		if requirement, usernameRequired, ok := runtimeSecretReferenceObject(source); ok {
+			result.EditorShape = "RUNTIME_SECRET_REFERENCE_OBJECT"
+			result.RuntimeSecretRequirementRef = requirement
+			result.RuntimeSecretUsernameRequired = usernameRequired
+		}
 		return result
 	}
 	if source.UI.XReferenceKind != "" {
@@ -706,6 +717,85 @@ func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetti
 		}
 	}
 	return result
+}
+
+// runtimeSecretReferenceObject recognizes the sole closed object shape which
+// may cross the Installer editor boundary: a schema-declared runtime SecretRef
+// with an optional schema-declared PostgreSQL-style username. It never exposes
+// arbitrary catalog schema or accepts a name/shape-based guess.
+func runtimeSecretReferenceObject(source catalogSetting) (string, bool, bool) {
+	meta := source.UI.XRuntimeSecretRequirement
+	if source.Type != "object" || len(meta) != 2 || meta["purpose"] != "SERVICE_PASSWORD" {
+		return "", false, false
+	}
+	requirement, ok := meta["requirementRef"].(string)
+	if !ok || len(requirement) > 64 || !catalogIdentifierPattern.MatchString(requirement) {
+		return "", false, false
+	}
+	schema := source.Schema
+	if len(schema) != 4 || schema["type"] != "object" || schema["additionalProperties"] != false || !sameRequiredFields(source.Validation["required"], schema["required"]) {
+		return "", false, false
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || len(properties) < 1 || len(properties) > 2 {
+		return "", false, false
+	}
+	password, passwordOK := properties["passwordSecretRef"].(map[string]any)
+	if !passwordOK || len(password) != 2 || password["type"] != "string" || integerConstraint(password["minLength"]) != 1 {
+		return "", false, false
+	}
+	username, hasUsername := properties["username"]
+	if len(properties) != 1 && !hasUsername {
+		return "", false, false
+	}
+	usernameRequired := requiredField(schema["required"], "username")
+	if hasUsername {
+		value, ok := username.(map[string]any)
+		if !ok || len(value) != 2 || value["type"] != "string" || value["pattern"] != "^[A-Za-z_][A-Za-z0-9_]{0,62}$" {
+			return "", false, false
+		}
+	} else if usernameRequired {
+		return "", false, false
+	}
+	if !requiredField(schema["required"], "passwordSecretRef") {
+		return "", false, false
+	}
+	return requirement, usernameRequired, true
+}
+
+func sameRequiredFields(left, right any) bool {
+	leftFields, leftOK := requiredFieldSet(left)
+	rightFields, rightOK := requiredFieldSet(right)
+	if !leftOK || !rightOK || len(leftFields) != len(rightFields) {
+		return false
+	}
+	for field := range leftFields {
+		if !rightFields[field] {
+			return false
+		}
+	}
+	return true
+}
+
+func requiredField(value any, wanted string) bool {
+	fields, ok := requiredFieldSet(value)
+	return ok && fields[wanted]
+}
+
+func requiredFieldSet(value any) (map[string]bool, bool) {
+	values, ok := value.([]any)
+	if !ok || len(values) < 1 || len(values) > 2 {
+		return nil, false
+	}
+	result := make(map[string]bool, len(values))
+	for _, raw := range values {
+		field, ok := raw.(string)
+		if !ok || (field != "username" && field != "passwordSecretRef") || result[field] {
+			return nil, false
+		}
+		result[field] = true
+	}
+	return result, true
 }
 
 // ValidDNSDomain is the closed DNS domain shape admitted to the Installer

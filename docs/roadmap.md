@@ -771,21 +771,34 @@ Not ready when:
 
 Status: SERVICE-INSTALL-01 Keepalived DONE (2026-09-23); SERVICE-INSTALL-02
 BIND DONE (2026-09-23); SERVICE-INSTALL-03 dns-client DONE (2026-09-23);
-SERVICE-INSTALL-04 HAProxy DONE (2026-09-23); SERVICE-INSTALL-05 Kafka is
-NEXT.
+SERVICE-INSTALL-04 HAProxy DONE (2026-09-23); SERVICE-INSTALL-05 Kafka DONE
+(2026-09-23); SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover DONE (2026-09-24);
+SERVICE-INSTALL-07 Redis standalone and Sentinel HA (three members on one host
+by default, with three-host placement also required) is NEXT; SERVICE-INSTALL-08 is the final
+one-plan acceptance for seven services. Redis implementation has not started.
+For SERVICE-INSTALL-07, the service Secrets dialog accepts bounded values
+against the verified local catalog without a readiness check. The installation
+flow obtains fresh Core requirements and a deployment plan before Start;
+Execution Node readiness is an installation prerequisite, not a repeated
+service-editor action. Passwords remain session-only.
 The completed UI-02E one-host Kafka evidence remains historical evidence.
 Milestones and individual acceptance criteria:
 [SERVICE-INSTALL-01…07](service-install-acceptance.md).
 
 The sequence uses one Git-ignored cumulative Installer-managed QA project:
-01 created it, 02–06 open and extend its exact saved revision, and 07 builds
+01 created it, 02–07 open and extend its exact saved revision, and 08 builds
 the final single plan from that same project. A milestone may remove only the
 old attributable runtime installation of its own service; it must not replace
-the cumulative project or discard accepted preceding services.
+the cumulative project or discard accepted preceding services. Redis standalone
+is additionally accepted in a separate isolated QA project; Redis Sentinel HA
+is the sole Redis deployment added to the cumulative project, because the
+current Redis contract admits at most one Redis deployment per project.
 
 Order: 01 Keepalived → 02 BIND → 03 dns-client → 04 HAProxy → 05 Kafka
 (replace the isolated one-target QA deployment with a three-target deployment)
-→ 06 PostgreSQL/pg_auto_failover → 07 all six services from one shared plan.
+→ 06 PostgreSQL/pg_auto_failover → 07 Redis standalone and Sentinel HA (3/1 and 3/3) with mandatory TLS
+→ 08 all seven services from one shared plan. SERVICE-INSTALL-07 architecture:
+[Redis/Sentinel](service-install-07-redis-sentinel-architecture.md).
 Before each service installation, identify and remove only its attributable
 old QA installation through a proven narrow cleanup path. Record exact targets
 and check ports, paths, unit names and neighboring deployment state first.
@@ -800,6 +813,14 @@ For Kafka, verify cluster membership/quorum and TLS on all three target hosts.
 For the final shared plan, verify cross-service dependencies and integrations.
 Record before/after evidence that unrelated QA deployments were not changed.
 The final shared-plan test starts only after the individual service tests pass.
+
+SERVICE-INSTALL-06 accepted an isolated three-host PostgreSQL
+`pg_auto_failover` deployment: node1 monitor, node2 and node3 database
+members. The first Go-managed lifecycle run
+`installer-45943379628ebee4a28716d85b571916` completed `SUCCEEDED` in 17m45s
+with 65 changes; the fresh repeat
+`installer-4fcc0cd5afc8689509aea2e2a49935e6` completed `SUCCEEDED` in 17m9s
+with `changed=0`. PKI apply, PostgreSQL apply and verify passed in both cycles.
 
 ## Phase G — Expansion
 

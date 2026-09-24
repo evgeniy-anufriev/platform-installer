@@ -90,6 +90,15 @@ func validateConfigurationValue(setting *projectlifecycle.ProjectCatalogSetting,
 		if !ok || !validDesiredStateIdentifier(text) {
 			return invalidConfigurationValue()
 		}
+	case "RUNTIME_SECRET_REFERENCE_OBJECT":
+		object, ok := value.(map[string]any)
+		if !ok || !safeRuntimeSecretReferenceObject(object) || object["passwordSecretRef"] != "runtime:"+setting.RuntimeSecretRequirementRef {
+			return invalidConfigurationValue()
+		}
+		_, usernamePresent := object["username"]
+		if setting.RuntimeSecretUsernameRequired != usernamePresent {
+			return invalidConfigurationValue()
+		}
 	default:
 		return blocked("SETTING_UNSUPPORTED", "Configuration setting is read-only in this Installer version", "command.setting")
 	}

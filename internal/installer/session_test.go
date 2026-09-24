@@ -25,6 +25,18 @@ func TestValidateCommandRejectsCrossOperationFieldsAndNonRuntimeRefs(t *testing.
 	}
 }
 
+func TestValidateCommandV9AcceptsPublishedCatalogServiceAndModeIdentifiers(t *testing.T) {
+	base := EditCommand{APIVersion: EditCommandAPIVersionV9, Kind: "EditCommand", BaseProjectRevision: "sha256:" + strings.Repeat("a", 64), Operation: "CreateServiceDeployment", DeploymentID: "postgres-ha", ServiceType: "postgresql", Mode: "pg_auto_failover"}
+	if err := validateCommand(base); err != nil {
+		t.Fatalf("published PostgreSQL catalog mode rejected: %v", err)
+	}
+	invalid := base
+	invalid.Mode = "pg__auto"
+	if err := validateCommand(invalid); err == nil {
+		t.Fatal("invalid desired-state catalog identifier accepted")
+	}
+}
+
 func TestValidateV2CreateServerRejectsUnknownDecodedFields(t *testing.T) {
 	baseRevision := "sha256:" + strings.Repeat("a", 64)
 	content := `{"apiVersion":"platform.installer/edit-command/v1alpha2","kind":"EditCommand","baseProjectRevision":"` + baseRevision + `","operation":"CreateServer","hostId":"node1","address":"192.0.2.1","rawYaml":"unsafe"}`

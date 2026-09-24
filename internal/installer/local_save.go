@@ -150,7 +150,7 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		serviceType, serviceOK := deployment["serviceType"].(string)
 		mode, modeOK := deployment["mode"].(string)
 		endpointGroup, endpointOK := optionalString(deployment, "endpointGroup")
-		if deployment == nil || !serviceOK || !identifierPattern.MatchString(serviceType) || !modeOK || !identifierPattern.MatchString(mode) || !endpointOK || (endpointGroup != "" && !identifierPattern.MatchString(endpointGroup)) {
+		if deployment == nil || !serviceOK || !validDesiredStateIdentifier(serviceType) || !modeOK || !validDesiredStateIdentifier(mode) || !endpointOK || (endpointGroup != "" && !identifierPattern.MatchString(endpointGroup)) {
 			return managedReadError("Managed deployment is malformed", desiredDocument)
 		}
 		provider, providerErr := managedProviderProjection(deployment)

@@ -28,6 +28,37 @@ func h1Catalog() *projectlifecycle.ProjectCatalogView {
 	}}}
 }
 
+func TestRuntimeSecretReferenceObjectRequiresExactCatalogDescriptor(t *testing.T) {
+	setting := &projectlifecycle.ProjectCatalogSetting{EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "postgresql-admin-password", RuntimeSecretUsernameRequired: true}
+	valid := map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password"}
+	if err := validateConfigurationValue(setting, valid); err != nil {
+		t.Fatalf("valid runtime reference object rejected: %v", err)
+	}
+	for name, value := range map[string]any{
+		"wrong requirement": map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:other"},
+		"plain password":    map[string]any{"username": "platform_admin", "passwordSecretRef": "plaintext"},
+		"missing username":  map[string]any{"passwordSecretRef": "runtime:postgresql-admin-password"},
+		"unknown field":     map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password", "extra": true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateConfigurationValue(setting, value); err == nil {
+				t.Fatalf("unsafe value accepted: %#v", value)
+			}
+		})
+	}
+}
+
+func TestClosedRuntimeSecretReferenceObjectDoesNotUseSettingNameAsSecretValue(t *testing.T) {
+	command := EditCommand{APIVersion: EditCommandAPIVersionV9, Kind: "EditCommand", BaseProjectRevision: "sha256:" + strings.Repeat("a", 64), Operation: "SetServiceConfigurationValue", DeploymentID: "postgres-ha", Scope: "DEPLOYMENT", Setting: "monitorCredential", Value: map[string]any{"passwordSecretRef": "runtime:postgresql-monitor-password"}}
+	if err := validateCommand(command); err != nil {
+		t.Fatalf("closed runtime reference object rejected: %v", err)
+	}
+	command.Value = map[string]any{"passwordSecretRef": "plain-password"}
+	if err := validateCommand(command); err == nil {
+		t.Fatal("plaintext reference accepted")
+	}
+}
+
 func h1CatalogWithTLSProfileSetting(settingID string) *projectlifecycle.ProjectCatalogView {
 	catalog := h1Catalog()
 	for index := range catalog.Services[0].ConfigurationSettings {

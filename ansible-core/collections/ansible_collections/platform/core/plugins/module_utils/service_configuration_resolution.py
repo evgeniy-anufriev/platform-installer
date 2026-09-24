@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+import copy
 import posixpath
 import re
 
@@ -50,6 +51,16 @@ def _canonical_defaults(role_defaults, mapping):
         for logical, entry in sorted(mapping.items())
         if isinstance(entry, dict) and entry.get("roleVariable") in role_defaults
     }
+
+
+def _merge_mapping_defaults(default_value, override_value):
+    """Match Ansible's configured hash merge for one resolved object setting."""
+    if not isinstance(default_value, dict) or not isinstance(override_value, dict):
+        return override_value
+    result = {key: copy.deepcopy(value) for key, value in default_value.items()}
+    for key, value in override_value.items():
+        result[key] = _merge_mapping_defaults(result[key], value) if key in result else copy.deepcopy(value)
+    return result
 
 
 _EXACT_REFERENCE = re.compile(r"^{{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*}}$")
@@ -408,13 +419,14 @@ def resolve_service_configuration(
                 entry = mapping.get(logical)
                 if not isinstance(entry, dict) or not entry.get("roleVariable"):
                     return None
-                if scope_name == "member" and logical in member_overrides and "member" in _mapping_scopes(entry):
-                    return "MEMBER_OVERRIDE", member_overrides[logical], None
-                if logical in overrides:
-                    return "DEPLOYMENT_OVERRIDE", overrides[logical], None
-                if logical in document_overrides:
-                    return "DEPLOYMENT_OVERRIDE", document_overrides[logical], document_origins[logical]
                 role_variable = entry["roleVariable"]
+                default_value = defaults.get(role_variable)
+                if scope_name == "member" and logical in member_overrides and "member" in _mapping_scopes(entry):
+                    return "MEMBER_OVERRIDE", _merge_mapping_defaults(default_value, member_overrides[logical]), None
+                if logical in overrides:
+                    return "DEPLOYMENT_OVERRIDE", _merge_mapping_defaults(default_value, overrides[logical]), None
+                if logical in document_overrides:
+                    return "DEPLOYMENT_OVERRIDE", _merge_mapping_defaults(default_value, document_overrides[logical]), document_origins[logical]
                 if role_variable in defaults:
                     return "ROLE_DEFAULT", defaults[role_variable], None
                 return None

@@ -5,6 +5,10 @@
   hosts: platform_targets
   become: true
   gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime PostgreSQL configuration
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
   roles:
     - role: platform.postgresql.postgresql
       platform_postgresql_verify_only: true

@@ -73,6 +73,42 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertEqual(first["deploymentPlan"]["fingerprints"]["plan"], changed["deploymentPlan"]["fingerprints"]["plan"])
         self.assertNotEqual(first["executionManifestDigest"], changed["executionManifestDigest"])
 
+    def test_private_manifest_binds_core_resolved_host_role_variables(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["provider"]["roleEntrypoints"] = {"apply": {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_"}, "verify": {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_"}}
+        value["definitions"]["provider"]["configuration"] = {"settings": {"enabled": {"roleVariable": "platform_provider_enabled"}}}
+        state["serviceDeployments"] = {"provider": {"serviceType": "provider"}}
+        configuration = {"services": {"provider": {"mode": "active", "configuration": {"enabled": {"state": "RESOLVED", "value": True}}, "members": {"member-1": {"variableContext": {"hostId": "node1"}, "configuration": {"enabled": {"state": "RESOLVED", "value": True}}}}}}}
+        result = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=[], execution_configuration=configuration)
+        operation = next(item for item in result["executionManifest"]["operations"] if item["operationId"] == "apply:provider")
+        self.assertEqual({"node1": {"platform_provider_mode": "active", "platform_provider_enabled": True}}, operation["roleVariablesByHost"])
+        self.assertNotIn("roleVariablesByHost", result["deploymentPlan"])
+
+    def test_private_manifest_projects_declared_member_list_from_resolved_topology(self):
+        value, state = catalog(), snapshot()
+        entrypoint = {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_", "x-memberListVariable": "platform_provider_instances"}
+        value["definitions"]["provider"]["roleEntrypoints"] = {"apply": entrypoint, "verify": entrypoint}
+        value["definitions"]["provider"]["configuration"] = {"settings": {"enabled": {"roleVariable": "platform_provider_enabled"}}}
+        state["serviceDeployments"] = {"provider": {"serviceType": "provider"}}
+        state["hosts"] = {"node1": {"ansibleHost": "192.0.2.10"}, "node2": {"ansibleHost": "192.0.2.11"}}
+        state["topology"] = {"resolved": {"serviceDeployments": {"provider": {"members": {
+            "monitor": {"host": "node1", "roles": ["monitor"]},
+            "data": {"host": "node2", "roles": ["database"]},
+        }}}}}
+        configuration = {"services": {"provider": {"mode": "active", "configuration": {"enabled": {"state": "RESOLVED", "value": True}}, "members": {
+            "monitor": {"variableContext": {"hostId": "node1"}, "configuration": {"enabled": {"state": "RESOLVED", "value": True}}},
+            "data": {"variableContext": {"hostId": "node2"}, "configuration": {"enabled": {"state": "RESOLVED", "value": True}}},
+        }}}}
+        result = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=[], execution_configuration=configuration)
+        operation = next(item for item in result["executionManifest"]["operations"] if item["operationId"] == "apply:provider")
+        expected = [
+            {"id": "data", "host": "node2", "hostname": "node2", "address": "192.0.2.11", "roles": ["database"]},
+            {"id": "monitor", "host": "node1", "hostname": "node1", "address": "192.0.2.10", "roles": ["monitor"]},
+        ]
+        self.assertEqual(expected, operation["roleVariablesByHost"]["node1"]["platform_provider_instances"])
+        self.assertEqual(expected, operation["roleVariablesByHost"]["node2"]["platform_provider_instances"])
+        self.assertNotIn("roleVariablesByHost", result["deploymentPlan"])
+
     def test_unsafe_bundle_ref_is_rejected_before_manifest_creation(self):
         unsafe = copy.deepcopy(sources()); unsafe[0]["ref"] = "runtime/artifacts/../escape.tgz"
         with self.assertRaisesRegex(ValueError, "BUNDLE_SOURCE_INDEX_INVALID"):

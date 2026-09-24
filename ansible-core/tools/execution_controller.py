@@ -25,6 +25,9 @@ MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096
 MAX_PKI_PLAN_STRING_BYTES = 4096
 MAX_OPERATION_FAILURE_CAPTURE_BYTES = 32768
+MAX_ROLE_VARIABLE_HOSTS = 4096
+MAX_ROLE_VARIABLES_PER_HOST = 256
+MAX_ROLE_VARIABLE_BYTES = 65536
 OPERATION_ERROR_CODE = re.compile(br'(?:"error_code"\s*:\s*"|error_code\s*[=:]\s*)([A-Z][A-Z0-9_]{2,127})')
 _PKI_PLAN_FIELDS = frozenset(("id", "requestId", "tlsProfileId", "authorityId", "hostId", "targetDirectory", "formats", "keyAlias", "trustAlias", "storePasswordSecretRef", "materializationFingerprint"))
 _PKI_PLAN_FORMATS = ("PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE")
@@ -112,6 +115,11 @@ def _terminal(journal, state, code, summary):
         details = os.lstat(secret)
         if not os.path.islink(secret) and os.path.isfile(secret):
             os.unlink(secret)
+    credentials = os.path.join(journal.directory, ".ansible-runtime-credentials.json")
+    if os.path.lexists(credentials):
+        details = os.lstat(credentials)
+        if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
+            os.unlink(credentials)
     for name in os.listdir(journal.directory):
         if not name.startswith(".runtime-secret-"):
             continue
@@ -125,6 +133,34 @@ def _terminal(journal, state, code, summary):
 
 def _safe_service(value):
     return isinstance(value, str) and value in SERVICE_TYPES
+
+
+def _role_variables_by_host(operation):
+    """Validate the closed Core-derived role-variable projection.
+
+    The controller transports this digest-bound data only.  It never resolves
+    settings or interprets service-specific names.
+    """
+    values = operation.get("roleVariablesByHost")
+    if values is None:
+        return None
+    prefix = operation.get("roleVariablesPrefix")
+    if not isinstance(prefix, str) or re.fullmatch(r"platform_[a-z0-9_]{1,96}_", prefix) is None or not isinstance(values, dict) or not values or len(values) > MAX_ROLE_VARIABLE_HOSTS:
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    result = {}
+    for host, variables in values.items():
+        if not isinstance(host, str) or not host or not isinstance(variables, dict) or not variables or len(variables) > MAX_ROLE_VARIABLES_PER_HOST:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        if any(not isinstance(name, str) or not name.startswith(prefix) for name in variables):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        try:
+            encoded = json.dumps(variables, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        except (TypeError, ValueError):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        if len(encoded) > MAX_ROLE_VARIABLE_BYTES:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        result[host] = variables
+    return result
 
 
 def _context_value(operation, key):
@@ -299,13 +335,17 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         for requirement in service_requirements:
             if set(requirement) != {"requirementRef", "purpose", "hosts", "runtimeReference", "serviceDeployment"}:
                 raise LifecycleError("EXECUTION_MANIFEST_INVALID")
-            deployment, reference = requirement.get("serviceDeployment"), requirement.get("runtimeReference")
-            if not isinstance(deployment, str) or not isinstance(reference, str) or reference not in values:
+            deployment, reference, requirement_ref = requirement.get("serviceDeployment"), requirement.get("runtimeReference"), requirement.get("requirementRef")
+            # The v1alpha3 lease payload is keyed by the public requirement
+            # reference. The runtime reference is a separate private-manifest
+            # identity consumed by the role projection, never a payload key.
+            if (not isinstance(deployment, str) or not isinstance(reference, str) or
+                    not isinstance(requirement_ref, str) or requirement_ref not in values):
                 raise LifecycleError("EXECUTION_MANIFEST_INVALID")
             path = os.path.join(journal.directory, ".runtime-secret-" + hashlib.sha256((deployment + "\0" + reference).encode("utf-8")).hexdigest())
             descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             try:
-                os.write(descriptor, values[reference].encode("utf-8")); os.fsync(descriptor)
+                os.write(descriptor, values[requirement_ref].encode("utf-8")); os.fsync(descriptor)
             finally:
                 os.close(descriptor)
             service_secret_files.setdefault(deployment, {})[reference] = path
@@ -344,6 +384,9 @@ def _materialize_runtime_projection(journal, metadata, manifest):
                 raise LifecycleError("EXECUTION_MANIFEST_INVALID")
             scoped = dict(payload)
             scoped[prefix + "secret_files"] = service_secret_files.get(deployment, {})
+            role_variables = _role_variables_by_host(operation)
+            if role_variables is not None:
+                scoped["platform_execution_role_variables_by_host"] = role_variables
             destination = os.path.join(journal.directory, ".runtime-projection-" + hashlib.sha256(operation_id.encode("utf-8")).hexdigest() + ".json")
             descriptor, operation_temporary = tempfile.mkstemp(prefix=".runtime-projection-", dir=journal.directory)
             try:
@@ -371,8 +414,28 @@ def _dispatch(release, journal, manifest, stopped):
         if stopped[0]:
             return "CANCELLED"
         journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_environment(release, journal, operation))
-        completed = _wait_for_operation(process, stopped)
+        credentials_path = None
+        credentials = execution_secret_lease.ansible_password_credentials_for_run(journal.root, journal.run_id)
+        if credentials is not None:
+            credentials_path = os.path.join(journal.directory, ".ansible-runtime-credentials.json")
+            descriptor = os.open(credentials_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            try:
+                with os.fdopen(descriptor, "w") as stream:
+                    json.dump(credentials, stream, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                    stream.flush(); os.fsync(stream.fileno())
+            except Exception:
+                try: os.unlink(credentials_path)
+                except OSError: pass
+                raise
+            command = [sys.executable, os.path.join(release, "ansible-core", "tools", "run_with_runtime_credentials.py"), "--credentials-file", credentials_path, "--runtime-dir", os.path.join(journal.directory, ".ansible-runtime"), "--"] + command
+        try:
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_environment(release, journal, operation))
+            completed = _wait_for_operation(process, stopped)
+        finally:
+            if credentials_path is not None and os.path.lexists(credentials_path):
+                details = os.lstat(credentials_path)
+                if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
+                    os.unlink(credentials_path)
         if completed is None:
             return "CANCELLED"
         returncode, error_code = completed

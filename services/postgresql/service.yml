@@ -101,7 +101,7 @@ configuration:
     advancedConfig: {kind: ADVANCED, roleVariable: platform_postgresql_advanced_config, type: object, scopes: [deployment], validation: {additionalProperties: true}, ui: {label: Advanced PostgreSQL settings, section: Advanced, order: 90}}
 x-reservedAdvancedProperties: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
 roleEntrypoints:
-  apply: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
-  verify: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_}
+  apply: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_, x-memberListVariable: platform_postgresql_instances}
+  verify: {fqcn: platform.postgresql.postgresql, variablesPrefix: platform_postgresql_, x-memberListVariable: platform_postgresql_instances}
 artifacts: []
 compatibilityRef: compatibility.yml

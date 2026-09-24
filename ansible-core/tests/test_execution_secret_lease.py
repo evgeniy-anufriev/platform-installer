@@ -79,6 +79,15 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
             self.assertIsNone(execution_secret_lease.target_username_for_run(root, "installer-123"))
 
+    def test_controller_can_project_only_closed_attached_ansible_password_fields(self):
+        with tempfile.TemporaryDirectory() as root:
+            value = payload(); value["sudoPassword"] = "sudo-secret"
+            stored = execution_secret_lease.put(root, request(), value)
+            self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
+            self.assertEqual({"ansible_password": "secret", "ansible_become_password": "sudo-secret"}, execution_secret_lease.ansible_password_credentials_for_run(root, "installer-123"))
+            self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
+            self.assertIsNone(execution_secret_lease.ansible_password_credentials_for_run(root, "installer-123"))
+
     def test_invalid_identity_or_payload_is_closed(self):
         with tempfile.TemporaryDirectory() as root:
             bad = request(); bad["projectIdentity"] = "-invalid"
@@ -105,6 +114,14 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             valid = runtime_secret_payload({"postgresql-admin-password": "\u044f" * 2048}, "pki")
             stored = execution_secret_lease.put(root, request(), valid)
             self.assertTrue(stored["leaseId"])
+
+            # v1alpha3 carries both bounded service values and the one PKI
+            # store password. It must remain eligible for the existing PKI
+            # materialization path after attachment.
+            self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
+            self.assertEqual("pki", execution_secret_lease.pki_store_password_for_run(root, "installer-123"))
+            self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
+
             invalid = [
                 runtime_secret_payload({}),
                 runtime_secret_payload({"invalid_ref": "value"}),

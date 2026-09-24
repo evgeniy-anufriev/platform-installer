@@ -591,6 +591,124 @@ func TestServiceInstall05KafkaLifecycle(t *testing.T) {
 	}
 }
 
+// TestServiceInstall06PostgreSQLLifecycle provisions an isolated Installer-managed
+// project with one three-host pg_auto_failover deployment. The four PostgreSQL
+// passwords stay exclusively in the runtime credential lease: the project
+// stores only their closed runtime references.
+func TestServiceInstall06PostgreSQLLifecycle(t *testing.T) {
+	if os.Getenv("PLATFORM_SERVICE_INSTALL_06_E2E") != "1" {
+		t.Skip("set PLATFORM_SERVICE_INSTALL_06_E2E=1 for SERVICE-INSTALL-06 PostgreSQL acceptance")
+	}
+	address, user, identity, knownHosts := os.Getenv("PLATFORM_EXEC01A_ADDRESS"), os.Getenv("PLATFORM_EXEC01A_USER"), os.Getenv("PLATFORM_EXEC01A_IDENTITY"), os.Getenv("PLATFORM_EXEC01A_KNOWN_HOSTS")
+	targetUser, targetPassword, targetSudoPassword, pkiStorePassword := os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_USER"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_SUDO_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_PKI_STORE_PASSWORD")
+	adminPassword, monitorPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_ADMIN_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_MONITOR_PASSWORD")
+	replicationPassword, healthcheckPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_REPLICATION_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_HEALTHCHECK_PASSWORD")
+	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiStorePassword == "" || adminPassword == "" || monitorPassword == "" || replicationPassword == "" || healthcheckPassword == "" {
+		t.Fatal("SERVICE_INSTALL_06_E2E_PREREQUISITE_MISSING")
+	}
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
+	if cacheRoot == "" {
+		cacheRoot = filepath.Join(repo, "bundle")
+	}
+	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, projectIdentity := configureIsolatedPostgreSQLProjectThroughGo(t, repo, bundle)
+	node := Node{ID: "service-install-06-node1", Address: address, User: user, Port: 22, CredentialRef: "runtime:ssh", HostKey: HostKeyPolicy{State: "TRUSTED", KnownHosts: knownHosts, Fingerprint: "operator-approved"}}
+	transport := OpenSSHTransport{Identity: e2eIdentity{path: identity}}
+	service := NewExecutionService(transport, transport)
+	service.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if !request.RequiresPKIStorePassword || len(request.RuntimeSecretRequirements) != 4 {
+			return os.ErrInvalid
+		}
+		return use(TargetCredentialLeasePayload{Username: targetUser, Password: targetPassword, SudoPassword: targetSudoPassword, PKIStorePassword: pkiStorePassword, RuntimeSecretValues: map[string]string{
+			"postgresql-admin-password":       adminPassword,
+			"postgresql-monitor-password":     monitorPassword,
+			"postgresql-replication-password": replicationPassword,
+			"postgresql-healthcheck-password": healthcheckPassword,
+		}})
+	})
+	release := map[string]any{"bundleDigest": bundle.Digest, "coreVersion": bundle.Manifest.CoreVersion, "catalogDigest": bundle.Manifest.CatalogDigest, "planningProtocol": "v1alpha1"}
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Minute)
+	defer cancel()
+	for cycle := 1; cycle <= 2; cycle++ {
+		started := time.Now()
+		record, err := service.CreatePlan(ctx, node, project, release)
+		if err != nil {
+			t.Fatalf("cycle=%d plan: %v", cycle, err)
+		}
+		if record.Plan.Status != "EXECUTABLE" || record.Plan.ProjectIdentity != projectIdentity {
+			t.Fatalf("cycle=%d unexpected plan: %#v", cycle, record.Plan)
+		}
+		if err := service.ApprovePlan(record.ID, record.Plan.Acknowledgements); err != nil {
+			t.Fatalf("cycle=%d approve: %v", cycle, err)
+		}
+		run, err := service.Start(ctx, node, record.ID)
+		if err != nil {
+			t.Fatalf("cycle=%d start: %v", cycle, err)
+		}
+		observer, err := NewRunObserver(transport, filepath.Join(repo, ".runtime"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		subscription, err := observer.Observe(ctx, node, run.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for subscription.Events != nil || subscription.Errors != nil {
+			select {
+			case _, ok := <-subscription.Events:
+				if !ok {
+					subscription.Events = nil
+				}
+			case observeErr, ok := <-subscription.Errors:
+				if !ok {
+					subscription.Errors = nil
+				} else {
+					t.Fatalf("cycle=%d observer: %v", cycle, observeErr)
+				}
+			case <-ctx.Done():
+				t.Fatalf("cycle=%d timeout", cycle)
+			}
+		}
+		current, _, err := service.Sync(ctx, node, run.RunID)
+		if err != nil || current.State != "SUCCEEDED" {
+			t.Fatalf("cycle=%d terminal=%#v err=%v", cycle, current, err)
+		}
+		events, err := observer.Replay(ctx, node, run.RunID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		apply, verify, changed := false, false, 0
+		for _, event := range events {
+			apply = apply || (event.EventType == "ACTION_COMPLETED" && event.Status == "SUCCESS" && event.ActionID == "apply:service-install-06-postgresql")
+			verify = verify || (event.EventType == "ACTION_COMPLETED" && event.Status == "SUCCESS" && event.ActionID == "verify:service-install-06-postgresql")
+			if event.EventType == "TASK_COMPLETED" && event.Status == "CHANGED" {
+				changed++
+			}
+		}
+		if !apply || !verify {
+			t.Fatalf("cycle=%d missing PostgreSQL apply/verify success: apply=%t verify=%t", cycle, apply, verify)
+		}
+		if cycle == 2 && changed != 0 {
+			t.Fatalf("repeat apply changed=%d", changed)
+		}
+		mirror, err := EventMirrorPath(filepath.Join(repo, ".runtime"), run.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info, err := os.Stat(mirror); err != nil || info.Size() == 0 {
+			t.Fatalf("cycle=%d mirror=%q stat=%v", cycle, mirror, err)
+		}
+		t.Logf("cycle=%d runId=%s terminal=%s duration=%s events=%d changed=%d mirror=%s", cycle, run.RunID, current.State, time.Since(started).Round(time.Second), len(events), changed, strings.ReplaceAll(mirror, "\\", "/"))
+	}
+}
+
 // TestServiceInstall01PrepareCumulativeProject materializes only the first
 // service's canonical Core/Ansible inputs. It deliberately has no Execution
 // Node, credential, plan or target-contact path, so Wails can reopen the
@@ -632,6 +750,101 @@ func cumulativeProjectRoot(t *testing.T, repository string) string {
 		t.Fatal("SERVICE_INSTALL_CUMULATIVE_PROJECT_INVALID")
 	}
 	return abs
+}
+
+func isolatedPostgreSQLProjectRoot(t *testing.T, repository string, bundle executionbundle.Verified) string {
+	t.Helper()
+	root := os.Getenv("PLATFORM_SERVICE_INSTALL_06_PROJECT")
+	if root == "" {
+		root = filepath.Join(repository, ".runtime", "qa", "service-install-06-postgresql-project")
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(abs); os.IsNotExist(err) {
+		lifecycle := projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle.Root})
+		if _, err := lifecycle.CreateProject(t.Context(), projectlifecycle.CreateProjectRequest{
+			ProjectRoot: abs, DisplayName: "SERVICE-INSTALL-06 PostgreSQL", CompatibilitySourceID: projectlifecycle.DefaultCompatibilitySourceID,
+		}); err != nil {
+			t.Fatalf("create isolated PostgreSQL project: %v", err)
+		}
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	return abs
+}
+
+func configureIsolatedPostgreSQLProjectThroughGo(t *testing.T, repository string, bundle executionbundle.Verified) (string, string) {
+	t.Helper()
+	root := isolatedPostgreSQLProjectRoot(t, repository, bundle)
+	config, err := appconfig.Load(filepath.Join(repository, "config", "application.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTypes := make([]string, len(config.ServerTypes))
+	for index, serverType := range config.ServerTypes {
+		serverTypes[index] = serverType.ID
+	}
+	lifecycle := projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle.Root})
+	opened, err := lifecycle.OpenProject(t.Context(), root)
+	if err != nil || opened.Project == nil || opened.Catalog == nil || opened.Catalog.Status != "READY" {
+		t.Fatalf("open isolated PostgreSQL project=%#v err=%v", opened, err)
+	}
+	if opened.Classification == projectlifecycle.ClassificationManaged {
+		view, viewErr := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+		if viewErr == nil && len(view.Servers) == 3 && len(view.Deployments) == 1 && view.Deployments["service-install-06-postgresql"].Mode == "pg_auto_failover" {
+			return opened.Root, opened.Project.ID
+		}
+		t.Fatalf("existing isolated PostgreSQL state=%#v err=%v", view, viewErr)
+	}
+	if opened.Classification != projectlifecycle.ClassificationEmpty {
+		t.Fatalf("unexpected isolated PostgreSQL classification=%s", opened.Classification)
+	}
+	revision, err := installer.ProjectRevision(opened.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := installer.NewBackend(nil, installer.WithServerTypes(serverTypes), installer.WithProjectCatalogResolver(func(ctx context.Context, projectRoot string) (*projectlifecycle.ProjectCatalogView, error) {
+		return lifecycle.ResolveProjectCatalog(ctx, projectRoot)
+	}))
+	sessions := installer.NewEditSessionStore()
+	session, err := sessions.Start(opened.Project.ID, opened.Root, opened.Classification, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secretRef := func(requirement string) map[string]any {
+		return map[string]any{"passwordSecretRef": "runtime:" + requirement}
+	}
+	commands := []installer.EditCommand{
+		{Operation: "CreateServer", HostID: "node1", ServerType: "infra", DesiredHostname: "node1", Address: "192.168.56.101"}, {Operation: "CreateServer", HostID: "node2", ServerType: "infra", DesiredHostname: "node2", Address: "192.168.56.102"}, {Operation: "CreateServer", HostID: "node3", ServerType: "infra", DesiredHostname: "node3", Address: "192.168.56.103"},
+		{Operation: "CreateCertificateAuthority", EntityID: "service-install-ca", Entity: map[string]any{"mode": "MANAGED", "commonName": "Service Install QA CA"}},
+		{Operation: "CreateCertificateProfile", EntityID: "service-install-server", Entity: map[string]any{"authorityRef": "service-install-ca", "keyAlgorithm": "RSA", "keySize": 2048, "usages": []any{"serverAuth", "clientAuth"}, "sanPolicy": map[string]any{"includeHostDns": true, "includeHostIp": true}}},
+		{Operation: "CreateTLSProfile", EntityID: "service-install-postgresql-tls", Entity: map[string]any{"certificateProfileRef": "service-install-server", "scope": "DEPLOYMENT", "storePasswordSecretRef": "runtime:pki-store-password"}},
+		{Operation: "CreateCertificateScope", EntityID: "service-install-postgresql-scope", Entity: map[string]any{"displayName": "Service Install PostgreSQL", "profile": "service-install-server", "scope": "DEPLOYMENT", "sources": map[string]any{"hosts": []any{"node1", "node2", "node3"}}}},
+		{Operation: "CreateServiceDeployment", DeploymentID: "service-install-06-postgresql", ServiceType: "postgresql", Mode: "pg_auto_failover"},
+		{Operation: "ReconcileDeploymentPlacement", DeploymentID: "service-install-06-postgresql", Members: []installer.PlacementMember{{MemberID: "postgres-monitor", HostID: "node1", Roles: []string{"monitor"}}, {MemberID: "postgres-1", HostID: "node2", Roles: []string{"database"}}, {MemberID: "postgres-2", HostID: "node3", Roles: []string{"database"}}}},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "tlsProfile", Value: "service-install-postgresql-tls"},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "adminSuperuser", Value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password"}},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "monitorCredential", Value: secretRef("postgresql-monitor-password")}, {Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "replicationCredential", Value: secretRef("postgresql-replication-password")}, {Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "healthcheckCredential", Value: secretRef("postgresql-healthcheck-password")},
+	}
+	for _, command := range commands {
+		if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
+			t.Fatalf("append %s: %v", command.Operation, err)
+		}
+	}
+	plan, err := sessions.ReviewStructural(t.Context(), backend, session.SessionID)
+	if err != nil || plan == nil || !plan.SaveAllowed {
+		t.Fatalf("review=%#v err=%v", plan, err)
+	}
+	if _, err := sessions.BeginCommit(session.SessionID, plan.PlanID); err != nil {
+		t.Fatal(err)
+	}
+	committed := backend.CommitStructuralSave(t.Context(), plan.PlanID)
+	if committed.Status != "COMMITTED" || !committed.Changed || committed.Managed == nil || !sessions.FinishCommit(session.SessionID, plan.PlanID, true) {
+		t.Fatalf("commit=%#v", committed)
+	}
+	return opened.Root, opened.Project.ID
 }
 
 // configureKeepalivedProjectThroughGo continues the empty managed project
@@ -1047,6 +1260,94 @@ func configureKafkaProjectThroughGo(t *testing.T, repository string, bundle exec
 	}
 	deployment, exists := reopened.Deployments["service-install-05-kafka"]
 	if !exists || len(reopened.Servers) != 3 || len(reopened.Deployments) != 5 || len(reopened.MemberPlacements) != 3 || deployment.ServiceType != "kafka" || deployment.Mode != "kraft-distributed" || len(deployment.Configuration) != 2 {
+		t.Fatalf("reopen=%#v", reopened)
+	}
+	return opened.Root, opened.Project.ID
+}
+
+// configurePostgreSQLProjectThroughGo appends the typed pg_auto_failover
+// topology to the saved cumulative project. It deliberately uses the same
+// structural-review and guarded-local-save path as the application.
+func configurePostgreSQLProjectThroughGo(t *testing.T, repository string, bundle executionbundle.Verified, root string) (string, string) {
+	t.Helper()
+	config, err := appconfig.Load(filepath.Join(repository, "config", "application.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTypes := make([]string, len(config.ServerTypes))
+	for index, serverType := range config.ServerTypes {
+		serverTypes[index] = serverType.ID
+	}
+	lifecycle := projectlifecycle.NewService(map[string]string{projectlifecycle.DefaultCompatibilitySourceID: bundle.Root})
+	opened, err := lifecycle.OpenProject(t.Context(), root)
+	if err != nil || opened.Project == nil || opened.Catalog == nil || opened.Catalog.Status != "READY" || opened.Classification != projectlifecycle.ClassificationManaged {
+		t.Fatalf("open cumulative project=%#v err=%v", opened, err)
+	}
+	view, err := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deployment, exists := view.Deployments["service-install-06-postgresql"]; exists {
+		if len(view.Servers) != 3 || len(view.Deployments) != 6 || len(view.MemberPlacements) != 6 || deployment.ServiceType != "postgresql" || deployment.Mode != "pg_auto_failover" || len(deployment.Configuration) != 5 {
+			t.Fatalf("existing cumulative PostgreSQL state=%#v", view)
+		}
+		return opened.Root, opened.Project.ID
+	}
+	if len(view.Servers) != 3 || len(view.Deployments) != 5 || view.Deployments["service-install-05-kafka"].ServiceType != "kafka" || view.PKI.TLSProfiles["service-install-haproxy-tls"] == nil {
+		t.Fatalf("unexpected cumulative base=%#v", view)
+	}
+	revision, err := installer.ProjectRevision(opened.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := installer.NewBackend(nil,
+		installer.WithServerTypes(serverTypes),
+		installer.WithProjectCatalogResolver(func(ctx context.Context, projectRoot string) (*projectlifecycle.ProjectCatalogView, error) {
+			return lifecycle.ResolveProjectCatalog(ctx, projectRoot)
+		}),
+	)
+	sessions := installer.NewEditSessionStore()
+	session, err := sessions.Start(opened.Project.ID, opened.Root, opened.Classification, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secretRef := func(requirement string) map[string]any {
+		return map[string]any{"passwordSecretRef": "runtime:" + requirement}
+	}
+	commands := []installer.EditCommand{
+		{Operation: "CreateServiceDeployment", DeploymentID: "service-install-06-postgresql", ServiceType: "postgresql", Mode: "pg_auto_failover"},
+		{Operation: "ReconcileDeploymentPlacement", DeploymentID: "service-install-06-postgresql", Members: []installer.PlacementMember{{MemberID: "postgres-monitor", HostID: "node1", Roles: []string{"monitor"}}, {MemberID: "postgres-1", HostID: "node2", Roles: []string{"database"}}, {MemberID: "postgres-2", HostID: "node3", Roles: []string{"database"}}}},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "tlsProfile", Value: "service-install-haproxy-tls"},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "adminSuperuser", Value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password"}},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "monitorCredential", Value: secretRef("postgresql-monitor-password")},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "replicationCredential", Value: secretRef("postgresql-replication-password")},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "healthcheckCredential", Value: secretRef("postgresql-healthcheck-password")},
+	}
+	for _, command := range commands {
+		if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
+			t.Fatalf("append %s: %v", command.Operation, err)
+		}
+	}
+	plan, err := sessions.ReviewStructural(t.Context(), backend, session.SessionID)
+	if err != nil || plan == nil || !plan.SaveAllowed {
+		if plan != nil && plan.Finding != nil {
+			t.Fatalf("review finding=%s field=%s message=%s err=%v", plan.Finding.Code, plan.Finding.Field, plan.Finding.SafeMessage, err)
+		}
+		t.Fatalf("review=%#v err=%v", plan, err)
+	}
+	if _, err := sessions.BeginCommit(session.SessionID, plan.PlanID); err != nil {
+		t.Fatal(err)
+	}
+	committed := backend.CommitStructuralSave(t.Context(), plan.PlanID)
+	if committed.Status != "COMMITTED" || !committed.Changed || committed.Managed == nil || !sessions.FinishCommit(session.SessionID, plan.PlanID, true) {
+		t.Fatalf("commit=%#v", committed)
+	}
+	reopened, err := installer.ReadManagedProjectViewWithCatalog(opened.Root, opened.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployment, exists := reopened.Deployments["service-install-06-postgresql"]
+	if !exists || len(reopened.Servers) != 3 || len(reopened.Deployments) != 6 || len(reopened.MemberPlacements) != 6 || deployment.ServiceType != "postgresql" || deployment.Mode != "pg_auto_failover" || len(deployment.Configuration) != 5 {
 		t.Fatalf("reopen=%#v", reopened)
 	}
 	return opened.Root, opened.Project.ID

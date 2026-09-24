@@ -226,6 +226,7 @@
           "pattern": "^[a-z][a-z0-9_]*_$"
         }
       },
+      "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
       "additionalProperties": false
     },
     "artifactRequirement": {

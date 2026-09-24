@@ -26,5 +26,6 @@
         runtime_release: "{{ platform_execution_runtime_release }}"
         bundle_artifact_sources: "{{ platform_execution_bundle_artifact_sources | default([]) }}"
         pki_materialization: "{{ platform_plan_snapshot.pki_materialization | default({}) }}"
+        execution_configuration: "{{ platform_plan_snapshot.execution_configuration | default({}) }}"
       changed_when: false
       become: false

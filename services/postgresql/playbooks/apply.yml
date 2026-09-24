@@ -8,6 +8,10 @@
   serial: 1
   become: true
   gather_facts: true
+  pre_tasks:
+    - name: Apply trusted runtime PostgreSQL configuration
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
   roles:
     - role: platform.postgresql.postgresql
       platform_postgresql_verify_only: false

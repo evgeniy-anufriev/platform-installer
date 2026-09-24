@@ -1,7 +1,9 @@
 # SERVICE-INSTALL — последовательная приёмка установки
 
 Статус: SERVICE-INSTALL-01 DONE; SERVICE-INSTALL-02 DONE; SERVICE-INSTALL-03 DONE;
-SERVICE-INSTALL-04 DONE. SERVICE-INSTALL-05 NEXT. Исторический UI-02E
+SERVICE-INSTALL-04 DONE; SERVICE-INSTALL-05 DONE; SERVICE-INSTALL-06 DONE.
+SERVICE-INSTALL-07 Redis standalone и Sentinel HA NEXT; SERVICE-INSTALL-08 — общий план для
+семи сервисов. Исторический UI-02E
 тест Kafka (три экземпляра на одном target) остаётся завершённым и не заменяет
 SERVICE-INSTALL-05 (три target).
 
@@ -17,8 +19,8 @@ service через typed EditSession → Review → local Save и доказыв
 создавать новый project для отдельного сервиса.
 
 Если root уже существует перед первым milestone, создание останавливается:
-его замена требует отдельной scoped cleanup-проверки. После SERVICE-INSTALL-06
-SERVICE-INSTALL-07 строит один fresh DeploymentPlan именно из накопленного
+его замена требует отдельной scoped cleanup-проверки. После SERVICE-INSTALL-07
+SERVICE-INSTALL-08 строит один fresh DeploymentPlan именно из накопленного
 project, а не из повторно собранного аналога. Runtime-only project и рабочие
 артефакты очищаются только после финальной фиксации evidence и безопасного
 scoped teardown.
@@ -217,11 +219,40 @@ repeat `changed=0`. Проверить отсутствие регрессии �
 сетевых сервисов и Kafka. Старые database directories удалять только после
 точной проверки deployment ownership и отсутствия нужных данных.
 
-## SERVICE-INSTALL-07 — все сервисы из одного плана
+Приёмка завершена 2026-09-24: monitor node1 (`192.168.56.101`), database
+members node2 (`192.168.56.102`) и node3 (`192.168.56.103`). Первый lifecycle
+`installer-45943379628ebee4a28716d85b571916` завершился `SUCCEEDED` за 17m45s
+с 65 изменениями; repeat `installer-4fcc0cd5afc8689509aea2e2a49935e6`
+завершился `SUCCEEDED` за 17m9s с `changed=0`. В обоих циклах PKI apply,
+PostgreSQL apply и verify прошли успешно.
 
-После PASS milestones 01–06 подготовить один изолированный canonical project,
-содержащий все шесть services: Keepalived, BIND, dns-client, HAProxy, Kafka
-на трёх hosts и PostgreSQL `pg_auto_failover`. Зафиксировать placement,
+## SERVICE-INSTALL-07 — Redis и Redis Sentinel с TLS
+
+Service package поддерживает два режима. `redis/standalone`: один Redis member
+на одном host, TLS-only client port, без Sentinel. `redis/sentinel-ha`: три
+парных members (Redis и Sentinel) на одном host по умолчанию, с раздельными
+портами, units и persistent state; размещение на трёх hosts тоже обязательно.
+TLS-only транспорт
+для Redis, репликации, Sentinel→Redis и Sentinel↔Sentinel. Реализовать оба
+режима через самостоятельный Ansible, Core, Go и Wails/React. По решению
+владельца один canonical project может содержать не более одного Redis
+deployment: standalone проверяется в отдельном изолированном QA project, а
+HA становится единственным Redis deployment накопительного проекта.
+Для каждого
+режима провести два свежих полных lifecycle run: `SUCCEEDED`, apply/verify
+PASS, repeat `changed=0`; для HA это требуется отдельно в 3/1 и 3/3.
+Однохостовый quorum не означает отказоустойчивости к потере сервера.
+HA дополнительно проверяет три Redis units, три
+Sentinel units, один active master, две replicas, Sentinel quorum и сохранение
+текущего master после failover. Старый Redis QA state очищать только после
+доказательства принадлежности конкретному deployment.
+Архитектура: [SERVICE-INSTALL-07](service-install-07-redis-sentinel-architecture.md).
+
+## SERVICE-INSTALL-08 — все семь сервисов из одного плана
+
+После PASS milestones 01–07 подготовить один canonical project,
+содержащий все семь services: Keepalived, BIND, dns-client, HAProxy, Kafka,
+PostgreSQL `pg_auto_failover` и Redis/Sentinel. Зафиксировать placement,
 provider/consumer links, VIP, endpoint groups, PKI scopes, secret inputs и
 отсутствие конфликтов ресурсов. До запуска удалить только прежнее состояние
 этого интеграционного QA проекта, если оно есть и безопасно атрибутировано.

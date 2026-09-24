@@ -273,7 +273,75 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
     return public, private, findings
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None):
+def _execution_role_variables(deployment_id, definition, prefix, execution_configuration, targets,
+                              resolved_deployment=None, hosts=None, member_list_variable=None):
+    """Project Core-resolved settings into one private host-scoped operation map."""
+    services = execution_configuration.get("services", {}) if isinstance(execution_configuration, dict) else {}
+    service = services.get(deployment_id) if isinstance(services, dict) else None
+    if not isinstance(service, dict):
+        return None
+    settings = ((definition.get("configuration") or {}).get("settings") or {}) if isinstance(definition, dict) else {}
+    if not isinstance(settings, dict) or not isinstance(service.get("mode"), str):
+        raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+    deployment_values = service.get("configuration", {})
+    members = service.get("members", {})
+    if not isinstance(deployment_values, dict) or not isinstance(members, dict):
+        raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+
+    def role_values(values):
+        if not isinstance(values, dict):
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        result = {prefix + "mode": service["mode"]}
+        for logical, resolved in values.items():
+            entry = settings.get(logical)
+            role_variable = entry.get("roleVariable") if isinstance(entry, dict) else None
+            if not isinstance(role_variable, str) or not role_variable.startswith(prefix):
+                raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+            if not isinstance(resolved, dict) or resolved.get("state") != "RESOLVED" or "value" not in resolved:
+                raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+            result[role_variable] = copy.deepcopy(resolved["value"])
+        return result
+
+    if not isinstance(targets, list) or not targets or any(not isinstance(host, str) or not host for host in targets):
+        raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+    by_host = {host: role_values(deployment_values) for host in sorted(set(targets))}
+    for member_id, member in sorted(members.items()):
+        context = member.get("variableContext", {}) if isinstance(member, dict) else {}
+        host_id = context.get("hostId") if isinstance(context, dict) else None
+        values = member.get("configuration") if isinstance(member, dict) else None
+        if not isinstance(member_id, str) or not isinstance(host_id, str) or not host_id:
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        variables = role_values(values)
+        if host_id not in by_host:
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        if by_host[host_id] != role_values(deployment_values) and by_host[host_id] != variables:
+            raise ValueError("EXECUTION_CONFIGURATION_HOST_CONFLICT")
+        by_host[host_id] = variables
+    if member_list_variable is not None:
+        if (not isinstance(member_list_variable, str) or not member_list_variable.startswith(prefix) or
+                not isinstance(resolved_deployment, dict) or not isinstance(hosts, dict)):
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        resolved_members = resolved_deployment.get("members")
+        if not isinstance(resolved_members, dict) or not resolved_members:
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        instances = []
+        for member_id, member in sorted(resolved_members.items()):
+            host_id = member.get("host") if isinstance(member, dict) else None
+            roles = member.get("roles") if isinstance(member, dict) else None
+            host = hosts.get(host_id) if isinstance(host_id, str) else None
+            address = host.get("ansibleHost") if isinstance(host, dict) else None
+            if (not isinstance(member_id, str) or not member_id or not isinstance(host_id, str) or not host_id or
+                    not isinstance(address, str) or not address or not isinstance(roles, list) or
+                    not roles or any(not isinstance(role, str) or not role for role in roles)):
+                raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+            instances.append({"id": member_id, "host": host_id, "hostname": host_id,
+                              "address": address, "roles": sorted(roles)})
+        for values in by_host.values():
+            values[member_list_variable] = copy.deepcopy(instances)
+    return {host_id: by_host[host_id] for host_id in sorted(by_host)}
+
+
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
@@ -360,11 +428,22 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                 deployment = deployments.get(action.get("serviceDeployment"), {})
                 definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) else {}
                 entrypoint = "apply" if action["type"] == "SERVICE_APPLY" else "verify"
-                prefix = (((definition.get("roleEntrypoints") or {}).get(entrypoint) or {}).get("variablesPrefix") if isinstance(definition, dict) else None)
+                role_entrypoint = ((definition.get("roleEntrypoints") or {}).get(entrypoint) or {}) if isinstance(definition, dict) else {}
+                prefix = role_entrypoint.get("variablesPrefix") if isinstance(role_entrypoint, dict) else None
                 item = {"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments}
                 if action["type"] in ("SERVICE_APPLY", "SERVICE_VERIFY"):
                     if isinstance(prefix, str) and re.fullmatch(r"platform_[a-z0-9_]{1,96}_", prefix) is not None:
                         item["roleVariablesPrefix"] = prefix
+                        topology = snapshot.get("topology", {}) if isinstance(snapshot.get("topology"), dict) else {}
+                        resolved = topology.get("resolved", {}) if isinstance(topology.get("resolved"), dict) else {}
+                        resolved_deployments = resolved.get("serviceDeployments", {}) if isinstance(resolved.get("serviceDeployments"), dict) else {}
+                        variables = _execution_role_variables(
+                            action.get("serviceDeployment"), definition, prefix, execution_configuration,
+                            action.get("targets"), resolved_deployments.get(action.get("serviceDeployment")),
+                            snapshot.get("hosts"), role_entrypoint.get("x-memberListVariable"),
+                        )
+                        if variables is not None:
+                            item["roleVariablesByHost"] = variables
                 manifest_operations.append(item)
         # Materialization plans are Core-derived, private execution inputs.  A
         # controller starts each approved Ansible operation in a fresh process,

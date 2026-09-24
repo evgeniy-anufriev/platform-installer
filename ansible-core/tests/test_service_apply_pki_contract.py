@@ -88,6 +88,17 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             self.assertNotIn("platform_pki_service_types:", playbook)
             self.assertLess(playbook.index(pki_import), playbook.index("roles:"))
 
+    def test_runtime_role_variable_guard_projects_only_the_private_host_map(self):
+        path = os.path.join(
+            ROOT,
+            "ansible-core/collections/ansible_collections/platform/core/roles/runtime_role_variables/tasks/main.yml",
+        )
+        with open(path, encoding="utf-8") as handle:
+            tasks = handle.read()
+        self.assertIn("platform_execution_role_variables_by_host[inventory_hostname] is mapping", tasks)
+        self.assertIn("ansible.builtin.set_fact", tasks)
+        self.assertIn("| dict2items", tasks)
+
     def test_kafka_verify_reloads_controller_owned_generated_state(self):
         verify = os.path.join(ROOT, "services/kafka/playbooks/verify.yml")
         loader = os.path.join(ROOT, "services/kafka/playbooks/load_generated_state.yml")
@@ -100,6 +111,28 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("platform_generated_state_path", loader_tasks)
         self.assertIn("KAFKA_GENERATED_STATE_REQUIRED", loader_tasks)
         self.assertIn("_platform_kafka_generated_state_document.platform_generated_state", loader_tasks)
+
+    def test_pg_auto_failover_uses_routable_member_addresses_for_cluster_identity(self):
+        lifecycle = os.path.join(
+            ROOT,
+            "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/pg_auto_failover.yml",
+        )
+        main = os.path.join(
+            ROOT,
+            "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml",
+        )
+        with open(lifecycle, encoding="utf-8") as handle:
+            lifecycle_tasks = handle.read()
+        with open(main, encoding="utf-8") as handle:
+            main_tasks = handle.read()
+
+        self.assertIn("_platform_postgresql_monitor.address", lifecycle_tasks)
+        self.assertIn("_platform_postgresql_member.address", lifecycle_tasks)
+        self.assertIn("- --hostname\n      - \"{{ _platform_postgresql_member.address }}\"", lifecycle_tasks)
+        self.assertNotIn("_platform_postgresql_monitor.hostname", lifecycle_tasks)
+        self.assertNotIn("_platform_postgresql_member.hostname", lifecycle_tasks)
+        self.assertIn("_platform_postgresql_monitor.address", main_tasks)
+        self.assertIn("_platform_postgresql_member.address", main_tasks)
 
 
 if __name__ == "__main__":

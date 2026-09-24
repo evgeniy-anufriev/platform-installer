@@ -107,15 +107,35 @@ the second full cumulative plan recorded `changed=0`, and `haproxy.service`
 is active on node1, node2 and node3. SERVICE-INSTALL-05 Kafka is DONE: the
 canonical three-member deployment was accepted on three distinct target hosts;
 the historical one-target QA deployment is not current deployment evidence.
-SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover is NEXT, then the final one-plan
-acceptance installs all tested
-services from one shared project and one approved plan, followed by verify
-and a fresh repeat plan proving `changed=0`. Deployment-scoped cleanup and
-before/after isolation checks must preserve other QA deployments. Exact target
-addresses and resource ownership must be established before execution.
+SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover is DONE (2026-09-24): the
+isolated three-host Go lifecycle accepted a monitor on node1 and database
+members on node2/node3. First run
+`installer-45943379628ebee4a28716d85b571916` reached `SUCCEEDED` in 17m45s
+with 65 changes; repeat run `installer-4fcc0cd5afc8689509aea2e2a49935e6`
+reached `SUCCEEDED` in 17m9s with `changed=0`; both PostgreSQL verify actions
+passed. By owner decision, SERVICE-INSTALL-07 is NEXT: implement and accept
+Redis `standalone` on one host and Redis/Sentinel HA with three paired members
+on one host by default, with distributed three-host placement also required;
+both use mandatory TLS through standalone Ansible, Core, Go
+and Wails/React. Its plan is
+`docs/service-install-07-redis-sentinel-architecture.md`; implementation has
+not started. Owner decision: at most one Redis deployment per project;
+standalone QA uses an isolated project and Sentinel HA is the sole Redis
+deployment in the cumulative project. Owner-approved Secrets UX for SI07:
+the service dialog accepts bounded runtime-only passwords from a trusted local
+catalog without Execution Node readiness; Core reconciles requirements and
+the mandatory fresh plan at the installation gate, before Start. Local format
+checks run immediately. The architecture-only Secrets review returned
+APPROVE_WITH_CHANGES with no blocking findings; its two wording/lifecycle
+clarifications are incorporated in the SI07 plan. Implementation remains
+NOT STARTED. SERVICE-INSTALL-08 is the subsequent one-plan acceptance for all
+seven services from one shared project and one approved plan, followed by
+verify and a fresh repeat plan proving `changed=0`. Deployment-scoped cleanup
+and before/after isolation checks must preserve other QA deployments. Exact
+target addresses and resource ownership must be established before execution.
 Ordered milestones: SERVICE-INSTALL-01 Keepalived, 02 BIND, 03 dns-client,
-04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover NEXT, 07 one
-plan for all six. Conditions: `docs/service-install-acceptance.md` and
+04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover DONE, 07
+Redis standalone plus Sentinel HA NEXT, 08 one plan for all seven. Conditions: `docs/service-install-acceptance.md` and
 `docs/roadmap.md`, "Post-UI-02 service installation acceptance".
 
 ## EXEC-OBS-01 completion (2026-09-05)

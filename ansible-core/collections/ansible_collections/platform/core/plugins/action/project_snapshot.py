@@ -317,7 +317,12 @@ class ActionModule(ActionBase):
             # This is controller-private Core plumbing for the immediately
             # following plan action.  `snapshot` remains the redacted public
             # read-only projection returned to Go/Wails.
-            return {"changed": False, "snapshot": snapshot, "pki_materialization": pki}
+            # This is private Core-to-plan plumbing.  The public snapshot
+            # remains redacted; the immediately following planner receives
+            # the resolved configuration needed to build a digest-bound
+            # execution manifest.
+            return {"changed": False, "snapshot": snapshot, "pki_materialization": pki,
+                    "execution_configuration": configuration}
         except (AnsibleError, KeyError, OSError, TypeError, ValueError):
             return {
                 "failed": True,

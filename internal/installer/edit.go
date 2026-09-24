@@ -313,7 +313,10 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "Certificate entity identifier is invalid", "command.entityId")
 		}
 	case "CreateServiceDeployment":
-		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (isEditCommandV2OrLater(command.APIVersion) && (!identifierPattern.MatchString(command.ServiceType) || !identifierPattern.MatchString(command.Mode))) {
+		// Deployment IDs remain Installer-owned short identifiers. Service and
+		// mode IDs, however, are catalog/desired-state identifiers and may use
+		// the published '_' and '.' separators (for example pg_auto_failover).
+		if !identifierPattern.MatchString(command.DeploymentID) || (command.APIVersion == EditCommandAPIVersion && command.Deployment == nil) || (isEditCommandV2OrLater(command.APIVersion) && (!validDesiredStateIdentifier(command.ServiceType) || !validDesiredStateIdentifier(command.Mode))) {
 			return blocked("INVALID_EDIT_COMMAND", "Create deployment requires an identifier and deployment object", "command")
 		}
 	case "DeleteServiceDeployment", "ClearServiceEndpointGroup", "ClearHAProxyIntegration":
@@ -377,7 +380,14 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 			return blocked("INVALID_EDIT_COMMAND", "Placement property edit requires host, deployment, and property identifiers", "command")
 		}
 	}
-	if err := safeValue(command.Value, command.Setting); err != nil {
+	// A trusted closed runtime-reference object is inspected by its own fields.
+	// Its setting ID can legitimately contain words such as "credential" and
+	// must not be mistaken for a plaintext credential field.
+	settingKey := command.Setting
+	if object, ok := command.Value.(map[string]any); ok && safeRuntimeSecretReferenceObject(object) {
+		settingKey = ""
+	}
+	if err := safeValue(command.Value, settingKey); err != nil {
 		return err
 	}
 	if err := safeValue(command.Value, command.Property); err != nil {
@@ -397,9 +407,36 @@ func configurationPrimitive(value any) bool {
 		return true
 	case float64:
 		return !math.IsNaN(typed) && !math.IsInf(typed, 0)
+	case map[string]any:
+		return safeRuntimeSecretReferenceObject(typed)
 	default:
 		return false
 	}
+}
+
+// safeRuntimeSecretReferenceObject is intentionally only an early admission
+// bound. Review still requires the exact trusted catalog descriptor before
+// this closed object can reach a candidate or writer.
+func safeRuntimeSecretReferenceObject(value map[string]any) bool {
+	if len(value) < 1 || len(value) > 2 {
+		return false
+	}
+	reference, referenceOK := value["passwordSecretRef"].(string)
+	if !referenceOK || !runtimeRefPattern.MatchString(reference) {
+		return false
+	}
+	if username, present := value["username"]; present {
+		text, ok := username.(string)
+		if !ok || !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`).MatchString(text) {
+			return false
+		}
+	}
+	for key := range value {
+		if key != "username" && key != "passwordSecretRef" {
+			return false
+		}
+	}
+	return true
 }
 
 func validEndpointGroup(value map[string]any) bool {

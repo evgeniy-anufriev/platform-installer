@@ -110,6 +110,31 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual({"degraded": True, "reason": "TASK_EVENT_LIMIT"}, marker)
             self.assertEqual(5, journal.status()["sequence"])
 
+    def test_task_capacity_retains_one_redacted_failed_task_in_critical_reserve(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            with mock.patch.object(execution_lifecycle, "MAX_EVENTS", 8), mock.patch.object(execution_lifecycle, "CRITICAL_EVENT_RESERVE", 4):
+                self.assertIsNotNone(journal.task_event("TASK_STARTED", "RUNNING", "task-1"))
+                self.assertIsNotNone(journal.task_event("TASK_COMPLETED", "SUCCESS", "task-1", host="node1"))
+                self.assertIsNotNone(journal.task_event("TASK_STARTED", "RUNNING", "task-2"))
+                # The next ordinary event is truncated at the task threshold.
+                self.assertIsNone(journal.task_event("TASK_COMPLETED", "SUCCESS", "task-2", host="node1"))
+                failed = journal.task_event("TASK_COMPLETED", "FAILED", "task-3", host="node2", name="unsafe rendered secret", no_log=True)
+                self.assertIsNotNone(failed)
+                self.assertEqual("FAILED", failed["status"])
+                self.assertEqual("task-3", failed["task"]["uuid"])
+                self.assertNotIn("name", failed["task"])
+                self.assertEqual(["task.name"], failed["redaction"]["fields"])
+                self.assertEqual("ANSIBLE_TASK_FAILED", failed["error"]["code"])
+                self.assertIsNone(journal.task_event("TASK_COMPLETED", "FAILED", "task-4", host="node3"))
+                self.assertTrue(Path(journal.task_failure_reported_path).exists())
+                journal.event("ACTION_COMPLETED", "FAILED", "done", actionId="apply:postgresql")
+                self.assertEqual("FAILED", journal.terminal("FAILED", "EXECUTION_OPERATION_FAILED", "failed")["state"])
+            events = journal.events()
+            self.assertEqual(7, journal.status()["sequence"])
+            self.assertEqual(1, len([event for event in events if event.get("error", {}).get("code") == "ANSIBLE_TASK_FAILED"]))
+            self.assert_events_match_contract(events)
+
     def test_corrupt_orphaned_terminal_uses_contract_valid_failed_event_status(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)

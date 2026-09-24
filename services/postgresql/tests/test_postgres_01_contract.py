@@ -105,6 +105,25 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("Probe replication credential over TLS on the writable data member", self.main)
         self.assertIn("platform_postgresql_replication_login.rc | default(1) != 0", self.main)
 
+    def test_tls_credential_probes_run_as_the_owner_of_the_private_pgpass_file(self):
+        task_names = (
+            "Probe data-to-monitor credential over TLS",
+            "Probe replication credential over TLS on the writable data member",
+            "Probe monitor healthcheck credential over TLS",
+        )
+        for task_name in task_names:
+            start = self.main.index(task_name)
+            end = self.main.find("\n- name:", start + len(task_name))
+            task = self.main[start:] if end == -1 else self.main[start:end]
+            self.assertIn('become_user: "{{ platform_postgresql_user }}"', task)
+
+    def test_monitor_tls_probe_uses_the_resolved_defaultable_monitor_port(self):
+        start = self.main.index("Probe data-to-monitor credential over TLS")
+        end = self.main.find("\n- name:", start + len("Probe data-to-monitor credential over TLS"))
+        task = self.main[start:] if end == -1 else self.main[start:end]
+        self.assertIn("{{ _platform_postgresql_monitor_port }}", task)
+        self.assertNotIn("{{ _platform_postgresql_monitor.port }}", task)
+
     def test_tls_material_is_reloaded_by_the_pg_autoctl_owned_postgres_process(self):
         self.assertIn("notify: Reload PostgreSQL TLS material", self.tls)
         self.assertIn("pg_ctl, reload, -D", self.handlers)

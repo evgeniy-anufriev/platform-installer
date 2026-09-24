@@ -20,7 +20,10 @@ EXECUTION_STATE_ROOT = "/var/lib/platform-installer/execution"
 RUN_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 TERMINAL = frozenset(("SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED", "CORRUPT_ORPHANED"))
 ACTIVE = frozenset(("PENDING", "STARTING", "RUNNING"))
-MAX_EVENTS = 2048
+# Detailed Ansible task events are intentionally bounded, but a complete
+# cumulative service plan legitimately produces several thousand events.
+# Keep the journal finite without truncating normal multi-service runs.
+MAX_EVENTS = 8192
 MAX_EVENT_PAGE = 512
 MAX_EVENT_PAGE_BYTES = 1024 * 1024
 MAX_EVENT_BYTES = 64 * 1024
@@ -165,6 +168,8 @@ class Journal(object):
     def task_observability_path(self): return os.path.join(self.directory, "task-observability.json")
     @property
     def task_observability_reported_path(self): return os.path.join(self.directory, ".task-observability.reported")
+    @property
+    def task_failure_reported_path(self): return os.path.join(self.directory, ".task-failure-after-truncation.reported")
 
     def lock(self):
         os.makedirs(self.directory, mode=0o700, exist_ok=True)
@@ -295,12 +300,19 @@ class Journal(object):
             if current.get("state") not in ACTIVE:
                 raise LifecycleError("TASK_EVENT_RUN_INACTIVE")
             sequence = max(int(current.get("sequence", 0)), self._last_complete_event_sequence())
-            if sequence >= MAX_EVENTS - CRITICAL_EVENT_RESERVE:
-                self._mark_task_observability_locked("TASK_EVENT_LIMIT")
-                return None
             if event_type not in TASK_EVENT_TYPES or status not in TASK_EVENT_STATUSES or not isinstance(task_uuid, str) or not task_uuid:
                 self._mark_task_observability_locked("TASK_EVENT_INVALID")
                 return None
+            truncated = sequence >= MAX_EVENTS - CRITICAL_EVENT_RESERVE
+            if truncated:
+                self._mark_task_observability_locked("TASK_EVENT_LIMIT")
+                # Ordinary task progress yields to action and terminal events.
+                # Preserve exactly one redacted failed-task identity, however:
+                # otherwise a saturated stream makes the only actionable failure
+                # diagnosis disappear.  The fixed private marker prevents an
+                # unbounded failure flood from consuming the critical reserve.
+                if event_type != "TASK_COMPLETED" or status != "FAILED" or sequence >= MAX_EVENTS or os.path.exists(self.task_failure_reported_path):
+                    return None
             task = {"uuid": _bounded_text(task_uuid, MAX_TASK_UUID)}
             safe_role = _bounded_text(role, MAX_TASK_ROLE)
             if safe_role:
@@ -323,7 +335,10 @@ class Journal(object):
                 event["elapsedMilliseconds"] = elapsed_milliseconds
             if status == "FAILED":
                 event["error"] = {"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed"}
-            return self._append_event_locked(current, event)
+            committed = self._append_event_locked(current, event)
+            if truncated:
+                _write(self.task_failure_reported_path, {"reported": True})
+            return committed
         except (OSError, ValueError, LifecycleError):
             try:
                 self._mark_task_observability_locked("TASK_EVENT_WRITE_FAILED")

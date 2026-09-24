@@ -147,6 +147,40 @@ func TestH1CatalogSettingProjectionRejectsIncompleteBoundsAndArbitraryPattern(t 
 	}
 }
 
+func TestRuntimeSecretReferenceObjectProjectionRequiresExactTrustedShape(t *testing.T) {
+	secretObject := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_postgresql_admin", Type: "object", Scopes: []string{"deployment"}, Validation: map[string]any{"required": []any{"username", "passwordSecretRef"}}, Schema: map[string]any{
+		"type": "object", "additionalProperties": false, "required": []any{"username", "passwordSecretRef"},
+		"properties": map[string]any{
+			"username":          map[string]any{"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
+			"passwordSecretRef": map[string]any{"type": "string", "minLength": 1},
+		},
+	}}
+	secretObject.UI.XRuntimeSecretRequirement = map[string]any{"requirementRef": "postgresql-admin-password", "purpose": "SERVICE_PASSWORD"}
+	projected := projectCatalogSetting("adminSuperuser", secretObject)
+	if projected.EditorShape != "RUNTIME_SECRET_REFERENCE_OBJECT" || projected.RuntimeSecretRequirementRef != "postgresql-admin-password" || !projected.RuntimeSecretUsernameRequired {
+		t.Fatalf("descriptor=%#v", projected)
+	}
+	for name, mutate := range map[string]func(*catalogSetting){
+		"unknown object property": func(value *catalogSetting) {
+			value.Schema["properties"].(map[string]any)["other"] = map[string]any{"type": "string"}
+		},
+		"missing trusted metadata": func(value *catalogSetting) { value.UI.XRuntimeSecretRequirement = nil },
+		"wrong purpose":            func(value *catalogSetting) { value.UI.XRuntimeSecretRequirement["purpose"] = "SECRET_REF" },
+		"open object":              func(value *catalogSetting) { value.Schema["additionalProperties"] = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := secretObject
+			candidate.Validation = map[string]any{"required": []any{"username", "passwordSecretRef"}}
+			candidate.Schema = map[string]any{"type": secretObject.Schema["type"], "additionalProperties": secretObject.Schema["additionalProperties"], "required": []any{"username", "passwordSecretRef"}, "properties": map[string]any{"username": map[string]any{"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"}, "passwordSecretRef": map[string]any{"type": "string", "minLength": 1}}}
+			candidate.UI.XRuntimeSecretRequirement = map[string]any{"requirementRef": "postgresql-admin-password", "purpose": "SERVICE_PASSWORD"}
+			mutate(&candidate)
+			if got := projectCatalogSetting("adminSuperuser", candidate); got.EditorShape != "UNSUPPORTED" {
+				t.Fatalf("descriptor=%#v", got)
+			}
+		})
+	}
+}
+
 func TestDNSDomainEditorShapeRequiresExactClosedMetadata(t *testing.T) {
 	exact := catalogSetting{Kind: "MANAGED", RoleVariable: "platform_bind_zone", Type: "string", Scopes: []string{"deployment"}, Validation: map[string]any{"minLength": 4, "maxLength": 253, "pattern": dnsDomainValidationPattern}}
 	projected := projectCatalogSetting("zone", exact)

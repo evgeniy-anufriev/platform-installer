@@ -163,7 +163,7 @@ def _payload(value):
 
 
 def pki_store_password(state_root, lease_id, run_id):
-    """Return one attached v2 secret to the controller only, never a path."""
+    """Return one attached PKI-bearing v2/v3 secret, never a path."""
     path = payload_path(state_root, lease_id, run_id)
     try:
         with open(path, "rb") as stream:
@@ -172,7 +172,7 @@ def pki_store_password(state_root, lease_id, run_id):
     except (OSError, UnicodeError, ValueError):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     _payload(value)
-    if value.get("apiVersion") != PKI_PAYLOAD_VERSION or value.get("pkiStorePassword") is None:
+    if value.get("apiVersion") not in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("pkiStorePassword") is None:
         raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
     return value["pkiStorePassword"]
 
@@ -211,6 +211,39 @@ def target_username_for_run(state_root, run_id):
     return value["username"]
 
 
+def ansible_password_credentials_for_run(state_root, run_id):
+    """Return only Ansible's two accepted password fields for an attached run.
+
+    This is deliberately narrower than the lease payload: it never returns a
+    username, private key, PKI password, or service-secret values.  A
+    private-key lease continues through the established node identity path;
+    this helper exists solely for the closed password transport consumed by
+    ``run_with_runtime_credentials.py``.
+    """
+    attached_path = os.path.join(_root(state_root), "attached", run_id + ".json")
+    if not os.path.exists(attached_path):
+        return None
+    attached = _read(attached_path)
+    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
+    if not _safe_id(lease_id):
+        return None
+    path = payload_path(state_root, lease_id, run_id)
+    try:
+        with open(path, "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    password = value.get("password")
+    if password is None:
+        return None
+    result = {"ansible_password": password}
+    if value.get("sudoPassword") is not None:
+        result["ansible_become_password"] = value["sudoPassword"]
+    return result
+
+
 def runtime_secret_values_for_run(state_root, run_id):
     """Return attached v1alpha3 values only to the controller process."""
     attached = _read(os.path.join(_root(state_root), "attached", run_id + ".json"))
@@ -244,7 +277,7 @@ def validate_staged_pki_store_password(state_root, lease_id):
     except (OSError, UnicodeError, ValueError):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     _payload(value)
-    if value.get("apiVersion") != PKI_PAYLOAD_VERSION or value.get("pkiStorePassword") is None:
+    if value.get("apiVersion") not in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("pkiStorePassword") is None:
         raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
 
 

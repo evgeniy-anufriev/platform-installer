@@ -1,0 +1,17 @@
+---
+- name: Require Core-derived role variables for the current target
+  ansible.builtin.assert:
+    that:
+      - platform_execution_role_variables_by_host is mapping
+      - inventory_hostname in platform_execution_role_variables_by_host
+      - platform_execution_role_variables_by_host[inventory_hostname] is mapping
+    fail_msg: EXECUTION_ROLE_VARIABLES_INVALID
+  no_log: true
+
+- name: Apply Core-derived role variables for the current target
+  ansible.builtin.set_fact:
+    "{{ item.key }}": "{{ item.value }}"
+  loop: "{{ platform_execution_role_variables_by_host[inventory_hostname] | dict2items }}"
+  loop_control:
+    label: redacted
+  no_log: true
