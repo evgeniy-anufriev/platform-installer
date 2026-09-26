@@ -1,0 +1,110 @@
+---
+- name: Resolve the canonical project root for standalone bootstrap custody
+  ansible.builtin.set_fact:
+    _platform_vault_project_root: >-
+      {{ platform_project_root if (platform_project_root is defined and platform_project_root | string | length > 0)
+         else ((inventory_dir | dirname) if (inventory_dir is defined and inventory_dir | string | length > 0) else '') }}
+
+- name: Resolve the exact bootstrap output path
+  ansible.builtin.set_fact:
+    _platform_vault_bootstrap_output_dir: >-
+      {{ platform_vault_bootstrap_output_dir if (platform_vault_bootstrap_output_dir | string | length > 0)
+         else (_platform_vault_project_root ~ '/secrets/' ~ platform_vault_deployment_id) }}
+    _platform_vault_output_uses_project_secrets: "{{ platform_vault_bootstrap_output_dir | string | length == 0 }}"
+
+- name: Require an unambiguous absolute bootstrap output path
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_bootstrap_output_dir is string
+      - _platform_vault_bootstrap_output_dir.startswith('/')
+      - "'/../' not in (_platform_vault_bootstrap_output_dir ~ '/')"
+      - not (_platform_vault_output_uses_project_secrets | bool) or (_platform_vault_project_root | string | length > 0)
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
+
+- name: Resolve output path without following a substituted parent
+  ansible.builtin.command:
+    argv: [realpath, -m, "{{ _platform_vault_bootstrap_output_dir }}"]
+  register: _platform_vault_output_realpath
+  changed_when: false
+
+- name: Require a canonical output path with no symlinked ancestors
+  ansible.builtin.assert:
+    that: _platform_vault_output_realpath.stdout == _platform_vault_bootstrap_output_dir
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
+
+- name: Identify the Ansible controller account that owns standalone outputs
+  ansible.builtin.command:
+    argv: [id, -u]
+  register: _platform_vault_controller_uid
+  changed_when: false
+
+- name: Inspect the default secrets parent without following symlinks
+  ansible.builtin.stat:
+    path: "{{ _platform_vault_project_root }}/secrets"
+    follow: false
+  register: _platform_vault_secrets_parent
+  when: _platform_vault_output_uses_project_secrets | bool
+
+- name: Refuse an unsafe existing project secrets directory
+  ansible.builtin.assert:
+    that:
+      - not _platform_vault_secrets_parent.stat.exists or (_platform_vault_secrets_parent.stat.isdir and not _platform_vault_secrets_parent.stat.islnk and _platform_vault_secrets_parent.stat.uid | string == _platform_vault_controller_uid.stdout | trim and _platform_vault_secrets_parent.stat.mode == '0700')
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
+  when: _platform_vault_output_uses_project_secrets | bool
+
+- name: Create the project secrets directory with private permissions
+  ansible.builtin.file:
+    path: "{{ _platform_vault_project_root }}/secrets"
+    state: directory
+    mode: '0700'
+  when: _platform_vault_output_uses_project_secrets | bool
+
+- name: Inspect the explicit output parent without following symlinks
+  ansible.builtin.stat:
+    path: "{{ _platform_vault_bootstrap_output_dir | dirname }}"
+    follow: false
+  register: _platform_vault_explicit_output_parent
+  when: not (_platform_vault_output_uses_project_secrets | bool)
+
+- name: Require the explicit output parent to be an existing controller-owned directory
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_explicit_output_parent.stat.isdir
+      - not _platform_vault_explicit_output_parent.stat.islnk
+      - _platform_vault_explicit_output_parent.stat.uid | string == _platform_vault_controller_uid.stdout | trim
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
+  when: not (_platform_vault_output_uses_project_secrets | bool)
+
+- name: Inspect the deployment output directory without following symlinks
+  ansible.builtin.stat:
+    path: "{{ _platform_vault_bootstrap_output_dir }}"
+    follow: false
+  register: _platform_vault_output_directory
+
+- name: Refuse an unsafe existing deployment output directory
+  ansible.builtin.assert:
+    that:
+      - not _platform_vault_output_directory.stat.exists or (_platform_vault_output_directory.stat.isdir and not _platform_vault_output_directory.stat.islnk and _platform_vault_output_directory.stat.uid | string == _platform_vault_controller_uid.stdout | trim and _platform_vault_output_directory.stat.mode == '0700')
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
+
+- name: Create the deployment output directory with private permissions
+  ansible.builtin.file:
+    path: "{{ _platform_vault_bootstrap_output_dir }}"
+    state: directory
+    mode: '0700'
+
+- name: Inspect the three fixed bootstrap custody files without following symlinks
+  ansible.builtin.stat:
+    path: "{{ _platform_vault_bootstrap_output_dir }}/{{ item }}"
+    follow: false
+  loop: [root-token, unseal-keys.json, init-response.json]
+  register: _platform_vault_output_files
+
+- name: Refuse substituted, foreign-owned or overly permissive bootstrap files
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or (item.stat.isreg and not item.stat.islnk and item.stat.uid | string == _platform_vault_controller_uid.stdout | trim and item.stat.mode == '0600')
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_FILE_UNSAFE
+  loop: "{{ _platform_vault_output_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"

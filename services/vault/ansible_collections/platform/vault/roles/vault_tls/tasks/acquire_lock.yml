@@ -1,0 +1,97 @@
+---
+- name: Validate the canonical Vault lock host
+  ansible.builtin.assert:
+    that:
+      - platform_vault_bootstrap_lock_root == '/run/lock/platform-vault'
+      - platform_vault_lock_token is string
+      - platform_vault_lock_token is match('^[0-9a-f]{32}$')
+    fail_msg: VAULT_LOCK_INPUT_INVALID
+
+- name: Inspect the fixed Vault lock directory without following symlinks
+  ansible.builtin.stat:
+    path: /run/lock/platform-vault
+    follow: false
+  register: _platform_vault_lock_root_stat
+
+- name: Reject a substituted or incorrectly owned Vault lock directory
+  ansible.builtin.assert:
+    that:
+      - not _platform_vault_lock_root_stat.stat.exists or (_platform_vault_lock_root_stat.stat.isdir and not _platform_vault_lock_root_stat.stat.islnk and _platform_vault_lock_root_stat.stat.uid == 0)
+    fail_msg: VAULT_LOCK_DIRECTORY_UNSAFE
+
+- name: Create the root-owned Vault lock directory on the canonical first member
+  ansible.builtin.file:
+    path: /run/lock/platform-vault
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Derive the shared deployment lock identity
+  ansible.builtin.set_fact:
+    _platform_vault_lock_key: "{{ platform_vault_deployment_id | hash('sha256') }}"
+    _platform_vault_lock_unit: "platform-vault-lock-{{ platform_vault_lock_token }}"
+
+- name: Inspect the persistent shared lock object without following symlinks
+  ansible.builtin.stat:
+    path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
+    follow: false
+  register: _platform_vault_lock_stat
+
+- name: Refuse an unsafe pre-existing Vault lock object
+  ansible.builtin.assert:
+    that:
+      - not _platform_vault_lock_stat.stat.exists or (_platform_vault_lock_stat.stat.isreg and not _platform_vault_lock_stat.stat.islnk and _platform_vault_lock_stat.stat.uid == 0 and (_platform_vault_lock_stat.stat.mode | int(base=8)) == 384)
+    fail_msg: VAULT_LOCK_OBJECT_UNSAFE
+
+- name: Hold the shared Vault bootstrap lock for this Ansible invocation
+  ansible.builtin.command:
+    argv:
+      - systemd-run
+      - --quiet
+      - --no-block
+      - "--unit={{ _platform_vault_lock_unit }}"
+      - --property=Type=notify
+      - --property=NotifyAccess=all
+      - --property=TimeoutStartSec=15s
+      - --property=Restart=no
+      - --property=UMask=0077
+      - /usr/bin/flock
+      - --nonblock
+      - --exclusive
+      - --no-fork
+      - "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
+      - /bin/sh
+      - -c
+      - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
+  register: _platform_vault_lock_start
+  changed_when: true
+
+- name: Wait for the lock holder readiness signal or fail-closed startup
+  ansible.builtin.command:
+    argv: [systemctl, show, --property=ActiveState, --value, "{{ _platform_vault_lock_unit }}.service"]
+  register: _platform_vault_lock_state
+  changed_when: false
+  until: _platform_vault_lock_state.stdout in ['active', 'failed', 'inactive']
+  retries: 20
+  delay: 1
+
+- name: Require successful ownership of the deployment lock
+  ansible.builtin.assert:
+    that: _platform_vault_lock_state.stdout == 'active'
+    fail_msg: VAULT_DEPLOYMENT_BUSY
+
+- name: Verify the opened Vault lock is a private regular root-owned file
+  ansible.builtin.stat:
+    path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
+    follow: false
+  register: _platform_vault_lock_file_stat
+
+- name: Fail closed if the Vault lock file was substituted
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_lock_file_stat.stat.isreg
+      - not _platform_vault_lock_file_stat.stat.islnk
+      - _platform_vault_lock_file_stat.stat.uid == 0
+      - (_platform_vault_lock_file_stat.stat.mode | int(base=8)) == 384
+    fail_msg: VAULT_LOCK_OBJECT_UNSAFE

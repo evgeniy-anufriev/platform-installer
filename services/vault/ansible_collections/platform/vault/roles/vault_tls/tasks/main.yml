@@ -1,0 +1,114 @@
+---
+- name: Validate Vault desired runtime projection
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Normalize Vault instance ports and private resource identities
+  ansible.builtin.include_tasks: normalize.yml
+
+- name: Serialize Vault apply across Installer and standalone Ansible callers
+  block:
+    - name: Create one invocation identity for deployment locking
+      ansible.builtin.set_fact:
+        platform_vault_lock_token: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, chars='hexdigits') | lower }}"
+      run_once: true
+
+    - name: Acquire the target-side project/deployment flock
+      ansible.builtin.include_tasks:
+        file: acquire_lock.yml
+        apply:
+          run_once: true
+          delegate_to: "{{ _platform_vault_instances[0].host }}"
+          become: true
+
+    - name: Reject package-provided default Vault units before mutation
+      ansible.builtin.command:
+        argv: [systemctl, is-active, vault.service]
+      register: _platform_vault_default_unit
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if the package default unit owns an unrelated Vault instance
+      ansible.builtin.assert:
+        that: _platform_vault_default_unit.stdout | trim != 'active'
+        fail_msg: VAULT_DEFAULT_UNIT_CONFLICT
+
+    - name: Resolve and protect the standalone bootstrap output directory
+      ansible.builtin.include_tasks:
+        file: prepare_output.yml
+        apply:
+          run_once: true
+          delegate_to: localhost
+          become: false
+      when: not (platform_vault_verify_only | bool)
+
+    - name: Require approved Vault artifact source before mutation
+      ansible.builtin.include_role:
+        name: platform.core.artifact_source_gate
+      vars:
+        platform_artifact_requirements:
+          - {id: vault-runtime, name: vault}
+      when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+
+    - name: Resolve the selected Vault API certificate materialization plan
+      ansible.builtin.include_tasks: resolve_tls.yml
+
+    - name: Run Vault preflight before package or service changes
+      ansible.builtin.include_tasks: preflight.yml
+      when: not (platform_vault_verify_only | bool)
+
+    - name: Run Vault provisioning and configuration
+      ansible.builtin.include_tasks: provision.yml
+      when: not (platform_vault_verify_only | bool)
+
+    - name: Start seed, initialize once, then join and unseal members sequentially
+      ansible.builtin.include_tasks:
+        file: bootstrap.yml
+        apply:
+          run_once: true
+      when: not (platform_vault_verify_only | bool)
+
+    - name: Configure audit, KV v2 and userpass without changing existing resources
+      ansible.builtin.include_tasks: configure.yml
+      when: not (platform_vault_verify_only | bool)
+
+    - name: Verify the provisioned Vault while deployment lock is held
+      ansible.builtin.include_tasks: verify.yml
+      when: not (platform_vault_verify_only | bool)
+
+  always:
+    - name: Release this invocation's deployment lock on its canonical member
+      ansible.builtin.include_tasks:
+        file: release_lock.yml
+        apply:
+          run_once: true
+          delegate_to: "{{ _platform_vault_instances[0].host }}"
+          become: true
+      when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined
+  when: not (platform_vault_verify_only | bool)
+
+- name: Resolve current Vault TLS evidence for read-only verify
+  ansible.builtin.include_tasks: resolve_tls.yml
+  when: platform_vault_verify_only | bool
+
+- name: Resolve standalone protected bootstrap input for verify-only runs
+  ansible.builtin.include_tasks:
+    file: read_output.yml
+    apply:
+      run_once: true
+      delegate_to: localhost
+      become: false
+  when: platform_vault_verify_only | bool and (platform_vault_admin_token is not defined or platform_vault_admin_token | string | length == 0)
+
+- name: Require Vault verification authority without opening or mutating output files
+  ansible.builtin.assert:
+    that:
+      - platform_vault_admin_token is defined
+      - platform_vault_admin_token is string
+      - platform_vault_admin_token | length > 0
+    fail_msg: VAULT_ADMIN_TOKEN_REQUIRED
+  when: platform_vault_verify_only | bool
+  no_log: true
+
+- name: Verify Vault without changing service state
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_vault_verify_only | bool

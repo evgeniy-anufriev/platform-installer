@@ -1,0 +1,59 @@
+---
+- name: Validate Vault closed standalone input
+  ansible.builtin.assert:
+    that:
+      - platform_vault_mode in ['standalone', 'raft-ha']
+      - platform_vault_deployment_id is string
+      - platform_vault_deployment_id | length <= 128
+      - platform_vault_deployment_id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - platform_vault_mode != 'raft-ha' or (platform_vault_unseal_shares == 1 and platform_vault_unseal_threshold == 1) or platform_vault_unseal_threshold >= 2
+      - platform_vault_project_id == '' or (platform_vault_project_id is string and platform_vault_project_id | length <= 128 and platform_vault_project_id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$'))
+      - platform_vault_api_port is integer and platform_vault_api_port is not boolean
+      - platform_vault_cluster_port is integer and platform_vault_cluster_port is not boolean
+      - platform_vault_api_port >= 1 and platform_vault_api_port <= 65535
+      - platform_vault_cluster_port >= 1 and platform_vault_cluster_port <= 65535
+      - platform_vault_unseal_shares is integer and platform_vault_unseal_shares is not boolean
+      - platform_vault_unseal_threshold is integer and platform_vault_unseal_threshold is not boolean
+      - platform_vault_unseal_shares >= 1 and platform_vault_unseal_shares <= 255
+      - platform_vault_unseal_threshold >= 1 and platform_vault_unseal_threshold <= platform_vault_unseal_shares
+      - platform_vault_unseal_shares == 1 or platform_vault_unseal_threshold >= 2
+      - platform_vault_instances is sequence and platform_vault_instances is not string and platform_vault_instances is not mapping
+      - platform_vault_instances | length == (1 if platform_vault_mode == 'standalone' else 3)
+      - platform_vault_config_root == '/etc/platform-vault'
+      - platform_vault_data_root == '/var/lib/platform-vault'
+      - platform_vault_log_root == '/var/log/platform-vault'
+      - platform_vault_tls_profile is string and platform_vault_tls_profile | length > 0
+    fail_msg: VAULT_CONFIGURATION_INVALID
+
+- name: Validate Vault member identity and reachable address
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.id is string and item.id | length <= 128
+      - item.id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - item.host is string and item.host | length > 0
+      - item.address is string and item.address | length <= 253
+      - item.address is match('^[A-Za-z0-9][A-Za-z0-9.-]*$')
+      - item.address not in ['127.0.0.1', 'localhost', '0.0.0.0']
+      - item.roles == ['vault']
+    fail_msg: VAULT_MEMBER_CONFIGURATION_INVALID
+  loop: "{{ platform_vault_instances }}"
+  loop_control:
+    label: "{{ item.id | default('unknown') }}"
+
+- name: Require unique canonical Vault member identities
+  ansible.builtin.assert:
+    that:
+      - platform_vault_instances | map(attribute='id') | unique | length == platform_vault_instances | length
+    fail_msg: VAULT_MEMBER_ID_DUPLICATE
+
+- name: Require unique deterministic Vault unit identities
+  ansible.builtin.assert:
+    that:
+      - >-
+        platform_vault_instances
+        | map(attribute='id')
+        | map('regex_replace', '^', platform_vault_deployment_id ~ '\n')
+        | map('hash', 'sha256')
+        | unique | length == platform_vault_instances | length
+    fail_msg: VAULT_MEMBER_ID_COLLISION

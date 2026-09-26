@@ -1,0 +1,17 @@
+# platform-vault-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}
+{{ vault_member.log_directory }}/audit.log {
+    daily
+    maxsize 100M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    create 0600 {{ platform_vault_user }} {{ platform_vault_group }}
+    su {{ platform_vault_user }} {{ platform_vault_group }}
+    sharedscripts
+    postrotate
+        /usr/bin/systemctl kill --kill-who=main --signal=HUP {{ vault_member.instance_name }}.service >/dev/null 2>&1 || true
+    endscript
+}

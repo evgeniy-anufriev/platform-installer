@@ -1,0 +1,30 @@
+---
+- name: Exercise Vault preflight read-only in an isolated local namespace
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load Vault defaults
+      ansible.builtin.include_vars: ../ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
+
+    - name: Load the standalone preflight fixture
+      ansible.builtin.include_vars: "{{ platform_vault_fixture }}"
+
+    - name: Validate Vault role inputs
+      ansible.builtin.include_role:
+        name: platform.vault.vault_tls
+        tasks_from: validate.yml
+
+    - name: Normalize Vault role inputs
+      ansible.builtin.include_role:
+        name: platform.vault.vault_tls
+        tasks_from: normalize.yml
+
+    - name: Bind the synthetic fixture member to localhost for read-only checks
+      ansible.builtin.set_fact:
+        _platform_vault_instances: "{{ _platform_vault_instances | map('combine', {'host': inventory_hostname}) | list }}"
+
+    - name: Run Vault host preflight without making changes or contacting a target
+      ansible.builtin.include_role:
+        name: platform.vault.vault_tls
+        tasks_from: preflight.yml

@@ -1,0 +1,26 @@
+# platform-vault-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}
+[Unit]
+Description=Platform Vault {{ vault_member.instance_name }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ platform_vault_user }}
+Group={{ platform_vault_group }}
+ExecStart=/usr/bin/vault server -config={{ vault_member.config_directory }}/vault.hcl
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ vault_member.data_directory }} /var/log/platform-vault-audit
+BindPaths={{ vault_member.log_directory }}:/var/log/platform-vault-audit
+LimitNOFILE=65536
+KillSignal=SIGINT
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

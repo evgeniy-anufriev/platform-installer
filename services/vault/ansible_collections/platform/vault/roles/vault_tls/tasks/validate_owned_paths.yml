@@ -1,0 +1,24 @@
+---
+- name: Inspect each bounded Vault path component without following symlinks
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+    follow: false
+  loop: "{{ _platform_vault_path_checks }}"
+  register: _platform_vault_owned_path_stats
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Reject substituted, non-directory or incorrectly owned Vault path components
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - >-
+        not item.stat.exists or
+        (item.stat.isdir and not item.stat.islnk and
+        ((item.item.owner == 'root' and item.stat.uid == 0) or
+        (item.item.owner == 'service' and _platform_vault_service_uid.rc == 0 and
+        item.stat.uid | string == _platform_vault_service_uid.stdout | trim)))
+    fail_msg: VAULT_PATH_UNSAFE
+  loop: "{{ _platform_vault_owned_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"

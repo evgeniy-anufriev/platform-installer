@@ -1,0 +1,8 @@
+namespace: platform
+name: vault
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer]
+description: Standalone Vault TLS Integrated Storage role
+license: [Apache-2.0]
+dependencies: {}

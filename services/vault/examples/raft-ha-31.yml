@@ -1,0 +1,7 @@
+---
+platform_vault_mode: raft-ha
+platform_vault_deployment_id: vault-ha
+platform_vault_instances:
+  - {id: vault-3, host: node1, address: 192.168.56.101, roles: [vault]}
+  - {id: vault-1, host: node1, address: 192.168.56.101, roles: [vault]}
+  - {id: vault-2, host: node1, address: 192.168.56.101, roles: [vault]}

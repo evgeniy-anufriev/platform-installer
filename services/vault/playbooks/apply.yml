@@ -1,0 +1,16 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+
+- name: Apply Vault TLS deployment
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime Vault settings
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+  roles:
+    - role: platform.vault.vault_tls
+      platform_vault_verify_only: false

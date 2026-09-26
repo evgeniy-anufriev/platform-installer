@@ -1,0 +1,239 @@
+---
+- name: Prove Vault deployment lock readiness and release semantics on the QA node
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Create a private isolated lock test directory
+      ansible.builtin.tempfile:
+        state: directory
+        path: /var/tmp
+        prefix: platform-vault-lock-test-
+      register: vault_lock_test_dir
+
+    - name: Validate the generated test directory boundary
+      ansible.builtin.assert:
+        that:
+          - vault_lock_test_dir.path is match('^/var/tmp/platform-vault-lock-test-[A-Za-z0-9_]+$')
+        fail_msg: VAULT_LOCK_TEST_PATH_INVALID
+
+    - name: Create the exact root-owned test lock file
+      ansible.builtin.file:
+        path: "{{ vault_lock_test_dir.path }}/deployment.lock"
+        state: touch
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Create invocation-specific transient unit names
+      ansible.builtin.set_fact:
+        vault_lock_test_suffix: "{{ lookup('ansible.builtin.password', '/dev/null', length=20, chars='hexdigits') | lower }}"
+
+    - name: Record exact transient units for bounded cleanup
+      ansible.builtin.set_fact:
+        vault_lock_test_units:
+          - "platform-vault-lock-test-holder-{{ vault_lock_test_suffix }}"
+          - "platform-vault-lock-test-contender-{{ vault_lock_test_suffix }}"
+          - "platform-vault-lock-test-normal-release-{{ vault_lock_test_suffix }}"
+          - "platform-vault-lock-test-failure-{{ vault_lock_test_suffix }}"
+          - "platform-vault-lock-test-recovery-{{ vault_lock_test_suffix }}"
+
+    - name: Exercise contention, ordinary release and failed-holder release
+      block:
+        - name: Start the first unit and wait for READY only after flock succeeds
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --quiet
+              - --no-block
+              - "--unit={{ vault_lock_test_units[0] }}"
+              - --property=Type=notify
+              - --property=NotifyAccess=all
+              - --property=TimeoutStartSec=10s
+              - --property=Restart=no
+              - /usr/bin/flock
+              - --nonblock
+              - --exclusive
+              - --no-fork
+              - "{{ vault_lock_test_dir.path }}/deployment.lock"
+              - /bin/sh
+              - -c
+              - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/holder-reached-ready; exec /usr/bin/sleep infinity"
+          changed_when: true
+
+        - name: Wait for the lock holder readiness handshake
+          ansible.builtin.command:
+            argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[0] }}.service"]
+          register: vault_lock_holder_state
+          changed_when: false
+          until: vault_lock_holder_state.stdout == 'active'
+          retries: 10
+          delay: 1
+
+        - name: Start a competing unit against the held lock
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --quiet
+              - --no-block
+              - "--unit={{ vault_lock_test_units[1] }}"
+              - --property=Type=notify
+              - --property=NotifyAccess=all
+              - --property=TimeoutStartSec=10s
+              - --property=Restart=no
+              - /usr/bin/flock
+              - --nonblock
+              - --exclusive
+              - --no-fork
+              - "{{ vault_lock_test_dir.path }}/deployment.lock"
+              - /bin/sh
+              - -c
+              - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/contender-reached-ready; exec /usr/bin/sleep infinity"
+          changed_when: true
+
+        - name: Wait until the contender fails before reaching its readiness command
+          ansible.builtin.command:
+            argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[1] }}.service"]
+          register: vault_lock_contender_state
+          changed_when: false
+          until: vault_lock_contender_state.stdout in ['failed', 'inactive']
+          retries: 10
+          delay: 1
+
+        - name: Prove exactly the lock holder reached the protected phase
+          ansible.builtin.stat:
+            path: "{{ vault_lock_test_dir.path }}/{{ item }}"
+          loop:
+            - holder-reached-ready
+            - contender-reached-ready
+          register: vault_lock_markers
+
+        - name: Assert one winner and a blocked contender
+          ansible.builtin.assert:
+            that:
+              - vault_lock_holder_state.stdout == 'active'
+              - vault_lock_contender_state.stdout in ['failed', 'inactive']
+              - vault_lock_markers.results[0].stat.exists
+              - not vault_lock_markers.results[1].stat.exists
+            fail_msg: VAULT_LOCK_CONTENTION_TEST_FAILED
+
+        - name: Release the lock holder normally
+          ansible.builtin.command:
+            argv: [systemctl, stop, "{{ vault_lock_test_units[0] }}.service"]
+          changed_when: true
+
+        - name: Start the contender after ordinary release
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --quiet
+              - --no-block
+              - "--unit={{ vault_lock_test_units[2] }}"
+              - --property=Type=notify
+              - --property=NotifyAccess=all
+              - --property=TimeoutStartSec=10s
+              - --property=Restart=no
+              - /usr/bin/flock
+              - --nonblock
+              - --exclusive
+              - --no-fork
+              - "{{ vault_lock_test_dir.path }}/deployment.lock"
+              - /bin/sh
+              - -c
+              - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
+          changed_when: true
+
+        - name: Wait for contender readiness after ordinary release
+          ansible.builtin.command:
+            argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[2] }}.service"]
+          register: vault_lock_released_state
+          changed_when: false
+          until: vault_lock_released_state.stdout == 'active'
+          retries: 10
+          delay: 1
+
+        - name: Stop the ordinary-release contender
+          ansible.builtin.command:
+            argv: [systemctl, stop, "{{ vault_lock_test_units[2] }}.service"]
+          changed_when: true
+
+        - name: Start a holder that fails after successfully reporting READY
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --quiet
+              - --no-block
+              - "--unit={{ vault_lock_test_units[3] }}"
+              - --property=Type=notify
+              - --property=NotifyAccess=all
+              - --property=TimeoutStartSec=10s
+              - --property=Restart=no
+              - /usr/bin/flock
+              - --nonblock
+              - --exclusive
+              - --no-fork
+              - "{{ vault_lock_test_dir.path }}/deployment.lock"
+              - /bin/sh
+              - -c
+              - "set -eu; /usr/bin/systemd-notify --ready; exit 42"
+          changed_when: true
+
+        - name: Wait for the lock holder process failure
+          ansible.builtin.command:
+            argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[3] }}.service"]
+          register: vault_lock_failed_state
+          changed_when: false
+          until: vault_lock_failed_state.stdout in ['failed', 'inactive']
+          retries: 10
+          delay: 1
+
+        - name: Acquire the lock after failed-holder cleanup
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --quiet
+              - --no-block
+              - "--unit={{ vault_lock_test_units[4] }}"
+              - --property=Type=notify
+              - --property=NotifyAccess=all
+              - --property=TimeoutStartSec=10s
+              - --property=Restart=no
+              - /usr/bin/flock
+              - --nonblock
+              - --exclusive
+              - --no-fork
+              - "{{ vault_lock_test_dir.path }}/deployment.lock"
+              - /bin/sh
+              - -c
+              - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
+          changed_when: true
+
+        - name: Wait for readiness after failed-holder release
+          ansible.builtin.command:
+            argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[4] }}.service"]
+          register: vault_lock_recovery_state
+          changed_when: false
+          until: vault_lock_recovery_state.stdout == 'active'
+          retries: 10
+          delay: 1
+
+      always:
+        - name: Stop only this test's exact transient units
+          ansible.builtin.command:
+            argv: [systemctl, stop, "{{ item }}.service"]
+          loop: "{{ vault_lock_test_units }}"
+          changed_when: false
+          failed_when: false
+
+        - name: Clear only this test's failed transient unit records
+          ansible.builtin.command:
+            argv: [systemctl, reset-failed, "{{ item }}.service"]
+          loop: "{{ vault_lock_test_units }}"
+          changed_when: false
+          failed_when: false
+
+        - name: Remove the exact generated lock test directory
+          ansible.builtin.file:
+            path: "{{ vault_lock_test_dir.path }}"
+            state: absent

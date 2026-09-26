@@ -1,0 +1,78 @@
+---
+- name: Validate standalone Vault output-directory preparation without target contact
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load Vault role defaults
+      ansible.builtin.include_vars: ../ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
+
+    - name: Create an isolated temporary project root
+      ansible.builtin.tempfile:
+        state: directory
+        path: /var/tmp
+        prefix: platform-vault-output-test-
+      register: _vault_output_test_root
+
+    - name: Exercise output preflight and always remove only this test root
+      block:
+        - name: Bind the test to its exact temporary project root
+          ansible.builtin.set_fact:
+            platform_project_root: "{{ _vault_output_test_root.path }}"
+            platform_vault_bootstrap_output_dir: ''
+
+        - name: Prepare the exact default project/deployment output path
+          ansible.builtin.include_tasks: ../ansible_collections/platform/vault/roles/vault_tls/tasks/prepare_output.yml
+
+        - name: Confirm both output path levels are private directories
+          ansible.builtin.stat:
+            path: "{{ item }}"
+            follow: false
+          loop:
+            - "{{ _vault_output_test_root.path }}/secrets"
+            - "{{ _vault_output_test_root.path }}/secrets/{{ platform_vault_deployment_id }}"
+          register: _vault_output_test_stats
+
+        - name: Require the default output directory contract
+          ansible.builtin.assert:
+            that:
+              - _vault_output_test_stats.results | map(attribute='stat.mode') | list == ['0700', '0700']
+              - _platform_vault_bootstrap_output_dir == _vault_output_test_root.path ~ '/secrets/' ~ platform_vault_deployment_id
+            fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
+
+        - name: Create a symlinked output parent as a negative test fixture
+          ansible.builtin.file:
+            src: "{{ _vault_output_test_root.path }}/secrets"
+            dest: "{{ _vault_output_test_root.path }}/secrets-link"
+            state: link
+
+        - name: Refuse an output path reached through a symlink
+          block:
+            - name: Select the deliberately substituted output path
+              ansible.builtin.set_fact:
+                platform_vault_bootstrap_output_dir: "{{ _vault_output_test_root.path }}/secrets-link/vault-symlink-negative"
+
+            - name: Run the same output boundary checks for the substituted path
+              ansible.builtin.include_tasks: ../ansible_collections/platform/vault/roles/vault_tls/tasks/prepare_output.yml
+          rescue:
+            - name: Prove the symlink path was rejected at canonical-path validation
+              ansible.builtin.assert:
+                that:
+                  - ansible_failed_task.name == 'Require a canonical output path with no symlinked ancestors'
+                fail_msg: VAULT_TEST_SYMLINK_BOUNDARY_FAILED
+
+        - name: Confirm the rejected output did not create a deployment directory
+          ansible.builtin.stat:
+            path: "{{ _vault_output_test_root.path }}/secrets/vault-symlink-negative"
+            follow: false
+          register: _vault_output_symlink_target
+
+        - name: Require no directory to have been published through the symlink
+          ansible.builtin.assert:
+            that: not _vault_output_symlink_target.stat.exists
+            fail_msg: VAULT_TEST_SYMLINK_BOUNDARY_FAILED
+      always:
+        - name: Remove only this uniquely-created temporary test project
+          ansible.builtin.file:
+            path: "{{ _vault_output_test_root.path }}"
+            state: absent

@@ -1,0 +1,75 @@
+---
+- name: Read current Vault audit mounts, secrets engines and auth methods
+  ansible.builtin.uri:
+    url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ _platform_vault_admin_token }}"
+    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    validate_certs: true
+    status_code: 200
+    return_content: true
+  loop: [sys/audit, sys/mounts, sys/auth]
+  register: _platform_vault_owned_configuration
+  changed_when: false
+  no_log: true
+
+- name: Refuse incompatible existing audit, KV or userpass configuration before mutation
+  ansible.builtin.assert:
+    that:
+      - "'file/' not in _platform_vault_owned_configuration.results[0].json.data or (_platform_vault_owned_configuration.results[0].json.data['file/'].type == 'file' and (_platform_vault_owned_configuration.results[0].json.data['file/'].local | default(false) | bool) == false and _platform_vault_owned_configuration.results[0].json.data['file/'].options.file_path == '/var/log/platform-vault-audit/audit.log' and (_platform_vault_owned_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) == 'false')"
+      - "'secret/' not in _platform_vault_owned_configuration.results[1].json.data or (_platform_vault_owned_configuration.results[1].json.data['secret/'].type == 'kv' and _platform_vault_owned_configuration.results[1].json.data['secret/'].options.version | string == '2')"
+      - "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data or _platform_vault_owned_configuration.results[2].json.data['userpass/'].type == 'userpass'"
+    fail_msg: VAULT_EXISTING_CONFIGURATION_INCOMPATIBLE
+  no_log: true
+
+- name: Enable the cluster-wide file audit device only when absent
+  ansible.builtin.uri:
+    url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/audit/file"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ _platform_vault_admin_token }}"
+    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    validate_certs: true
+    status_code: [200, 204]
+    body_format: json
+    body:
+      type: file
+      local: false
+      options:
+        file_path: /var/log/platform-vault-audit/audit.log
+        log_raw: false
+  when: "'file/' not in _platform_vault_owned_configuration.results[0].json.data"
+  no_log: true
+
+- name: Enable KV v2 at the fixed secret mount only when absent
+  ansible.builtin.uri:
+    url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/mounts/secret"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ _platform_vault_admin_token }}"
+    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    validate_certs: true
+    status_code: [200, 204]
+    body_format: json
+    body:
+      type: kv
+      options:
+        version: '2'
+  when: "'secret/' not in _platform_vault_owned_configuration.results[1].json.data"
+  no_log: true
+
+- name: Enable userpass auth only when absent
+  ansible.builtin.uri:
+    url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/auth/userpass"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ _platform_vault_admin_token }}"
+    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    validate_certs: true
+    status_code: [200, 204]
+    body_format: json
+    body:
+      type: userpass
+  when: "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data"
+  no_log: true

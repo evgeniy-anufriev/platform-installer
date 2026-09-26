@@ -1,0 +1,26 @@
+ui = false
+disable_mlock = true
+api_addr = "https://{{ vault_member.address }}:{{ vault_member.api_port }}"
+cluster_addr = "https://{{ vault_member.address }}:{{ vault_member.cluster_port }}"
+storage "raft" {
+  path = "{{ vault_member.data_directory }}"
+  node_id = "{{ vault_member.instance_name }}"
+{% if platform_vault_mode == 'raft-ha' and vault_member.slot != 0 %}
+  retry_join {
+    leader_api_addr = "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}"
+    leader_ca_cert_file = "{{ vault_member.config_directory }}/pki/ca-chain.pem"
+    leader_client_cert_file = "{{ vault_member.config_directory }}/pki/certificate.pem"
+    leader_client_key_file = "{{ vault_member.config_directory }}/pki/private-key.pem"
+  }
+{% endif %}
+}
+listener "tcp" {
+  address = "{{ vault_member.address }}:{{ vault_member.api_port }}"
+  cluster_address = "{{ vault_member.address }}:{{ vault_member.cluster_port }}"
+  tls_disable = false
+  tls_min_version = "tls12"
+  tls_cert_file = "{{ vault_member.config_directory }}/pki/certificate.pem"
+  tls_key_file = "{{ vault_member.config_directory }}/pki/private-key.pem"
+  tls_client_ca_file = "{{ vault_member.config_directory }}/pki/ca-chain.pem"
+  tls_require_and_verify_client_cert = false
+}

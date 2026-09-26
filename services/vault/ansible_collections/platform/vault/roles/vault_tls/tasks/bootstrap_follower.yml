@@ -1,0 +1,30 @@
+---
+- name: Start one Raft follower only after the seed is unsealed
+  ansible.builtin.systemd_service:
+    name: "{{ vault_member.instance_name }}.service"
+    state: "{{ 'restarted' if vault_member.instance_name in (hostvars[vault_member.host]._platform_vault_active_units | default([])) and vault_member.id in (hostvars[vault_member.host]._platform_vault_restart_member_ids | default([])) else 'started' }}"
+    enabled: true
+    daemon_reload: true
+  delegate_to: "{{ vault_member.host }}"
+  become: true
+
+- name: Wait for the follower to join the initialized seed storage
+  ansible.builtin.uri:
+    url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/init"
+    method: GET
+    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    validate_certs: true
+    status_code: 200
+    return_content: true
+  delegate_to: "{{ vault_member.host }}"
+  register: _platform_vault_follower_init
+  changed_when: false
+  retries: 60
+  delay: 2
+  until: _platform_vault_follower_init is succeeded and _platform_vault_follower_init.json.initialized | bool
+  no_log: true
+
+- name: Unseal the joined Raft follower
+  ansible.builtin.include_tasks: unseal_member.yml
+  vars:
+    vault_member: "{{ vault_member }}"

@@ -3,7 +3,7 @@
 Статус: SERVICE-INSTALL-01 DONE; SERVICE-INSTALL-02 DONE; SERVICE-INSTALL-03 DONE;
 SERVICE-INSTALL-04 DONE; SERVICE-INSTALL-05 DONE; SERVICE-INSTALL-06 DONE.
 SERVICE-INSTALL-07 Redis standalone и Sentinel HA; SERVICE-INSTALL-08 — Vault
-(1/1, 3/1, 3/3), SI08-A DONE, SI08-B NOT STARTED;
+(1/1, 3/1, 3/3), SI08-A DONE, SI08-B DONE, SI08-C NEXT;
 SERVICE-INSTALL-09 — общий план для восьми сервисов. Исторический UI-02E
 тест Kafka (три экземпляра на одном target) остаётся завершённым и не заменяет
 SERVICE-INSTALL-05 (три target).

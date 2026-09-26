@@ -1,0 +1,66 @@
+---
+- name: Resolve the canonical standalone project root for read-only verify
+  ansible.builtin.set_fact:
+    _platform_vault_project_root: >-
+      {{ platform_project_root if (platform_project_root is defined and platform_project_root | string | length > 0)
+         else ((inventory_dir | dirname) if (inventory_dir is defined and inventory_dir | string | length > 0) else '') }}
+
+- name: Resolve the exact standalone output path for read-only verify
+  ansible.builtin.set_fact:
+    _platform_vault_bootstrap_output_dir: >-
+      {{ platform_vault_bootstrap_output_dir if (platform_vault_bootstrap_output_dir | string | length > 0)
+         else (_platform_vault_project_root ~ '/secrets/' ~ platform_vault_deployment_id) }}
+
+- name: Require an explicit or project-root-derived standalone output path
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_bootstrap_output_dir.startswith('/')
+      - _platform_vault_bootstrap_output_dir | string | length > 1
+      - "'/../' not in (_platform_vault_bootstrap_output_dir ~ '/')"
+      - "'\\' not in _platform_vault_bootstrap_output_dir"
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
+
+- name: Resolve the verify output path without following a substituted parent
+  ansible.builtin.command:
+    argv: [realpath, -m, "{{ _platform_vault_bootstrap_output_dir }}"]
+  register: _platform_vault_verify_output_realpath
+  changed_when: false
+
+- name: Require the read-only verify output path to be canonical
+  ansible.builtin.assert:
+    that: _platform_vault_verify_output_realpath.stdout == _platform_vault_bootstrap_output_dir
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
+
+- name: Identify the local verify account
+  ansible.builtin.command:
+    argv: [id, -u]
+  register: _platform_vault_verify_uid
+  changed_when: false
+
+- name: Inspect standalone output directory and token without following links
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ _platform_vault_bootstrap_output_dir }}"
+    - "{{ _platform_vault_bootstrap_output_dir }}/root-token"
+  register: _platform_vault_verify_output_stats
+
+- name: Require private controller-owned token custody for standalone verify
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_verify_output_stats.results[0].stat.isdir
+      - not _platform_vault_verify_output_stats.results[0].stat.islnk
+      - _platform_vault_verify_output_stats.results[0].stat.uid | string == _platform_vault_verify_uid.stdout | trim
+      - _platform_vault_verify_output_stats.results[0].stat.mode == '0700'
+      - _platform_vault_verify_output_stats.results[1].stat.isreg
+      - not _platform_vault_verify_output_stats.results[1].stat.islnk
+      - _platform_vault_verify_output_stats.results[1].stat.uid | string == _platform_vault_verify_uid.stdout | trim
+      - _platform_vault_verify_output_stats.results[1].stat.mode == '0600'
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_FILE_UNSAFE
+  no_log: true
+
+- name: Read the standalone root token without exposing it
+  ansible.builtin.set_fact:
+    platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/root-token') | trim }}"
+  no_log: true
