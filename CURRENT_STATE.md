@@ -2,6 +2,70 @@
 
 ## SERVICE-INSTALL-08 Vault implementation started (2026-09-26)
 
+SI08-D owner clarification: the common output encryption password is entered
+on Installation → Plan. No folder selection is provided. The workstation
+uses `<project-root>/secrets/<deploymentId>/` automatically. This behavior is
+implemented with safe opened-directory publication and tests for the default
+path, no overwrite, symlink rejection and exclusion from Core staging/revision.
+Go full test/vet, frontend 67 tests/lint/build and Windows Wails build PASS.
+Initial FULL DIFF review returned BLOCK with six findings SI08-D-DIFF-01–06.
+The owner accepted all six blocking and two nonblocking corrections. Final QA
+PASS: Core 341 PASS/4 opt-in skips, contracts 31 PASS, Vault role 15 PASS,
+Windows full Go/vet, frontend 67/lint/build, Wails and affected RED OS race PASS.
+The single targeted recheck resolved DIFF-01–05 but returned BLOCK on DIFF-06:
+protected pre-publication packages lacked reservation/terminal recovery handling.
+The owner subsequently authorized this exact correction. DIFF-06 is now
+RESOLVED BY OWNER-AUTHORIZED EXACT CORRECTION, with private durable reservations,
+full-pair terminal publication, empty completion/next-run admission and explicit
+partial-material recovery status. No further architecture review was run;
+the automatic review budget remains exhausted. Final current-source offline
+QA: lifecycle 38 PASS, storage 24 PASS, Core 351 PASS/4 opt-in skips,
+contracts 31 PASS, Vault role 15 PASS, catalog/schema checks PASS; affected
+Go race, Windows full Go/vet and frontend 67/lint/build PASS.
+SI08-C/D are recorded in a focused implementation commit; unrelated work remains
+outside it. No Vault execution occurred. See `docs/service-install-08d.md` and
+`docs/service-install-08d-review.md`. SI08-E remains NOT STARTED.
+
+SI08-B is DONE. SI08-C implementation and QA gates PASS in the current
+worktree and are recorded with SI08-D in a focused implementation commit.
+Unrelated in-progress changes remain outside it. SI08-D is implemented; SI08-E
+remains NOT STARTED. D has implemented the workstation age file crypto base at
+`internal/secretfiles`, pinned to filippo.io/age v1.3.2, Scrypt work factor 18,
+and the approved encrypted-file size bound. It also strictly extracts only the
+approved Vault token/share fields and projects closed `x-secretInputs` from the
+locked catalog as safe metadata. Focused tests, `go test ./...` and `go vet
+./...` pass. D now includes no-follow selected-file reading, broker/lease
+integration, output delivery and generic Secrets/Plan UI in the worktree.
+The DIFF-06 reservation/recovery correction is implemented and tested; real
+Vault service acceptance remains SI08-E. The mockup shows the common Plan encryption
+password and fixed default output path. The SI08-C implementation and QA evidence are recorded in
+[`docs/service-install-08c.md`](docs/service-install-08c.md). It adds Core
+typed-secret descriptors and manifest binding, Execution Node capability and
+lease admission, scoped Ansible forwarding, and interruption-safe cleanup of
+temporary typed-input files. Vault unseal shares are Apply-only; the admin token
+is available to Apply and Verify. The immutable runtime was not published or
+activated, and no Vault deployment or target mutation occurred.
+
+SI08-B is DONE. The owner-authorized targeted recheck passed SI08-B-DIFF-01 and
+SI08-B-DIFF-03 after the lock/path execution evidence was supplied;
+SI08-B-DIFF-02 is resolved by the owner decision to match
+the established services' two-mode artifact-source behavior: authority/resolved
+source mode uses the common gate; direct Ansible-only mode without those inputs
+continues using the configured package repository without a new mandatory gate.
+All three B findings are resolved with zero blocking and zero overengineering
+findings. No real Vault deployment or target mutation occurred.
+
+Latest focused evidence on RED OS: Vault role contract 14 PASS; lock contention
+proved exactly one READY holder and reacquisition after normal stop and failed
+holder; seven symlink cases across config/data/log deployment/member and config
+PKI boundaries rejected before outside writes; standalone, 3-member/1-host and
+3-member/3-host role validation plus read-only preflight and apply/verify syntax
+checks PASS. The prior B Core suite had 322 tests PASS, 4 skipped. Latest C
+regression: Core 337 PASS, 4 skipped; contracts 31 PASS; Vault role 15 PASS;
+catalog and service schema reproducibility, apply syntax-check and
+`git diff --check` PASS. No Vault package, init, or target data mutation has
+been performed.
+
 Owner authorized implementation after the exact SI08-PLAN-02 terminal-evidence
 correction. SI08-A is DONE; pinned artifact acquisition blocker is resolved.
 The architecture is
@@ -27,9 +91,10 @@ Private Linux protected package publication/Fetch foundation is implemented,
 not wired or advertised: no-follow held descriptors, restricted ownership/modes,
 durable exact binding, no overwrite and READY publication after entry flush.
 RED OS storage tests 10 PASS; Core suite 320 tests, OK (4 skipped).
-Next implementation work: trusted controller integration/producerCompletion,
-retention guard, fetch/ACK operations, workstation age storage and Vault role.
-No Vault deployment or UI acceptance. SI08-B remains NOT STARTED.
+SI08-D exact DIFF-06 correction and focused/regression gates are complete in
+the focused C/D implementation commit. SI08-E
+owns real Vault deployment acceptance. SI08-B and SI08-C status/evidence are
+recorded above.
 Redis completion must not be inferred from this entry.
 Artifact metadata license BUSL-1.1; intended distribution/license notices must
 be addressed before offline publication. No runtime release was published or
@@ -163,13 +228,23 @@ members on node2/node3. First run
 `installer-45943379628ebee4a28716d85b571916` reached `SUCCEEDED` in 17m45s
 with 65 changes; repeat run `installer-4fcc0cd5afc8689509aea2e2a49935e6`
 reached `SUCCEEDED` in 17m9s with `changed=0`; both PostgreSQL verify actions
-passed. By owner decision, SERVICE-INSTALL-07 is NEXT: implement and accept
+passed. By owner decision, SERVICE-INSTALL-07 is active: implement and accept
 Redis `standalone` on one host and Redis/Sentinel HA with three paired members
 on one host by default, with distributed three-host placement also required;
 both use mandatory TLS through standalone Ansible, Core, Go
 and Wails/React. Its plan is
-`docs/service-install-07-redis-sentinel-architecture.md`; implementation has
-not started. Owner decision: at most one Redis deployment per project;
+`docs/service-install-07-redis-sentinel-architecture.md`; implementation and
+acceptance are in progress. The standalone Go lifecycle passed twice:
+`installer-a641eec3e9ac20867bde45bccd36dec9` succeeded with 17 changes and
+`installer-679e49f37f791802b19fe3b1b07025ca` succeeded with `changed=0`.
+The Sentinel 3-member/1-host deployment was added to the cumulative project;
+its first full plan, `installer-8d2639ea1adaca620772383631a8a534`, failed before
+Redis apply in PostgreSQL TLS resolution because several deployments shared a
+TLS profile and the role selected only by host/profile. The working-tree fix
+passes focused selector/lifecycle tests, all 307 Core tests, and syntax checks
+for PostgreSQL, Redis, HAProxy and Kafka playbooks. A fresh immutable runtime
+release must be activated before retrying the cumulative plan; Sentinel
+3-member/3-host acceptance remains pending. Owner decision: at most one Redis deployment per project;
 standalone QA uses an isolated project and Sentinel HA is the sole Redis
 deployment in the cumulative project. Owner-approved Secrets UX for SI07:
 the service dialog accepts bounded runtime-only passwords from a trusted local
@@ -177,15 +252,15 @@ catalog without Execution Node readiness; Core reconciles requirements and
 the mandatory fresh plan at the installation gate, before Start. Local format
 checks run immediately. The architecture-only Secrets review returned
 APPROVE_WITH_CHANGES with no blocking findings; its two wording/lifecycle
-clarifications are incorporated in the SI07 plan. Implementation remains
-NOT STARTED. SERVICE-INSTALL-08 is the subsequent one-plan acceptance for all
+clarifications are incorporated in the SI07 plan. SERVICE-INSTALL-08 is the
+subsequent one-plan acceptance for all
 seven services from one shared project and one approved plan, followed by
 verify and a fresh repeat plan proving `changed=0`. Deployment-scoped cleanup
 and before/after isolation checks must preserve other QA deployments. Exact
 target addresses and resource ownership must be established before execution.
 Ordered milestones: SERVICE-INSTALL-01 Keepalived, 02 BIND, 03 dns-client,
 04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover DONE, 07
-Redis standalone plus Sentinel HA NEXT, 08 one plan for all seven. Conditions: `docs/service-install-acceptance.md` and
+Redis standalone plus Sentinel HA ACTIVE, 08 one plan for all seven NEXT. Conditions: `docs/service-install-acceptance.md` and
 `docs/roadmap.md`, "Post-UI-02 service installation acceptance".
 
 ## EXEC-OBS-01 completion (2026-09-05)

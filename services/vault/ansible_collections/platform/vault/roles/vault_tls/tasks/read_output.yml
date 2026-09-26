@@ -43,7 +43,7 @@
     follow: false
   loop:
     - "{{ _platform_vault_bootstrap_output_dir }}"
-    - "{{ _platform_vault_bootstrap_output_dir }}/root-token"
+    - "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
   register: _platform_vault_verify_output_stats
 
 - name: Require private controller-owned token custody for standalone verify
@@ -62,5 +62,5 @@
 
 - name: Read the standalone root token without exposing it
   ansible.builtin.set_fact:
-    platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/root-token') | trim }}"
+    platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/admin-token') | trim }}"
   no_log: true

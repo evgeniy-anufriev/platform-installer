@@ -1,6 +1,7 @@
 package runtimesecret
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -128,6 +129,123 @@ func TestBrokerReplacesOnlyAcknowledgedRuntimeSecretSubset(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestBrokerBindsTypedServiceInputsToCoreDescriptors(t *testing.T) {
+	broker := NewBroker()
+	binding := Binding{Root: `C:\projects\vault`, ID: "project-vault"}
+	if err := broker.SetPendingServiceSecretInput(binding, "vault-ha", "SERVICE_ADMIN_TOKEN", []byte("admin-token"), nil); err != nil {
+		t.Fatal("pending admin token rejected")
+	}
+	if err := broker.SetPendingServiceSecretInput(binding, "vault-ha", "SERVICE_UNSEAL_SHARES", nil, [][]byte{[]byte("share-a"), []byte("share-b")}); err != nil {
+		t.Fatal("pending shares rejected")
+	}
+	if _, err := broker.Set(binding, Input{Username: "operator", SSHMode: SSHPassword, SSHPassword: "transport", ElevationMode: ElevationNone}); err != nil {
+		t.Fatal("session setup failed")
+	}
+	descriptors := []RuntimeSecretInput{
+		{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "vault-ha", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}},
+		{RequirementRef: "si-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Purpose: "SERVICE_UNSEAL_SHARES", ServiceDeployment: "vault-ha", Operations: []string{"SERVICE_APPLY"}},
+	}
+	if err := broker.BindPendingServiceSecretInputs(binding, descriptors); err != nil {
+		t.Fatal("Core descriptor binding failed")
+	}
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if len(value.RuntimeSecretInputs) != 2 {
+			t.Fatal("typed inputs missing")
+		}
+		for _, input := range value.RuntimeSecretInputs {
+			switch input.Purpose {
+			case "SERVICE_ADMIN_TOKEN":
+				if input.RequirementRef != descriptors[0].RequirementRef || string(input.Value) != "admin-token" {
+					t.Fatal("admin token not bound to Core ref")
+				}
+			case "SERVICE_UNSEAL_SHARES":
+				if input.RequirementRef != descriptors[1].RequirementRef || len(input.Shares) != 2 || string(input.Shares[1]) != "share-b" {
+					t.Fatal("shares not bound to Core ref")
+				}
+			default:
+				t.Fatal("unexpected typed input purpose")
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal("credential callback failed")
+	}
+	if err := broker.BindPendingServiceSecretInputs(binding, []RuntimeSecretInput{descriptors[0]}); err == nil || err.Error() != "RUNTIME_SECRET_DESCRIPTORS_STALE" {
+		t.Fatal("missing current descriptor did not fail closed")
+	}
+}
+
+func TestBrokerHoldsPendingServiceSecretsUntilCurrentCoreDescriptorsAndTargetCredentialExist(t *testing.T) {
+	broker := NewBroker()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if err := broker.SetPendingRuntimeSecretValuesForRequirements(binding, []string{"redis-password"}, map[string]string{"redis-password": "not-reported"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.PromotePendingRuntimeSecretValues(binding, []string{"redis-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "transport-only", ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.PromotePendingRuntimeSecretValues(binding, []string{"other-password"}); err == nil || err.Error() != "RUNTIME_SECRET_DESCRIPTORS_STALE" {
+		t.Fatalf("stale core descriptors error=%v", err)
+	}
+	if err := broker.PromotePendingRuntimeSecretValues(binding, []string{"redis-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if string(value.RuntimeSecretValues["redis-password"]) != "not-reported" || len(value.RuntimeSecretValues) != 1 {
+			t.Fatalf("unexpected promoted values")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	broker.ClearRuntimeSecretValues(binding)
+	if err := broker.PromotePendingRuntimeSecretValues(binding, []string{"redis-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 0 {
+			t.Fatal("cleared pending values were retained")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOutputEncryptionPasswordIsProjectBoundTransientAndClearedAfterUse(t *testing.T) {
+	now := time.Now()
+	broker := NewBroker(WithClock(func() time.Time { return now }))
+	binding := Binding{Root: t.TempDir(), ID: "project-output"}
+	secret := []byte("age-password-test")
+	if err := broker.SetOutputEncryptionPassword(binding, secret); err != nil {
+		t.Fatal(err)
+	}
+	var borrowed []byte
+	if err := broker.WithOutputEncryptionPassword(binding, func(value []byte) error {
+		borrowed = value
+		if string(value) != string(secret) {
+			t.Fatal("password mismatch")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(borrowed, make([]byte, len(borrowed))) {
+		t.Fatal("borrowed password was not zeroed")
+	}
+	if err := broker.WithOutputEncryptionPassword(Binding{Root: binding.Root, ID: "other"}, func([]byte) error { t.Fatal("cross-project password access"); return nil }); err == nil {
+		t.Fatal("cross-project password access accepted")
+	}
+	now = now.Add(31 * time.Minute)
+	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { t.Fatal("expired password access"); return nil }); err == nil {
+		t.Fatal("expired password accepted")
+	}
+	broker.Clear()
 }
 
 func TestBrokerStoresBoundedPKIStorePasswordOnlyInMemory(t *testing.T) {

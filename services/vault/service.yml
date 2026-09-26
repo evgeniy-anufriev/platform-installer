@@ -42,7 +42,7 @@ runtimeRequirements:
     architecture: x86_64
     requiredOffline: false
 compatibilityRef: compatibility.yml
-x-implementationStatus: contract-only-si08-a
+x-implementationStatus: core-runtime-si08-c
 x-secretOutputs:
   protocol: SecretOutputDelivery/v1alpha1
   entries: [admin-token, unseal-shares]
@@ -58,4 +58,4 @@ x-secretInputs:
       purpose: SERVICE_UNSEAL_SHARES
       displayLabel: Unseal keys
       requiredWhen: SEALED
-      operations: [SERVICE_APPLY, SERVICE_VERIFY]
+      operations: [SERVICE_APPLY]

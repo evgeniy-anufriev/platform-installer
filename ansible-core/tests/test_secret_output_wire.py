@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 import struct
 import sys
+import os
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +22,18 @@ class SecretOutputWireTests(unittest.TestCase):
     def decode(self, data):
         return decode_request(data, self.validator, self.schemas / "request.schema.json")
 
+    def test_production_entrypoint_resolves_bundle_without_preimports(self):
+        environment = dict(os.environ)
+        environment.pop("PYTHONPATH", None)
+        request = {"protocol": "SecretOutputDelivery/v1alpha1", "operation": "GetCapabilities", "projectId": "qa"}
+        completed = subprocess.run([sys.executable, str(ROOT / "ansible-core" / "tools" / "execution_secret_output_protocol.py")],
+                                   input=json.dumps(request).encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   env=environment, cwd="/", timeout=15, check=False)
+        self.assertEqual(0, completed.returncode, "production entrypoint failed")
+        response = json.loads(completed.stdout)
+        self.assertEqual("GetCapabilities", response["operation"])
+        self.assertEqual(["ListPending", "Fetch", "Acknowledge"], response["operations"])
+
     def test_request_closed_and_bounded(self):
         request = {"protocol": "SecretOutputDelivery/v1alpha1", "operation": "ListPending", "projectId": "qa", "limit": 32}
         self.assertEqual(self.decode(json.dumps(request).encode()), request)
@@ -34,7 +48,7 @@ class SecretOutputWireTests(unittest.TestCase):
 
     def metadata(self):
         return {"protocol": "SecretOutputDelivery/v1alpha1", "packageId": "a" * 32,
-                "projectId": "qa", "deploymentId": "vault-ha", "clusterId": "12345678-1234-1234-1234-123456789abc",
+                "projectId": "qa", "deploymentId": "vault-ha",
                 "sourceRunId": "installer-test", "runtimeDigest": "sha256:" + "b" * 64,
                 "generation": 1, "state": "READY", "entries": ["admin-token", "unseal-shares"]}
 

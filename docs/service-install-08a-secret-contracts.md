@@ -1,9 +1,17 @@
 # SI08-A typed input contract freeze
 
-These additive schemas are definitions only. The active runtime remains at its
-existing versions; no capability is advertised until SI08-C/D integration and
-its proof. Published lease v1 request schema only admits payload v1: new typed
-inputs therefore use a NEW lease request, not an in-place payload addition.
+These additive schemas preserve immutable published versions. Existing
+immutable runtime releases continue to advertise their original capabilities;
+the SI08-C runtime source advertises v1alpha4 only after the complete descriptor,
+lease admission and operation-scoped Ansible path passes its gates. Published
+lease v1 request schema only admits payload v1: typed inputs use a NEW lease
+request, not an in-place payload addition.
+
+Owner-authorized pre-publication correction: the unseal-shares operation scope
+is SERVICE_APPLY only; administrative tokens remain scoped to Apply and Verify.
+The v1alpha1/v1alpha4 source schemas were corrected before any immutable runtime
+release advertised them. Published older capability, lease and payload versions
+remain unchanged.
 
 | Boundary | New version | Preserved |
 | --- | --- | --- |
@@ -40,6 +48,9 @@ storage. New generation inputs are not read from a completed output package.
 Lease payload keeps target SSH/sudo, PKI password and existing bounded service
 password values. New runtimeSecretInputs is a list of at most 16 typed entries,
 each with requirementRef, purpose, serviceDeployment, fixed operations, value.
+Operation scope is purpose-specific: SERVICE_ADMIN_TOKEN is available to
+SERVICE_APPLY and SERVICE_VERIFY; SERVICE_UNSEAL_SHARES is SERVICE_APPLY only.
+Verify never receives unseal shares because it does not unseal Vault members.
 ADMIN_TOKEN value is nonempty valid UTF-8, at most 4096 UTF-8 bytes, unchanged.
 UNSEAL_SHARES value is 1..255 distinct nonempty opaque strings, at most 128
 UTF-8 bytes each; encoded JSON array is at most 32768 bytes. Vault-specific key
@@ -94,7 +105,11 @@ files are bounded to 131072 bytes before parsing; decrypted files use the above
 plaintext bounds. This choice adds no dependency until D and claims no crypto
 integration tests in A. See [standard API](https://pkg.go.dev/filippo.io/age).
 
-SI08-C must implement descriptor/plan/private-manifest adapters together and
-attest capability v4; SI08-D must add typed input/age/UI integration. Legacy
-runtimes cannot run Vault secret operations. The common UI remains rendering
-only. The manifest is not added to the active catalog until C.
+SI08-C implements the Core descriptor/plan/private-manifest adapters together
+with the Execution Node v1alpha4 capability, v1alpha2 lease admission,
+manifest-bound Start checks and operation-scoped Ansible input projection.
+This does not add workstation-side input collection or broaden Go/Wails/React.
+SI08-D owns Go lease-client/provider support, age-protected workstation files,
+and generic Secrets UI integration. Legacy runtimes cannot run Vault secret
+operations. The common UI remains rendering only. The manifest enters the
+active catalog only with the complete C runtime path.

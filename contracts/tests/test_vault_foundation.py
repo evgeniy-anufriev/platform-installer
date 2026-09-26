@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,6 +14,7 @@ from schema_validation import SchemaValidator
 from service_configuration_contract import generated_schema
 from secret_input_wire import decode_payload, InputWireError
 import execution_secret_lease
+import execution_protocol
 import yaml
 
 
@@ -29,7 +31,8 @@ class VaultFoundationTests(unittest.TestCase):
 
     def item(self, purpose="SERVICE_ADMIN_TOKEN", value="test-token"):
         return {"requirementRef": "input-test", "purpose": purpose, "serviceDeployment": "vault-ha",
-                "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"], "value": value}
+                "operations": ["SERVICE_APPLY"] if purpose == "SERVICE_UNSEAL_SHARES" else ["SERVICE_APPLY", "SERVICE_VERIFY"],
+                "value": value}
 
     def admit(self, payload, expected=None):
         if expected is None:
@@ -49,12 +52,26 @@ class VaultFoundationTests(unittest.TestCase):
         for name in ("unsealShares", "unsealThreshold"):
             self.assertEqual(schema["properties"][name], {"type": "integer", "minimum": 1, "maximum": 255})
         self.assertEqual(self.validator.validate(manifest["x-secretInputs"], CONTRACTS / "service-secret-inputs" / "v1alpha1" / "schema.json"), [])
+        incorrect_scope = copy.deepcopy(manifest["x-secretInputs"])
+        next(item for item in incorrect_scope["inputs"] if item["purpose"] == "SERVICE_UNSEAL_SHARES")["operations"] = ["SERVICE_APPLY", "SERVICE_VERIFY"]
+        self.assertTrue(self.validator.validate(incorrect_scope, CONTRACTS / "service-secret-inputs" / "v1alpha1" / "schema.json"))
         self.assertEqual(self.validator.validate(manifest["x-secretOutputs"], CONTRACTS / "secret-output-delivery" / "v1alpha1" / "declaration.schema.json"), [])
 
-    def test_new_payload_does_not_pass_old_runtime_admission(self):
-        with self.assertRaises(execution_secret_lease.LifecycleError):
-            execution_secret_lease._payload(self.payload())
-        self.admit(self.payload())
+    def test_new_payload_requires_new_runtime_lease_protocol(self):
+        metadata = {"requestId": "a" * 32, "startAttemptId": "b" * 32,
+                    "projectIdentity": "qa", "projectRevision": "sha256:" + "c" * 64,
+                    "planFingerprint": "sha256:" + "d" * 64,
+                    "executionManifestDigest": "sha256:" + "e" * 64,
+                    "runtimeRelease": {"bundleDigest": "sha256:" + "f" * 64,
+                                        "coreVersion": "test", "catalogDigest": "sha256:" + "c" * 64,
+                                        "planningProtocol": "test"}}
+        wire = {"apiVersion": "platform.installer/runtime-secret-lease/v1alpha1",
+                "kind": "PutRuntimeSecretLeaseRequest", **metadata, "payload": self.payload()}
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaisesRegex(execution_secret_lease.LifecycleError, "PAYLOAD_INVALID"):
+                execution_protocol.put_runtime_secret_lease(wire, root)
+            wire["apiVersion"] = "platform.installer/runtime-secret-lease/v1alpha2"
+            self.assertEqual("STORED", execution_protocol.put_runtime_secret_lease(wire, root)["status"])
 
     def test_token_exact_utf8_byte_bounds_and_no_rewrite(self):
         for token in ("x", "x" * 4096, "é" * 2048, " token\n"):
@@ -77,6 +94,11 @@ class VaultFoundationTests(unittest.TestCase):
             payload = self.payload()
             payload["runtimeSecretInputs"] = [self.item("SERVICE_UNSEAL_SHARES", shares)]
             with self.assertRaises(InputWireError): self.admit(payload)
+        payload = self.payload()
+        payload["runtimeSecretInputs"] = [dict(self.item("SERVICE_UNSEAL_SHARES", ["share"]),
+                                                operations=["SERVICE_APPLY", "SERVICE_VERIFY"])]
+        with self.assertRaisesRegex(InputWireError, "^TARGET_CREDENTIAL_LEASE_INPUT_INVALID$"):
+            self.admit(payload)
 
     def test_scope_and_duplicates_are_not_ignored(self):
         payload = self.payload()

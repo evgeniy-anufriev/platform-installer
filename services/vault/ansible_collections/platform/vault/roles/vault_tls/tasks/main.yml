@@ -1,4 +1,7 @@
 ---
+- name: Resolve optional typed runtime lease inputs
+  ansible.builtin.include_tasks: resolve_runtime_inputs.yml
+
 - name: Validate Vault desired runtime projection
   ansible.builtin.include_tasks: validate.yml
 

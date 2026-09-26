@@ -225,6 +225,12 @@ func copyProject(source string) (string, func(), error) {
 		if err != nil {
 			return err
 		}
+		if relative == "secrets" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if relative == ".git" || relative == ".runtime" {
 			return filepath.SkipDir
 		}

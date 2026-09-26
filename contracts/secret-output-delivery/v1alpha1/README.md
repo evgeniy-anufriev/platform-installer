@@ -44,6 +44,12 @@ admin-token and unseal-shares entries encrypted separately with that password.
 
 ## Publication and acknowledgement
 
+The two trusted output entry IDs are also the protected source filenames:
+`admin-token` and `unseal-shares` (the latter contains bounded JSON). The
+temporary `init-response.json` is recovery-only and is never included in Fetch.
+Package ownership is bound to `projectId` + `deploymentId`; this protocol does
+not invent or infer a service-internal cluster ID.
+
 The workstation ACK is sent only after both encrypted files and a complete
 local receipt have been durably published and read-back/decrypt verified.
 Ciphertext digests are SHA-256 and bind each of the two fixed entries. The

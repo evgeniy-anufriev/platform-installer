@@ -25,6 +25,25 @@ SCHEMA = load("schema_validation", "schema_validation.py")
 
 
 class ProjectSnapshotTests(unittest.TestCase):
+    def test_standalone_vault_secret_output_does_not_enter_project_revision(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "inventory"))
+            for logical, content in {
+                "project.yml": b"metadata: {id: project-test}\n",
+                "inventory/hosts.yml": b"all: {hosts: {}}\n",
+            }.items():
+                path = os.path.join(root, *logical.split("/"))
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as stream:
+                    stream.write(content)
+            _, before = SNAPSHOT.project_documents(root)
+            secret = os.path.join(root, "secrets", "vault-standalone", "root-token")
+            os.makedirs(os.path.dirname(secret), mode=0o700)
+            with open(secret, "wb") as stream:
+                stream.write(b"standalone-test-token\n")
+            _, after = SNAPSHOT.project_documents(root)
+            self.assertEqual(before, after)
+
     def test_revision_uses_raw_bytes_and_excludes_generated_state(self):
         with tempfile.TemporaryDirectory() as root:
             os.makedirs(os.path.join(root, "inventory", "group_vars", "all"))

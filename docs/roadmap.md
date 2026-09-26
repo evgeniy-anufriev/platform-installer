@@ -775,8 +775,12 @@ SERVICE-INSTALL-04 HAProxy DONE (2026-09-23); SERVICE-INSTALL-05 Kafka DONE
 (2026-09-23); SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover DONE (2026-09-24);
 SERVICE-INSTALL-07 Redis standalone and Sentinel HA (three members on one host
 by default, with three-host placement also required) is NEXT; SERVICE-INSTALL-08 is Vault,
-with SI08-A contract foundation DONE and SI08-B NOT STARTED. SERVICE-INSTALL-09
-is the final one-plan acceptance for eight services. Redis implementation has not started.
+with SI08-A contract foundation DONE, SI08-B DONE, SI08-C implementation and
+QA PASS (commit pending), SI08-D implementation/correction QA PASS in the shared
+worktree (DIFF-06 resolved by owner-authorized exact correction; no new review),
+and SI08-E NOT STARTED. SERVICE-INSTALL-09
+is the final one-plan acceptance for eight services. Redis implementation is in progress;
+target acceptance has not started.
 For SERVICE-INSTALL-07, the service Secrets dialog accepts bounded values
 against the verified local catalog without a readiness check. The installation
 flow obtains fresh Core requirements and a deployment plan before Start;

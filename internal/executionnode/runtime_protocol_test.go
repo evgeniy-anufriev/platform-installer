@@ -286,6 +286,104 @@ func TestCandidateCommitPreflightRejectsChangedRuntimeRelease(t *testing.T) {
 	}
 }
 
+type secretOutputRunner struct {
+	protocolRunner
+	response                 string
+	separatedErr             error
+	separatedArgs            []string
+	stdoutLimit, stderrLimit int
+}
+
+func (r *secretOutputRunner) RunSeparatedBounded(_ context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, []byte, error) {
+	r.separatedArgs = append([]string{name}, args...)
+	r.stdoutLimit, r.stderrLimit = stdoutLimit, stderrLimit
+	r.calls = append(r.calls, recordedCommand{name: name, args: append([]string(nil), args...), input: string(input)})
+	return []byte(r.response), []byte("discarded-stderr-canary"), r.separatedErr
+}
+
+func TestSecretOutputRecoveryErrorUsesOnlyClosedAttestedResponse(t *testing.T) {
+	for _, item := range []struct {
+		response string
+		allowed  bool
+	}{
+		{`{"protocol":"SecretOutputDelivery/v1alpha1","operation":"ListPending","errorCode":"OUTPUT_RECOVERY_REQUIRED"}`, true},
+		{`{"protocol":"SecretOutputDelivery/v1alpha1","operation":"Fetch","errorCode":"OUTPUT_RECOVERY_REQUIRED"}`, false},
+		{`{"protocol":"SecretOutputDelivery/v1alpha1","operation":"ListPending","errorCode":"OUTPUT_RECOVERY_REQUIRED","raw":"unsafe-canary"}`, false},
+		{`{"protocol":"SecretOutputDelivery/v1alpha1","operation":"ListPending","errorCode":"unsafe-canary"}`, false},
+		{`{"protocol":"SecretOutputDelivery/v1alpha1","protocol":"other","operation":"ListPending","errorCode":"OUTPUT_RECOVERY_REQUIRED"}`, false},
+	} {
+		runner := &secretOutputRunner{response: item.response, separatedErr: errors.New("unsafe-process-canary")}
+		transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+		_, err := transport.ListPendingSecretOutputs(context.Background(), testNode(), "sha256:"+strings.Repeat("b", 64), "project-test", 32, nil)
+		if err == nil || errors.Is(err, ErrSecretOutputRecoveryRequired) != item.allowed || strings.Contains(err.Error(), "canary") {
+			t.Fatalf("unsafe error classification: %v", err)
+		}
+	}
+}
+
+func TestSecretOutputListRejectsMalformedIdentityBoundsAndDuplicates(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("b", 64)
+	valid := SecretOutputPackage{Protocol: secretOutputProtocol, PackageID: strings.Repeat("a", 32), ProjectID: "project-test", DeploymentID: "vault-ha", SourceRunID: "installer-1234", RuntimeDigest: digest, Generation: 1, State: "READY", Entries: []string{"admin-token", "unseal-shares"}}
+	for _, scenario := range []string{"valid", "run", "deployment", "generation", "duplicate", "cursor"} {
+		t.Run(scenario, func(t *testing.T) {
+			list := SecretOutputList{Protocol: secretOutputProtocol, Operation: "ListPending", ProjectID: "project-test", Packages: []SecretOutputPackage{valid}}
+			switch scenario {
+			case "run":
+				list.Packages[0].SourceRunID = "../run"
+			case "deployment":
+				list.Packages[0].DeploymentID = strings.Repeat("a", 129)
+			case "generation":
+				list.Packages[0].Generation = 2147483648
+			case "duplicate":
+				list.Packages = append(list.Packages, valid)
+			case "cursor":
+				cursor := "invalid"
+				list.NextCursor = &cursor
+			}
+			encoded, err := json.Marshal(list)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner := &secretOutputRunner{response: string(encoded)}
+			transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+			_, err = transport.ListPendingSecretOutputs(context.Background(), testNode(), digest, "project-test", 32, nil)
+			if (scenario == "valid" && err != nil) || (scenario != "valid" && !errors.Is(err, errSecretOutputProtocol)) {
+				t.Fatalf("scenario %s: %v", scenario, err)
+			}
+		})
+	}
+}
+
+func TestSecretOutputHandshakeUsesAttestedRuntimeAndSeparateBinaryTransport(t *testing.T) {
+	runner := &secretOutputRunner{response: `{"protocol":"SecretOutputDelivery/v1alpha1","operation":"GetCapabilities","maxPayloadBytes":65536,"operations":["ListPending","Fetch","Acknowledge"]}`}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	digest := "sha256:" + strings.Repeat("b", 64)
+	capabilities, err := transport.GetSecretOutputCapabilities(context.Background(), testNode(), digest, "project-test")
+	if err != nil || capabilities.MaxPayloadBytes != 65536 {
+		t.Fatalf("caps=%#v err=%v", capabilities, err)
+	}
+	if runner.stdoutLimit != maxSecretOutputResponseBytes || runner.stderrLimit != maxSecretOutputStderrBytes {
+		t.Fatalf("limits=%d/%d", runner.stdoutLimit, runner.stderrLimit)
+	}
+	call := runner.calls[len(runner.calls)-1]
+	joined := strings.Join(call.args, " ")
+	if !strings.Contains(joined, "execution_secret_output_protocol.py") || !strings.Contains(joined, "sudo -n env PYTHONPATH=") || strings.Contains(joined, "execution_protocol.py") {
+		t.Fatalf("unexpected remote command: %s", joined)
+	}
+	if !strings.Contains(call.input, `"protocol":"SecretOutputDelivery/v1alpha1"`) || !strings.Contains(call.input, `"projectId":"project-test"`) {
+		t.Fatalf("unexpected request: %s", call.input)
+	}
+
+	runner.response = `{"protocol":"SecretOutputDelivery/v1alpha1","operation":"GetCapabilities","maxPayloadBytes":65535,"operations":["ListPending","Fetch","Acknowledge"]}`
+	if _, err := transport.GetSecretOutputCapabilities(context.Background(), testNode(), digest, "project-test"); !errors.Is(err, errSecretOutputProtocol) {
+		t.Fatalf("malformed capabilities err=%v", err)
+	}
+	runner.response = `{"protocol":"SecretOutputDelivery/v1alpha1","operation":"GetCapabilities","maxPayloadBytes":65536,"operations":["ListPending","Fetch","Acknowledge"]}`
+	if _, err := transport.GetSecretOutputCapabilities(context.Background(), testNode(), "sha256:"+strings.Repeat("c", 64), "project-test"); !errors.Is(err, errSecretOutputProtocol) {
+		t.Fatalf("runtime mismatch err=%v", err)
+	}
+}
+
 type unsupportedCandidateRunner struct {
 	protocolRunner
 	capabilities string

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"regexp"
 	"sort"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -16,6 +18,7 @@ import (
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
 	"platform-installer/internal/runtimesecret"
+	"platform-installer/internal/secretfiles"
 )
 
 // projectSnapshotReader is intentionally narrower than the future editor
@@ -137,8 +140,11 @@ type ApplicationConfigResult struct {
 }
 
 type RuntimeSecretDescriptorView struct {
-	RequirementRef, Purpose, ServiceDeployment, DisplayLabel string
-	Hosts                                                    []string
+	RequirementRef, Purpose, ServiceDeployment, Setting, DisplayLabel string
+	RequiredWhen                                                      string
+	Operations                                                        []string
+	ReferenceConfigured                                               bool
+	Hosts                                                             []string
 }
 
 type RuntimeSecretDescriptorOperation struct {
@@ -154,6 +160,33 @@ type RuntimeSecretValuesInput struct {
 	DescriptorSetFingerprint string            `json:"descriptorSetFingerprint"`
 	ServiceDeployment        string            `json:"serviceDeployment"`
 	Values                   map[string]string `json:"values"`
+}
+
+// PendingRuntimeSecretValuesInput is a locally catalog-authorized, transient
+// service-password submission. It intentionally has no project revision or
+// Execution Node evidence: Core confirms exact requirements later at the
+// installation gate before any target can be contacted.
+type PendingRuntimeSecretValuesInput struct {
+	ServiceDeployment string            `json:"serviceDeployment"`
+	Values            map[string]string `json:"values"`
+}
+
+type PendingRuntimeSecretFileInput struct {
+	ServiceDeployment  string `json:"serviceDeployment"`
+	Purpose            string `json:"purpose"`
+	EncryptionPassword string `json:"encryptionPassword"`
+}
+
+type OutputEncryptionPasswordInput struct {
+	Password string `json:"password"`
+	Confirm  string `json:"confirm"`
+}
+
+type SecretOutputPackagesOperation struct {
+	Status     string                              `json:"status"`
+	Packages   []executionnode.SecretOutputPackage `json:"packages,omitempty"`
+	NextCursor *string                             `json:"nextCursor,omitempty"`
+	Error      *ProjectOpenError                   `json:"error,omitempty"`
 }
 
 type runtimeSecretDescriptorEvidence struct {
@@ -623,11 +656,295 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 	return a.secrets.SetRuntimeSecretValuesForRequirements(binding, requirements, input.Values)
 }
 
+// GetPendingRuntimeSecretDescriptors uses only the exact immutable catalog
+// already locked by project.yml plus the saved managed deployment. It neither
+// contacts Core nor requires an Execution Node to be READY.
+func (a *App) GetPendingRuntimeSecretDescriptors(serviceDeployment string) RuntimeSecretDescriptorOperation {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	descriptors, err := a.pendingRuntimeSecretDescriptorsLocked(serviceDeployment)
+	if err != nil {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
+	}
+	return RuntimeSecretDescriptorOperation{Status: "READY", Descriptors: descriptors}
+}
+
+// SetPendingDeploymentRuntimeSecretValues keeps locally catalog-authorized
+// service passwords in short-lived process memory. They are never written to
+// desired state. A later Core descriptor query must attest the same
+// requirements before the Broker can attach them to a target credential.
+func (a *App) SetPendingDeploymentRuntimeSecretValues(input PendingRuntimeSecretValuesInput) error {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return err
+	}
+	descriptors, err := a.pendingRuntimeSecretDescriptorsLocked(input.ServiceDeployment)
+	if err != nil {
+		return err
+	}
+	requirements := make([]string, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		requirements = append(requirements, descriptor.RequirementRef)
+	}
+	return a.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, requirements, input.Values)
+}
+
+// SetSecretOutputEncryptionPassword keeps a confirmed workstation age
+// password only in the project-bound in-memory Broker. It is never sent to
+// Core or to the Execution Node.
+func (a *App) SetSecretOutputEncryptionPassword(input OutputEncryptionPasswordInput) error {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return err
+	}
+	password, confirm := []byte(input.Password), []byte(input.Confirm)
+	defer clear(password)
+	defer clear(confirm)
+	if len(password) == 0 || len(password) > secretfiles.MaxPasswordBytes || !utf8.Valid(password) || !bytes.Equal(password, confirm) {
+		return errors.New("SECRET_OUTPUT_PASSWORD_INVALID")
+	}
+	return a.secrets.SetOutputEncryptionPassword(binding, password)
+}
+
+// ChoosePendingDeploymentRuntimeSecretFile imports one trusted typed-secret
+// file without returning its path or contents to the Wails/React boundary.
+func (a *App) ChoosePendingDeploymentRuntimeSecretFile(input PendingRuntimeSecretFileInput) (string, error) {
+	a.editMu.Lock()
+	if a.ctx == nil {
+		a.editMu.Unlock()
+		return "", errors.New("UI_NOT_READY")
+	}
+	descriptors, err := a.pendingRuntimeSecretDescriptorsLocked(input.ServiceDeployment)
+	if err != nil {
+		a.editMu.Unlock()
+		return "", err
+	}
+	allowed := false
+	for _, descriptor := range descriptors {
+		if descriptor.Purpose == input.Purpose && descriptor.ServiceDeployment == input.ServiceDeployment && (input.Purpose == secretfiles.PurposeAdminToken || input.Purpose == secretfiles.PurposeUnsealShares) {
+			allowed = true
+			break
+		}
+	}
+	binding, bindErr := a.credentialBindingLocked()
+	ctx := a.ctx
+	a.editMu.Unlock()
+	if !allowed || bindErr != nil {
+		return "", errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+	}
+	path, err := runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{Title: "Выбрать файл секрета", Filters: []runtime.FileFilter{{DisplayName: "Файлы секрета (*.json, *.age)", Pattern: "*.json;*.age"}}})
+	if err != nil {
+		return "", errors.New("SECRET_FILE_SELECTION_FAILED")
+	}
+	if path == "" {
+		return "CANCELLED", nil
+	}
+	fileBytes, err := secretfiles.ReadSelectedFile(path, secretfiles.MaxEncryptedBytes)
+	if err != nil {
+		return "", errors.New("SECRET_FILE_INVALID")
+	}
+	defer clear(fileBytes)
+	password := []byte(input.EncryptionPassword)
+	defer clear(password)
+	parsed, err := secretfiles.ReadVaultInput(input.Purpose, fileBytes, password)
+	if err != nil {
+		return "", errors.New("SECRET_FILE_INVALID")
+	}
+	defer clear(parsed.Token)
+	defer func() {
+		for _, share := range parsed.Shares {
+			clear(share)
+		}
+	}()
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	currentBinding, err := a.credentialBindingLocked()
+	if err != nil || currentBinding != binding {
+		return "", errors.New("PROJECT_CHANGED")
+	}
+	currentDescriptors, err := a.pendingRuntimeSecretDescriptorsLocked(input.ServiceDeployment)
+	if err != nil {
+		return "", err
+	}
+	for _, descriptor := range currentDescriptors {
+		if descriptor.Purpose == input.Purpose && descriptor.ServiceDeployment == input.ServiceDeployment {
+			if err := a.secrets.SetPendingServiceSecretInput(binding, input.ServiceDeployment, input.Purpose, parsed.Token, parsed.Shares); err != nil {
+				return "", err
+			}
+			return "STORED", nil
+		}
+	}
+	return "", errors.New("RUNTIME_SECRET_DESCRIPTOR_STALE")
+}
+
+func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([]RuntimeSecretDescriptorView, error) {
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || serviceDeployment == "" {
+		return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+	}
+	deployment, exists := a.current.Managed.Deployments[serviceDeployment]
+	if !exists {
+		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+	}
+	var service *projectlifecycle.ProjectCatalogService
+	for index := range a.current.Catalog.Services {
+		if a.current.Catalog.Services[index].ID == deployment.ServiceType {
+			service = &a.current.Catalog.Services[index]
+			break
+		}
+	}
+	if service == nil {
+		return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+	}
+	var mode *projectlifecycle.ProjectCatalogMode
+	for index := range service.Modes {
+		if service.Modes[index].ID == deployment.Mode {
+			mode = &service.Modes[index]
+			break
+		}
+	}
+	if mode == nil || (len(mode.RequiredRuntimeSecretSettings) == 0 && len(service.SecretInputs) == 0) {
+		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+	}
+	settings := make(map[string]projectlifecycle.ProjectCatalogSetting, len(service.ConfigurationSettings))
+	for _, setting := range service.ConfigurationSettings {
+		settings[setting.ID] = setting
+	}
+	result := make([]RuntimeSecretDescriptorView, 0, len(mode.RequiredRuntimeSecretSettings)+len(service.SecretInputs))
+	seen := make(map[string]struct{}, len(mode.RequiredRuntimeSecretSettings))
+	for _, settingID := range mode.RequiredRuntimeSecretSettings {
+		setting, exists := settings[settingID]
+		if !exists || setting.EditorShape != "RUNTIME_SECRET_REFERENCE_OBJECT" || !runtimeSecretDescriptorRequirement.MatchString(setting.RuntimeSecretRequirementRef) || setting.RuntimeSecretRequirementRef == "" || setting.Label == "" {
+			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+		}
+		if _, duplicate := seen[setting.RuntimeSecretRequirementRef]; duplicate {
+			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+		}
+		seen[setting.RuntimeSecretRequirementRef] = struct{}{}
+		referenceConfigured := false
+		for _, override := range deployment.Configuration {
+			if override.Setting != settingID || !override.OverridePresent || override.State != "EDITABLE" {
+				continue
+			}
+			value, valid := override.Value.(map[string]any)
+			referenceConfigured = valid && len(value) == 1 && value["passwordSecretRef"] == "runtime:"+setting.RuntimeSecretRequirementRef
+			break
+		}
+		result = append(result, RuntimeSecretDescriptorView{RequirementRef: setting.RuntimeSecretRequirementRef, Purpose: "SERVICE_PASSWORD", ServiceDeployment: serviceDeployment, Setting: settingID, DisplayLabel: setting.Label, ReferenceConfigured: referenceConfigured})
+	}
+	for _, input := range service.SecretInputs {
+		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
+			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+		}
+		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: serviceDeployment, DisplayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
+	}
+	return result, nil
+}
+
+func (a *App) secretOutputEncryptionRequiredLocked() bool {
+	if a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" {
+		return false
+	}
+	declared := make(map[string]bool, len(a.current.Catalog.Services))
+	for _, service := range a.current.Catalog.Services {
+		declared[service.ID] = len(service.SecretOutputEntries) == 2 && service.SecretOutputEntries[0] == "admin-token" && service.SecretOutputEntries[1] == "unseal-shares"
+	}
+	for _, deployment := range a.current.Managed.Deployments {
+		if declared[deployment.ServiceType] {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) secretOutputEncryptionPasswordPresentLocked() bool {
+	binding, err := a.credentialBindingLocked()
+	return err == nil && a.secrets.HasOutputEncryptionPassword(binding)
+}
+
 // GetRuntimeSecretDescriptors is a target-free Core query. It exposes only
 // bounded prompt metadata and never exposes the runtime reference or value.
 func (a *App) GetRuntimeSecretDescriptors() RuntimeSecretDescriptorOperation {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	return a.getRuntimeSecretDescriptorsLocked(true)
+}
+
+// ListPendingSecretOutputs exposes only bounded package metadata. The remote
+// output protocol is consulted only for the currently READY, explicitly
+// selected Execution Node; secret bytes remain in the dedicated delivery flow.
+func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOperation {
+	a.editMu.Lock()
+	if a.current.Status != "OPEN" || a.current.Project == nil {
+		a.editMu.Unlock()
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "PROJECT_NOT_OPEN", Message: projectErrorMessage("PROJECT_NOT_OPEN")}}
+	}
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	if err != nil || a.execution.context.Status != "READY" {
+		a.editMu.Unlock()
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "EXECUTION_NODE_NOT_READY", Message: projectErrorMessage("EXECUTION_NODE_NOT_READY")}}
+	}
+	client, ok := binding.reader.transport.(interface {
+		GetSecretOutputCapabilities(context.Context, executionnode.Node, string, string) (executionnode.SecretOutputCapabilities, error)
+		ListPendingSecretOutputs(context.Context, executionnode.Node, string, string, int, *string) (executionnode.SecretOutputList, error)
+	})
+	if !ok {
+		a.editMu.Unlock()
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNSUPPORTED", Message: "The selected Execution Node does not support protected output delivery."}}
+	}
+	runtimeBinding, valid := installationRuntimeBinding(binding.reader.runtimeRelease)
+	if !valid {
+		a.editMu.Unlock()
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "EXECUTION_NODE_NOT_READY", Message: projectErrorMessage("EXECUTION_NODE_NOT_READY")}}
+	}
+	projectID, node, runtimeDigest := a.current.Project.ID, binding.node, runtimeBinding.BundleDigest
+	generation, root := a.installationGeneration, a.current.Root
+	ctx, cancel := a.operationContext(30 * time.Second)
+	a.editMu.Unlock()
+	defer cancel()
+	if _, err := client.GetSecretOutputCapabilities(ctx, node, runtimeDigest, projectID); err != nil {
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNAVAILABLE", Message: "Secret output delivery is not available from the selected Execution Node."}}
+	}
+	listed, err := client.ListPendingSecretOutputs(ctx, node, runtimeDigest, projectID, 32, cursor)
+	if err != nil {
+		if errors.Is(err, executionnode.ErrSecretOutputRecoveryRequired) {
+			return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "OUTPUT_RECOVERY_REQUIRED", Message: "Незавершённые выходные файлы сервиса сохранены на Execution Node. Требуется восстановление; частичные данные не удалены."}}
+		}
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNAVAILABLE", Message: "Pending secret outputs could not be safely listed."}}
+	}
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if a.installationGeneration != generation || a.current.Root != root || a.current.Project == nil || a.current.Project.ID != projectID || a.execution.context.SelectedHostID != node.ID {
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "PROJECT_CHANGED", Message: projectErrorMessage("PROJECT_CHANGED")}}
+	}
+	// A delivered/cleanup-pending remote package may no longer be listable.
+	// Recover its identity from the bound local receipt at known managed paths.
+	if cursor == nil && a.current.Managed != nil {
+		seen := map[string]bool{}
+		for _, item := range listed.Packages {
+			seen[item.PackageID] = true
+		}
+		for deployment := range a.current.Managed.Deployments {
+			receipt, encrypted, readErr := installer.ReadSecretOutputReceipt(root, projectID, deployment, runtimeDigest)
+			for _, data := range encrypted {
+				clear(data)
+			}
+			if readErr != nil || seen[receipt.PackageID] {
+				continue
+			}
+			listed.Packages = append(listed.Packages, executionnode.SecretOutputPackage{Protocol: "SecretOutputDelivery/v1alpha1", PackageID: receipt.PackageID, ProjectID: receipt.ProjectID, DeploymentID: receipt.DeploymentID, SourceRunID: receipt.SourceRunID, RuntimeDigest: receipt.RuntimeDigest, Generation: receipt.Generation, State: "ACKED_CLEANUP_PENDING", Entries: []string{"admin-token", "unseal-shares"}})
+			if len(listed.Packages) >= 96 {
+				break
+			}
+		}
+	}
+	return SecretOutputPackagesOperation{Status: "READY", Packages: listed.Packages, NextCursor: listed.NextCursor}
+}
+
+func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecretDescriptorOperation {
 	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Root == "" || a.execution.context.Status != "READY" {
 		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "EXECUTION_NODE_READY_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_READY_REQUIRED")}}
 	}
@@ -660,14 +977,70 @@ func (a *App) GetRuntimeSecretDescriptors() RuntimeSecretDescriptorOperation {
 		if !validRuntimeSecretDescriptor(item) {
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe service secret descriptor."}}
 		}
-		view.Descriptors = append(view.Descriptors, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment, DisplayLabel: item.DisplayLabel, Hosts: append([]string(nil), item.Hosts...)})
+		view.Descriptors = append(view.Descriptors, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment, DisplayLabel: item.DisplayLabel, RequiredWhen: item.RequiredWhen, Operations: append([]string(nil), item.Operations...), Hosts: append([]string(nil), item.Hosts...)})
 	}
 	if len(view.Descriptors) > 16 {
 		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned too many service secret descriptors."}}
 	}
-	a.clearRuntimeSecretDescriptorEvidenceLocked()
+	// A fresh Core descriptor set invalidates values already attached to a
+	// target credential, but retains local pending values long enough to prove
+	// they match this exact set below.
+	a.runtimeSecretEvidence = nil
+	if credentialBinding, bindingErr := a.credentialBindingLocked(); clearAttached && bindingErr == nil {
+		a.secrets.ClearAttachedRuntimeSecretValues(credentialBinding)
+	}
 	a.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{projectID: a.current.Project.ID, projectRevision: revision, nodeID: binding.node.ID, runtime: result.Runtime, fingerprint: result.DescriptorSetFingerprint, descriptors: append([]RuntimeSecretDescriptorView(nil), view.Descriptors...)}
+	requirements := make([]string, 0, len(view.Descriptors))
+	typedRequirements := make([]runtimesecret.RuntimeSecretInput, 0, len(view.Descriptors))
+	for _, descriptor := range view.Descriptors {
+		if descriptor.Purpose == "SERVICE_PASSWORD" {
+			requirements = append(requirements, descriptor.RequirementRef)
+		}
+		if descriptor.Purpose == secretfiles.PurposeAdminToken || descriptor.Purpose == secretfiles.PurposeUnsealShares {
+			typedRequirements = append(typedRequirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment, Operations: append([]string(nil), descriptor.Operations...)})
+		}
+	}
+	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
+		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements); err != nil {
+			a.runtimeSecretEvidence = nil
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
+		}
+		if err := a.secrets.BindPendingServiceSecretInputs(credentialBinding, typedRequirements); err != nil {
+			a.runtimeSecretEvidence = nil
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
+		}
+	}
 	return view
+}
+
+func typedRuntimeSecretRequirements(plan executionnode.DeploymentPlan) []executionnode.RuntimeSecretInputRequirement {
+	result := make([]executionnode.RuntimeSecretInputRequirement, 0)
+	for _, requirement := range plan.RequiredCredentials {
+		if requirement.Purpose == secretfiles.PurposeAdminToken || requirement.Purpose == secretfiles.PurposeUnsealShares {
+			result = append(result, executionnode.RuntimeSecretInputRequirement{RequirementRef: requirement.RequirementRef, Purpose: requirement.Purpose})
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].RequirementRef < result[j].RequirementRef })
+	return result
+}
+
+func runtimeDescriptorsMatchPlan(descriptors []RuntimeSecretDescriptorView, requirements []executionnode.RuntimeSecretInputRequirement) bool {
+	actual := make([]executionnode.RuntimeSecretInputRequirement, 0)
+	for _, descriptor := range descriptors {
+		if descriptor.Purpose == secretfiles.PurposeAdminToken || descriptor.Purpose == secretfiles.PurposeUnsealShares {
+			actual = append(actual, executionnode.RuntimeSecretInputRequirement{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose})
+		}
+	}
+	sort.Slice(actual, func(i, j int) bool { return actual[i].RequirementRef < actual[j].RequirementRef })
+	if len(actual) != len(requirements) {
+		return false
+	}
+	for i := range actual {
+		if actual[i] != requirements[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func validRuntimeSecretDescriptor(item executionnode.RuntimeSecretDescriptor) bool {
@@ -685,9 +1058,18 @@ func validRuntimeSecretDescriptor(item executionnode.RuntimeSecretDescriptor) bo
 		seenHosts[host] = struct{}{}
 	}
 	if item.Purpose == "PKI_STORE_PASSWORD" {
-		return item.RequirementRef == "pki-store-password" && item.ServiceDeployment == ""
+		return item.RequirementRef == "pki-store-password" && item.ServiceDeployment == "" && item.RequiredWhen == "ALWAYS" && len(item.Operations) == 2 && item.Operations[0] == "SERVICE_APPLY" && item.Operations[1] == "SERVICE_VERIFY"
 	}
-	return item.Purpose == "SERVICE_PASSWORD" && item.ServiceDeployment != ""
+	if item.Purpose == "SERVICE_PASSWORD" {
+		return item.ServiceDeployment != "" && item.RequiredWhen == "ALWAYS" && len(item.Operations) == 2 && item.Operations[0] == "SERVICE_APPLY" && item.Operations[1] == "SERVICE_VERIFY"
+	}
+	if item.Purpose == secretfiles.PurposeAdminToken {
+		return item.ServiceDeployment != "" && item.RequiredWhen == "INITIALIZED" && len(item.Operations) == 2 && item.Operations[0] == "SERVICE_APPLY" && item.Operations[1] == "SERVICE_VERIFY"
+	}
+	if item.Purpose == secretfiles.PurposeUnsealShares {
+		return item.ServiceDeployment != "" && item.RequiredWhen == "SEALED" && len(item.Operations) == 1 && item.Operations[0] == "SERVICE_APPLY"
+	}
+	return false
 }
 
 func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
@@ -1113,6 +1495,14 @@ func projectErrorMessage(code string) string {
 		return "Сначала сохраните или отмените несохранённые изменения проекта."
 	case "PROJECT_REVISION_UNAVAILABLE":
 		return "Не удалось безопасно прочитать сохранённую ревизию проекта."
+	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
+		return "Для выбранного сервиса в текущем режиме секреты не требуются."
+	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
+		return "Нельзя безопасно определить требования к секретам для текущего сохранённого проекта."
+	case "RUNTIME_SECRET_DESCRIPTORS_STALE", "RUNTIME_SECRET_INPUT_EXPIRED":
+		return "Введённые секреты больше не соответствуют свежему плану или истекли. Введите их заново."
+	case "RUNTIME_SECRET_INPUT_INVALID":
+		return "Секрет должен быть непустым корректным текстом и укладываться в допустимый размер."
 	case "INSTALLATION_PLAN_NOT_FOUND":
 		return "Этот план не принадлежит текущему открытому проекту или уже истёк. Создайте свежий план."
 	case "PLAN_BLOCKED":

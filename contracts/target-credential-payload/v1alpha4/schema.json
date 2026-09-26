@@ -28,12 +28,12 @@
         "requirementRef": {"$ref": "#/$defs/requirement"},
         "purpose": {"enum": ["SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"]},
         "serviceDeployment": {"$ref": "#/$defs/deployment"},
-        "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]},
+        "operations": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["SERVICE_APPLY", "SERVICE_VERIFY"]}},
         "value": {}
       },
       "oneOf": [
-        {"properties": {"purpose": {"const": "SERVICE_ADMIN_TOKEN"}, "value": {"type": "string", "minLength": 1, "maxLength": 4096}}},
-        {"properties": {"purpose": {"const": "SERVICE_UNSEAL_SHARES"}, "value": {"type": "array", "minItems": 1, "maxItems": 255, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}}}}
+        {"properties": {"purpose": {"const": "SERVICE_ADMIN_TOKEN"}, "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]}, "value": {"type": "string", "minLength": 1, "maxLength": 4096}}},
+        {"properties": {"purpose": {"const": "SERVICE_UNSEAL_SHARES"}, "operations": {"const": ["SERVICE_APPLY"]}, "value": {"type": "array", "minItems": 1, "maxItems": 255, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}}}}
       ]
     }
   }

@@ -20,7 +20,6 @@ var (
 	opaque     = regexp.MustCompile(`^[0-9a-f]{32}$`)
 	project    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
 	deployment = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
-	cluster    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	run        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 	digest     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
@@ -28,8 +27,8 @@ var (
 // Binding is the expected identity from trusted local runtime context, never
 // an identity inferred from the received frame itself.
 type Binding struct {
-	ProjectID, DeploymentID, ClusterID, PackageID, SourceRunID, RuntimeDigest string
-	Generation                                                                int
+	ProjectID, DeploymentID, PackageID, SourceRunID, RuntimeDigest string
+	Generation                                                     int
 }
 
 type metadata struct {
@@ -37,7 +36,6 @@ type metadata struct {
 	PackageID     string   `json:"packageId"`
 	ProjectID     string   `json:"projectId"`
 	DeploymentID  string   `json:"deploymentId"`
-	ClusterID     string   `json:"clusterId"`
 	SourceRunID   string   `json:"sourceRunId"`
 	RuntimeDigest string   `json:"runtimeDigest"`
 	Generation    int      `json:"generation"`
@@ -73,7 +71,7 @@ func Consume(source io.Reader, expected Binding, use func(token, shares []byte) 
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&meta) != nil || meta.Protocol != "SecretOutputDelivery/v1alpha1" || meta.State != "READY" ||
 		len(meta.Entries) != 2 || meta.Entries[0] != "admin-token" || meta.Entries[1] != "unseal-shares" ||
-		meta.ProjectID != expected.ProjectID || meta.DeploymentID != expected.DeploymentID || meta.ClusterID != expected.ClusterID ||
+		meta.ProjectID != expected.ProjectID || meta.DeploymentID != expected.DeploymentID ||
 		meta.PackageID != expected.PackageID || meta.SourceRunID != expected.SourceRunID || meta.RuntimeDigest != expected.RuntimeDigest || meta.Generation != expected.Generation {
 		return ErrTransfer
 	}
@@ -91,7 +89,7 @@ func Consume(source io.Reader, expected Binding, use func(token, shares []byte) 
 }
 
 func validBinding(b Binding) bool {
-	return project.MatchString(b.ProjectID) && len(b.DeploymentID) <= 128 && deployment.MatchString(b.DeploymentID) && cluster.MatchString(b.ClusterID) &&
+	return project.MatchString(b.ProjectID) && len(b.DeploymentID) <= 128 && deployment.MatchString(b.DeploymentID) &&
 		opaque.MatchString(b.PackageID) && run.MatchString(b.SourceRunID) && digest.MatchString(b.RuntimeDigest) && b.Generation >= 1 && b.Generation <= 2147483647
 }
 
@@ -125,12 +123,12 @@ func uniqueFlatObject(data []byte) bool {
 
 func exactMetadataKeys(data []byte) bool {
 	var fields map[string]json.RawMessage
-	if json.Unmarshal(data, &fields) != nil || len(fields) != 10 {
+	if json.Unmarshal(data, &fields) != nil || len(fields) != 9 {
 		return false
 	}
 	for key := range fields {
 		switch key {
-		case "protocol", "packageId", "projectId", "deploymentId", "clusterId", "sourceRunId", "runtimeDigest", "generation", "state", "entries":
+		case "protocol", "packageId", "projectId", "deploymentId", "sourceRunId", "runtimeDigest", "generation", "state", "entries":
 		default:
 			return false
 		}

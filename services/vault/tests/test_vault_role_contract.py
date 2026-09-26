@@ -8,6 +8,17 @@ ROLE = ROOT / "services/vault/ansible_collections/platform/vault/roles/vault_tls
 
 
 class VaultRoleContractTests(unittest.TestCase):
+    def test_typed_runtime_inputs_are_closed_and_never_logged(self):
+        main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
+        include = main[0]
+        self.assertEqual("Resolve optional typed runtime lease inputs", include["name"])
+        tasks = yaml.safe_load((ROLE / "tasks/resolve_runtime_inputs.yml").read_text(encoding="utf-8"))
+        self.assertTrue(all(task.get("no_log") for task in tasks))
+        source = (ROLE / "tasks/resolve_runtime_inputs.yml").read_text(encoding="utf-8")
+        self.assertIn("SERVICE_ADMIN_TOKEN", source)
+        self.assertIn("SERVICE_UNSEAL_SHARES", source)
+        self.assertNotIn("lookup('ansible.builtin.password'", source)
+
     def test_role_and_playbook_yaml_is_parseable(self):
         roots = [ROOT / "services/vault/ansible_collections/platform/vault/roles/vault_tls",
                  ROOT / "services/vault/playbooks"]
@@ -81,6 +92,11 @@ class VaultRoleContractTests(unittest.TestCase):
         copies = [task for task in bootstrap if "ansible.builtin.copy" in task]
         self.assertTrue(copies)
         self.assertTrue(all(task["ansible.builtin.copy"].get("force") is False for task in copies))
+        bootstrap_text = str(bootstrap)
+        self.assertIn("/admin-token", bootstrap_text)
+        self.assertIn("/unseal-shares", bootstrap_text)
+        self.assertNotIn("/root-token", bootstrap_text)
+        self.assertNotIn("/unseal-keys.json", bootstrap_text)
         verify = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
         self.assertTrue(all("GET" == task.get("ansible.builtin.uri", {}).get("method", "GET") for task in verify
                             if "ansible.builtin.uri" in task))

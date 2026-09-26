@@ -88,6 +88,98 @@ func TestProjectCatalogViewIsClosedStableAndPreservesRoleOrder(t *testing.T) {
 	}
 }
 
+func TestProjectCatalogModeProjectsOnlyTrustedRequiredRuntimeSecretSettings(t *testing.T) {
+	catalogText := "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  redis:\n    metadata: {id: redis, version: 1.0.0, displayName: Redis}\n    modes:\n      standalone:\n        displayName: Standalone\n        memberRoles: [redis]\n        x-requiredRuntimeSecretSettings: [redisCredential]\n        placement: {minMembers: 1, distinctHosts: false}\n    configuration:\n      settings:\n        redisCredential:\n          kind: MANAGED\n          roleVariable: platform_redis_credential\n          type: object\n          scopes: [deployment]\n          validation: {required: [passwordSecretRef]}\n          schema:\n            type: object\n            additionalProperties: false\n            required: [passwordSecretRef]\n            properties:\n              passwordSecretRef: {type: string, minLength: 1}\n          ui:\n            x-runtimeSecretRequirement: {requirementRef: redis-password, purpose: SERVICE_PASSWORD}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+	verified, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, catalogText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := readCatalog(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := value.view(verified).Services[0].Modes[0]
+	if got := strings.Join(mode.RequiredRuntimeSecretSettings, ","); got != "redisCredential" {
+		t.Fatalf("required secrets=%q", got)
+	}
+	for _, invalid := range []string{"missing setting", "non-secret setting", "duplicate setting"} {
+		t.Run(invalid, func(t *testing.T) {
+			candidate := catalogText
+			switch invalid {
+			case "missing setting":
+				candidate = strings.Replace(candidate, "[redisCredential]", "[notThere]", 1)
+			case "non-secret setting":
+				candidate = strings.Replace(candidate, "x-runtimeSecretRequirement: {requirementRef: redis-password, purpose: SERVICE_PASSWORD}", "label: ordinary", 1)
+			case "duplicate setting":
+				candidate = strings.Replace(candidate, "[redisCredential]", "[redisCredential, redisCredential]", 1)
+			}
+			bundle := testBundleWithCatalog(t, candidate)
+			verified, err := executionbundle.ValidateRoot(bundle)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readCatalog(verified); err == nil {
+				t.Fatal("invalid mode secret metadata accepted")
+			}
+		})
+	}
+}
+
+func TestProjectCatalogProjectsClosedSecretInputMetadata(t *testing.T) {
+	catalogText := "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  vault:\n    metadata: {id: vault, version: 1.21.2, displayName: Vault}\n    modes:\n      standalone: {displayName: Standalone, memberRoles: [vault], placement: {minMembers: 1}}\n    x-secretInputs:\n      apiVersion: ServiceSecretInputs/v1alpha1\n      inputs:\n        - {requirementRef: vault-admin-token, purpose: SERVICE_ADMIN_TOKEN, displayLabel: Administrative token, requiredWhen: INITIALIZED, operations: [SERVICE_APPLY, SERVICE_VERIFY]}\n        - {requirementRef: vault-unseal-shares, purpose: SERVICE_UNSEAL_SHARES, displayLabel: Unseal keys, requiredWhen: SEALED, operations: [SERVICE_APPLY]}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+	verified, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, catalogText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := readCatalog(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := value.view(verified).Services[0].SecretInputs
+	if len(inputs) != 2 || inputs[0].RequirementRef != "vault-admin-token" || inputs[0].Purpose != "SERVICE_ADMIN_TOKEN" || inputs[1].Purpose != "SERVICE_UNSEAL_SHARES" || len(inputs[1].Operations) != 1 || inputs[1].Operations[0] != "SERVICE_APPLY" {
+		t.Fatalf("unexpected safe input projection: %#v", inputs)
+	}
+
+	invalids := []string{
+		strings.Replace(catalogText, "apiVersion: ServiceSecretInputs/v1alpha1", "apiVersion: ServiceSecretInputs/v1alpha9", 1),
+		strings.Replace(catalogText, "operations: [SERVICE_APPLY]", "operations: [SERVICE_VERIFY]", 1),
+		strings.Replace(catalogText, "requiredWhen: SEALED", "requiredWhen: ALWAYS", 1),
+		strings.Replace(catalogText, "requirementRef: vault-unseal-shares", "requirementRef: vault-admin-token", 1),
+		strings.Replace(catalogText, "displayLabel: Unseal keys,", "displayLabel: Unseal keys, unexpected: true,", 1),
+	}
+	for index, candidate := range invalids {
+		t.Run(strconv.Itoa(index), func(t *testing.T) {
+			bundle, err := executionbundle.ValidateRoot(testBundleWithCatalog(t, candidate))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readCatalog(bundle); err == nil {
+				t.Fatal("malformed secret input metadata accepted")
+			}
+		})
+	}
+}
+
+func TestCatalogSecretOutputProjectionAcceptsOnlyFixedProtocolEntries(t *testing.T) {
+	valid := map[string]any{"protocol": "SecretOutputDelivery/v1alpha1", "entries": []any{"admin-token", "unseal-shares"}}
+	if !validCatalogSecretOutputs(valid) || strings.Join(projectCatalogSecretOutputEntries(valid), ",") != "admin-token,unseal-shares" {
+		t.Fatal("approved output metadata was not projected")
+	}
+	for _, invalid := range []map[string]any{
+		{"protocol": "SecretOutputDelivery/v1alpha2", "entries": []any{"admin-token", "unseal-shares"}},
+		{"protocol": "SecretOutputDelivery/v1alpha1", "entries": []any{"admin-token", "unseal-shares", "extra"}},
+		{"protocol": "SecretOutputDelivery/v1alpha1", "entries": []any{"../token", "unseal-shares"}},
+		{"protocol": "SecretOutputDelivery/v1alpha1", "entries": []any{"admin-token", "unseal-shares"}, "path": "/tmp"},
+	} {
+		if validCatalogSecretOutputs(invalid) {
+			t.Fatalf("unsafe output metadata admitted: %#v", invalid)
+		}
+	}
+	if !validCatalogSecretOutputs(nil) || projectCatalogSecretOutputEntries(nil) != nil {
+		t.Fatal("absent optional declaration changed semantics")
+	}
+}
+
 func TestReadCatalogAcceptsPublishedIdentifierGrammar(t *testing.T) {
 	bundle := testBundleWithCatalog(t, "apiVersion: platform.installer/catalog/v1alpha1\nkind: ServiceCatalog\ndigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndefinitions:\n  postgresql:\n    metadata: {id: postgresql, version: 1.0.0, displayName: PostgreSQL}\n    modes:\n      pg_auto_failover:\n        displayName: pg_auto_failover\n        memberRoles: [data_member]\n        placement:\n          minMembers: 1\n          roleCardinality:\n            data_member: {minimum: 1}\n    x-definitionDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n")
 	verified, err := executionbundle.ValidateRoot(bundle)

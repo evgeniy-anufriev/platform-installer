@@ -14,6 +14,7 @@ type lifecycleBuilder struct {
 	calls       int
 	stale       bool
 	requiresPKI bool
+	typedInputs bool
 }
 
 func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any) (DeploymentPlan, error) {
@@ -26,6 +27,9 @@ func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ stri
 	if b.requiresPKI {
 		plan.RequiredCredentials = []RequiredCredential{{RequirementRef: "pki-store-password", Purpose: "PKI_STORE_PASSWORD", Hosts: []string{"node1"}}}
 	}
+	if b.typedInputs {
+		plan.RequiredCredentials = append(plan.RequiredCredentials, RequiredCredential{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", Hosts: []string{"node1"}})
+	}
 	return plan, nil
 }
 
@@ -35,9 +39,13 @@ type lifecycleClient struct {
 	requests        []ExecutionStartV2Request
 	startErr        error
 	ops             []string
+	typedCapability bool
 }
 
 func (c *lifecycleClient) CredentialStartCapability(context.Context, Node) (CredentialStartCapability, error) {
+	if c.typedCapability {
+		return CredentialStartCapability{MaxPayloadBytes: 1114112, PayloadVersions: []string{credentialPayloadVersionV4}, TypedRuntimeInputs: true}, nil
+	}
 	return CredentialStartCapability{MaxPayloadBytes: 1114112, PayloadVersions: []string{credentialPayloadVersion, credentialPayloadVersionV2}}, nil
 }
 func (c *lifecycleClient) StartExecutionV2(_ context.Context, _ Node, request ExecutionStartV2Request) (ExecutionStartV2Response, error) {
@@ -137,6 +145,43 @@ func TestExecutionServiceApprovalFreshPlanAndOneShotStart(t *testing.T) {
 	}
 	if len(c.requests) != 1 || c.requests[0].StartAttemptID == "" || c.requests[0].LeaseID != "" {
 		t.Fatalf("UI-02 Start did not use the closed v2 request: %#v", c.requests)
+	}
+}
+
+func TestExecutionServiceRequiresTypedV4AndAllowsConditionalInputsAbsent(t *testing.T) {
+	b := &lifecycleBuilder{typedInputs: true}
+	c := &lifecycleClient{typedCapability: true}
+	s := NewExecutionService(b, c)
+	plan, err := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApprovePlan(plan.ID, plan.Plan.Acknowledgements); err != nil {
+		t.Fatal(err)
+	}
+	s.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if len(request.RuntimeSecretInputs) != 1 || request.RuntimeSecretInputs[0].Purpose != "SERVICE_ADMIN_TOKEN" {
+			t.Fatal("typed plan requirements not bound")
+		}
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "ssh", UseTypedRuntimeInputs: true})
+	})
+	if _, err := s.Start(context.Background(), Node{}, plan.ID); err != nil {
+		t.Fatal("conditional secret absence blocked initial run")
+	}
+	c = &lifecycleClient{}
+	s = NewExecutionService(b, c)
+	plan, err = s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApprovePlan(plan.ID, plan.Plan.Acknowledgements); err != nil {
+		t.Fatal(err)
+	}
+	s.ConfigureTargetCredentialLease(func(_ TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "ssh", UseTypedRuntimeInputs: true})
+	})
+	if _, err := s.Start(context.Background(), Node{}, plan.ID); err == nil || err.Error() != "RUNTIME_SECRET_INPUTS_UNAVAILABLE" {
+		t.Fatal("missing v4 capability did not block typed plan")
 	}
 }
 
@@ -328,7 +373,8 @@ func TestExecutionServiceSyncRejectsMoreThanJournalCapacity(t *testing.T) {
 	if _, _, err := service.Sync(context.Background(), Node{}, runID); err == nil || err.Error() != ObserverIntegrityFailure {
 		t.Fatalf("capacity err=%v", err)
 	}
-	if len(client.afters) > 9 {
+	maxPages := (maxObservedExecutionEvents + 1 + ExecutionEventPageLimit - 1) / ExecutionEventPageLimit
+	if len(client.afters) > maxPages {
 		t.Fatalf("unbounded page drain: %d", len(client.afters))
 	}
 }

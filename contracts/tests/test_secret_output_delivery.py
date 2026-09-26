@@ -65,10 +65,10 @@ class SecretOutputDeliveryContractTests(unittest.TestCase):
         validate = validator("metadata.schema.json")
         metadata = dict(protocol=self.base["protocol"], packageId="a" * 32,
                         projectId="project-test", deploymentId="vault-ha",
-                        clusterId="12345678-1234-1234-1234-123456789abc",
                         sourceRunId="installer-" + "e" * 32, runtimeDigest="sha256:" + "f" * 64,
                         generation=1, state="READY", entries=["admin-token", "unseal-shares"])
         validate.validate(metadata)
+        self.assertFalse(validate.is_valid(dict(metadata, clusterId="12345678-1234-1234-1234-123456789abc")))
         self.assertFalse(validate.is_valid(dict(metadata, content="unexpected")))
         self.assertFalse(validate.is_valid(dict(metadata, entries=["admin-token", "admin-token"])))
         self.assertFalse(validate.is_valid(dict(metadata, entries=["unseal-shares", "admin-token"])))

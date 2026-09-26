@@ -1,0 +1,43 @@
+---
+- name: Validate bounded typed Vault inputs from the Execution Node lease
+  ansible.builtin.assert:
+    that:
+      - platform_runtime_secret_inputs is sequence
+      - platform_runtime_secret_inputs is not string
+      - platform_runtime_secret_inputs is not mapping
+      - item is mapping
+      - item.keys() | list | sort == ['purpose', 'requirementRef', 'value']
+      - item.purpose in ['SERVICE_ADMIN_TOKEN', 'SERVICE_UNSEAL_SHARES']
+      - item.requirementRef is string and item.requirementRef is match('^si-[0-9a-f]{40}$')
+      - item.value is string or (item.purpose == 'SERVICE_UNSEAL_SHARES' and item.value is sequence and item.value is not string and item.value is not mapping)
+    fail_msg: VAULT_RUNTIME_SECRET_INPUT_INVALID
+  loop: "{{ platform_runtime_secret_inputs | default([]) }}"
+  loop_control:
+    label: "{{ item.purpose | default('unknown') }}"
+  no_log: true
+
+- name: Reject duplicate typed Vault input purposes
+  ansible.builtin.assert:
+    that:
+      - >-
+        (platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | list | length) <= 1
+      - >-
+        (platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | list | length) <= 1
+    fail_msg: VAULT_RUNTIME_SECRET_INPUT_DUPLICATE
+  no_log: true
+
+- name: Use the typed administrative token when no standalone token was supplied
+  ansible.builtin.set_fact:
+    platform_vault_admin_token: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | first).value }}"
+  when:
+    - platform_vault_admin_token | default('') | string | length == 0
+    - platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | list | length == 1
+  no_log: true
+
+- name: Use typed Shamir shares when no standalone shares were supplied
+  ansible.builtin.set_fact:
+    platform_vault_unseal_keys: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | first).value }}"
+  when:
+    - platform_vault_unseal_keys | default([]) | length == 0
+    - platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | list | length == 1
+  no_log: true

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OpenResult, RuntimeSecretDescriptorOperation, RuntimeSecretValuesInput } from "./backend";
+import type { OpenResult, PendingRuntimeSecretFileInput, PendingRuntimeSecretValuesInput, RuntimeSecretDescriptorOperation } from "./backend";
 import type { CertificateIntent } from "./CertificatesPage";
 import type { DeploymentIntent, PlacementIntent } from "./TopologyPage";
 
@@ -10,7 +10,7 @@ export type ConfigurationIntent =
       scope: "DEPLOYMENT" | "MEMBER";
       memberId?: string;
       setting: string;
-      value: string | number | boolean;
+      value: ConfigurationValue;
     }
   | {
       operation: "RemoveServiceConfigurationOverride";
@@ -32,6 +32,8 @@ type Row = {
   state?: "new" | "deleting";
 };
 type Value = string | number | boolean;
+type RuntimeSecretReference = { passwordSecretRef: string };
+type ConfigurationValue = Value | RuntimeSecretReference;
 type Scope = "DEPLOYMENT" | "MEMBER";
 type MemberRow = {
   deploymentId: string;
@@ -42,7 +44,7 @@ type MemberRow = {
     setting: string;
     overridePresent: boolean;
     state: string;
-    value?: Value;
+    value?: ConfigurationValue;
   }>;
 };
 
@@ -103,16 +105,16 @@ function settingValue(
     setting: string;
     overridePresent: boolean;
     state: string;
-    value?: Value;
+    value?: ConfigurationValue;
   }>,
   deploymentId: string,
   scope: Scope,
   memberId: string,
   setting: string,
   intents: ConfigurationIntent[],
-): { overridePresent: boolean; state: string; value?: Value } {
+): { overridePresent: boolean; state: string; value?: ConfigurationValue } {
   const saved = overrides.find((entry) => entry.setting === setting);
-  let result = {
+  let result: { overridePresent: boolean; state: string; value?: ConfigurationValue } = {
     overridePresent: saved?.overridePresent || false,
     state: saved?.state || "EDITABLE",
     value: saved?.value,
@@ -206,7 +208,8 @@ function finalDeploymentIDs(
   return [...ids].sort((left, right) => left.localeCompare(right));
 }
 
-function inputValue(value: Value | undefined, shape: string) {
+function inputValue(value: ConfigurationValue | undefined, shape: string) {
+  if (typeof value === "object") return "";
   if (shape === "BOOLEAN") return value === true ? "true" : "false";
   return value === undefined ? "" : String(value);
 }
@@ -247,8 +250,9 @@ export function ServicesPage({
   onAppend,
   onReview,
   onDiscard,
-  onGetRuntimeSecretDescriptors,
-  onSetDeploymentRuntimeSecretValues,
+  onGetPendingRuntimeSecretDescriptors,
+  onSetPendingDeploymentRuntimeSecretValues,
+  onChoosePendingDeploymentRuntimeSecretFile,
 }: {
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
@@ -271,8 +275,9 @@ export function ServicesPage({
   onAppend: (intent: ConfigurationIntent) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
-  onGetRuntimeSecretDescriptors?: () => Promise<RuntimeSecretDescriptorOperation>;
-  onSetDeploymentRuntimeSecretValues?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  onGetPendingRuntimeSecretDescriptors?: (serviceDeployment: string) => Promise<RuntimeSecretDescriptorOperation>;
+  onSetPendingDeploymentRuntimeSecretValues?: (input: PendingRuntimeSecretValuesInput) => Promise<void>;
+  onChoosePendingDeploymentRuntimeSecretFile?: (input: PendingRuntimeSecretFileInput) => Promise<string>;
 }) {
   const [filter, setFilter] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -280,6 +285,8 @@ export function ServicesPage({
   const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [secretBusy, setSecretBusy] = useState(false);
   const [secretError, setSecretError] = useState("");
+  const [inputEncryptionPassword, setInputEncryptionPassword] = useState("");
+  const [secretFileStates, setSecretFileStates] = useState<Record<string, string>>({});
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const rows = useMemo(
@@ -339,17 +346,19 @@ export function ServicesPage({
     setSecretValues({});
     setSecretError("");
     setSecretOperation(null);
+    setInputEncryptionPassword("");
+    setSecretFileStates({});
   };
   const openSecrets = async () => {
-    if (!onGetRuntimeSecretDescriptors || !selected) return;
+    if (!onGetPendingRuntimeSecretDescriptors || !selected) return;
     setSecretBusy(true);
     setSecretError("");
     try {
-      const operation = await onGetRuntimeSecretDescriptors();
+      const operation = await onGetPendingRuntimeSecretDescriptors(selected.deploymentId);
       const descriptors = (operation.descriptors || []).filter(
-        (item) => item.purpose === "SERVICE_PASSWORD" && item.serviceDeployment === selected.deploymentId,
+        (item) => ["SERVICE_PASSWORD", "SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"].includes(item.purpose) && item.serviceDeployment === selected.deploymentId,
       );
-      if (operation.status !== "READY" || !operation.projectRevision || !operation.descriptorSetFingerprint || !descriptors.length) {
+      if (operation.status !== "READY" || !descriptors.length) {
         setSecretError(operation.error?.message || "Для этого deployment нет доступных требований к секретам.");
         return;
       }
@@ -362,8 +371,9 @@ export function ServicesPage({
   };
   const submitSecrets = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selected || !secretOperation?.projectRevision || !secretOperation.descriptorSetFingerprint || !onSetDeploymentRuntimeSecretValues) return;
-    const descriptors = secretOperation.descriptors || [];
+    if (!selected || !secretOperation || !onSetPendingDeploymentRuntimeSecretValues) return;
+    const descriptors = (secretOperation.descriptors || []).filter((item) => item.purpose === "SERVICE_PASSWORD");
+    if (descriptors.length === 0) { closeSecrets(); return; }
     const values: Record<string, string> = {};
     for (const descriptor of descriptors) values[descriptor.requirementRef] = secretValues[descriptor.requirementRef] || "";
     if (Object.values(values).some((value) => !value)) {
@@ -373,12 +383,48 @@ export function ServicesPage({
     setSecretBusy(true);
     setSecretError("");
     try {
-      await onSetDeploymentRuntimeSecretValues({ projectRevision: secretOperation.projectRevision, descriptorSetFingerprint: secretOperation.descriptorSetFingerprint, serviceDeployment: selected.deploymentId, values });
+      const referencesAdded = descriptors.filter(
+        (descriptor) => !descriptor.referenceConfigured && descriptor.setting,
+      );
+      for (const descriptor of referencesAdded) {
+        const appended = await onAppend({
+          operation: "SetServiceConfigurationValue",
+          deploymentId: selected.deploymentId,
+          scope: "DEPLOYMENT",
+          setting: descriptor.setting!,
+          value: { passwordSecretRef: `runtime:${descriptor.requirementRef}` },
+        });
+        if (!appended) {
+          setSecretError("Ссылка на секрет не добавлена в черновик. Значение не сохранено.");
+          return;
+        }
+      }
+      if (referencesAdded.length) {
+        setSecretValues({});
+        setSecretError("Ссылки добавлены в черновик. Сохраните проект и затем введите значения ещё раз.");
+        return;
+      }
+      await onSetPendingDeploymentRuntimeSecretValues({ serviceDeployment: selected.deploymentId, values });
       closeSecrets();
     } catch {
       setSecretValues({});
       setSecretError("Значения не приняты: обновите требования и повторите ввод.");
     } finally {
+      setSecretBusy(false);
+    }
+  };
+
+  const chooseSecretFile = async (purpose: "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES") => {
+    if (!selected || !onChoosePendingDeploymentRuntimeSecretFile) return;
+    setSecretBusy(true);
+    setSecretError("");
+    try {
+      const status = await onChoosePendingDeploymentRuntimeSecretFile({serviceDeployment: selected.deploymentId, purpose, encryptionPassword: inputEncryptionPassword});
+      setSecretFileStates((current) => ({...current, [purpose]: status}));
+    } catch {
+      setSecretError("Файл не принят. Проверьте формат/пароль и повторите выбор.");
+    } finally {
+      setInputEncryptionPassword("");
       setSecretBusy(false);
     }
   };
@@ -433,12 +479,12 @@ export function ServicesPage({
         <section className="card service-secrets-action">
           <div>
             <h2>Секреты</h2>
-            <p className="muted">Требования определяются Core для текущей сохранённой версии проекта. Значения не сохраняются в проекте и не отображаются после ввода.</p>
+            <p className="muted">Для выбранного режима показаны только разрешённые каталогом поля. Значения остаются в памяти приложения, не сохраняются в проекте и перед запуском повторно сверяются Core с новым планом.</p>
           </div>
-          <button className="outline" disabled={busy || structuralDisabled || !!selected.state || secretBusy || !onGetRuntimeSecretDescriptors || !onSetDeploymentRuntimeSecretValues} onClick={() => void openSecrets()}>
+          <button className="outline" disabled={busy || structuralDisabled || !!selected.state || secretBusy || !onGetPendingRuntimeSecretDescriptors || (!onSetPendingDeploymentRuntimeSecretValues && !onChoosePendingDeploymentRuntimeSecretFile)} onClick={() => void openSecrets()}>
             Секреты
           </button>
-          {secretError && <p className="error" role="alert">{secretError}</p>}
+          {secretError && !secretOperation && <p className="error" role="alert">{secretError}</p>}
         </section>
         <section className="card services-settings">
           <h2>Параметры deployment</h2>
@@ -743,16 +789,27 @@ export function ServicesPage({
           <dialog className="runtime-secret-dialog" open aria-label="Секреты сервиса">
             <form method="dialog" onSubmit={submitSecrets}>
               <h2>Секреты: {selected.deploymentId}</h2>
-              <p className="muted">Введите значения только для текущего запуска. После отправки поля будут очищены.</p>
-              {(secretOperation.descriptors || []).map((descriptor) => (
+              <p className="muted">Значения остаются только в памяти приложения и перед запуском сверяются с требованиями Core.</p>
+              {(secretOperation.descriptors || []).filter((descriptor) => descriptor.purpose === "SERVICE_PASSWORD").map((descriptor) => (
                 <label key={descriptor.requirementRef}>
                   {descriptor.displayLabel}
                   <input type="password" autoComplete="new-password" value={secretValues[descriptor.requirementRef] || ""} disabled={secretBusy} onChange={(event) => setSecretValues((current) => ({ ...current, [descriptor.requirementRef]: event.target.value }))} />
                 </label>
               ))}
+              {(secretOperation.descriptors || []).filter((descriptor) => descriptor.purpose === "SERVICE_ADMIN_TOKEN" || descriptor.purpose === "SERVICE_UNSEAL_SHARES").map((descriptor) => (
+                <div key={descriptor.requirementRef} className="runtime-secret-file-input">
+                  <strong>{descriptor.displayLabel}</strong>
+                  <p className="muted">{descriptor.requiredWhen === "INITIALIZED" ? "Для уже инициализированного сервиса" : "Для повторного запуска sealed-сервиса"}</p>
+                  <label>Пароль файла age, если файл зашифрован
+                    <input type="password" autoComplete="new-password" value={inputEncryptionPassword} disabled={secretBusy} onChange={(event) => setInputEncryptionPassword(event.target.value)} />
+                  </label>
+                  <button type="button" className="outline" disabled={secretBusy || !onChoosePendingDeploymentRuntimeSecretFile} onClick={() => void chooseSecretFile(descriptor.purpose as "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES")}>Выбрать файл</button>
+                  <small aria-live="polite">{secretFileStates[descriptor.purpose] === "STORED" ? "Файл принят и сохранён только в сессии." : secretFileStates[descriptor.purpose] === "CANCELLED" ? "Выбор отменён." : "Файл не выбран."}</small>
+                </div>
+              ))}
               {secretError && <p className="error" role="alert">{secretError}</p>}
               <div className="actions">
-                <button type="submit" disabled={secretBusy}>Сохранить в сессии</button>
+                <button type="submit" disabled={secretBusy}>{(secretOperation.descriptors || []).some((item) => item.purpose === "SERVICE_PASSWORD") ? "Сохранить в сессии" : "Готово"}</button>
                 <button type="button" className="outline" disabled={secretBusy} onClick={closeSecrets}>Отмена</button>
               </div>
             </form>

@@ -18,6 +18,10 @@ export function CheckExecutionNode() {
   return window['go']['main']['App']['CheckExecutionNode']();
 }
 
+export function ChoosePendingDeploymentRuntimeSecretFile(arg1) {
+  return window['go']['main']['App']['ChoosePendingDeploymentRuntimeSecretFile'](arg1);
+}
+
 export function ChooseProject() {
   return window['go']['main']['App']['ChooseProject']();
 }
@@ -62,6 +66,10 @@ export function CurrentProject() {
   return window['go']['main']['App']['CurrentProject']();
 }
 
+export function DeliverPendingSecretOutput(arg1) {
+  return window['go']['main']['App']['DeliverPendingSecretOutput'](arg1);
+}
+
 export function DiscardEditSession(arg1) {
   return window['go']['main']['App']['DiscardEditSession'](arg1);
 }
@@ -90,6 +98,10 @@ export function GetInstallationState() {
   return window['go']['main']['App']['GetInstallationState']();
 }
 
+export function GetPendingRuntimeSecretDescriptors(arg1) {
+  return window['go']['main']['App']['GetPendingRuntimeSecretDescriptors'](arg1);
+}
+
 export function GetRuntimeSecretDescriptors() {
   return window['go']['main']['App']['GetRuntimeSecretDescriptors']();
 }
@@ -100,6 +112,10 @@ export function GetSessionCredentialStatus() {
 
 export function GetVerifiedPKIView() {
   return window['go']['main']['App']['GetVerifiedPKIView']();
+}
+
+export function ListPendingSecretOutputs(arg1) {
+  return window['go']['main']['App']['ListPendingSecretOutputs'](arg1);
 }
 
 export function OpenProject(arg1) {
@@ -136,6 +152,14 @@ export function SetDeploymentRuntimeSecretValues(arg1) {
 
 export function SetPKIStorePassword(arg1) {
   return window['go']['main']['App']['SetPKIStorePassword'](arg1);
+}
+
+export function SetPendingDeploymentRuntimeSecretValues(arg1) {
+  return window['go']['main']['App']['SetPendingDeploymentRuntimeSecretValues'](arg1);
+}
+
+export function SetSecretOutputEncryptionPassword(arg1) {
+  return window['go']['main']['App']['SetSecretOutputEncryptionPassword'](arg1);
 }
 
 export function SetSessionCredential(arg1) {

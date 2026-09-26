@@ -127,6 +127,8 @@ type RuntimeSecretDescriptorRequest struct {
 
 type RuntimeSecretDescriptor struct {
 	RequirementRef, Purpose, ServiceDeployment, DisplayLabel string
+	RequiredWhen                                             string
+	Operations                                               []string
 	Hosts                                                    []string
 }
 
@@ -216,7 +218,10 @@ func validSHA256(value string) bool {
 }
 
 const ExecutionEventPageLimit = 256
-const maxObservedExecutionEvents = 2048
+
+// Match the bounded Execution Node journal. The remote lifecycle reserves its
+// final 256 slots for critical events, but permits up to 8192 total records.
+const maxObservedExecutionEvents = 8192
 
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
@@ -425,7 +430,7 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
 	}
 	capability, err := t.CredentialStartCapability(ctx, node)
-	if err != nil || capability.APIVersion != "platform.installer/execution-capabilities/v1alpha3" || !capability.supportsPayloadVersion(credentialPayloadVersionV3) {
+	if err != nil || capability.APIVersion != "platform.installer/execution-capabilities/v1alpha4" || !capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED")
 	}
 	runID, err := newRunID()

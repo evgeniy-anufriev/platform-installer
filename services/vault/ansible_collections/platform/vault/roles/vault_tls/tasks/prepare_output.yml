@@ -97,7 +97,7 @@
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir }}/{{ item }}"
     follow: false
-  loop: [root-token, unseal-keys.json, init-response.json]
+  loop: [admin-token, unseal-shares, init-response.json]
   register: _platform_vault_output_files
 
 - name: Refuse substituted, foreign-owned or overly permissive bootstrap files

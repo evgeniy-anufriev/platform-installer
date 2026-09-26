@@ -408,9 +408,36 @@ class ExecutionLifecycleTests(unittest.TestCase):
             manifest = {"projectIdentity": "project-1", "planFingerprint": metadata()["planFingerprint"], "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"]}, "operations": []}
             Path(journal.directory, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
             journal.transition("RUNNING", "running")
+            secret_name = ".runtime-secret-inputs-" + hashlib.sha256(b"apply:vault").hexdigest() + ".json"
+            secret_path = Path(journal.directory, secret_name)
+            secret_path.write_text('{"value":"secret-canary"}', encoding="utf-8")
+            foreign = Path(root, "foreign-secret-target")
+            foreign.write_text("foreign", encoding="utf-8")
+            symlink_path = Path(journal.directory, ".runtime-secret-inputs-" + hashlib.sha256(b"verify:vault").hexdigest() + ".json")
+            symlink_path.symlink_to(foreign)
+            non_regular_path = Path(journal.directory, ".runtime-secret-inputs-" + hashlib.sha256(b"other:vault").hexdigest() + ".json")
+            non_regular_path.mkdir()
             self.assertEqual(["run-1"], recover(root, lambda _unit, _metadata: False))
             self.assertEqual([], recover(root, lambda _unit, _metadata: False))
             self.assertEqual("INTERRUPTED", journal.status()["state"])
+            self.assertFalse(secret_path.exists())
+            self.assertTrue(symlink_path.is_symlink())
+            self.assertEqual("foreign", foreign.read_text(encoding="utf-8"))
+            self.assertTrue(non_regular_path.is_dir())
+
+    def test_cancel_missing_controller_removes_typed_secret_input_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            manifest = {"projectIdentity": "project-1", "planFingerprint": metadata()["planFingerprint"], "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            journal.transition("RUNNING", "running")
+            secret_path = Path(journal.directory, ".runtime-secret-inputs-" + hashlib.sha256(b"apply:vault").hexdigest() + ".json")
+            secret_path.write_text('{"value":"secret-canary"}', encoding="utf-8")
+            with mock.patch.object(execution_protocol, "active", return_value=False):
+                result = execution_protocol.cancel({"runId": "run-1"}, root)
+            self.assertEqual("INTERRUPTED", result["run"]["state"])
+            self.assertFalse(secret_path.exists())
 
     def test_terminal_result_is_exactly_once_under_a_race(self):
         with tempfile.TemporaryDirectory() as root:
@@ -435,6 +462,17 @@ class ExecutionLifecycleTests(unittest.TestCase):
             journal = Journal(root, "run-1"); journal.initialize(metadata())
             with self.assertRaisesRegex(LifecycleError, "RUNTIME_PROJECTION_MISSING"):
                 execution_controller._dispatch(root, journal, {"operations": [{"operationId": "apply:kafka", "operation": "SERVICE_APPLY", "serviceType": "kafka"}]}, [False])
+
+    def test_redis_is_an_admitted_generic_service_operation(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1"); journal.initialize(metadata())
+            operation = {"operationId": "apply:redis-main", "operation": "SERVICE_APPLY", "serviceType": "redis", "serviceDeployment": "redis-main"}
+            projection_id = hashlib.sha256(operation["operationId"].encode("utf-8")).hexdigest()
+            Path(journal.directory, ".runtime-projection-" + projection_id + ".json").write_text("{}", encoding="utf-8")
+            command = execution_controller._command("/runtime/release", journal, operation)
+            self.assertEqual("/runtime/release/services/redis/playbooks/apply.yml", command[3])
+            self.assertIn("platform_execution_service_deployment=redis-main", command)
+            self.assertEqual("SERVICE_APPLY", operation["operation"])
 
     def test_generic_source_authority_invocation_does_not_shadow_resolution_fact(self):
         with tempfile.TemporaryDirectory() as root:
@@ -475,6 +513,97 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             self.assertEqual({"ansible_password": "test", "ansible_become_password": "test"}, captured["credentials"])
             self.assertFalse(Path(journal.directory, ".ansible-runtime-credentials.json").exists())
+
+    def test_output_reservation_terminal_recovery_finishes_ready_publication(self):
+        for terminal_before_crash in (False, True):
+            with self.subTest(terminal_before_crash=terminal_before_crash), tempfile.TemporaryDirectory() as root:
+                os.chmod(root,0o700)
+                journal=Journal(root,"run-1")
+                manifest={"projectIdentity":"project-1","planFingerprint":metadata()["planFingerprint"],
+                    "runtimeRelease":{"bundleDigest":metadata()["runtimeRelease"]},
+                    "operations":[{"operation":"SERVICE_APPLY","operationId":"apply:vault","serviceDeployment":"vault-ha","roleVariablesPrefix":"platform_vault_"}],
+                    "artifactRequirements":[],"artifactSourceAuthorities":[],
+                    "runtimeSecretOutputs":[{"protocol":"SecretOutputDelivery/v1alpha1","serviceDeployment":"vault-ha","entries":["admin-token","unseal-shares"]}]}
+                current=metadata();current["manifestDigest"]=digest(manifest)
+                journal.initialize(current)
+                Path(journal.directory,"manifest.json").write_text(json.dumps(manifest))
+                execution_controller._materialize_runtime_projection(journal,current,manifest)
+                storage=execution_controller.execution_secret_output
+                package,generation=storage.load_package_identity(journal.directory,"project-1","vault-ha",journal.run_id)
+                directory=Path(root,"secret-outputs",package)
+                for name,data in (("admin-token",b"synthetic-token"),("unseal-shares",b'{"keys":["synthetic-share"]}'),("init-response.json",b'{}')):
+                    (directory/name).write_bytes(data);(directory/name).chmod(0o600)
+                self.assertFalse((directory/"metadata.json").exists())
+                journal.transition("RUNNING","running")
+                if terminal_before_crash: journal.terminal("FAILED","TEST_FAILURE","synthetic failure")
+                recover(root,lambda _unit,_metadata:False)
+                validator,schema_path=execution_controller._output_schema_validator(None)
+                self.assertEqual("READY",json.loads((directory/"metadata.json").read_text())["state"])
+                self.assertTrue(storage.fetch(root,package,"project-1",generation,validator,schema_path))
+                storage.acknowledge(root,"project-1",package,generation,"e"*32,
+                    {"admin-token":"sha256:"+"c"*64,"unseal-shares":"sha256:"+"d"*64})
+                recover(root,lambda _unit,_metadata:False)
+                self.assertEqual("DELIVERED",json.loads((directory/"metadata.json").read_text())["state"])
+                self.assertTrue(Path(journal.directory).exists())
+                for name in ("admin-token","unseal-shares","init-response.json"):
+                    self.assertFalse((directory/name).exists())
+
+    def test_reservation_without_directory_preserves_journal_until_empty_recovery(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.chmod(root,0o700)
+            journal=Journal(root,"run-1")
+            manifest={"projectIdentity":"project-1","planFingerprint":metadata()["planFingerprint"],
+                "runtimeRelease":{"bundleDigest":metadata()["runtimeRelease"]},"operations":[],
+                "runtimeSecretOutputs":[{"protocol":"SecretOutputDelivery/v1alpha1","serviceDeployment":"vault-ha","entries":["admin-token","unseal-shares"]}]}
+            current=metadata();current["manifestDigest"]=digest(manifest)
+            journal.initialize(current)
+            Path(journal.directory,"manifest.json").write_text(json.dumps(manifest))
+            storage=execution_controller.execution_secret_output
+            package,generation=storage.prepare_package_identity(root,journal.directory,"project-1","vault-ha",journal.run_id,current["runtimeRelease"])
+            journal.terminal("FAILED","TEST_FAILURE","synthetic failure")
+            self.assertFalse(Path(root,"secret-outputs",package).exists())
+            self.assertTrue(execution_lifecycle._secret_output_retention_pending(root,journal))
+            recover(root,lambda _unit,_metadata:False)
+            self.assertFalse(execution_lifecycle._secret_output_retention_pending(root,journal))
+            self.assertTrue(Path(root,"secret-outputs",package,"no-output.json").exists())
+
+    def test_output_custody_is_shared_by_apply_verify_and_capture(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.chmod(root, 0o700)
+            journal = Journal(root, "run-1")
+            manifest = {"operations": [{"operation": operation, "operationId": operation.lower()+":vault", "serviceDeployment": "vault-ha", "roleVariablesPrefix": "platform_vault_"} for operation in ("SERVICE_APPLY", "SERVICE_VERIFY")],
+                        "artifactRequirements": [], "artifactSourceAuthorities": [],
+                        "runtimeSecretOutputs": [{"protocol": "SecretOutputDelivery/v1alpha1", "serviceDeployment": "vault-ha", "entries": ["admin-token", "unseal-shares"]}]}
+            current = metadata()
+            current["manifestDigest"] = digest(manifest)
+            journal.initialize(current)
+            execution_controller._materialize_runtime_projection(journal, current, manifest)
+            directories = []
+            for operation in manifest["operations"]:
+                name = ".runtime-projection-"+hashlib.sha256(operation["operationId"].encode()).hexdigest()+".json"
+                projection = json.loads(Path(journal.directory, name).read_text())
+                directories.append(projection["platform_vault_bootstrap_output_dir"])
+            self.assertEqual(directories[0], directories[1])
+            output = Path(directories[0])
+            self.assertEqual(Path(root,"secret-outputs"), output.parent)
+            for name, content in (("admin-token", b"synthetic-token"), ("unseal-shares", b'{"keys":["synthetic-share"]}'), ("init-response.json", b'{}')):
+                (output/name).write_bytes(content)
+                (output/name).chmod(0o600)
+            # Capture failure cannot delete the last recoverable material.
+            with mock.patch.object(execution_controller.execution_secret_output, "publish", side_effect=OSError("injected capture failure")):
+                with self.assertRaises(OSError):
+                    execution_controller._capture_secret_outputs(journal, manifest, None)
+            self.assertTrue((output/"admin-token").exists())
+            execution_controller._capture_secret_outputs(journal, manifest, None)
+            result = {"state":"SUCCEEDED"}
+            execution_controller._complete_secret_outputs(journal,manifest,result)
+            ack = execution_controller.execution_secret_output.acknowledge(root,"project-1",output.name,1,"e"*32,
+                {"admin-token":"sha256:"+"c"*64,"unseal-shares":"sha256:"+"d"*64})
+            self.assertEqual("DELIVERED",ack["state"])
+            self.assertTrue(Path(journal.directory).exists())
+            self.assertFalse(Path(journal.directory,"project","secrets").exists())
+            for name in ("admin-token","unseal-shares","init-response.json"):
+                self.assertFalse((output/name).exists())
 
     def test_service_projection_binding_is_verified_before_controller_start(self):
         with tempfile.TemporaryDirectory() as root:

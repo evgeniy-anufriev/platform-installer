@@ -10,6 +10,7 @@ from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
 
 from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
+from ansible_collections.platform.core.plugins.module_utils.deployment_plan import _service_runtime_secret_requirements
 from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
 from ansible_collections.platform.core.plugins.module_utils.pki_resolution import resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
@@ -277,6 +278,17 @@ class ActionModule(ActionBase):
             configuration = resolve_service_configuration(
                 topology, materialized, catalog, role_defaults, schemas,
             )
+            deployments = materialized.get("serviceDeployments", {}) if isinstance(materialized, dict) else {}
+            definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
+            _, _, secret_findings = _service_runtime_secret_requirements(
+                deployments, definitions, sorted(hosts),
+            )
+            if secret_findings:
+                configuration["findings"] = sorted(
+                    list(configuration.get("findings", [])) + secret_findings,
+                    key=lambda item: (item.get("field", ""), item.get("code", ""), item.get("safeMessage", "")),
+                )
+                configuration["status"] = "BLOCKED"
             endpoints = resolve_service_endpoints(materialized, catalog, configuration, inventory_deployments)
             dns = resolve_dns_zones(materialized, catalog, host_addresses, inventory_deployments)
             pki_defaults_path = os.path.join(

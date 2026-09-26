@@ -273,6 +273,7 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
     const installationRoot = root.querySelector('#installation');
     installationRoot.insertAdjacentHTML('beforeend', `<section class="installation-view" id="installation-plan" hidden>
       <h2 class="install-title">План</h2><p class="muted">Демонстрационный план demo-plan-001 · не рассчитан Core</p>
+      <article class="card"><div class="body"><h3>Защищённые выходные файлы · пример для сервисов с такими выходами</h3><label>Пароль шифрования <input type="password" autocomplete="new-password"></label><label>Повторите пароль <input type="password" autocomplete="new-password"></label><p>Пароль хранится только в памяти сеанса на этом компьютере. Файлы сохраняются автоматически в secrets/&lt;имя deployment&gt;/ текущего проекта.</p></div></article>
       <article class="card"><div class="body"><div class="row"><span>Execution Node: node1</span><span>Целевые серверы: node1, node2, node3</span></div>
       <p>Порядок действий и зависимости. Здесь показано намерение, не результат выполнения.</p>
       <div class="server-table"><table class="task-table"><thead><tr><th>Этап</th><th>Действие</th><th>Где</th><th>Зависит от</th></tr></thead><tbody>

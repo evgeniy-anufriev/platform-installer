@@ -13,6 +13,8 @@ export function CancelInstallationRun(arg1:string):Promise<main.InstallationRunO
 
 export function CheckExecutionNode():Promise<main.ExecutionNodeReadiness>;
 
+export function ChoosePendingDeploymentRuntimeSecretFile(arg1:main.PendingRuntimeSecretFileInput):Promise<string>;
+
 export function ChooseProject():Promise<main.ProjectOpenResult>;
 
 export function ChooseProjectExportParent():Promise<string>;
@@ -35,6 +37,8 @@ export function CreateProject(arg1:projectlifecycle.CreateProjectRequest):Promis
 
 export function CurrentProject():Promise<main.ProjectOpenResult>;
 
+export function DeliverPendingSecretOutput(arg1:main.SecretOutputDeliveryInput):Promise<main.SecretOutputDeliveryOperation>;
+
 export function DiscardEditSession(arg1:string):Promise<main.EditOperationResult>;
 
 export function GetApplicationConfig():Promise<main.ApplicationConfigResult>;
@@ -49,11 +53,15 @@ export function GetInstallationRun(arg1:string):Promise<main.InstallationRunOper
 
 export function GetInstallationState():Promise<main.InstallationState>;
 
+export function GetPendingRuntimeSecretDescriptors(arg1:string):Promise<main.RuntimeSecretDescriptorOperation>;
+
 export function GetRuntimeSecretDescriptors():Promise<main.RuntimeSecretDescriptorOperation>;
 
 export function GetSessionCredentialStatus():Promise<runtimesecret.Status>;
 
 export function GetVerifiedPKIView():Promise<main.VerifiedPKIView>;
+
+export function ListPendingSecretOutputs(arg1:any):Promise<main.SecretOutputPackagesOperation>;
 
 export function OpenProject(arg1:string):Promise<main.ProjectOpenResult>;
 
@@ -72,6 +80,10 @@ export function SelectExecutionNode(arg1:string):Promise<main.ExecutionNodeConte
 export function SetDeploymentRuntimeSecretValues(arg1:main.RuntimeSecretValuesInput):Promise<void>;
 
 export function SetPKIStorePassword(arg1:string):Promise<runtimesecret.Status>;
+
+export function SetPendingDeploymentRuntimeSecretValues(arg1:main.PendingRuntimeSecretValuesInput):Promise<void>;
+
+export function SetSecretOutputEncryptionPassword(arg1:main.OutputEncryptionPasswordInput):Promise<void>;
 
 export function SetSessionCredential(arg1:runtimesecret.Input):Promise<runtimesecret.Status>;
 

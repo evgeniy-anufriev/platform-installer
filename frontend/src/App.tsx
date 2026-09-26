@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import type {
   EditResult,
@@ -16,6 +16,8 @@ import type {
   SessionCredentialInput,
   SessionCredentialStatus,
   VerifiedPKIView,
+  SecretOutputPackagesOperation,
+  SecretOutputDeliveryOperation,
 } from "./backend";
 import { backend } from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
@@ -185,6 +187,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [installationRun, setInstallationRun] = useState<InstallationRunOperation | undefined>(undefined);
   const [installationEvents, setInstallationEvents] = useState<InstallationEventView[]>([]);
   const [installationSubscription, setInstallationSubscription] = useState("");
+  const [secretOutputPackages, setSecretOutputPackages] = useState<SecretOutputPackagesOperation | undefined>();
+  const [outputDelivery, setOutputDelivery] = useState<SecretOutputDeliveryOperation | undefined>();
   const [endpointPreview, setEndpointPreview] = useState<
     EndpointPreview | undefined
   >(undefined);
@@ -429,6 +433,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationBusy(true);
     try {
       const operation = await api.startApprovedInstallation(planId);
+      if (operation.status === "BLOCKED" && api.getInstallationPlan) {
+        setInstallationPlan(await api.getInstallationPlan(planId));
+      }
       setInstallationRun(operation);
       setInstallationEvents([]);
       setInstallationTab("execution");
@@ -444,6 +451,35 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationBusy(true);
     try { setInstallationRun(await api.cancelInstallationRun(runId)); } finally { setInstallationBusy(false); }
   };
+  const setOutputEncryptionPassword = async (password: string, confirm: string) => {
+    if (!api.setSecretOutputEncryptionPassword) throw new Error("SECRET_OUTPUT_UNAVAILABLE");
+    await api.setSecretOutputEncryptionPassword(password, confirm);
+    if (installationPlan?.plan?.id && api.getInstallationPlan) {
+      setInstallationPlan(await api.getInstallationPlan(installationPlan.plan.id));
+    }
+  };
+  const refreshSecretOutputs = useCallback(async () => {
+    if (api.listPendingSecretOutputs) setSecretOutputPackages(await api.listPendingSecretOutputs());
+  }, [api]);
+  const deliverSecretOutput = useCallback(async (packageId: string) => {
+    if (!api.deliverPendingSecretOutput) return;
+    setOutputDelivery(await api.deliverPendingSecretOutput(packageId));
+    if (api.listPendingSecretOutputs) setSecretOutputPackages(await api.listPendingSecretOutputs());
+  }, [api]);
+  const collectAndDeliverSecretOutputs = useCallback(async () => {
+    if (!api.listPendingSecretOutputs) return;
+    const pending = await api.listPendingSecretOutputs();
+    setSecretOutputPackages(pending);
+    const plan = installationPlan?.plan;
+    if (pending.status !== "READY" || !plan?.secretOutputEncryptionRequired || !plan.secretOutputEncryptionPasswordPresent) return;
+    for (const item of pending.packages || []) {
+      if (!api.deliverPendingSecretOutput) break;
+      const delivery = await api.deliverPendingSecretOutput(item.packageId);
+      setOutputDelivery(delivery);
+      if (delivery.status !== "DELIVERED") break;
+    }
+    setSecretOutputPackages(await api.listPendingSecretOutputs());
+  }, [api, installationPlan?.plan]);
   useEffect(() => {
     if (!(window as unknown as { runtime?: unknown }).runtime) return undefined;
     return EventsOn("installation-run-event", (value: { subscriptionId?: string; event?: InstallationEventView }) => {
@@ -451,9 +487,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setInstallationEvents((current) => current.some((event) => event.sequence === value.event!.sequence) ? current : [...current, value.event!].slice(-512));
       if (["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(value.event.status) && api.getInstallationRun) {
         api.getInstallationRun(value.event.runId).then(setInstallationRun).catch(() => {});
+        void collectAndDeliverSecretOutputs().catch(() => {});
       }
     });
-  }, [api, installationSubscription]);
+  }, [api, installationSubscription, collectAndDeliverSecretOutputs]);
   useEffect(() => {
     if (installationTab === "execution" || !installationSubscription || !api.unsubscribeInstallationRun) return;
     void api.unsubscribeInstallationRun(installationSubscription);
@@ -731,15 +768,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setCredentialStatus(status);
     return status;
   };
-  const getRuntimeSecretDescriptors = async () => {
-    if (!api.getRuntimeSecretDescriptors)
-      throw new Error("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED");
-    return api.getRuntimeSecretDescriptors();
+  const getPendingRuntimeSecretDescriptors = async (serviceDeployment: string) => {
+    if (!api.getPendingRuntimeSecretDescriptors)
+      throw new Error("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE");
+    return api.getPendingRuntimeSecretDescriptors(serviceDeployment);
   };
-  const setDeploymentRuntimeSecretValues = async (input: Parameters<NonNullable<ProjectBackend["setDeploymentRuntimeSecretValues"]>>[0]) => {
-    if (!api.setDeploymentRuntimeSecretValues)
-      throw new Error("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED");
-    await api.setDeploymentRuntimeSecretValues(input);
+  const setPendingDeploymentRuntimeSecretValues = async (input: Parameters<NonNullable<ProjectBackend["setPendingDeploymentRuntimeSecretValues"]>>[0]) => {
+    if (!api.setPendingDeploymentRuntimeSecretValues)
+      throw new Error("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE");
+    await api.setPendingDeploymentRuntimeSecretValues(input);
+  };
+
+  const choosePendingDeploymentRuntimeSecretFile = async (input: Parameters<NonNullable<ProjectBackend["choosePendingDeploymentRuntimeSecretFile"]>>[0]) => {
+    if (!api.choosePendingDeploymentRuntimeSecretFile) throw new Error("SECRET_FILE_IMPORT_UNAVAILABLE");
+    return api.choosePendingDeploymentRuntimeSecretFile(input);
   };
   const selectExecutionNode = async (hostId: string) => {
     if (!api.selectExecutionNode)
@@ -1120,8 +1162,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             onAppend={appendStructuralIntent}
             onReview={review}
             onDiscard={discard}
-            onGetRuntimeSecretDescriptors={getRuntimeSecretDescriptors}
-            onSetDeploymentRuntimeSecretValues={setDeploymentRuntimeSecretValues}
+            onGetPendingRuntimeSecretDescriptors={getPendingRuntimeSecretDescriptors}
+            onSetPendingDeploymentRuntimeSecretValues={setPendingDeploymentRuntimeSecretValues}
+            onChoosePendingDeploymentRuntimeSecretFile={choosePendingDeploymentRuntimeSecretFile}
           />
         )}
         {!loading && !creating && projectOpen && page === "certificates" && (
@@ -1181,6 +1224,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             events={installationEvents}
             credentialStatus={credentialStatus}
             onSetPKIStorePassword={setPKIStorePassword}
+            onSetOutputEncryptionPassword={setOutputEncryptionPassword}
+            secretOutputPackages={secretOutputPackages}
+            outputDelivery={outputDelivery}
+            onRefreshSecretOutputs={() => void refreshSecretOutputs()}
+            onDeliverSecretOutput={(packageId) => void deliverSecretOutput(packageId)}
             onStart={startApprovedInstallation}
             onCancel={cancelInstallationRun}
           />

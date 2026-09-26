@@ -88,10 +88,20 @@ def owned(journal):
 
 
 def request():
-    value = json.load(sys.stdin)
+    def unique_pairs(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
+            value[key] = item
+        return value
+    def reject_constant(_value):
+        raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
+    value = json.load(sys.stdin, object_pairs_hook=unique_pairs,
+                      parse_constant=reject_constant)
     if isinstance(value, dict) and value.get("apiVersion") == "platform.installer/execution-start/v1alpha2" and value.get("kind") == "StartExecutionRequest":
         return value
-    if isinstance(value, dict) and value.get("apiVersion") == "platform.installer/runtime-secret-lease/v1alpha1" and value.get("kind") == "PutRuntimeSecretLeaseRequest":
+    if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
     if not isinstance(value, dict) or value.get("apiVersion") != "platform.installer/execution-runtime/v1alpha1":
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
@@ -100,7 +110,7 @@ def request():
     return value
 
 
-def _capabilities_v3(args):
+def _capabilities_v4(args):
     try:
         with open(os.path.join(args.runtime_release, "manifest.yaml"), "r", encoding="utf-8") as stream:
             manifest = yaml.safe_load(stream)
@@ -109,7 +119,7 @@ def _capabilities_v3(args):
     required = ("bundleVersion", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest")
     if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
-    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha3", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.PAYLOAD_VERSION, execution_secret_lease.PKI_PAYLOAD_VERSION, execution_secret_lease.RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha1", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha4", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha2", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
 
 
 def _v2_start_request(value):
@@ -151,8 +161,10 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
     with open(manifest_path, "r", encoding="utf-8") as stream: manifest = json.load(stream)
     if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]: raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
     requirements = manifest.get("runtimeSecretRequirements", [])
+    typed_requirements = manifest.get("runtimeSecretInputs", [])
     if not isinstance(requirements, list) or len(requirements) > 16:
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    execution_secret_lease._validate_typed_secret_requirements(typed_requirements)
     pki, service = [], []
     references, requirement_refs = set(), set()
     for requirement in requirements:
@@ -169,16 +181,22 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     if len(pki) > 1:
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
-    if pki:
-        if not value.get("leaseId"):
-            raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
-        execution_secret_lease.validate_staged_pki_store_password(state_root, value["leaseId"])
-    if service:
-        if not value.get("leaseId"):
-            raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
-        execution_secret_lease.validate_staged_runtime_secret_values(state_root, value["leaseId"], service)
-    if not requirements and value.get("leaseId"):
-        execution_secret_lease.validate_staged_payload_without_pki_store_password(state_root, value["leaseId"])
+    if pki and not value.get("leaseId"):
+        raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+    if service and not value.get("leaseId"):
+        raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
+    if value.get("leaseId"):
+        if pki:
+            execution_secret_lease.validate_staged_pki_store_password(
+                state_root, value["leaseId"], allow_service_values=bool(service),
+                allow_typed_inputs=bool(typed_requirements))
+        else:
+            execution_secret_lease.validate_staged_payload_without_pki_store_password(
+                state_root, value["leaseId"], allow_typed_inputs=bool(typed_requirements),
+                allow_service_values=bool(service))
+        if service:
+            execution_secret_lease.validate_staged_runtime_secret_values(state_root, value["leaseId"], service)
+        execution_secret_lease.validate_staged_runtime_secret_inputs(state_root, value["leaseId"], typed_requirements)
     # The node, not planning or the caller, creates the authoritative run id.
     run_id = "installer-" + os.urandom(16).hex()
     run_dir = os.path.join(state_root, "runs", run_id)
@@ -740,12 +758,34 @@ def runtime_secret_descriptors(value, state_root, runtime_release, runtime_ident
         _cleanup_snapshot_staging(value, journal, stage_identity)
 
 
+def put_runtime_secret_lease(value, state_root):
+    """Admit only the payload generation authorized by each fixed request version."""
+    fields = {"apiVersion", "kind", "requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease", "payload"}
+    version = value.get("apiVersion") if isinstance(value, dict) else None
+    if not isinstance(value, dict) or set(value) != fields or value.get("kind") != "PutRuntimeSecretLeaseRequest":
+        raise LifecycleError("LEASE_REQUEST_INVALID")
+    payload = value.get("payload")
+    payload_version = payload.get("apiVersion") if isinstance(payload, dict) else None
+    if version == "platform.installer/runtime-secret-lease/v1alpha2":
+        if payload_version != execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION:
+            raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    elif version == "platform.installer/runtime-secret-lease/v1alpha1":
+        if payload_version == execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION:
+            raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    else:
+        raise LifecycleError("LEASE_REQUEST_INVALID")
+    metadata = {key: value.get(key) for key in ("requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease")}
+    return execution_secret_lease.put(state_root, metadata, payload)
+
+
 def get(value, state_root):
     journal = Journal(state_root, value["runId"])
     metadata = owned(journal)
     recover(state_root, active)
     result = {"run": journal.status(), "metadata": metadata}
     if result["run"].get("state") not in ACTIVE:
+        if not active(metadata.get("unit"), metadata):
+            journal.cleanup_runtime_secret_inputs()
         execution_secret_lease.cleanup_run(state_root, journal.run_id)
     if os.path.exists(journal.result_path):
         with open(journal.result_path, "r", encoding="utf-8") as stream:
@@ -774,15 +814,19 @@ def cancel(value, state_root):
     try:
         metadata, status = owned(journal), journal.status()
         if status.get("state") not in ACTIVE:
+            if not active(metadata.get("unit"), metadata):
+                journal.cleanup_runtime_secret_inputs()
             return {"run": status, "idempotent": True}
         if not active(metadata.get("unit"), metadata):
             journal.terminal("INTERRUPTED", "CONTROLLER_INTERRUPTED", "Owned controller is no longer active")
+            journal.cleanup_runtime_secret_inputs()
             return {"run": journal.status(), "idempotent": True}
         # Commit cancellation before asking systemd to terminate the whole
         # owned cgroup.  The controller can then never race a child SIGTERM
         # into a contradictory FAILED terminal result.
         journal.terminal("CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
         subprocess.check_call(["systemctl", "stop", metadata["unit"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        journal.cleanup_runtime_secret_inputs()
         return {"run": journal.status(), "idempotent": False}
     finally:
         os.close(lock)
@@ -819,13 +863,10 @@ def main():
     value = request()
     if value.get("apiVersion") == "platform.installer/execution-start/v1alpha2":
         return reply(_start_v2(value, args.state_root, args.runtime_release, args.controller, args.bundle_digest))
-    if value.get("apiVersion") == "platform.installer/runtime-secret-lease/v1alpha1":
-        if set(value) != {"apiVersion", "kind", "requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease", "payload"}:
-            raise LifecycleError("LEASE_REQUEST_INVALID")
-        metadata = {key: value.get(key) for key in ("requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease")}
-        return reply(execution_secret_lease.put(args.state_root, metadata, value.get("payload")))
+    if value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2"):
+        return reply(put_runtime_secret_lease(value, args.state_root))
     operation = value["operation"]
-    if operation == "GetCapabilities": return reply(_capabilities_v3(args))
+    if operation == "GetCapabilities": return reply(_capabilities_v4(args))
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)

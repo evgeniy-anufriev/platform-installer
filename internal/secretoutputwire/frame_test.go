@@ -11,8 +11,8 @@ import (
 
 func fixture(t *testing.T) ([]byte, Binding) {
 	t.Helper()
-	b := Binding{"project-test", "vault-ha", "12345678-1234-1234-1234-123456789abc", strings.Repeat("a", 32), "installer-test", "sha256:" + strings.Repeat("b", 64), 1}
-	m := metadata{"SecretOutputDelivery/v1alpha1", b.PackageID, b.ProjectID, b.DeploymentID, b.ClusterID, b.SourceRunID, b.RuntimeDigest, b.Generation, "READY", []string{"admin-token", "unseal-shares"}}
+	b := Binding{"project-test", "vault-ha", strings.Repeat("a", 32), "installer-test", "sha256:" + strings.Repeat("b", 64), 1}
+	m := metadata{"SecretOutputDelivery/v1alpha1", b.PackageID, b.ProjectID, b.DeploymentID, b.SourceRunID, b.RuntimeDigest, b.Generation, "READY", []string{"admin-token", "unseal-shares"}}
 	header, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)

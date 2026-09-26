@@ -224,6 +224,13 @@ current selected run. Neither page displays runtime secret values.
 
 ## 5. Installation local pages
 
+For plans declaring protected service outputs, Installation → Plan collects
+and confirms the shared session-only encryption password. The password stays
+on the workstation. Output files are saved automatically under the current
+project's `secrets/<deploymentId>/`; there is no output-folder selector.
+Installation → Result shows safe delivery status and the completed location.
+Service credential inputs remain in the selected service's Secrets dialog.
+
 | Local page | Primary content and boundary |
 | --- | --- |
 | Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |

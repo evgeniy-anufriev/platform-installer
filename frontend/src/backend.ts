@@ -12,6 +12,10 @@ import {
   GetEndpointPreview,
   GetVerifiedPKIView,
   GetRuntimeSecretDescriptors,
+	GetPendingRuntimeSecretDescriptors,
+	ListPendingSecretOutputs,
+	SetSecretOutputEncryptionPassword,
+	DeliverPendingSecretOutput,
   GetExecutionNodeContext,
   GetInstallationState,
   CreateInstallationPlan,
@@ -32,6 +36,8 @@ import {
   SetSessionCredential,
   SetPKIStorePassword,
   SetDeploymentRuntimeSecretValues,
+  SetPendingDeploymentRuntimeSecretValues,
+  ChoosePendingDeploymentRuntimeSecretFile,
   SelectExecutionNode,
   StartEditSession,
   VerifyProject,
@@ -220,6 +226,8 @@ export type InstallationPlanView = {
   expiresAt: string;
   approved: boolean;
   pkiStorePasswordRequired?: boolean;
+  secretOutputEncryptionRequired?: boolean;
+  secretOutputEncryptionPasswordPresent?: boolean;
   acknowledgements: Array<{ code: string; summary: string }>;
   phases: Array<{
     id: string;
@@ -324,9 +332,13 @@ export type ProjectExportOperationResult = {
 };
 export type RuntimeSecretDescriptor = {
   requirementRef: string;
-  purpose: "PKI_STORE_PASSWORD" | "SERVICE_PASSWORD";
+  purpose: "PKI_STORE_PASSWORD" | "SERVICE_PASSWORD" | "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES";
   serviceDeployment?: string;
+  setting?: string;
   displayLabel: string;
+  requiredWhen?: string;
+  operations?: string[];
+  referenceConfigured?: boolean;
   hosts: string[];
 };
 export type RuntimeSecretDescriptorOperation = {
@@ -341,6 +353,39 @@ export type RuntimeSecretValuesInput = {
   descriptorSetFingerprint: string;
   serviceDeployment: string;
   values: Record<string, string>;
+};
+export type PendingRuntimeSecretValuesInput = {
+  serviceDeployment: string;
+  values: Record<string, string>;
+};
+export type PendingRuntimeSecretFileInput = {
+  serviceDeployment: string;
+  purpose: "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES";
+  encryptionPassword: string;
+};
+export type SecretOutputPackage = {
+  protocol: string;
+  packageId: string;
+  projectId: string;
+  deploymentId: string;
+  sourceRunId: string;
+  runtimeDigest: string;
+  generation: number;
+  state: "READY" | "ACKED_CLEANUP_PENDING";
+  entries: Array<"admin-token" | "unseal-shares">;
+};
+export type SecretOutputPackagesOperation = {
+  status: "READY" | "UNAVAILABLE";
+  packages?: SecretOutputPackage[];
+  nextCursor?: string | null;
+  error?: { code: string; message: string };
+};
+export type SecretOutputDeliveryOperation = {
+  status: "UNAVAILABLE" | "STAGING_RETAINED" | "ACK_PENDING" | "DELIVERED";
+  package?: SecretOutputPackage;
+  directory?: string;
+  stagingPath?: string;
+  error?: { code: string; message: string };
 };
 export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
@@ -369,6 +414,12 @@ export interface ProjectBackend {
   setPKIStorePassword?(value: string): Promise<SessionCredentialStatus>;
   getRuntimeSecretDescriptors?(): Promise<RuntimeSecretDescriptorOperation>;
   setDeploymentRuntimeSecretValues?(input: RuntimeSecretValuesInput): Promise<void>;
+  getPendingRuntimeSecretDescriptors?(serviceDeployment: string): Promise<RuntimeSecretDescriptorOperation>;
+  setPendingDeploymentRuntimeSecretValues?(input: PendingRuntimeSecretValuesInput): Promise<void>;
+  choosePendingDeploymentRuntimeSecretFile?(input: PendingRuntimeSecretFileInput): Promise<string>;
+  listPendingSecretOutputs?(cursor?: string | null): Promise<SecretOutputPackagesOperation>;
+  setSecretOutputEncryptionPassword?(password: string, confirm: string): Promise<void>;
+  deliverPendingSecretOutput?(packageId: string): Promise<SecretOutputDeliveryOperation>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
   getInstallationState?(): Promise<InstallationState>;
@@ -426,6 +477,12 @@ export const backend: ProjectBackend = {
   setPKIStorePassword: SetPKIStorePassword,
   getRuntimeSecretDescriptors: () => GetRuntimeSecretDescriptors() as unknown as Promise<RuntimeSecretDescriptorOperation>,
   setDeploymentRuntimeSecretValues: (input) => SetDeploymentRuntimeSecretValues(input as never),
+  getPendingRuntimeSecretDescriptors: (serviceDeployment) => GetPendingRuntimeSecretDescriptors(serviceDeployment) as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  setPendingDeploymentRuntimeSecretValues: (input) => SetPendingDeploymentRuntimeSecretValues(input as never),
+  choosePendingDeploymentRuntimeSecretFile: (input) => ChoosePendingDeploymentRuntimeSecretFile(input as never),
+  listPendingSecretOutputs: (cursor = null) => ListPendingSecretOutputs(cursor) as unknown as Promise<SecretOutputPackagesOperation>,
+  setSecretOutputEncryptionPassword: (password, confirm) => SetSecretOutputEncryptionPassword({ password, confirm } as never),
+  deliverPendingSecretOutput: (packageId) => DeliverPendingSecretOutput({ packageId } as never) as unknown as Promise<SecretOutputDeliveryOperation>,
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
   getInstallationState: () =>

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -19,6 +22,7 @@ import (
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
 	"platform-installer/internal/runtimesecret"
+	"platform-installer/internal/secretfiles"
 )
 
 type snapshotReaderStub struct {
@@ -117,6 +121,48 @@ func testApplicationConfig() AppOption {
 
 func (s snapshotReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {
 	return s.snapshot, s.err
+}
+
+func TestPendingServiceSecretsUseSavedCatalogAndRequireNoExecutionNode(t *testing.T) {
+	app := NewApp(snapshotReaderStub{}, lifecycleStub{})
+	app.current = ProjectOpenResult{
+		Status: "OPEN", Root: t.TempDir(), Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"},
+		Managed: &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{
+			"redis-main": {DeploymentID: "redis-main", ServiceType: "redis", Mode: "sentinel-ha"},
+		}},
+		Catalog: &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{
+			ID: "redis", Modes: []projectlifecycle.ProjectCatalogMode{{ID: "sentinel-ha", RequiredRuntimeSecretSettings: []string{"redisCredential", "sentinelCredential"}}},
+			ConfigurationSettings: []projectlifecycle.ProjectCatalogSetting{
+				{ID: "redisCredential", EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "redis-password", Label: "Redis password"},
+				{ID: "sentinelCredential", EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "redis-sentinel-password", Label: "Sentinel password"},
+			},
+		}}},
+	}
+	operation := app.GetPendingRuntimeSecretDescriptors("redis-main")
+	if operation.Status != "READY" || len(operation.Descriptors) != 2 || app.execution.context.Status == "READY" {
+		t.Fatalf("operation=%#v execution=%#v", operation, app.execution.context)
+	}
+	if err := app.SetPendingDeploymentRuntimeSecretValues(PendingRuntimeSecretValuesInput{ServiceDeployment: "redis-main", Values: map[string]string{"redis-password": "not-reported", "redis-sentinel-password": "also-not-reported"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.SetSessionCredential(runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "transport-only", ElevationMode: runtimesecret.ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	binding, err := app.credentialBindingLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.PromotePendingRuntimeSecretValues(binding, []string{"redis-password", "redis-sentinel-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 2 {
+			t.Fatal("pending secrets were not attached after exact promotion")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 type lifecycleStub struct {
@@ -521,6 +567,153 @@ func TestVerifyWithoutReadyNodeReturnsPrerequisiteWithoutPreparation(t *testing.
 	}
 	if after := fileDigest(t, projectFile); after != before {
 		t.Fatalf("Verify prerequisite path mutated project: before=%s after=%s", before, after)
+	}
+}
+
+type secretOutputTransportStub struct {
+	capabilityCalls, listCalls int
+	fetchCalls, ackCalls       int
+	packages                   []executionnode.SecretOutputPackage
+	frame                      []byte
+	ack                        executionnode.SecretOutputAck
+	ackRequest                 executionnode.SecretOutputRequest
+	err                        error
+	listErr                    error
+}
+
+func (*secretOutputTransportStub) BuildProjectSnapshot(ctx context.Context, node executionnode.Node, root string, release map[string]any) (*coreadapter.Snapshot, error) {
+	return verificationTransportStub{}.BuildProjectSnapshot(ctx, node, root, release)
+}
+
+func (s *secretOutputTransportStub) GetSecretOutputCapabilities(context.Context, executionnode.Node, string, string) (executionnode.SecretOutputCapabilities, error) {
+	s.capabilityCalls++
+	return executionnode.SecretOutputCapabilities{Protocol: "SecretOutputDelivery/v1alpha1", Operation: "GetCapabilities", MaxPayloadBytes: 65536, Operations: []string{"ListPending", "Fetch", "Acknowledge"}}, s.err
+}
+func (s *secretOutputTransportStub) ListPendingSecretOutputs(_ context.Context, _ executionnode.Node, _, project string, limit int, cursor *string) (executionnode.SecretOutputList, error) {
+	s.listCalls++
+	if s.listErr != nil {
+		return executionnode.SecretOutputList{}, s.listErr
+	}
+	return executionnode.SecretOutputList{Protocol: "SecretOutputDelivery/v1alpha1", Operation: "ListPending", ProjectID: project, Packages: s.packages}, s.err
+}
+func (s *secretOutputTransportStub) FetchSecretOutput(context.Context, executionnode.Node, string, string, string, int) ([]byte, error) {
+	s.fetchCalls++
+	if len(s.frame) == 0 {
+		return nil, errors.New("Fetch unavailable after ACK")
+	}
+	return append([]byte(nil), s.frame...), s.err
+}
+func (s *secretOutputTransportStub) AcknowledgeSecretOutput(_ context.Context, _ executionnode.Node, _ string, request executionnode.SecretOutputRequest) (executionnode.SecretOutputAck, error) {
+	s.ackCalls++
+	s.ackRequest = request
+	if s.ack.ReceiptID == "" {
+		s.ack = executionnode.SecretOutputAck{Protocol: "SecretOutputDelivery/v1alpha1", Operation: "Acknowledge", ProjectID: request.ProjectID, PackageID: request.PackageID, Generation: request.Generation, ReceiptID: request.ReceiptID, State: "DELIVERED"}
+	}
+	return s.ack, s.err
+}
+
+func TestListPendingSecretOutputsRequiresReadyNodeAndReturnsMetadataOnly(t *testing.T) {
+	root := t.TempDir()
+	node := executionnode.Node{ID: "desktop-qa", Address: "192.0.2.10", User: "qa", Port: 22, CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: "known_hosts", Fingerprint: "SHA256:qa"}}
+	transport := &secretOutputTransportStub{packages: []executionnode.SecretOutputPackage{{Protocol: "SecretOutputDelivery/v1alpha1", PackageID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ProjectID: "project-aaaaaaaaaaaaaaaa", DeploymentID: "vault-ha", SourceRunID: "installer-1234", RuntimeDigest: "sha256:" + strings.Repeat("b", 64), Generation: 1, State: "READY", Entries: []string{"admin-token", "unseal-shares"}}}}
+	release := map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64), "coreVersion": "test-core", "catalogDigest": "sha256:" + strings.Repeat("c", 64), "planningProtocol": executionbundle.ProtocolVersion}
+	reader := projectReader{transport: transport, node: node, runtimeRelease: release}
+	service := &executionLifecycleStub{}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: service, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+	app.execution.context.SelectedHostID = node.ID
+	if result := app.ListPendingSecretOutputs(nil); result.Status != "UNAVAILABLE" || transport.capabilityCalls != 0 || transport.listCalls != 0 {
+		t.Fatalf("not-ready result=%#v calls=%d/%d", result, transport.capabilityCalls, transport.listCalls)
+	}
+	app.execution.context.Status = "READY"
+	result := app.ListPendingSecretOutputs(nil)
+	if result.Status != "READY" || len(result.Packages) != 1 || transport.capabilityCalls != 1 || transport.listCalls != 1 {
+		t.Fatalf("result=%#v calls=%d/%d", result, transport.capabilityCalls, transport.listCalls)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil || bytes.Contains(encoded, []byte("test-token")) || bytes.Contains(encoded, []byte("test-share")) {
+		t.Fatalf("unsafe metadata projection: %s err=%v", encoded, err)
+	}
+	transport.listErr = executionnode.ErrSecretOutputRecoveryRequired
+	if recovery := app.ListPendingSecretOutputs(nil); recovery.Error == nil || recovery.Error.Code != "OUTPUT_RECOVERY_REQUIRED" {
+		t.Fatal("partial output recovery state hidden from UI")
+	}
+}
+
+func TestDeliverPendingSecretOutputEncryptsBeforeIdempotentAck(t *testing.T) {
+	root := t.TempDir()
+	projectID, deploymentID := "project-aaaaaaaaaaaaaaaa", "vault-ha"
+	packageID, runID := strings.Repeat("a", 32), "installer-1234"
+	runtimeDigest := "sha256:" + strings.Repeat("b", 64)
+	token, shares := []byte("vault-root-token\n"), []byte(`{"keys":["share-one","share-two"]}`)
+	meta, _ := json.Marshal(map[string]any{"protocol": "SecretOutputDelivery/v1alpha1", "packageId": packageID, "projectId": projectID, "deploymentId": deploymentID, "sourceRunId": runID, "runtimeDigest": runtimeDigest, "generation": 1, "state": "READY", "entries": []string{"admin-token", "unseal-shares"}})
+	frame := make([]byte, 16)
+	copy(frame, "SOD1")
+	binary.BigEndian.PutUint32(frame[4:8], uint32(len(meta)))
+	binary.BigEndian.PutUint32(frame[8:12], uint32(len(token)))
+	binary.BigEndian.PutUint32(frame[12:16], uint32(len(shares)))
+	frame = append(frame, meta...)
+	frame = append(frame, token...)
+	frame = append(frame, shares...)
+	node := executionnode.Node{ID: "desktop-qa", Address: "192.0.2.10", User: "qa", Port: 22, CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: "known_hosts", Fingerprint: "SHA256:qa"}}
+	transport := &secretOutputTransportStub{frame: frame, packages: []executionnode.SecretOutputPackage{{Protocol: "SecretOutputDelivery/v1alpha1", PackageID: packageID, ProjectID: projectID, DeploymentID: deploymentID, SourceRunID: runID, RuntimeDigest: runtimeDigest, Generation: 1, State: "READY", Entries: []string{"admin-token", "unseal-shares"}}}, ack: executionnode.SecretOutputAck{Protocol: "SecretOutputDelivery/v1alpha1", Operation: "Acknowledge", ProjectID: projectID, PackageID: packageID, Generation: 1, ReceiptID: strings.Repeat("c", 32), State: "DELIVERED"}}
+	// The ACK receipt id is filled from the locally committed package by the
+	// real transport; the stub echoes the request in the dedicated test below.
+	transport.ack = executionnode.SecretOutputAck{}
+	reader := projectReader{transport: transport, node: node, runtimeRelease: map[string]any{"bundleDigest": runtimeDigest, "coreVersion": "test-core", "catalogDigest": "sha256:" + strings.Repeat("d", 64), "planningProtocol": executionbundle.ProtocolVersion}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: &executionLifecycleStub{}, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: projectID}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+	app.execution.context.Status, app.execution.context.SelectedHostID = "READY", node.ID
+	password := []byte("correct horse battery staple")
+	if err := app.secrets.SetOutputEncryptionPassword(runtimesecret.Binding{Root: root, ID: projectID}, password); err != nil {
+		t.Fatal(err)
+	}
+	operation := app.DeliverPendingSecretOutput(SecretOutputDeliveryInput{PackageID: packageID})
+	if operation.Status != "DELIVERED" || operation.Directory == "" || transport.fetchCalls != 1 || transport.ackCalls != 1 {
+		t.Fatalf("delivery=%#v calls=%d/%d", operation, transport.fetchCalls, transport.ackCalls)
+	}
+	if operation.Directory != filepath.Join(root, "secrets", deploymentID) {
+		t.Fatalf("unexpected default output directory: %s", operation.Directory)
+	}
+	loaded, encrypted, err := installer.ReadSecretOutputFiles(root, projectID, deploymentID, packageID, runID, 1, runtimeDigest)
+	if err != nil || loaded.ReceiptID == "" {
+		t.Fatalf("local receipt=%#v err=%v", loaded, err)
+	}
+	defer func() {
+		for _, value := range encrypted {
+			clear(value)
+		}
+	}()
+	admin, err := secretfiles.Decrypt(password, encrypted["admin-token"], 4096)
+	if err != nil || !bytes.Equal(admin, token) {
+		t.Fatal("encrypted token did not round-trip")
+	}
+	clear(admin)
+	if _, err := os.Stat(filepath.Join(operation.Directory, "admin-token")); !os.IsNotExist(err) {
+		t.Fatal("plaintext output file was created")
+	}
+	// A fresh application has no remembered pending listing/frame. Its only
+	// recovery authority is the bound receipt at a known managed deployment.
+	transport.packages, transport.frame = nil, nil
+	reopened := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: &executionLifecycleStub{}, bundleRoot: "bundle"}))
+	reopened.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: projectID}, Managed: &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{deploymentID: {}}}, Verification: notVerified()}
+	reopened.bindExecutionLocked(root, reopened.current.Project, nil)
+	reopened.execution.context.Status, reopened.execution.context.SelectedHostID = "READY", node.ID
+	if err := reopened.secrets.SetOutputEncryptionPassword(runtimesecret.Binding{Root: root, ID: projectID}, password); err != nil {
+		t.Fatal(err)
+	}
+	listed := reopened.ListPendingSecretOutputs(nil)
+	if len(listed.Packages) != 1 || listed.Packages[0].PackageID != packageID {
+		t.Fatal("lost ACK identity did not survive reopen")
+	}
+	for _, ackState := range []string{"ACKED_CLEANUP_PENDING", "DELIVERED"} {
+		transport.ack.State = ackState
+		retry := reopened.DeliverPendingSecretOutput(SecretOutputDeliveryInput{PackageID: packageID})
+		if (ackState == "DELIVERED" && retry.Status != "DELIVERED") || (ackState != "DELIVERED" && retry.Status != "ACK_PENDING") || transport.fetchCalls != 1 || transport.ackRequest.ReceiptID != loaded.ReceiptID {
+			t.Fatalf("retry=%#v fetch=%d", retry, transport.fetchCalls)
+		}
 	}
 }
 

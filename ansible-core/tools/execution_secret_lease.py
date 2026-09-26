@@ -18,15 +18,24 @@ from datetime import datetime, timezone
 from execution_lifecycle import LifecycleError
 
 
-LEASE_PROTOCOL = "PutRuntimeSecretLease/v1alpha1"
+LEASE_PROTOCOL = "PutRuntimeSecretLease/v1alpha2"
+LEGACY_LEASE_PROTOCOL = "PutRuntimeSecretLease/v1alpha1"
 PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha1"
 PKI_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha2"
 RUNTIME_SECRET_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha3"
+TYPED_RUNTIME_SECRET_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha4"
 MAX_PAYLOAD_BYTES = 1088 * 1024
 MAX_PKI_STORE_PASSWORD_BYTES = 4096
 MAX_RUNTIME_SECRET_VALUES = 16
 MAX_RUNTIME_SECRET_VALUE_BYTES = 4096
 MAX_RUNTIME_SECRET_TOTAL_BYTES = 65536
+MAX_TYPED_RUNTIME_SECRET_INPUTS = 16
+MAX_TYPED_RUNTIME_SECRET_TOTAL_BYTES = 65536
+MAX_TYPED_SHARE_ARRAY_BYTES = 32768
+_TYPED_INPUT_OPERATIONS = {
+    "SERVICE_ADMIN_TOKEN": ["SERVICE_APPLY", "SERVICE_VERIFY"],
+    "SERVICE_UNSEAL_SHARES": ["SERVICE_APPLY"],
+}
 STAGED_TTL_SECONDS = 30 * 60
 _ID = re.compile(r"^[0-9a-f]{32}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -114,9 +123,11 @@ def _payload(value):
     base = {"apiVersion", "kind", "username", "password", "privateKey", "sudoPassword"}
     v2 = base | {"pkiStorePassword"}
     v3 = v2 | {"runtimeSecretValues"}
-    if not isinstance(value, dict) or set(value) not in (base, v2, v3) or value.get("apiVersion") not in (PAYLOAD_VERSION, PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("kind") != "TargetCredentialLeasePayload":
+    v4 = v3 | {"runtimeSecretInputs"}
+    if not isinstance(value, dict) or set(value) not in (base, v2, v3, v4) or value.get("apiVersion") not in (PAYLOAD_VERSION, PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("kind") != "TargetCredentialLeasePayload":
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
-    if (value.get("apiVersion") == PAYLOAD_VERSION) != (set(value) == base):
+    versions = {PAYLOAD_VERSION: base, PKI_PAYLOAD_VERSION: v2, RUNTIME_SECRET_PAYLOAD_VERSION: v3, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION: v4}
+    if set(value) != versions[value["apiVersion"]]:
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     username = value.get("username")
     password, key, sudo = value.get("password"), value.get("privateKey"), value.get("sudoPassword")
@@ -133,7 +144,7 @@ def _payload(value):
             except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
             if size < 1 or size > MAX_PKI_STORE_PASSWORD_BYTES:
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
-    if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION:
+    if value.get("apiVersion") in (RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION):
         store = value.get("pkiStorePassword")
         if store is not None:
             if not isinstance(store, str):
@@ -143,7 +154,7 @@ def _payload(value):
             if size < 1 or size > MAX_PKI_STORE_PASSWORD_BYTES:
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
         values = value.get("runtimeSecretValues")
-        if not isinstance(values, dict) or not values or len(values) > MAX_RUNTIME_SECRET_VALUES:
+        if not isinstance(values, dict) or len(values) > MAX_RUNTIME_SECRET_VALUES or (value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION and not values):
             raise LifecycleError("LEASE_PAYLOAD_INVALID")
         total = 0
         for reference, secret in values.items():
@@ -155,6 +166,48 @@ def _payload(value):
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
             total += size
             if total > MAX_RUNTIME_SECRET_TOTAL_BYTES:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    if value.get("apiVersion") == TYPED_RUNTIME_SECRET_PAYLOAD_VERSION:
+        inputs = value.get("runtimeSecretInputs")
+        if not isinstance(inputs, list) or len(inputs) > MAX_TYPED_RUNTIME_SECRET_INPUTS:
+            raise LifecycleError("LEASE_PAYLOAD_INVALID")
+        seen, total = set(), 0
+        for item in inputs:
+            if not isinstance(item, dict) or set(item) != {"requirementRef", "purpose", "serviceDeployment", "operations", "value"}:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            reference, purpose, deployment, operations = (item.get("requirementRef"), item.get("purpose"), item.get("serviceDeployment"), item.get("operations"))
+            if (not isinstance(reference, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", reference) is None or
+                    not isinstance(purpose, str) or purpose not in _TYPED_INPUT_OPERATIONS or
+                    not isinstance(deployment, str) or len(deployment) > 128 or re.fullmatch(r"[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*", deployment) is None or
+                    operations != _TYPED_INPUT_OPERATIONS.get(purpose) or (deployment, reference) in seen):
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            seen.add((deployment, reference))
+            secret = item.get("value")
+            if purpose == "SERVICE_ADMIN_TOKEN":
+                if not isinstance(secret, str):
+                    raise LifecycleError("LEASE_PAYLOAD_INVALID")
+                try: size = len(secret.encode("utf-8", "strict"))
+                except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
+                if not 1 <= size <= 4096:
+                    raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            elif purpose == "SERVICE_UNSEAL_SHARES":
+                if not isinstance(secret, list) or not 1 <= len(secret) <= 255 or any(not isinstance(share, str) for share in secret) or len(set(secret)) != len(secret):
+                    raise LifecycleError("LEASE_PAYLOAD_INVALID")
+                for share in secret:
+                    try: size = len(share.encode("utf-8", "strict"))
+                    except UnicodeError: raise LifecycleError("LEASE_PAYLOAD_INVALID")
+                    if not 1 <= size <= 128:
+                        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+                    total += size
+                encoded_shares = json.dumps(secret, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+                if len(encoded_shares) > MAX_TYPED_SHARE_ARRAY_BYTES:
+                    raise LifecycleError("LEASE_PAYLOAD_INVALID")
+                total += len(encoded_shares)
+            else:
+                raise LifecycleError("LEASE_PAYLOAD_INVALID")
+            if purpose == "SERVICE_ADMIN_TOKEN":
+                total += size
+            if total > MAX_TYPED_RUNTIME_SECRET_TOTAL_BYTES:
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
     encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_PAYLOAD_BYTES:
@@ -172,7 +225,7 @@ def pki_store_password(state_root, lease_id, run_id):
     except (OSError, UnicodeError, ValueError):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     _payload(value)
-    if value.get("apiVersion") not in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("pkiStorePassword") is None:
+    if value.get("apiVersion") not in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("pkiStorePassword") is None:
         raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
     return value["pkiStorePassword"]
 
@@ -245,24 +298,109 @@ def ansible_password_credentials_for_run(state_root, run_id):
 
 
 def runtime_secret_values_for_run(state_root, run_id):
-    """Return attached v1alpha3 values only to the controller process."""
-    attached = _read(os.path.join(_root(state_root), "attached", run_id + ".json"))
-    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
-    if not _safe_id(lease_id):
-        raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
-    path = payload_path(state_root, lease_id, run_id)
-    try:
-        with open(path, "rb") as stream: raw = stream.read(MAX_PAYLOAD_BYTES + 1)
-        value = json.loads(raw.decode("utf-8", "strict"))
-    except (OSError, UnicodeError, ValueError):
-        raise LifecycleError("LEASE_PAYLOAD_INVALID")
-    _payload(value)
-    values = value.get("runtimeSecretValues") if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION else None
+    """Return attached bounded service values only to the controller process."""
+    value = _attached_payload_for_run(state_root, run_id)
+    values = value.get("runtimeSecretValues") if value.get("apiVersion") in (RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) else None
     if not isinstance(values, dict): raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")
     return values
 
 
-def validate_staged_pki_store_password(state_root, lease_id):
+def _attached_payload_for_run(state_root, run_id):
+    attached = _read(os.path.join(_root(state_root), "attached", run_id + ".json"))
+    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
+    if not _safe_id(lease_id):
+        raise LifecycleError("LEASE_ATTACH_INVALID")
+    path = payload_path(state_root, lease_id, run_id)
+    try:
+        with open(path, "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    return value
+
+
+def _validate_typed_secret_requirements(requirements):
+    if not isinstance(requirements, list) or len(requirements) > MAX_TYPED_RUNTIME_SECRET_INPUTS:
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    expected = {}
+    for requirement in requirements:
+        fields = {"requirementRef", "purpose", "serviceDeployment", "manifestRequirementRef", "hosts", "requiredWhen", "operations"}
+        if not isinstance(requirement, dict) or set(requirement) != fields:
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        reference, purpose = requirement.get("requirementRef"), requirement.get("purpose")
+        manifest_reference = requirement.get("manifestRequirementRef")
+        deployment, hosts = requirement.get("serviceDeployment"), requirement.get("hosts")
+        key = (deployment, reference)
+        if (not isinstance(reference, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", reference) is None or
+                not isinstance(manifest_reference, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", manifest_reference) is None or
+                purpose not in _TYPED_INPUT_OPERATIONS or
+                not isinstance(deployment, str) or len(deployment) > 128 or re.fullmatch(r"[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*", deployment) is None or
+                not isinstance(hosts, list) or len(hosts) > 256 or any(not isinstance(host, str) or not host for host in hosts) or len(set(hosts)) != len(hosts) or
+                requirement.get("requiredWhen") != {"SERVICE_ADMIN_TOKEN": "INITIALIZED", "SERVICE_UNSEAL_SHARES": "SEALED"}[purpose] or
+                requirement.get("operations") != _TYPED_INPUT_OPERATIONS.get(purpose) or key in expected):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        expected[key] = requirement
+    return expected
+
+
+def _validate_typed_secret_payload(values, requirements):
+    expected = _validate_typed_secret_requirements(requirements)
+    provided = values.get("runtimeSecretInputs", []) if values.get("apiVersion") == TYPED_RUNTIME_SECRET_PAYLOAD_VERSION else []
+    if provided and values.get("apiVersion") != TYPED_RUNTIME_SECRET_PAYLOAD_VERSION:
+        raise LifecycleError("RUNTIME_SECRET_INPUTS_UNEXPECTED")
+    seen = set()
+    for item in provided:
+        key = (item["serviceDeployment"], item["requirementRef"])
+        requirement = expected.get(key)
+        if (key in seen or requirement is None or
+                any(item[name] != requirement[name] for name in ("requirementRef", "purpose", "serviceDeployment", "operations"))):
+            raise LifecycleError("RUNTIME_SECRET_INPUTS_MISMATCH")
+        seen.add(key)
+    return provided
+
+
+def validate_staged_runtime_secret_inputs(state_root, lease_id, requirements):
+    """Bind supplied v1alpha4 values to the exact digest-protected Core manifest.
+
+    Conditional inputs may be absent: Core cannot observe initialized/sealed
+    target state. The service role enforces those runtime prerequisites before
+    mutating service configuration.
+    """
+    if not _safe_id(lease_id):
+        raise LifecycleError("RUNTIME_SECRET_INPUTS_REQUIRED")
+    record = _read(os.path.join(_lease_dir(_root(state_root), lease_id), "record.json"))
+    if record.get("state") != "STAGED":
+        raise LifecycleError("LEASE_NOT_STAGED")
+    try:
+        with open(os.path.join(_lease_dir(_root(state_root), lease_id), "payload.json"), "rb") as stream:
+            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
+        value = json.loads(raw.decode("utf-8", "strict"))
+    except (OSError, UnicodeError, ValueError):
+        raise LifecycleError("LEASE_PAYLOAD_INVALID")
+    _payload(value)
+    typed = _validate_typed_secret_payload(value, requirements)
+    if (requirements or typed) and value.get("apiVersion") != TYPED_RUNTIME_SECRET_PAYLOAD_VERSION:
+        raise LifecycleError("RUNTIME_SECRET_INPUTS_REQUIRED")
+    return typed
+
+
+def runtime_secret_inputs_for_operation(state_root, run_id, deployment, operation, requirements):
+    """Return only the attached typed values allowed for this deployment/action."""
+    expected = _validate_typed_secret_requirements(requirements)
+    value = _attached_payload_for_run(state_root, run_id)
+    provided = _validate_typed_secret_payload(value, requirements)
+    result = []
+    for item in provided:
+        if item["serviceDeployment"] == deployment and operation in item["operations"]:
+            result.append({"requirementRef": item["requirementRef"], "purpose": item["purpose"], "value": item["value"]})
+    if any((deployment, item["requirementRef"]) not in expected for item in result):
+        raise LifecycleError("RUNTIME_SECRET_INPUTS_MISMATCH")
+    return result
+
+
+def validate_staged_pki_store_password(state_root, lease_id, allow_service_values=False, allow_typed_inputs=False):
     """Prove a staged lease carries the one closed v2 PKI value without
     returning it.  Start uses this before its durable commit."""
     if not _safe_id(lease_id):
@@ -277,11 +415,15 @@ def validate_staged_pki_store_password(state_root, lease_id):
     except (OSError, UnicodeError, ValueError):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     _payload(value)
-    if value.get("apiVersion") not in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("pkiStorePassword") is None:
+    if value.get("apiVersion") not in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) or value.get("pkiStorePassword") is None:
         raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
+    if value.get("apiVersion") in (RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) and value.get("runtimeSecretValues") and not allow_service_values:
+        raise LifecycleError("RUNTIME_SECRET_VALUES_UNEXPECTED")
+    if value.get("apiVersion") == TYPED_RUNTIME_SECRET_PAYLOAD_VERSION and value.get("runtimeSecretInputs") and not allow_typed_inputs:
+        raise LifecycleError("RUNTIME_SECRET_INPUTS_UNEXPECTED")
 
 
-def validate_staged_payload_without_pki_store_password(state_root, lease_id):
+def validate_staged_payload_without_pki_store_password(state_root, lease_id, allow_typed_inputs=False, allow_service_values=False):
     """Reject a secret-bearing v2 lease when the private manifest did not
     attest the closed PKI requirement."""
     if not _safe_id(lease_id):
@@ -296,10 +438,12 @@ def validate_staged_payload_without_pki_store_password(state_root, lease_id):
     except (OSError, UnicodeError, ValueError):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     _payload(value)
-    if value.get("apiVersion") == PKI_PAYLOAD_VERSION and value.get("pkiStorePassword") is not None:
+    if value.get("apiVersion") in (PKI_PAYLOAD_VERSION, RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) and value.get("pkiStorePassword") is not None:
         raise LifecycleError("PKI_STORE_PASSWORD_UNEXPECTED")
-    if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION and (value.get("pkiStorePassword") is not None or value.get("runtimeSecretValues")):
+    if value.get("apiVersion") in (RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) and value.get("runtimeSecretValues") and not allow_service_values:
         raise LifecycleError("RUNTIME_SECRET_VALUES_UNEXPECTED")
+    if value.get("apiVersion") == TYPED_RUNTIME_SECRET_PAYLOAD_VERSION and value.get("runtimeSecretInputs") and not allow_typed_inputs:
+        raise LifecycleError("RUNTIME_SECRET_INPUTS_UNEXPECTED")
 
 
 def validate_staged_runtime_secret_values(state_root, lease_id, requirements):
@@ -316,7 +460,7 @@ def validate_staged_runtime_secret_values(state_root, lease_id, requirements):
     except (OSError, UnicodeError, ValueError):
         raise LifecycleError("LEASE_PAYLOAD_INVALID")
     _payload(value)
-    values = value.get("runtimeSecretValues") if value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION else None
+    values = value.get("runtimeSecretValues") if value.get("apiVersion") in (RUNTIME_SECRET_PAYLOAD_VERSION, TYPED_RUNTIME_SECRET_PAYLOAD_VERSION) else None
     expected = {item.get("requirementRef") for item in requirements if isinstance(item, dict)}
     if not expected or len(expected) != len(requirements) or not isinstance(values, dict) or set(values) != expected:
         raise LifecycleError("RUNTIME_SECRET_VALUES_REQUIRED")

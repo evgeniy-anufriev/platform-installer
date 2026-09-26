@@ -5,15 +5,56 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"platform-installer/internal/coreadapter"
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
+	"platform-installer/internal/runtimesecret"
 )
 
 type installationPlanTransport struct{}
+
+type outputCapabilityGateTransport struct {
+	secretOutputTransportStub
+	cap    executionnode.SecretOutputCapabilities
+	capErr error
+}
+
+func (s *outputCapabilityGateTransport) GetSecretOutputCapabilities(context.Context, executionnode.Node, string, string) (executionnode.SecretOutputCapabilities, error) {
+	return s.cap, s.capErr
+}
+
+func TestOutputCapabilityGateBlocksBeforeStart(t *testing.T) {
+	for _, mode := range []string{"unsupported", "unavailable", "malformed"} {
+		t.Run(mode, func(t *testing.T) {
+			app, _, client := installationPlanApp(t, false)
+			created := app.CreateInstallationPlan()
+			app.current.Managed = &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{"vault-ha": {ServiceType: "vault"}}}
+			app.current.Catalog = &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{ID: "vault", SecretOutputEntries: []string{"admin-token", "unseal-shares"}}}}
+			if err := app.secrets.SetOutputEncryptionPassword(runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}, []byte("synthetic-session-password")); err != nil {
+				t.Fatal(err)
+			}
+			approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+			if approved.Error != nil {
+				t.Fatal(approved.Error)
+			}
+			if mode != "unsupported" {
+				transport := &outputCapabilityGateTransport{}
+				if mode == "unavailable" {
+					transport.capErr = errors.New("test handshake failure")
+				}
+				app.binding.reader.transport = transport
+			}
+			result := app.StartApprovedInstallation(created.Plan.ID)
+			if result.Status != "BLOCKED" || result.Error == nil || !strings.HasPrefix(result.Error.Code, "SECRET_OUTPUT_") || client.starts != 0 {
+				t.Fatalf("result=%#v starts=%d", result, client.starts)
+			}
+		})
+	}
+}
 
 func (installationPlanTransport) BuildProjectSnapshot(context.Context, executionnode.Node, string, map[string]any) (*coreadapter.Snapshot, error) {
 	return nil, errors.New("snapshot must not be called by installation plan")
@@ -116,6 +157,22 @@ func TestInstallationPlanRejectsApprovalAfterCanonicalRevisionChanges(t *testing
 	approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
 	if approved.Error == nil || approved.Error.Code != executionnode.PlanStale || client.starts != 0 {
 		t.Fatalf("approved=%#v starts=%d", approved, client.starts)
+	}
+}
+
+func TestInstallationPlanRuntimeSecretRequirementsUseOnlyClosedCorePlanEntries(t *testing.T) {
+	plan := executionnode.DeploymentPlan{RequiredCredentials: []executionnode.RequiredCredential{
+		{RequirementRef: "redis-sentinel-password", Purpose: "SERVICE_PASSWORD"},
+		{RequirementRef: "pki-store-password", Purpose: "PKI_STORE_PASSWORD"},
+		{RequirementRef: "redis-password", Purpose: "SERVICE_PASSWORD"},
+	}}
+	got, err := installationPlanRuntimeSecretRequirements(plan)
+	if err != nil || strings.Join(got, ",") != "redis-password,redis-sentinel-password" {
+		t.Fatalf("requirements=%v err=%v", got, err)
+	}
+	plan.RequiredCredentials = append(plan.RequiredCredentials, executionnode.RequiredCredential{RequirementRef: "invalid_ref", Purpose: "SERVICE_PASSWORD"})
+	if _, err := installationPlanRuntimeSecretRequirements(plan); err == nil || err.Error() != "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE" {
+		t.Fatalf("invalid plan secret reference error=%v", err)
 	}
 }
 

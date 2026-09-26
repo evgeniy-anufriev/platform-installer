@@ -39,6 +39,10 @@ type boundedCommandRunner interface {
 	RunBounded(context.Context, string, []string, []byte, int) ([]byte, error)
 }
 
+type separatedCommandRunner interface {
+	RunSeparatedBounded(context.Context, string, []string, []byte, int, int) ([]byte, []byte, error)
+}
+
 type osRunner struct{}
 
 func (osRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
@@ -58,6 +62,19 @@ func (osRunner) RunBounded(ctx context.Context, name string, args []string, inpu
 		return output.Bytes(), errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
 	}
 	return output.Bytes(), err
+}
+
+func (osRunner) RunSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, []byte, error) {
+	command := exec.CommandContext(ctx, name, args...)
+	command.Stdin = bytes.NewReader(input)
+	stdout := &boundedOutput{limit: stdoutLimit}
+	stderr := &boundedOutput{limit: stderrLimit}
+	command.Stdout, command.Stderr = stdout, stderr
+	err := command.Run()
+	if stdout.overflow || stderr.overflow {
+		return stdout.Bytes(), nil, errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
+	}
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
 type boundedOutput struct {
@@ -735,6 +752,16 @@ func (t OpenSSHTransport) sshBounded(ctx context.Context, node Node, program str
 	full = append(full, args...)
 	return t.runBounded(ctx, "ssh", full, input, limit)
 }
+
+func (t OpenSSHTransport) sshSeparatedBounded(ctx context.Context, node Node, program string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, error) {
+	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	if err != nil {
+		return nil, errors.New("EXECUTION_NODE_TRANSPORT_FAILED")
+	}
+	full := append(t.base(node, identity), node.User+"@"+node.Address, program)
+	full = append(full, args...)
+	return t.runSeparatedBounded(ctx, "ssh", full, input, stdoutLimit, stderrLimit)
+}
 func (t OpenSSHTransport) base(node Node, identity string) []string {
 	return []string{"-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=" + node.HostKey.KnownHosts, "-i", identity, "-p", fmt.Sprint(node.Port)}
 }
@@ -789,6 +816,24 @@ func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []st
 		return out, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s", name)
 	}
 	return out, nil
+}
+
+func (t OpenSSHTransport) runSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, error) {
+	runner := t.Runner
+	if runner == nil {
+		runner = osRunner{}
+	}
+	separated, ok := runner.(separatedCommandRunner)
+	if !ok {
+		return nil, errors.New("EXECUTION_NODE_TRANSPORT_FAILED")
+	}
+	stdout, _, err := separated.RunSeparatedBounded(ctx, name, args, input, stdoutLimit, stderrLimit)
+	if err != nil {
+		// Keep bounded stdout for closed protocol error decoding only. Stderr
+		// and the process error never become diagnostics or secret content.
+		return stdout, errors.New("EXECUTION_NODE_TRANSPORT_FAILED")
+	}
+	return stdout, nil
 }
 func remoteChecks(bundle executionbundle.Verified) string {
 	var b strings.Builder

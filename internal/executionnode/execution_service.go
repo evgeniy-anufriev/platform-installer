@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -129,7 +130,10 @@ type CredentialedExecutionClient interface {
 type TargetCredentialLeaseRequest struct {
 	RequiresPKIStorePassword  bool
 	RuntimeSecretRequirements []string
+	RuntimeSecretInputs       []RuntimeSecretInputRequirement
 }
+
+type RuntimeSecretInputRequirement struct{ RequirementRef, Purpose string }
 
 type TargetCredentialLeaseProvider func(TargetCredentialLeaseRequest, func(TargetCredentialLeasePayload) error) error
 
@@ -388,6 +392,7 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if !hasPending {
 		requiresPKIStorePassword := planRequiresPKIStorePassword(fresh)
 		runtimeSecretRequirements := planRuntimeSecretRequirements(fresh)
+		typedRuntimeSecretRequirements := planRuntimeSecretInputRequirements(fresh)
 		if requiresPKIStorePassword && (!capability.supportsPayloadVersion(credentialPayloadVersionV2) || capability.MaxPayloadBytes < 4096) {
 			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_RUNTIME_UNSUPPORTED")
 		}
@@ -396,6 +401,9 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		}
 		if len(runtimeSecretRequirements) > 0 && (!capability.supportsPayloadVersion(credentialPayloadVersionV3) || provider == nil) {
 			return ExecutionRun{}, errors.New("RUNTIME_SECRET_VALUES_UNAVAILABLE")
+		}
+		if len(typedRuntimeSecretRequirements) > 0 && (!capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) || provider == nil) {
+			return ExecutionRun{}, errors.New("RUNTIME_SECRET_INPUTS_UNAVAILABLE")
 		}
 		attempt, err := newStartAttemptID()
 		if err != nil {
@@ -407,8 +415,8 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 			if err != nil {
 				return ExecutionRun{}, err
 			}
-			err = provider(TargetCredentialLeaseRequest{RequiresPKIStorePassword: requiresPKIStorePassword, RuntimeSecretRequirements: append([]string(nil), runtimeSecretRequirements...)}, func(payload TargetCredentialLeasePayload) error {
-				if requiresPKIStorePassword != (payload.PKIStorePassword != "") || !sameRuntimeSecretRequirementSet(runtimeSecretRequirements, payload.RuntimeSecretValues) {
+			err = provider(TargetCredentialLeaseRequest{RequiresPKIStorePassword: requiresPKIStorePassword, RuntimeSecretRequirements: append([]string(nil), runtimeSecretRequirements...), RuntimeSecretInputs: append([]RuntimeSecretInputRequirement(nil), typedRuntimeSecretRequirements...)}, func(payload TargetCredentialLeasePayload) error {
+				if requiresPKIStorePassword != (payload.PKIStorePassword != "") || !sameRuntimeSecretRequirementSet(runtimeSecretRequirements, payload.RuntimeSecretValues) || (len(typedRuntimeSecretRequirements) > 0 && (!payload.UseTypedRuntimeInputs || !sameRuntimeSecretInputSet(typedRuntimeSecretRequirements, payload.RuntimeSecretInputs))) {
 					return errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
 				}
 				lease, leaseErr := client.PutRuntimeSecretLease(ctx, node, CredentialLeaseRequest{RequestID: requestID, StartAttemptID: attempt, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease}, payload, capability.MaxPayloadBytes)
@@ -462,6 +470,34 @@ func planRuntimeSecretRequirements(plan DeploymentPlan) []string {
 	}
 	slices.Sort(result)
 	return result
+}
+
+func planRuntimeSecretInputRequirements(plan DeploymentPlan) []RuntimeSecretInputRequirement {
+	result := []RuntimeSecretInputRequirement{}
+	for _, requirement := range plan.RequiredCredentials {
+		if requirement.Purpose == "SERVICE_ADMIN_TOKEN" || requirement.Purpose == "SERVICE_UNSEAL_SHARES" {
+			result = append(result, RuntimeSecretInputRequirement{RequirementRef: requirement.RequirementRef, Purpose: requirement.Purpose})
+		}
+	}
+	slices.SortFunc(result, func(a, b RuntimeSecretInputRequirement) int {
+		return strings.Compare(a.RequirementRef, b.RequirementRef)
+	})
+	return result
+}
+
+func sameRuntimeSecretInputSet(required []RuntimeSecretInputRequirement, values []RuntimeSecretInputPayload) bool {
+	allowed := make(map[string]string, len(required))
+	for _, item := range required {
+		allowed[item.RequirementRef] = item.Purpose
+	}
+	seen := map[string]bool{}
+	for _, item := range values {
+		if seen[item.RequirementRef] || allowed[item.RequirementRef] != item.Purpose {
+			return false
+		}
+		seen[item.RequirementRef] = true
+	}
+	return true
 }
 
 func sameRuntimeSecretRequirementSet(required []string, values map[string]string) bool {

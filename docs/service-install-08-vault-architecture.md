@@ -202,10 +202,15 @@ SI08-A фиксирует additive определения и точные bounds
 [typed input contract freeze](service-install-08a-secret-contracts.md):
 ExecutionCapabilities/v1alpha4, BuildRuntimeSecretDescriptors/v1alpha2,
 PutRuntimeSecretLease/v1alpha2, TargetCredentialLeasePayload/v1alpha4.
-Старые schemas не меняются; StartExecution/v1alpha2 сохраняется. Определения
-ещё не advertised и не дают действующему runtime права принимать эти inputs.
-Manifest/settings находятся в `services/vault/`, без регистрации в catalog и
-без реализованной роли. Подключение adapters/runtime — SI08-C/D.
+Старые schemas не меняются; StartExecution/v1alpha2 сохраняется. Уточнение
+операций до публикации runtime: admin token нужен для Apply и Verify, unseal
+shares передаются только в Apply и никогда в Verify. В рамках
+SI08-C исходный код runtime подключает эти версии только после прохождения
+проверок descriptor, lease admission, manifest binding и Ansible forwarding.
+Это ещё не означает, что существующий установленный runtime обновлён или что
+Vault развернут: immutable release должен быть отдельно собран и активирован.
+Manifest и роль Vault находятся в `services/vault/`; подключение сервиса в
+рабочий catalog допустимо только вместе с полным C runtime path.
 
 Initial root token разрешён для первоначальной настройки внутри этого run.
 Он сохраняется зашифрованным для повторного доступа. Пользователь также может
@@ -272,11 +277,11 @@ shell working directory. Если root нельзя однозначно раз�
   inventory/
   secrets/
     vault-ha/
-      root-token
-      unseal-keys.json
+      admin-token
+      unseal-shares
     vault-standalone/
-      root-token
-      unseal-keys.json
+      admin-token
+      unseal-shares
 ```
 
 Подкаталог определяется canonical deploymentId, не displayName. Каталоги
@@ -299,8 +304,10 @@ Git policy должна исключать её; это не защищает у
 В Installer execution `platform_project_root` указывает на ephemeral copy.
 Поэтому backend передаёт тому же параметру retained directory на Execution
 Node, привязанный к project/deployment/package identity, вне run workspace.
-Workstation destination задаётся локально в Installer; encrypted outputs
-группируются по deploymentId. Role не получает filesystem path workstation.
+Workstation destination автоматически определяется как
+`<project-root>/secrets/<deploymentId>/`; выбора папки в UI нет.
+Encrypted outputs имеют имена `admin-token.age` и `unseal-shares.age`.
+Role не получает filesystem path workstation.
 Таким образом отличается resolver каталога, а не Vault install semantics.
 
 Передача bootstrap material — по существующему проверенному SSH/SFTP transport
@@ -344,11 +351,14 @@ Ansible events и не новые записи в terminal ExecutionEvent journa
 закрытая область `secret-outputs/<opaque-package-id>/` вне runs/project/archive.
 Package ID — случайный 128-bit lowercase hex; пути из request не принимаются.
 Несекретная metadata содержит schemaVersion, packageId, projectId,
-deploymentId, clusterId, sourceRunId, runtime digest, owner execution identity,
+deploymentId, sourceRunId, runtime digest, owner execution identity,
 generation, состояние READY/ACKED_CLEANUP_PENDING/DELIVERED и descriptors двух
-фиксированных entries. На один cluster/deployment bootstrap имеет одну
-generation: retry не создаёт второй пакет и не перезаписывает чужой cluster.
+фиксированных entries. На один project/deployment bootstrap имеет одну
+generation: retry не создаёт второй пакет и не перезаписывает чужой deployment.
 Сравнение stable identity обязательно; rename displayName ничего не меняет.
+Installer связывает пакет с парой projectId + deploymentId. Go не угадывает и
+не генерирует вместо Vault его внутренний clusterId; packageId и generation
+идентифицируют конкретный набор выходов.
 
 READY публикуется атомарно после записи/flush обоих plaintext entries и metadata.
 Directories 0700/files 0600 принадлежат execution identity/root. Использовать
@@ -428,6 +438,12 @@ boundary; новая multi-user authorization система не вводитс
 | ListPending | bounded opaque cursor?, limit 1..32 | Safe metadata READY/ACKED_CLEANUP_PENDING packages выбранного project; без token/shares |
 | Fetch | packageId, expectedGeneration | Framed closed metadata + два bounded content entries; READY only |
 | Acknowledge | packageId, expectedGeneration, receiptId, ciphertext digests двух entries | DELIVERED или ACKED_CLEANUP_PENDING; повтор того же ACK идемпотентен |
+
+Имена двух role-owned постоянных файлов совпадают с trusted output entry IDs:
+`admin-token` и `unseal-shares`. `unseal-shares` содержит bounded JSON. Временный
+`init-response.json` используется только для восстановления после прерывания
+между получением ответа init и записью обоих файлов; он не публикуется в output
+package и удаляется после подтверждённой записи пары.
 
 Fetch — отдельный binary-safe streaming метод transport в память backend:
 stdout только ограниченный frame, stderr никогда не склеивается с stdout,
@@ -584,8 +600,8 @@ locking использовать, его фактический scope подтв
 | --- | --- |
 | SI08-A | Решения init/unseal/token custody, pinned artifact, проверенные contract gaps; закрытые manifest/settings/secret contracts |
 | SI08-B | Standalone Ansible role: normalize/preflight/PKI/provision/configure/verify, 1/1 и 3/1 fixtures |
-| SI08-C | Core package/catalog/source/PKI/member projection, target-free snapshot и fresh execution plan |
-| SI08-D | Go Save/reopen/secret lease/Start integration и generic Wails/React authoring/status |
+| SI08-C | Core package/catalog/source/PKI/member projection, target-free snapshot и fresh execution plan; Execution Node capability v1alpha4, typed lease v1alpha2 admission, manifest binding and operation-scoped Ansible input projection |
+| SI08-D | Go lease client/provider and Start integration, age-protected workstation input/output handling, generic Wails/React authoring/status |
 | SI08-E | Реальные 1/1, 3/1, 3/3 apply/verify/repeat и failover; regression/docs |
 
 SI08-A не начинается до owner decisions и PLAN review. Начать B–E при
@@ -638,9 +654,11 @@ Legacy Vault cleanup только по доказанному QA ownership, с �
 6. ПРИНЯТО (последнее решение): шифрование на workstation, пароль остаётся там.
    На Execution Node допустим защищённый временный plaintext до ACK доставки.
    Файлы age, transport SSH, SHA-256 только для проверки encrypted bytes.
-7. ПРИНЯТО: Ansible-only default output — `<project>/secrets/<deploymentId>`;
-   Installer задаёт retained directory на Execution Node и локальную папку
-   workstation. Одна переменная роли, secrets subtree не является portable input.
+7. ПРИНЯТО: Ansible-only output — `<project>/secrets/<deploymentId>`;
+   Installer задаёт retained directory на Execution Node и автоматически
+   сохраняет encrypted outputs в `<project-root>/secrets/<deploymentId>`
+   на workstation. Выбора папки в UI нет. Пароль шифрования задаётся на
+   странице «Установка», этапе плана. Secrets subtree не является portable input.
 8. ПРИНЯТО: generic автоматическое сохранение и прогресс в существующем журнале
    установки, без Vault-specific installation flow.
 

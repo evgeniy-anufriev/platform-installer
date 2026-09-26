@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import io
 import tempfile
 import unittest
 from unittest import mock
@@ -37,6 +38,14 @@ def runtime_secret_payload(values, store_password=None):
     return value
 
 
+def typed_runtime_secret_payload(inputs, values=None, store_password=None):
+    value = payload()
+    value.update({"apiVersion": execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION,
+                  "pkiStorePassword": store_password, "runtimeSecretValues": values or {},
+                  "runtimeSecretInputs": inputs})
+    return value
+
+
 class ExecutionSecretLeaseTests(unittest.TestCase):
     def test_complete_put_is_idempotent_and_never_persists_request_secret(self):
         with tempfile.TemporaryDirectory() as root:
@@ -48,6 +57,26 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             request_record = Path(root, "secret-leases", "requests", "1" * 32 + ".json").read_text(encoding="utf-8")
             self.assertNotIn("secret", request_record)
             self.assertIn("payloadDigest", request_record)
+
+    def test_put_protocol_v2_admits_only_the_typed_v1alpha4_payload(self):
+        metadata = request()
+        wire = {"apiVersion": "platform.installer/runtime-secret-lease/v1alpha2",
+                "kind": "PutRuntimeSecretLeaseRequest", **metadata,
+                "payload": typed_runtime_secret_payload([])}
+        with tempfile.TemporaryDirectory() as root:
+            result = execution_protocol.put_runtime_secret_lease(wire, root)
+            self.assertEqual("STORED", result["status"])
+            wrong = dict(wire, requestId="3" * 32, payload=runtime_secret_payload({"x": "secret"}))
+            with self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
+                execution_protocol.put_runtime_secret_lease(wrong, root)
+            legacy_fallback = dict(wire, apiVersion="platform.installer/runtime-secret-lease/v1alpha1", requestId="4" * 32)
+            with self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
+                execution_protocol.put_runtime_secret_lease(legacy_fallback, root)
+
+    def test_runtime_protocol_rejects_duplicate_json_keys_before_secret_admission(self):
+        with mock.patch.object(execution_protocol.sys, "stdin", io.StringIO('{"apiVersion":"platform.installer/runtime-secret-lease/v1alpha2","apiVersion":"platform.installer/runtime-secret-lease/v1alpha1"}')):
+            with self.assertRaisesRegex(LifecycleError, "PROTOCOL_INVALID"):
+                execution_protocol.request()
 
     def test_partial_or_conflicting_put_publishes_no_replacement(self):
         with tempfile.TemporaryDirectory() as root:
@@ -132,6 +161,78 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             for index, candidate in enumerate(invalid):
                 with self.subTest(index=index), self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
                     execution_secret_lease.put(root, request("%032x" % (index + 9)), candidate)
+
+    def test_typed_inputs_are_bound_to_private_manifest_and_operation(self):
+        descriptor = {"requirementRef": "si-" + "a" * 40, "purpose": "SERVICE_ADMIN_TOKEN",
+                      "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-admin-token",
+                      "hosts": ["node1"], "requiredWhen": "INITIALIZED",
+                      "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]}
+        item = {"requirementRef": descriptor["requirementRef"], "purpose": descriptor["purpose"],
+                "serviceDeployment": descriptor["serviceDeployment"], "operations": descriptor["operations"],
+                "value": "sensitive-vault-token"}
+        with tempfile.TemporaryDirectory() as root:
+            stored = execution_secret_lease.put(root, request(), typed_runtime_secret_payload([item]))
+            self.assertEqual([item], execution_secret_lease.validate_staged_runtime_secret_inputs(root, stored["leaseId"], [descriptor]))
+            self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
+            self.assertEqual([{"requirementRef": item["requirementRef"], "purpose": item["purpose"], "value": item["value"]}],
+                             execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "SERVICE_APPLY", [descriptor]))
+            self.assertEqual([], execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-other", "SERVICE_APPLY", [descriptor]))
+            self.assertEqual([], execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "PKI_APPLY", [descriptor]))
+            self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
+
+    def test_typed_input_payload_fails_closed_for_scope_duplicates_and_bounds(self):
+        descriptor = {"requirementRef": "si-" + "b" * 40, "purpose": "SERVICE_UNSEAL_SHARES",
+                      "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-unseal-shares",
+                      "hosts": ["node1"], "requiredWhen": "SEALED",
+                      "operations": ["SERVICE_APPLY"]}
+        item = {"requirementRef": descriptor["requirementRef"], "purpose": descriptor["purpose"],
+                "serviceDeployment": descriptor["serviceDeployment"], "operations": descriptor["operations"],
+                "value": ["share-one", "share-two"]}
+        execution_secret_lease._payload(typed_runtime_secret_payload([item]))
+        verify_scope = dict(item, operations=["SERVICE_APPLY", "SERVICE_VERIFY"])
+        with self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
+            execution_secret_lease._payload(typed_runtime_secret_payload([verify_scope]))
+        invalid = []
+        invalid.append(typed_runtime_secret_payload([item, item]))
+        invalid.append(typed_runtime_secret_payload([dict(item, value=["same", "same"])]))
+        invalid.append(typed_runtime_secret_payload([dict(item, value=["x" * 129])]))
+        invalid.append(typed_runtime_secret_payload([dict(item, value=[str(index).zfill(3) + "x" * 125 for index in range(255)])]))
+        invalid.append(typed_runtime_secret_payload([dict(item, purpose="UNKNOWN")]))
+        for candidate in invalid:
+            with self.subTest(payload=candidate["runtimeSecretInputs"][0]["purpose"]):
+                with self.assertRaisesRegex(LifecycleError, "PAYLOAD_INVALID"):
+                    execution_secret_lease._payload(candidate)
+        wrong_scope = dict(item, serviceDeployment="other")
+        with self.assertRaisesRegex(LifecycleError, "INPUTS_MISMATCH"):
+            execution_secret_lease._validate_typed_secret_payload(
+                typed_runtime_secret_payload([wrong_scope]), [descriptor])
+
+    def test_unseal_shares_are_scoped_to_apply_and_never_verify(self):
+        descriptor = {"requirementRef": "si-" + "d" * 40, "purpose": "SERVICE_UNSEAL_SHARES",
+                      "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-unseal-shares",
+                      "hosts": ["node1"], "requiredWhen": "SEALED", "operations": ["SERVICE_APPLY"]}
+        item = {key: descriptor[key] for key in ("requirementRef", "purpose", "serviceDeployment", "operations")}
+        item["value"] = ["share-one", "share-two"]
+        with tempfile.TemporaryDirectory() as root:
+            stored = execution_secret_lease.put(root, request(), typed_runtime_secret_payload([item]))
+            self.assertEqual([item], execution_secret_lease.validate_staged_runtime_secret_inputs(root, stored["leaseId"], [descriptor]))
+            self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
+            self.assertEqual([{"requirementRef": descriptor["requirementRef"], "purpose": descriptor["purpose"], "value": item["value"]}],
+                             execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "SERVICE_APPLY", [descriptor]))
+            self.assertEqual([], execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "SERVICE_VERIFY", [descriptor]))
+
+    def test_conditional_typed_inputs_may_be_absent_but_unattested_values_cannot_be_added(self):
+        descriptor = {"requirementRef": "si-" + "c" * 40, "purpose": "SERVICE_ADMIN_TOKEN",
+                      "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-admin-token",
+                      "hosts": ["node1"], "requiredWhen": "INITIALIZED",
+                      "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]}
+        with tempfile.TemporaryDirectory() as root:
+            stored = execution_secret_lease.put(root, request(), typed_runtime_secret_payload([]))
+            self.assertEqual([], execution_secret_lease.validate_staged_runtime_secret_inputs(root, stored["leaseId"], [descriptor]))
+            extra = {"requirementRef": descriptor["requirementRef"], "purpose": descriptor["purpose"],
+                     "serviceDeployment": descriptor["serviceDeployment"], "operations": descriptor["operations"], "value": "token"}
+            with self.assertRaisesRegex(LifecycleError, "INPUTS_MISMATCH"):
+                execution_secret_lease._validate_typed_secret_payload(typed_runtime_secret_payload([extra]), [])
 
     def test_start_attempt_is_durable_and_conflicts_fail_closed(self):
         with tempfile.TemporaryDirectory() as root:
@@ -335,6 +436,67 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             self.assertEqual(("ALREADY_STARTED", run_id), (retry["status"], retry["runId"]))
             self.assertEqual(1, launch.call_count)
             self.assertTrue(Path(root, "runs", run_id).is_dir())
+
+    def test_start_binds_typed_lease_values_to_manifest_before_commit(self):
+        descriptor = {"requirementRef": "si-" + "d" * 40, "purpose": "SERVICE_ADMIN_TOKEN",
+                      "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-admin-token",
+                      "hosts": ["node1"], "requiredWhen": "INITIALIZED",
+                      "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]}
+        item = {"requirementRef": descriptor["requirementRef"], "purpose": descriptor["purpose"],
+                "serviceDeployment": descriptor["serviceDeployment"], "operations": descriptor["operations"],
+                "value": "sensitive-vault-token"}
+        with tempfile.TemporaryDirectory() as root:
+            metadata = request()
+            release = metadata["runtimeRelease"]
+            manifest = {"projectIdentity": metadata["projectIdentity"], "planFingerprint": metadata["planFingerprint"],
+                        "runtimeRelease": release, "operations": [], "runtimeSecretRequirements": [],
+                        "runtimeSecretInputs": [descriptor]}
+            stage = "installer-stage-vault"
+            Path(root, "runs", stage).mkdir(parents=True)
+            Path(root, "runs", stage, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_digest = execution_protocol.digest(manifest)
+            metadata["executionManifestDigest"] = manifest_digest
+            execution_secret_lease.register_plan(root, stage, manifest_digest, manifest)
+            stored = execution_secret_lease.put(root, metadata, typed_runtime_secret_payload([item]))
+            start_request = {"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionRequest",
+                             "startAttemptId": metadata["startAttemptId"], "projectIdentity": metadata["projectIdentity"],
+                             "projectRevision": metadata["projectRevision"], "planFingerprint": metadata["planFingerprint"],
+                             "executionManifestDigest": manifest_digest, "runtimeRelease": release, "leaseId": stored["leaseId"]}
+            with mock.patch.object(execution_protocol.subprocess, "check_call"):
+                result = execution_protocol._start_v2(start_request, root, "/release", "/controller", "")
+            self.assertEqual("STARTED", result["status"])
+            self.assertEqual((result["runId"], True), execution_secret_lease.attempt(
+                root, metadata["startAttemptId"], {"projectIdentity": metadata["projectIdentity"],
+                "projectRevision": metadata["projectRevision"], "planFingerprint": metadata["planFingerprint"],
+                "executionManifestDigest": manifest_digest, "runtimeRelease": release, "leaseId": stored["leaseId"]}))
+
+    def test_start_rejects_unattested_typed_lease_value_before_run_creation(self):
+        descriptor = {"requirementRef": "si-" + "e" * 40, "purpose": "SERVICE_ADMIN_TOKEN",
+                      "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-admin-token",
+                      "hosts": ["node1"], "requiredWhen": "INITIALIZED",
+                      "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]}
+        item = {"requirementRef": descriptor["requirementRef"], "purpose": descriptor["purpose"],
+                "serviceDeployment": "other-deployment", "operations": descriptor["operations"], "value": "token"}
+        with tempfile.TemporaryDirectory() as root:
+            metadata = request()
+            release = metadata["runtimeRelease"]
+            manifest = {"projectIdentity": metadata["projectIdentity"], "planFingerprint": metadata["planFingerprint"],
+                        "runtimeRelease": release, "operations": [], "runtimeSecretRequirements": [],
+                        "runtimeSecretInputs": [descriptor]}
+            stage = "installer-stage-invalid-vault"
+            Path(root, "runs", stage).mkdir(parents=True)
+            Path(root, "runs", stage, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_digest = execution_protocol.digest(manifest)
+            metadata["executionManifestDigest"] = manifest_digest
+            execution_secret_lease.register_plan(root, stage, manifest_digest, manifest)
+            stored = execution_secret_lease.put(root, metadata, typed_runtime_secret_payload([item]))
+            start_request = {"apiVersion": "platform.installer/execution-start/v1alpha2", "kind": "StartExecutionRequest",
+                             "startAttemptId": metadata["startAttemptId"], "projectIdentity": metadata["projectIdentity"],
+                             "projectRevision": metadata["projectRevision"], "planFingerprint": metadata["planFingerprint"],
+                             "executionManifestDigest": manifest_digest, "runtimeRelease": release, "leaseId": stored["leaseId"]}
+            with self.assertRaisesRegex(LifecycleError, "INPUTS_MISMATCH"):
+                execution_protocol._start_v2(start_request, root, "/release", "/controller", "")
+            self.assertFalse(Path(root, "secret-leases", "attempts", metadata["startAttemptId"] + ".json").exists())
 
 
 if __name__ == "__main__":

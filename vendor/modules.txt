@@ -1,3 +1,15 @@
+# filippo.io/age v1.3.2
+## explicit; go 1.25.0
+filippo.io/age
+filippo.io/age/internal/bech32
+filippo.io/age/internal/format
+filippo.io/age/internal/stream
+# filippo.io/hpke v0.4.0
+## explicit; go 1.24.0
+filippo.io/hpke
+filippo.io/hpke/crypto
+filippo.io/hpke/crypto/ecdh
+filippo.io/hpke/internal/byteorder
 # git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3
 ## explicit; go 1.20
 git.sr.ht/~jackmordaunt/go-toast/v2
@@ -134,11 +146,19 @@ github.com/wailsapp/wails/v2/pkg/options/linux
 github.com/wailsapp/wails/v2/pkg/options/mac
 github.com/wailsapp/wails/v2/pkg/options/windows
 github.com/wailsapp/wails/v2/pkg/runtime
-# golang.org/x/crypto v0.53.0
+# golang.org/x/crypto v0.55.0
 ## explicit; go 1.25.0
 golang.org/x/crypto/acme
 golang.org/x/crypto/acme/autocert
-# golang.org/x/net v0.56.0
+golang.org/x/crypto/chacha20
+golang.org/x/crypto/chacha20poly1305
+golang.org/x/crypto/curve25519
+golang.org/x/crypto/hkdf
+golang.org/x/crypto/internal/alias
+golang.org/x/crypto/internal/poly1305
+golang.org/x/crypto/pbkdf2
+golang.org/x/crypto/scrypt
+# golang.org/x/net v0.57.0
 ## explicit; go 1.25.0
 golang.org/x/net/html
 golang.org/x/net/html/atom
@@ -149,12 +169,13 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/httpcommon
 golang.org/x/net/internal/httpsfv
-# golang.org/x/sys v0.46.0
+# golang.org/x/sys v0.47.0
 ## explicit; go 1.25.0
+golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/text v0.39.0
+# golang.org/x/text v0.41.0
 ## explicit; go 1.25.0
 golang.org/x/text/cases
 golang.org/x/text/internal

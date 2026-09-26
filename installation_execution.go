@@ -222,9 +222,33 @@ func (a *App) configureTargetCredentialLease() {
 					payload.RuntimeSecretValues[reference] = string(value)
 				}
 			}
+			if len(request.RuntimeSecretInputs) > 0 {
+				payload.UseTypedRuntimeInputs = true
+				expected := make(map[string]string, len(request.RuntimeSecretInputs))
+				for _, item := range request.RuntimeSecretInputs {
+					expected[item.RequirementRef] = item.Purpose
+				}
+				for _, item := range credential.RuntimeSecretInputs {
+					if expected[item.RequirementRef] != item.Purpose {
+						return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+					}
+					payload.RuntimeSecretInputs = append(payload.RuntimeSecretInputs, executionnode.RuntimeSecretInputPayload{
+						RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment,
+						Operations: append([]string(nil), item.Operations...), Value: string(item.Value), Shares: byteSlicesToStrings(item.Shares),
+					})
+				}
+			}
 			return use(payload)
 		})
 	})
+}
+
+func byteSlicesToStrings(values [][]byte) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = string(value)
+	}
+	return result
 }
 
 func installationRunView(run executionnode.ExecutionRun) InstallationRunView {
@@ -289,10 +313,57 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
 	}
+	planRecord, planErr := binding.plans.GetPlan(planID)
+	if planErr != nil || !installationPlanMatches(planRecord, a.current.Project.ID, revision, binding) {
+		a.editMu.Unlock()
+		if planErr == nil {
+			planErr = errors.New("PLAN_STALE")
+		}
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(planErr), Message: projectErrorMessage(projectErrorCode(planErr))}}
+	}
+	outputRequired := a.secretOutputEncryptionRequiredLocked()
+	if outputRequired {
+		credentialBinding, bindingErr := a.credentialBindingLocked()
+		if bindingErr != nil || !a.secrets.HasOutputEncryptionPassword(credentialBinding) {
+			a.editMu.Unlock()
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_ENCRYPTION_PASSWORD_REQUIRED", Message: "Set and confirm the password for locally encrypted service output files before approval and Start."}}
+		}
+	}
+	typedInputs := typedRuntimeSecretRequirements(planRecord.Plan)
+	if len(typedInputs) > 0 {
+		descriptors := a.getRuntimeSecretDescriptorsLocked(false)
+		if descriptors.Status != "READY" || !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs) {
+			a.editMu.Unlock()
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_STALE", Message: "Core did not confirm the exact service input requirements for this saved plan."}}
+		}
+	}
+	requirements, requirementsErr := installationPlanRuntimeSecretRequirements(planRecord.Plan)
+	if requirementsErr != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(requirementsErr), Message: projectErrorMessage(projectErrorCode(requirementsErr))}}
+	}
+	credentialBinding, credentialErr := a.credentialBindingLocked()
+	if credentialErr == nil {
+		credentialErr = a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements)
+	}
+	if credentialErr != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(credentialErr), Message: projectErrorMessage(projectErrorCode(credentialErr))}}
+	}
 	captured := installationStartContext{generation: a.installationGeneration, root: a.current.Root, projectID: a.current.Project.ID, revision: revision, planID: planID, nodeID: binding.node.ID, runtime: runtimeBinding}
 	a.editMu.Unlock()
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
+	if outputRequired {
+		client, ok := binding.reader.transport.(secretOutputDeliveryClient)
+		if !ok {
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNSUPPORTED", Message: "Execution Node does not support protected output delivery."}}
+		}
+		capability, capabilityErr := client.GetSecretOutputCapabilities(ctx, binding.node, runtimeBinding.BundleDigest, captured.projectID)
+		if capabilityErr != nil || capability.Protocol != "SecretOutputDelivery/v1alpha1" || capability.Operation != "GetCapabilities" || capability.MaxPayloadBytes != 65536 || len(capability.Operations) != 3 || capability.Operations[0] != "ListPending" || capability.Operations[1] != "Fetch" || capability.Operations[2] != "Acknowledge" {
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNAVAILABLE", Message: "Protected output delivery capabilities were not confirmed; execution was not started."}}
+		}
+	}
 	run, err := binding.plans.Start(ctx, binding.node, planID)
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}

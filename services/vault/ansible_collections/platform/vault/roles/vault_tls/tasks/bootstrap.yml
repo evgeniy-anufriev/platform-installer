@@ -99,7 +99,7 @@
 - name: Persist the standalone initial root token without overwriting an existing file
   ansible.builtin.copy:
     content: "{{ _platform_vault_bootstrap_material.root_token }}\n"
-    dest: "{{ _platform_vault_bootstrap_output_dir }}/root-token"
+    dest: "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
     mode: '0600'
     force: false
   delegate_to: localhost
@@ -110,7 +110,7 @@
 - name: Persist the standalone unseal shares without overwriting an existing file
   ansible.builtin.copy:
     content: "{{ {'keys': _platform_vault_bootstrap_material.keys} | to_nice_json }}\n"
-    dest: "{{ _platform_vault_bootstrap_output_dir }}/unseal-keys.json"
+    dest: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
     mode: '0600'
     force: false
   delegate_to: localhost
@@ -120,7 +120,7 @@
 
 - name: Read an existing root token before completing interrupted custody publication
   ansible.builtin.slurp:
-    src: "{{ _platform_vault_bootstrap_output_dir }}/root-token"
+    src: "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
   register: _platform_vault_existing_root_token
   when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[0].stat.exists
   delegate_to: localhost
@@ -136,7 +136,7 @@
 
 - name: Read existing unseal shares before completing interrupted custody publication
   ansible.builtin.slurp:
-    src: "{{ _platform_vault_bootstrap_output_dir }}/unseal-keys.json"
+    src: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
   register: _platform_vault_existing_unseal_keys
   when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[1].stat.exists
   delegate_to: localhost
@@ -174,13 +174,13 @@
 
 - name: Load the administrative token from protected standalone custody
   ansible.builtin.set_fact:
-    _platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/root-token') | trim }}"
+    _platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/admin-token') | trim }}"
   when: _platform_vault_admin_token is not defined and _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
 - name: Load unseal shares from protected standalone custody
   ansible.builtin.set_fact:
-    _platform_vault_effective_unseal_keys: "{{ (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-keys.json') | from_json).keys }}"
+    _platform_vault_effective_unseal_keys: "{{ (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-shares') | from_json).keys }}"
   when: _platform_vault_effective_unseal_keys is not defined and (platform_vault_unseal_keys is not defined or platform_vault_unseal_keys | length == 0) and _platform_vault_output_files.results[1].stat.exists
   no_log: true
 

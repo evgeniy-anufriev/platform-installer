@@ -12,7 +12,7 @@ type leaseRunner struct {
 }
 
 func (r *leaseRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
-	if strings.Contains(string(input), `"operation":"GetCapabilities"`) || strings.Contains(string(input), `runtime-secret-lease/v1alpha1`) || strings.Contains(string(input), `execution-start/v1alpha2`) {
+	if strings.Contains(string(input), `"operation":"GetCapabilities"`) || strings.Contains(string(input), `runtime-secret-lease/v1alpha1`) || strings.Contains(string(input), `runtime-secret-lease/v1alpha2`) || strings.Contains(string(input), `execution-start/v1alpha2`) {
 		r.calls = append(r.calls, recordedCommand{name: name, args: append([]string(nil), args...), input: string(input)})
 		return []byte(r.response), nil
 	}
@@ -37,6 +37,15 @@ func TestCredentialStartCapabilityRequiresClosedV2LeaseEnvelope(t *testing.T) {
 	runner.response = strings.Replace(leaseCapabilityResponse(), `,"projectSnapshotRequestVersions":[]`, `,"unexpected":true,"projectSnapshotRequestVersions":[]`, 1)
 	if _, err := transport.CredentialStartCapability(context.Background(), testNode()); err == nil || err.Error() != "TARGET_CREDENTIAL_LEASE_UNSUPPORTED" {
 		t.Fatalf("malformed capability err=%v", err)
+	}
+}
+
+func TestCredentialStartCapabilityAdmitsExactTypedV4Envelope(t *testing.T) {
+	runner := &leaseRunner{response: `{"apiVersion":"platform.installer/execution-capabilities/v1alpha4","kind":"ExecutionCapabilities","bootstrapProtocol":"v1alpha1","coreVersion":"core","catalogDigest":"sha256:` + strings.Repeat("a", 64) + `","schemaDigest":"sha256:` + strings.Repeat("b", 64) + `","runtime":{"bundleVersion":"bundle","bundleDigest":"sha256:` + strings.Repeat("c", 64) + `"},"supportedOperations":["BuildRuntimeSecretDescriptors","PutRuntimeSecretLease"],"executionStart":{"protocol":"StartExecution/v1alpha2"},"targetCredentialLease":{"protocol":"PutRuntimeSecretLease/v1alpha2","payloadVersions":["TargetCredentialLeasePayload/v1alpha4"],"maxPayloadBytes":1114112,"requiredStartProtocol":"StartExecution/v1alpha2"},"runtimeSecretDescriptors":{"protocol":"BuildRuntimeSecretDescriptors/v1alpha2","maxDescriptors":16,"maxHostsPerDescriptor":256,"maxResponseBytes":65536},"projectSnapshotRequestVersions":[]}`}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	capability, err := transport.CredentialStartCapability(context.Background(), testNode())
+	if err != nil || !capability.TypedRuntimeInputs || capability.APIVersion != "platform.installer/execution-capabilities/v1alpha4" || !capability.supportsPayloadVersion(credentialPayloadVersionV4) {
+		t.Fatalf("capability=%+v err=%v", capability, err)
 	}
 }
 
@@ -73,6 +82,28 @@ func TestPutRuntimeSecretLeaseUsesV3ForBoundedRuntimeSecretValues(t *testing.T) 
 		if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, TargetCredentialLeasePayload{Username: "operator", Password: "secret", RuntimeSecretValues: invalid}, 1114112); err == nil {
 			t.Fatalf("invalid runtime secrets accepted: %#v", invalid)
 		}
+	}
+}
+
+func TestPutRuntimeSecretLeaseUsesV4ForTypedOptionalInputs(t *testing.T) {
+	id := strings.Repeat("1", 32)
+	runner := &leaseRunner{response: `{"requestId":"` + id + `","startAttemptId":"` + strings.Repeat("2", 32) + `","status":"STORED","leaseId":"` + strings.Repeat("3", 32) + `","stagedExpiresAt":"2026-09-22T12:00:00Z"}`}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	request := CredentialLeaseRequest{RequestID: id, StartAttemptID: strings.Repeat("2", 32), ProjectIdentity: "project-1", ProjectRevision: "sha256:" + strings.Repeat("a", 64), PlanFingerprint: "sha256:" + strings.Repeat("b", 64), ExecutionManifestDigest: "sha256:" + strings.Repeat("c", 64), RuntimeRelease: map[string]any{"bundleDigest": "sha256:" + strings.Repeat("d", 64), "coreVersion": "core", "catalogDigest": "sha256:" + strings.Repeat("e", 64), "planningProtocol": "v1alpha1"}}
+	payload := TargetCredentialLeasePayload{Username: "operator", Password: "ssh-secret", UseTypedRuntimeInputs: true, RuntimeSecretInputs: []RuntimeSecretInputPayload{{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "vault-ha", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Value: "admin-token"}}}
+	if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, payload, 1114112); err != nil {
+		t.Fatal("valid typed payload rejected")
+	}
+	if len(runner.calls) == 0 {
+		t.Fatal("typed lease transport was not invoked")
+	}
+	call := runner.calls[len(runner.calls)-1]
+	if !strings.Contains(call.input, `"apiVersion":"platform.installer/runtime-secret-lease/v1alpha2"`) || !strings.Contains(call.input, `"apiVersion":"TargetCredentialLeasePayload/v1alpha4"`) || !strings.Contains(call.input, `"requirementRef":"si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`) {
+		t.Fatal("typed payload was not sent through the closed v1alpha4 lease")
+	}
+	payload.RuntimeSecretInputs[0].Operations = []string{"SERVICE_APPLY"}
+	if _, err := transport.PutRuntimeSecretLease(context.Background(), testNode(), request, payload, 1114112); err == nil {
+		t.Fatal("invalid typed operation scope accepted")
 	}
 }
 

@@ -17,6 +17,17 @@ API_VERSION = "platform.installer/plan/v1alpha2"
 MANIFEST_API_VERSION = "platform.installer/execution-manifest/v1alpha1"
 PLANNING_PROTOCOL = "v1alpha1"
 SOURCE_POLICY = "REPOSITORY_THEN_OFFLINE"
+_SECRET_INPUT_REF = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+_SECRET_INPUT_DEPLOYMENT = re.compile(r"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$")
+_SECRET_INPUT_PURPOSES = {
+    "SERVICE_ADMIN_TOKEN": "INITIALIZED",
+    "SERVICE_UNSEAL_SHARES": "SEALED",
+}
+_SECRET_INPUT_OPERATIONS = ["SERVICE_APPLY", "SERVICE_VERIFY"]
+_SECRET_INPUT_OPERATIONS_BY_PURPOSE = {
+    "SERVICE_ADMIN_TOKEN": _SECRET_INPUT_OPERATIONS,
+    "SERVICE_UNSEAL_SHARES": ["SERVICE_APPLY"],
+}
 
 
 def _digest(value):
@@ -273,6 +284,124 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
     return public, private, findings
 
 
+def _secret_input_requirement_ref(service_deployment, manifest_requirement_ref, purpose):
+    """Return the public opaque ref for a typed service input."""
+    encoded = json.dumps([service_deployment, manifest_requirement_ref, purpose], ensure_ascii=False,
+                         sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return "si-" + hashlib.sha256(encoded).hexdigest()[:40]
+
+
+def _service_input_requirements(deployments, definitions, resolved_topology):
+    """Project the closed manifest x-secretInputs extension without values.
+
+    This is metadata-only: target conditions are evaluated by the service at
+    execution time, never by target-free planning.
+    """
+    public, private, findings = [], [], []
+    resolved = resolved_topology.get("serviceDeployments", {}) if isinstance(resolved_topology, dict) else {}
+    if not isinstance(resolved, dict):
+        resolved = {}
+    for deployment_id, deployment in sorted(deployments.items()):
+        service_type = deployment.get("serviceType") if isinstance(deployment, dict) else None
+        definition = definitions.get(service_type) if isinstance(definitions, dict) else None
+        extension = definition.get("x-secretInputs") if isinstance(definition, dict) else None
+        if extension is None:
+            continue
+        field = "catalog.definitions.%s.x-secretInputs" % (service_type or "unknown")
+        if not isinstance(deployment_id, str) or len(deployment_id) > 128 or _SECRET_INPUT_DEPLOYMENT.fullmatch(deployment_id) is None or not isinstance(extension, dict) or set(extension) != {"apiVersion", "inputs"} or extension.get("apiVersion") != "ServiceSecretInputs/v1alpha1" or not isinstance(extension.get("inputs"), list) or not 1 <= len(extension["inputs"]) <= 16:
+            findings.append(_finding("SERVICE_SECRET_INPUT_METADATA_INVALID", field, "Service secret input metadata is invalid"))
+            continue
+        placement = resolved.get(deployment_id, {})
+        members = placement.get("members", {}) if isinstance(placement, dict) else None
+        hosts = sorted({member.get("host") for member in members.values()
+                        if isinstance(member, dict) and isinstance(member.get("host"), str) and member.get("host")}
+                       ) if isinstance(members, dict) else []
+        if not hosts or len(hosts) > 256:
+            findings.append(_finding("SERVICE_SECRET_INPUT_PLACEMENT_INVALID", "serviceDeployments.%s" % deployment_id, "Service secret input placement is unavailable"))
+            continue
+        seen = set()
+        for item in extension["inputs"]:
+            if not isinstance(item, dict) or set(item) != {"requirementRef", "purpose", "displayLabel", "requiredWhen", "operations"}:
+                findings.append(_finding("SERVICE_SECRET_INPUT_METADATA_INVALID", field, "Service secret input metadata is invalid"))
+                continue
+            manifest_ref, purpose = item.get("requirementRef"), item.get("purpose")
+            if (not isinstance(manifest_ref, str) or _SECRET_INPUT_REF.fullmatch(manifest_ref) is None or
+                    not isinstance(purpose, str) or purpose not in _SECRET_INPUT_PURPOSES or item.get("requiredWhen") != _SECRET_INPUT_PURPOSES.get(purpose) or
+                    not isinstance(item.get("displayLabel"), str) or not item["displayLabel"] or len(item["displayLabel"].encode("utf-8")) > 256 or
+                    item.get("operations") != _SECRET_INPUT_OPERATIONS_BY_PURPOSE.get(purpose) or (manifest_ref, purpose) in seen):
+                findings.append(_finding("SERVICE_SECRET_INPUT_METADATA_INVALID", field, "Service secret input metadata is invalid"))
+                continue
+            seen.add((manifest_ref, purpose))
+            requirement_ref = _secret_input_requirement_ref(deployment_id, manifest_ref, purpose)
+            descriptor = {"requirementRef": requirement_ref, "purpose": purpose,
+                          "serviceDeployment": deployment_id, "displayLabel": item["displayLabel"],
+                          "hosts": hosts, "requiredWhen": item["requiredWhen"],
+                          "operations": list(item["operations"])}
+            public.append({key: descriptor[key] for key in ("requirementRef", "purpose", "serviceDeployment", "displayLabel", "hosts", "requiredWhen", "operations")})
+            private.append(dict(descriptor, manifestRequirementRef=manifest_ref))
+    keys = [(item["serviceDeployment"], item["manifestRequirementRef"], item["purpose"]) for item in private]
+    refs = [item["requirementRef"] for item in private]
+    if len(set(keys)) != len(keys) or len(set(refs)) != len(refs):
+        findings.append(_finding("SERVICE_SECRET_INPUT_DUPLICATE", "serviceDeployments", "Service secret input requirements must be unique"))
+    if len(public) > 16:
+        findings.append(_finding("SERVICE_SECRET_INPUT_LIMIT_EXCEEDED", "serviceDeployments", "Service secret input requirements exceed the supported limit"))
+    return public, private, findings
+
+
+def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None):
+    """Build the closed safe v1alpha2 descriptor response from trusted Core data."""
+    if not isinstance(snapshot, dict) or not isinstance(catalog, dict):
+        raise ValueError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
+    deployments = snapshot.get("serviceDeployments", {})
+    definitions = catalog.get("definitions", {})
+    hosts = sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else []
+    password_public, password_private, findings = _service_runtime_secret_requirements(deployments, definitions, hosts)
+    _, pki_private, pki_findings = _pki_store_password_requirements(pki_materialization)
+    findings.extend(pki_findings)
+    typed_public, _, typed_findings = _service_input_requirements(
+        deployments, definitions,
+        (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot.get("topology"), dict) else {},
+    )
+    findings.extend(typed_findings)
+    if findings:
+        raise ValueError("RUNTIME_SECRET_DESCRIPTORS_BLOCKED")
+    labels = {}
+    for deployment_id, deployment in deployments.items() if isinstance(deployments, dict) else []:
+        definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) else {}
+        settings = ((definition.get("configuration") or {}).get("settings") or {}) if isinstance(definition, dict) else {}
+        for setting in settings.values() if isinstance(settings, dict) else []:
+            ui = setting.get("ui") if isinstance(setting, dict) else None
+            extension = ui.get("x-runtimeSecretRequirement") if isinstance(ui, dict) else None
+            if isinstance(extension, dict) and isinstance(extension.get("requirementRef"), str):
+                labels[(deployment_id, extension["requirementRef"])] = ui.get("label")
+    descriptors = []
+    for item in pki_private:
+        descriptors.append({"requirementRef": item["requirementRef"], "purpose": item["purpose"],
+                            "serviceDeployment": None, "displayLabel": "PKI store password",
+                            "hosts": item["hosts"], "requiredWhen": "ALWAYS",
+                            "operations": list(_SECRET_INPUT_OPERATIONS)})
+    for item in password_private:
+        label = labels.get((item["serviceDeployment"], item["requirementRef"]))
+        if not isinstance(label, str) or not label or len(label.encode("utf-8")) > 256:
+            raise ValueError("RUNTIME_SECRET_DESCRIPTORS_BLOCKED")
+        descriptors.append({"requirementRef": item["requirementRef"], "purpose": item["purpose"],
+                            "serviceDeployment": item["serviceDeployment"], "displayLabel": label,
+                            "hosts": item["hosts"], "requiredWhen": "ALWAYS",
+                            "operations": list(_SECRET_INPUT_OPERATIONS)})
+    descriptors.extend(typed_public)
+    descriptors.sort(key=lambda item: (item["serviceDeployment"] or "", item["requirementRef"]))
+    identity = snapshot.get("project", {}).get("id") if isinstance(snapshot.get("project"), dict) else None
+    revision = snapshot.get("projectRevision")
+    if (not isinstance(identity, str) or not identity or not isinstance(revision, str) or
+            DIGEST_PATTERN.fullmatch(revision) is None or len(descriptors) > 16 or
+            any(len(item["hosts"]) > 256 for item in descriptors)):
+        raise ValueError("RUNTIME_SECRET_DESCRIPTORS_BLOCKED")
+    fields = ("requirementRef", "purpose", "serviceDeployment", "hosts", "requiredWhen", "operations")
+    return {"apiVersion": "BuildRuntimeSecretDescriptors/v1alpha2", "projectIdentity": identity,
+            "projectRevision": revision, "descriptors": descriptors,
+            "descriptorSetFingerprint": canonical_digest([{key: item[key] for key in fields} for item in descriptors])}
+
+
 def _execution_role_variables(deployment_id, definition, prefix, execution_configuration, targets,
                               resolved_deployment=None, hosts=None, member_list_variable=None):
     """Project Core-resolved settings into one private host-scoped operation map."""
@@ -341,6 +470,33 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
     return {host_id: by_host[host_id] for host_id in sorted(by_host)}
 
 
+def _runtime_secret_outputs(manifest_operations, deployments, definitions):
+    """Copy trusted closed output declarations into the private manifest.
+
+    Output source paths are not accepted from catalog data. The execution
+    controller uses the established project/secrets/<deploymentId> convention.
+    """
+    apply_deployments = {
+        item.get("serviceDeployment") for item in manifest_operations
+        if isinstance(item, dict) and item.get("operation") == "SERVICE_APPLY"
+    }
+    result = []
+    for deployment_id in sorted(apply_deployments):
+        deployment = deployments.get(deployment_id)
+        service_type = deployment.get("serviceType") if isinstance(deployment, dict) else None
+        definition = definitions.get(service_type) if isinstance(service_type, str) else None
+        declaration = definition.get("x-secretOutputs") if isinstance(definition, dict) else None
+        if declaration is None:
+            continue
+        if (not isinstance(declaration, dict) or set(declaration) != {"protocol", "entries"} or
+                declaration.get("protocol") != "SecretOutputDelivery/v1alpha1" or
+                declaration.get("entries") != ["admin-token", "unseal-shares"]):
+            raise ValueError("SECRET_OUTPUT_DECLARATION_INVALID")
+        result.append({"protocol": declaration["protocol"], "serviceDeployment": deployment_id,
+                       "entries": list(declaration["entries"])})
+    return result
+
+
 def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
@@ -361,11 +517,21 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     findings.extend(source_findings)
     pki_public, pki_private, pki_secret_findings = _pki_store_password_requirements(pki_materialization)
     service_public, service_private, service_secret_findings = _service_runtime_secret_requirements(deployments, definitions, sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else [])
-    required_credentials, runtime_secret_requirements = pki_public + service_public, pki_private + service_private
-    if len({item["requirementRef"] for item in runtime_secret_requirements}) != len(runtime_secret_requirements) or len({item["runtimeReference"] for item in runtime_secret_requirements}) != len(runtime_secret_requirements):
+    service_input_public, service_input_private, service_input_findings = _service_input_requirements(
+        deployments, definitions,
+        (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot.get("topology"), dict) else {},
+    )
+    required_credentials = pki_public + service_public + [
+        {key: item[key] for key in ("requirementRef", "purpose", "hosts")}
+        for item in service_input_public
+    ]
+    runtime_secret_requirements = pki_private + service_private
+    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({item["runtimeReference"] for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
         service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
-    findings.extend(pki_secret_findings + service_secret_findings)
+    findings.extend(pki_secret_findings + service_secret_findings + service_input_findings)
     required_credentials.sort(key=lambda item: item["requirementRef"])
+    if len({item["requirementRef"] for item in required_credentials}) != len(required_credentials):
+        findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
     runtime_secret_requirements.sort(key=lambda item: (item.get("serviceDeployment") or "", item["requirementRef"]))
     findings = _safe_findings(findings)
     executable = not findings
@@ -445,6 +611,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                         if variables is not None:
                             item["roleVariablesByHost"] = variables
                 manifest_operations.append(item)
+        runtime_secret_outputs = _runtime_secret_outputs(manifest_operations, deployments, definitions)
         # Materialization plans are Core-derived, private execution inputs.  A
         # controller starts each approved Ansible operation in a fresh process,
         # so PKI-consuming service operations must receive the same plans that
@@ -455,6 +622,15 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         # The descriptor fingerprint has one closed shape.  PKI has no
         # service deployment and therefore uses the explicit null value rather
         # than a second, ambiguously shaped descriptor form.
-        descriptor_set = [{key: item.get(key) for key in ("requirementRef", "purpose", "serviceDeployment", "hosts")} for item in runtime_secret_requirements]
-        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "runtimeSecretDescriptorSetFingerprint": canonical_digest(descriptor_set), "pkiMaterializationPlans": materialization_plans}
+        descriptor_set = [
+            {key: item.get(key) for key in ("requirementRef", "purpose", "serviceDeployment", "hosts")}
+            for item in runtime_secret_requirements
+        ] + [
+            {key: item.get(key) for key in ("requirementRef", "purpose", "serviceDeployment", "hosts", "requiredWhen", "operations")}
+            for item in service_input_private
+        ] + [
+            {key: item.get(key) for key in ("protocol", "serviceDeployment", "entries")}
+            for item in runtime_secret_outputs
+        ]
+        manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "runtimeSecretInputs": service_input_private, "runtimeSecretOutputs": runtime_secret_outputs, "runtimeSecretDescriptorSetFingerprint": canonical_digest(descriptor_set), "pkiMaterializationPlans": materialization_plans}
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}

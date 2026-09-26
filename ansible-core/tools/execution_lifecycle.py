@@ -11,7 +11,9 @@ import hashlib
 import json
 import os
 import re
+import stat
 import tempfile
+import errno
 from datetime import datetime, timezone
 
 
@@ -40,6 +42,7 @@ EVENT_STATUSES = frozenset(("PENDING", "RUNNING", "SUCCESS", "CHANGED", "SKIPPED
 TASK_EVENT_TYPES = frozenset(("TASK_STARTED", "TASK_COMPLETED"))
 TASK_EVENT_STATUSES = frozenset(("RUNNING", "SUCCESS", "CHANGED", "SKIPPED", "FAILED"))
 TASK_DEGRADATION_REASONS = frozenset(("TASK_EVENT_LIMIT", "TASK_EVENT_WRITE_FAILED", "TASK_EVENT_INVALID"))
+RUNTIME_SECRET_INPUT_FILE = re.compile(r"^\.runtime-secret-inputs-[0-9a-f]{64}\.json$")
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
@@ -176,6 +179,22 @@ class Journal(object):
         descriptor = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         return descriptor
+
+    def cleanup_runtime_secret_inputs(self):
+        """Remove only owned regular files created for typed Ansible inputs."""
+        _assert_private_path(self.directory, directory=True)
+        for name in os.listdir(self.directory):
+            if RUNTIME_SECRET_INPUT_FILE.fullmatch(name) is None:
+                continue
+            path = os.path.join(self.directory, name)
+            try:
+                details = os.lstat(path)
+            except OSError as error:
+                if error.errno == errno.ENOENT:
+                    continue
+                raise
+            if stat.S_ISREG(details.st_mode) and details.st_uid == os.geteuid():
+                os.unlink(path)
 
     def event_lock(self):
         if not os.path.isdir(self.directory) or os.path.islink(self.directory):
@@ -544,14 +563,46 @@ def recover(root, unit_active):
             try:
                 metadata, status = validate_ownership(journal), journal.status()
                 if status.get("state") in ACTIVE and not unit_active(metadata.get("unit"), metadata):
-                    journal.terminal("INTERRUPTED", "CONTROLLER_INTERRUPTED", "Owned controller is no longer active")
+                    result = journal.terminal("INTERRUPTED", "CONTROLLER_INTERRUPTED", "Owned controller is no longer active")
+                    _complete_recovered_secret_outputs(root, journal, result)
+                    journal.cleanup_runtime_secret_inputs()
                     recovered.append(run_id)
+                elif status.get("state") in TERMINAL:
+                    # A crash may occur after terminal result but before output
+                    # publication/completion. Retry this existing lifecycle only.
+                    _complete_recovered_secret_outputs(root, journal, _read(journal.result_path))
             finally:
                 os.close(lock)
         except (OSError, ValueError, LifecycleError):
             # Invalid state is intentionally not attached to any unit.
             continue
     return recovered
+
+
+def _complete_recovered_secret_outputs(root, journal, result):
+    try:
+        import execution_secret_output
+        from execution_controller import _output_schema_validator
+        validator, schema_path = _output_schema_validator(None)
+        manifest = _read(os.path.join(journal.directory, "manifest.json"))
+        outputs = manifest.get("runtimeSecretOutputs", [])
+        if not isinstance(outputs, list) or len(outputs) > 64:
+            return
+        for output in outputs:
+            if (not isinstance(output, dict) or set(output) != {"protocol", "serviceDeployment", "entries"} or
+                    output.get("protocol") != "SecretOutputDelivery/v1alpha1" or
+                    not isinstance(output.get("serviceDeployment"), str) or
+                    output.get("entries") != ["admin-token", "unseal-shares"]):
+                return
+            try:
+                execution_secret_output.complete_retained_outputs(
+                    root, journal.directory, manifest["projectIdentity"], output["serviceDeployment"],
+                    journal.run_id, journal.metadata()["runtimeRelease"], result["state"], digest(result),
+                    validator, schema_path)
+            except execution_secret_output.OutputWireError:
+                continue
+    except (ImportError, OSError, ValueError, KeyError, TypeError):
+        return
 
 
 def retain(root, limit=DEFAULT_TERMINAL_RETENTION):
@@ -568,6 +619,8 @@ def retain(root, limit=DEFAULT_TERMINAL_RETENTION):
             status = journal.status()
             metadata = validate_ownership(journal)
             if status.get("state") in TERMINAL and metadata.get("runId") == run_id and os.path.isfile(journal.result_path) and not os.path.islink(journal.result_path):
+                if _secret_output_retention_pending(root, journal):
+                    continue
                 terminal.append((status.get("updatedAt", ""), run_id, journal.directory))
         except (OSError, ValueError, LifecycleError):
             continue
@@ -584,3 +637,51 @@ def retain(root, limit=DEFAULT_TERMINAL_RETENTION):
             os.rmdir(directory)
             removed.append(run_id)
     return removed
+
+
+def _secret_output_retention_pending(root, journal):
+    """Preserve a run until every declared output package has release evidence."""
+    manifest_path = os.path.join(journal.directory, "manifest.json")
+    try:
+        manifest = _read(manifest_path)
+    except (OSError, ValueError, LifecycleError):
+        return True
+    outputs = manifest.get("runtimeSecretOutputs", [])
+    if not isinstance(outputs, list) or len(outputs) > 64:
+        return True
+    project_id = manifest.get("projectIdentity")
+    if not isinstance(project_id, str):
+        return bool(outputs)
+    try:
+        import execution_secret_output
+    except ImportError:
+        return bool(outputs)
+    for output in outputs:
+        if (not isinstance(output, dict) or set(output) != {"protocol", "serviceDeployment", "entries"} or
+                output.get("protocol") != "SecretOutputDelivery/v1alpha1" or
+                not isinstance(output.get("serviceDeployment"), str) or
+                output.get("entries") != ["admin-token", "unseal-shares"]):
+            return True
+        try:
+            package, _generation = execution_secret_output.load_package_identity(
+                journal.directory, project_id, output["serviceDeployment"], journal.run_id)
+        except execution_secret_output.OutputWireError:
+            package = None
+        if package is None:
+            source_dir = os.path.join(journal.directory, "project", "secrets", output["serviceDeployment"])
+            if any(os.path.lexists(os.path.join(source_dir, entry))
+                   for entry in ("admin-token", "unseal-shares", "init-response.json")):
+                return True
+            continue
+        package_dir = os.path.join(os.path.realpath(root), "secret-outputs", package)
+        source_dir = os.path.join(journal.directory, "project", "secrets", output["serviceDeployment"])
+        source_present = any(os.path.lexists(os.path.join(source_dir, entry))
+                             for entry in ("admin-token", "unseal-shares", "init-response.json"))
+        package_present = os.path.lexists(package_dir)
+        if source_present and (not package_present or not execution_secret_output.producer_completed(root, package, journal.run_id)):
+            return True
+        # A durable reservation can precede directory creation. Preserve its
+        # journal until READY or explicit empty completion is durable as well.
+        if not execution_secret_output.producer_completed(root, package, journal.run_id):
+            return True
+    return False

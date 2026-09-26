@@ -14,17 +14,18 @@
       "required": ["requirementRef", "purpose", "serviceDeployment", "displayLabel", "hosts", "requiredWhen", "operations"],
       "properties": {
         "requirementRef": {"$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/requirement"},
-        "purpose": {"enum": ["SERVICE_PASSWORD", "SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"]},
-        "serviceDeployment": {"$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/deployment"},
+        "purpose": {"enum": ["PKI_STORE_PASSWORD", "SERVICE_PASSWORD", "SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"]},
+        "serviceDeployment": {"oneOf": [{"$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/deployment"}, {"type": "null"}]},
         "displayLabel": {"type": "string", "minLength": 1, "maxLength": 256},
         "hosts": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/deployment"}},
         "requiredWhen": {"enum": ["ALWAYS", "INITIALIZED", "SEALED"]},
-        "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]}
+        "operations": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["SERVICE_APPLY", "SERVICE_VERIFY"]}}
       },
       "oneOf": [
-        {"properties": {"purpose": {"const": "SERVICE_PASSWORD"}, "requiredWhen": {"const": "ALWAYS"}}},
-        {"properties": {"purpose": {"const": "SERVICE_ADMIN_TOKEN"}, "requiredWhen": {"const": "INITIALIZED"}}},
-        {"properties": {"purpose": {"const": "SERVICE_UNSEAL_SHARES"}, "requiredWhen": {"const": "SEALED"}}}
+        {"properties": {"purpose": {"const": "PKI_STORE_PASSWORD"}, "serviceDeployment": {"const": null}, "requiredWhen": {"const": "ALWAYS"}, "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]}}},
+        {"properties": {"purpose": {"const": "SERVICE_PASSWORD"}, "requiredWhen": {"const": "ALWAYS"}, "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]}}},
+        {"properties": {"purpose": {"const": "SERVICE_ADMIN_TOKEN"}, "requiredWhen": {"const": "INITIALIZED"}, "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]}}},
+        {"properties": {"purpose": {"const": "SERVICE_UNSEAL_SHARES"}, "requiredWhen": {"const": "SEALED"}, "operations": {"const": ["SERVICE_APPLY"]}}}
       ]
     }}
   }

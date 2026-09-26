@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +79,17 @@ type TargetCredential struct {
 	SudoSecret          []byte
 	PKIStorePassword    []byte
 	RuntimeSecretValues map[string][]byte
+	RuntimeSecretInputs []RuntimeSecretInput
+}
+
+// RuntimeSecretInput is a typed, short-lived payload for the private v1alpha4
+// lease. Values are borrowed by one synchronous execution callback and cleared
+// immediately afterwards.
+type RuntimeSecretInput struct {
+	RequirementRef, Purpose, ServiceDeployment string
+	Operations                                 []string
+	Value                                      []byte
+	Shares                                     [][]byte
 }
 
 type lease struct {
@@ -89,8 +101,146 @@ type lease struct {
 	sudoSecret          []byte
 	pkiStorePassword    []byte
 	runtimeSecretValues map[string][]byte
+	runtimeSecretInputs []RuntimeSecretInput
 	expiresAt           time.Time
 	generation          uint64
+}
+
+// pendingRuntimeSecrets holds service-password values entered before a target
+// credential is available.  It is project-bound, short-lived and deliberately
+// separate from a transport credential: it cannot be used for SSH or exposed
+// through Status.
+type pendingRuntimeSecrets struct {
+	binding    Binding
+	values     map[string][]byte
+	typed      map[string]RuntimeSecretInput
+	expiresAt  time.Time
+	generation uint64
+}
+
+// SetPendingServiceSecretInput stores a locally catalog-authorized typed
+// secret without requiring a target credential or Execution Node readiness.
+// Core later supplies the opaque exact requirementRef and allowed operations.
+func (b *Broker) SetPendingServiceSecretInput(binding Binding, deployment, purpose string, value []byte, shares [][]byte) error {
+	if binding.Root == "" || binding.ID == "" || deployment == "" || len(deployment) > 128 {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	input := RuntimeSecretInput{Purpose: purpose, ServiceDeployment: deployment}
+	switch purpose {
+	case "SERVICE_ADMIN_TOKEN":
+		if len(value) == 0 || len(value) > 4096 || len(shares) != 0 || !utf8.Valid(value) {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		input.Value = append([]byte(nil), value...)
+	case "SERVICE_UNSEAL_SHARES":
+		if len(shares) == 0 || len(shares) > 255 || len(value) != 0 {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		seen := map[string]bool{}
+		total := 0
+		for _, share := range shares {
+			if len(share) == 0 || len(share) > 128 || !utf8.Valid(share) || seen[string(share)] {
+				return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+			}
+			seen[string(share)] = true
+			total += len(share)
+		}
+		if total > 32768 {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		input.Shares = cloneSecretSlices(shares)
+	default:
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	key := typedSecretKey(deployment, purpose)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.pending == nil || b.pending.binding != binding || !b.now().Before(b.pending.expiresAt) {
+		if b.pending != nil && !b.now().Before(b.pending.expiresAt) {
+			b.clearPendingLocked()
+		}
+		b.nextGen++
+		b.pending = &pendingRuntimeSecrets{binding: binding, values: map[string][]byte{}, typed: map[string]RuntimeSecretInput{}, expiresAt: b.now().Add(b.ttl), generation: b.nextGen}
+		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
+	}
+	if b.pending.typed == nil {
+		b.pending.typed = map[string]RuntimeSecretInput{}
+	}
+	if previous, ok := b.pending.typed[key]; ok {
+		zeroRuntimeSecretInput(previous)
+	}
+	b.pending.typed[key] = input
+	return nil
+}
+
+// BindPendingServiceSecretInputs maps local deployment/purpose values onto
+// the exact current Core descriptors before target credential serialization.
+func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []RuntimeSecretInput) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.pending == nil || b.pending.binding != binding || !b.now().Before(b.pending.expiresAt) || b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		return nil
+	}
+	allowed := make(map[string]RuntimeSecretInput, len(descriptors))
+	for _, descriptor := range descriptors {
+		if !validTypedDescriptor(descriptor) {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		key := typedSecretKey(descriptor.ServiceDeployment, descriptor.Purpose)
+		if _, exists := allowed[key]; exists {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		allowed[key] = descriptor
+	}
+	attached := make([]RuntimeSecretInput, 0, len(b.pending.typed))
+	for key, pending := range b.pending.typed {
+		descriptor, ok := allowed[key]
+		if !ok {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		descriptor.Value = append([]byte(nil), pending.Value...)
+		descriptor.Shares = cloneSecretSlices(pending.Shares)
+		attached = append(attached, descriptor)
+	}
+	sort.Slice(attached, func(i, j int) bool { return attached[i].RequirementRef < attached[j].RequirementRef })
+	for _, old := range b.lease.runtimeSecretInputs {
+		zeroRuntimeSecretInput(old)
+	}
+	b.lease.runtimeSecretInputs = attached
+	return nil
+}
+
+func validTypedDescriptor(value RuntimeSecretInput) bool {
+	if !runtimeSecretID(value.RequirementRef) || value.ServiceDeployment == "" || len(value.ServiceDeployment) > 128 {
+		return false
+	}
+	switch value.Purpose {
+	case "SERVICE_ADMIN_TOKEN":
+		return len(value.Operations) == 2 && value.Operations[0] == "SERVICE_APPLY" && value.Operations[1] == "SERVICE_VERIFY"
+	case "SERVICE_UNSEAL_SHARES":
+		return len(value.Operations) == 1 && value.Operations[0] == "SERVICE_APPLY"
+	default:
+		return false
+	}
+}
+
+func typedSecretKey(deployment, purpose string) string { return deployment + "\x00" + purpose }
+
+func zeroRuntimeSecretInput(value RuntimeSecretInput) {
+	zero(value.Value)
+	zeroByteSlices(value.Shares)
+}
+
+func zeroTypedSecretMap(values map[string]RuntimeSecretInput) {
+	for _, value := range values {
+		zeroRuntimeSecretInput(value)
+	}
+}
+
+func zeroByteSlices(values [][]byte) {
+	for _, value := range values {
+		zero(value)
+	}
 }
 
 // SetPKIStorePassword updates only the optional in-memory PKI password on the
@@ -173,16 +323,120 @@ func (b *Broker) SetRuntimeSecretValuesForRequirements(binding Binding, requirem
 	return nil
 }
 
+// SetPendingRuntimeSecretValuesForRequirements accepts a locally
+// catalog-authorized service-secret subset before a READY Execution Node or a
+// target credential exists. Values are kept only in Broker memory and expire
+// on the same bounded TTL as session credentials.
+func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, requirements []string, values map[string]string) error {
+	if binding.Root == "" || binding.ID == "" || !sameRuntimeSecretRequirements(requirements, values) {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	next := make(map[string][]byte, len(values))
+	for reference, value := range values {
+		next[reference] = []byte(value)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt) {
+		merged := cloneSecretMap(b.pending.values)
+		typed := cloneTypedSecretMap(b.pending.typed)
+		for _, reference := range requirements {
+			zero(merged[reference])
+			delete(merged, reference)
+		}
+		for reference, value := range next {
+			merged[reference] = value
+		}
+		next = merged
+		b.clearPendingLocked()
+		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, typed: typed, expiresAt: b.now().Add(b.ttl)}
+		b.nextGen++
+		b.pending.generation = b.nextGen
+		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
+		return nil
+	}
+	if !validRuntimeSecretMap(next) {
+		zeroSecretMap(next)
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	b.clearPendingLocked()
+	b.nextGen++
+	b.pending = &pendingRuntimeSecrets{binding: binding, values: next, expiresAt: b.now().Add(b.ttl), generation: b.nextGen}
+	b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
+	return nil
+}
+
+// PromotePendingRuntimeSecretValues moves values into the target credential
+// only after Core has produced the current descriptor set. Every pending key
+// must be in that set; stale or superseded local requirements fail closed.
+func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.pending == nil || b.pending.binding != binding {
+		return nil
+	}
+	if !b.now().Before(b.pending.expiresAt) {
+		b.clearPendingLocked()
+		return errors.New("RUNTIME_SECRET_INPUT_EXPIRED")
+	}
+	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(requirements))
+	for _, reference := range requirements {
+		if !runtimeSecretID(reference) {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		allowed[reference] = struct{}{}
+	}
+	for reference := range b.pending.values {
+		if _, ok := allowed[reference]; !ok {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+	}
+	next := cloneSecretMap(b.lease.runtimeSecretValues)
+	for reference, value := range b.pending.values {
+		zero(next[reference])
+		next[reference] = append([]byte(nil), value...)
+	}
+	if !validRuntimeSecretMap(next) {
+		zeroSecretMap(next)
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	zeroSecretMap(b.lease.runtimeSecretValues)
+	b.lease.runtimeSecretValues = next
+	b.clearPendingLocked()
+	return nil
+}
+
 // ClearRuntimeSecretValues leaves the target credential and optional PKI
 // password intact while invalidating descriptor-bound service values.
 func (b *Broker) ClearRuntimeSecretValues(binding Binding) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.lease == nil || b.lease.binding != binding {
-		return
+	if b.lease != nil && b.lease.binding == binding {
+		zeroSecretMap(b.lease.runtimeSecretValues)
+		b.lease.runtimeSecretValues = nil
+		zeroTypedSecretSlice(b.lease.runtimeSecretInputs)
+		b.lease.runtimeSecretInputs = nil
 	}
-	zeroSecretMap(b.lease.runtimeSecretValues)
-	b.lease.runtimeSecretValues = nil
+	if b.pending != nil && b.pending.binding == binding {
+		b.clearPendingLocked()
+	}
+}
+
+// ClearAttachedRuntimeSecretValues removes only values already attached to a
+// target credential. Pending locally entered values remain available for the
+// immediately following Core-attested promotion step.
+func (b *Broker) ClearAttachedRuntimeSecretValues(binding Binding) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.lease != nil && b.lease.binding == binding {
+		zeroSecretMap(b.lease.runtimeSecretValues)
+		b.lease.runtimeSecretValues = nil
+		zeroTypedSecretSlice(b.lease.runtimeSecretInputs)
+		b.lease.runtimeSecretInputs = nil
+	}
 }
 
 type expiredMarker struct {
@@ -191,13 +445,83 @@ type expiredMarker struct {
 }
 
 type Broker struct {
-	mu      sync.Mutex
-	ttl     time.Duration
-	now     func() time.Time
-	lease   *lease
-	expired *expiredMarker
-	timer   *time.Timer
-	nextGen uint64
+	mu              sync.Mutex
+	ttl             time.Duration
+	now             func() time.Time
+	lease           *lease
+	pending         *pendingRuntimeSecrets
+	outputPassword  []byte
+	outputBinding   Binding
+	outputExpiresAt time.Time
+	expired         *expiredMarker
+	timer           *time.Timer
+	nextGen         uint64
+}
+
+// SetOutputEncryptionPassword keeps the workstation-only age password in the
+// same bounded in-memory broker as other session secrets. It is never part of
+// TargetCredential or any transport payload.
+func (b *Broker) SetOutputEncryptionPassword(binding Binding, password []byte) error {
+	if binding.Root == "" || binding.ID == "" || len(password) == 0 || len(password) > maxPKIStorePasswordBytes || !utf8.Valid(password) {
+		return errors.New("SECRET_OUTPUT_PASSWORD_INVALID")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.outputBinding != binding {
+		zero(b.outputPassword)
+	}
+	b.outputPassword = append(b.outputPassword[:0], password...)
+	b.outputBinding = binding
+	b.outputExpiresAt = b.now().Add(b.ttl)
+	return nil
+}
+
+// WithOutputEncryptionPassword lends a short-lived copy synchronously and
+// zeroes it after callback completion. It is not exposed in status or DTOs.
+func (b *Broker) WithOutputEncryptionPassword(binding Binding, use func([]byte) error) error {
+	if use == nil {
+		return errors.New("SECRET_OUTPUT_PASSWORD_MISSING")
+	}
+	b.mu.Lock()
+	if b.outputBinding != binding || len(b.outputPassword) == 0 || !b.now().Before(b.outputExpiresAt) {
+		if len(b.outputPassword) > 0 && !b.now().Before(b.outputExpiresAt) {
+			zero(b.outputPassword)
+			b.outputPassword = nil
+		}
+		b.mu.Unlock()
+		return errors.New("SECRET_OUTPUT_PASSWORD_MISSING")
+	}
+	copyValue := append([]byte(nil), b.outputPassword...)
+	b.mu.Unlock()
+	defer zero(copyValue)
+	return use(copyValue)
+}
+
+func (b *Broker) ClearOutputEncryptionPassword(binding Binding) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.outputBinding == binding {
+		zero(b.outputPassword)
+		b.outputPassword = nil
+		b.outputBinding = Binding{}
+		b.outputExpiresAt = time.Time{}
+	}
+}
+
+func (b *Broker) HasOutputEncryptionPassword(binding Binding) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.outputBinding != binding || len(b.outputPassword) == 0 {
+		return false
+	}
+	if !b.now().Before(b.outputExpiresAt) {
+		zero(b.outputPassword)
+		b.outputPassword = nil
+		b.outputBinding = Binding{}
+		b.outputExpiresAt = time.Time{}
+		return false
+	}
+	return true
 }
 
 type Option func(*Broker)
@@ -225,7 +549,16 @@ func (b *Broker) Set(binding Binding, input Input) (Status, error) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.outputBinding != binding {
+		zero(b.outputPassword)
+		b.outputPassword = nil
+		b.outputBinding = Binding{}
+		b.outputExpiresAt = time.Time{}
+	}
 	b.clearLeaseLocked(false)
+	if b.pending != nil && b.pending.binding != binding {
+		b.clearPendingLocked()
+	}
 	b.expired = nil
 	b.nextGen++
 	candidate.generation = b.nextGen
@@ -255,6 +588,11 @@ func (b *Broker) Clear() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.clearLeaseLocked(true)
+	b.clearPendingLocked()
+	zero(b.outputPassword)
+	b.outputPassword = nil
+	b.outputBinding = Binding{}
+	b.outputExpiresAt = time.Time{}
 }
 
 func (b *Broker) Close() { b.Clear() }
@@ -274,12 +612,13 @@ func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential
 		b.mu.Unlock()
 		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
-	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), PKIStorePassword: append([]byte(nil), b.lease.pkiStorePassword...), RuntimeSecretValues: cloneSecretMap(b.lease.runtimeSecretValues)}
+	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), PKIStorePassword: append([]byte(nil), b.lease.pkiStorePassword...), RuntimeSecretValues: cloneSecretMap(b.lease.runtimeSecretValues), RuntimeSecretInputs: cloneTypedSecretSlice(b.lease.runtimeSecretInputs)}
 	b.mu.Unlock()
 	defer zero(value.SSHSecret)
 	defer zero(value.SudoSecret)
 	defer zero(value.PKIStorePassword)
 	defer zeroSecretMap(value.RuntimeSecretValues)
+	defer zeroTypedSecretSlice(value.RuntimeSecretInputs)
 	return use(value)
 }
 
@@ -419,6 +758,16 @@ func (b *Broker) armExpiryLocked(generation uint64, expiresAt time.Time) {
 	})
 }
 
+func (b *Broker) armPendingExpiryLocked(generation uint64, expiresAt time.Time) {
+	time.AfterFunc(time.Until(expiresAt), func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.pending != nil && b.pending.generation == generation && !b.now().Before(b.pending.expiresAt) {
+			b.clearPendingLocked()
+		}
+	})
+}
+
 func (b *Broker) expireLocked(generation uint64) {
 	if b.lease == nil || b.lease.generation != generation {
 		return
@@ -439,11 +788,22 @@ func (b *Broker) clearLeaseLocked(clearExpired bool) {
 		zero(b.lease.sudoSecret)
 		zero(b.lease.pkiStorePassword)
 		zeroSecretMap(b.lease.runtimeSecretValues)
+		zeroTypedSecretSlice(b.lease.runtimeSecretInputs)
+		zeroTypedSecretSlice(b.lease.runtimeSecretInputs)
 		b.lease = nil
 	}
 	if clearExpired {
 		b.expired = nil
 	}
+}
+
+func (b *Broker) clearPendingLocked() {
+	if b.pending == nil {
+		return
+	}
+	zeroSecretMap(b.pending.values)
+	zeroTypedSecretMap(b.pending.typed)
+	b.pending = nil
 }
 
 func statusFromLease(value *lease) Status {
@@ -534,6 +894,44 @@ func cloneSecretMap(value map[string][]byte) map[string][]byte {
 func zeroSecretMap(value map[string][]byte) {
 	for _, item := range value {
 		zero(item)
+	}
+}
+
+func cloneTypedSecretInput(value RuntimeSecretInput) RuntimeSecretInput {
+	return RuntimeSecretInput{RequirementRef: value.RequirementRef, Purpose: value.Purpose, ServiceDeployment: value.ServiceDeployment,
+		Operations: append([]string(nil), value.Operations...), Value: append([]byte(nil), value.Value...), Shares: cloneSecretSlices(value.Shares)}
+}
+
+func cloneSecretSlices(values [][]byte) [][]byte {
+	result := make([][]byte, len(values))
+	for i, value := range values {
+		result[i] = append([]byte(nil), value...)
+	}
+	return result
+}
+
+func cloneTypedSecretSlice(values []RuntimeSecretInput) []RuntimeSecretInput {
+	result := make([]RuntimeSecretInput, len(values))
+	for i, value := range values {
+		result[i] = cloneTypedSecretInput(value)
+	}
+	return result
+}
+
+func cloneTypedSecretMap(values map[string]RuntimeSecretInput) map[string]RuntimeSecretInput {
+	if values == nil {
+		return nil
+	}
+	result := make(map[string]RuntimeSecretInput, len(values))
+	for key, value := range values {
+		result[key] = cloneTypedSecretInput(value)
+	}
+	return result
+}
+
+func zeroTypedSecretSlice(values []RuntimeSecretInput) {
+	for _, value := range values {
+		zeroRuntimeSecretInput(value)
 	}
 }
 func stringTrimSpace(value string) string { return strings.TrimSpace(value) }

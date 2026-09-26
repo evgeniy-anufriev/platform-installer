@@ -17,9 +17,10 @@ import tempfile
 
 from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, digest, retain
 import execution_secret_lease
+import execution_secret_output
 
 
-SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client"))
+SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault"))
 PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096
@@ -216,8 +217,9 @@ def _command(release, journal, operation):
         if not isinstance(deployment, str) or not deployment or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" for char in deployment):
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
         command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "services", operation["serviceType"], "playbooks", action + ".yml"), "-e", "@" + projection]
+        command.extend(["-e", "platform_execution_service_deployment=" + deployment])
         if operation.get("requiresArtifactSources") is True:
-            command.extend(["-e", "platform_execution_service_deployment=" + deployment, "-e", "platform_artifact_source_authority_active=true"])
+            command.extend(["-e", "platform_artifact_source_authority_active=true"])
         return command
     if kind == "CORE_DELAY" and operation.get("operationId") == "core:delay":
         # A Core-owned, bounded safe fixture used only to prove detached unit
@@ -275,7 +277,92 @@ def _validate_runtime_projection(journal, metadata, manifest):
             not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict) or
             projection.get("platform_pki_materialization_plans") != plans or
             not isinstance(projection.get("platform_pki_secret_files"), dict)):
-        raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
+            raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
+
+
+def _secret_output_declarations(manifest):
+    values = manifest.get("runtimeSecretOutputs", [])
+    if not isinstance(values, list) or len(values) > 64:
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    applies = {item.get("serviceDeployment") for item in manifest.get("operations", [])
+               if isinstance(item, dict) and item.get("operation") == "SERVICE_APPLY"}
+    seen = set()
+    for item in values:
+        if (not isinstance(item, dict) or set(item) != {"protocol", "serviceDeployment", "entries"} or
+                item.get("protocol") != "SecretOutputDelivery/v1alpha1" or
+                not isinstance(item.get("serviceDeployment"), str) or
+                item["serviceDeployment"] not in applies or item["serviceDeployment"] in seen or
+                item.get("entries") != ["admin-token", "unseal-shares"]):
+            raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        seen.add(item["serviceDeployment"])
+    return values
+
+
+def _output_schema_validator(runtime_release):
+    bundle_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    module_utils = os.path.join(bundle_root, "ansible-core", "collections", "ansible_collections", "platform", "core", "plugins", "module_utils")
+    if module_utils not in sys.path:
+        sys.path.insert(0, module_utils)
+    from schema_validation import SchemaValidator
+    bundle_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    schema_root = os.path.join(bundle_root, "contracts", "secret-output-delivery", "v1alpha1")
+    schema_path = os.path.join(schema_root, "metadata.schema.json")
+    if not os.path.isfile(schema_path):
+        raise LifecycleError("SECRET_OUTPUT_CONTRACT_UNAVAILABLE")
+    return SchemaValidator(schema_root), schema_path
+
+
+def _capture_secret_outputs(journal, manifest, runtime_release):
+    declarations = _secret_output_declarations(manifest)
+    if not declarations:
+        return []
+    validator, schema_path = _output_schema_validator(runtime_release)
+    project_root = os.path.join(journal.directory, "project")
+    metadata = journal.metadata()
+    published = []
+    for declaration in declarations:
+        package = execution_secret_output.publish_retained_outputs(
+            journal.root, journal.directory, metadata["projectIdentity"],
+            declaration["serviceDeployment"], journal.run_id,
+            metadata["runtimeRelease"], validator, schema_path)
+        if package is not None:
+            published.append((package, journal.run_id))
+    return published
+
+
+def _complete_secret_outputs(journal, manifest, result):
+    declarations = _secret_output_declarations(manifest)
+    if not declarations:
+        return
+    terminal_digest = digest(result)
+    metadata = journal.metadata()
+    validator, schema_path = _output_schema_validator(None)
+    for declaration in declarations:
+        try:
+            execution_secret_output.complete_retained_outputs(
+                journal.root, journal.directory, metadata["projectIdentity"],
+                declaration["serviceDeployment"], journal.run_id, metadata["runtimeRelease"],
+                result["state"], terminal_digest, validator, schema_path)
+        except execution_secret_output.OutputWireError:
+            # Keep the terminal result authoritative; retention sees the
+            # missing completion record and preserves this journal for recovery.
+            continue
+
+
+def _finish_run_with_outputs(journal, state, code, summary, manifest, runtime_release):
+    try:
+        _capture_secret_outputs(journal, manifest, runtime_release)
+    except (LifecycleError, execution_secret_output.OutputWireError, OSError, ValueError):
+        # Delivery is a separate observation from the authoritative run result.
+        # Preserve the run workspace for recovery instead of deleting the only
+        # remaining copy of a potentially generated bootstrap output.
+        try:
+            journal.event("DIAGNOSTIC", "RUNNING", "Generated secret output is not yet durably available")
+        except (LifecycleError, OSError, ValueError):
+            pass
+    result = _terminal(journal, state, code, summary)
+    _complete_secret_outputs(journal, manifest, result)
+    return result
 
 
 def _materialize_runtime_projection(journal, metadata, manifest):
@@ -349,6 +436,11 @@ def _materialize_runtime_projection(journal, metadata, manifest):
             finally:
                 os.close(descriptor)
             service_secret_files.setdefault(deployment, {})[reference] = path
+    output_directories = {}
+    for declaration in _secret_output_declarations(manifest):
+        deployment = declaration["serviceDeployment"]
+        output_directories[deployment] = execution_secret_output.prepare_retained_output_directory(
+            journal.root, journal.directory, metadata["projectIdentity"], deployment, journal.run_id, metadata["runtimeRelease"])
     payload = {
         "apiVersion": "platform.installer/runtime-projection/v1alpha2",
         "platform_execution_run_id": metadata["runId"],
@@ -384,6 +476,8 @@ def _materialize_runtime_projection(journal, metadata, manifest):
                 raise LifecycleError("EXECUTION_MANIFEST_INVALID")
             scoped = dict(payload)
             scoped[prefix + "secret_files"] = service_secret_files.get(deployment, {})
+            if deployment in output_directories:
+                scoped[prefix + "bootstrap_output_dir"] = output_directories[deployment]
             role_variables = _role_variables_by_host(operation)
             if role_variables is not None:
                 scoped["platform_execution_role_variables_by_host"] = role_variables
@@ -415,27 +509,48 @@ def _dispatch(release, journal, manifest, stopped):
             return "CANCELLED"
         journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
         credentials_path = None
-        credentials = execution_secret_lease.ansible_password_credentials_for_run(journal.root, journal.run_id)
-        if credentials is not None:
-            credentials_path = os.path.join(journal.directory, ".ansible-runtime-credentials.json")
-            descriptor = os.open(credentials_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-            try:
-                with os.fdopen(descriptor, "w") as stream:
-                    json.dump(credentials, stream, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-                    stream.flush(); os.fsync(stream.fileno())
-            except Exception:
-                try: os.unlink(credentials_path)
-                except OSError: pass
-                raise
-            command = [sys.executable, os.path.join(release, "ansible-core", "tools", "run_with_runtime_credentials.py"), "--credentials-file", credentials_path, "--runtime-dir", os.path.join(journal.directory, ".ansible-runtime"), "--"] + command
+        secret_inputs_path = None
         try:
+            credentials = execution_secret_lease.ansible_password_credentials_for_run(journal.root, journal.run_id)
+            if credentials is not None:
+                credentials_path = os.path.join(journal.directory, ".ansible-runtime-credentials.json")
+                descriptor = os.open(credentials_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                try:
+                    with os.fdopen(descriptor, "w") as stream:
+                        json.dump(credentials, stream, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                        stream.flush(); os.fsync(stream.fileno())
+                except Exception:
+                    try: os.unlink(credentials_path)
+                    except OSError: pass
+                    raise
+                command = [sys.executable, os.path.join(release, "ansible-core", "tools", "run_with_runtime_credentials.py"), "--credentials-file", credentials_path, "--runtime-dir", os.path.join(journal.directory, ".ansible-runtime"), "--"] + command
+            deployment = operation.get("serviceDeployment")
+            typed_requirements = manifest.get("runtimeSecretInputs", [])
+            if (isinstance(deployment, str) and operation.get("operation") in ("SERVICE_APPLY", "SERVICE_VERIFY")
+                    and typed_requirements):
+                secret_inputs = execution_secret_lease.runtime_secret_inputs_for_operation(
+                    journal.root, journal.run_id, deployment, operation["operation"],
+                    typed_requirements)
+                if secret_inputs:
+                    secret_inputs_path = os.path.join(journal.directory, ".runtime-secret-inputs-" + hashlib.sha256(operation["operationId"].encode("utf-8")).hexdigest() + ".json")
+                    secret_descriptor = os.open(secret_inputs_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                    try:
+                        with os.fdopen(secret_descriptor, "w", encoding="utf-8") as stream:
+                            json.dump({"platform_runtime_secret_inputs": secret_inputs}, stream, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                            stream.flush(); os.fsync(stream.fileno())
+                    except Exception:
+                        try: os.unlink(secret_inputs_path)
+                        except OSError: pass
+                        raise
+                    command.extend(["-e", "@" + secret_inputs_path])
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_environment(release, journal, operation))
             completed = _wait_for_operation(process, stopped)
         finally:
-            if credentials_path is not None and os.path.lexists(credentials_path):
-                details = os.lstat(credentials_path)
-                if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
-                    os.unlink(credentials_path)
+            for temporary_path in (credentials_path, secret_inputs_path):
+                if temporary_path is not None and os.path.lexists(temporary_path):
+                    details = os.lstat(temporary_path)
+                    if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
+                        os.unlink(temporary_path)
         if completed is None:
             return "CANCELLED"
         returncode, error_code = completed
@@ -465,6 +580,7 @@ def main():
             return _terminal(journal, "FAILED", "EXECUTION_MANIFEST_TAMPERED", "Private execution manifest digest does not match") and 2
         if manifest.get("projectIdentity") != metadata.get("projectIdentity") or manifest.get("planFingerprint") != metadata.get("planFingerprint") or manifest.get("runtimeRelease", {}).get("bundleDigest") != args.bundle_digest or metadata.get("runtimeRelease") != args.bundle_digest:
             return _terminal(journal, "FAILED", "EXECUTION_IDENTITY_MISMATCH", "Manifest identity does not match run ownership") and 2
+        _secret_output_declarations(manifest)
         if not os.path.isdir(args.runtime_release) or os.path.islink(args.runtime_release):
             return _terminal(journal, "FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
         _materialize_runtime_projection(journal, metadata, manifest)
@@ -484,13 +600,13 @@ def main():
     try:
         terminal = _dispatch(args.runtime_release, journal, manifest, cancelled)
         if terminal == "CANCELLED":
-            _terminal(journal, "CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
+            _finish_run_with_outputs(journal, "CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested", manifest, args.runtime_release)
         else:
-            _terminal(journal, "SUCCEEDED", "", "Execution controller completed")
+            _finish_run_with_outputs(journal, "SUCCEEDED", "", "Execution controller completed", manifest, args.runtime_release)
         retain(args.state_root)
         return 0
     except LifecycleError as error:
-        _terminal(journal, "FAILED", str(error), "Trusted operation failed before completion")
+        _finish_run_with_outputs(journal, "FAILED", str(error), "Trusted operation failed before completion", manifest, args.runtime_release)
         retain(args.state_root)
         return 2
 

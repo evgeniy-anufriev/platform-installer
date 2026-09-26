@@ -1249,6 +1249,71 @@ describe("UI-01F3 deployment editor", () => {
 });
 
 describe("UI-01H2 services navigation and safe settings", () => {
+  it("adds only runtime references before accepting Redis secret values into memory", async () => {
+    const redisProject = {
+      ...project,
+      managed: {
+        ...project.managed,
+        deployments: {
+          ...project.managed.deployments,
+          "redis-main": { deploymentId: "redis-main", serviceType: "redis", mode: "standalone" },
+        },
+      },
+      catalog: {
+        ...project.catalog,
+        services: [
+          ...project.catalog.services,
+          {
+            id: "redis",
+            definitionVersion: "1",
+            displayName: "Redis",
+            category: "Database",
+            ui: {},
+            endpointConsumer: false,
+            endpointProvider: false,
+            modes: [{ id: "standalone", displayName: "Standalone", placementKind: "MEMBER_SCOPED", roles: ["redis"], guidance: { minParticipants: 1, distinctHosts: false } }],
+            configurationSettings: [],
+          },
+        ],
+      },
+    };
+    const getPendingRuntimeSecretDescriptors = vi.fn().mockResolvedValue({
+      status: "READY",
+      descriptors: [{
+        requirementRef: "redis-password",
+        purpose: "SERVICE_PASSWORD",
+        serviceDeployment: "redis-main",
+        setting: "redisCredential",
+        displayLabel: "Redis password",
+        referenceConfigured: false,
+        hosts: ["node1"],
+      }],
+    });
+    const setPendingDeploymentRuntimeSecretValues = vi.fn();
+    const value = api({
+      getPendingRuntimeSecretDescriptors,
+      setPendingDeploymentRuntimeSecretValues,
+    });
+    value.chooseProject.mockResolvedValue(redisProject);
+    render(<App api={value} />);
+    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^redis-main/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
+    await userEvent.type(screen.getByLabelText("Redis password"), "not-persisted");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить в сессии" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "SetServiceConfigurationValue",
+      deploymentId: "redis-main",
+      scope: "DEPLOYMENT",
+      setting: "redisCredential",
+      value: { passwordSecretRef: "runtime:redis-password" },
+    });
+    expect(setPendingDeploymentRuntimeSecretValues).not.toHaveBeenCalled();
+    expect(screen.getByText(/Ссылки добавлены в черновик/)).toBeTruthy();
+    expect(screen.queryByText("not-persisted")).toBeNull();
+  });
+
   it("opens one Services list/detail view without an Execution Node and returns to the list", async () => {
     const value = api();
     value.chooseProject.mockResolvedValue(project);
@@ -1271,6 +1336,40 @@ describe("UI-01H2 services navigation and safe settings", () => {
       await screen.findByRole("heading", { name: "Сервисы" }),
     ).toBeTruthy();
     expect(value.getExecutionNodeContext).toBeUndefined();
+  });
+
+  it("imports typed service secret files through Go without exposing paths or values", async () => {
+    const value = api({
+      getPendingRuntimeSecretDescriptors: vi.fn().mockResolvedValue({
+        status: "READY",
+        descriptors: [{
+          requirementRef: "vault-admin-token",
+          purpose: "SERVICE_ADMIN_TOKEN",
+          serviceDeployment: "kafka-main",
+          displayLabel: "Administrative token",
+          requiredWhen: "INITIALIZED",
+          operations: ["SERVICE_APPLY", "SERVICE_VERIFY"],
+          hosts: ["node1"],
+        }],
+      }),
+      choosePendingDeploymentRuntimeSecretFile: vi.fn().mockResolvedValue("STORED"),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
+    await userEvent.type(screen.getByLabelText(/Пароль файла age/), "temporary-input-password");
+    await userEvent.click(screen.getByRole("button", { name: "Выбрать файл" }));
+    expect(value.choosePendingDeploymentRuntimeSecretFile).toHaveBeenCalledWith({
+      serviceDeployment: "kafka-main",
+      purpose: "SERVICE_ADMIN_TOKEN",
+      encryptionPassword: "temporary-input-password",
+    });
+    expect(screen.getByText("Файл принят и сохранён только в сессии.")).toBeTruthy();
+    expect(value.getExecutionNodeContext).toBeUndefined();
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
   });
 
   it("adds one deployment-scoped safe setting command through the shared session", async () => {

@@ -153,6 +153,34 @@ export namespace executionnode {
       this.protocol = source["protocol"];
     }
   }
+  export class SecretOutputPackage {
+    protocol: string;
+    packageId: string;
+    projectId: string;
+    deploymentId: string;
+    sourceRunId: string;
+    runtimeDigest: string;
+    generation: number;
+    state: string;
+    entries: string[];
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputPackage(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.protocol = source["protocol"];
+      this.packageId = source["packageId"];
+      this.projectId = source["projectId"];
+      this.deploymentId = source["deploymentId"];
+      this.sourceRunId = source["sourceRunId"];
+      this.runtimeDigest = source["runtimeDigest"];
+      this.generation = source["generation"];
+      this.state = source["state"];
+      this.entries = source["entries"];
+    }
+  }
 }
 
 export namespace installer {
@@ -240,7 +268,7 @@ export namespace installer {
   export class PlacementHost {
     hostId: string;
     roles?: string[];
-    priority: number;
+    priority?: number;
 
     static createFrom(source: any = {}) {
       return new PlacementHost(source);
@@ -1752,6 +1780,8 @@ export namespace main {
     phases: InstallationPlanPhase[];
     findings?: InstallationPlanFinding[];
     pkiStorePasswordRequired: boolean;
+    secretOutputEncryptionRequired: boolean;
+    secretOutputEncryptionPasswordPresent: boolean;
 
     static createFrom(source: any = {}) {
       return new InstallationPlanView(source);
@@ -1780,6 +1810,10 @@ export namespace main {
         InstallationPlanFinding,
       );
       this.pkiStorePasswordRequired = source["pkiStorePasswordRequired"];
+      this.secretOutputEncryptionRequired =
+        source["secretOutputEncryptionRequired"];
+      this.secretOutputEncryptionPasswordPresent =
+        source["secretOutputEncryptionPasswordPresent"];
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2081,6 +2115,50 @@ export namespace main {
     }
   }
 
+  export class OutputEncryptionPasswordInput {
+    password: string;
+    confirm: string;
+
+    static createFrom(source: any = {}) {
+      return new OutputEncryptionPasswordInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.password = source["password"];
+      this.confirm = source["confirm"];
+    }
+  }
+  export class PendingRuntimeSecretFileInput {
+    serviceDeployment: string;
+    purpose: string;
+    encryptionPassword: string;
+
+    static createFrom(source: any = {}) {
+      return new PendingRuntimeSecretFileInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.serviceDeployment = source["serviceDeployment"];
+      this.purpose = source["purpose"];
+      this.encryptionPassword = source["encryptionPassword"];
+    }
+  }
+  export class PendingRuntimeSecretValuesInput {
+    serviceDeployment: string;
+    values: Record<string, string>;
+
+    static createFrom(source: any = {}) {
+      return new PendingRuntimeSecretValuesInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.serviceDeployment = source["serviceDeployment"];
+      this.values = source["values"];
+    }
+  }
   export class ProjectExportOperationResult {
     status: string;
     plan?: installer.ProjectExportPlan;
@@ -2196,6 +2274,186 @@ export namespace main {
     }
   }
 
+  export class RuntimeSecretDescriptorView {
+    RequirementRef: string;
+    Purpose: string;
+    ServiceDeployment: string;
+    Setting: string;
+    DisplayLabel: string;
+    RequiredWhen: string;
+    Operations: string[];
+    ReferenceConfigured: boolean;
+    Hosts: string[];
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretDescriptorView(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.RequirementRef = source["RequirementRef"];
+      this.Purpose = source["Purpose"];
+      this.ServiceDeployment = source["ServiceDeployment"];
+      this.Setting = source["Setting"];
+      this.DisplayLabel = source["DisplayLabel"];
+      this.RequiredWhen = source["RequiredWhen"];
+      this.Operations = source["Operations"];
+      this.ReferenceConfigured = source["ReferenceConfigured"];
+      this.Hosts = source["Hosts"];
+    }
+  }
+  export class RuntimeSecretDescriptorOperation {
+    Status: string;
+    ProjectRevision: string;
+    DescriptorSetFingerprint: string;
+    Descriptors: RuntimeSecretDescriptorView[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretDescriptorOperation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.Status = source["Status"];
+      this.ProjectRevision = source["ProjectRevision"];
+      this.DescriptorSetFingerprint = source["DescriptorSetFingerprint"];
+      this.Descriptors = this.convertValues(
+        source["Descriptors"],
+        RuntimeSecretDescriptorView,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class RuntimeSecretValuesInput {
+    projectRevision: string;
+    descriptorSetFingerprint: string;
+    serviceDeployment: string;
+    values: Record<string, string>;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretValuesInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.projectRevision = source["projectRevision"];
+      this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
+      this.serviceDeployment = source["serviceDeployment"];
+      this.values = source["values"];
+    }
+  }
+  export class SecretOutputDeliveryInput {
+    packageId: string;
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputDeliveryInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.packageId = source["packageId"];
+    }
+  }
+  export class SecretOutputDeliveryOperation {
+    status: string;
+    package?: executionnode.SecretOutputPackage;
+    directory?: string;
+    stagingPath?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputDeliveryOperation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.package = this.convertValues(
+        source["package"],
+        executionnode.SecretOutputPackage,
+      );
+      this.directory = source["directory"];
+      this.stagingPath = source["stagingPath"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class SecretOutputPackagesOperation {
+    status: string;
+    packages?: executionnode.SecretOutputPackage[];
+    nextCursor?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputPackagesOperation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.packages = this.convertValues(
+        source["packages"],
+        executionnode.SecretOutputPackage,
+      );
+      this.nextCursor = source["nextCursor"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class StructuralEditOperationResult {
     status: string;
     session?: installer.EditSession;
@@ -2354,29 +2612,6 @@ export namespace main {
       }
       return a;
     }
-  }
-
-  export class RuntimeSecretDescriptorView {
-    RequirementRef!: string;
-    Purpose!: string;
-    ServiceDeployment!: string;
-    DisplayLabel!: string;
-    Hosts!: string[];
-  }
-
-  export class RuntimeSecretDescriptorOperation {
-    Status!: string;
-    ProjectRevision!: string;
-    DescriptorSetFingerprint!: string;
-    Descriptors!: RuntimeSecretDescriptorView[];
-    Error?: ProjectOpenError;
-  }
-
-  export class RuntimeSecretValuesInput {
-    projectRevision!: string;
-    descriptorSetFingerprint!: string;
-    serviceDeployment!: string;
-    values!: { [key: string]: string };
   }
 }
 
@@ -2543,6 +2778,7 @@ export namespace projectlifecycle {
     description?: string;
     placementKind: string;
     roles: string[];
+    requiredRuntimeSecretSettings?: string[];
     guidance: ProjectCatalogModeGuidance;
 
     static createFrom(source: any = {}) {
@@ -2556,6 +2792,8 @@ export namespace projectlifecycle {
       this.description = source["description"];
       this.placementKind = source["placementKind"];
       this.roles = source["roles"];
+      this.requiredRuntimeSecretSettings =
+        source["requiredRuntimeSecretSettings"];
       this.guidance = this.convertValues(
         source["guidance"],
         ProjectCatalogModeGuidance,
@@ -2581,6 +2819,26 @@ export namespace projectlifecycle {
     }
   }
 
+  export class ProjectCatalogSecretInput {
+    requirementRef: string;
+    purpose: string;
+    displayLabel: string;
+    requiredWhen: string;
+    operations: string[];
+
+    static createFrom(source: any = {}) {
+      return new ProjectCatalogSecretInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.requirementRef = source["requirementRef"];
+      this.purpose = source["purpose"];
+      this.displayLabel = source["displayLabel"];
+      this.requiredWhen = source["requiredWhen"];
+      this.operations = source["operations"];
+    }
+  }
   export class ProjectCatalogSetting {
     id: string;
     kind: string;
@@ -2591,6 +2849,8 @@ export namespace projectlifecycle {
     order?: number;
     editorShape: string;
     referenceKind?: string;
+    runtimeSecretRequirementRef?: string;
+    runtimeSecretUsernameRequired?: boolean;
     minimum?: number;
     maximum?: number;
     minLength?: number;
@@ -2612,6 +2872,9 @@ export namespace projectlifecycle {
       this.order = source["order"];
       this.editorShape = source["editorShape"];
       this.referenceKind = source["referenceKind"];
+      this.runtimeSecretRequirementRef = source["runtimeSecretRequirementRef"];
+      this.runtimeSecretUsernameRequired =
+        source["runtimeSecretUsernameRequired"];
       this.minimum = source["minimum"];
       this.maximum = source["maximum"];
       this.minLength = source["minLength"];
@@ -2646,6 +2909,8 @@ export namespace projectlifecycle {
     endpointProvider: boolean;
     modes: ProjectCatalogMode[];
     configurationSettings: ProjectCatalogSetting[];
+    secretInputs?: ProjectCatalogSecretInput[];
+    secretOutputEntries?: string[];
 
     static createFrom(source: any = {}) {
       return new ProjectCatalogService(source);
@@ -2666,6 +2931,11 @@ export namespace projectlifecycle {
         source["configurationSettings"],
         ProjectCatalogSetting,
       );
+      this.secretInputs = this.convertValues(
+        source["secretInputs"],
+        ProjectCatalogSecretInput,
+      );
+      this.secretOutputEntries = source["secretOutputEntries"];
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {

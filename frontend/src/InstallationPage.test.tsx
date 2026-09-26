@@ -79,4 +79,42 @@ describe("InstallationPage", () => {
     expect(onSetPKIStorePassword).toHaveBeenCalledWith("write-only");
     expect(onStart).not.toHaveBeenCalled();
   });
+
+  it("requires the common output password and uses the default secrets folder before plan approval", async () => {
+    const user = userEvent.setup();
+    const onApprovePlan = vi.fn();
+    const setOutputPassword = vi.fn().mockResolvedValue(undefined);
+    const plan = { status: "PLAN_REVIEW" as const, plan: { id: "plan-vault", status: "EXECUTABLE" as const, projectRevision: "sha256:revision", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-26T10:00:00Z", approved: false, secretOutputEncryptionRequired: true, secretOutputEncryptionPasswordPresent: false, acknowledgements: [{ code: "ACK_RISK", summary: "Review changes" }], phases: [] } };
+    const view = render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={plan} onSetOutputEncryptionPassword={setOutputPassword} />);
+    const approve = screen.getByRole("button", { name: "Одобрить план" });
+    expect(approve).toHaveProperty("disabled", true);
+    await user.type(screen.getByLabelText("Пароль шифрования"), "session-only");
+    await user.type(screen.getByLabelText("Повторите пароль"), "session-only");
+    await user.click(screen.getByRole("button", { name: "Сохранить пароль в сеансе" }));
+    await user.click(screen.getByRole("checkbox"));
+    expect(approve).toHaveProperty("disabled", false);
+    await user.click(approve);
+    expect(setOutputPassword).toHaveBeenCalledWith("session-only", "session-only");
+    expect(onApprovePlan).toHaveBeenCalledWith("plan-vault", ["ACK_RISK"]);
+    // Fresh backend state after expiry must override the previous local ACK.
+    view.rerender(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={{ ...plan, plan: { ...plan.plan, secretOutputEncryptionPasswordPresent: false } }} onSetOutputEncryptionPassword={setOutputPassword} />);
+    expect(screen.getByLabelText("Пароль шифрования")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty("disabled", true);
+    view.rerender(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={{ ...plan, plan: { ...plan.plan, id: "replacement-plan", secretOutputEncryptionPasswordPresent: false } }} onSetOutputEncryptionPassword={setOutputPassword} />);
+    expect(screen.getByLabelText("Пароль шифрования")).toBeTruthy();
+  });
+
+  it("shows only safe output-delivery status and package metadata", async () => {
+    const user = userEvent.setup();
+    const refresh = vi.fn();
+    const deliver = vi.fn();
+    render(<InstallationPage state={state} tab="result" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} secretOutputPackages={{ status: "READY", packages: [{ protocol: "SecretOutputDelivery/v1alpha1", packageId: "pkg-safe", projectId: "project-1", deploymentId: "vault-ha", sourceRunId: "run-safe", runtimeDigest: "sha256:runtime", generation: 1, state: "READY", entries: ["admin-token", "unseal-shares"] }] }} outputDelivery={{ status: "DELIVERED", directory: "C:\\VaultSecrets\\vault-ha" }} onRefreshSecretOutputs={refresh} onDeliverSecretOutput={deliver} />);
+    expect(screen.getByText("Зашифрованные файлы сохранены: C:\\VaultSecrets\\vault-ha")).toBeTruthy();
+    expect(screen.getByText(/Защищённый пакет · vault-ha/)).toBeTruthy();
+    expect(screen.queryByText(/root token|unseal key/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Проверить ожидающие файлы" }));
+    await user.click(screen.getByRole("button", { name: "Получить и сохранить зашифрованно" }));
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(deliver).toHaveBeenCalledWith("pkg-safe");
+  });
 });

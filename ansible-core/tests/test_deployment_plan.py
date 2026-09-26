@@ -166,6 +166,153 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertEqual(("provider", "runtime:provider-password"), (private["serviceDeployment"], private["runtimeReference"]))
         self.assertNotIn("runtime:provider-password", json.dumps(result["deploymentPlan"]))
 
+    def test_typed_service_inputs_are_target_free_opaque_and_bound_to_deployment_hosts(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["vault"] = {
+            "metadata": {"version": "1.0.0"}, "capabilities": [], "dependencies": [],
+            "artifacts": [], "runtimeRequirements": [{"id": "vault-runtime", "name": "vault", "version": "1.21.2", "os": "redos", "architecture": "x86_64", "requiredOffline": False}],
+            "x-secretInputs": {"apiVersion": "ServiceSecretInputs/v1alpha1", "inputs": [
+                {"requirementRef": "vault-admin-token", "purpose": "SERVICE_ADMIN_TOKEN", "displayLabel": "Administrative token", "requiredWhen": "INITIALIZED", "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]},
+                {"requirementRef": "vault-unseal-shares", "purpose": "SERVICE_UNSEAL_SHARES", "displayLabel": "Unseal keys", "requiredWhen": "SEALED", "operations": ["SERVICE_APPLY"]},
+            ]},
+            "roleEntrypoints": {"apply": {"fqcn": "p.p.r", "variablesPrefix": "platform_vault_", "x-memberListVariable": "platform_vault_instances"}, "verify": {"fqcn": "p.p.r", "variablesPrefix": "platform_vault_", "x-memberListVariable": "platform_vault_instances"}},
+            "configuration": {"settings": {"tlsProfile": {"roleVariable": "platform_vault_tls_profile"}}},
+        }
+        state["hosts"] = {"node1": {"ansibleHost": "192.0.2.11"}, "node2": {"ansibleHost": "192.0.2.12"}, "node3": {"ansibleHost": "192.0.2.13"}}
+        state["serviceDeployments"] = {"vault-ha": {"serviceType": "vault", "mode": "raft-ha"}}
+        state["pki"] = {"certificateIdentities": [{"consumers": [{"deploymentId": "vault-ha"}]}]}
+        state["topology"] = {"resolved": {"serviceDeployments": {"vault-ha": {"members": {
+            "vault-1": {"host": "node1", "roles": ["vault"]},
+            "vault-2": {"host": "node2", "roles": ["vault"]},
+            "vault-3": {"host": "node3", "roles": ["vault"]},
+        }}}}}
+        execution_configuration = {"services": {"vault-ha": {
+            "mode": "raft-ha", "configuration": {"tlsProfile": {"state": "RESOLVED", "value": "infra-tls"}},
+            "members": {"vault-%d" % index: {"variableContext": {"hostId": "node%d" % index}, "configuration": {"tlsProfile": {"state": "RESOLVED", "value": "infra-tls"}}}
+                        for index in range(1, 4)},
+        }}}
+        pki = {"materializationPlans": [{"id": "infra-tls--vault-ha", "requestId": "infra-tls--vault-ha", "tlsProfileId": "infra-tls", "authorityId": "ca", "hostId": "node1", "targetDirectory": "/etc/platform/project/infra-tls", "formats": ["PEM"], "keyAlias": "platform-vault", "trustAlias": "platform-ca-ca", "storePasswordSecretRef": None, "materializationFingerprint": DIGEST}]}
+        requirement = PLAN._artifact_requirements(state["serviceDeployments"], value["definitions"])[0]
+        source = {key: requirement[key] for key in ("serviceType", "requirementId", "name", "version", "os", "architecture", "digest")}
+        source.update({"ref": "runtime/artifacts/vault/vault.rpm", "sha256": requirement["digest"], "size": 2048, "type": "package"})
+        result = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=[source], pki_materialization=pki, execution_configuration=execution_configuration)
+        self.assertEqual("EXECUTABLE", result["deploymentPlan"]["status"])
+        self.assertEqual(1, len(result["deploymentPlan"]["artifactRequirements"]))
+        refs = [item for item in result["deploymentPlan"]["requiredCredentials"] if item["purpose"] in ("SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES")]
+        self.assertEqual(2, len(refs))
+        self.assertTrue(all(item["requirementRef"].startswith("si-") and len(item["requirementRef"]) == 43 for item in refs))
+        self.assertTrue(all(item["hosts"] == ["node1", "node2", "node3"] for item in refs))
+        private = result["executionManifest"]["runtimeSecretInputs"]
+        self.assertEqual({"vault-admin-token", "vault-unseal-shares"}, {item["manifestRequirementRef"] for item in private})
+        self.assertEqual({"INITIALIZED", "SEALED"}, {item["requiredWhen"] for item in private})
+        operations_by_purpose = {item["purpose"]: item["operations"] for item in private}
+        self.assertEqual(["SERVICE_APPLY", "SERVICE_VERIFY"], operations_by_purpose["SERVICE_ADMIN_TOKEN"])
+        self.assertEqual(["SERVICE_APPLY"], operations_by_purpose["SERVICE_UNSEAL_SHARES"])
+        self.assertNotIn("root_token", json.dumps(result))
+        self.assertNotIn("unseal_keys", json.dumps(result))
+        self.assertNotIn("vault-admin-token", json.dumps(result["deploymentPlan"]))
+        apply = next(item for item in result["executionManifest"]["operations"] if item["operationId"] == "apply:vault-ha")
+        apply_action = next(action for phase in result["deploymentPlan"]["phases"] for action in phase["actions"] if action["id"] == "apply:vault-ha")
+        self.assertIn("pki:apply", apply_action["dependsOn"])
+        self.assertEqual(pki["materializationPlans"], result["executionManifest"]["pkiMaterializationPlans"])
+        authority = result["executionManifest"]["artifactSourceAuthorities"][0]
+        self.assertEqual("redos", authority["requirement"]["os"])
+        self.assertEqual("runtime/artifacts/vault/vault.rpm", authority["offlineBundle"]["ref"])
+        for host in ("node1", "node2", "node3"):
+            self.assertEqual("raft-ha", apply["roleVariablesByHost"][host]["platform_vault_mode"])
+            self.assertEqual("infra-tls", apply["roleVariablesByHost"][host]["platform_vault_tls_profile"])
+            self.assertEqual(["vault-1", "vault-2", "vault-3"], [item["id"] for item in apply["roleVariablesByHost"][host]["platform_vault_instances"]])
+
+    def test_secret_output_declaration_is_private_and_bound_to_apply_deployment(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["provider"]["x-secretOutputs"] = {
+            "protocol": "SecretOutputDelivery/v1alpha1",
+            "entries": ["admin-token", "unseal-shares"],
+        }
+        state["serviceDeployments"] = {"provider": {"serviceType": "provider"}}
+        result = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=[])
+        self.assertEqual([{
+            "protocol": "SecretOutputDelivery/v1alpha1",
+            "serviceDeployment": "provider",
+            "entries": ["admin-token", "unseal-shares"],
+        }], result["executionManifest"]["runtimeSecretOutputs"])
+        self.assertNotIn("runtimeSecretOutputs", result["deploymentPlan"])
+        malformed = copy.deepcopy(value)
+        malformed["definitions"]["provider"]["x-secretOutputs"]["sourcePath"] = "/untrusted"
+        with self.assertRaisesRegex(ValueError, "SECRET_OUTPUT_DECLARATION_INVALID"):
+            PLAN.build_deployment_plan(state, malformed, runtime(), bundle_artifact_sources=[])
+
+    def test_vault_descriptor_v2_is_closed_bounded_and_target_free(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["vault"] = {
+            "metadata": {"version": "1"}, "dependencies": [], "capabilities": [], "artifacts": [],
+            "configuration": {"settings": {"tlsProfile": {"ui": {"label": "TLS profile"}}}},
+            "x-secretInputs": {"apiVersion": "ServiceSecretInputs/v1alpha1", "inputs": [
+                {"requirementRef": "vault-admin-token", "purpose": "SERVICE_ADMIN_TOKEN", "displayLabel": "Administrative token", "requiredWhen": "INITIALIZED", "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]},
+                {"requirementRef": "vault-unseal-shares", "purpose": "SERVICE_UNSEAL_SHARES", "displayLabel": "Unseal keys", "requiredWhen": "SEALED", "operations": ["SERVICE_APPLY"]},
+            ]},
+        }
+        state["serviceDeployments"] = {"vault-ha": {"serviceType": "vault", "mode": "raft-ha"}}
+        state["topology"] = {"resolved": {"serviceDeployments": {"vault-ha": {"members": {
+            "vault-1": {"host": "node1"}, "vault-2": {"host": "node1"}, "vault-3": {"host": "node1"},
+        }}}}}
+        descriptors = PLAN.build_runtime_secret_descriptors(
+            state, value, {"materializationPlans": [{"hostId": "node1", "storePasswordSecretRef": "runtime:pki-store-password"}]})
+        self.assertEqual("BuildRuntimeSecretDescriptors/v1alpha2", descriptors["apiVersion"])
+        self.assertEqual("PKI_STORE_PASSWORD", descriptors["descriptors"][0]["purpose"])
+        self.assertIsNone(descriptors["descriptors"][0]["serviceDeployment"])
+        self.assertEqual(["node1"], descriptors["descriptors"][1]["hosts"])
+        self.assertEqual({"ALWAYS", "INITIALIZED", "SEALED"}, {item["requiredWhen"] for item in descriptors["descriptors"]})
+        self.assertNotIn("vault-admin-token", json.dumps(descriptors))
+        self.assertNotIn("sensitive-test-canary", json.dumps(descriptors))
+        contracts = Path(__file__).resolve().parents[2] / "contracts"
+        findings = SCHEMA.SchemaValidator(contracts).validate(
+            descriptors, contracts / "runtime-secret-descriptors" / "v1alpha2" / "schema.json")
+        self.assertEqual([], findings)
+        shares = next(item for item in descriptors["descriptors"] if item["purpose"] == "SERVICE_UNSEAL_SHARES")
+        self.assertEqual(["SERVICE_APPLY"], shares["operations"])
+        invalid_descriptors = copy.deepcopy(descriptors)
+        next(item for item in invalid_descriptors["descriptors"] if item["purpose"] == "SERVICE_UNSEAL_SHARES")["operations"] = ["SERVICE_APPLY", "SERVICE_VERIFY"]
+        self.assertTrue(SCHEMA.SchemaValidator(contracts).validate(
+            invalid_descriptors, contracts / "runtime-secret-descriptors" / "v1alpha2" / "schema.json"))
+
+    def test_typed_service_input_hosts_follow_resolved_placement_and_one_host_three_members(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["vault"] = {"x-secretInputs": {"apiVersion": "ServiceSecretInputs/v1alpha1", "inputs": [
+            {"requirementRef": "vault-admin-token", "purpose": "SERVICE_ADMIN_TOKEN", "displayLabel": "Administrative token", "requiredWhen": "INITIALIZED", "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]},
+        ]}, "artifacts": [], "runtimeRequirements": [], "dependencies": [], "capabilities": [], "metadata": {"version": "1"}}
+        state["serviceDeployments"] = {"vault-ha": {"serviceType": "vault"}}
+        state["topology"] = {"resolved": {"serviceDeployments": {"vault-ha": {"members": {
+            "vault-1": {"host": "node1", "roles": ["vault"]},
+            "vault-2": {"host": "node1", "roles": ["vault"]},
+            "vault-3": {"host": "node1", "roles": ["vault"]},
+        }}}}}
+        result = PLAN.build_deployment_plan(state, value, runtime())
+        self.assertEqual(["node1"], result["deploymentPlan"]["requiredCredentials"][0]["hosts"])
+        private = result["executionManifest"]["runtimeSecretInputs"][0]
+        self.assertEqual(["node1"], private["hosts"])
+
+        standalone = copy.deepcopy(state)
+        standalone["serviceDeployments"]["vault-ha"]["mode"] = "standalone"
+        standalone["topology"]["resolved"]["serviceDeployments"]["vault-ha"]["members"] = {
+            "vault-1": {"host": "node1", "roles": ["vault"]},
+        }
+        single = PLAN.build_deployment_plan(standalone, value, runtime())
+        self.assertEqual(["node1"], single["deploymentPlan"]["requiredCredentials"][0]["hosts"])
+        self.assertEqual(["node1"], single["executionManifest"]["runtimeSecretInputs"][0]["hosts"])
+
+    def test_typed_service_input_metadata_fails_closed_and_never_creates_a_manifest(self):
+        value, state = catalog(), snapshot()
+        value["definitions"]["provider"]["x-secretInputs"] = {"apiVersion": "ServiceSecretInputs/v1alpha1", "inputs": [
+            {"requirementRef": "vault-admin-token", "purpose": "SERVICE_ADMIN_TOKEN", "displayLabel": "Token", "requiredWhen": "ALWAYS", "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]},
+        ]}
+        state["serviceDeployments"]["provider"]["configuration"] = {}
+        state["topology"] = {"resolved": {"serviceDeployments": {"provider": {"members": {"member-1": {"host": "node1", "roles": []}}}}}}
+        result = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=sources())
+        self.assertEqual("BLOCKED", result["deploymentPlan"]["status"])
+        self.assertIsNone(result["executionManifest"])
+        self.assertIn("SERVICE_SECRET_INPUT_METADATA_INVALID", [item["code"] for item in result["deploymentPlan"]["findings"]])
+
     def test_unsupported_pki_runtime_reference_blocks_without_exposure(self):
         result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(), pki_materialization={"materializationPlans": [{"hostId": "node1", "storePasswordSecretRef": "runtime:other"}]})
         self.assertEqual("BLOCKED", result["deploymentPlan"]["status"])

@@ -44,11 +44,11 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Secret output safe control response | `v1alpha1` | `secret-output-delivery/v1alpha1/response.schema.json` |
 | Secret output discovery metadata | `v1alpha1` | `secret-output-delivery/v1alpha1/metadata.schema.json` |
 | Trusted secret output declaration | `v1alpha1` | `secret-output-delivery/v1alpha1/declaration.schema.json` |
-| Typed input capability definition (not active) | `v1alpha4` | `execution-capabilities/v1alpha4/schema.json` |
-| Typed safe input descriptors (not active) | `v1alpha2` | `runtime-secret-descriptors/v1alpha2/schema.json` |
-| Typed credential payload (not active) | `v1alpha4` | `target-credential-payload/v1alpha4/schema.json` |
-| Typed input lease request (not active) | `v1alpha2` | `runtime-secret-lease/v1alpha2/request.schema.json` |
-| Typed input lease response (not active) | `v1alpha2` | `runtime-secret-lease/v1alpha2/response.schema.json` |
+| Typed input capability | `v1alpha4` | `execution-capabilities/v1alpha4/schema.json` |
+| Typed safe input descriptors | `v1alpha2` | `runtime-secret-descriptors/v1alpha2/schema.json` |
+| Typed credential payload | `v1alpha4` | `target-credential-payload/v1alpha4/schema.json` |
+| Typed input lease request | `v1alpha2` | `runtime-secret-lease/v1alpha2/request.schema.json` |
+| Typed input lease response | `v1alpha2` | `runtime-secret-lease/v1alpha2/response.schema.json` |
 | Trusted service input metadata | `v1alpha1` | `service-secret-inputs/v1alpha1/schema.json` |
 
 Execution selection is project/execution state, not service topology. Candidate
@@ -170,3 +170,12 @@ blocked without fallback to v1alpha1 or direct workstation-to-target SSH.
 `runtimeSecretDescriptors` capability and the fixed v1alpha1/v1alpha2/v1alpha3
 lease-payload sequence. Older envelopes remain immutable and cannot authorize
 descriptor retrieval or a service-secret Start path.
+
+`ExecutionCapabilities/v1alpha4` preserves the planning and Start semantics and
+advertises only the typed-input pair `BuildRuntimeSecretDescriptors/v1alpha2`
+and `PutRuntimeSecretLease/v1alpha2` with its sole
+`TargetCredentialLeasePayload/v1alpha4`. Lease v1alpha2 rejects every other
+payload generation; lease v1alpha1 remains unchanged and cannot authorize the
+typed-input path. Capability v1alpha4 is emitted only by a runtime that
+implements the corresponding descriptor, lease admission, manifest binding,
+and operation-scoped Ansible projection.

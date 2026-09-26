@@ -102,16 +102,28 @@ type CatalogViewError struct {
 }
 
 type ProjectCatalogService struct {
-	ID                    string                  `json:"id"`
-	DefinitionVersion     string                  `json:"definitionVersion"`
-	DisplayName           string                  `json:"displayName"`
-	Description           string                  `json:"description,omitempty"`
-	Category              string                  `json:"category,omitempty"`
-	UI                    ProjectCatalogUI        `json:"ui"`
-	EndpointConsumer      bool                    `json:"endpointConsumer"`
-	EndpointProvider      bool                    `json:"endpointProvider"`
-	Modes                 []ProjectCatalogMode    `json:"modes"`
-	ConfigurationSettings []ProjectCatalogSetting `json:"configurationSettings"`
+	ID                    string                      `json:"id"`
+	DefinitionVersion     string                      `json:"definitionVersion"`
+	DisplayName           string                      `json:"displayName"`
+	Description           string                      `json:"description,omitempty"`
+	Category              string                      `json:"category,omitempty"`
+	UI                    ProjectCatalogUI            `json:"ui"`
+	EndpointConsumer      bool                        `json:"endpointConsumer"`
+	EndpointProvider      bool                        `json:"endpointProvider"`
+	Modes                 []ProjectCatalogMode        `json:"modes"`
+	ConfigurationSettings []ProjectCatalogSetting     `json:"configurationSettings"`
+	SecretInputs          []ProjectCatalogSecretInput `json:"secretInputs,omitempty"`
+	SecretOutputEntries   []string                    `json:"secretOutputEntries,omitempty"`
+}
+
+// ProjectCatalogSecretInput is trusted, closed UI guidance from the locked
+// service manifest. It carries no file path, value or credential reference.
+type ProjectCatalogSecretInput struct {
+	RequirementRef string   `json:"requirementRef"`
+	Purpose        string   `json:"purpose"`
+	DisplayLabel   string   `json:"displayLabel"`
+	RequiredWhen   string   `json:"requiredWhen"`
+	Operations     []string `json:"operations"`
 }
 
 type ProjectCatalogSetting struct {
@@ -139,12 +151,13 @@ type ProjectCatalogUI struct {
 	DocumentationTopic string `json:"documentationTopic,omitempty"`
 }
 type ProjectCatalogMode struct {
-	ID            string                     `json:"id"`
-	DisplayName   string                     `json:"displayName"`
-	Description   string                     `json:"description,omitempty"`
-	PlacementKind string                     `json:"placementKind"`
-	Roles         []string                   `json:"roles"`
-	Guidance      ProjectCatalogModeGuidance `json:"guidance"`
+	ID                            string                     `json:"id"`
+	DisplayName                   string                     `json:"displayName"`
+	Description                   string                     `json:"description,omitempty"`
+	PlacementKind                 string                     `json:"placementKind"`
+	Roles                         []string                   `json:"roles"`
+	RequiredRuntimeSecretSettings []string                   `json:"requiredRuntimeSecretSettings,omitempty"`
+	Guidance                      ProjectCatalogModeGuidance `json:"guidance"`
 }
 type ProjectCatalogModeGuidance struct {
 	MinParticipants int                             `json:"minParticipants"`
@@ -392,6 +405,8 @@ type definition struct {
 	Modes            map[string]catalogMode `yaml:"modes"`
 	EndpointConsumer map[string]any         `yaml:"endpointConsumer"`
 	EndpointProvider map[string]any         `yaml:"endpointProvider"`
+	SecretInputs     map[string]any         `yaml:"x-secretInputs"`
+	SecretOutputs    map[string]any         `yaml:"x-secretOutputs"`
 	Configuration    struct {
 		Settings map[string]catalogSetting `yaml:"settings"`
 	} `yaml:"configuration"`
@@ -415,10 +430,11 @@ type catalogSetting struct {
 }
 
 type catalogMode struct {
-	DisplayName string   `yaml:"displayName"`
-	Description string   `yaml:"description"`
-	MemberRoles []string `yaml:"memberRoles"`
-	Placement   struct {
+	DisplayName                    string   `yaml:"displayName"`
+	Description                    string   `yaml:"description"`
+	MemberRoles                    []string `yaml:"memberRoles"`
+	XRequiredRuntimeSecretSettings []string `yaml:"x-requiredRuntimeSecretSettings"`
+	Placement                      struct {
 		HostScoped      bool                       `yaml:"hostScoped"`
 		MinMembers      int                        `yaml:"minMembers"`
 		MaxMembers      *int                       `yaml:"maxMembers"`
@@ -438,6 +454,7 @@ type roleCardinality struct {
 var catalogIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var catalogRoleVariablePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 var catalogSettingIDPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,127}$`)
+var catalogSecretInputRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
 func readCatalog(verified executionbundle.Verified) (catalog, error) {
 	var value catalog
@@ -446,11 +463,11 @@ func readCatalog(verified executionbundle.Verified) (catalog, error) {
 		return catalog{}, errors.New("catalog invalid")
 	}
 	for id, definition := range value.Definitions {
-		if !catalogIdentifierPattern.MatchString(id) || id != definition.Metadata.ID || definition.Metadata.Version == "" || definition.Metadata.DisplayName == "" || len(definition.Metadata.DisplayName) > 256 || len(definition.Metadata.Description) > 4096 || len(definition.Metadata.Category) > 128 || len(definition.Metadata.UI.Icon) > 256 || len(definition.Metadata.UI.DocumentationTopic) > 256 || !validDigest(definition.Digest) || len(definition.Modes) == 0 || len(definition.Modes) > 256 || len(definition.Configuration.Settings) > 4096 || !validEndpointCapability(definition.EndpointConsumer) || !validEndpointCapability(definition.EndpointProvider) {
+		if !catalogIdentifierPattern.MatchString(id) || id != definition.Metadata.ID || definition.Metadata.Version == "" || definition.Metadata.DisplayName == "" || len(definition.Metadata.DisplayName) > 256 || len(definition.Metadata.Description) > 4096 || len(definition.Metadata.Category) > 128 || len(definition.Metadata.UI.Icon) > 256 || len(definition.Metadata.UI.DocumentationTopic) > 256 || !validDigest(definition.Digest) || len(definition.Modes) == 0 || len(definition.Modes) > 256 || len(definition.Configuration.Settings) > 4096 || !validEndpointCapability(definition.EndpointConsumer) || !validEndpointCapability(definition.EndpointProvider) || !validCatalogSecretInputs(definition.SecretInputs) || !validCatalogSecretOutputs(definition.SecretOutputs) {
 			return catalog{}, errors.New("catalog definition invalid")
 		}
 		for modeID, mode := range definition.Modes {
-			if !catalogIdentifierPattern.MatchString(modeID) || mode.DisplayName == "" || len(mode.DisplayName) > 256 || len(mode.Description) > 4096 || len(mode.MemberRoles) > 128 || mode.Placement.MinMembers < 0 || (mode.Placement.MaxMembers != nil && *mode.Placement.MaxMembers < mode.Placement.MinMembers) || !validCatalogRoles(mode.MemberRoles) || !validRoleCardinality(mode.Placement.RoleCardinality) {
+			if !catalogIdentifierPattern.MatchString(modeID) || mode.DisplayName == "" || len(mode.DisplayName) > 256 || len(mode.Description) > 4096 || len(mode.MemberRoles) > 128 || mode.Placement.MinMembers < 0 || (mode.Placement.MaxMembers != nil && *mode.Placement.MaxMembers < mode.Placement.MinMembers) || !validCatalogRoles(mode.MemberRoles) || !validRoleCardinality(mode.Placement.RoleCardinality) || !validModeRequiredRuntimeSecretSettings(mode.XRequiredRuntimeSecretSettings, definition.Configuration.Settings) {
 				return catalog{}, errors.New("catalog mode invalid")
 			}
 		}
@@ -461,6 +478,128 @@ func readCatalog(verified executionbundle.Verified) (catalog, error) {
 		}
 	}
 	return value, nil
+}
+
+func validCatalogSecretInputs(raw map[string]any) bool {
+	if raw == nil {
+		return true
+	}
+	if len(raw) != 2 || raw["apiVersion"] != "ServiceSecretInputs/v1alpha1" {
+		return false
+	}
+	inputs, ok := raw["inputs"].([]any)
+	if !ok || len(inputs) == 0 || len(inputs) > 16 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(inputs))
+	for _, entry := range inputs {
+		item, ok := entry.(map[string]any)
+		if !ok || len(item) != 5 {
+			return false
+		}
+		reference, refOK := item["requirementRef"].(string)
+		purpose, purposeOK := item["purpose"].(string)
+		label, labelOK := item["displayLabel"].(string)
+		requiredWhen, whenOK := item["requiredWhen"].(string)
+		operations, opsOK := item["operations"].([]any)
+		if !refOK || !catalogSecretInputRefPattern.MatchString(reference) || !purposeOK || !labelOK || label == "" || len([]byte(label)) > 256 || !whenOK || !opsOK {
+			return false
+		}
+		if _, duplicate := seen[reference]; duplicate {
+			return false
+		}
+		seen[reference] = struct{}{}
+		switch purpose {
+		case "SERVICE_ADMIN_TOKEN":
+			if requiredWhen != "INITIALIZED" || !exactCatalogOperations(operations, "SERVICE_APPLY", "SERVICE_VERIFY") {
+				return false
+			}
+		case "SERVICE_UNSEAL_SHARES":
+			if requiredWhen != "SEALED" || !exactCatalogOperations(operations, "SERVICE_APPLY") {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validCatalogSecretOutputs(raw map[string]any) bool {
+	if raw == nil {
+		return true
+	}
+	if len(raw) != 2 || raw["protocol"] != "SecretOutputDelivery/v1alpha1" {
+		return false
+	}
+	entries, ok := raw["entries"].([]any)
+	return ok && len(entries) == 2 && entries[0] == "admin-token" && entries[1] == "unseal-shares"
+}
+
+func projectCatalogSecretOutputEntries(raw map[string]any) []string {
+	if raw == nil {
+		return nil
+	}
+	return []string{"admin-token", "unseal-shares"}
+}
+
+func exactCatalogOperations(values []any, expected ...string) bool {
+	if len(values) != len(expected) {
+		return false
+	}
+	for index, item := range values {
+		if item != expected[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func projectCatalogSecretInputs(raw map[string]any) []ProjectCatalogSecretInput {
+	if raw == nil {
+		return nil
+	}
+	items, _ := raw["inputs"].([]any)
+	result := make([]ProjectCatalogSecretInput, 0, len(items))
+	for _, entry := range items {
+		item, _ := entry.(map[string]any)
+		input := ProjectCatalogSecretInput{RequirementRef: item["requirementRef"].(string), Purpose: item["purpose"].(string), DisplayLabel: item["displayLabel"].(string), RequiredWhen: item["requiredWhen"].(string)}
+		operations, _ := item["operations"].([]any)
+		for _, operation := range operations {
+			input.Operations = append(input.Operations, operation.(string))
+		}
+		result = append(result, input)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].RequirementRef < result[j].RequirementRef })
+	return result
+}
+
+// validModeRequiredRuntimeSecretSettings admits only an explicit, bounded
+// subset of the existing trusted runtime-secret setting descriptors.  The
+// catalog is rejected rather than allowing the UI to guess which inputs are
+// needed for a selected mode.
+func validModeRequiredRuntimeSecretSettings(ids []string, settings map[string]catalogSetting) bool {
+	if len(ids) > 16 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if !catalogSettingIDPattern.MatchString(id) {
+			return false
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return false
+		}
+		setting, exists := settings[id]
+		if !exists {
+			return false
+		}
+		if _, _, trusted := runtimeSecretReferenceObject(setting); !trusted {
+			return false
+		}
+		seen[id] = struct{}{}
+	}
+	return true
 }
 
 func validCatalogSetting(id string, value catalogSetting) bool {
@@ -643,12 +782,14 @@ func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView
 				cardinality = append(cardinality, ProjectCatalogRoleCardinality{Role: role, Minimum: rule.Minimum, Maximum: rule.Maximum})
 			}
 			sort.Slice(cardinality, func(left, right int) bool { return cardinality[left].Role < cardinality[right].Role })
-			modes = append(modes, ProjectCatalogMode{ID: modeID, DisplayName: mode.DisplayName, Description: mode.Description, Roles: roles, PlacementKind: kind, Guidance: ProjectCatalogModeGuidance{MinParticipants: mode.Placement.MinMembers, MaxParticipants: mode.Placement.MaxMembers, DistinctHosts: mode.Placement.DistinctHosts, RoleCardinality: cardinality}})
+			requiredSecrets := append([]string(nil), mode.XRequiredRuntimeSecretSettings...)
+			sort.Strings(requiredSecrets)
+			modes = append(modes, ProjectCatalogMode{ID: modeID, DisplayName: mode.DisplayName, Description: mode.Description, Roles: roles, PlacementKind: kind, RequiredRuntimeSecretSettings: requiredSecrets, Guidance: ProjectCatalogModeGuidance{MinParticipants: mode.Placement.MinMembers, MaxParticipants: mode.Placement.MaxMembers, DistinctHosts: mode.Placement.DistinctHosts, RoleCardinality: cardinality}})
 		}
 		sort.Slice(modes, func(left, right int) bool {
 			return catalogOrderLess(nil, modes[left].DisplayName, modes[left].ID, nil, modes[right].DisplayName, modes[right].ID)
 		})
-		services = append(services, ProjectCatalogService{ID: id, DefinitionVersion: definition.Metadata.Version, DisplayName: definition.Metadata.DisplayName, Description: definition.Metadata.Description, Category: definition.Metadata.Category, UI: ProjectCatalogUI{Icon: definition.Metadata.UI.Icon, Order: definition.Metadata.UI.Order, DocumentationTopic: definition.Metadata.UI.DocumentationTopic}, EndpointConsumer: definition.EndpointConsumer != nil, EndpointProvider: definition.EndpointProvider != nil, Modes: modes, ConfigurationSettings: settings})
+		services = append(services, ProjectCatalogService{ID: id, DefinitionVersion: definition.Metadata.Version, DisplayName: definition.Metadata.DisplayName, Description: definition.Metadata.Description, Category: definition.Metadata.Category, UI: ProjectCatalogUI{Icon: definition.Metadata.UI.Icon, Order: definition.Metadata.UI.Order, DocumentationTopic: definition.Metadata.UI.DocumentationTopic}, EndpointConsumer: definition.EndpointConsumer != nil, EndpointProvider: definition.EndpointProvider != nil, Modes: modes, ConfigurationSettings: settings, SecretInputs: projectCatalogSecretInputs(definition.SecretInputs), SecretOutputEntries: projectCatalogSecretOutputEntries(definition.SecretOutputs)})
 	}
 	sort.Slice(services, func(left, right int) bool {
 		return catalogOrderLess(services[left].UI.Order, services[left].DisplayName, services[left].ID, services[right].UI.Order, services[right].DisplayName, services[right].ID)

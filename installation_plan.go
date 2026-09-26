@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"platform-installer/internal/executionnode"
@@ -20,18 +21,20 @@ type InstallationPlanOperation struct {
 }
 
 type InstallationPlanView struct {
-	ID                       string                        `json:"id"`
-	Status                   string                        `json:"status"`
-	ProjectRevision          string                        `json:"projectRevision"`
-	PlanFingerprint          string                        `json:"planFingerprint"`
-	ExecutionNodeID          string                        `json:"executionNodeId"`
-	Runtime                  InstallationRuntimeBinding    `json:"runtime"`
-	ExpiresAt                string                        `json:"expiresAt"`
-	Approved                 bool                          `json:"approved"`
-	Acknowledgements         []InstallationAcknowledgement `json:"acknowledgements"`
-	Phases                   []InstallationPlanPhase       `json:"phases"`
-	Findings                 []InstallationPlanFinding     `json:"findings,omitempty"`
-	PKIStorePasswordRequired bool                          `json:"pkiStorePasswordRequired"`
+	ID                                    string                        `json:"id"`
+	Status                                string                        `json:"status"`
+	ProjectRevision                       string                        `json:"projectRevision"`
+	PlanFingerprint                       string                        `json:"planFingerprint"`
+	ExecutionNodeID                       string                        `json:"executionNodeId"`
+	Runtime                               InstallationRuntimeBinding    `json:"runtime"`
+	ExpiresAt                             string                        `json:"expiresAt"`
+	Approved                              bool                          `json:"approved"`
+	Acknowledgements                      []InstallationAcknowledgement `json:"acknowledgements"`
+	Phases                                []InstallationPlanPhase       `json:"phases"`
+	Findings                              []InstallationPlanFinding     `json:"findings,omitempty"`
+	PKIStorePasswordRequired              bool                          `json:"pkiStorePasswordRequired"`
+	SecretOutputEncryptionRequired        bool                          `json:"secretOutputEncryptionRequired"`
+	SecretOutputEncryptionPasswordPresent bool                          `json:"secretOutputEncryptionPasswordPresent"`
 }
 
 type InstallationRuntimeBinding struct {
@@ -107,6 +110,8 @@ func (a *App) CreateInstallationPlan() InstallationPlanOperation {
 		a.installationPlanID = ""
 		return installationPlanFailure(err)
 	}
+	view.SecretOutputEncryptionRequired = a.secretOutputEncryptionRequiredLocked()
+	view.SecretOutputEncryptionPasswordPresent = a.secretOutputEncryptionPasswordPresentLocked()
 	return InstallationPlanOperation{Status: installationPlanStateFor(record), Plan: &view}
 }
 
@@ -140,6 +145,12 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 		a.installationPlanID = ""
 		return installationPlanFailure(errors.New("PLAN_STALE"))
 	}
+	if a.secretOutputEncryptionRequiredLocked() {
+		credentialBinding, bindingErr := a.credentialBindingLocked()
+		if bindingErr != nil || !a.secrets.HasOutputEncryptionPassword(credentialBinding) {
+			return installationPlanFailure(errors.New("SECRET_OUTPUT_ENCRYPTION_PASSWORD_REQUIRED"))
+		}
+	}
 	if err := binding.plans.ApprovePlan(planID, append([]string(nil), acknowledgements...)); err != nil {
 		return installationPlanFailure(err)
 	}
@@ -168,6 +179,8 @@ func (a *App) getInstallationPlanLocked(planID string) InstallationPlanOperation
 	if err != nil {
 		return installationPlanFailure(err)
 	}
+	view.SecretOutputEncryptionRequired = a.secretOutputEncryptionRequiredLocked()
+	view.SecretOutputEncryptionPasswordPresent = a.secretOutputEncryptionPasswordPresentLocked()
 	return InstallationPlanOperation{Status: installationPlanStateFor(record), Plan: &view}
 }
 
@@ -222,6 +235,29 @@ func executionnodePlanRequiresPKIStorePassword(plan executionnode.DeploymentPlan
 		}
 	}
 	return false
+}
+
+// installationPlanRuntimeSecretRequirements is intentionally derived from the
+// fresh Core plan rather than the UI catalog. It is used only to bind already
+// pending runtime-only values at the pre-target Start gate.
+func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan) ([]string, error) {
+	result := make([]string, 0)
+	seen := map[string]struct{}{}
+	for _, requirement := range plan.RequiredCredentials {
+		if requirement.Purpose != "SERVICE_PASSWORD" {
+			continue
+		}
+		if !runtimeSecretDescriptorRequirement.MatchString(requirement.RequirementRef) {
+			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+		}
+		if _, duplicate := seen[requirement.RequirementRef]; duplicate {
+			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+		}
+		seen[requirement.RequirementRef] = struct{}{}
+		result = append(result, requirement.RequirementRef)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func installationRuntimeBinding(release map[string]any) (InstallationRuntimeBinding, bool) {
