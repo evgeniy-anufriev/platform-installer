@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/secret-output-delivery/v1alpha1/response.schema.json",
+  "title": "SecretOutputDelivery safe control response (never Fetch contents)",
+  "oneOf": [{"$ref": "#/$defs/capabilities"}, {"$ref": "#/$defs/list"}, {"$ref": "#/$defs/ack"}, {"$ref": "#/$defs/error"}],
+  "$defs": {
+    "version": {"const": "SecretOutputDelivery/v1alpha1"},
+    "capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "maxPayloadBytes", "operations"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "GetCapabilities"},
+        "maxPayloadBytes": {"const": 65536},
+        "operations": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [{"const": "ListPending"}, {"const": "Fetch"}, {"const": "Acknowledge"}], "items": false}
+      }
+    },
+    "list": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "projectId", "packages", "nextCursor"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "ListPending"},
+        "projectId": {"$ref": "request.schema.json#/$defs/identity"},
+        "packages": {"type": "array", "maxItems": 32, "items": {"allOf": [{"$ref": "metadata.schema.json"}, {"properties": {"state": {"enum": ["READY", "ACKED_CLEANUP_PENDING"]}}}]}},
+        "nextCursor": {"oneOf": [{"type": "null"}, {"$ref": "request.schema.json#/$defs/opaqueId"}]}
+      }
+    },
+    "ack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "projectId", "packageId", "generation", "receiptId", "state"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "Acknowledge"},
+        "projectId": {"$ref": "request.schema.json#/$defs/identity"}, "packageId": {"$ref": "request.schema.json#/$defs/opaqueId"},
+        "generation": {"$ref": "request.schema.json#/$defs/generation"}, "receiptId": {"$ref": "request.schema.json#/$defs/opaqueId"},
+        "state": {"enum": ["ACKED_CLEANUP_PENDING", "DELIVERED"]}
+      }
+    },
+    "error": {
+      "type": "object", "additionalProperties": false, "required": ["protocol", "operation", "errorCode"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"enum": ["GetCapabilities", "ListPending", "Fetch", "Acknowledge"]},
+        "errorCode": {"enum": ["OUTPUT_REQUEST_INVALID", "OUTPUT_UNAVAILABLE", "OUTPUT_NOT_FOUND", "OUTPUT_ACCESS_DENIED", "OUTPUT_IDENTITY_MISMATCH", "OUTPUT_BUSY", "OUTPUT_RECOVERY_REQUIRED", "OUTPUT_TRANSFER_FAILED", "OUTPUT_CLEANUP_FAILED"]}
+      }
+    }
+  }
+}

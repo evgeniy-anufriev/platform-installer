@@ -774,8 +774,9 @@ BIND DONE (2026-09-23); SERVICE-INSTALL-03 dns-client DONE (2026-09-23);
 SERVICE-INSTALL-04 HAProxy DONE (2026-09-23); SERVICE-INSTALL-05 Kafka DONE
 (2026-09-23); SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover DONE (2026-09-24);
 SERVICE-INSTALL-07 Redis standalone and Sentinel HA (three members on one host
-by default, with three-host placement also required) is NEXT; SERVICE-INSTALL-08 is the final
-one-plan acceptance for seven services. Redis implementation has not started.
+by default, with three-host placement also required) is NEXT; SERVICE-INSTALL-08 is Vault,
+with SI08-A contract foundation DONE and SI08-B NOT STARTED. SERVICE-INSTALL-09
+is the final one-plan acceptance for eight services. Redis implementation has not started.
 For SERVICE-INSTALL-07, the service Secrets dialog accepts bounded values
 against the verified local catalog without a readiness check. The installation
 flow obtains fresh Core requirements and a deployment plan before Start;
@@ -786,7 +787,7 @@ Milestones and individual acceptance criteria:
 [SERVICE-INSTALL-01…07](service-install-acceptance.md).
 
 The sequence uses one Git-ignored cumulative Installer-managed QA project:
-01 created it, 02–07 open and extend its exact saved revision, and 08 builds
+01 created it, 02–08 open and extend its exact saved revision, and 09 builds
 the final single plan from that same project. A milestone may remove only the
 old attributable runtime installation of its own service; it must not replace
 the cumulative project or discard accepted preceding services. Redis standalone
@@ -797,7 +798,9 @@ current Redis contract admits at most one Redis deployment per project.
 Order: 01 Keepalived → 02 BIND → 03 dns-client → 04 HAProxy → 05 Kafka
 (replace the isolated one-target QA deployment with a three-target deployment)
 → 06 PostgreSQL/pg_auto_failover → 07 Redis standalone and Sentinel HA (3/1 and 3/3) with mandatory TLS
-→ 08 all seven services from one shared plan. SERVICE-INSTALL-07 architecture:
+→ 08 Vault (1/1, 3/1, 3/3) → 09 all eight services from one shared plan.
+SI08-A evidence: [contract foundation](service-install-08a.md).
+SERVICE-INSTALL-07 architecture:
 [Redis/Sentinel](service-install-07-redis-sentinel-architecture.md).
 Before each service installation, identify and remove only its attributable
 old QA installation through a proven narrow cleanup path. Record exact targets

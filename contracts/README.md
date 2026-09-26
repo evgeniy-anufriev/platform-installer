@@ -40,6 +40,16 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Credentialed execution Start response | `v1alpha2` | `execution-start/v1alpha2/response.schema.json` |
 | Target credential lease request | `v1alpha1` | `runtime-secret-lease/v1alpha1/request.schema.json` |
 | Target credential lease response | `v1alpha1` | `runtime-secret-lease/v1alpha1/response.schema.json` |
+| Secret output delivery request | `v1alpha1` | `secret-output-delivery/v1alpha1/request.schema.json` |
+| Secret output safe control response | `v1alpha1` | `secret-output-delivery/v1alpha1/response.schema.json` |
+| Secret output discovery metadata | `v1alpha1` | `secret-output-delivery/v1alpha1/metadata.schema.json` |
+| Trusted secret output declaration | `v1alpha1` | `secret-output-delivery/v1alpha1/declaration.schema.json` |
+| Typed input capability definition (not active) | `v1alpha4` | `execution-capabilities/v1alpha4/schema.json` |
+| Typed safe input descriptors (not active) | `v1alpha2` | `runtime-secret-descriptors/v1alpha2/schema.json` |
+| Typed credential payload (not active) | `v1alpha4` | `target-credential-payload/v1alpha4/schema.json` |
+| Typed input lease request (not active) | `v1alpha2` | `runtime-secret-lease/v1alpha2/request.schema.json` |
+| Typed input lease response (not active) | `v1alpha2` | `runtime-secret-lease/v1alpha2/response.schema.json` |
+| Trusted service input metadata | `v1alpha1` | `service-secret-inputs/v1alpha1/schema.json` |
 
 Execution selection is project/execution state, not service topology. Candidate
 eligibility is evaluated before preparation; `EXECUTION_READY` is reported only

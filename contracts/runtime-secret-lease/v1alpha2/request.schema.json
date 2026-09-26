@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/runtime-secret-lease/v1alpha2/request.schema.json",
+  "title": "PutRuntimeSecretLease/v1alpha2 closed request",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "requestId", "startAttemptId", "projectIdentity", "projectRevision", "planFingerprint", "executionManifestDigest", "runtimeRelease", "payload"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/runtime-secret-lease/v1alpha2"},
+    "kind": {"const": "PutRuntimeSecretLeaseRequest"},
+    "requestId": {"$ref": "../v1alpha1/request.schema.json#/$defs/id"},
+    "startAttemptId": {"$ref": "../v1alpha1/request.schema.json#/$defs/id"},
+    "projectIdentity": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"},
+    "projectRevision": {"$ref": "../v1alpha1/request.schema.json#/$defs/digest"},
+    "planFingerprint": {"$ref": "../v1alpha1/request.schema.json#/$defs/digest"},
+    "executionManifestDigest": {"$ref": "../v1alpha1/request.schema.json#/$defs/digest"},
+    "runtimeRelease": {"$ref": "../v1alpha1/request.schema.json#/$defs/runtimeRelease"},
+    "payload": {"$ref": "../../target-credential-payload/v1alpha4/schema.json"}
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/target-credential-payload/v1alpha4/schema.json",
+  "title": "Private target credentials with typed deployment/operation scoped inputs",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "username", "password", "privateKey", "sudoPassword", "pkiStorePassword", "runtimeSecretValues", "runtimeSecretInputs"],
+  "properties": {
+    "apiVersion": {"const": "TargetCredentialLeasePayload/v1alpha4"}, "kind": {"const": "TargetCredentialLeasePayload"},
+    "username": {"type": "string", "minLength": 1, "maxLength": 255},
+    "password": {"type": ["string", "null"], "minLength": 1},
+    "privateKey": {"type": ["string", "null"], "minLength": 1},
+    "sudoPassword": {"type": ["string", "null"], "minLength": 1},
+    "pkiStorePassword": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
+    "runtimeSecretValues": {"type": "object", "maxProperties": 16, "propertyNames": {"$ref": "#/$defs/requirement"}, "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 4096}},
+    "runtimeSecretInputs": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/input"}}
+  },
+  "oneOf": [
+    {"properties": {"password": {"type": "string"}, "privateKey": {"type": "null"}}},
+    {"properties": {"password": {"type": "null"}, "privateKey": {"type": "string"}}}
+  ],
+  "$defs": {
+    "requirement": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "deployment": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$", "maxLength": 128},
+    "input": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requirementRef", "purpose", "serviceDeployment", "operations", "value"],
+      "properties": {
+        "requirementRef": {"$ref": "#/$defs/requirement"},
+        "purpose": {"enum": ["SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"]},
+        "serviceDeployment": {"$ref": "#/$defs/deployment"},
+        "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]},
+        "value": {}
+      },
+      "oneOf": [
+        {"properties": {"purpose": {"const": "SERVICE_ADMIN_TOKEN"}, "value": {"type": "string", "minLength": 1, "maxLength": 4096}}},
+        {"properties": {"purpose": {"const": "SERVICE_UNSEAL_SHARES"}, "value": {"type": "array", "minItems": 1, "maxItems": 255, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}}}}
+      ]
+    }
+  }
+}

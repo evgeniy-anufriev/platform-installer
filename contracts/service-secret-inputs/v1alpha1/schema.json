@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/service-secret-inputs/v1alpha1/schema.json",
+  "title": "Trusted closed service input metadata carried only by an x extension",
+  "type": "object", "additionalProperties": false, "required": ["apiVersion", "inputs"],
+  "properties": {
+    "apiVersion": {"const": "ServiceSecretInputs/v1alpha1"},
+    "inputs": {"type": "array", "minItems": 1, "maxItems": 16, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requirementRef", "purpose", "displayLabel", "requiredWhen", "operations"],
+      "properties": {
+        "requirementRef": {"$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/requirement"},
+        "purpose": {"enum": ["SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"]},
+        "displayLabel": {"type": "string", "minLength": 1, "maxLength": 256},
+        "requiredWhen": {"enum": ["INITIALIZED", "SEALED"]},
+        "operations": {"const": ["SERVICE_APPLY", "SERVICE_VERIFY"]}
+      },
+      "oneOf": [
+        {"properties": {"purpose": {"const": "SERVICE_ADMIN_TOKEN"}, "requiredWhen": {"const": "INITIALIZED"}}},
+        {"properties": {"purpose": {"const": "SERVICE_UNSEAL_SHARES"}, "requiredWhen": {"const": "SEALED"}}}
+      ]
+    }}
+  }
+}

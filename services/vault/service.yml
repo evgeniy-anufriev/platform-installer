@@ -1,0 +1,61 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: vault
+  version: "1.0.0-alpha.1"
+  displayName: HashiCorp Vault
+  description: TLS API, Integrated Storage Raft, file audit, KV v2 and userpass mount
+  category: security
+modes:
+  standalone:
+    displayName: Standalone
+    memberRoles: [vault]
+    placement: {explicit: true, minMembers: 1, maxMembers: 1, distinctHosts: false, roleCardinality: {vault: {minimum: 1, maximum: 1}}}
+  raft-ha:
+    displayName: Raft HA
+    memberRoles: [vault]
+    placement: {explicit: true, minMembers: 3, maxMembers: 3, distinctHosts: false, roleCardinality: {vault: {minimum: 3, maximum: 3}}}
+listeners:
+  client: {protocol: https, defaultPort: 8200, tlsCapable: true, scope: member}
+  cluster: {protocol: tcp, defaultPort: 8201, tlsCapable: true, scope: member}
+endpoint: {}
+capabilities: [service.vault.api]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    tlsProfile: {kind: MANAGED, roleVariable: platform_vault_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 10, x-referenceKind: TLS_PROFILE}}
+    apiPort: {kind: MANAGED, roleVariable: platform_vault_api_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: API TLS base port, section: Network, order: 20}}
+    clusterPort: {kind: MANAGED, roleVariable: platform_vault_cluster_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Cluster base port, section: Network, order: 21}}
+    unsealShares: {kind: MANAGED, roleVariable: platform_vault_unseal_shares, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 255}, ui: {label: Unseal shares, section: Initialization, order: 30}}
+    unsealThreshold: {kind: MANAGED, roleVariable: platform_vault_unseal_threshold, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 255}, ui: {label: Unseal threshold, section: Initialization, order: 31}}
+roleEntrypoints:
+  apply: {fqcn: platform.vault.vault_tls, variablesPrefix: platform_vault_, x-memberListVariable: platform_vault_instances}
+  verify: {fqcn: platform.vault.vault_tls, variablesPrefix: platform_vault_, x-memberListVariable: platform_vault_instances}
+artifacts: []
+runtimeRequirements:
+  - id: vault-runtime
+    name: vault
+    version: "1.21.2"
+    os: redos
+    architecture: x86_64
+    requiredOffline: false
+compatibilityRef: compatibility.yml
+x-implementationStatus: contract-only-si08-a
+x-secretOutputs:
+  protocol: SecretOutputDelivery/v1alpha1
+  entries: [admin-token, unseal-shares]
+x-secretInputs:
+  apiVersion: ServiceSecretInputs/v1alpha1
+  inputs:
+    - requirementRef: vault-admin-token
+      purpose: SERVICE_ADMIN_TOKEN
+      displayLabel: Administrative token
+      requiredWhen: INITIALIZED
+      operations: [SERVICE_APPLY, SERVICE_VERIFY]
+    - requirementRef: vault-unseal-shares
+      purpose: SERVICE_UNSEAL_SHARES
+      displayLabel: Unseal keys
+      requiredWhen: SEALED
+      operations: [SERVICE_APPLY, SERVICE_VERIFY]

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/runtime-secret-lease/v1alpha2/response.schema.json",
+  "title": "PutRuntimeSecretLease/v1alpha2 response preserves existing receipt semantics",
+  "$ref": "../v1alpha1/response.schema.json"
+}

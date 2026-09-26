@@ -1,5 +1,55 @@
 # Current state
 
+## SERVICE-INSTALL-08 Vault implementation started (2026-09-26)
+
+Owner authorized implementation after the exact SI08-PLAN-02 terminal-evidence
+correction. SI08-A is DONE; pinned artifact acquisition blocker is resolved.
+The architecture is
+`docs/service-install-08-vault-architecture.md`: standalone and three-member
+Raft (1/1, 3/1, 3/3), API TLS and Vault cluster TLS, audit, KV v2, userpass
+enabled without managed accounts; configurable unseal defaults 2-of-3.
+Workstation encryption uses its session password; protected temporary
+plaintext on Execution Node is retained until confirmed delivery.
+
+Initial additive SecretOutputDelivery/v1alpha1 request/control-response/safe
+metadata schemas and a bounded Go Fetch-frame decoder are implemented but not
+wired into an active runtime or advertised. Existing published execution
+contracts are unchanged. Closed Go control-request decoder and Python
+request/Fetch codec are added; neither performs target contact or storage.
+RED OS contract suite: 21 PASS; Python codec: 3 PASS; `go test ./...` and
+`go vet ./...` PASS. Owner-authorized DEV acquisition of
+`vault-1.21.2-1.red80.x86_64` from RED OS `updates` completed. RPM signature and
+repository/remote/local SHA-256 equality PASS:
+`sha256:11db853f514625835ed4516876311057b7021fbaf39a53040e5e13d111bc41dd`.
+Artifact is Git-ignored under `.runtime/artifacts/vault/`; extracted binary
+reports Vault v1.21.2. No Vault package has been installed.
+Private Linux protected package publication/Fetch foundation is implemented,
+not wired or advertised: no-follow held descriptors, restricted ownership/modes,
+durable exact binding, no overwrite and READY publication after entry flush.
+RED OS storage tests 10 PASS; Core suite 320 tests, OK (4 skipped).
+Next implementation work: trusted controller integration/producerCompletion,
+retention guard, fetch/ACK operations, workstation age storage and Vault role.
+No Vault deployment or UI acceptance. SI08-B remains NOT STARTED.
+Redis completion must not be inferred from this entry.
+Artifact metadata license BUSL-1.1; intended distribution/license notices must
+be addressed before offline publication. No runtime release was published or
+activated. Exact artifact evidence and remaining A contract gates are recorded
+in `docs/service-install-08a.md`.
+
+Initial implementation DIFF review: BLOCK, one blocking finding. Canonical
+deployment IDs containing dots/underscores are rejected by output identity
+admission (SI08-A-DIFF-01). Exact metadata-key case is NON_BLOCKING
+(SI08-A-DIFF-02). Callback error leakage is RESOLVED (SI08-A-DIFF-03), with
+independent focused QA PASS. Latest full Go test/vet and RED OS wire race PASS;
+contracts 31 PASS, Core 320 tests OK (4 skipped), reproducibility/offline PASS.
+This initial BLOCK is historical. Owner-approved corrections passed the one
+TARGETED_RECHECK: DIFF-01/02 RESOLVED, DIFF-03 remains RESOLVED, 0 blocking
+and 0 overengineering findings. Final Windows Go test/vet PASS; RED OS Core
+321 tests OK (4 skipped), contracts 31 PASS, wire race and reproducibility
+PASS; diff-check PASS. SI08-A contract foundation is DONE, not runtime or
+Vault deployment acceptance. New additive input/output contracts are defined
+but not advertised; existing published contracts are unchanged.
+
 ## Application config and server type foundation (2026-09-14)
 
 `OWNER-APP-CONFIG-01/02` is implemented. Repository development configuration

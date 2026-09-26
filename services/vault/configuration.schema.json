@@ -1,0 +1,33 @@
+{
+  "$id": "https://platform.installer/schemas/services/vault/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "clusterPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "unsealShares": {
+      "maximum": 255,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "unsealThreshold": {
+      "maximum": 255,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "title": "HashiCorp Vault desired configuration",
+  "type": "object"
+}

@@ -2,8 +2,9 @@
 
 Статус: SERVICE-INSTALL-01 DONE; SERVICE-INSTALL-02 DONE; SERVICE-INSTALL-03 DONE;
 SERVICE-INSTALL-04 DONE; SERVICE-INSTALL-05 DONE; SERVICE-INSTALL-06 DONE.
-SERVICE-INSTALL-07 Redis standalone и Sentinel HA NEXT; SERVICE-INSTALL-08 — общий план для
-семи сервисов. Исторический UI-02E
+SERVICE-INSTALL-07 Redis standalone и Sentinel HA; SERVICE-INSTALL-08 — Vault
+(1/1, 3/1, 3/3), SI08-A DONE, SI08-B NOT STARTED;
+SERVICE-INSTALL-09 — общий план для восьми сервисов. Исторический UI-02E
 тест Kafka (три экземпляра на одном target) остаётся завершённым и не заменяет
 SERVICE-INSTALL-05 (три target).
 
@@ -19,8 +20,8 @@ service через typed EditSession → Review → local Save и доказыв
 создавать новый project для отдельного сервиса.
 
 Если root уже существует перед первым milestone, создание останавливается:
-его замена требует отдельной scoped cleanup-проверки. После SERVICE-INSTALL-07
-SERVICE-INSTALL-08 строит один fresh DeploymentPlan именно из накопленного
+его замена требует отдельной scoped cleanup-проверки. После SERVICE-INSTALL-08
+SERVICE-INSTALL-09 строит один fresh DeploymentPlan именно из накопленного
 project, а не из повторно собранного аналога. Runtime-only project и рабочие
 артефакты очищаются только после финальной фиксации evidence и безопасного
 scoped teardown.
@@ -248,17 +249,17 @@ Sentinel units, один active master, две replicas, Sentinel quorum и со
 доказательства принадлежности конкретному deployment.
 Архитектура: [SERVICE-INSTALL-07](service-install-07-redis-sentinel-architecture.md).
 
-## SERVICE-INSTALL-08 — все семь сервисов из одного плана
+## SERVICE-INSTALL-09 — все восемь сервисов из одного плана
 
-После PASS milestones 01–07 подготовить один canonical project,
-содержащий все семь services: Keepalived, BIND, dns-client, HAProxy, Kafka,
-PostgreSQL `pg_auto_failover` и Redis/Sentinel. Зафиксировать placement,
+После PASS milestones 01–08 подготовить один canonical project,
+содержащий все восемь services: Keepalived, BIND, dns-client, HAProxy, Kafka,
+PostgreSQL `pg_auto_failover`, Redis/Sentinel и Vault. Зафиксировать placement,
 provider/consumer links, VIP, endpoint groups, PKI scopes, secret inputs и
 отсутствие конфликтов ресурсов. До запуска удалить только прежнее состояние
 этого интеграционного QA проекта, если оно есть и безопасно атрибутировано.
 
 Выполнить один `CreatePlan -> ApprovePlan -> Start` с одним authoritative
-DeploymentPlan/ExecutionManifest, а не шесть отдельных Start. Core определяет
+DeploymentPlan/ExecutionManifest, а не отдельные Start по сервисам. Core определяет
 порядок зависимостей и допустимый параллелизм. Проверить успешные apply и
 verify для каждого сервиса, реальные сетевые и TLS интеграции, terminal
 `SUCCEEDED` и отсутствие изменений в сторонних deployments. Затем построить

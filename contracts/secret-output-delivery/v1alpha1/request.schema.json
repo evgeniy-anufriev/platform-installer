@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/secret-output-delivery/v1alpha1/request.schema.json",
+  "title": "SecretOutputDelivery/v1alpha1 request",
+  "oneOf": [
+    {"$ref": "#/$defs/capabilities"},
+    {"$ref": "#/$defs/list"},
+    {"$ref": "#/$defs/fetch"},
+    {"$ref": "#/$defs/ack"}
+  ],
+  "$defs": {
+    "version": {"const": "SecretOutputDelivery/v1alpha1"},
+    "identity": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"},
+    "opaqueId": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "generation": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "projectId"],
+      "properties": {"protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "GetCapabilities"}, "projectId": {"$ref": "#/$defs/identity"}}
+    },
+    "list": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "projectId", "limit"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "ListPending"},
+        "projectId": {"$ref": "#/$defs/identity"}, "limit": {"type": "integer", "minimum": 1, "maximum": 32},
+        "cursor": {"$ref": "#/$defs/opaqueId"}
+      }
+    },
+    "fetch": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "projectId", "packageId", "expectedGeneration"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "Fetch"}, "projectId": {"$ref": "#/$defs/identity"},
+        "packageId": {"$ref": "#/$defs/opaqueId"}, "expectedGeneration": {"$ref": "#/$defs/generation"}
+      }
+    },
+    "ack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "operation", "projectId", "packageId", "expectedGeneration", "receiptId", "ciphertextDigests"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/version"}, "operation": {"const": "Acknowledge"}, "projectId": {"$ref": "#/$defs/identity"},
+        "packageId": {"$ref": "#/$defs/opaqueId"}, "expectedGeneration": {"$ref": "#/$defs/generation"},
+        "receiptId": {"$ref": "#/$defs/opaqueId"},
+        "ciphertextDigests": {
+          "type": "object", "additionalProperties": false, "required": ["admin-token", "unseal-shares"],
+          "properties": {"admin-token": {"$ref": "#/$defs/digest"}, "unseal-shares": {"$ref": "#/$defs/digest"}}
+        }
+      }
+    }
+  }
+}

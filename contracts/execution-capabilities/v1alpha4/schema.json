@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha4/schema.json",
+  "title": "Execution capabilities for typed runtime input leases",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "runtimeSecretDescriptors", "targetCredentialLease"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-capabilities/v1alpha4"},
+    "kind": {"const": "ExecutionCapabilities"},
+    "bootstrapProtocol": {"$ref": "../v1alpha3/schema.json#/properties/bootstrapProtocol"},
+    "coreVersion": {"$ref": "../v1alpha3/schema.json#/properties/coreVersion"},
+    "catalogDigest": {"$ref": "../v1alpha3/schema.json#/$defs/digest"},
+    "schemaDigest": {"$ref": "../v1alpha3/schema.json#/$defs/digest"},
+    "runtime": {"$ref": "../v1alpha3/schema.json#/$defs/runtime"},
+    "supportedOperations": {"$ref": "../v1alpha3/schema.json#/properties/supportedOperations"},
+    "projectSnapshotRequestVersions": {"$ref": "../v1alpha3/schema.json#/properties/projectSnapshotRequestVersions"},
+    "executionStart": {"$ref": "../v1alpha3/schema.json#/properties/executionStart"},
+    "targetCredentialLease": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "payloadVersions", "maxPayloadBytes", "requiredStartProtocol"],
+      "properties": {
+        "protocol": {"const": "PutRuntimeSecretLease/v1alpha2"},
+        "payloadVersions": {"const": ["TargetCredentialLeasePayload/v1alpha4"]},
+        "maxPayloadBytes": {"type": "integer", "minimum": 1, "maximum": 1114112},
+        "requiredStartProtocol": {"const": "StartExecution/v1alpha2"}
+      }
+    },
+    "runtimeSecretDescriptors": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "maxDescriptors", "maxHostsPerDescriptor", "maxResponseBytes"],
+      "properties": {"protocol": {"const": "BuildRuntimeSecretDescriptors/v1alpha2"}, "maxDescriptors": {"const": 16}, "maxHostsPerDescriptor": {"const": 256}, "maxResponseBytes": {"const": 65536}}
+    }
+  },
+  "allOf": [{"properties": {"supportedOperations": {"allOf": [{"contains": {"const": "BuildRuntimeSecretDescriptors"}}, {"contains": {"const": "PutRuntimeSecretLease"}}]}}}]
+}
