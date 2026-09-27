@@ -9,6 +9,7 @@ platform_vault_unseal_threshold: 2
 platform_vault_tls_profile: infrastructure-tls
 platform_vault_instances: []
 platform_vault_verify_only: false
+platform_vault_confirm_destructive_reset: ''
 platform_vault_user: platform-vault
 platform_vault_group: platform-vault
 platform_vault_config_root: /etc/platform-vault

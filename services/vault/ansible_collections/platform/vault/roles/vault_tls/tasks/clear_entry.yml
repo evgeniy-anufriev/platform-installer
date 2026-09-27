@@ -1,0 +1,57 @@
+---
+- name: Validate Vault standalone clear inputs
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Require exact Vault destructive reset acknowledgement
+  ansible.builtin.assert:
+    that:
+      - platform_vault_confirm_destructive_reset == platform_vault_deployment_id
+      - platform_vault_user == 'platform-vault'
+      - platform_vault_group == 'platform-vault'
+    fail_msg: VAULT_CLEAR_CONFIRMATION_REQUIRED
+
+- name: Normalize selected Vault member identities for clear
+  ansible.builtin.include_tasks: normalize.yml
+
+- name: Collect only selected local Vault members
+  ansible.builtin.set_fact:
+    _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+
+- name: Inspect Vault clear without mutation in check mode
+  platform.vault.clear_member:
+    deployment_id: "{{ platform_vault_deployment_id }}"
+    member_id: "{{ item.id }}"
+    confirmation: "{{ platform_vault_confirm_destructive_reset }}"
+  loop: "{{ _platform_vault_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  when: ansible_check_mode
+
+- name: Serialize explicit Vault clear with the existing deployment lock
+  block:
+    - name: Create one invocation identity for Vault clear locking
+      ansible.builtin.set_fact:
+        platform_vault_lock_token: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, chars='hexdigits') | lower }}"
+      run_once: true
+
+    - name: Acquire the existing Vault deployment lock before clear
+      ansible.builtin.include_tasks:
+        file: acquire_lock.yml
+        apply:
+          run_once: true
+          delegate_to: "{{ _platform_vault_instances[0].host }}"
+          become: true
+
+    - name: Clear only explicitly selected owned Vault members
+      ansible.builtin.include_tasks: clear.yml
+
+  always:
+    - name: Release only this clear invocation's deployment lock
+      ansible.builtin.include_tasks:
+        file: release_lock.yml
+        apply:
+          run_once: true
+          delegate_to: "{{ _platform_vault_instances[0].host }}"
+          become: true
+      when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined
+  when: not ansible_check_mode

@@ -1,5 +1,24 @@
 # Current state
 
+## Vault explicit clear corrections complete; targeted DIFF PASS (2026-09-27)
+
+Owner authorized exact SI08-CLEAR-DIFF-02/03 corrections. Process guard now
+matches both exact config forms independently of argv[0]. Vault-only no-follow
+fd traversal checks opened inode identity and Linux mnt_id before each descent;
+missing/malformed mount evidence blocks clear. No generic framework or normal
+Apply/Verify change.
+Focused RED OS clear 18 PASS (1.839s), Vault contract 15 PASS (0.515s), syntax
+PASS; independent full Core 387 total / 383 PASS / 4 opt-in SKIP / 0 errors
+(174.730s), catalog/schema, full Go tests/vet and diff check PASS. Tested source
+hashes match the reviewed revision.
+One independent targeted recheck APPROVE: DIFF-01 remains RESOLVED, DIFF-02/03
+OPEN -> RESOLVED, zero blocking/overengineering findings. Reviewed ordinal
+fingerprint `1f30018aa7b9db71f591dfe54b28117608b38e73bc50bb359163301a7baead5a`.
+QA source workspace was cleaned. Actual reset and SI08-E acceptance are still
+not claimed; subsequent reset requires fresh exact identity/no-active-run proof.
+Evidence: docs/service-install-08e-clear-evidence.md. Earlier unrelated
+uncommitted work is preserved; clear is a separate focused implementation.
+
 ## SERVICE-INSTALL-08 Vault implementation started (2026-09-26)
 
 SI08-D owner clarification: the common output encryption password is entered

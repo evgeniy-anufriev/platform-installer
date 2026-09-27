@@ -20,3 +20,42 @@ lease UI integration remain SI08-D; real deployment acceptance is SI08-E.
 No password, root token, unseal key or selected file path belongs in desired
 configuration. Secret inputs and encrypted outputs use the separate contracts
 in docs/service-install-08a.md and the parent architecture plan.
+
+Explicit standalone reset: `playbooks/clear.yml` is opt-in and is never called
+by apply/verify. It requires ordinary Vault variables and exact acknowledgement:
+
+```sh
+ANSIBLE_COLLECTIONS_PATHS=services/vault:ansible-core/collections \
+  ansible-playbook -i /path/to/inventory services/vault/playbooks/clear.yml \
+  -e @/path/to/vault-vars.yml \
+  -e platform_vault_confirm_destructive_reset=vault-ha
+```
+
+The acknowledgement must equal `platform_vault_deployment_id`, not the project
+display name. Select all intended target hosts and members in the variables;
+do not limit out the canonical first member (the shared lock host). Stop active
+Installer runs first. Clear takes the existing deployment flock, validates every
+selected member before stopping units, then freshly validates stopped members.
+Only the standard `platform-vault` account/group is supported by clear.
+
+Clear destroys selected Raft contents but keeps the member root and identity
+marker, config, TLS, audit logs, package/account and exact systemd units. Selected
+units are stopped/disabled; a later explicit apply starts/enables them again.
+No broad service stop, process kill, controller custody or journal cleanup occurs.
+Missing/foreign identity, active processes or lock contention block the operation.
+This is not an uninstall or automatically recoverable transaction: after partial
+failure already-deleted Raft data cannot be restored by the role.
+
+The narrow `platform.vault.clear_member` module opens fixed member ancestry
+without following links, validates the held marker/unit/config objects and
+deletes contents relative to the held member descriptor. Linux root, Python with
+no-follow fd-relative operations and readable Linux descriptor mount identity,
+and permission to create a private mount namespace are required. Every directory's
+opened `mnt_id` must match the member's mount before descent, including
+directories moved after initial admission. Nested mounts, including bind mounts, block clear;
+there is no unsafe pathname fallback. `--check` only inspects and predicts data
+changes; it does not acquire locks or stop services.
+
+Previous bootstrap tokens/shares are intentionally retained but become obsolete
+after reset. Use a fresh protected bootstrap output namespace for the new store;
+do not silently reuse old custody. See `docs/service-install-08e-clear.md`.
