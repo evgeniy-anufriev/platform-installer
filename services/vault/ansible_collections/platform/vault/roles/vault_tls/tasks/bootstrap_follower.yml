@@ -26,5 +26,3 @@
 
 - name: Unseal the joined Raft follower
   ansible.builtin.include_tasks: unseal_member.yml
-  vars:
-    vault_member: "{{ vault_member }}"

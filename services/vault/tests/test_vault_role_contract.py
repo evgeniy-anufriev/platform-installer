@@ -8,6 +8,29 @@ ROLE = ROOT / "services/vault/ansible_collections/platform/vault/roles/vault_tls
 
 
 class VaultRoleContractTests(unittest.TestCase):
+    def test_follower_unseal_inherits_outer_member_without_recursive_override(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+
+        bootstrap = yaml.safe_load((ROLE / "tasks/bootstrap.yml").read_text(encoding="utf-8"))
+        followers = next(task for task in bootstrap if task["name"].startswith("Join and unseal each Raft follower"))
+        self.assertEqual(followers["loop_control"]["loop_var"], "vault_member")
+        tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
+        unseal = next(task for task in tasks if task["name"] == "Unseal the joined Raft follower")
+        self.assertEqual(unseal["ansible.builtin.include_tasks"], "unseal_member.yml")
+        self.assertNotIn("vault_member", unseal.get("vars", {}))
+        loader = DataLoader()
+        for member_id, address, port in (("vault-ha-2", "192.168.56.101", 8302),
+                                         ("vault-ha-3", "192.168.56.101", 8304),
+                                         ("vault-hb-2", "192.168.56.102", 8502)):
+            member = {"id": member_id, "address": address, "api_port": port}
+            variables = {"vault_member": member, **unseal.get("vars", {})}
+            templar = Templar(loader=loader, variables=variables)
+            with self.subTest(member=member_id):
+                self.assertEqual(templar.template("{{ vault_member }}"), member)
+                self.assertEqual(templar.template("https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"),
+                                 f"https://{address}:{port}/v1/sys/health")
+
     def test_typed_runtime_inputs_are_closed_and_never_logged(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
         include = main[0]
