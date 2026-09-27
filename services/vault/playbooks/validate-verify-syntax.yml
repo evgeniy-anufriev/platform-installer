@@ -1,0 +1,11 @@
+---
+# Static import lets --syntax-check parse the otherwise dynamically included
+# verifier without contacting targets or executing service tasks.
+- name: Parse the standalone Vault verifier
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Statically load the Vault verification task contract
+      ansible.builtin.import_role:
+        name: platform.vault.vault_tls
+        tasks_from: verify

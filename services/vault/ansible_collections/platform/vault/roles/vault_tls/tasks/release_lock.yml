@@ -4,5 +4,7 @@
     name: "{{ _platform_vault_lock_unit }}.service"
     state: stopped
   register: _platform_vault_lock_stop
+  # Releasing this invocation's coordination does not change desired state.
+  changed_when: false
   failed_when: false
   when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined

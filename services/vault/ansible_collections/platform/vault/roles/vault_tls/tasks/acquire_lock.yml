@@ -65,7 +65,8 @@
       - -c
       - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
   register: _platform_vault_lock_start
-  changed_when: true
+  # Per-invocation coordination is not a desired-state service change.
+  changed_when: false
 
 - name: Wait for the lock holder readiness signal or fail-closed startup
   ansible.builtin.command:

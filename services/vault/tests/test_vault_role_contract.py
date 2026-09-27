@@ -27,6 +27,27 @@ class VaultRoleContractTests(unittest.TestCase):
                 with self.subTest(path=path.relative_to(ROOT)):
                     self.assertIsNotNone(yaml.safe_load(path.read_text(encoding="utf-8")))
 
+    def test_verify_failure_message_belongs_to_assert_module(self):
+        tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        task = next(task for task in tasks if task["name"] == "Require the approved audit device, KV v2 and userpass mount")
+        self.assertNotIn("fail_msg", task)
+        self.assertEqual(task["ansible.builtin.assert"]["fail_msg"], "VAULT_CONFIGURATION_VERIFY_FAILED")
+
+    def test_independent_verify_reconstructs_pki_through_shared_read_only_playbook(self):
+        playbook = yaml.safe_load((ROOT / "services/vault/playbooks/verify.yml").read_text(encoding="utf-8"))
+        self.assertEqual(playbook[0], {"import_playbook": "../../../ansible-core/playbooks/validate.yml"})
+        self.assertEqual(playbook[1], {"import_playbook": "../../../ansible-core/playbooks/pki-verify.yml"})
+        self.assertTrue(playbook[2]["roles"][0]["platform_vault_verify_only"])
+        self.assertNotIn("pki-apply.yml", str(playbook))
+        for service in ("kafka", "postgresql"):
+            peer = yaml.safe_load((ROOT / "services" / service / "playbooks/verify.yml").read_text(encoding="utf-8"))
+            self.assertIn(playbook[1], peer)
+        shared = yaml.safe_load((ROOT / "ansible-core/playbooks/pki-verify.yml").read_text(encoding="utf-8"))
+        resolver = shared[0]["tasks"][0]
+        self.assertEqual(resolver["ansible.builtin.include_role"]["tasks_from"], "resolve.yml")
+        self.assertTrue(resolver["vars"]["platform_pki_resolve_managed"])
+        self.assertEqual(shared[1]["roles"], [{"role": "platform.core.pki_verify"}])
+
     def test_role_serializes_apply_with_target_shared_flock_and_always_release(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
         block = next(task["block"] for task in main if task["name"].startswith("Serialize Vault apply"))
@@ -45,6 +66,25 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertTrue(lock["apply"]["run_once"])
         self.assertIn("_platform_vault_instances[0].host", lock["apply"]["delegate_to"])
         self.assertNotIn("rm -rf", str(acquire + release))
+
+    def test_only_transient_lock_coordination_is_excluded_from_change_recap(self):
+        acquire = yaml.safe_load((ROLE / "tasks/acquire_lock.yml").read_text(encoding="utf-8"))
+        release = yaml.safe_load((ROLE / "tasks/release_lock.yml").read_text(encoding="utf-8"))
+        hold = next(task for task in acquire if task["name"].startswith("Hold the shared Vault bootstrap lock"))
+        self.assertIs(hold["changed_when"], False)
+        self.assertNotIn("failed_when", hold)
+        self.assertIn("--nonblock", hold["ansible.builtin.command"]["argv"])
+        self.assertIs(release[0]["changed_when"], False)
+        self.assertEqual(release[0]["ansible.builtin.systemd_service"]["state"], "stopped")
+        lock_gate = next(task for task in acquire if task["name"].startswith("Require successful ownership"))
+        self.assertEqual(lock_gate["ansible.builtin.assert"]["fail_msg"], "VAULT_DEPLOYMENT_BUSY")
+        root = next(task for task in acquire if "ansible.builtin.file" in task)
+        self.assertNotIn("changed_when", root)
+        for filename in ("provision.yml", "configure.yml", "bootstrap.yml"):
+            tasks = yaml.safe_load((ROLE / "tasks" / filename).read_text(encoding="utf-8"))
+            for task in tasks:
+                if any(module in task for module in ("ansible.builtin.copy", "ansible.builtin.template", "ansible.builtin.file", "ansible.builtin.package", "ansible.builtin.systemd_service")):
+                    self.assertNotIn("changed_when", task, task.get("name"))
 
     def test_config_keeps_api_tls_and_raft_join_pki_roles_distinct(self):
         template = (ROLE / "templates/vault.hcl.j2").read_text(encoding="utf-8")
@@ -109,6 +149,57 @@ class VaultRoleContractTests(unittest.TestCase):
         for task in tasks:
             if "ansible.builtin.uri" in task and task["ansible.builtin.uri"].get("method") != "GET":
                 self.assertTrue(task.get("no_log"))
+
+    def test_audit_option_writer_uses_canonical_string_false(self):
+        tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
+        enable = next(task for task in tasks if task["name"] == "Enable the cluster-wide file audit device only when absent")
+        self.assertEqual(enable["ansible.builtin.uri"]["body"]["options"]["log_raw"], "false")
+        self.assertIsInstance(enable["ansible.builtin.uri"]["body"]["options"]["log_raw"], str)
+        self.assertIn("not in", enable["when"])
+
+    def test_audit_false_readback_guards_use_real_ansible_conditionals(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.playbook.conditional import Conditional
+        from ansible.template import Templar
+
+        configure = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
+        verify = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        configure_guard = next(task for task in configure if task["name"].startswith("Refuse incompatible existing audit"))["ansible.builtin.assert"]["that"][0]
+        verify_guard = next(task for task in verify if task["name"].startswith("Require the approved audit"))["ansible.builtin.assert"]["that"]
+        verify_guard = next(condition for condition in verify_guard if "log_raw" in condition)
+        absent = object()
+        cases = [(absent, True), (False, True), ("false", True), ("False", True),
+                 ("FALSE", True), ("0", True), (True, False), ("true", False),
+                 ("TRUE", False), ("1", False), ("yes", False), ("off", False),
+                 ("", False), (None, False), ([], False), ({}, False),
+                 (" false", False), ("false ", False), ("00", False), ("0.0", False)]
+        loader = DataLoader()
+        for value, expected in cases:
+            options = {"file_path": "/var/log/platform-vault-audit/audit.log"}
+            if value is not absent:
+                options["log_raw"] = value
+            result = {"results": [{"json": {"data": {"file/": {
+                "type": "file", "local": False, "options": options}}}}]}
+            variables = {"_platform_vault_owned_configuration": result,
+                         "_platform_vault_configuration": result}
+            for guard in (configure_guard, verify_guard):
+                with self.subTest(value="absent" if value is absent else value, guard=guard):
+                    conditional = Conditional(loader=loader)
+                    conditional.when = [guard]
+                    templar = Templar(loader=loader, variables=variables)
+                    self.assertEqual(conditional.evaluate_conditional(templar, variables), expected)
+
+        # Accepting a legacy false spelling must not weaken other audit guards.
+        for field, value in (("type", "socket"), ("local", True),
+                             ("options", {"file_path": "/tmp/foreign-audit.log", "log_raw": "0"})):
+            audit = {"type": "file", "local": False, "options": {
+                "file_path": "/var/log/platform-vault-audit/audit.log", "log_raw": "0"}}
+            audit[field] = value
+            variables = {"_platform_vault_owned_configuration": {
+                "results": [{"json": {"data": {"file/": audit}}}]}}
+            conditional = Conditional(loader=loader)
+            conditional.when = [configure_guard]
+            self.assertFalse(conditional.evaluate_conditional(Templar(loader=loader, variables=variables), variables))
 
     def test_vault_systemd_unit_uses_shared_audit_namespace_binding(self):
         unit = (ROLE / "templates/vault.service.j2").read_text(encoding="utf-8")

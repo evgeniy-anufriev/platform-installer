@@ -17,7 +17,9 @@
 - name: Refuse incompatible existing audit, KV or userpass configuration before mutation
   ansible.builtin.assert:
     that:
-      - "'file/' not in _platform_vault_owned_configuration.results[0].json.data or (_platform_vault_owned_configuration.results[0].json.data['file/'].type == 'file' and (_platform_vault_owned_configuration.results[0].json.data['file/'].local | default(false) | bool) == false and _platform_vault_owned_configuration.results[0].json.data['file/'].options.file_path == '/var/log/platform-vault-audit/audit.log' and (_platform_vault_owned_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) == 'false')"
+      # Vault stores audit options as strings; "0" is the legacy false form.
+      # Explicit membership rejects unknown values instead of bool-coercing them.
+      - "'file/' not in _platform_vault_owned_configuration.results[0].json.data or (_platform_vault_owned_configuration.results[0].json.data['file/'].type == 'file' and (_platform_vault_owned_configuration.results[0].json.data['file/'].local | default(false) | bool) == false and _platform_vault_owned_configuration.results[0].json.data['file/'].options.file_path == '/var/log/platform-vault-audit/audit.log' and (_platform_vault_owned_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) in ['false', '0'])"
       - "'secret/' not in _platform_vault_owned_configuration.results[1].json.data or (_platform_vault_owned_configuration.results[1].json.data['secret/'].type == 'kv' and _platform_vault_owned_configuration.results[1].json.data['secret/'].options.version | string == '2')"
       - "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data or _platform_vault_owned_configuration.results[2].json.data['userpass/'].type == 'userpass'"
     fail_msg: VAULT_EXISTING_CONFIGURATION_INCOMPATIBLE
@@ -38,7 +40,7 @@
       local: false
       options:
         file_path: /var/log/platform-vault-audit/audit.log
-        log_raw: false
+        log_raw: 'false'
   when: "'file/' not in _platform_vault_owned_configuration.results[0].json.data"
   no_log: true
 

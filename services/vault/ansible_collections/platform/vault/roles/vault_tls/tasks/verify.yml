@@ -59,11 +59,11 @@
       - _platform_vault_configuration.results[0].json.data['file/'].type == 'file'
       - (_platform_vault_configuration.results[0].json.data['file/'].local | default(false) | bool) == false
       - _platform_vault_configuration.results[0].json.data['file/'].options.file_path == '/var/log/platform-vault-audit/audit.log'
-      - (_platform_vault_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) == 'false'
+      - (_platform_vault_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) in ['false', '0']
       - _platform_vault_configuration.results[1].json.data['secret/'].type == 'kv'
       - _platform_vault_configuration.results[1].json.data['secret/'].options.version | string == '2'
       - _platform_vault_configuration.results[2].json.data['userpass/'].type == 'userpass'
-  fail_msg: VAULT_CONFIGURATION_VERIFY_FAILED
+    fail_msg: VAULT_CONFIGURATION_VERIFY_FAILED
   no_log: true
 
 - name: Read the authoritative Raft membership configuration

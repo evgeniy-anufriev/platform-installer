@@ -14,6 +14,16 @@ bounded audit rotation per instance. No users/policies are created. Cross-field
 bounds (threshold<=shares, threshold>=2 for multiple
 shares; port range/collision after slot expansion) belong to Core/role, not Go.
 
+Audit API options are string-valued: new devices use `log_raw: 'false'`.
+Configure/verify also accept the existing `"0"` false representation without
+rewriting an enabled device. Unknown or true values remain fail-closed;
+no general bool coercion is used for this security option.
+
+Transient lock hold/release coordinates one invocation and reports no
+desired-state change. Lock admission/readiness/contention and always-release
+remain enforced. Persistent directory creation, configuration, PKI, packages
+and service changes retain normal change reporting.
+
 Generated configuration schema contains primitive bounds only. It does not
 pretend to prove cross-field runtime validity. Installer authoring and typed
 lease UI integration remain SI08-D; real deployment acceptance is SI08-E.
