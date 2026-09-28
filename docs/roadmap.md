@@ -769,7 +769,15 @@ Not ready when:
 
 ## Post-UI-02 service installation acceptance
 
-Status: SERVICE-INSTALL-01 Keepalived DONE (2026-09-23); SERVICE-INSTALL-02
+Latest SI08-E status (2026-09-28): Vault 1/1, HA 3/1 and HA 3/3 technical
+acceptance is DONE, including real React/Wails lifecycle, strict `changed=0`
+repeats, failover, explicit unseal, persistent KV marker and the full RED OS
+race gate. [SI08-E evidence](service-install-08e.md). SI09 (all services in
+one plan) has not started and requires a separate owner request. Earlier
+shared-worktree changes still prevent a clean-repository claim; consult
+`CURRENT_STATE.md` before treating the broader release as finalized.
+
+Historical pre-SI08-E status snapshot: SERVICE-INSTALL-01 Keepalived DONE (2026-09-23); SERVICE-INSTALL-02
 BIND DONE (2026-09-23); SERVICE-INSTALL-03 dns-client DONE (2026-09-23);
 SERVICE-INSTALL-04 HAProxy DONE (2026-09-23); SERVICE-INSTALL-05 Kafka DONE
 (2026-09-23); SERVICE-INSTALL-06 PostgreSQL/pg_auto_failover DONE (2026-09-24);

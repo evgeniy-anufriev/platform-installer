@@ -8,6 +8,34 @@ ROLE = ROOT / "services/vault/ansible_collections/platform/vault/roles/vault_tls
 
 
 class VaultRoleContractTests(unittest.TestCase):
+    def test_cluster_shared_mount_configuration_runs_only_on_canonical_seed(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.playbook.conditional import Conditional
+        from ansible.template import Templar
+
+        main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
+        block = next(task["block"] for task in main if task["name"].startswith("Serialize Vault apply"))
+        configure = next(task for task in block if task["name"].startswith("Configure audit, KV v2 and userpass"))
+        self.assertEqual(configure["ansible.builtin.include_tasks"], "configure.yml")
+        self.assertIn("inventory_hostname == _platform_vault_instances[0].host", configure["when"])
+        self.assertNotIn("delegate_to", configure)
+        loader = DataLoader()
+        for hosts in (("node1",), ("node1", "node2", "node3")):
+            for current in hosts:
+                variables = {"platform_vault_verify_only": False,
+                             "inventory_hostname": current,
+                             "_platform_vault_instances": [{"host": host} for host in hosts]}
+                conditional = Conditional(loader=loader)
+                conditional.when = [configure["when"]]
+                with self.subTest(hosts=hosts, current=current):
+                    self.assertEqual(conditional.evaluate_conditional(
+                        Templar(loader=loader, variables=variables), variables), current == hosts[0])
+        variables["platform_vault_verify_only"] = True
+        conditional = Conditional(loader=loader)
+        conditional.when = [configure["when"]]
+        self.assertFalse(conditional.evaluate_conditional(
+            Templar(loader=loader, variables=variables), variables))
+
     def test_follower_unseal_inherits_outer_member_without_recursive_override(self):
         from ansible.parsing.dataloader import DataLoader
         from ansible.template import Templar

@@ -72,7 +72,9 @@
 
     - name: Configure audit, KV v2 and userpass without changing existing resources
       ansible.builtin.include_tasks: configure.yml
-      when: not (platform_vault_verify_only | bool)
+      # These mounts are Raft cluster state, not per-host resources. Only the
+      # canonical seed may reconcile them while the deployment lock is held.
+      when: not (platform_vault_verify_only | bool) and inventory_hostname == _platform_vault_instances[0].host
 
     - name: Verify the provisioned Vault while deployment lock is held
       ansible.builtin.include_tasks: verify.yml
