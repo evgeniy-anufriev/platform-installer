@@ -1,5 +1,21 @@
 # Current state
 
+## SERVICE-INSTALL-09 ClickHouse PLAN (2026-09-29)
+
+Owner requested the next service: ClickHouse 1/1 standalone without Keeper,
+then 3/1 and 3/3 with one paired server+Keeper member per replica, TLS on all
+enabled protocols and an HTTPS endpoint. The original all-services one-plan
+final acceptance is now SERVICE-INSTALL-10 (nine services). Architecture plan:
+[SI09](docs/service-install-09-clickhouse-architecture.md). The first FULL
+PLAN review identified source-authenticity and HTTPS-authentication gaps; the
+owner approved signed upstream repository metadata plus exact RPM checksums,
+and the standard ClickHouse `default` password supplied through Installer
+Secrets. The single allowed targeted recheck APPROVED both findings with zero
+blockers. Four exact `26.8.14.3` LTS RPMs were acquired through the signed
+official repository metadata and rehashed after copy into ignored DEV import.
+The temporary RED OS acquisition workspace was removed. No ClickHouse
+runtime has been published or installed yet.
+
 ## SI08-F Vault endpoint HA technical acceptance DONE (2026-09-29)
 
 New managed 3-host project `project-e74f53b99dd648d4` pinned to immutable

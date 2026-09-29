@@ -769,6 +769,13 @@ Not ready when:
 
 ## Post-UI-02 service installation acceptance
 
+Current next milestone: [SERVICE-INSTALL-09 ClickHouse](service-install-09-clickhouse-architecture.md)
+with standalone 1/1 (no Keeper), paired server+Keeper HA 3/1 and 3/3,
+TLS-only enabled protocols and HTTPS endpoint. The corrected PLAN passed its
+single targeted recheck with zero blockers. The all-services one-plan final
+acceptance moves to SERVICE-INSTALL-10 and includes nine services. Earlier
+references to SI09 as the final eight-service test below are historical snapshots.
+
 Latest SI08-F status (2026-09-29): the fresh 3-host Keepalived/BIND/HAProxy/
 Vault endpoint project and strict repeat are technically DONE through real
 React/Wails → Go → Execution Node. Both full runs SUCCEEDED; repeat had
