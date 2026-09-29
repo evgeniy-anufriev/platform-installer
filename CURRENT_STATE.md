@@ -1,5 +1,40 @@
 # Current state
 
+## SI08-F Vault endpoint HA technical acceptance DONE (2026-09-29)
+
+New managed 3-host project `project-e74f53b99dd648d4` pinned to immutable
+runtime `sha256:9b0beb40e91b1a1beb20d14096ecd6a45c09274053b6f0bdf412a8424e7a6e3c`.
+Canonical project revision stayed
+`sha256:5e9c6fc52f0c760a15083b797831f4122ca87d17426f14c277dea07f0a65e6cb`.
+Real nonvisual React/Wails opened the project, imported protected Vault inputs,
+built/approved plan `plan-7ef0fd3def229115d95c955f`, started and observed
+both runs through the supported Wails Go methods. Initial run
+`installer-56f9aa6637457b0bcf119b6b3abfa0f4` SUCCEEDED in 35m55s;
+strict repeat `installer-06510ac6068d9b7a695599d14850d32e` SUCCEEDED
+in 40m54s, with all nine actions SUCCESS, 0 CHANGED, 0 FAILED and no event
+sequence gaps. Repeat task counts: 1564 SUCCESS, 427 SKIPPED.
+
+Post-initial-run audit found that new project BIND serial 1 equaled the old
+served zone's serial 1; secondaries had not transferred the new content. The
+explicit audited `recover_dns_lifecycle` operation used prior fingerprint and
+three observed SOA serials to advance the persistent new-project serial to 2.
+All three DNS nodes then answered the endpoint FQDN with VIP 192.168.56.121,
+SOA serial 2. No manual zone file edit or automatic cross-project state
+adoption was used. This is an explicit QA migration, not normal apply behavior.
+
+Three current Vault units are active and unsealed. HAProxy has identical
+three-target backend fragments on all nodes, validates with `haproxy -c`,
+and uses `ssl verify required` with endpoint `verifyhost`. File audit, KV v2,
+userpass, three Raft voters, authenticated KV through DNS/VIP, leader
+step-down, active-node loss, marker continuity and restored/unsealed 3/3
+cluster all PASS. Core full 416 OK (19 skips); affected BIND/HAProxy/Vault,
+Windows Go/vet/frontend/Wails, RED OS affected race, catalog/schema and
+secret-event audit PASS. Six exact remote QA workspaces removed. Full evidence:
+[SI08-F](docs/service-install-08f-vault-endpoint-ha.md). SI09 has NOT started.
+The SI08-F source, runtime, Installer and QA changes are recorded in focused
+commits `f23fb9a`, `d1c0612`, `d1df02d`, `c6f066b`, `2b67ed8` and
+`9773413`. SI09 still requires a separate owner request.
+
 ## SI08-E Vault technical acceptance PASS (2026-09-28)
 
 Initial real React/Wails 3/3 run installer-810aa4cf27d26af17702df266bcf9959
@@ -648,6 +683,207 @@ QA source workspace was cleaned. Actual reset and SI08-E acceptance are still
 not claimed; subsequent reset requires fresh exact identity/no-active-run proof.
 Evidence: docs/service-install-08e-clear-evidence.md. Earlier unrelated
 uncommitted work is preserved; clear is a separate focused implementation.
+
+## Vault clear resumed FULL DIFF: two safety blockers (2026-09-27)
+
+Owner authorized commit/continuation. Resumed SAME incomplete FULL DIFF on
+unchanged fingerprint `86df9179819d462aaa11813072c70ec9645be9a643a522b7e8e7ef3a872f37e3`.
+SI08-CLEAR-DIFF-01 envelope mismatch is reviewer-verified RESOLVED. Review now
+completed with BLOCK: SI08-CLEAR-DIFF-02 process admission relies on argv[0],
+and SI08-CLEAR-DIFF-03 one-shot mount admission does not exclude later movement
+of a directory containing an inherited mount into the deletion subtree.
+The second finding is a static counterexample, not an experimentally reproduced
+deletion. Smallest corrections: exact config-argument guard independent of
+argv[0], and descriptor mount-identity checks before each directory descent,
+with focused real-process and synchronized mount-movement tests.
+No automatic correction/re-review, commit or destructive execution. Owner
+decision on these two bounded safety corrections is required. Existing tests
+remain regression PASS but do not prove the missing cases. QA identity chain
+project/run/operation/member/unit/config/data was read-only rechecked PASS;
+active Installer runs and Vault lock holders were zero at inspection.
+
+## Vault explicit clear implemented; DIFF revision-envelope blocker (2026-09-27)
+
+Owner approved the concrete clear plan. Added standalone clear playbook,
+clear_entry/clear tasks, exact confirmation default and narrow held-descriptor
+Vault member helper. Apply/Verify are unchanged; actual Raft data has not been
+cleared and no service was stopped. Current owned unit passed read-only helper
+inspection (`inspect_only=true`, changed=false).
+
+RED OS focused clear 15 PASS, Vault contract 15 PASS, standalone clear syntax
+PASS; independent full Core 384 total / 380 PASS / 4 opt-in SKIP / 0 errors,
+177.032s; catalog/schema reproducibility PASS; full Go tests/vet and diff check
+PASS. Seven tested source file hashes match the local implementation.
+
+FULL DIFF reviewer returned BLOCK, SI08-CLEAR-DIFF-01: supplied fingerprint
+used PowerShell cultural sorting instead of the stated ordinal sorting.
+Read-only reconciliation confirms unchanged file hashes; corrected ordinal
+fingerprint matches reviewer exactly:
+`86df9179819d462aaa11813072c70ec9645be9a643a522b7e8e7ef3a872f37e3`.
+No automatic review rerun or destructive execution. The safety review is not
+complete; owner authorization is needed for review continuation/recheck with
+the corrected identity. Evidence: docs/service-install-08e-clear-evidence.md.
+No commit; unrelated existing worktree changes are preserved. SI08-E acceptance
+remains BLOCKED.
+
+## SI08-E QA reset authorized; safe mechanism prerequisite unresolved (2026-09-27)
+
+Owner authorized reset of the owned QA Vault instance. Read-only recheck on
+.101 confirms Vault is initialized, while `init-response.json`, `admin-token`
+and `unseal-shares` are absent from the exact failed run's output package.
+Scoped inspection found no existing suitable identity-safe Vault data reset or
+quarantine mechanism. Existing project publication rename helpers do not prove
+the identity of a Vault source directory and are not reused as a reset tool.
+The approved bootstrap correction plan explicitly requires stopping on this
+mechanism gap. No unit was stopped, no data was deleted/moved, no journal or
+output package was changed, and no new runtime or acceptance run was started.
+SI08-E remains BLOCKED pending an owner-approved bounded reset mechanism.
+
+Owner requested analogous Kafka/PostgreSQL Ansible clear tasks. Concrete plan:
+`docs/service-install-08e-clear.md`, explicit standalone playbook, exact
+deployment acknowledgement and existing flock; a narrow Vault-only held-fd
+reset preserves member root/marker, config, TLS, audit and controller custody.
+Independent FULL PLAN review APPROVE_WITH_CHANGES, zero blocking findings;
+two nonblocking mount/revalidation clarifications were incorporated. Concrete
+helper design was subsequently approved and implemented (see latest entry).
+No destructive target mutation has occurred.
+
+## SI08-E acceptance preparation started (2026-09-27)
+
+Owner authorized SI08-E after C/D commit `3e1f711`. Required preserved
+prerequisite work was restored from stash (stash retained). New immutable QA
+runtime `sha256:d84df0dc93eee8673276981fa94a2d7a20bd6373fa7cffea3a4271fd3216e89d`
+is activated on .101 and READY. Standalone QA project
+`.runtime/qa/vault-qa-standalone-20260927` has saved inventory/PKI/Vault desired
+state; fresh Go/Core plan is EXECUTABLE. Native UI import of the prepared
+project was confirmed by the owner. Visual/manual UI acceptance is waived;
+nonvisual React/Wails integration through real backend bindings is now mandatory
+for all services and affected application flows (see AGENTS/common acceptance).
+The imported project now includes unplaced Kafka `asd`, preserved unchanged.
+Isolated Vault QA project `project-76b046511af5faed` has an EXECUTABLE plan.
+Start was blocked by the Go PKI capability gate requiring legacy payload v2
+from a v4-only runtime. Owner-approved bounded correction and focused tests
+are implemented; focused/full Go tests, vet, diff check and production Wails
+build PASS. The real React/Wails automation prerequisite is resolved via the
+standard loopback Wails dev server and headless Edge; no production debug
+endpoint or dependency edits. React session credentials/readiness PASS and
+fresh Plan reaches PLAN_REVIEW. Owner-approved Plan presentation correction
+now serializes empty Targets/DependsOn as arrays; JSON regression/full Go/vet
+PASS and actual React Plan rendering/approval/PKI input PASS. Real React Start
+previously returned BLOCKED / LEASE_PAYLOAD_INVALID before run creation. The
+owner-approved typed nil-map correction now serializes runtimeSecretValues as
+{}, with focused/full Go tests, vet and diff check PASS. Actual React/Wails
+retry passes lease admission but returns EXECUTION_MANIFEST_INVALID before run
+creation. Active runtime proof: Core emits displayLabel in private
+runtimeSecretInputs; the closed consumer rejects that field. The same bounded
+descriptor without displayLabel is accepted. SI08-E is BLOCKED on this new
+producer/consumer mismatch was then corrected with owner authorization: private
+displayLabel omitted, public label preserved, real consumer regression PASS.
+Core 351 PASS/4 skips, Go full suite/vet and catalog/schema checks PASS.
+New immutable runtime sha256:a668dca34624ba39bc289efbe577b6b1665488d9e7ce416c8c910d65d0139c96
+activated; only isolated Vault QA project locks advanced through guarded API.
+Real React/Wails Start admitted run installer-7c88e83cb1124ca91cfce021861d4b01,
+then terminal INTERRUPTED at sequence 2. Controller reports OUTPUT_ACCESS_DENIED:
+execution root is mode 0700 owned by UID 1001, detached controller runs as UID 0;
+output storage requires owner == effective UID. SI08-E is BLOCKED on this new
+ownership mismatch before Ansible Apply was corrected with owner authorization.
+Supported activation now creates/verifies private execution storage through the
+existing no-follow output directory helper under sudo; foreign owner fails closed.
+QA root alone was corrected by fchown on its opened directory after no active runs
+were confirmed; descendants/journals/leases were untouched. Startup projection
+failure after verified durable identity now records FAILED with lease cleanup.
+Core 353 PASS/4 skips, lifecycle 39, output storage 25, Go suite/vet, frontend
+67/lint/build and catalog/schema checks PASS. Runtime
+sha256:c1727d16eca98bcb054bbe4665275776df5d0adc8ecbd202961346143455de09
+activated; React/Wails admitted run installer-95d2c1f3ad92343e09ae8da684a1ef78.
+It reached RUNNING and PKI Apply completed. Terminal FAILED at sequence 338:
+Vault closed-input assertion rejects apiPort type after generic
+runtime_role_variables set_fact. Manifest apiPort is an integer; local-only
+Ansible reproduction of the same set_fact conversion fails assertion index 6
+(platform_vault_api_port is integer). SI08-E is BLOCKED on this new typed
+Core-to-Ansible boundary defect; no type/safety check was weakened.
+Owner authorized a narrow generic correction. Local-only RED OS experiment
+proved mapping args preserve numeric types, but Ansible set_fact with native mode
+disabled still converts string "false" to boolean. New focused real-Ansible
+regression: native=True PASS; native=False BLOCK on string identity; empty and
+malformed/missing-host guards PASS. The experimental production task change was
+reverted; regression retained. No new runtime publication or Vault retry.
+A fully typed correction now requires an explicit choice of a narrowly scoped
+fact action adapter versus global native-mode policy; the latter was not changed.
+Owner approved the narrow adapter. platform.core.apply_runtime_role_variables
+now copies only current-host platform_* values into facts without scalar
+templating/coercion, target transport, or file writes. Existing mapping guards
+and no_log retained; arguments/invalid names rejected. Real Ansible regression
+PASS in native=False/True, including numeric and boolean-shaped strings,
+list/map/null, empty mapping and malformed/missing host. Focused tests 3 and
+service/PKI contracts 11 PASS; Go suite/vet PASS; full Core 356 PASS/4 skips,
+catalog/schema reproducibility PASS. Runtime
+sha256:0c0248c19a457d647a060c8c72b1ca1fa5999099f02a0e43b55239b563b15f1a
+activated; only isolated QA project lock updated. React/Wails run
+installer-2e83aa4e51d88886abc0827217e6abae reached PKI/apply and passed the
+previously failing Vault typed-input guard. Pinned Vault repository installation
+completed; terminal FAILED at sequence 586 on changed-member restart tracking.
+provision.yml used loop_var vault_member for configuration/systemd templates,
+while tracking expected item.item.id. Owner authorized retaining item.item.id:
+template loops now use default item with task-local vault_member alias.
+Real local-only Ansible regression PASS: three-member first render, unchanged
+repeat, and single-member change track the exact expected identities without
+duplicates. Target now has
+partial package/account/PKI/config provisioning; no active Vault units observed.
+No Vault init/unseal, verify or output-delivery success is claimed. SI08-E is
+BLOCKED on a new independent service-directory access defect after this
+owner-authorized loop correction passed real acceptance. Core 357 PASS/4 skips,
+Go suite/vet, catalog/schema and diff check PASS. Immutable runtime
+sha256:66ed3423ed150cb8fa46af19c0bdcd120a4066a4ffcd78c3367d28b76ac24e67
+activated. React/Wails run installer-ff1844b73c5fd429dbf4c7b0c9243cbe passed both
+tracking tasks and started the seed; terminal FAILED at sequence 600.
+Vault auto-restarts (exit 1, permission denied). Deployment parent directory
+/etc/platform-vault/vault is root:root 0750; service-owned member config 0600
+cannot be read as platform-vault because parent traversal is denied. No new
+permission correction was made. QA source workspace/key and local automation
+were cleaned; original imported project and unrelated services unchanged.
+Owner authorized the next bounded permission correction: deployment parents
+now retain root owner/0750 with platform_vault_group. Private member/file modes
+and no-follow/owner guards are unchanged. Focused root/local Ansible 2 PASS,
+including service read/no-parent-write and repeat changed=0; Vault 15 PASS,
+Core 358 PASS/5 skips; Go suite/vet, catalog/schema and diff check PASS.
+Runtime sha256:c8952a109ac1774cc896e5d195a5908e95d371f385ec5891317436eef38789df
+activated. React/Wails run installer-b095002168ac83f7fb1aa9289f7120cb proves
+configuration readable and Vault ACTIVE, closing the permission blocker.
+Terminal FAILED at sequence 612 on a new bootstrap response validation defect:
+dictionary .keys resolves a method rather than the Shamir shares collection.
+Synthetic active-task proof fails; ['keys'] variant passes. Production bootstrap
+was not changed. TLS API confirms initialized=true; exact custody package has
+no init-response.json/admin-token/unseal-shares (existence-only proof).
+SI08-E remains BLOCKED. No blind retry or QA state reset was performed; required
+next actions are explicit dictionary indexing correction and owner-authorized
+reset of only the exact owned initialized QA member before repeat acceptance.
+QA source workspace/key and local automation cleaned; no other service mutation.
+Owner accepted the bootstrap plan correction. Revision 2 is in
+docs/service-install-08e-bootstrap-correction.md: immediate minimal recovery
+copy, explicit readback/sync durability, strict validation and confirmed durable
+pair before recovery deletion. Independent single targeted recheck APPROVE:
+SI08-E-PLAN-01 RESOLVED (PLAN), zero blocking/overengineering findings.
+SI08-E-PLAN-02 remains the separate reset identity/mechanism prerequisite.
+This closes only the plan gate; production bootstrap implementation, fault
+injection and real retry have not been performed. No QA reset occurred.
+Owner subsequently authorized implementation. bootstrap.yml now uses explicit
+keys indexing, immediate minimal recovery copy, metadata/readback/sync checks,
+strict validation and pre-publication conflict checks, synchronized pair and
+directory synchronization after recovery cleanup. Native modes/interruption/
+reopen/partial pair/malformed/conflict/sync/cleanup regression: focused 6 PASS
+(213.153s), Vault contracts 15 PASS. Independent QA full Core 364 PASS/5 skips
+(369 total, 238.129s); Go suite/vet, catalog/schema, standalone syntax and diff
+check PASS. QA source workspaces/logs cleaned; no actual secret reads.
+No runtime promotion or real retry in this correction; no QA reset. Existing
+initialized seed without custody still blocks SI08-E acceptance. PLAN-02 exact
+ownership reconciliation, safe reset/quarantine mechanism and separate owner
+authorization remain required. Implementation uncommitted; SI08-E not DONE.
+See docs/qa-react-wails.md and SI08-E evidence. No mock substitute is used.
+Vault Apply partially completed and seed init occurred as above; unseal, verify,
+protected delivery and repeat acceptance have not passed. See
+`docs/service-install-08e.md`. Earlier NOT STARTED statements below describe
+the historical C/D gate, not the current E authorization.
 
 ## SERVICE-INSTALL-08 Vault implementation started (2026-09-26)
 

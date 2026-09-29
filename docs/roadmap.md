@@ -769,6 +769,17 @@ Not ready when:
 
 ## Post-UI-02 service installation acceptance
 
+Latest SI08-F status (2026-09-29): the fresh 3-host Keepalived/BIND/HAProxy/
+Vault endpoint project and strict repeat are technically DONE through real
+React/Wails → Go → Execution Node. Both full runs SUCCEEDED; repeat had
+`changed=0`. DNS serial migration was explicit and evidence-bound, and
+authenticated Vault KV remained reachable through DNS/VIP after leader
+step-down and loss/restoration of the active Vault member. Full Core,
+service, frontend/Wails, RED OS race and secret gates passed.
+[SI08-F evidence](service-install-08f-vault-endpoint-ha.md). SI09 all-services
+one-plan acceptance has not started. SI08-F source and QA are recorded in
+focused commits; see `CURRENT_STATE.md` for the current milestone gate.
+
 Latest SI08-E status (2026-09-28): Vault 1/1, HA 3/1 and HA 3/3 technical
 acceptance is DONE, including real React/Wails lifecycle, strict `changed=0`
 repeats, failover, explicit unseal, persistent KV marker and the full RED OS
@@ -838,6 +849,25 @@ with 65 changes; the fresh repeat
 with `changed=0`. PKI apply, PostgreSQL apply and verify passed in both cycles.
 
 ## Phase G — Expansion
+
+### Deferred feature: dependency-aware parallel installation
+
+After the sequential all-services acceptance, consider bounded parallel
+execution within one approved deployment plan. Complete the shared
+infrastructure layer first: Keepalived, BIND, dns-client and the HAProxy
+configuration that does not depend on application backends. Then run
+independent application deployments, such as Kafka, Redis and Vault,
+concurrently. A backend or other operation that consumes an application
+endpoint waits for that provider's apply/verify result; for example, the
+Vault-backed HAProxy configuration cannot be finalized before Vault is ready.
+
+Core's declared `dependsOn` edges remain the ordering authority. The future
+controller scheduler must also serialize conflicting operations on the same
+target (package manager, shared files, service reloads), retain one
+authoritative run/journal and bounded task-event stream, and preserve
+failure/cancel/secret-output semantics. Start with a small concurrency limit
+and prove both speedup and unchanged apply/verify/repeat results. This is a
+later feature, not part of the current sequential service acceptance.
 
 ### SERVICE-N: Additional production services
 
