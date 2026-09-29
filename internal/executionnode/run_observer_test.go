@@ -547,3 +547,18 @@ func TestObserverRejectsMoreThanRemoteJournalCapacity(t *testing.T) {
 		t.Fatalf("capacity err=%v", err)
 	}
 }
+
+func TestObserverAcceptsEventsPastPreviousInstallerLimit(t *testing.T) {
+	runID := "installer-214"
+	const previousInstallerLimit = 2048
+	seen := make(map[int][]byte, previousInstallerLimit)
+	for sequence := 1; sequence <= previousInstallerLimit; sequence++ {
+		encoded, _ := canonicalEvent(validEvent(runID, sequence))
+		seen[sequence] = encoded
+	}
+	page := ExecutionEventPage{Events: []ExecutionEvent{validEvent(runID, previousInstallerLimit+1)}, NextSequence: previousInstallerLimit + 1}
+	accepted, next, err := validateObserverPage(page, runID, previousInstallerLimit, seen)
+	if err != nil || len(accepted) != 1 || accepted[0].Sequence != previousInstallerLimit+1 || next != previousInstallerLimit+1 {
+		t.Fatalf("accepted=%d next=%d err=%v", len(accepted), next, err)
+	}
+}

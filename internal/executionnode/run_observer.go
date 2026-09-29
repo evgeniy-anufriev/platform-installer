@@ -26,6 +26,7 @@ const (
 	maxObservedRuns             = 32
 	maxSubscribersPerRun        = 16
 	maxAggregateSubscriberSlots = 16 * 1024
+	maxSubscriberBufferSlots    = 4096
 )
 
 type ObserverError struct{ Code string }
@@ -134,7 +135,7 @@ func (o *RunObserver) Subscribe(ctx context.Context, node Node, runID string, ca
 }
 
 func (o *RunObserver) SubscribeAfter(ctx context.Context, node Node, runID string, after, capacity int) (*ObserverSubscription, error) {
-	if ctx == nil || !validRuntimeToken(runID) || after < 0 || capacity < 1 || capacity > 4096 {
+	if ctx == nil || !validRuntimeToken(runID) || after < 0 || capacity < 1 || capacity > maxSubscriberBufferSlots {
 		return nil, errors.New("EXECUTION_OBSERVER_INPUT_INVALID")
 	}
 	key := observerKey(node, runID)
@@ -170,7 +171,7 @@ func (o *RunObserver) SubscribeAfter(ctx context.Context, node Node, runID strin
 		}
 	}
 	requestedSlots := replayCount + capacity
-	if requestedSlots > 4096 {
+	if requestedSlots > maxObservedExecutionEvents+maxSubscriberBufferSlots {
 		current.stateMu.Unlock()
 		o.mu.Unlock()
 		if startPoller {

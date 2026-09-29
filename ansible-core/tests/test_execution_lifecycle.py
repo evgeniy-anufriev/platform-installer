@@ -38,6 +38,28 @@ def runtime_evidence():
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_controller_output_preparation_failure_terminates_committed_run(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            record = metadata()
+            journal.initialize(record)
+            manifest = {"projectIdentity": record["projectIdentity"],
+                        "planFingerprint": record["planFingerprint"],
+                        "runtimeRelease": {"bundleDigest": record["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest))
+            args = ["controller", "--state-root", root, "--run-id", "run-1",
+                    "--runtime-release", root, "--bundle-digest", record["runtimeRelease"]]
+            with mock.patch.object(sys, "argv", args), \
+                    mock.patch.object(execution_controller, "_materialize_runtime_projection",
+                                      side_effect=execution_controller.execution_secret_output.OutputWireError("OUTPUT_ACCESS_DENIED")), \
+                    mock.patch.object(execution_controller.execution_secret_lease, "cleanup_run") as cleanup, \
+                    mock.patch.object(execution_controller, "_dispatch") as dispatch:
+                self.assertEqual(2, execution_controller.main())
+            self.assertEqual("FAILED", journal.status()["state"])
+            self.assertEqual(record, journal.metadata())
+            cleanup.assert_called_once_with(root, "run-1")
+            dispatch.assert_not_called()
+
     def test_terminal_status_is_published_before_result_becomes_observable(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")

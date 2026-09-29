@@ -39,16 +39,52 @@ def _safe_pki_plan_string(value):
 
 
 def _operation_error_code(output):
-    """Return only the final bounded machine error token from child output."""
-    matches = OPERATION_ERROR_CODE.findall(output if isinstance(output, bytes) else b"")
-    return matches[-1].decode("ascii") if matches else ""
+    """Return a machine token or a coarse fixed diagnostic, never raw output.
+
+    Classification is diagnostic only, not a service rule or retry decision.
+    Inspect only the final ordinary Ansible failure record, not earlier task
+    output. Censored/no_log results remain opaque.
+    """
+    output = output[-MAX_OPERATION_FAILURE_CAPTURE_BYTES:] if isinstance(output, bytes) else b""
+    matches = OPERATION_ERROR_CODE.findall(output)
+    if matches:
+        return matches[-1].decode("ascii")
+    failures = re.findall(br'^fatal: \[[^\r\n]+\]: (?:FAILED|UNREACHABLE)! => ([^\r\n]*)', output, re.MULTILINE)
+    if not failures:
+        return ""
+    try:
+        result = json.loads(failures[-1])
+    except (ValueError, UnicodeError):
+        return "ANSIBLE_FAILURE_UNCLASSIFIED"
+    if not isinstance(result, dict):
+        return "ANSIBLE_FAILURE_UNCLASSIFIED"
+    if result.get("_ansible_no_log") or "censored" in result:
+        return "ANSIBLE_FAILURE_REDACTED"
+    message = result.get("msg")
+    if not isinstance(message, str):
+        return "ANSIBLE_FAILURE_UNCLASSIFIED"
+    message = message.lower()
+    for code, phrases in (
+        ("ANSIBLE_BECOME_TIMEOUT", ("timeout waiting for privilege escalation prompt",)),
+        ("ANSIBLE_BECOME_FAILED", ("missing sudo password", "incorrect sudo password", "sudo: a password is required")),
+        ("ANSIBLE_SSH_AUTH_FAILED", ("permission denied (publickey", "permission denied (password")),
+        ("ANSIBLE_CONNECTION_TIMEOUT", ("connection timed out", "connection timeout")),
+        ("ANSIBLE_CONNECTION_LOST", ("connection reset by peer", "connection closed by remote host", "broken pipe")),
+        ("ANSIBLE_FILESYSTEM_READ_ONLY", ("read-only file system",)),
+        ("ANSIBLE_FILESYSTEM_FULL", ("no space left on device",)),
+        ("ANSIBLE_PERMISSION_DENIED", ("permission denied", "operation not permitted")),
+    ):
+        if any(phrase in message for phrase in phrases):
+            return code
+    return "ANSIBLE_FAILURE_UNCLASSIFIED"
 
 
 def _wait_for_operation(process, stopped):
     """Drain child output without persisting it or allowing an output flood.
 
     The retained rolling window exists only in memory and is reduced to a
-    strictly-shaped ``error_code`` token before it reaches the journal.
+    machine error token or fixed coarse failure class before it reaches the
+    journal. Raw Ansible messages never cross that boundary.
     """
     captured = bytearray()
     descriptor = process.stdout.fileno()
@@ -588,9 +624,15 @@ def main():
         _secret_output_declarations(manifest)
         if not os.path.isdir(args.runtime_release) or os.path.islink(args.runtime_release):
             return _terminal(journal, "FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
-        _materialize_runtime_projection(journal, metadata, manifest)
-        _validate_runtime_projection(journal, metadata, manifest)
-        journal.transition("RUNNING", "Fixed Core controller started")
+        try:
+            _materialize_runtime_projection(journal, metadata, manifest)
+            _validate_runtime_projection(journal, metadata, manifest)
+            journal.transition("RUNNING", "Fixed Core controller started")
+        except (LifecycleError, execution_secret_output.OutputWireError, OSError, ValueError):
+            # Identity was verified above and Start is already durable.
+            _terminal(journal, "FAILED", "EXECUTION_CONTROLLER_PREPARATION_FAILED",
+                      "Controller preparation failed before execution")
+            return 2
     finally:
         os.close(lock)
     cancelled = [False]

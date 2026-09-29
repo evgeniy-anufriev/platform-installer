@@ -16,6 +16,24 @@ from secret_output_wire import OutputWireError
 
 
 class SecretOutputStorageTests(unittest.TestCase):
+    def test_preparation_creates_private_storage_and_preserves_existing_bytes(self):
+        with tempfile.TemporaryDirectory() as parent:
+            root = Path(parent) / "execution"
+            with storage._directory(str(root), create=True):
+                pass
+            self.assertEqual(0o700, stat.S_IMODE(root.stat().st_mode))
+            self.assertEqual(os.geteuid(), root.stat().st_uid)
+            sentinel = root / "existing-journal"
+            sentinel.write_bytes(b"unchanged")
+            with storage._directory(str(root), create=True):
+                pass
+            self.assertEqual(b"unchanged", sentinel.read_bytes())
+            with patch.object(storage.os, "geteuid", return_value=os.geteuid() + 1):
+                with self.assertRaisesRegex(OutputWireError, "OUTPUT_ACCESS_DENIED"):
+                    with storage._directory(str(root), create=True):
+                        pass
+            self.assertEqual(b"unchanged", sentinel.read_bytes())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

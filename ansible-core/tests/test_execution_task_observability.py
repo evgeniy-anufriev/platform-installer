@@ -22,6 +22,7 @@ import execution_lifecycle
 from execution_lifecycle import Journal, digest
 import execution_controller
 import execution_protocol
+import execution_secret_lease
 from ansible_collections.platform.core.plugins.callback import execution_events_json
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
@@ -325,6 +326,48 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual("SUCCESS", events[-1]["status"])
             self.assert_events_match_contract(events)
             self.assertIsNone(journal.emit_task_observability_diagnostic(actionId="apply:kafka-main"))
+
+    def test_controller_forwards_typed_inputs_only_in_scoped_ephemeral_vars_file(self):
+        class _CompletedProcess(object):
+            returncode = 0
+
+            def poll(self):
+                return 0
+
+        secret = "sensitive-vault-token-canary"
+        operation = {"operationId": "apply:vault-ha", "phaseId": "apply", "operation": "SERVICE_APPLY",
+                     "serviceType": "vault", "serviceDeployment": "vault-ha"}
+        requirements = [{"requirementRef": "si-" + "a" * 40, "purpose": "SERVICE_ADMIN_TOKEN",
+                         "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-admin-token",
+                         "hosts": ["node1"], "requiredWhen": "INITIALIZED",
+                         "operations": ["SERVICE_APPLY", "SERVICE_VERIFY"]}]
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            projection_name = ".runtime-projection-" + __import__("hashlib").sha256(operation["operationId"].encode()).hexdigest() + ".json"
+            Path(journal.directory, projection_name).write_text("{}", encoding="utf-8")
+            observed = {}
+
+            def launch(command, **kwargs):
+                vars_arg = next(command[index + 1] for index, item in enumerate(command)
+                                if item == "-e" and ".runtime-secret-inputs-" in command[index + 1])
+                path = Path(vars_arg[1:])
+                observed["path"] = path
+                observed["mode"] = path.stat().st_mode & 0o777
+                observed["payload"] = json.loads(path.read_text(encoding="utf-8"))
+                return _CompletedProcess()
+
+            with mock.patch.object(execution_secret_lease, "runtime_secret_inputs_for_operation",
+                                   return_value=[{"requirementRef": requirements[0]["requirementRef"], "purpose": "SERVICE_ADMIN_TOKEN", "value": secret}]), \
+                 mock.patch.object(execution_controller.subprocess, "Popen", side_effect=launch), \
+                 mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+                state = execution_controller._dispatch("/runtime/release", journal,
+                    {"operations": [operation], "runtimeSecretInputs": requirements}, [False])
+
+            self.assertEqual("SUCCEEDED", state)
+            self.assertEqual(0o600, observed["mode"])
+            self.assertEqual([{"requirementRef": requirements[0]["requirementRef"], "purpose": "SERVICE_ADMIN_TOKEN", "value": secret}], observed["payload"]["platform_runtime_secret_inputs"])
+            self.assertFalse(observed["path"].exists())
+            self.assertNotIn(secret, json.dumps(journal.events()))
 
     def test_controller_emits_redacted_failure_code_after_task_stream_truncation(self):
         class _FailedProcess(object):
