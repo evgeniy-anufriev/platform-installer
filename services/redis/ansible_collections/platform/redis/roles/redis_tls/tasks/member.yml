@@ -1,0 +1,118 @@
+---
+- name: Create Redis member paths
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_redis_user }}"
+    group: "{{ platform_redis_group }}"
+    mode: '0700'
+  loop:
+    - "{{ redis_member.data_directory }}"
+    - "{{ redis_member.data_directory }}/sentinel"
+    - "{{ redis_member.config_directory }}"
+    - "{{ redis_member.log_directory }}"
+
+- name: Create Redis member TLS directory
+  ansible.builtin.file:
+    path: "{{ redis_member.config_directory }}/pki"
+    state: directory
+    owner: "{{ platform_redis_user }}"
+    group: "{{ platform_redis_group }}"
+    mode: '0700'
+
+- name: Materialize Redis member TLS files
+  ansible.builtin.copy:
+    src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
+    dest: "{{ redis_member.config_directory }}/pki/{{ item.name }}"
+    remote_src: true
+    owner: "{{ platform_redis_user }}"
+    group: "{{ platform_redis_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: ca-chain.pem, mode: '0644'}
+    - {name: certificate.pem, mode: '0644'}
+    - {name: private-key.pem, mode: '0600'}
+  no_log: true
+  register: _platform_redis_tls_copy
+
+- name: Render Redis TLS-only configuration
+  ansible.builtin.template:
+    src: redis.conf.j2
+    dest: "{{ redis_member.config_directory }}/redis.conf"
+    owner: "{{ platform_redis_user }}"
+    group: "{{ platform_redis_group }}"
+    mode: '0600'
+  no_log: true
+  register: _platform_redis_config
+  when: not _platform_redis_has_persistent_state
+
+- name: Render Redis systemd instance unit
+  ansible.builtin.template:
+    src: redis.service.j2
+    dest: "/etc/systemd/system/platform-redis@{{ redis_member.instance_name }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  register: _platform_redis_unit
+
+- name: Seed Sentinel TLS-only configuration for a new Sentinel
+  ansible.builtin.template:
+    src: sentinel.conf.j2
+    dest: "{{ redis_member.config_directory }}/sentinel.conf"
+    owner: "{{ platform_redis_user }}"
+    group: "{{ platform_redis_group }}"
+    mode: '0600'
+  no_log: true
+  register: _platform_sentinel_config
+  when:
+    - "'sentinel' in redis_member.roles"
+    - not _platform_redis_has_persistent_state
+
+- name: Render Sentinel systemd instance unit
+  ansible.builtin.template:
+    src: sentinel.service.j2
+    dest: "/etc/systemd/system/platform-redis-sentinel@{{ redis_member.instance_name }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  register: _platform_sentinel_unit
+  when: "'sentinel' in redis_member.roles"
+
+- name: Reload systemd for Redis member units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: >-
+    _platform_redis_unit.changed or
+    (_platform_sentinel_unit.changed | default(false))
+
+- name: Enable and start Redis member
+  ansible.builtin.systemd_service:
+    name: "platform-redis@{{ redis_member.instance_name }}.service"
+    enabled: true
+    state: restarted
+  when: _platform_redis_config.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
+
+- name: Start unchanged Redis member
+  ansible.builtin.systemd_service:
+    name: "platform-redis@{{ redis_member.instance_name }}.service"
+    enabled: true
+    state: started
+  when: not (_platform_redis_config.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
+
+- name: Enable and start Sentinel member
+  ansible.builtin.systemd_service:
+    name: "platform-redis-sentinel@{{ redis_member.instance_name }}.service"
+    enabled: true
+    state: restarted
+  when:
+    - "'sentinel' in redis_member.roles"
+    - _platform_sentinel_config.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
+
+- name: Start unchanged Sentinel member
+  ansible.builtin.systemd_service:
+    name: "platform-redis-sentinel@{{ redis_member.instance_name }}.service"
+    enabled: true
+    state: started
+  when:
+    - "'sentinel' in redis_member.roles"
+    - not (_platform_sentinel_config.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))

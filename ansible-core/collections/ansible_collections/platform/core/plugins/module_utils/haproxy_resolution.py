@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+import re
+
 try:
     from .project_validation import canonical_digest
 except ImportError:
@@ -31,6 +33,79 @@ def _catalog_default_port(definition):
         and isinstance(value.get("defaultPort"), int)
     ]
     return candidates[0] if len(candidates) == 1 else None
+
+
+def _valid_port(value):
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535
+
+
+def _member_client_allocation(definition):
+    descriptor = definition.get("x-backendClientListener") if isinstance(definition, dict) else None
+    if descriptor is None:
+        return None
+    if not isinstance(descriptor, dict) or set(descriptor) != {"listener", "allocation"}:
+        raise ValueError("HAPROXY_CLIENT_LISTENER_DESCRIPTOR_INVALID")
+    listener_name = descriptor.get("listener")
+    listeners = definition.get("listeners")
+    if not isinstance(listener_name, str) or not isinstance(listeners, dict):
+        raise ValueError("HAPROXY_CLIENT_LISTENER_DESCRIPTOR_INVALID")
+    listener = listeners.get(listener_name)
+    allocation = descriptor["allocation"]
+    settings = (definition.get("configuration") or {}).get("settings", {})
+    port_setting = settings.get("port") if isinstance(settings, dict) else None
+    if (not isinstance(listener, dict) or listener.get("scope") != "member" or
+            not _valid_port(listener.get("defaultPort")) or
+            not isinstance(allocation, dict) or set(allocation) != {"kind", "stride"} or
+            allocation.get("kind") != "HOST_LOCAL_ORDINAL" or
+            not _valid_port(allocation.get("stride")) or
+            not isinstance(port_setting, dict) or
+            "member" not in port_setting.get("scopes", [])):
+        raise ValueError("HAPROXY_CLIENT_LISTENER_DESCRIPTOR_INVALID")
+    return allocation["stride"]
+
+
+def _inventory_members_for_deployment(inventory_deployments, deployment_id):
+    """Build the ephemeral member view from inventory-owned placements."""
+    members = {}
+    duplicate_ids = set()
+    source = inventory_deployments if isinstance(inventory_deployments, dict) else {}
+    for host_id in sorted(source):
+        placements = source.get(host_id)
+        placement = placements.get(deployment_id) if isinstance(placements, dict) else None
+        candidate_members = placement.get("members") if isinstance(placement, dict) else None
+        if not isinstance(candidate_members, dict):
+            continue
+        for member_id, member in sorted(candidate_members.items()):
+            if member_id in members:
+                duplicate_ids.add(member_id)
+                continue
+            if not isinstance(member, dict):
+                continue
+            projected = dict(member)
+            # Inventory ownership is authoritative for the target host.
+            projected["host"] = host_id
+            members[member_id] = projected
+    return members, sorted(duplicate_ids)
+
+
+def _safe_dns_name(value):
+    return (isinstance(value, str) and 1 <= len(value) <= 253 and
+            all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in value.split(".")))
+
+
+def _request_dns_covers_name(dns_names, expected_name):
+    """Accept an exact SAN or a wildcard covering exactly one DNS label."""
+    if not isinstance(dns_names, list) or not _safe_dns_name(expected_name):
+        return False
+    for candidate in dns_names:
+        if candidate == expected_name:
+            return True
+        if isinstance(candidate, str) and candidate.startswith("*.") and _safe_dns_name(candidate[2:]):
+            suffix = candidate[1:]
+            if expected_name.endswith(suffix) and "." not in expected_name[:-len(suffix)]:
+                return True
+    return False
 
 
 def normalize_backend_settings(defaults, override, field):
@@ -67,7 +142,8 @@ def normalize_backend_settings(defaults, override, field):
 
 
 def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments,
-                             resolved_endpoints, backend_defaults=None, resolved_configuration=None):
+                             resolved_endpoints, backend_defaults=None, resolved_configuration=None,
+                             pki_requests=None):
     topology = topology if isinstance(topology, dict) else {}
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology.get("serviceDeployments"), dict) else {}
     definitions = _definitions(service_catalog)
@@ -98,15 +174,23 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
             findings.append(_finding("HAPROXY_ENDPOINT_GROUP_REQUIRED", field, "HAProxy target and deployment require endpointGroup"))
         elif target.get("endpointGroup") != proxy.get("endpointGroup"):
             findings.append(_finding("HAPROXY_ENDPOINT_GROUP_MISMATCH", field, "HAProxy target and deployment must use the same endpoint group"))
+        try:
+            member_stride = _member_client_allocation(definition)
+        except ValueError:
+            findings.append(_finding("HAPROXY_CLIENT_LISTENER_DESCRIPTOR_INVALID", field, "Client listener metadata is invalid"))
+            continue
         configuration = target.get("configuration", {}) if isinstance(target.get("configuration"), dict) else {}
         port = configuration.get("port")
-        if not isinstance(port, int):
+        if not _valid_port(port):
             effective = (((resolved_configuration or {}).get("services", {}).get(target_id, {})
                           .get("configuration", {}).get("port", {})))
             port = effective.get("value") if isinstance(effective, dict) else None
-        if not isinstance(port, int):
-            port = _catalog_default_port(definition)
-        if not isinstance(port, int) or not 1 <= port <= 65535:
+        if not _valid_port(port):
+            if member_stride is not None:
+                port = definition["listeners"][definition["x-backendClientListener"]["listener"]]["defaultPort"]
+            else:
+                port = _catalog_default_port(definition)
+        if not _valid_port(port):
             findings.append(_finding("HAPROXY_BACKEND_PORT_UNRESOLVED", "serviceDeployments.%s.configuration.port" % target_id, "HAProxy target requires a valid configuration.port"))
         defaults = (backend_defaults or {}).get(target.get("serviceType"), {})
         effective, setting_findings = normalize_backend_settings(defaults, relation.get("backend", {}), field)
@@ -114,23 +198,87 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
         if findings:
             continue
         targets = []
-        for host_id, placements in sorted(inventory_deployments.items()):
-            if isinstance(placements, dict) and target_id in placements:
-                values = inventory_hosts.get(host_id, {}) if isinstance(inventory_hosts.get(host_id), dict) else {}
-                targets.append({"hostId": host_id, "address": values.get("ansible_host", host_id), "port": port, "serverName": host_id})
-        for member_id, member in sorted((target.get("members", {}) if isinstance(target.get("members"), dict) else {}).items()):
-            host_id = member.get("host") if isinstance(member, dict) else None
-            if isinstance(host_id, str):
-                values = inventory_hosts.get(host_id, {}) if isinstance(inventory_hosts.get(host_id), dict) else {}
-                targets.append({"hostId": host_id, "address": values.get("ansible_host", host_id), "port": port, "serverName": host_id})
-        targets = sorted({item["hostId"]: item for item in targets}.values(), key=lambda item: item["hostId"])
+        if member_stride is None:
+            for host_id, placements in sorted(inventory_deployments.items()):
+                if isinstance(placements, dict) and target_id in placements:
+                    values = inventory_hosts.get(host_id, {}) if isinstance(inventory_hosts.get(host_id), dict) else {}
+                    targets.append({"hostId": host_id, "address": values.get("ansible_host", host_id), "port": port, "serverName": host_id})
+            for member_id, member in sorted((target.get("members", {}) if isinstance(target.get("members"), dict) else {}).items()):
+                host_id = member.get("host") if isinstance(member, dict) else None
+                if isinstance(host_id, str):
+                    values = inventory_hosts.get(host_id, {}) if isinstance(inventory_hosts.get(host_id), dict) else {}
+                    targets.append({"hostId": host_id, "address": values.get("ansible_host", host_id), "port": port, "serverName": host_id})
+            targets = sorted({item["hostId"]: item for item in targets}.values(), key=lambda item: item["hostId"])
+        else:
+            host_counts, used = {}, set()
+            members = target.get("members", {}) if isinstance(target.get("members"), dict) else {}
+            if not members:
+                members, duplicate_member_ids = _inventory_members_for_deployment(
+                    inventory_deployments, target_id
+                )
+                if duplicate_member_ids:
+                    findings.append(_finding(
+                        "HAPROXY_BACKEND_TARGETS_UNRESOLVED",
+                        field,
+                        "Inventory-owned deployment members are duplicated",
+                    ))
+            for member_id, member in sorted(members.items()):
+                host_id = member.get("host") if isinstance(member, dict) else None
+                if not isinstance(host_id, str) or host_id not in inventory_hosts:
+                    findings.append(_finding("HAPROXY_BACKEND_TARGETS_UNRESOLVED", field, "Member host cannot be resolved"))
+                    break
+                member_config = member.get("configuration", {}) if isinstance(member.get("configuration"), dict) else {}
+                explicit = member_config.get("port")
+                if explicit is None:
+                    resolved_member = (((resolved_configuration or {}).get("services", {}).get(target_id, {})
+                                        .get("members", {}).get(member_id, {}).get("configuration", {}).get("port")))
+                    if isinstance(resolved_member, dict) and resolved_member.get("source") == "MEMBER_OVERRIDE":
+                        explicit = resolved_member.get("value")
+                member_port = explicit if explicit is not None else port + member_stride * host_counts.get(host_id, 0)
+                if not _valid_port(member_port) or (host_id, member_port) in used:
+                    findings.append(_finding("HAPROXY_BACKEND_PORT_COLLISION", field, "Member client ports collide or exceed valid range"))
+                    break
+                host_counts[host_id] = host_counts.get(host_id, 0) + 1
+                used.add((host_id, member_port))
+                values = inventory_hosts[host_id]
+                targets.append({"hostId": host_id, "memberId": member_id,
+                                "address": values.get("ansible_host", host_id) if isinstance(values, dict) else host_id,
+                                "port": member_port, "serverName": member_id})
+            if findings:
+                continue
         if not targets:
             findings.append(_finding("HAPROXY_BACKEND_TARGETS_UNRESOLVED", field, "HAProxy target has no resolved host placements"))
             continue
         endpoint_group_id = target.get("endpointGroup")
+        expected_name = None
+        if member_stride is not None and effective.get("ssl") is True and effective.get("sslVerify") == "required":
+            endpoint = endpoint_map.get(target_id, {})
+            expected_name = endpoint.get("fqdn") if isinstance(endpoint, dict) else None
+            if not _safe_dns_name(expected_name):
+                findings.append(_finding("HAPROXY_BACKEND_TLS_IDENTITY_UNRESOLVED", field, "Backend TLS identity is unavailable"))
+                continue
+            if pki_requests is not None:
+                for member_target in targets:
+                    matched = any(
+                        isinstance(request, dict) and
+                        _request_dns_covers_name(request.get("dnsNames"), expected_name) and
+                        any(isinstance(consumer, dict) and
+                            consumer.get("deploymentId") == target_id and
+                            consumer.get("memberId") == member_target["memberId"] and
+                            consumer.get("hostId") == member_target["hostId"]
+                            for consumer in request.get("consumers", []))
+                        for request in pki_requests
+                    )
+                    if not matched:
+                        findings.append(_finding("HAPROXY_BACKEND_TLS_IDENTITY_UNRESOLVED", field, "Backend certificate request lacks the endpoint DNS identity"))
+                        break
+                if findings:
+                    continue
         record = {"targetDeploymentId": target_id, "backendName": "%s-%s" % (target_id, endpoint_group_id),
                   "configFileName": "30-backend-%s-%s.cfg" % (target_id, endpoint_group_id),
                   "endpoint": endpoint_map.get(target_id, {}), "settings": effective, "targets": targets}
+        if expected_name is not None:
+            record["expectedServerName"] = expected_name
         record["fingerprint"] = canonical_digest(record)
         resolved.setdefault(haproxy_id, []).append(record)
     if findings:

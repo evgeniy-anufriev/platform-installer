@@ -36,6 +36,7 @@
       - item.address is match('^[A-Za-z0-9][A-Za-z0-9.-]*$')
       - item.address not in ['127.0.0.1', 'localhost', '0.0.0.0']
       - item.roles == ['vault']
+      - item.port is not defined or (item.port is integer and item.port is not boolean and item.port >= 1 and item.port <= 65535)
     fail_msg: VAULT_MEMBER_CONFIGURATION_INVALID
   loop: "{{ platform_vault_instances }}"
   loop_control:

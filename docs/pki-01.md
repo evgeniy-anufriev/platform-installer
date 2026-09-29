@@ -61,8 +61,11 @@ An explicit leaf-certificate reissue is available only through
 `ansible-core/playbooks/pki-reissue.yml` with a non-empty runtime
 `platform_pki_reissue_request_ids` list. It records a recovery marker,
 preserves old request material in protected Execution Node state, rekeys and
-reissues only the selected request, then clears the marker after recording the
-new identity. The certificate profile `usages` collection already supports
+reissues only the selected request, even when its desired certificate identity
+is unchanged, then clears the marker after recording the identity. This allows
+an operator-authorized key/store rotation without inventing a CN/SAN/profile
+change. Ordinary `pki-apply.yml` still blocks changed request identities and
+does not rotate selected material. The certificate profile `usages` collection already supports
 `serverAuth`, `clientAuth`, or both; PKI-01's default remains `serverAuth`.
 
 `pki-verify.yml` only resolves the plan, checks target-owned files,
@@ -71,11 +74,19 @@ fingerprints and certificate chains, and reports `changed=0`.
 ## Контракт service apply
 
 Каждый playbook TLS-capable сервиса импортирует `pki-apply.yml` до изменения
-конфигурации или запуска роли сервиса. Playbook передаёт собственный
-`serviceType`, поэтому PKI-резолвер выбирает только deployment этого сервиса с
-effective `configuration.tlsProfile`. Само объявление `certificateProfile` или
-`tlsProfile` ничего не материализует: deployment или member сервиса должен
-явно выбрать `tlsProfile`.
+конфигурации или запуска роли сервиса. PKI-резолвер строит requests и планы
+для TLS-потребителей из canonical project. Само объявление
+`certificateProfile` или `tlsProfile` ничего не материализует: deployment или
+member сервиса должен явно выбрать `tlsProfile`.
+
+Повторное использование одного TLS-профиля несколькими deployment не делает
+их сертификатные запросы взаимозаменяемыми. Перед изменением сервиса роль
+находит запрос по его `consumers` (deployment, host, member и TLS-профиль),
+затем выбирает materialization plan по `requestId` и host. В управляемом
+исполнении точный deployment передаётся из текущей операции плана. В обычном
+Ansible запуске без этого контекста разрешён только единственный подходящий
+план; неоднозначность блокирует запуск до изменения сервиса. Нельзя выбирать
+первый план по паре host/TLS-профиль.
 
 Если у выбранного сервиса нет TLS-потребителей, PKI-резолвер возвращает пустой
 plan и не создаёт PKI-каталоги Execution Node или файлы на targets. Отдельный

@@ -1,0 +1,20 @@
+platform_redis_mode: standalone
+platform_redis_version: "8.6.4-1.red80"
+platform_redis_port: 6379
+platform_redis_sentinel_port: 26379
+platform_redis_user: redis
+platform_redis_group: redis
+platform_redis_data_root: /var/lib/platform-redis
+platform_redis_config_root: /etc/platform-redis
+platform_redis_log_root: /var/log/platform-redis
+platform_redis_tls_profile: infrastructure-tls
+platform_redis_credential:
+  passwordSecretRef: ''
+platform_redis_sentinel_credential:
+  passwordSecretRef: ''
+platform_redis_advanced_config: {}
+platform_redis_instances: []
+platform_redis_secret_files: {}
+platform_redis_pki_materialization_plans: []
+platform_redis_verify_only: false
+platform_redis_install_from_system_repo: true

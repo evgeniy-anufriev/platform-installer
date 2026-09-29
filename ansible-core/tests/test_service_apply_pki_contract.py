@@ -30,6 +30,21 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             tasks,
         )
 
+    def test_explicit_pki_reissue_selection_rotates_same_identity_without_reconcile_bypass(self):
+        request_tasks = os.path.join(
+            ROOT,
+            "ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/request.yml",
+        )
+        with open(request_tasks, encoding="utf-8") as handle:
+            tasks = handle.read()
+        self.assertIn("_platform_pki_reissue_requested: \"{{ platform_pki_request.id in platform_pki_reissue_request_ids }}\"", tasks)
+        self.assertIn("or\n          _platform_pki_reissue_requested", tasks)
+        self.assertIn("not _platform_pki_reissue_required or _platform_pki_reissue_requested", tasks)
+        self.assertIn("_platform_pki_reissue_active", tasks)
+        self.assertIn("Preserve prior PKI request material before explicit reissue", tasks)
+        self.assertIn("Remove superseded PKI request material during explicit reissue", tasks)
+        self.assertIn("CERTIFICATE_REISSUE_REQUIRED", tasks)
+
     def test_pki_deploy_publishes_a_non_secret_change_signal(self):
         deploy_tasks = os.path.join(
             ROOT,
@@ -88,6 +103,69 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             self.assertNotIn("platform_pki_service_types:", playbook)
             self.assertLess(playbook.index(pki_import), playbook.index("roles:"))
 
+    def test_pki_consumers_use_exact_request_binding_instead_of_first_profile_match(self):
+        selector = os.path.join(
+            ROOT,
+            "ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/select_consumer_plan.yml",
+        )
+        with open(selector, encoding="utf-8") as handle:
+            selector_tasks = handle.read()
+        self.assertIn("platform_execution_service_deployment", selector_tasks)
+        self.assertIn("selectattr('deploymentId', 'equalto', _platform_pki_consumer_deployment_id)", selector_tasks)
+        self.assertIn("selectattr('requestId', 'in', _platform_pki_consumer_request_ids)", selector_tasks)
+        self.assertIn("_platform_pki_consumer_plans | length == 1", selector_tasks)
+
+        consumers = {
+            "postgresql": "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/resolve_tls.yml",
+            "redis": "services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/resolve_tls.yml",
+            "haproxy": "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml",
+        }
+        for service, relative_path in consumers.items():
+            with open(os.path.join(ROOT, relative_path), encoding="utf-8") as handle:
+                tasks = handle.read()
+            self.assertIn("tasks_from: select_consumer_plan.yml", tasks, service)
+
+        haproxy_prepare = os.path.join(
+            ROOT,
+            "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml",
+        )
+        with open(haproxy_prepare, encoding="utf-8") as handle:
+            haproxy_prepare_tasks = handle.read()
+        self.assertNotIn("_platform_haproxy_pki_plan", haproxy_prepare_tasks)
+
+        postgresql_main = os.path.join(
+            ROOT,
+            "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml",
+        )
+        with open(postgresql_main, encoding="utf-8") as handle:
+            postgresql_tasks = handle.read()
+        self.assertLess(
+            postgresql_tasks.index("Resolve the exact PostgreSQL PKI consumer plan before mutation"),
+            postgresql_tasks.index("Deliver selected PostgreSQL offline artifacts"),
+        )
+
+        haproxy_main = os.path.join(
+            ROOT,
+            "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml",
+        )
+        with open(haproxy_main, encoding="utf-8") as handle:
+            haproxy_tasks = handle.read()
+        self.assertLess(
+            haproxy_tasks.index("Select the exact PKI consumer plan before HAProxy mutation"),
+            haproxy_tasks.index("Deliver selected HAProxy offline artifacts"),
+        )
+
+        redis_main = os.path.join(
+            ROOT,
+            "services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/main.yml",
+        )
+        with open(redis_main, encoding="utf-8") as handle:
+            redis_tasks = handle.read()
+        self.assertLess(
+            redis_tasks.index("Resolve Redis TLS material"),
+            redis_tasks.index("Install approved Redis package"),
+        )
+
     def test_runtime_role_variable_guard_projects_only_the_private_host_map(self):
         path = os.path.join(
             ROOT,
@@ -96,8 +174,8 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(path, encoding="utf-8") as handle:
             tasks = handle.read()
         self.assertIn("platform_execution_role_variables_by_host[inventory_hostname] is mapping", tasks)
-        self.assertIn("ansible.builtin.set_fact", tasks)
-        self.assertIn("| dict2items", tasks)
+        self.assertIn("platform.core.apply_runtime_role_variables", tasks)
+        self.assertNotIn("| dict2items", tasks)
 
     def test_kafka_verify_reloads_controller_owned_generated_state(self):
         verify = os.path.join(ROOT, "services/kafka/playbooks/verify.yml")

@@ -1,0 +1,17 @@
+bind 0.0.0.0
+port 0
+tls-port {{ redis_member.sentinel_port }}
+tls-cert-file {{ redis_member.config_directory }}/pki/certificate.pem
+tls-key-file {{ redis_member.config_directory }}/pki/private-key.pem
+tls-ca-cert-file {{ redis_member.config_directory }}/pki/ca-chain.pem
+tls-auth-clients yes
+tls-replication yes
+requirepass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}
+dir {{ redis_member.data_directory }}/sentinel
+logfile {{ redis_member.log_directory }}/sentinel.log
+sentinel resolve-hostnames no
+sentinel announce-hostnames no
+sentinel announce-ip {{ redis_member.address }}
+sentinel announce-port {{ redis_member.sentinel_port }}
+sentinel monitor {{ (_platform_redis_instances | first).id }} {{ (_platform_redis_instances | first).address }} {{ (_platform_redis_instances | first).redis_port }} 2
+sentinel auth-pass {{ (_platform_redis_instances | first).id }} {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}

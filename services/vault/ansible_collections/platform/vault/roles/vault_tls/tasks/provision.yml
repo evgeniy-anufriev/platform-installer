@@ -51,7 +51,7 @@
     path: "{{ item }}"
     state: directory
     owner: root
-    group: root
+    group: "{{ platform_vault_group }}"
     mode: '0750'
   loop:
     - "{{ platform_vault_config_root }}/{{ platform_vault_deployment_id }}"
@@ -134,8 +134,9 @@
     mode: '0600'
   loop: "{{ _platform_vault_local_instances }}"
   loop_control:
-    loop_var: vault_member
-    label: "{{ vault_member.id }}"
+    label: "{{ item.id }}"
+  vars:
+    vault_member: "{{ item }}"
   no_log: true
   register: _platform_vault_config_rendered
 
@@ -154,8 +155,9 @@
     mode: '0644'
   loop: "{{ _platform_vault_local_instances }}"
   loop_control:
-    loop_var: vault_member
-    label: "{{ vault_member.id }}"
+    label: "{{ item.id }}"
+  vars:
+    vault_member: "{{ item }}"
   register: _platform_vault_units_rendered
 
 - name: Install bounded per-instance Vault audit log rotation policy
@@ -167,8 +169,9 @@
     mode: '0644'
   loop: "{{ _platform_vault_local_instances }}"
   loop_control:
-    loop_var: vault_member
-    label: "{{ vault_member.id }}"
+    label: "{{ item.id }}"
+  vars:
+    vault_member: "{{ item }}"
 
 - name: Record members whose systemd unit changed
   ansible.builtin.set_fact:

@@ -1,0 +1,92 @@
+---
+- name: Validate resolved Redis artifact source before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: redis-runtime, name: redis}
+  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+
+- name: Validate Redis inputs and instance topology
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Normalize Redis members into stable deployment slots
+  ansible.builtin.include_tasks: normalize.yml
+
+- name: Check ownership of package-provided Redis system units
+  ansible.builtin.include_tasks: package_preflight.yml
+  when: not (platform_redis_verify_only | bool)
+
+- name: Project local Redis member list
+  ansible.builtin.set_fact:
+    _platform_redis_local_instances: >-
+      {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
+
+- name: Prove local Redis listener ownership before mutation
+  ansible.builtin.include_tasks: preflight.yml
+  when: not (platform_redis_verify_only | bool)
+
+- name: Resolve Redis TLS material
+  ansible.builtin.include_tasks: resolve_tls.yml
+
+- name: Install approved Redis package from configured repository
+  ansible.builtin.package:
+    name: "redis-{{ platform_redis_version }}"
+    state: present
+  when:
+    - not (platform_redis_verify_only | bool)
+    - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['redis-runtime'].source == 'REPOSITORY'
+
+- name: Disable package-provided Redis units on first package installation
+  ansible.builtin.include_tasks: package_units.yml
+  when:
+    - not (platform_redis_verify_only | bool)
+    - _platform_redis_package_absent_before_apply
+
+- name: Configure local Redis members
+  ansible.builtin.include_tasks: member.yml
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    loop_var: redis_member
+    label: "{{ redis_member.id }}"
+  when: not (platform_redis_verify_only | bool)
+
+- name: Initialize local Redis verification observations
+  ansible.builtin.set_fact:
+    _platform_redis_observed_members: []
+    _platform_redis_observed_sentinel_masters: []
+  when: _platform_redis_local_instances | length > 0
+
+- name: Verify local Redis and Sentinel before committing bootstrap state
+  ansible.builtin.include_tasks: verify.yml
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    loop_var: redis_member
+    label: "{{ redis_member.id }}"
+  when: not (platform_redis_verify_only | bool)
+
+- name: Verify deployment-wide Redis replication and Sentinel agreement
+  ansible.builtin.include_tasks: verify_deployment.yml
+  when:
+    - not (platform_redis_verify_only | bool)
+    - _platform_redis_local_instances | length > 0
+
+- name: Finalize new Redis deployment bootstrap state
+  ansible.builtin.include_tasks: finalize_bootstrap.yml
+  when:
+    - not (platform_redis_verify_only | bool)
+    - not _platform_redis_has_persistent_state
+
+- name: Verify local Redis and Sentinel read-only
+  ansible.builtin.include_tasks: verify.yml
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    loop_var: redis_member
+    label: "{{ redis_member.id }}"
+  when: platform_redis_verify_only | bool
+
+- name: Verify deployment-wide Redis replication and Sentinel agreement read-only
+  ansible.builtin.include_tasks: verify_deployment.yml
+  when:
+    - platform_redis_verify_only | bool
+    - _platform_redis_local_instances | length > 0

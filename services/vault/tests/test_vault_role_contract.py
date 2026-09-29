@@ -164,6 +164,14 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertLess(names.index("Unseal the seed with the configured threshold"),
                         names.index("Join and unseal each Raft follower after the seed is healthy"))
         init = tasks[names.index("Initialize a new seed exactly once")]
+        self.assertEqual(names[names.index("Initialize a new seed exactly once") + 1],
+                         "Durably stage the minimal init response before any unseal operation")
+        self.assertLess(names.index("Synchronize recovery data and directory publication before validation"),
+                        names.index("Validate the saved secret response before publishing or using it"))
+        self.assertLess(names.index("Synchronize both matching custody files before recovery cleanup"),
+                        names.index("Remove the protected recovery record only after both custody files exist"))
+        self.assertLess(names.index("Remove the protected recovery record only after both custody files exist"),
+                        names.index("Synchronize the custody directory after recovery record removal"))
         self.assertIn("not (_platform_vault_seed_init.json.initialized | bool)", init["when"])
         self.assertTrue(init["no_log"])
         material_tasks = [task for task in tasks if "_platform_vault_bootstrap_material" in str(task)

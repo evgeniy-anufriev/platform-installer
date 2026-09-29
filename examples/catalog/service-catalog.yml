@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:08c0db299313f33292a0f69b9ab5a180e1853ccbbd1821aca167140a98cb7b75
+digest: sha256:3e92c57ff09461262be6a75d40a21713e7499eb8a984167498a885bd9787385d
 definitions:
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -281,6 +281,8 @@ definitions:
           maxMembers: 1
           distinctHosts: false
         x-maturity: implemented-postgres-01a
+        x-requiredRuntimeSecretSettings:
+        - adminSuperuser
       pg_auto_failover:
         displayName: pg_auto_failover
         description: One monitor and two PostgreSQL data members
@@ -300,6 +302,11 @@ definitions:
               minimum: 2
               maximum: 2
         x-maturity: implemented-postgres-01b
+        x-requiredRuntimeSecretSettings:
+        - adminSuperuser
+        - monitorCredential
+        - replicationCredential
+        - healthcheckCredential
       patroni:
         displayName: Patroni
         description: Deferred compatibility fixture; not implemented by POSTGRES-01
@@ -518,8 +525,378 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:8ad65f69da4a10814d2343ba566246e970b8880f2a09f277af74859798d24f2b
+    x-definitionDigest: sha256:2d1bed9ec11400e2e77fe43016eb12dd471325b47823d07e0d02ea75cdd6da3e
     x-sourceManifest: services/postgresql/service.yml
+  redis:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: redis
+      version: 1.0.0-alpha.1
+      displayName: Redis
+      description: Redis with TLS-only standalone and Sentinel high-availability modes
+      category: database
+    modes:
+      standalone:
+        displayName: Standalone
+        description: One TLS-only Redis member
+        memberRoles:
+        - redis
+        placement:
+          explicit: true
+          minMembers: 1
+          maxMembers: 1
+          distinctHosts: false
+          roleCardinality:
+            redis:
+              minimum: 1
+              maximum: 1
+        x-requiredRuntimeSecretSettings:
+        - redisCredential
+      sentinel-ha:
+        displayName: Redis Sentinel HA
+        description: Three paired Redis and Sentinel members; members may share a host
+        memberRoles:
+        - redis
+        - sentinel
+        placement:
+          explicit: true
+          minMembers: 3
+          maxMembers: 3
+          distinctHosts: false
+          roleCardinality:
+            redis:
+              minimum: 3
+              maximum: 3
+            sentinel:
+              minimum: 3
+              maximum: 3
+        x-requiredRuntimeSecretSettings:
+        - redisCredential
+        - sentinelCredential
+    listeners:
+      client:
+        protocol: tcp
+        defaultPort: 6379
+        tlsCapable: true
+        scope: member
+      sentinel:
+        protocol: tcp
+        defaultPort: 26379
+        tlsCapable: true
+        scope: member
+    endpoint: {}
+    capabilities:
+    - service.redis.client
+    - service.redis.sentinel
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/redis/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        tlsProfile:
+          kind: MANAGED
+          roleVariable: platform_redis_tls_profile
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+          ui:
+            label: Redis TLS profile
+            section: TLS
+            order: 10
+            x-referenceKind: TLS_PROFILE
+        redisPort:
+          kind: MANAGED
+          roleVariable: platform_redis_port
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 65535
+          ui:
+            label: Redis TLS base port
+            section: Network
+            order: 20
+        sentinelPort:
+          kind: MANAGED
+          roleVariable: platform_redis_sentinel_port
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 65535
+          ui:
+            label: Sentinel TLS base port
+            section: Network
+            order: 21
+        redisCredential:
+          kind: MANAGED
+          roleVariable: platform_redis_credential
+          type: object
+          scopes:
+          - deployment
+          validation:
+            required:
+            - passwordSecretRef
+          schema:
+            type: object
+            additionalProperties: false
+            required:
+            - passwordSecretRef
+            properties:
+              passwordSecretRef:
+                type: string
+                minLength: 1
+          ui:
+            label: Redis password
+            section: Credentials
+            order: 40
+            x-runtimeSecretRequirement:
+              requirementRef: redis-password
+              purpose: SERVICE_PASSWORD
+        sentinelCredential:
+          kind: MANAGED
+          roleVariable: platform_redis_sentinel_credential
+          type: object
+          scopes:
+          - deployment
+          validation:
+            required:
+            - passwordSecretRef
+          schema:
+            type: object
+            additionalProperties: false
+            required:
+            - passwordSecretRef
+            properties:
+              passwordSecretRef:
+                type: string
+                minLength: 1
+          ui:
+            label: Sentinel password
+            section: Credentials
+            order: 41
+            x-runtimeSecretRequirement:
+              requirementRef: redis-sentinel-password
+              purpose: SERVICE_PASSWORD
+        advancedConfig:
+          kind: ADVANCED
+          roleVariable: platform_redis_advanced_config
+          type: object
+          scopes:
+          - deployment
+          validation:
+            additionalProperties: true
+          ui:
+            label: Advanced Redis settings
+            section: Advanced
+            order: 90
+    x-reservedAdvancedProperties:
+    - port
+    - tls-port
+    - tls-cert-file
+    - tls-key-file
+    - tls-ca-cert-file
+    - requirepass
+    - masterauth
+    - sentinel
+    - dir
+    - pidfile
+    - logfile
+    roleEntrypoints:
+      apply:
+        fqcn: platform.redis.redis_tls
+        variablesPrefix: platform_redis_
+        x-memberListVariable: platform_redis_instances
+      verify:
+        fqcn: platform.redis.redis_tls
+        variablesPrefix: platform_redis_
+        x-memberListVariable: platform_redis_instances
+    artifacts: []
+    runtimeRequirements:
+    - id: redis-runtime
+      name: redis
+      version: 8.6.4
+      os: redos
+      architecture: x86_64
+      requiredOffline: false
+    compatibilityRef: ../../services/redis/compatibility.yml
+    x-definitionDigest: sha256:7a44b74efa553f99162ab9bf9b3b50409a9bdf1d4aeee0670049cf458ed66b40
+    x-sourceManifest: services/redis/service.yml
+  vault:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: vault
+      version: 1.0.0-alpha.2
+      displayName: HashiCorp Vault
+      description: TLS API, Integrated Storage Raft, file audit, KV v2 and userpass mount
+      category: security
+    modes:
+      standalone:
+        displayName: Standalone
+        memberRoles:
+        - vault
+        placement:
+          explicit: true
+          minMembers: 1
+          maxMembers: 1
+          distinctHosts: false
+          roleCardinality:
+            vault:
+              minimum: 1
+              maximum: 1
+      raft-ha:
+        displayName: Raft HA
+        memberRoles:
+        - vault
+        placement:
+          explicit: true
+          minMembers: 3
+          maxMembers: 3
+          distinctHosts: false
+          roleCardinality:
+            vault:
+              minimum: 3
+              maximum: 3
+    listeners:
+      client:
+        protocol: https
+        defaultPort: 8200
+        tlsCapable: true
+        scope: member
+      cluster:
+        protocol: tcp
+        defaultPort: 8201
+        tlsCapable: true
+        scope: member
+    endpoint: {}
+    x-backendClientListener:
+      listener: client
+      allocation:
+        kind: HOST_LOCAL_ORDINAL
+        stride: 2
+    capabilities:
+    - service.vault.api
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/vault/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        tlsProfile:
+          kind: MANAGED
+          roleVariable: platform_vault_tls_profile
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+          ui:
+            label: TLS profile
+            section: TLS
+            order: 10
+            x-referenceKind: TLS_PROFILE
+        port:
+          kind: MANAGED
+          roleVariable: platform_vault_api_port
+          type: integer
+          scopes:
+          - deployment
+          - member
+          validation:
+            minimum: 1
+            maximum: 65535
+          ui:
+            label: API TLS base port
+            section: Network
+            order: 20
+        clusterPort:
+          kind: MANAGED
+          roleVariable: platform_vault_cluster_port
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 65535
+          ui:
+            label: Cluster base port
+            section: Network
+            order: 21
+        unsealShares:
+          kind: MANAGED
+          roleVariable: platform_vault_unseal_shares
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 255
+          ui:
+            label: Unseal shares
+            section: Initialization
+            order: 30
+        unsealThreshold:
+          kind: MANAGED
+          roleVariable: platform_vault_unseal_threshold
+          type: integer
+          scopes:
+          - deployment
+          validation:
+            minimum: 1
+            maximum: 255
+          ui:
+            label: Unseal threshold
+            section: Initialization
+            order: 31
+    roleEntrypoints:
+      apply:
+        fqcn: platform.vault.vault_tls
+        variablesPrefix: platform_vault_
+        x-memberListVariable: platform_vault_instances
+      verify:
+        fqcn: platform.vault.vault_tls
+        variablesPrefix: platform_vault_
+        x-memberListVariable: platform_vault_instances
+    artifacts: []
+    runtimeRequirements:
+    - id: vault-runtime
+      name: vault
+      version: 1.21.2
+      os: redos
+      architecture: x86_64
+      requiredOffline: false
+    compatibilityRef: ../../services/vault/compatibility.yml
+    x-implementationStatus: core-runtime-si08-c
+    x-secretOutputs:
+      protocol: SecretOutputDelivery/v1alpha1
+      entries:
+      - admin-token
+      - unseal-shares
+    x-secretInputs:
+      apiVersion: ServiceSecretInputs/v1alpha1
+      inputs:
+      - requirementRef: vault-admin-token
+        purpose: SERVICE_ADMIN_TOKEN
+        displayLabel: Administrative token
+        requiredWhen: INITIALIZED
+        operations:
+        - SERVICE_APPLY
+        - SERVICE_VERIFY
+      - requirementRef: vault-unseal-shares
+        purpose: SERVICE_UNSEAL_SHARES
+        displayLabel: Unseal keys
+        requiredWhen: SEALED
+        operations:
+        - SERVICE_APPLY
+    x-definitionDigest: sha256:34d1a4358e20d499055a785d3f9cb6c128e624668efd57ce43083f7a344c27d3
+    x-sourceManifest: services/vault/service.yml
   keepalived:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest

@@ -1,0 +1,76 @@
+---
+- name: Validate Redis mode and managed values
+  ansible.builtin.assert:
+    that:
+      - platform_redis_mode in ['standalone', 'sentinel-ha']
+      - platform_redis_version == '8.6.4-1.red80'
+      - platform_redis_data_root == '/var/lib/platform-redis'
+      - platform_redis_config_root == '/etc/platform-redis'
+      - platform_redis_log_root == '/var/log/platform-redis'
+      - platform_redis_instances is iterable
+      - platform_redis_instances is not string
+      - platform_redis_advanced_config is mapping
+      - platform_redis_port | int >= 1
+      - platform_redis_port | int <= 65535
+      - platform_redis_sentinel_port | int >= 1
+      - platform_redis_sentinel_port | int <= 65535
+      - platform_redis_tls_profile | string | length > 0
+      - platform_redis_credential is mapping
+      - platform_redis_credential.passwordSecretRef | default('') | length > 0
+      - platform_redis_credential.passwordSecretRef in platform_redis_secret_files
+      - platform_redis_secret_files[platform_redis_credential.passwordSecretRef] | length > 0
+    fail_msg: REDIS_CONFIGURATION_INVALID
+
+- name: Validate each Redis member
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.id is defined
+      - item.id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - item.host is defined
+      - item.host | string | length > 0
+      - item.address is defined
+      - item.address | string | length > 0
+      - item.roles is iterable
+      - item.roles is not string
+      - item.roles | difference(['redis', 'sentinel']) | length == 0
+      - item.roles | length > 0
+    fail_msg: REDIS_MEMBER_CONFIGURATION_INVALID
+  loop: "{{ platform_redis_instances }}"
+  loop_control:
+    label: "{{ item.id | default('unknown') }}"
+
+- name: Validate Redis standalone placement
+  ansible.builtin.assert:
+    that:
+      - platform_redis_instances | length == 1
+      - (platform_redis_instances | selectattr('roles', 'contains', 'redis') | list | length) == 1
+      - (platform_redis_instances | selectattr('roles', 'contains', 'sentinel') | list | length) == 0
+    fail_msg: REDIS_STANDALONE_REQUIRES_ONE_REDIS_MEMBER
+  when: platform_redis_mode == 'standalone'
+
+- name: Validate paired Sentinel HA placement
+  ansible.builtin.assert:
+    that:
+      - platform_redis_instances | length == 3
+      - (platform_redis_instances | selectattr('roles', 'contains', 'redis') | list | length) == 3
+      - (platform_redis_instances | selectattr('roles', 'contains', 'sentinel') | list | length) == 3
+      - platform_redis_instances | map(attribute='id') | list | unique | length == 3
+    fail_msg: REDIS_SENTINEL_HA_REQUIRES_THREE_PAIRED_MEMBERS
+  when: platform_redis_mode == 'sentinel-ha'
+
+- name: Reject unsafe Redis advanced settings
+  ansible.builtin.assert:
+    that: item not in platform_redis_advanced_config
+    fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
+  loop: [port, tls-port, tls-cert-file, tls-key-file, tls-ca-cert-file, requirepass, masterauth, sentinel, dir, pidfile, logfile]
+
+- name: Require the Sentinel credential for Sentinel HA
+  ansible.builtin.assert:
+    that:
+      - platform_redis_sentinel_credential is mapping
+      - platform_redis_sentinel_credential.passwordSecretRef | default('') | length > 0
+      - platform_redis_sentinel_credential.passwordSecretRef in platform_redis_secret_files
+      - platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef] | length > 0
+    fail_msg: REDIS_SENTINEL_CREDENTIAL_INVALID
+  when: platform_redis_mode == 'sentinel-ha'

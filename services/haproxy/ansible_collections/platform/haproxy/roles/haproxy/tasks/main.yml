@@ -1,4 +1,29 @@
 ---
+- name: Require valid HAProxy phase and canonical desired state
+  ansible.builtin.assert:
+    that:
+      - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
+      - platform_desired_state is mapping
+      - platform_deployments | default({}) is mapping
+    fail_msg: HAPROXY_DESIRED_STATE_INVALID
+
+- name: End HAProxy role on hosts without HAProxy placement
+  ansible.builtin.meta: end_role
+  when: >-
+    (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') |
+     selectattr('key', 'in', platform_deployments | default({})) | list | length) == 0
+
+- name: Resolve HAProxy runtime projection from canonical state
+  ansible.builtin.include_tasks: resolve.yml
+
+- name: Select the exact PKI consumer plan before HAProxy mutation
+  ansible.builtin.include_role:
+    name: platform.core.pki_materialize
+    tasks_from: select_consumer_plan.yml
+  vars:
+    platform_pki_consumer_tls_profile_id: "{{ platform_haproxy_tls_profile }}"
+  when: platform_haproxy_phase == 'prepare'
+
 - name: Validate resolved HAProxy artifact sources before mutation
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
@@ -16,23 +41,6 @@
   when:
     - platform_resolved_artifact_sources is defined
     - platform_haproxy_phase == 'prepare'
-
-- name: Require valid HAProxy phase and canonical desired state
-  ansible.builtin.assert:
-    that:
-      - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
-      - platform_desired_state is mapping
-      - platform_deployments | default({}) is mapping
-    fail_msg: HAPROXY_DESIRED_STATE_INVALID
-
-- name: End HAProxy role on hosts without HAProxy placement
-  ansible.builtin.meta: end_role
-  when: >-
-    (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') |
-     selectattr('key', 'in', platform_deployments | default({})) | list | length) == 0
-
-- name: Resolve HAProxy runtime projection from canonical state
-  ansible.builtin.include_tasks: resolve.yml
 
 - name: Prepare and validate complete HAProxy candidate
   ansible.builtin.include_tasks: prepare.yml

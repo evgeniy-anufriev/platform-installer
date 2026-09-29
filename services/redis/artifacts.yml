@@ -1,0 +1,9 @@
+apiVersion: platform.installer/artifacts/v1alpha1
+service: redis
+artifacts: []
+packageSource:
+  kind: system-repository
+  distribution: RED OS
+  packages: [redis-8.6.4-1.red80]
+  offlineBundle: deferred
+status: candidate-system-repository-acceptance

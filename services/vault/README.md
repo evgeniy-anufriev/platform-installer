@@ -31,6 +31,22 @@ No password, root token, unseal key or selected file path belongs in desired
 configuration. Secret inputs and encrypted outputs use the separate contracts
 in docs/service-install-08a.md and the parent architecture plan.
 
+Filesystem permissions: fixed config/data/log roots are root-owned 0755.
+Deployment parents are root-owned with `platform_vault_group` and mode 0750:
+the service can traverse them but cannot modify their entries. Member config,
+Raft data and PKI directories remain service-owned 0700; private keys and
+configuration remain 0600. Ownership/no-follow preflight remains mandatory.
+
+Bootstrap custody: immediately after a usable init response, write only
+root_token and explicitly indexed keys to the private minimal recovery record.
+Confirm safe readback and synchronize the file/directory with Linux coreutils
+`/usr/bin/sync -f` before validation or normal publication. Existing conflicting
+custody blocks completion without overwrite. Remove recovery only after a
+matching, synchronized admin-token/unseal-shares pair; sync the directory after
+cleanup. Interruption recovers through the same files without another init.
+Response loss/crash before the first durable record still requires operator
+recovery; the role never automatically resets an initialized seed.
+
 Explicit standalone reset: `playbooks/clear.yml` is opt-in and is never called
 by apply/verify. It requires ordinary Vault variables and exact acknowledgement:
 

@@ -1,0 +1,9 @@
+namespace: platform
+name: redis
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer]
+description: TLS-only Redis and Redis Sentinel role
+license: [MIT]
+tags: [redis, sentinel, tls]
+repository: https://platform-installer.local

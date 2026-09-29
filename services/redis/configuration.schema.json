@@ -1,0 +1,53 @@
+{
+  "$id": "https://platform.installer/schemas/services/redis/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "advancedConfig": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "redisCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "redisPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "sentinelCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "sentinelPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "Redis desired configuration",
+  "type": "object"
+}

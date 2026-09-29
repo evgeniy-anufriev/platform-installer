@@ -13,6 +13,7 @@ modes:
     memberRoles: [database]
     placement: {explicit: true, minMembers: 1, maxMembers: 1, distinctHosts: false}
     x-maturity: implemented-postgres-01a
+    x-requiredRuntimeSecretSettings: [adminSuperuser]
   pg_auto_failover:
     displayName: pg_auto_failover
     description: One monitor and two PostgreSQL data members
@@ -26,6 +27,7 @@ modes:
         monitor: {minimum: 1, maximum: 1}
         database: {minimum: 2, maximum: 2}
     x-maturity: implemented-postgres-01b
+    x-requiredRuntimeSecretSettings: [adminSuperuser, monitorCredential, replicationCredential, healthcheckCredential]
   patroni:
     displayName: Patroni
     description: Deferred compatibility fixture; not implemented by POSTGRES-01

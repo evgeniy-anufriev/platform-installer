@@ -20,7 +20,8 @@ class BackendFileContractTests(unittest.TestCase):
         activate = (ROLE / "tasks" / "activate.yml").read_text(encoding="utf-8")
         self.assertIn("30-backend-*.cfg", prepare)
         self.assertIn("platform_haproxy_managed_application_backend_files", activate)
-        self.assertIn("Remove stale Platform-managed HAProxy application backend fragments", activate)
+        self.assertIn("platform.haproxy.archive_managed_backends", activate)
+        self.assertNotIn("Remove stale Platform-managed HAProxy application backend fragments", activate)
 
     def test_service_backend_defaults_are_not_owned_by_haproxy_role(self):
         defaults = (ROLE / "defaults" / "main.yml").read_text(encoding="utf-8")

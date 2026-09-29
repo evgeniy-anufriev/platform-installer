@@ -1,0 +1,62 @@
+---
+- name: Install exact validated Platform main configuration atomically
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_candidate_directory }}/haproxy.cfg"
+    dest: "{{ platform_haproxy_main_config }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  register: _platform_haproxy_main_config_install
+
+- name: Install exact validated Platform HAProxy fragments atomically
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
+    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  loop: [10-public.cfg, 20-local-stats.cfg, 90-stats-backends.cfg]
+  register: _platform_haproxy_fragment_install
+
+- name: Install exact validated managed HAProxy application backend fragments
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
+    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  loop: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
+  register: _platform_haproxy_application_backend_install
+
+- name: Record whether the active HAProxy graph changed
+  ansible.builtin.set_fact:
+    platform_haproxy_active_artifacts_changed: >-
+      {{ _platform_haproxy_main_config_install.changed or
+         (_platform_haproxy_fragment_install.results | selectattr('changed') | list | length > 0) or
+         (_platform_haproxy_application_backend_install.results | default([]) | selectattr('changed') | list | length > 0) or
+         _platform_haproxy_backend_archive.changed }}
+
+- name: Calculate deterministic active HAProxy graph digest
+  ansible.builtin.shell: >-
+    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
+      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
+    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
+    sha256sum | awk '{print $1}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: _platform_haproxy_active_graph_digest
+
+- name: Require exact candidate and active HAProxy graph equivalence
+  ansible.builtin.assert:
+    that:
+      - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
+    fail_msg: HAPROXY_CANDIDATE_ACTIVE_GRAPH_MISMATCH
+
+- name: Validate active HAProxy configuration before service lifecycle
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false

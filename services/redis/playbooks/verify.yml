@@ -1,0 +1,14 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
+
+- name: Verify Redis TLS members read-only
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime Redis configuration
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+  roles:
+    - role: platform.redis.redis_tls
+      platform_redis_verify_only: true

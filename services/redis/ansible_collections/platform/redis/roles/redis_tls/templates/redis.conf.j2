@@ -1,0 +1,23 @@
+bind 0.0.0.0
+port 0
+tls-port {{ redis_member.redis_port }}
+tls-cert-file {{ redis_member.config_directory }}/pki/certificate.pem
+tls-key-file {{ redis_member.config_directory }}/pki/private-key.pem
+tls-ca-cert-file {{ redis_member.config_directory }}/pki/ca-chain.pem
+tls-auth-clients yes
+tls-replication yes
+protected-mode yes
+dir {{ redis_member.data_directory }}
+dbfilename dump.rdb
+appendonly yes
+appendfilename appendonly.aof
+pidfile {{ redis_member.data_directory }}/redis.pid
+logfile {{ redis_member.log_directory }}/redis.log
+requirepass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}
+{% if platform_redis_mode == 'sentinel-ha' and redis_member.slot | int > 0 %}
+replicaof {{ (_platform_redis_instances | first).address }} {{ (_platform_redis_instances | first).redis_port }}
+masterauth {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}
+{% endif %}
+{% for key, value in platform_redis_advanced_config | dictsort %}
+{{ key }} {{ value }}
+{% endfor %}

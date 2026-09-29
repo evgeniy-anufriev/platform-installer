@@ -88,11 +88,27 @@
          (item.stat.mode | default('') == item.item.mode) and
          (item.stat.pw_name | default('') == platform_pki_owner) and
          (item.stat.gr_name | default('') == platform_pki_group) and
-         (item.stat.checksum | default('') ==
-           ((_platform_pki_integrity_sources.results[item.item.source].stat.checksum)
-            if item.item.source < 5 else
-            ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')))) }}
-  loop: "{{ _platform_pki_integrity_targets.results }}"
+         (item.stat.checksum | default('') == _platform_pki_integrity_sources.results[item.item.source].stat.checksum) }}
+  loop: "{{ _platform_pki_integrity_targets.results[:5] }}"
+  no_log: true
+
+- name: Compare the fingerprint bytes with the applied plan
+  ansible.builtin.set_fact:
+    _platform_pki_integrity_fingerprint_matches: "{{ _platform_pki_integrity_targets.results[5].stat.checksum | default('') == ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')) }}"
+  no_log: true
+
+- name: Compare the exact materialization fingerprint file
+  ansible.builtin.set_fact:
+    _platform_pki_integrity_valid: >-
+      {{ false not in [
+         (_platform_pki_integrity_valid | bool),
+         (_platform_pki_integrity_targets.results[5].stat.isreg | default(false)),
+         not (_platform_pki_integrity_targets.results[5].stat.islnk | default(false)),
+         (_platform_pki_integrity_targets.results[5].stat.mode | default('') == '0644'),
+         (_platform_pki_integrity_targets.results[5].stat.pw_name | default('') == platform_pki_owner),
+         (_platform_pki_integrity_targets.results[5].stat.gr_name | default('') == platform_pki_group),
+         (_platform_pki_integrity_fingerprint_matches | bool)
+         ] }}
   no_log: true
 
 - name: Repair PKI material that does not match the applied plan

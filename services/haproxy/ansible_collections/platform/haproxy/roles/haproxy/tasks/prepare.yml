@@ -1,4 +1,10 @@
 ---
+- name: Capture exact prior Platform HAProxy backend inventory before candidate reset
+  platform.haproxy.archive_managed_backends:
+    operation: capture
+    config_directory: "{{ platform_haproxy_config_directory }}"
+  register: _platform_haproxy_prior_backend_capture
+
 - name: Install HAProxy from configured system repositories
   ansible.builtin.package:
     name: "{{ platform_haproxy_package }}"
@@ -32,20 +38,14 @@
   loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
   changed_when: false
 
-- name: Select resolved PKI plan for local HAProxy host
-  ansible.builtin.set_fact:
-    _platform_haproxy_pki_plan: >-
-      {{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
-          | selectattr('hostId', 'equalto', inventory_hostname) | selectattr('tlsProfileId', 'equalto', platform_haproxy_tls_profile) | list | first) }}
-
 - name: Require HAProxy PKI materialization
   ansible.builtin.assert:
-    that: _platform_haproxy_pki_plan.targetDirectory is defined
+    that: platform_pki_selected_consumer_plan.targetDirectory is defined
     fail_msg: HAPROXY_PKI_PLAN_REQUIRED
 
 - name: Deploy HAProxy TLS PEM inputs
   ansible.builtin.copy:
-    src: "{{ _platform_haproxy_pki_plan.targetDirectory }}/{{ item.name }}"
+    src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
     dest: "{{ platform_haproxy_pki_directory }}/{{ item.bundle }}"
     remote_src: true
     owner: root
@@ -106,6 +106,38 @@
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
          flatten | map(attribute='configFileName') | sort | list }}
+
+- name: Probe actual backend TLS identities before HAProxy candidate activation
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/timeout
+      - '12s'
+      - /usr/bin/openssl
+      - s_client
+      - -connect
+      - "{{ item.1.address }}:{{ item.1.port }}"
+      - -servername
+      - "{{ item.0.expectedServerName }}"
+      - -verify_hostname
+      - "{{ item.0.expectedServerName }}"
+      - -CAfile
+      - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
+      - -verify_return_error
+      - -brief
+    stdin: ''
+  loop: "{{ platform_haproxy_application_backends | selectattr('expectedServerName', 'defined') | subelements('targets') }}"
+  loop_control:
+    label: "{{ item.0.targetDeploymentId }}/{{ item.1.memberId }}"
+  register: _platform_haproxy_backend_tls_probes
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Require every actual backend TLS identity to match the Core projection
+  ansible.builtin.assert:
+    that:
+      - _platform_haproxy_backend_tls_probes.results | default([]) | selectattr('rc', 'ne', 0) | list | length == 0
+    fail_msg: HAPROXY_BACKEND_TLS_IDENTITY_UNVERIFIED
 
 - name: Render full Platform HAProxy candidate
   ansible.builtin.template:

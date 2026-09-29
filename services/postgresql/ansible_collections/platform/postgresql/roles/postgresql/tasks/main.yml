@@ -1,4 +1,8 @@
 ---
+- name: Resolve the exact PostgreSQL PKI consumer plan before mutation
+  ansible.builtin.include_tasks: resolve_tls.yml
+  when: platform_postgresql_tls_profile | length > 0
+
 - name: Validate resolved PostgreSQL artifact sources before mutation
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
@@ -131,10 +135,6 @@
     - not platform_postgresql_pg_version_file.stat.exists
   register: platform_postgresql_initdb
   changed_when: true
-
-- name: Resolve PKI-01 PEM projection for PostgreSQL TLS
-  ansible.builtin.include_tasks: resolve_tls.yml
-  when: platform_postgresql_tls_profile | length > 0
 
 - name: Render PostgreSQL configuration
   ansible.builtin.template:

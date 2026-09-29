@@ -1,0 +1,40 @@
+---
+- name: Validate deployment-wide Redis observations
+  vars:
+    redis_hosts: "{{ platform_redis_instances | map(attribute='host') | unique | list }}"
+    redis_hostvars: "{{ redis_hosts | map('extract', hostvars) | list }}"
+    redis_members: "{{ redis_hostvars | map(attribute='_platform_redis_observed_members') | flatten }}"
+    redis_masters: "{{ redis_members | selectattr('role', 'equalto', 'master') | list }}"
+    redis_sentinels: "{{ redis_hostvars | map(attribute='_platform_redis_observed_sentinel_masters') | flatten }}"
+  block:
+    - name: Require expected Redis member observation count
+      ansible.builtin.assert:
+        that: redis_members | length == (1 if platform_redis_mode == 'standalone' else 3)
+        fail_msg: REDIS_DEPLOYMENT_MEMBER_COUNT_INVALID
+
+    - name: Require exactly one observed Redis master
+      ansible.builtin.assert:
+        that: redis_masters | length == 1
+        fail_msg: REDIS_DEPLOYMENT_MASTER_COUNT_INVALID
+
+    - name: Require two ready Redis replicas in Sentinel HA
+      ansible.builtin.assert:
+        that: >-
+          platform_redis_mode == 'standalone'
+          or redis_members | selectattr('replicaReady', 'equalto', true) | list | length == 2
+        fail_msg: REDIS_DEPLOYMENT_REPLICA_SET_INVALID
+
+    - name: Require one agreed Sentinel master in Sentinel HA
+      ansible.builtin.assert:
+        that: >-
+          platform_redis_mode == 'standalone'
+          or (redis_sentinels | unique | list | length == 1)
+        fail_msg: REDIS_DEPLOYMENT_SENTINEL_AGREEMENT_INVALID
+
+    - name: Require Sentinel master to match the Redis observation
+      ansible.builtin.assert:
+        that: >-
+          platform_redis_mode == 'standalone'
+          or redis_sentinels[0] == (redis_masters[0].address ~ ':' ~ redis_masters[0].port)
+        fail_msg: REDIS_DEPLOYMENT_SENTINEL_MASTER_MISMATCH
+  run_once: true

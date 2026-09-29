@@ -24,12 +24,6 @@
   until: _platform_vault_seed_init is succeeded
   no_log: true
 
-- name: Load a durable interrupted-init recovery response
-  ansible.builtin.set_fact:
-    _platform_vault_bootstrap_material: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/init-response.json') | from_json }}"
-  when: _platform_vault_output_files.results[2].stat.exists
-  no_log: true
-
 - name: Refuse an init recovery response if the seed is still uninitialized
   ansible.builtin.assert:
     that: _platform_vault_seed_init.json.initialized | bool
@@ -44,6 +38,14 @@
       - not _platform_vault_output_files.results[1].stat.exists
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_ALREADY_EXISTS
   when: not (_platform_vault_seed_init.json.initialized | bool) and not _platform_vault_output_files.results[2].stat.exists
+  no_log: true
+
+- name: Require controller filesystem synchronization before initialization
+  ansible.builtin.command:
+    argv: [/usr/bin/sync, -f, '--', "{{ _platform_vault_bootstrap_output_dir }}"]
+  delegate_to: localhost
+  become: false
+  changed_when: false
   no_log: true
 
 - name: Initialize a new seed exactly once
@@ -63,31 +65,9 @@
   when: not (_platform_vault_seed_init.json.initialized | bool) and not _platform_vault_output_files.results[2].stat.exists
   no_log: true
 
-- name: Keep only the required initial token and Shamir shares in the recovery record
-  ansible.builtin.set_fact:
-    _platform_vault_bootstrap_material:
-      root_token: "{{ _platform_vault_init_response.json.root_token }}"
-      keys: "{{ _platform_vault_init_response.json.keys }}"
-  when: _platform_vault_init_response is not skipped
-  no_log: true
-
-- name: Validate the secret response before persisting or using it
-  ansible.builtin.assert:
-    that:
-      - _platform_vault_bootstrap_material is mapping
-      - _platform_vault_bootstrap_material.root_token is string
-      - _platform_vault_bootstrap_material.root_token | length > 0
-      - _platform_vault_bootstrap_material.keys is sequence
-      - _platform_vault_bootstrap_material.keys is not string
-      - _platform_vault_bootstrap_material.keys | length == platform_vault_unseal_shares
-      - _platform_vault_bootstrap_material.keys | select('string') | list | length == platform_vault_unseal_shares
-    fail_msg: VAULT_INIT_RESPONSE_INVALID
-  when: _platform_vault_bootstrap_material is defined
-  no_log: true
-
 - name: Durably stage the minimal init response before any unseal operation
   ansible.builtin.copy:
-    content: "{{ _platform_vault_bootstrap_material | to_nice_json }}\n"
+    content: "{{ {'root_token': _platform_vault_init_response['json']['root_token'], 'keys': _platform_vault_init_response['json']['keys']} | to_nice_json }}\n"
     dest: "{{ _platform_vault_bootstrap_output_dir }}/init-response.json"
     mode: '0600'
     force: false
@@ -96,9 +76,105 @@
   when: _platform_vault_init_response is not skipped
   no_log: true
 
+- name: Inspect the fixed recovery record without following symlinks
+  ansible.builtin.stat:
+    path: "{{ _platform_vault_bootstrap_output_dir }}/init-response.json"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  register: _platform_vault_recovery_stat
+  delegate_to: localhost
+  become: false
+  when: _platform_vault_init_response is not skipped or _platform_vault_output_files.results[2].stat.exists
+  no_log: true
+
+- name: Require a private bounded controller-owned recovery record
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_recovery_stat.stat.isreg | default(false)
+      - not (_platform_vault_recovery_stat.stat.islnk | default(true))
+      - _platform_vault_recovery_stat.stat.uid | string == _platform_vault_controller_uid.stdout | trim
+      - _platform_vault_recovery_stat.stat.mode == '0600'
+      - _platform_vault_recovery_stat.stat.size <= 65536
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_FILE_UNSAFE
+  when: _platform_vault_recovery_stat is not skipped
+  no_log: true
+
+- name: Read back the minimal recovery record without exposing it
+  ansible.builtin.slurp:
+    src: "{{ _platform_vault_bootstrap_output_dir }}/init-response.json"
+  register: _platform_vault_recovery_readback
+  delegate_to: localhost
+  become: false
+  when: _platform_vault_recovery_stat is not skipped
+  no_log: true
+
+- name: Require first-init recovery readback to match the exact minimal response
+  ansible.builtin.assert:
+    that: >-
+      (_platform_vault_recovery_readback.content | b64decode | from_json) ==
+      {'root_token': _platform_vault_init_response['json']['root_token'], 'keys': _platform_vault_init_response['json']['keys']}
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_CONFLICT
+  when: _platform_vault_init_response is not skipped
+  no_log: true
+
+- name: Synchronize recovery data and directory publication before validation
+  ansible.builtin.command:
+    argv: [/usr/bin/sync, -f, '--', "{{ item }}"]
+  loop:
+    - "{{ _platform_vault_bootstrap_output_dir }}/init-response.json"
+    - "{{ _platform_vault_bootstrap_output_dir }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  when: _platform_vault_recovery_stat is not skipped
+  no_log: true
+
+- name: Load the synchronized minimal recovery record
+  ansible.builtin.set_fact:
+    _platform_vault_bootstrap_material: "{{ _platform_vault_recovery_readback.content | b64decode | from_json }}"
+  when: _platform_vault_recovery_stat is not skipped
+  no_log: true
+
+- name: Validate the saved secret response before publishing or using it
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_bootstrap_material is mapping
+      - _platform_vault_bootstrap_material.keys() | list | sort == ['keys', 'root_token']
+      - _platform_vault_bootstrap_material.root_token is string
+      - _platform_vault_bootstrap_material.root_token | length > 0
+      - _platform_vault_bootstrap_material['keys'] is sequence
+      - _platform_vault_bootstrap_material['keys'] is not string
+      - _platform_vault_bootstrap_material['keys'] is not mapping
+      - _platform_vault_bootstrap_material['keys'] | length == platform_vault_unseal_shares
+      - _platform_vault_bootstrap_material['keys'] | select('string') | list | length == platform_vault_unseal_shares
+    fail_msg: VAULT_INIT_RESPONSE_INVALID
+  when: _platform_vault_bootstrap_material is defined
+  no_log: true
+
+- name: Reject a conflicting existing token before completing the custody pair
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_output_files.results[0].stat.size <= 4096
+      - (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/admin-token') | trim) == _platform_vault_bootstrap_material.root_token
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_CONFLICT
+  when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[0].stat.exists
+  no_log: true
+
+- name: Reject conflicting existing shares before completing the custody pair
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_output_files.results[1].stat.size <= 32768
+      - >-
+        (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-shares') | from_json) ==
+        {'keys': _platform_vault_bootstrap_material['keys']}
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_CONFLICT
+  when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[1].stat.exists
+  no_log: true
+
 - name: Persist the standalone initial root token without overwriting an existing file
   ansible.builtin.copy:
-    content: "{{ _platform_vault_bootstrap_material.root_token }}\n"
+    content: "{{ _platform_vault_bootstrap_material.root_token }}"
     dest: "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
     mode: '0600'
     force: false
@@ -109,7 +185,7 @@
 
 - name: Persist the standalone unseal shares without overwriting an existing file
   ansible.builtin.copy:
-    content: "{{ {'keys': _platform_vault_bootstrap_material.keys} | to_nice_json }}\n"
+    content: "{{ {'keys': _platform_vault_bootstrap_material['keys']} | to_nice_json }}\n"
     dest: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
     mode: '0600'
     force: false
@@ -118,11 +194,37 @@
   when: _platform_vault_bootstrap_material is defined and not _platform_vault_output_files.results[1].stat.exists
   no_log: true
 
+- name: Inspect both custody files before confirming durable publication
+  ansible.builtin.stat:
+    path: "{{ _platform_vault_bootstrap_output_dir }}/{{ item }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  loop: [admin-token, unseal-shares]
+  register: _platform_vault_published_custody_stats
+  delegate_to: localhost
+  become: false
+  when: _platform_vault_bootstrap_material is defined
+  no_log: true
+
+- name: Require a complete private bounded custody pair before readback
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - not (item.stat.islnk | default(true))
+      - item.stat.uid | string == _platform_vault_controller_uid.stdout | trim
+      - item.stat.mode == '0600'
+      - item.stat.size <= (4096 if item.item == 'admin-token' else 32768)
+    fail_msg: VAULT_BOOTSTRAP_OUTPUT_FILE_UNSAFE
+  loop: "{{ _platform_vault_published_custody_stats.results | default([]) }}"
+  when: _platform_vault_bootstrap_material is defined
+  no_log: true
+
 - name: Read an existing root token before completing interrupted custody publication
   ansible.builtin.slurp:
     src: "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
   register: _platform_vault_existing_root_token
-  when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[0].stat.exists
+  when: _platform_vault_bootstrap_material is defined
   delegate_to: localhost
   become: false
   no_log: true
@@ -138,22 +240,38 @@
   ansible.builtin.slurp:
     src: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
   register: _platform_vault_existing_unseal_keys
-  when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[1].stat.exists
+  when: _platform_vault_bootstrap_material is defined
   delegate_to: localhost
   become: false
   no_log: true
 
 - name: Require an existing unseal file to match the durable init response
   ansible.builtin.assert:
-    that: (( _platform_vault_existing_unseal_keys.content | b64decode | from_json).keys) == _platform_vault_bootstrap_material.keys
+    that:
+      - >-
+        (_platform_vault_existing_unseal_keys.content | b64decode | from_json) ==
+        {'keys': _platform_vault_bootstrap_material['keys']}
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_CONFLICT
   when: _platform_vault_existing_unseal_keys is not skipped
+  no_log: true
+
+- name: Synchronize both matching custody files before recovery cleanup
+  ansible.builtin.command:
+    argv: [/usr/bin/sync, -f, '--', "{{ item }}"]
+  loop:
+    - "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
+    - "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
+    - "{{ _platform_vault_bootstrap_output_dir }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  when: _platform_vault_bootstrap_material is defined
   no_log: true
 
 - name: Select the generated or recovered token and shares for this invocation
   ansible.builtin.set_fact:
     _platform_vault_admin_token: "{{ _platform_vault_bootstrap_material.root_token }}"
-    _platform_vault_effective_unseal_keys: "{{ _platform_vault_bootstrap_material.keys }}"
+    _platform_vault_effective_unseal_keys: "{{ _platform_vault_bootstrap_material['keys'] }}"
   when: _platform_vault_bootstrap_material is defined
   no_log: true
 
@@ -163,6 +281,15 @@
     state: absent
   delegate_to: localhost
   become: false
+  when: _platform_vault_bootstrap_material is defined
+  no_log: true
+
+- name: Synchronize the custody directory after recovery record removal
+  ansible.builtin.command:
+    argv: [/usr/bin/sync, -f, '--', "{{ _platform_vault_bootstrap_output_dir }}"]
+  delegate_to: localhost
+  become: false
+  changed_when: false
   when: _platform_vault_bootstrap_material is defined
   no_log: true
 
@@ -180,7 +307,7 @@
 
 - name: Load unseal shares from protected standalone custody
   ansible.builtin.set_fact:
-    _platform_vault_effective_unseal_keys: "{{ (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-shares') | from_json).keys }}"
+    _platform_vault_effective_unseal_keys: "{{ (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-shares') | from_json)['keys'] }}"
   when: _platform_vault_effective_unseal_keys is not defined and (platform_vault_unseal_keys is not defined or platform_vault_unseal_keys | length == 0) and _platform_vault_output_files.results[1].stat.exists
   no_log: true
 

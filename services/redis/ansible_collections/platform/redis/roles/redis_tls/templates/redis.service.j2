@@ -1,0 +1,17 @@
+[Unit]
+Description=Platform Redis TLS member {{ redis_member.id }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ platform_redis_user }}
+Group={{ platform_redis_group }}
+ExecStart=/usr/bin/redis-server {{ redis_member.config_directory }}/redis.conf
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,140 @@
+from pathlib import Path
+import base64
+import unittest
+
+import yaml
+from jinja2 import Environment
+from ansible.plugins.filter.core import b64decode, regex_escape
+from ansible.plugins.test.core import search
+
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def manifest():
+    return yaml.safe_load((ROOT / "services" / "redis" / "service.yml").read_text(encoding="utf-8"))
+
+
+class RedisContractTests(unittest.TestCase):
+    def test_sentinel_rewritten_tls_paths_preserve_exact_static_guard(self):
+        role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
+        tasks = yaml.safe_load((role / "tasks" / "preflight.yml").read_text(encoding="utf-8"))
+        guard = next(task for task in tasks if task["name"] == "Reject unsafe Sentinel static configuration drift")
+        self.assertTrue(guard["no_log"])
+        env = Environment()
+        env.filters.update(b64decode=b64decode, regex_escape=regex_escape)
+        env.tests["search"] = search
+        directory = "/etc/platform-redis/redis-ha33-a"
+        for expression, directive, filename in zip(guard["ansible.builtin.assert"]["that"][2:5],
+                ("tls-cert-file", "tls-key-file", "tls-ca-cert-file"),
+                ("certificate.pem", "private-key.pem", "ca-chain.pem")):
+            path = f"{directory}/pki/{filename}"
+            template = env.from_string("{{ " + expression + " }}")
+            for value, accepted in ((path, True), ('"' + path + '"', True),
+                    ('"' + path, False), (path + '"', False),
+                    (path + ".other", False), (path.replace("redis-ha33-a", "foreign"), False),
+                    (path.replace(".pem", "Xpem"), False)):
+                with self.subTest(directive=directive, value=value):
+                    content = base64.b64encode(f"{directive} {value}\n".encode()).decode()
+                    result = template.render(
+                        _platform_sentinel_config_stat={"results": [{"stat": {"exists": True}}]},
+                        _platform_sentinel_existing_config={"results": [{"content": content}]},
+                        sentinel_config_index=0, item={"config_directory": directory})
+                    self.assertEqual(result, str(accepted))
+
+    def test_modes_keep_member_scoped_tls_contract(self):
+        value = manifest()
+        settings = value["configuration"]["settings"]
+        self.assertNotIn("dataRoot", settings)
+        self.assertNotIn("configRoot", settings)
+        self.assertEqual(value["modes"]["standalone"]["placement"]["minMembers"], 1)
+        ha = value["modes"]["sentinel-ha"]
+        self.assertEqual(ha["placement"]["minMembers"], 3)
+        self.assertFalse(ha["placement"]["distinctHosts"])
+        self.assertEqual(ha["placement"]["roleCardinality"], {
+            "redis": {"minimum": 3, "maximum": 3},
+            "sentinel": {"minimum": 3, "maximum": 3},
+        })
+        self.assertEqual(value["listeners"]["client"]["scope"], "member")
+        self.assertEqual(value["listeners"]["sentinel"]["scope"], "member")
+
+    def test_repository_source_version_matches_dnf_repoquery_identity(self):
+        value = manifest()
+        self.assertEqual(value["runtimeRequirements"][0]["version"], "8.6.4")
+        defaults = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "defaults" / "main.yml").read_text(encoding="utf-8")
+        package_source = (ROOT / "services" / "redis" / "artifacts.yml").read_text(encoding="utf-8")
+        self.assertIn('platform_redis_version: "8.6.4-1.red80"', defaults)
+        self.assertIn("platform_redis_data_root: /var/lib/platform-redis", defaults)
+        self.assertIn("platform_redis_config_root: /etc/platform-redis", defaults)
+        self.assertIn("platform_redis_log_root: /var/log/platform-redis", defaults)
+        validate = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "validate.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_redis_data_root == '/var/lib/platform-redis'", validate)
+        self.assertIn("platform_redis_config_root == '/etc/platform-redis'", validate)
+        self.assertIn("platform_redis_log_root == '/var/log/platform-redis'", validate)
+        self.assertIn("redis-8.6.4-1.red80", package_source)
+
+    def test_secret_references_are_runtime_only_contract_values(self):
+        settings = manifest()["configuration"]["settings"]
+        self.assertEqual(settings["redisCredential"]["ui"]["x-runtimeSecretRequirement"]["requirementRef"], "redis-password")
+        self.assertEqual(settings["sentinelCredential"]["ui"]["x-runtimeSecretRequirement"]["requirementRef"], "redis-sentinel-password")
+
+    def test_sentinel_replication_seed_is_only_rendered_for_initial_ha_members(self):
+        role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
+        template = (role / "templates" / "redis.conf.j2").read_text(encoding="utf-8")
+        sentinel_template = (role / "templates" / "sentinel.conf.j2").read_text(encoding="utf-8")
+        member = (role / "tasks" / "member.yml").read_text(encoding="utf-8")
+        finalize = (role / "tasks" / "finalize_bootstrap.yml").read_text(encoding="utf-8")
+        main = (role / "tasks" / "main.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_redis_mode == 'sentinel-ha' and redis_member.slot | int > 0", template)
+        self.assertIn("when: not _platform_redis_has_persistent_state", member)
+        self.assertIn("sentinel monitor {{ (_platform_redis_instances | first).id }}", sentinel_template)
+        self.assertIn("- not _platform_redis_has_persistent_state", member)
+        self.assertIn("Seed Sentinel TLS-only configuration for a new Sentinel", member)
+        self.assertIn("regexp: '^replicaof '\n    state: absent", finalize)
+        self.assertLess(finalize.index("Remove bootstrap replica target"), finalize.index("Write Redis persistent ownership marker"))
+        self.assertLess(main.index("include_tasks: member.yml"), main.index("include_tasks: finalize_bootstrap.yml"))
+        verify = (role / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        self.assertNotIn("--tls-host", verify)
+
+    def test_password_values_are_not_trimmed_and_are_quoted_in_redis_configuration(self):
+        role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
+        redis_template = (role / "templates" / "redis.conf.j2").read_text(encoding="utf-8")
+        sentinel_template = (role / "templates" / "sentinel.conf.j2").read_text(encoding="utf-8")
+        for template in (redis_template, sentinel_template):
+            self.assertNotIn("| trim", template)
+            self.assertIn("| to_json", template)
+
+    def test_tls_ping_failure_reports_only_closed_safe_category(self):
+        verify = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        for code in (
+            "REDIS_TLS_AUTH_REJECTED",
+            "REDIS_TLS_AUTH_REQUIRED",
+            "REDIS_TLS_CONNECTION_FAILED",
+            "REDIS_TLS_PING_FAILED",
+        ):
+            self.assertIn(code, verify)
+        self.assertIn("no_log: true", verify)
+        self.assertIn("ignore_errors: true", verify)
+        self.assertIn("_platform_redis_ping.stdout | trim == 'PONG'", verify)
+
+    def test_replication_role_checks_accept_redis_cli_crlf_output(self):
+        verify = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        self.assertIn("role:(master|slave|replica)\\\\r?$", verify)
+        self.assertIn("regex_search('(?m)^role:(master|slave|replica)')", verify)
+        self.assertIn("regex_search('(?m)^master_link_status:up')", verify)
+
+    def test_master_aggregation_uses_closed_role_text(self):
+        verify_member = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        verify_deployment = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "verify_deployment.yml").read_text(encoding="utf-8")
+        self.assertIn("'role': (", verify_member)
+        self.assertIn("default('role:unknown', true)", verify_member)
+        self.assertIn("selectattr('role', 'equalto', 'master')", verify_deployment)
+
+    def test_deployment_verify_assertions_are_bounded_and_separately_identifiable(self):
+        verify = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "verify_deployment.yml").read_text(encoding="utf-8")
+        self.assertIn("Require expected Redis member observation count", verify)
+        self.assertIn("Require exactly one observed Redis master", verify)
+        self.assertIn("Require two ready Redis replicas in Sentinel HA", verify)
+        self.assertIn("Require one agreed Sentinel master in Sentinel HA", verify)
+        self.assertIn("Require Sentinel master to match the Redis observation", verify)
+        self.assertIn("run_once: true", verify)

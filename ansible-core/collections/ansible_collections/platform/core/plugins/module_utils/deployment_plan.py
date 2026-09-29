@@ -178,7 +178,30 @@ def _service_dependencies(deployment_id, deployment, definitions, deployments):
             if capability in (candidate_definition.get("capabilities", []) if isinstance(candidate_definition, dict) else []):
                 providers.append("apply:%s" % candidate_id)
         result.extend(providers)
+    # A provider must not activate a backend before its explicitly related
+    # source has completed apply. This is generic relation ordering, not a
+    # service-type rule or a second endpoint model.
+    for source_id, source in sorted(deployments.items()):
+        relation = source.get("haproxy") if isinstance(source, dict) else None
+        if source_id != deployment_id and isinstance(relation, dict) and relation.get("deploymentRef") == deployment_id:
+            result.append("apply:%s" % source_id)
     return sorted(set(result))
+
+
+def _ordered_apply_actions(actions):
+    """Keep public plan and sequential controller order consistent with dependencies."""
+    pending = {item["id"]: item for item in actions}
+    ordered, completed = [], set()
+    while pending:
+        ready = sorted(key for key, item in pending.items()
+                       if all(dep not in pending or dep in completed
+                              for dep in item.get("dependsOn", [])))
+        if not ready:
+            raise ValueError("EXECUTION_DEPENDENCY_CYCLE")
+        for key in ready:
+            ordered.append(pending.pop(key))
+            completed.add(key)
+    return ordered
 
 
 def _pki_consumers(snapshot):
@@ -338,7 +361,10 @@ def _service_input_requirements(deployments, definitions, resolved_topology):
                           "hosts": hosts, "requiredWhen": item["requiredWhen"],
                           "operations": list(item["operations"])}
             public.append({key: descriptor[key] for key in ("requirementRef", "purpose", "serviceDeployment", "displayLabel", "hosts", "requiredWhen", "operations")})
-            private.append(dict(descriptor, manifestRequirementRef=manifest_ref))
+            private.append(dict(
+                {key: descriptor[key] for key in ("requirementRef", "purpose", "serviceDeployment", "hosts", "requiredWhen", "operations")},
+                manifestRequirementRef=manifest_ref,
+            ))
     keys = [(item["serviceDeployment"], item["manifestRequirementRef"], item["purpose"]) for item in private]
     refs = [item["requirementRef"] for item in private]
     if len(set(keys)) != len(keys) or len(set(refs)) != len(refs):
@@ -416,6 +442,18 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
     members = service.get("members", {})
     if not isinstance(deployment_values, dict) or not isinstance(members, dict):
         raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+    client_listener = definition.get("x-backendClientListener") if isinstance(definition, dict) else None
+    member_port_variable = None
+    if client_listener is not None:
+        port_setting = settings.get("port")
+        if (not isinstance(client_listener, dict) or
+                not isinstance(port_setting, dict) or
+                "member" not in port_setting.get("scopes", []) or
+                member_list_variable is None):
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        member_port_variable = port_setting.get("roleVariable")
+        if not isinstance(member_port_variable, str) or not member_port_variable.startswith(prefix):
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
 
     def role_values(values):
         if not isinstance(values, dict):
@@ -443,6 +481,10 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         variables = role_values(values)
         if host_id not in by_host:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        # A package-declared client port is represented per member in the
+        # existing member list. Other settings keep the host-conflict guard.
+        if member_port_variable is not None:
+            variables[member_port_variable] = by_host[host_id][member_port_variable]
         if by_host[host_id] != role_values(deployment_values) and by_host[host_id] != variables:
             raise ValueError("EXECUTION_CONFIGURATION_HOST_CONFLICT")
         by_host[host_id] = variables
@@ -463,8 +505,16 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
                     not isinstance(address, str) or not address or not isinstance(roles, list) or
                     not roles or any(not isinstance(role, str) or not role for role in roles)):
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
-            instances.append({"id": member_id, "host": host_id, "hostname": host_id,
-                              "address": address, "roles": sorted(roles)})
+            instance = {"id": member_id, "host": host_id, "hostname": host_id,
+                        "address": address, "roles": sorted(roles)}
+            if member_port_variable is not None:
+                port_value = members.get(member_id, {}).get("configuration", {}).get("port")
+                if isinstance(port_value, dict) and port_value.get("source") == "MEMBER_OVERRIDE":
+                    explicit_port = port_value.get("value")
+                    if isinstance(explicit_port, bool) or not isinstance(explicit_port, int) or not 1 <= explicit_port <= 65535:
+                        raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+                    instance["port"] = explicit_port
+            instances.append(instance)
         for values in by_host.values():
             values[member_list_variable] = copy.deepcopy(instances)
     return {host_id: by_host[host_id] for host_id in sorted(by_host)}
@@ -547,6 +597,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         if deployment_id in pki_consumers:
             dependencies.append("pki:apply")
         apply_actions.append({"id": "apply:%s" % deployment_id, "type": "SERVICE_APPLY", "serviceDeployment": deployment_id, "targets": targets, "dependsOn": sorted(set(dependencies)), "mutating": True, "reboot": "NONE", "summary": "Apply service deployment %s" % deployment_id})
+    apply_actions = _ordered_apply_actions(apply_actions)
     verify_actions = [{"id": "verify:%s" % deployment_id, "type": "SERVICE_VERIFY", "serviceDeployment": deployment_id, "targets": targets, "dependsOn": ["apply:%s" % deployment_id], "mutating": False, "reboot": "NONE", "summary": "Verify service deployment %s" % deployment_id} for deployment_id in sorted(deployments)]
     phases = []
     if actions:

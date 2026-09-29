@@ -1,0 +1,26 @@
+---
+- name: Start Redis normalized member projection
+  ansible.builtin.set_fact:
+    _platform_redis_instances: []
+
+- name: Add stable slot and owned paths to every Redis member
+  ansible.builtin.set_fact:
+    _platform_redis_instances: "{{ _platform_redis_instances + [item | combine({'slot': redis_slot, 'redis_port': (platform_redis_port | int) + redis_slot, 'sentinel_port': (platform_redis_sentinel_port | int) + redis_slot, 'instance_name': (item.id | regex_replace('[^A-Za-z0-9_.-]', '_')), 'data_directory': platform_redis_data_root ~ '/' ~ item.id, 'config_directory': platform_redis_config_root ~ '/' ~ item.id, 'log_directory': platform_redis_log_root ~ '/' ~ item.id})] }}"
+  loop: "{{ platform_redis_instances | sort(attribute='id') }}"
+  loop_control:
+    index_var: redis_slot
+
+- name: Reject Redis and Sentinel TLS port collisions on each host
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_platform_redis_instances | selectattr('host', 'equalto', item)
+        | map(attribute='redis_port') | list
+        + _platform_redis_instances | selectattr('host', 'equalto', item)
+        | selectattr('roles', 'contains', 'sentinel') | map(attribute='sentinel_port') | list)
+        | unique | length
+        ==
+        (_platform_redis_instances | selectattr('host', 'equalto', item) | list | length)
+        + (_platform_redis_instances | selectattr('host', 'equalto', item) | selectattr('roles', 'contains', 'sentinel') | list | length)
+    fail_msg: REDIS_LISTENER_PORT_COLLISION
+  loop: "{{ _platform_redis_instances | map(attribute='host') | unique | list }}"

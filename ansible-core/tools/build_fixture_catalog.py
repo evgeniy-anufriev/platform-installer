@@ -17,6 +17,8 @@ OUTPUT = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
 SOURCES = (
     ("kafka", REPOSITORY / "services" / "kafka" / "service.yml"),
     ("postgresql", REPOSITORY / "services" / "postgresql" / "service.yml"),
+    ("redis", REPOSITORY / "services" / "redis" / "service.yml"),
+    ("vault", REPOSITORY / "services" / "vault" / "service.yml"),
     ("keepalived", REPOSITORY / "services" / "keepalived" / "service.yml"),
     ("bind", REPOSITORY / "services" / "bind" / "service.yml"),
     ("dns-client", REPOSITORY / "services" / "dns-client" / "service.yml"),

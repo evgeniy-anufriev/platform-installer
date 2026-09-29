@@ -1,0 +1,24 @@
+---
+- name: Remove bootstrap replica target from Redis persistent configuration
+  ansible.builtin.lineinfile:
+    path: "{{ item.config_directory }}/redis.conf"
+    regexp: '^replicaof '
+    state: absent
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    label: "redis:{{ item.instance_name }}"
+  when:
+    - platform_redis_mode == 'sentinel-ha'
+    - item.slot | int > 0
+
+- name: Write Redis persistent ownership marker after successful bootstrap
+  ansible.builtin.copy:
+    content: "mode={{ platform_redis_mode }}\n"
+    dest: "{{ item.data_directory }}/.platform-redis-mode"
+    owner: "{{ platform_redis_user }}"
+    group: "{{ platform_redis_group }}"
+    mode: '0600'
+    force: false
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    label: "redis:{{ item.instance_name }}"

@@ -12,12 +12,6 @@
   changed_when: false
   no_log: true
 
-- name: Capture the seed cluster identity before unseal
-  ansible.builtin.set_fact:
-    _platform_vault_seed_cluster_id: "{{ _platform_vault_member_health_before.json.cluster_id }}"
-  when: vault_member.slot == 0
-  no_log: true
-
 - name: Require recovery material only when this member is sealed
   ansible.builtin.assert:
     that:
@@ -58,6 +52,21 @@
   retries: 30
   delay: 2
   until: _platform_vault_member_health_after is succeeded and _platform_vault_member_health_after.json.initialized | bool and not (_platform_vault_member_health_after.json.sealed | bool)
+  no_log: true
+
+- name: Require an initialized unsealed member to expose a cluster identity
+  ansible.builtin.assert:
+    that:
+      - _platform_vault_member_health_after.json.cluster_id is defined
+      - _platform_vault_member_health_after.json.cluster_id is string
+      - _platform_vault_member_health_after.json.cluster_id | length > 0
+    fail_msg: VAULT_CLUSTER_IDENTITY_MISMATCH
+  no_log: true
+
+- name: Capture the seed cluster identity after confirmed unseal
+  ansible.builtin.set_fact:
+    _platform_vault_seed_cluster_id: "{{ _platform_vault_member_health_after.json.cluster_id }}"
+  when: vault_member.slot == 0
   no_log: true
 
 - name: Require the member to share the seed cluster identity

@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 import os
 import sys
 import unittest
@@ -89,6 +90,81 @@ class HAProxyResolutionTests(unittest.TestCase):
         endpoints = ENDPOINTS.resolve_service_endpoints(topology, CATALOG, inventory_deployments=PLACEMENT)
         result = HAPROXY.resolve_haproxy_backends(topology, CATALOG, HOSTS, PLACEMENT, endpoints, DEFAULTS)
         self.assertEqual({}, result["backends"])
+
+    def test_inventory_owned_members_are_used_for_member_scoped_backend(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["definitions"]["vault"] = {
+            "endpoint": {}, "listeners": {"client": {"scope": "member", "defaultPort": 8200}},
+            "configuration": {"settings": {"port": {"scopes": ["deployment", "member"]}}},
+            "x-backendClientListener": {"listener": "client", "allocation": {"kind": "HOST_LOCAL_ORDINAL", "stride": 2}},
+        }
+        topology = copy.deepcopy(TOPOLOGY)
+        topology["serviceDeployments"]["vault-ha"] = {
+            "serviceType": "vault", "endpointGroup": "asutp",
+            "haproxy": {"deploymentRef": "haproxy", "backend": {"balance": "roundrobin", "ssl": True,
+                                                                        "sslVerify": "required", "check": True, "fall": 2, "rise": 2}},
+        }
+        inventory = copy.deepcopy(PLACEMENT)
+        inventory["node1"]["vault-ha"] = {"members": {"vault-1": {"roles": ["vault"]}}}
+        inventory["node2"]["vault-ha"] = {"members": {"vault-2": {"roles": ["vault"]}}}
+        inventory["node3"]["vault-ha"] = {"members": {"vault-3": {"roles": ["vault"]}}}
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, catalog, inventory_deployments=inventory)
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, inventory, endpoints, DEFAULTS)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        backend = next(item for item in result["backends"]["haproxy"] if item["targetDeploymentId"] == "vault-ha")
+        self.assertEqual(["vault-1", "vault-2", "vault-3"], [item["memberId"] for item in backend["targets"]])
+        self.assertEqual([8200, 8200, 8200], [item["port"] for item in backend["targets"]])
+
+    def test_member_client_port_uses_host_local_ordinals_without_host_deduplication(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["definitions"]["vault"] = {
+            "endpoint": {}, "listeners": {"client": {"scope": "member", "defaultPort": 8200}},
+            "configuration": {"settings": {"port": {"scopes": ["deployment", "member"]}}},
+            "x-backendClientListener": {"listener": "client", "allocation": {"kind": "HOST_LOCAL_ORDINAL", "stride": 2}},
+        }
+        topology = copy.deepcopy(TOPOLOGY)
+        topology["serviceDeployments"]["vault-ha"] = {
+            "serviceType": "vault", "endpointGroup": "asutp", "members": {
+                "vault-1": {"host": "node1"}, "vault-2": {"host": "node1"},
+                "vault-3": {"host": "node1", "configuration": {"port": 8210}},
+            },
+            "haproxy": {"deploymentRef": "haproxy", "backend": {"balance": "roundrobin", "ssl": True,
+                                                                "sslVerify": "required", "check": True, "fall": 2, "rise": 2}},
+        }
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, catalog, inventory_deployments=PLACEMENT)
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT, endpoints, DEFAULTS)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        targets = next(item for item in result["backends"]["haproxy"] if item["targetDeploymentId"] == "vault-ha")["targets"]
+        self.assertEqual([8200, 8202, 8210], [item["port"] for item in targets])
+        self.assertEqual(["vault-1", "vault-2", "vault-3"], [item["memberId"] for item in targets])
+        topology["serviceDeployments"]["vault-ha"]["members"]["vault-2"]["host"] = "node2"
+        topology["serviceDeployments"]["vault-ha"]["members"]["vault-3"]["host"] = "node3"
+        topology["serviceDeployments"]["vault-ha"]["members"]["vault-3"].pop("configuration")
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT, endpoints, DEFAULTS)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        targets = next(item for item in result["backends"]["haproxy"] if item["targetDeploymentId"] == "vault-ha")["targets"]
+        self.assertEqual([8200, 8200, 8200], [item["port"] for item in targets])
+        fqdn = endpoints["endpoints"]["vault-ha"]["fqdn"]
+        requests = [{"dnsNames": [fqdn], "consumers": [
+            {"deploymentId": "vault-ha", "memberId": item["memberId"], "hostId": item["hostId"]}
+            for item in targets]}]
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT,
+                                                  endpoints, DEFAULTS, pki_requests=requests)
+        backend = next(item for item in result["backends"]["haproxy"] if item["targetDeploymentId"] == "vault-ha")
+        self.assertEqual(fqdn, backend["expectedServerName"])
+        requests[0]["dnsNames"] = ["*.asutp.scada.local"]
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT,
+                                                  endpoints, DEFAULTS, pki_requests=requests)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        requests[0]["dnsNames"] = ["wrong.example.test"]
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT,
+                                                  endpoints, DEFAULTS, pki_requests=requests)
+        self.assertIn("HAPROXY_BACKEND_TLS_IDENTITY_UNRESOLVED", [item["code"] for item in result["findings"]])
+
+    def test_pkix_wildcard_covers_only_one_dns_label(self):
+        self.assertTrue(HAPROXY._request_dns_covers_name(["*.asutp.scada.local"], "vault.asutp.scada.local"))
+        self.assertFalse(HAPROXY._request_dns_covers_name(["*.asutp.scada.local"], "a.vault.asutp.scada.local"))
+        self.assertFalse(HAPROXY._request_dns_covers_name(["*.asutp.scada.local"], "vault.other.scada.local"))
 
 if __name__ == "__main__":
     unittest.main()

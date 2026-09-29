@@ -1,0 +1,37 @@
+---
+- name: Read installed Redis package version
+  ansible.builtin.command:
+    argv: [rpm, -q, --qf, "%{VERSION}-%{RELEASE}", redis]
+  changed_when: false
+  failed_when: false
+  register: _platform_redis_installed_package
+
+- name: Read package-provided Redis service state
+  ansible.builtin.command:
+    argv: [systemctl, "{{ item }}", redis.service]
+  changed_when: false
+  failed_when: false
+  register: _platform_redis_default_service_state
+  loop: [is-active, is-enabled]
+
+- name: Read package-provided Sentinel service state
+  ansible.builtin.command:
+    argv: [systemctl, "{{ item }}", redis-sentinel.service]
+  changed_when: false
+  failed_when: false
+  register: _platform_redis_default_sentinel_state
+  loop: [is-active, is-enabled]
+
+- name: Reject active or enabled package-provided Redis units
+  ansible.builtin.assert:
+    that:
+      - _platform_redis_installed_package.rc != 0 or _platform_redis_installed_package.stdout == platform_redis_version
+      - _platform_redis_default_service_state.results[0].stdout | trim != 'active'
+      - _platform_redis_default_service_state.results[1].stdout | trim not in ['enabled', 'enabled-runtime']
+      - _platform_redis_default_sentinel_state.results[0].stdout | trim != 'active'
+      - _platform_redis_default_sentinel_state.results[1].stdout | trim not in ['enabled', 'enabled-runtime']
+    fail_msg: REDIS_PACKAGE_DEFAULT_UNIT_CONFLICT
+
+- name: Record whether Redis package units will be introduced by this apply
+  ansible.builtin.set_fact:
+    _platform_redis_package_absent_before_apply: "{{ _platform_redis_installed_package.rc != 0 }}"

@@ -203,6 +203,25 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertTrue(all(item["requirementRef"].startswith("si-") and len(item["requirementRef"]) == 43 for item in refs))
         self.assertTrue(all(item["hosts"] == ["node1", "node2", "node3"] for item in refs))
         private = result["executionManifest"]["runtimeSecretInputs"]
+        # Exercise the actual closed Start consumer, not a parallel field check.
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+        try:
+            import execution_secret_lease
+            admitted = execution_secret_lease._validate_typed_secret_requirements(private)
+            self.assertEqual(2, len(admitted))
+            for item in private:
+                self.assertNotIn("displayLabel", item)
+            public_inputs, _, input_findings = PLAN._service_input_requirements(
+                state["serviceDeployments"], value["definitions"], state["topology"]["resolved"])
+            self.assertEqual([], input_findings)
+            self.assertEqual({"Administrative token", "Unseal keys"},
+                             {item["displayLabel"] for item in public_inputs})
+            malformed = copy.deepcopy(private)
+            malformed[0]["displayLabel"] = "Presentation only"
+            with self.assertRaisesRegex(execution_secret_lease.LifecycleError, "EXECUTION_MANIFEST_INVALID"):
+                execution_secret_lease._validate_typed_secret_requirements(malformed)
+        finally:
+            sys.path.pop(0)
         self.assertEqual({"vault-admin-token", "vault-unseal-shares"}, {item["manifestRequirementRef"] for item in private})
         self.assertEqual({"INITIALIZED", "SEALED"}, {item["requiredWhen"] for item in private})
         operations_by_purpose = {item["purpose"]: item["operations"] for item in private}
@@ -222,6 +241,37 @@ class DeploymentPlanTests(unittest.TestCase):
             self.assertEqual("raft-ha", apply["roleVariablesByHost"][host]["platform_vault_mode"])
             self.assertEqual("infra-tls", apply["roleVariablesByHost"][host]["platform_vault_tls_profile"])
             self.assertEqual(["vault-1", "vault-2", "vault-3"], [item["id"] for item in apply["roleVariablesByHost"][host]["platform_vault_instances"]])
+
+    def test_member_client_port_override_uses_existing_member_list_without_host_conflict(self):
+        definition = {
+            "configuration": {"settings": {"port": {"roleVariable": "platform_vault_api_port", "scopes": ["deployment", "member"]}}},
+            "x-backendClientListener": {"listener": "client", "allocation": {"kind": "HOST_LOCAL_ORDINAL", "stride": 2}},
+        }
+        resolved = {"members": {"vault-1": {"host": "node1", "roles": ["vault"]},
+                                "vault-2": {"host": "node1", "roles": ["vault"]}}}
+        service = {"services": {"vault-ha": {"mode": "raft-ha",
+            "configuration": {"port": {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": 8200}},
+            "members": {
+                "vault-1": {"variableContext": {"hostId": "node1"}, "configuration": {"port": {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": 8200}}},
+                "vault-2": {"variableContext": {"hostId": "node1"}, "configuration": {"port": {"state": "RESOLVED", "source": "MEMBER_OVERRIDE", "value": 8210}}},
+            }}}}
+        values = PLAN._execution_role_variables("vault-ha", definition, "platform_vault_", service,
+            ["node1"], resolved, {"node1": {"ansibleHost": "192.0.2.1"}}, "platform_vault_instances")
+        self.assertEqual(8200, values["node1"]["platform_vault_api_port"])
+        self.assertEqual([{}, {"port": 8210}], [
+            {key: item[key] for key in item if key == "port"}
+            for item in values["node1"]["platform_vault_instances"]])
+
+    def test_haproxy_provider_apply_follows_explicitly_related_source(self):
+        deployments = {"haproxy": {"serviceType": "haproxy"},
+                       "vault-ha": {"serviceType": "vault", "haproxy": {"deploymentRef": "haproxy"}}}
+        provider_dependencies = PLAN._service_dependencies("haproxy", deployments["haproxy"], {}, deployments)
+        self.assertEqual(["apply:vault-ha"], provider_dependencies)
+        actions = PLAN._ordered_apply_actions([
+            {"id": "apply:haproxy", "dependsOn": provider_dependencies},
+            {"id": "apply:vault-ha", "dependsOn": []},
+        ])
+        self.assertEqual(["apply:vault-ha", "apply:haproxy"], [item["id"] for item in actions])
 
     def test_secret_output_declaration_is_private_and_bound_to_apply_deployment(self):
         value, state = catalog(), snapshot()

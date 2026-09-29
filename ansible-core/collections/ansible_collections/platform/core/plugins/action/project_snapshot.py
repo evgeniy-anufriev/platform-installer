@@ -302,6 +302,7 @@ class ActionModule(ActionBase):
             )
             haproxy = resolve_haproxy_backends(
                 materialized, catalog, host_addresses, inventory_deployments, endpoints, {}, configuration,
+                pki.get("requests", []) if pki.get("status") == "PASS" else [],
             )
             owned = self._task.args.get("installer_owned_paths", [])
             documents, revision = project_documents(project_root, owned)

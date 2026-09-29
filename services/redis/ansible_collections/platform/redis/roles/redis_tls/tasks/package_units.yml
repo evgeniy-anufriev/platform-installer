@@ -1,0 +1,14 @@
+---
+- name: Disable the package-provided Redis default service
+  ansible.builtin.systemd_service:
+    name: redis.service
+    enabled: false
+    state: stopped
+    daemon_reload: true
+
+- name: Disable the package-provided Sentinel default service
+  ansible.builtin.systemd_service:
+    name: redis-sentinel.service
+    enabled: false
+    state: stopped
+    daemon_reload: true

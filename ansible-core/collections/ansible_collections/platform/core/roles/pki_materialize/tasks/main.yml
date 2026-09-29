@@ -17,7 +17,9 @@
 - name: Require fresh resolution to match the previously applied frozen PKI plans
   ansible.builtin.assert:
     that:
-      - platform_pki_resolve_managed | bool
+      - platform_pki_managed_resolution is defined
+      - not (platform_pki_managed_resolution.skipped | default(false))
+      - platform_pki_managed_resolution.pki.status == 'PASS'
       - platform_pki_managed_resolution.pki.materializationPlans | sort(attribute='id') == platform_pki_materialization_plans | sort(attribute='id')
     fail_msg: PKI_APPLIED_PLAN_MISMATCH
   when: "'platform_installer_pki_materialization' in ansible_skip_tags"

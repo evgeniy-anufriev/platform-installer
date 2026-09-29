@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+import yaml
+
 
 ROLE = (
     Path(__file__).resolve().parents[1]
@@ -33,9 +35,9 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", package)
 
     def test_ha_data_members_do_not_run_platform_initdb(self):
-        initdb = self.main[self.main.index("Initialize PostgreSQL exactly once") :]
-        initdb = initdb[: initdb.index("Resolve PKI-01 PEM projection")]
-        self.assertIn("platform_postgresql_mode == 'standalone'", initdb)
+        initdb = next(task for task in yaml.safe_load(self.main)
+                      if task.get("name") == "Initialize PostgreSQL exactly once")
+        self.assertIn("platform_postgresql_mode == 'standalone'", initdb["when"])
 
     def test_pg_autoctl_owns_empty_data_member_bootstrap(self):
         self.assertIn("pg_autoctl\n      - create\n      - postgres", self.failover)

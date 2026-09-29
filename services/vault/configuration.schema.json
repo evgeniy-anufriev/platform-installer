@@ -3,12 +3,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "apiPort": {
+    "clusterPort": {
       "maximum": 65535,
       "minimum": 1,
       "type": "integer"
     },
-    "clusterPort": {
+    "port": {
       "maximum": 65535,
       "minimum": 1,
       "type": "integer"

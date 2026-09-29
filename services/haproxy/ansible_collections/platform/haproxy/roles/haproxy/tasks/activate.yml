@@ -1,66 +1,11 @@
 ---
-- name: Install exact validated Platform main configuration atomically
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/haproxy.cfg"
-    dest: "{{ platform_haproxy_main_config }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  register: _platform_haproxy_main_config_install
+- name: Inspect active HAProxy main config before publication
+  ansible.builtin.stat:
+    path: "{{ platform_haproxy_main_config }}"
+    follow: false
+  register: _platform_haproxy_previous_main
 
-- name: Install exact validated Platform HAProxy fragments atomically
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
-    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: [10-public.cfg, 20-local-stats.cfg, 90-stats-backends.cfg]
-  register: _platform_haproxy_fragment_install
-
-- name: Install exact validated managed HAProxy application backend fragments
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
-    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
-  register: _platform_haproxy_application_backend_install
-
-- name: Discover stale Platform-managed HAProxy application backend fragments
-  ansible.builtin.find:
-    paths: "{{ platform_haproxy_conf_directory }}"
-    patterns: '30-backend-*.cfg'
-    use_regex: false
-    file_type: file
-    recurse: false
-  register: _platform_haproxy_active_application_backend_files
-
-- name: Remove stale Platform-managed HAProxy application backend fragments
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: absent
-  loop: >-
-    {{ _platform_haproxy_active_application_backend_files.files |
-       rejectattr('path', 'in', (platform_haproxy_managed_application_backend_files | default([]) |
-       map('regex_replace', '^', platform_haproxy_conf_directory ~ '/') | list)) | list }}
-  loop_control:
-    label: "{{ item.path }}"
-  register: _platform_haproxy_stale_application_backend_remove
-
-- name: Record whether the active HAProxy graph changed
-  ansible.builtin.set_fact:
-    platform_haproxy_active_artifacts_changed: >-
-      {{ _platform_haproxy_main_config_install.changed or
-         (_platform_haproxy_fragment_install.results | selectattr('changed') | list | length > 0) or
-         (_platform_haproxy_application_backend_install.results | default([]) | selectattr('changed') | list | length > 0) or
-         (_platform_haproxy_stale_application_backend_remove.results | default([]) | selectattr('changed') | list | length > 0) }}
-
-- name: Calculate deterministic active HAProxy graph digest
+- name: Calculate previous active HAProxy graph digest when installed
   ansible.builtin.shell: >-
     { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
       find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
@@ -69,15 +14,26 @@
   args:
     executable: /bin/bash
   changed_when: false
-  register: _platform_haproxy_active_graph_digest
+  register: _platform_haproxy_previous_graph_digest
+  when: _platform_haproxy_previous_main.stat.isreg | default(false)
 
-- name: Require exact candidate and active HAProxy graph equivalence
-  ansible.builtin.assert:
-    that:
-      - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
-    fail_msg: HAPROXY_CANDIDATE_ACTIVE_GRAPH_MISMATCH
+- name: Prove backend ownership and archive only stale owned fragments
+  platform.haproxy.archive_managed_backends:
+    config_directory: "{{ platform_haproxy_config_directory }}"
+    candidate_files: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
+    previous_inventory: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
+    activation_required: >-
+      {{ not (_platform_haproxy_previous_main.stat.isreg | default(false)) or
+         _platform_haproxy_previous_graph_digest.stdout != _platform_haproxy_candidate_graph_digest.stdout }}
+  register: _platform_haproxy_backend_archive
 
-- name: Validate active HAProxy configuration before service lifecycle
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
-  changed_when: false
+- name: Publish and verify exact validated HAProxy graph
+  block:
+    - name: Install and verify candidate graph
+      ansible.builtin.include_tasks: activate_publish.yml
+  rescue:
+    - name: Stop with recoverable HAProxy archive evidence
+      ansible.builtin.fail:
+        msg: >-
+          HAPROXY_ACTIVATION_RECOVERY_REQUIRED
+          archive={{ _platform_haproxy_backend_archive.archivePath | default('none', true) }}

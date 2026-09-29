@@ -1,0 +1,195 @@
+---
+- name: Check Redis member systemd state
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "platform-redis@{{ redis_member.instance_name }}.service"]
+  changed_when: false
+  register: _platform_redis_unit_state
+
+- name: Require active Redis member
+  ansible.builtin.assert:
+    that: _platform_redis_unit_state.stdout | trim == 'active'
+    fail_msg: REDIS_MEMBER_NOT_ACTIVE
+
+- name: Verify Redis TLS endpoint and credential
+  ansible.builtin.command:
+    argv:
+      - redis-cli
+      - --tls
+      - --cacert
+      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
+      - --cert
+      - "{{ redis_member.config_directory }}/pki/certificate.pem"
+      - --key
+      - "{{ redis_member.config_directory }}/pki/private-key.pem"
+      - -h
+      - "{{ redis_member.address }}"
+      - -p
+      - "{{ redis_member.redis_port | string }}"
+      - --user
+      - default
+      - PING
+  environment:
+    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) }}"
+  changed_when: false
+  register: _platform_redis_ping
+  retries: 24
+  delay: 5
+  until: _platform_redis_ping.rc == 0 and _platform_redis_ping.stdout | trim == 'PONG'
+  no_log: true
+  ignore_errors: true
+
+- name: Require successful Redis TLS endpoint authentication
+  ansible.builtin.assert:
+    that:
+      - _platform_redis_ping.rc == 0
+      - _platform_redis_ping.stdout | trim == 'PONG'
+    fail_msg: >-
+      {{ 'REDIS_TLS_AUTH_REJECTED'
+         if ((_platform_redis_ping.stdout | default('')) is search('(?i)WRONGPASS'))
+         else 'REDIS_TLS_AUTH_REQUIRED'
+         if ((_platform_redis_ping.stdout | default('')) is search('(?i)NOAUTH'))
+         else 'REDIS_TLS_CONNECTION_FAILED'
+         if (((_platform_redis_ping.stderr | default('')) ~ (_platform_redis_ping.stdout | default(''))) is search('(?i)connect|timeout|refused|handshake|certificate|tls|ssl'))
+         else 'REDIS_TLS_PING_FAILED' }}
+  when: _platform_redis_ping is failed
+
+- name: Read Redis replication role over the authenticated TLS endpoint
+  ansible.builtin.command:
+    argv:
+      - redis-cli
+      - --raw
+      - --tls
+      - --cacert
+      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
+      - --cert
+      - "{{ redis_member.config_directory }}/pki/certificate.pem"
+      - --key
+      - "{{ redis_member.config_directory }}/pki/private-key.pem"
+      - -h
+      - "{{ redis_member.address }}"
+      - -p
+      - "{{ redis_member.redis_port | string }}"
+      - --user
+      - default
+      - INFO
+      - replication
+  environment:
+    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) }}"
+  changed_when: false
+  register: _platform_redis_replication_info
+  retries: 24
+  delay: 5
+  until: >-
+    _platform_redis_replication_info.rc == 0
+    and (_platform_redis_replication_info.stdout is search('(?m)^role:(master|slave|replica)\\r?$'))
+    and (
+      _platform_redis_replication_info.stdout is search('(?m)^role:master\\r?$')
+      or _platform_redis_replication_info.stdout is search('(?m)^master_link_status:up\\r?$')
+    )
+  no_log: true
+
+- name: Record safe Redis role observation for deployment-wide verification
+  ansible.builtin.set_fact:
+    _platform_redis_observed_members: >-
+      {{ _platform_redis_observed_members + [{
+        'id': redis_member.id,
+        'address': redis_member.address,
+        'port': redis_member.redis_port | int,
+        'role': (
+          _platform_redis_replication_info.stdout
+          | regex_search('(?m)^role:(master|slave|replica)')
+          | default('role:unknown', true)
+          | regex_replace('^role:', '')
+        ),
+        'replicaReady': (
+          (_platform_redis_replication_info.stdout | regex_search('(?m)^role:(slave|replica)')) is not none
+          and (_platform_redis_replication_info.stdout | regex_search('(?m)^master_link_status:up')) is not none
+        )
+      }] }}
+  no_log: true
+
+- name: Check Sentinel member systemd state
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "platform-redis-sentinel@{{ redis_member.instance_name }}.service"]
+  changed_when: false
+  register: _platform_sentinel_unit_state
+  when: "'sentinel' in redis_member.roles"
+
+- name: Require active Sentinel member
+  ansible.builtin.assert:
+    that: _platform_sentinel_unit_state.stdout | trim == 'active'
+    fail_msg: REDIS_SENTINEL_MEMBER_NOT_ACTIVE
+  when: "'sentinel' in redis_member.roles"
+
+- name: Verify Sentinel TLS quorum and discover its current master
+  ansible.builtin.command:
+    argv:
+      - redis-cli
+      - --raw
+      - --tls
+      - --cacert
+      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
+      - --cert
+      - "{{ redis_member.config_directory }}/pki/certificate.pem"
+      - --key
+      - "{{ redis_member.config_directory }}/pki/private-key.pem"
+      - -h
+      - "{{ redis_member.address }}"
+      - -p
+      - "{{ redis_member.sentinel_port | string }}"
+      - --user
+      - default
+      - SENTINEL
+      - CKQUORUM
+      - "{{ (_platform_redis_instances | first).id }}"
+  environment:
+    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) }}"
+  changed_when: false
+  register: _platform_sentinel_quorum
+  retries: 24
+  delay: 5
+  until: _platform_sentinel_quorum.rc == 0 and _platform_sentinel_quorum.stdout | trim is match('^OK(?:\\s|$)')
+  no_log: true
+  when: "'sentinel' in redis_member.roles"
+
+- name: Read the current master address from Sentinel
+  ansible.builtin.command:
+    argv:
+      - redis-cli
+      - --raw
+      - --tls
+      - --cacert
+      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
+      - --cert
+      - "{{ redis_member.config_directory }}/pki/certificate.pem"
+      - --key
+      - "{{ redis_member.config_directory }}/pki/private-key.pem"
+      - -h
+      - "{{ redis_member.address }}"
+      - -p
+      - "{{ redis_member.sentinel_port | string }}"
+      - --user
+      - default
+      - SENTINEL
+      - GET-MASTER-ADDR-BY-NAME
+      - "{{ (_platform_redis_instances | first).id }}"
+  environment:
+    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) }}"
+  changed_when: false
+  register: _platform_sentinel_master_address
+  retries: 24
+  delay: 5
+  until: >-
+    _platform_sentinel_master_address.rc == 0
+    and _platform_sentinel_master_address.stdout_lines | length == 2
+  no_log: true
+  when: "'sentinel' in redis_member.roles"
+
+- name: Record safe Sentinel master observation for deployment-wide verification
+  ansible.builtin.set_fact:
+    _platform_redis_observed_sentinel_masters: >-
+      {{ _platform_redis_observed_sentinel_masters + [
+        _platform_sentinel_master_address.stdout_lines[0] ~ ':' ~ _platform_sentinel_master_address.stdout_lines[1]
+      ] }}
+  no_log: true
+  when: "'sentinel' in redis_member.roles"

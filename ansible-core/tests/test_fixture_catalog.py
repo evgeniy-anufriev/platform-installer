@@ -48,6 +48,17 @@ class FixtureCatalogTests(unittest.TestCase):
         )
         self.assertEqual([], findings)
 
+    def test_vault_manifest_is_in_generated_catalog_with_trusted_input_and_pki_metadata(self):
+        catalog = CATALOG.build_catalog()
+        definition = catalog["definitions"]["vault"]
+        self.assertEqual("vault", definition["metadata"]["id"])
+        self.assertEqual(["vault-admin-token", "vault-unseal-shares"],
+                         [item["requirementRef"] for item in definition["x-secretInputs"]["inputs"]])
+        self.assertEqual("TLS_PROFILE", definition["configuration"]["settings"]["tlsProfile"]["ui"]["x-referenceKind"])
+        self.assertEqual("platform_vault_instances", definition["roleEntrypoints"]["apply"]["x-memberListVariable"])
+        self.assertEqual("../../services/vault/configuration.schema.json", definition["configurationSchema"]["$ref"])
+        self.assertEqual([], SCHEMA.SchemaValidator(CONTRACTS).validate(catalog, CATALOG_SCHEMA))
+
     def test_catalog_rejects_unknown_configuration_ui_metadata(self):
         catalog = deepcopy(CATALOG.build_catalog())
         catalog["definitions"]["postgresql"]["configuration"]["settings"]["port"]["ui"]["unsupported"] = True

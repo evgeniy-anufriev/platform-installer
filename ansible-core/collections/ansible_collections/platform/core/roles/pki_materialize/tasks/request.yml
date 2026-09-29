@@ -104,7 +104,8 @@
   ansible.builtin.set_fact:
     _platform_pki_reissue_required: >-
       {{ platform_pki_request_marker.stat.exists and
-         (platform_pki_existing_request_fingerprint.stdout | default('') | trim) != platform_pki_request.certificateRequestFingerprint }}
+         ((platform_pki_existing_request_fingerprint.stdout | default('') | trim) != platform_pki_request.certificateRequestFingerprint or
+          _platform_pki_reissue_requested) }}
     _platform_pki_reissue_active: "{{ _platform_pki_reissue_resumable }}"
 
 - name: Require explicit authorization for certificate reissue
