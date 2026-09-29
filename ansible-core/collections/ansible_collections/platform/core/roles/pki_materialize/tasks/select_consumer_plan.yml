@@ -1,0 +1,76 @@
+---
+- name: Validate PKI consumer plan selector inputs
+  ansible.builtin.assert:
+    that:
+      - platform_pki_consumer_tls_profile_id is string
+      - platform_pki_consumer_tls_profile_id | length > 0
+    fail_msg: PKI_CONSUMER_PLAN_INPUT_INVALID
+
+- name: Resolve authoritative PKI consumer collections
+  ansible.builtin.set_fact:
+    _platform_pki_consumer_requests: >-
+      {{ platform_pki_requests
+         | default(hostvars['localhost'].platform_pki_requests | default([]), true) }}
+    _platform_pki_consumer_available_plans: >-
+      {{ platform_pki_materialization_plans
+         | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true) }}
+    _platform_pki_consumer_deployment_id: "{{ platform_execution_service_deployment | default('', true) }}"
+
+- name: Validate PKI consumer plan selector collections
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_consumer_requests is sequence
+      - _platform_pki_consumer_requests is not string
+      - _platform_pki_consumer_available_plans is sequence
+      - _platform_pki_consumer_available_plans is not string
+    fail_msg: PKI_CONSUMER_PLAN_INPUT_INVALID
+
+- name: Initialize PKI consumer request candidates
+  ansible.builtin.set_fact:
+    _platform_pki_consumer_request_ids: []
+
+- name: Collect PKI requests bound to this service consumer
+  ansible.builtin.set_fact:
+    _platform_pki_consumer_request_ids: "{{ _platform_pki_consumer_request_ids + [item.id] }}"
+  loop: "{{ _platform_pki_consumer_requests }}"
+  loop_control:
+    label: "{{ item.id | default('unknown') }}"
+  vars:
+    _platform_pki_consumer_matching_consumers: >-
+      {{ item.consumers | default([])
+         | selectattr('hostId', 'equalto', inventory_hostname)
+         | selectattr('tlsProfileRef', 'equalto', platform_pki_consumer_tls_profile_id)
+         | list }}
+  when:
+    - item is mapping
+    - item.id is defined
+    - item.id is string
+    - item.id | length > 0
+    - _platform_pki_consumer_matching_consumers | length > 0
+    - >-
+      (_platform_pki_consumer_deployment_id | length == 0)
+      or
+      (_platform_pki_consumer_matching_consumers
+       | selectattr('deploymentId', 'equalto', _platform_pki_consumer_deployment_id)
+       | list | length > 0)
+
+- name: Select the unique PKI plan for this service consumer
+  ansible.builtin.set_fact:
+    _platform_pki_consumer_plans: >-
+      {{ (_platform_pki_consumer_available_plans
+          | selectattr('hostId', 'equalto', inventory_hostname)
+          | selectattr('tlsProfileId', 'equalto', platform_pki_consumer_tls_profile_id)
+          | selectattr('requestId', 'in', _platform_pki_consumer_request_ids)
+          | list) }}
+
+- name: Require one exact PKI consumer plan
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_consumer_request_ids | length > 0
+      - _platform_pki_consumer_plans | length == 1
+      - _platform_pki_consumer_plans[0].targetDirectory is defined
+    fail_msg: PKI_CONSUMER_PLAN_REQUIRED
+
+- name: Publish selected PKI consumer plan
+  ansible.builtin.set_fact:
+    platform_pki_selected_consumer_plan: "{{ _platform_pki_consumer_plans[0] }}"

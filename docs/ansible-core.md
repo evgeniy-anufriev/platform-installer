@@ -217,6 +217,29 @@ Final result includes:
 - references to sanitized full diagnostics;
 - exact Core, collection, role, payload and artifact versions.
 
+## Runtime role-variable transfer
+
+Core-derived per-host role variables use `platform.core.runtime_role_variables`
+and its narrow action-only `platform.core.apply_runtime_role_variables` adapter.
+The adapter copies the current host's validated `platform_*` mapping into facts
+without templating individual scalars: integers and boolean-shaped strings retain
+their original types independently of Jinja native mode. It has no service rules,
+Go dependency, target transport or file writes; it rejects task arguments/invalid
+names, reports `changed=false`, and preserves `no_log`. Built-in `set_fact` was
+insufficient because non-native mode coerced numbers and strings such as `false`.
+
+## Registered loop-result convention
+
+For ordinary per-member render/copy operations with downstream changed-member
+tracking, use the standard Ansible loop variable `item`. Registered results then
+retain member identity in `result.item.id`; a tracking loop reads `item.item.id`.
+Templates may use a descriptive task-local alias (for example,
+`vault_member: "{{ item }}"`) without changing the registered result contract.
+Product loops retain their declared tuple shape (for example `item.item[0].id`).
+Do not introduce service-specific result extraction into the generic lifecycle.
+Explicit custom loop variables remain appropriate where nesting requires them,
+but their result consumers must match that explicitly declared contract.
+
 ## Secrets
 
 The standalone Core accepts secrets through a replaceable runtime provider, initially protected files, environment-owned descriptors or Ansible Vault where explicitly configured. The portable project contains only references and required-secret metadata.

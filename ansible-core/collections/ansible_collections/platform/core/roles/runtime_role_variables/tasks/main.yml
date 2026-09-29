@@ -9,9 +9,5 @@
   no_log: true
 
 - name: Apply Core-derived role variables for the current target
-  ansible.builtin.set_fact:
-    "{{ item.key }}": "{{ item.value }}"
-  loop: "{{ platform_execution_role_variables_by_host[inventory_hostname] | dict2items }}"
-  loop_control:
-    label: redacted
+  platform.core.apply_runtime_role_variables:
   no_log: true
