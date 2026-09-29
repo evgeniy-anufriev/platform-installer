@@ -20,6 +20,13 @@ build on trusted acquisition node
 → remove checkpoint
 ```
 
+For QA hosts where the selected Execution Node lacks acquisition workspace
+capacity, `-acquisition-address` may name a separate already trusted Linux
+acquisition host. Only the bundle build uses that host; supported preparation,
+activation and readiness still target `-address`. Both hosts must satisfy the
+same explicit SSH identity and host-key policy. Omitting the flag preserves
+the original single-host flow.
+
 The checkpoint is under `.runtime/qa/runtime-promotions/`, contains only
 paths, immutable digests and its stage, and is never canonical project state.
 The pre-publication checkpoint also closes the short interruption window after

@@ -151,13 +151,12 @@ func (t OpenSSHTransport) AcquireRuntimeClosure(ctx context.Context, node Node, 
 	if err := os.MkdirAll(target, 0o700); err != nil {
 		return err
 	}
-	sum := sha256.Sum256([]byte(node.ID))
-	remote := "/var/tmp/platform-installer/acquisition/" + hex.EncodeToString(sum[:8])
-	cleanup := func() {
-		_, _ = t.ssh(context.Background(), node, "sh", []string{"-s", "--", remote}, []byte("case \"$1\" in /var/tmp/platform-installer/acquisition/*) rm -rf -- \"$1\";; *) exit 64;; esac\n"))
+	remote, err := createRemoteAcquisitionWorkspace(ctx, t, node)
+	if err != nil {
+		return errors.New("EXECUTION_RUNTIME_CLOSURE_FAILED")
 	}
-	defer cleanup()
-	script := "set -eu\ncase \"$1\" in /var/tmp/platform-installer/acquisition/*) ;; *) exit 64;; esac\nrm -rf -- \"$1\"\nmkdir -p -- \"$1\"\nsudo -n dnf -q download --resolve --alldeps --destdir \"$1\" -- python3 ansible-core openssl ca-certificates tar gzip\nrpm=$(find \"$1\" -maxdepth 1 -type f -name '*.rpm' -print -quit)\ntest -n \"$rpm\"\ncd \"$1\"\nsudo -n tar -cf closure.tar -- *.rpm\nsudo -n chmod 0644 closure.tar\n"
+	defer cleanupRemoteAcquisitionWorkspace(t, node, remote)
+	script := "set -eu\nroot=$1\n" + `case "$root" in /var/tmp/platform-installer-acquisition-??????????) ;; *) exit 64;; esac` + "\ntest -d \"$root\" && test ! -L \"$root\"\nsudo -n dnf -q download --resolve --alldeps --destdir \"$root\" -- python3 ansible-core openssl ca-certificates tar gzip\nrpm=$(find \"$root\" -maxdepth 1 -type f -name '*.rpm' -print -quit)\ntest -n \"$rpm\"\ncd \"$root\"\nsudo -n tar -cf closure.tar -- *.rpm\nsudo -n chmod 0644 closure.tar\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte(script)); err != nil {
 		return errors.New("EXECUTION_RUNTIME_CLOSURE_FAILED")
 	}
@@ -297,6 +296,12 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 	root := t.runtimeRoot()
 	release := path.Join(root, "releases", id)
 	candidate := stage
+	// Storage and detached controllers share the sudo effective UID. Existing
+	// foreign-owned storage fails closed; preparation never repairs it by chown.
+	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer/bootstrap/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, root}, []byte(storageScript)); err != nil {
+		return Runtime{}, err
+	}
 	script := "set -eu\nstage=$1; release=$2; root=$3; bundle_digest=$4; bundle_version=$5; core_version=$6; protocol=$7\ncase \"$stage:$release:$root\" in /var/tmp/platform-installer/bootstrap/*:/var/lib/platform-installer/runtime/releases/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\ncase \"$bundle_digest\" in sha256:*) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$root/releases\" \"$root/state\"\nsudo -n rm -rf -- \"$release\"\nsudo -n cp -a -- \"$stage\" \"$release\"\nsudo -n test -f \"$release/manifest.yaml\"\nsudo -n test -f \"$release/ansible-core/playbooks/execution-capabilities.yml\"\nsudo -n env ANSIBLE_CONFIG=\"$release/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$release/ansible-core/collections\" ansible-playbook -i localhost, \"$release/ansible-core/playbooks/execution-capabilities.yml\" -e \"platform_execution_runtime_root=$release\" -e \"platform_execution_bundle_digest=$bundle_digest\" >/dev/null\nsudo -n sh -c 'umask 077; printf \"BUNDLE_VERSION=%s\\nBUNDLE_DIGEST=%s\\nCORE_VERSION=%s\\nPROTOCOL=%s\\nANSIBLE=yes\\nCAPABILITIES=yes\\n\" \"$1\" \"$2\" \"$3\" \"$4\" > \"$5.new\"; mv -f -- \"$5.new\" \"$5\"' -- \"$bundle_version\" \"$bundle_digest\" \"$core_version\" \"$protocol\" \"$root/state/active\"\nsudo -n ln -sfn -- \"$release\" \"$root/current.new\"\nsudo -n mv -Tf -- \"$root/current.new\" \"$root/current\"\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, release, root, bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol}, []byte(script)); err != nil {
 		return Runtime{}, err

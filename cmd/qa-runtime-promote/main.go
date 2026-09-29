@@ -31,6 +31,7 @@ func main() {
 	runtimeInput := flag.String("runtime-input", "", "verified runtime input for a new build; retained only before publish")
 	bundleVersion := flag.String("bundle-version", "", "new immutable bundle version")
 	address := flag.String("address", "", "trusted QA Execution Node address")
+	acquisitionAddress := flag.String("acquisition-address", "", "optional trusted QA acquisition node address; defaults to Execution Node")
 	user := flag.String("user", "", "trusted QA Execution Node user")
 	identityPath := flag.String("identity", "", "runtime-only SSH identity")
 	knownHosts := flag.String("known-hosts", "", "trusted SSH known_hosts")
@@ -45,13 +46,18 @@ func main() {
 		fatal("QA_RUNTIME_PROMOTION_INPUT_INVALID")
 	}
 	node := executionnode.Node{ID: "qa-runtime-promotion@" + *address, Address: *address, User: *user, Port: uint16(*port), CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: *knownHosts, Fingerprint: *fingerprint}}
+	buildNode := node
+	if *acquisitionAddress != "" {
+		buildNode.ID = "qa-runtime-acquisition@" + *acquisitionAddress
+		buildNode.Address = *acquisitionAddress
+	}
 	transport := executionnode.OpenSSHTransport{Identity: identity{*identityPath}, RepositoryRoot: repoRoot}
 	service := executionnode.NewService(transport, executionnode.WithBundleCache(executionbundle.Cache{Root: *cache}))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	result, err := qapromotion.Promote(ctx, qapromotion.Request{CheckpointRoot: *checkpointRoot, CacheRoot: *cache, ProjectRoot: *project, ExpectedArtifactDigest: *expectedArtifact, ExpectedCatalogDigest: *expectedCatalog, PublishedDigest: *publishedDigest, RuntimeInput: *runtimeInput, BundleVersion: *bundleVersion, Node: node}, qapromotion.Dependencies{
 		Build: func(ctx context.Context, node executionnode.Node, input, version string) (executionbundle.Verified, error) {
-			built, err := transport.BuildOnExecutionNode(ctx, node, input, version, "")
+			built, err := transport.BuildOnExecutionNode(ctx, buildNode, input, version, "")
 			if err != nil {
 				return executionbundle.Verified{}, err
 			}

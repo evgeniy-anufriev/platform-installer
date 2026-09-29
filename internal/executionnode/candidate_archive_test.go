@@ -81,6 +81,30 @@ func TestCandidateArchiveIncludesOnlyCanonicalDocuments(t *testing.T) {
 	}
 }
 
+func TestServiceProjectArchiveExcludesStandaloneVaultCustody(t *testing.T) {
+	root := t.TempDir()
+	writeCandidateFixture(t, root)
+	secret := filepath.Join(root, "secrets", "vault-standalone", "root-token")
+	if err := os.MkdirAll(filepath.Dir(secret), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secret, []byte("vault-token-must-not-be-archived"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archivePath, err := createProjectArchive(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(archivePath)
+	archive, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(archive, []byte("vault-token-must-not-be-archived")) || bytes.Contains(archive, []byte("secrets/")) {
+		t.Fatal("standalone Vault custody crossed the project archive boundary")
+	}
+}
+
 func TestCandidateArchiveRejectsUnsafeConfigAndHardlink(t *testing.T) {
 	t.Run("config", func(t *testing.T) {
 		root := t.TempDir()
