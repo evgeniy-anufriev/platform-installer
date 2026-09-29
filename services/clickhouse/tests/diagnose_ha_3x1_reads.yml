@@ -1,0 +1,33 @@
+---
+- name: Read bounded replica counts without exposing the runtime password
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    clickhouse_qa_root: "{{ lookup('ansible.builtin.env', 'PLATFORM_CLICKHOUSE_QA_ROOT') }}"
+    clickhouse_qa_password: "{{ lookup('ansible.builtin.file', clickhouse_qa_root ~ '/default-password', lstrip=False, rstrip=False) }}"
+  tasks:
+    - name: Read replicated table count on each HTTPS port
+      ansible.builtin.uri:
+        url: "https://192.168.56.103:{{ item }}/?query=SELECT%20count()%20FROM%20default.si09_ha3x1"
+        method: GET
+        url_username: default
+        url_password: "{{ clickhouse_qa_password }}"
+        force_basic_auth: true
+        ca_path: "{{ clickhouse_qa_root }}/pki/ca-chain.pem"
+        validate_certs: true
+        return_content: true
+        status_code: 200
+      loop: [8443, 8444, 8445]
+      register: clickhouse_qa_reads
+      failed_when: false
+      no_log: true
+
+    - name: Show only status and numeric count, never error payload
+      ansible.builtin.debug:
+        msg: >-
+          port={{ item.item }} status={{ item.status | default(-1) }}
+          count={{ (item.content | trim) if (item.content | default('') | trim) is match('^[0-9]{1,8}$') else 'non-numeric' }}
+      loop: "{{ clickhouse_qa_reads.results }}"
+      loop_control:
+        label: "{{ item.item }}"

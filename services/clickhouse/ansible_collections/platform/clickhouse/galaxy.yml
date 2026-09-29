@@ -1,0 +1,8 @@
+namespace: platform
+name: clickhouse
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer V2]
+description: TLS-only ClickHouse and ClickHouse Keeper installation
+license: [Apache-2.0]
+dependencies: {}

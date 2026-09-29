@@ -15,6 +15,7 @@ import yaml
 REPOSITORY = Path(__file__).resolve().parents[2]
 OUTPUT = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
 SOURCES = (
+    ("clickhouse", REPOSITORY / "services" / "clickhouse" / "service.yml"),
     ("kafka", REPOSITORY / "services" / "kafka" / "service.yml"),
     ("postgresql", REPOSITORY / "services" / "postgresql" / "service.yml"),
     ("redis", REPOSITORY / "services" / "redis" / "service.yml"),

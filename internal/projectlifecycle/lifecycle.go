@@ -403,7 +403,7 @@ type definition struct {
 	} `yaml:"metadata"`
 	Digest           string                 `yaml:"x-definitionDigest"`
 	Modes            map[string]catalogMode `yaml:"modes"`
-	EndpointConsumer map[string]any         `yaml:"endpointConsumer"`
+	EndpointConsumer map[string]any         `yaml:"endpoint"`
 	EndpointProvider map[string]any         `yaml:"endpointProvider"`
 	SecretInputs     map[string]any         `yaml:"x-secretInputs"`
 	SecretOutputs    map[string]any         `yaml:"x-secretOutputs"`

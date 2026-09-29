@@ -1,0 +1,70 @@
+---
+- name: Observe the exact ClickHouse server unit
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "platform-clickhouse-server-{{ clickhouse_member.unit_id[:16] }}.service"]
+  register: _platform_clickhouse_server_status
+  changed_when: false
+  failed_when: false
+
+- name: Require an active member-owned ClickHouse server
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_server_status.rc == 0
+      - _platform_clickhouse_server_status.stdout == 'active'
+    fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
+
+- name: Observe the exact Keeper unit only for HA
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "platform-clickhouse-keeper-{{ clickhouse_member.unit_id[:16] }}.service"]
+  register: _platform_clickhouse_keeper_status
+  changed_when: false
+  failed_when: false
+
+- name: Require the expected mode-specific Keeper process state
+  ansible.builtin.assert:
+    that: >-
+      (_platform_clickhouse_keeper_status.stdout == 'active')
+      if platform_clickhouse_mode == 'raft-ha'
+      else (_platform_clickhouse_keeper_status.stdout != 'active')
+    fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
+
+- name: Query ClickHouse HTTPS as default with exact runtime-only password and trusted CA
+  ansible.builtin.uri:
+    url: "https://{{ clickhouse_member.address }}:{{ clickhouse_member.https_port }}/?query=SELECT%201"
+    method: GET
+    url_username: default
+    url_password: "{{ _platform_clickhouse_default_password }}"
+    force_basic_auth: true
+    validate_certs: true
+    ca_path: "{{ clickhouse_member.config_directory }}/pki/ca-chain.pem"
+    return_content: true
+    status_code: 200
+  register: _platform_clickhouse_https_query
+  changed_when: false
+  failed_when: false
+  until: _platform_clickhouse_https_query.status | default(-1) | int == 200
+  retries: 15
+  delay: 2
+  no_log: true
+
+- name: Report only bounded HTTPS status on failed authentication or TLS
+  ansible.builtin.debug:
+    msg: "CLICKHOUSE_HTTPS_STATUS={{ _platform_clickhouse_https_query.status | default(-1) }}"
+  when: _platform_clickhouse_https_query.status | default(-1) | int != 200
+
+- name: Require authenticated ClickHouse HTTPS query result
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_https_query.status | default(-1) | int == 200
+      - _platform_clickhouse_https_query.content | default('') | trim == '1'
+    fail_msg: "CLICKHOUSE_AUTHENTICATED_HTTPS_VERIFY_FAILED status={{ _platform_clickhouse_https_query.status | default(-1) }}"
+  no_log: true
+
+- name: Require HA Keeper TLS listener or skip it for standalone
+  ansible.builtin.wait_for:
+    host: "{{ clickhouse_member.address }}"
+    port: "{{ clickhouse_member.keeper_client_port }}"
+    state: started
+    timeout: 30
+  when: platform_clickhouse_mode == 'raft-ha'
+  changed_when: false

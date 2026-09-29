@@ -1,0 +1,17 @@
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+
+- name: Apply ClickHouse TLS deployment
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime ClickHouse settings
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+  roles:
+    - role: platform.clickhouse.clickhouse_tls
+      platform_clickhouse_verify_only: false

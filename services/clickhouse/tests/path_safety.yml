@@ -1,0 +1,144 @@
+---
+- name: Prove ClickHouse managed-path admission without package or service mutation
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Allocate an exact QA-owned ClickHouse config root
+      ansible.builtin.tempfile:
+        state: directory
+        path: /etc
+        prefix: platform-clickhouse-qa-
+      register: clickhouse_path_qa_root
+
+    - name: Bind safe disposable roots and one member for path tests
+      ansible.builtin.set_fact:
+        platform_clickhouse_config_root: "{{ clickhouse_path_qa_root.path }}"
+        platform_clickhouse_data_root: "/var/lib/{{ clickhouse_path_qa_root.path | basename }}"
+        platform_clickhouse_log_root: "/var/log/{{ clickhouse_path_qa_root.path | basename }}"
+        platform_clickhouse_deployment_id: clickhouse-qa-path
+        _platform_clickhouse_local_instances:
+          - id: qa-member
+            config_directory: "{{ clickhouse_path_qa_root.path }}/clickhouse-qa-path/qa-member"
+            data_directory: "/var/lib/{{ clickhouse_path_qa_root.path | basename }}/clickhouse-qa-path/qa-member"
+            log_directory: "/var/log/{{ clickhouse_path_qa_root.path | basename }}/clickhouse-qa-path/qa-member"
+
+    - name: Require the disposable root to stay within the exact QA namespace
+      ansible.builtin.assert:
+        that: clickhouse_path_qa_root.path is match('^/etc/platform-clickhouse-qa-[A-Za-z0-9_-]+$')
+        fail_msg: CLICKHOUSE_QA_PATH_UNSAFE
+
+    - name: Exercise safe and hostile ClickHouse paths
+      block:
+        - name: Prepare correctly owned disposable root
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Admit an empty correctly owned root without mutation
+          ansible.builtin.include_role:
+            name: platform.clickhouse.clickhouse_tls
+            tasks_from: path_safety.yml
+
+        - name: Simulate a foreign owner on the managed root
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}"
+            owner: platform-clickhouse
+            group: platform-clickhouse
+
+        - name: Reject the foreign-owned managed root
+          block:
+            - ansible.builtin.include_role:
+                name: platform.clickhouse.clickhouse_tls
+                tasks_from: path_safety.yml
+            - ansible.builtin.fail:
+                msg: FOREIGN_ROOT_ADMITTED
+          rescue:
+            - ansible.builtin.assert:
+                that:
+                  - "'CLICKHOUSE_FOREIGN_ANCESTOR_PATH' in (ansible_failed_result | to_json)"
+                  - "'FOREIGN_ROOT_ADMITTED' not in (ansible_failed_result | to_json)"
+
+        - name: Restore root ownership before the next isolated case
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}"
+            owner: root
+            group: root
+
+        - name: Remove the disposable root before link substitution
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}"
+            state: absent
+
+        - name: Substitute an exact root symlink to an unrelated directory
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}"
+            src: /var/tmp
+            state: link
+
+        - name: Reject the substituted managed root
+          block:
+            - ansible.builtin.include_role:
+                name: platform.clickhouse.clickhouse_tls
+                tasks_from: path_safety.yml
+            - ansible.builtin.fail:
+                msg: ROOT_SYMLINK_ADMITTED
+          rescue:
+            - ansible.builtin.assert:
+                that:
+                  - "'CLICKHOUSE_FOREIGN_ANCESTOR_PATH' in (ansible_failed_result | to_json)"
+                  - "'ROOT_SYMLINK_ADMITTED' not in (ansible_failed_result | to_json)"
+
+        - name: Remove the QA-owned symlink without following it
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}"
+            state: absent
+
+        - name: Recreate the safe root and deployment directory
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+          loop:
+            - "{{ platform_clickhouse_config_root }}"
+            - "{{ platform_clickhouse_config_root }}/clickhouse-qa-path"
+
+        - name: Create an exact private member directory
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}/clickhouse-qa-path/qa-member"
+            state: directory
+            owner: platform-clickhouse
+            group: platform-clickhouse
+            mode: '0700'
+
+        - name: Substitute the private PKI path with a symlink
+          ansible.builtin.file:
+            path: "{{ platform_clickhouse_config_root }}/clickhouse-qa-path/qa-member/pki"
+            src: /var/tmp
+            state: link
+
+        - name: Reject the substituted private PKI path
+          block:
+            - ansible.builtin.include_role:
+                name: platform.clickhouse.clickhouse_tls
+                tasks_from: path_safety.yml
+            - ansible.builtin.fail:
+                msg: PRIVATE_PKI_SYMLINK_ADMITTED
+          rescue:
+            - ansible.builtin.assert:
+                that:
+                  - "'CLICKHOUSE_FOREIGN_PRIVATE_PATH' in (ansible_failed_result | to_json)"
+                  - "'PRIVATE_PKI_SYMLINK_ADMITTED' not in (ansible_failed_result | to_json)"
+
+      always:
+        - name: Remove only the exact ephemeral QA root or link
+          ansible.builtin.file:
+            path: "{{ clickhouse_path_qa_root.path }}"
+            state: absent
+          when: clickhouse_path_qa_root.path is match('^/etc/platform-clickhouse-qa-[A-Za-z0-9_-]+$')

@@ -1,0 +1,36 @@
+---
+- name: Deliver exact Core-approved ClickHouse RPMs without implicit installation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_package_manager: none
+    platform_artifact_delivery_requirements:
+      - {id: clickhouse-common-static, name: clickhouse-common-static}
+      - {id: clickhouse-server, name: clickhouse-server}
+      - {id: clickhouse-client, name: clickhouse-client}
+  when: platform_resolved_artifact_sources is defined
+
+- name: Install the pinned common binary before dependent RPMs
+  ansible.builtin.include_tasks: install_package.yml
+  vars:
+    clickhouse_package_id: clickhouse-common-static
+
+- name: Install exact server and client RPMs
+  ansible.builtin.include_tasks: install_package.yml
+  loop: [clickhouse-server, clickhouse-client]
+  loop_control:
+    loop_var: clickhouse_package_id
+    label: "{{ clickhouse_package_id }}"
+
+- name: Prove HA Keeper executable is supplied by the pinned server RPM
+  ansible.builtin.command:
+    argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', /usr/bin/clickhouse-keeper]
+  register: _platform_clickhouse_keeper_binary_owner
+  changed_when: false
+  when: platform_clickhouse_mode == 'raft-ha'
+
+- name: Reject a foreign or absent HA Keeper executable
+  ansible.builtin.assert:
+    that: _platform_clickhouse_keeper_binary_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
+    fail_msg: CLICKHOUSE_KEEPER_BINARY_NOT_PINNED
+  when: platform_clickhouse_mode == 'raft-ha'

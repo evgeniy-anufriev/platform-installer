@@ -1,0 +1,185 @@
+---
+- name: Create private ClickHouse service group
+  ansible.builtin.group:
+    name: "{{ platform_clickhouse_group }}"
+    system: true
+
+- name: Create non-login ClickHouse service account
+  ansible.builtin.user:
+    name: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    system: true
+    create_home: false
+    shell: /sbin/nologin
+
+- name: Create root-owned ClickHouse root and deployment directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ platform_clickhouse_config_root }}"
+    - "{{ platform_clickhouse_data_root }}"
+    - "{{ platform_clickhouse_log_root }}"
+    - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
+    - "{{ platform_clickhouse_data_root }}/{{ platform_clickhouse_deployment_id }}"
+    - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
+
+- name: Create private ClickHouse member directories
+  ansible.builtin.file:
+    path: "{{ item.0[item.1] }}"
+    state: directory
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0700'
+  loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
+  no_log: true
+
+- name: Bind member data paths to one immutable managed identity
+  ansible.builtin.copy:
+    content: "{{ {'apiVersion': 'platform.installer/clickhouse-member-marker/v1alpha1', 'deploymentId': platform_clickhouse_deployment_id, 'memberId': item.id, 'unitId': item.unit_id} | to_nice_json }}\n"
+    dest: "{{ item.data_directory }}/.platform-clickhouse-member.json"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+    force: false
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Create member-private TLS directories
+  ansible.builtin.file:
+    path: "{{ item.config_directory }}/pki"
+    state: directory
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0700'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Copy exact PKI material into member-private paths
+  ansible.builtin.copy:
+    src: "{{ _platform_clickhouse_tls_directory }}/{{ item.1 }}"
+    dest: "{{ item.0.config_directory }}/pki/{{ item.1 }}"
+    remote_src: true
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances | product(['ca-chain.pem', 'certificate.pem', 'private-key.pem']) | list }}"
+  register: _platform_clickhouse_tls_copies
+  no_log: true
+
+- name: Render password verifier and default user policy without plaintext
+  ansible.builtin.template:
+    src: users.xml.j2
+    dest: "{{ item.config_directory }}/users.xml"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: _platform_clickhouse_users_configs
+  no_log: true
+
+- name: Render private ClickHouse server configuration
+  ansible.builtin.template:
+    src: server.xml.j2
+    dest: "{{ clickhouse_member.config_directory }}/server.xml"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_server_configs
+  no_log: true
+
+- name: Render private Keeper Raft configuration only for HA
+  ansible.builtin.template:
+    src: keeper.xml.j2
+    dest: "{{ clickhouse_member.config_directory }}/keeper.xml"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_keeper_configs
+  when: platform_clickhouse_mode == 'raft-ha'
+  no_log: true
+
+- name: Install exact member-owned ClickHouse server units
+  ansible.builtin.template:
+    src: server.service.j2
+    dest: "/etc/systemd/system/platform-clickhouse-server-{{ clickhouse_member.unit_id[:16] }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_server_units
+
+- name: Install exact member-owned Keeper units only for HA
+  ansible.builtin.template:
+    src: keeper.service.j2
+    dest: "/etc/systemd/system/platform-clickhouse-keeper-{{ clickhouse_member.unit_id[:16] }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_keeper_units
+  when: platform_clickhouse_mode == 'raft-ha'
+
+- name: Reload systemd only after member-unit changes
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: >-
+    (_platform_clickhouse_server_units.results | selectattr('changed', 'equalto', true) | list | length > 0)
+    or
+    (_platform_clickhouse_keeper_units.results | default([]) | selectattr('changed', 'equalto', true) | list | length > 0)
+
+- name: Determine members with changed TLS or user policy
+  ansible.builtin.set_fact:
+    _platform_clickhouse_restart_all: >-
+      {{ (_platform_clickhouse_tls_copies.results | selectattr('changed', 'equalto', true) | list | length > 0)
+         or (_platform_clickhouse_users_configs.results | selectattr('changed', 'equalto', true) | list | length > 0) }}
+
+- name: Start or restart isolated Keeper voters before ClickHouse servers
+  ansible.builtin.systemd_service:
+    name: "platform-clickhouse-keeper-{{ clickhouse_member.unit_id[:16] }}.service"
+    enabled: true
+    state: >-
+      {{ 'restarted' if _platform_clickhouse_restart_all or
+         _platform_clickhouse_keeper_configs.results[clickhouse_index].changed or
+         _platform_clickhouse_keeper_units.results[clickhouse_index].changed else 'started' }}
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    index_var: clickhouse_index
+    label: "{{ clickhouse_member.id }}"
+  when: platform_clickhouse_mode == 'raft-ha'
+
+- name: Start or restart isolated ClickHouse servers
+  ansible.builtin.systemd_service:
+    name: "platform-clickhouse-server-{{ clickhouse_member.unit_id[:16] }}.service"
+    enabled: true
+    state: >-
+      {{ 'restarted' if _platform_clickhouse_restart_all or
+         _platform_clickhouse_server_configs.results[clickhouse_index].changed or
+         _platform_clickhouse_server_units.results[clickhouse_index].changed else 'started' }}
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    index_var: clickhouse_index
+    label: "{{ clickhouse_member.id }}"

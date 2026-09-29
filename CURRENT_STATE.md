@@ -1,6 +1,6 @@
 # Current state
 
-## SERVICE-INSTALL-09 ClickHouse PLAN (2026-09-29)
+## SERVICE-INSTALL-09 ClickHouse PARTIAL ACCEPTANCE, NOT DONE (2026-09-29)
 
 Owner requested the next service: ClickHouse 1/1 standalone without Keeper,
 then 3/1 and 3/3 with one paired server+Keeper member per replica, TLS on all
@@ -13,8 +13,73 @@ and the standard ClickHouse `default` password supplied through Installer
 Secrets. The single allowed targeted recheck APPROVED both findings with zero
 blockers. Four exact `26.8.14.3` LTS RPMs were acquired through the signed
 official repository metadata and rehashed after copy into ignored DEV import.
-The temporary RED OS acquisition workspace was removed. No ClickHouse
-runtime has been published or installed yet.
+The temporary RED OS acquisition workspace was removed. The ClickHouse service
+manifest, generated configuration schema/catalog, and TLS-only Ansible role
+were implemented. A RED OS target-free topology/secret
+contract test passed for standalone 1/1 and paired HA 3/1; read-only package,
+path, unit and listener preflight passed on node1. Apply/verify syntax-check
+passed. Direct standalone 1/1 Ansible apply and authenticated HTTPS verify now
+PASS on node1; repeat apply PASS with `changed=0`. The standalone run neither
+installed the Keeper RPM nor created a Keeper unit; its server unit is active.
+The first apply exposed non-traversable shared Execution Node directories, so
+the role now uses dedicated ClickHouse roots. A service-start race and a
+systemd template newline defect were corrected before the passing repeat.
+An immutable ClickHouse runtime is published. The terminal real-bridge
+acceptance remains incomplete as detailed below.
+The first direct HA 3/1 attempt stopped during package installation: the
+official Keeper RPM conflicts with the official server RPM on the same host.
+The installed pinned server RPM already owns a working Keeper executable.
+The service package closure was narrowed to common-static,
+server and client; HA now checks the Keeper binary's RPM owner before
+starting distinct Keeper units.
+Direct Ansible HA 3/1 now PASS on node3: three server plus three Keeper units,
+one row replicated across all three authenticated HTTPS members, and repeat
+apply `changed=0`. Direct Ansible HA 3/3 also PASS on nodes1–3: one paired
+member per host, a row written on node1 visible from all three, and per-host
+repeat apply `changed=0`. With only the owned node3 server+Keeper units stopped,
+nodes1–2 committed and read a second row; after restoring those exact units,
+node3 read both rows. A strict `interserver_https_host` value from each member
+address was required for verified interserver TLS. This is direct-Ansible
+evidence. The corrected immutable QA release
+`sha256:e0665a237c99ae18c3501ec088abaafcdc12a033e0d7b17dabee9983c01d76b1`
+is activated READY on node1. The cumulative saved project revision is
+`sha256:5afa228cea02912cc07351e1864fce9a89fea435dbc6bfa40785c0deb2a002b5`.
+Real nonvisual React/Wails built and approved plan
+`plan-4a9a1b6e6ede9da9d358a8ce`, then started
+`installer-f1c76b8b08a861e5cd10257ddc679809`. This cumulative full-plan
+run terminated FAILED at `apply:service-install-04-haproxy`, after ClickHouse
+apply SUCCEEDED. The HAProxy TLS probe had supplied empty stdin to
+`openssl s_client`, which could wait until timeout despite valid TLS. The
+bounded fix supplies `Q`; focused RED OS tests and syntax-check pass. The
+corrected HAProxy direct apply passed on all three nodes after an exact
+active-to-temporary-candidate recovery of the failed prior attempt. This
+manual QA recovery is not a general production recovery fix.
+The earlier full-plan run `installer-f477972a2d8afd831e67e2f07f119963`
+FAILED at Vault audit-space preflight: node1 had ~0.8 GiB free against its
+1.6 GiB requirement. Twelve old inactive QA runtime releases were removed
+after checking active release and terminal run state; node1 then had ~3.1 GiB
+free. This failed run is not acceptance. The SI09-DIFF-01 targeted recheck
+APPROVED the bounded ClickHouse path-safety correction, zero blockers.
+ClickHouse direct 3/3 verify passed on immutable release
+`sha256:4c87562e21981f4cc5ec742dacf1d6f010ea89cf8da2175665aa5c55d48fcec0`
+(READY on node1), saved revision
+`sha256:4f969e072089c76579be1c22be2193ff287516559f13f1158cdf6d7a74b82536`:
+node1/node2/node3 each `ok=67 changed=0 failed=0`. A strict direct repeat
+ClickHouse apply passed with `changed=0` on all three nodes (156 OK per host).
+The canonical server and Keeper units are active on each node. BIND on all
+three nodes resolves the ClickHouse name to VIP `192.168.56.121`; each HAProxy
+has the ClickHouse 3-member backend with CA and hostname verification, and an
+HTTPS `/ping` through DNS/VIP/HAProxy returned 200. This is isolated service
+and endpoint evidence, not a terminal PASS of the full UI lifecycle.
+
+The owner explicitly declined another cumulative full-plan run and requested
+partial acceptance. Therefore the required real React/Wails -> Go -> Execution
+Node terminal PASS is absent: SI09 remains NOT DONE. The next formal gate is a
+new terminal PASS and strict repeat through the real bridge, if later
+authorized. SERVICE-INSTALL-10 has NOT started.
+Owner deferred generic scoped endpoint-provider execution to the separate
+NOT STARTED `EXEC-PLAN-SCOPE-01` milestone after SI09 functional QA. Current
+full-plan execution must not be misreported as selective provider reconcile.
 
 ## SI08-F Vault endpoint HA technical acceptance DONE (2026-09-29)
 

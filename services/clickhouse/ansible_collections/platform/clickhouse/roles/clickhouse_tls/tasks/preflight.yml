@@ -1,0 +1,188 @@
+---
+- name: Prove managed ClickHouse path ancestry before privileged mutation
+  ansible.builtin.include_tasks: path_safety.yml
+
+- name: Inspect existing ClickHouse package identities without mutation
+  ansible.builtin.command:
+    argv: [rpm, -q, --qf, '%{VERSION}-%{RELEASE}.%{ARCH}', "{{ item }}"]
+  loop: "{{ ['clickhouse-common-static', 'clickhouse-server', 'clickhouse-client', 'clickhouse-keeper'] }}"
+  register: _platform_clickhouse_installed_packages
+  changed_when: false
+  failed_when: false
+
+- name: Refuse an incompatible foreign ClickHouse package generation
+  ansible.builtin.assert:
+    that:
+      - >-
+        (item.rc != 0) if item.item == 'clickhouse-keeper'
+        else (item.rc != 0 or item.stdout == platform_clickhouse_package_version ~ '-1.x86_64')
+    fail_msg: CLICKHOUSE_PACKAGE_VERSION_CONFLICT
+  loop: "{{ _platform_clickhouse_installed_packages.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Check stock ClickHouse server and Keeper unit activity without changing it
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ item }}"]
+  loop: [clickhouse-server.service, clickhouse-keeper.service]
+  register: _platform_clickhouse_stock_units
+  changed_when: false
+  failed_when: false
+
+- name: Refuse to change a host with active stock ClickHouse units
+  ansible.builtin.assert:
+    that: _platform_clickhouse_stock_units.results | selectattr('stdout', 'equalto', 'active') | list | length == 0
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
+
+- name: Inspect exact instance-unit paths before rendering
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/platform-clickhouse-{{ item.1 }}-{{ item.0.unit_id[:16] }}.service"
+    follow: false
+  loop: >-
+    {{ _platform_clickhouse_local_instances |
+       product(['server', 'keeper'] if platform_clickhouse_mode == 'raft-ha' else ['server']) | list }}
+  register: _platform_clickhouse_unit_path_stats
+  no_log: true
+
+- name: Refuse symlinked instance-unit paths
+  ansible.builtin.assert:
+    that: >-
+      _platform_clickhouse_unit_path_stats.results |
+      selectattr('stat.exists', 'equalto', true) |
+      selectattr('stat.islnk', 'equalto', true) | list | length == 0
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_PATH
+
+- name: Read existing instance-unit ownership headers
+  ansible.builtin.slurp:
+    path: "/etc/systemd/system/platform-clickhouse-{{ item.item.1 }}-{{ item.item.0.unit_id[:16] }}.service"
+  loop: "{{ _platform_clickhouse_unit_path_stats.results }}"
+  when: item.stat.isreg | default(false)
+  register: _platform_clickhouse_existing_unit_headers
+  no_log: true
+
+- name: Refuse replacement of a foreign instance unit
+  ansible.builtin.assert:
+    that: >-
+      (item.content | b64decode).startswith('# platform-clickhouse-managed: ' ~
+       platform_clickhouse_deployment_id ~ '/' ~ item.item.item.0.id ~ '/' ~ item.item.item.1 ~ '\n')
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_PATH
+  loop: "{{ _platform_clickhouse_existing_unit_headers.results }}"
+  when: item.content is defined
+  no_log: true
+
+- name: Inspect exact member-owned paths and identity markers
+  ansible.builtin.stat:
+    path: "{{ item.0[item.1] }}"
+    follow: false
+  loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
+  register: _platform_clickhouse_owned_path_stats
+
+- name: Inspect exact member identity markers
+  ansible.builtin.stat:
+    path: "{{ item.data_directory }}/.platform-clickhouse-member.json"
+    follow: false
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  register: _platform_clickhouse_marker_stats
+
+- name: Refuse foreign paths or symlink substitution
+  ansible.builtin.assert:
+    that:
+      - >-
+        _platform_clickhouse_owned_path_stats.results |
+        selectattr('stat.exists', 'equalto', true) |
+        selectattr('stat.islnk', 'equalto', true) | list | length == 0
+      - >-
+        _platform_clickhouse_marker_stats.results |
+        selectattr('stat.exists', 'equalto', true) |
+        selectattr('stat.islnk', 'equalto', true) | list | length == 0
+      - >-
+        not (_platform_clickhouse_owned_path_stats.results |
+        selectattr('item.0.id', 'equalto', item.id) |
+        selectattr('stat.exists', 'equalto', true) | list | length > 0)
+        or (_platform_clickhouse_marker_stats.results |
+        selectattr('item.id', 'equalto', item.id) |
+        selectattr('stat.exists', 'equalto', true) |
+        selectattr('stat.isreg', 'equalto', true) | list | length == 1)
+    fail_msg: CLICKHOUSE_FOREIGN_MEMBER_PATH
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Read existing ClickHouse member markers
+  ansible.builtin.slurp:
+    path: "{{ item.item.data_directory }}/.platform-clickhouse-member.json"
+  loop: "{{ _platform_clickhouse_marker_stats.results }}"
+  when: item.stat.isreg | default(false)
+  register: _platform_clickhouse_existing_markers
+  no_log: true
+
+- name: Prove existing member paths belong to the same identity
+  ansible.builtin.assert:
+    that:
+      - (item.content | b64decode | from_json).apiVersion == 'platform.installer/clickhouse-member-marker/v1alpha1'
+      - (item.content | b64decode | from_json).deploymentId == platform_clickhouse_deployment_id
+      - (item.content | b64decode | from_json).memberId == item.item.item.id
+      - (item.content | b64decode | from_json).unitId == item.item.item.unit_id
+    fail_msg: CLICKHOUSE_MEMBER_IDENTITY_MISMATCH
+  loop: "{{ _platform_clickhouse_existing_markers.results }}"
+  when: item.content is defined
+  no_log: true
+
+- name: Count members requiring first-time resource allocation
+  ansible.builtin.set_fact:
+    _platform_clickhouse_new_member_count: >-
+      {{ _platform_clickhouse_marker_stats.results |
+         rejectattr('stat.exists', 'equalto', true) | list | length }}
+
+- name: Inspect available target memory for new ClickHouse members
+  ansible.builtin.command:
+    argv: [free, -b]
+  register: _platform_clickhouse_memory
+  changed_when: false
+  when: _platform_clickhouse_new_member_count | int > 0
+
+- name: Inspect available target disk for new ClickHouse members
+  ansible.builtin.command:
+    argv: [df, -B1, --output=avail, /var/lib]
+  register: _platform_clickhouse_disk
+  changed_when: false
+  when: _platform_clickhouse_new_member_count | int > 0
+
+- name: Require conservative headroom only for first-time members
+  ansible.builtin.assert:
+    that:
+      - (_platform_clickhouse_memory.stdout_lines[1].split()[-1] | int) >= 1073741824 * (_platform_clickhouse_new_member_count | int)
+      - (_platform_clickhouse_disk.stdout_lines[-1] | trim | int) >= 1610612736
+    fail_msg: CLICKHOUSE_RESOURCE_PREFLIGHT_BLOCKED
+  when: _platform_clickhouse_new_member_count | int > 0
+
+- name: Begin listener preflight for new ClickHouse members
+  ansible.builtin.set_fact:
+    _platform_clickhouse_new_member_ports: []
+
+- name: Collect only ports belonging to members without an existing marker
+  ansible.builtin.set_fact:
+    _platform_clickhouse_new_member_ports: >-
+      {{ _platform_clickhouse_new_member_ports +
+         [item.https_port, item.native_port, item.interserver_port] +
+         ([item.keeper_client_port, item.keeper_raft_port]
+          if platform_clickhouse_mode == 'raft-ha' else []) }}
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    index_var: clickhouse_member_index
+    label: "{{ item.id }}"
+  when: not _platform_clickhouse_marker_stats.results[clickhouse_member_index].stat.exists
+
+- name: Observe all TCP listeners before package or unit mutation
+  ansible.builtin.command:
+    argv: [ss, -H, -ltn]
+  register: _platform_clickhouse_existing_listeners
+  changed_when: false
+  when: _platform_clickhouse_new_member_ports | length > 0
+
+- name: Refuse a new ClickHouse listener that belongs to another process
+  ansible.builtin.assert:
+    that: _platform_clickhouse_existing_listeners.stdout is not search(':' ~ (item | string) ~ '\\s')
+    fail_msg: CLICKHOUSE_LISTENER_IN_USE
+  loop: "{{ _platform_clickhouse_new_member_ports }}"
+  when: _platform_clickhouse_new_member_ports | length > 0

@@ -102,11 +102,14 @@ func TestH1V8DeploymentAndMemberConfigurationSaveReopen(t *testing.T) {
 	root, revision := emptyManagedProject(t)
 	commands := h1TopologyCommands(revision)
 	setDeployment := h1Command(revision, "SetServiceConfigurationValue")
-	setDeployment.DeploymentID, setDeployment.Scope, setDeployment.Setting, setDeployment.Value = "kafka-main", "DEPLOYMENT", "port", 9092
+	setDeployment.DeploymentID, setDeployment.Scope, setDeployment.Setting, setDeployment.Value = "kafka-main", "DEPLOYMENT", "port", float64(9092)
 	setMember := h1Command(revision, "SetServiceConfigurationValue")
-	setMember.DeploymentID, setMember.Scope, setMember.MemberID, setMember.Setting, setMember.Value = "kafka-main", "MEMBER", "kafka-1", "port", 9093
+	setMember.DeploymentID, setMember.Scope, setMember.MemberID, setMember.Setting, setMember.Value = "kafka-main", "MEMBER", "kafka-1", "port", float64(9093)
 	commands = append(commands, setDeployment, setMember)
 	result := commitStructuralForTest(t, f2Backend(h1Catalog()), root, projectlifecycle.ClassificationEmpty, revision, commands)
+	if strings.Contains(string(mustRead(t, filepath.Join(root, filepath.FromSlash(desiredDocument)))), "!!float") {
+		t.Fatal("JSON integer was persisted with a YAML float tag")
+	}
 
 	view, err := ReadManagedProjectViewWithCatalog(root, h1Catalog())
 	if err != nil {

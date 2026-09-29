@@ -1,0 +1,69 @@
+---
+- name: Prove three same-host ClickHouse replicas share one TLS Keeper quorum
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    clickhouse_qa_root: "{{ lookup('ansible.builtin.env', 'PLATFORM_CLICKHOUSE_QA_ROOT') }}"
+    clickhouse_qa_ports: [8443, 8444, 8445]
+    clickhouse_qa_password: "{{ lookup('ansible.builtin.file', clickhouse_qa_root ~ '/default-password', lstrip=False, rstrip=False) }}"
+    clickhouse_qa_ca: "{{ clickhouse_qa_root }}/pki/ca-chain.pem"
+  tasks:
+    - name: Require the isolated QA input root
+      ansible.builtin.assert:
+        that: clickhouse_qa_root is match('^/var/tmp/platform-clickhouse-qa-[A-Za-z0-9]+$')
+
+    - name: Create the same replicated table on all three members
+      ansible.builtin.uri:
+        url: "https://192.168.56.103:{{ item }}/"
+        method: POST
+        body: "CREATE TABLE IF NOT EXISTS default.si09_ha3x1_v3 (id UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/tables/si09_ha3x1_v3', '{replica}') ORDER BY id"
+        url_username: default
+        url_password: "{{ clickhouse_qa_password }}"
+        force_basic_auth: true
+        ca_path: "{{ clickhouse_qa_ca }}"
+        validate_certs: true
+        status_code: 200
+      loop: "{{ clickhouse_qa_ports }}"
+      register: clickhouse_qa_create
+      no_log: true
+
+    - name: Insert one QA row through the first member
+      ansible.builtin.uri:
+        url: https://192.168.56.103:8443/
+        method: POST
+        body: INSERT INTO default.si09_ha3x1_v3 VALUES (1)
+        url_username: default
+        url_password: "{{ clickhouse_qa_password }}"
+        force_basic_auth: true
+        ca_path: "{{ clickhouse_qa_ca }}"
+        validate_certs: true
+        status_code: 200
+      no_log: true
+
+    - name: Observe the committed row on every replica over authenticated HTTPS
+      ansible.builtin.uri:
+        url: "https://192.168.56.103:{{ item }}/?query=SELECT%20count()%20FROM%20default.si09_ha3x1_v3"
+        method: GET
+        url_username: default
+        url_password: "{{ clickhouse_qa_password }}"
+        force_basic_auth: true
+        ca_path: "{{ clickhouse_qa_ca }}"
+        validate_certs: true
+        return_content: true
+        status_code: 200
+      loop: "{{ clickhouse_qa_ports }}"
+      register: clickhouse_qa_replica_read
+      until: clickhouse_qa_replica_read.content | default('') | trim == '1'
+      retries: 20
+      delay: 2
+      no_log: true
+
+    - name: Confirm exactly one row reached each of three replicas
+      ansible.builtin.assert:
+        that:
+          - clickhouse_qa_replica_read.results | length == 3
+          - clickhouse_qa_replica_read.results | map(attribute='status') | list == [200, 200, 200]
+          - clickhouse_qa_replica_read.results | map(attribute='content') | map('trim') | list == ['1', '1', '1']
+        fail_msg: CLICKHOUSE_HA_REPLICATION_NOT_PROVEN
+      no_log: true

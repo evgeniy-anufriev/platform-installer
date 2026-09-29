@@ -775,6 +775,24 @@ TLS-only enabled protocols and HTTPS endpoint. The corrected PLAN passed its
 single targeted recheck with zero blockers. The all-services one-plan final
 acceptance moves to SERVICE-INSTALL-10 and includes nine services. Earlier
 references to SI09 as the final eight-service test below are historical snapshots.
+As of 2026-09-29 SI09 has partial acceptance, not DONE: direct 1/1, 3/1 and
+3/3 service cycles, strict repeat and the ClickHouse HTTPS endpoint pass, but
+the real React/Wails cumulative run ended FAILED at HAProxy apply. The bounded
+HAProxy TLS-probe correction passed direct QA; the owner declined another full
+plan run. A terminal real-bridge PASS remains a future SI09 gate, not inferred
+from direct Ansible evidence. SI10 remains NOT STARTED.
+
+After SI09 functional acceptance, plan `EXEC-PLAN-SCOPE-01` separately; it is
+NOT STARTED. The current `BuildDeploymentPlan` emits apply/verify actions for
+every saved deployment. A future fresh, authoritative scoped plan must be able
+to apply a selected deployment and reconcile only endpoint providers affected
+by its changed endpoint relation, generically for every service. BIND and
+HAProxy retain their full canonical-model `reconcile.yml` behavior so manual
+drift is corrected; scope selection must not turn this into an unsafe
+backend-file-only write. Unrelated deployments, such as unchanged Keepalived
+and Vault, must not be reapplied. This needs its own contract/architecture and
+acceptance before implementation; SI09 must not silently change existing
+execution-plan semantics.
 
 Latest SI08-F status (2026-09-29): the fresh 3-host Keepalived/BIND/HAProxy/
 Vault endpoint project and strict repeat are technically DONE through real

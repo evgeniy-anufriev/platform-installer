@@ -16,6 +16,7 @@ type lifecycleBuilder struct {
 	stale       bool
 	requiresPKI bool
 	typedInputs bool
+	runtimeValues bool
 }
 
 func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any) (DeploymentPlan, error) {
@@ -30,6 +31,9 @@ func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ stri
 	}
 	if b.typedInputs {
 		plan.RequiredCredentials = append(plan.RequiredCredentials, RequiredCredential{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", Hosts: []string{"node1"}})
+	}
+	if b.runtimeValues {
+		plan.RequiredCredentials = append(plan.RequiredCredentials, RequiredCredential{RequirementRef: "clickhouse-default-password", Purpose: "SERVICE_PASSWORD", Hosts: []string{"node1"}})
 	}
 	return plan, nil
 }
@@ -206,6 +210,31 @@ func TestExecutionServiceRequiresTypedV4AndAllowsConditionalInputsAbsent(t *test
 	})
 	if _, err := s.Start(context.Background(), Node{}, plan.ID); err == nil || err.Error() != "RUNTIME_SECRET_INPUTS_UNAVAILABLE" {
 		t.Fatal("missing v4 capability did not block typed plan")
+	}
+}
+
+func TestExecutionServiceV4OnlyRuntimeCarriesPasswordAndTypedInputs(t *testing.T) {
+	b := &lifecycleBuilder{requiresPKI: true, typedInputs: true, runtimeValues: true}
+	c := &lifecycleClient{typedCapability: true}
+	s := NewExecutionService(b, c)
+	s.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if !request.RequiresPKIStorePassword || len(request.RuntimeSecretRequirements) != 1 || request.RuntimeSecretRequirements[0] != "clickhouse-default-password" || len(request.RuntimeSecretInputs) != 1 {
+			t.Fatal("mixed plan requirements were not bound")
+		}
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "ssh", PKIStorePassword: "pki", RuntimeSecretValues: map[string]string{"clickhouse-default-password": "test-password"}, UseTypedRuntimeInputs: true})
+	})
+	plan, err := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApprovePlan(plan.ID, plan.Plan.Acknowledgements); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Start(context.Background(), Node{}, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(c.ops, ","); got != "put-lease,start-v2" {
+		t.Fatalf("mixed v4 Start operations=%s", got)
 	}
 }
 

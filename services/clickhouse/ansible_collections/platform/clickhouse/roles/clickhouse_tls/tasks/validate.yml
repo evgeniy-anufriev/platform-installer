@@ -1,0 +1,73 @@
+---
+- name: Validate closed ClickHouse deployment inputs
+  ansible.builtin.assert:
+    that:
+      - platform_clickhouse_mode in ['standalone', 'raft-ha']
+      - platform_clickhouse_deployment_id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - platform_clickhouse_deployment_id | length <= 128
+      - platform_clickhouse_instances is sequence
+      - platform_clickhouse_instances is not string
+      - platform_clickhouse_instances | length == (1 if platform_clickhouse_mode == 'standalone' else 3)
+      - platform_clickhouse_tls_profile is string
+      - platform_clickhouse_tls_profile | length > 0 or platform_clickhouse_tls_directory | default('') | length > 0
+      - platform_clickhouse_default_credential is mapping
+      - platform_clickhouse_default_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
+      - platform_clickhouse_secret_files is mapping
+      - platform_clickhouse_default_credential.passwordSecretRef in platform_clickhouse_secret_files
+    fail_msg: CLICKHOUSE_INPUT_INVALID
+  no_log: true
+
+- name: Validate each ClickHouse placement before filesystem mutation
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.id | default('') is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - item.id | length <= 128
+      - item.host | default('') is string
+      - item.host | length > 0
+      - item.address | default('') is string
+      - item.address | length > 0
+      - item.roles | default([]) | sort == (['server'] if platform_clickhouse_mode == 'standalone' else ['keeper', 'server'])
+    fail_msg: CLICKHOUSE_PLACEMENT_INVALID
+  loop: "{{ platform_clickhouse_instances }}"
+  loop_control:
+    label: "{{ item.id | default('invalid') }}"
+
+- name: Reject duplicate ClickHouse member IDs
+  ansible.builtin.assert:
+    that: platform_clickhouse_instances | map(attribute='id') | unique | list | length == platform_clickhouse_instances | length
+    fail_msg: CLICKHOUSE_MEMBER_ID_DUPLICATE
+
+- name: Require runtime-only default password file
+  ansible.builtin.stat:
+    path: "{{ platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef] }}"
+    follow: false
+  delegate_to: localhost
+  become: false
+  register: _platform_clickhouse_password_file
+  no_log: true
+
+- name: Reject missing or substituted default password file
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_password_file.stat.exists
+      - _platform_clickhouse_password_file.stat.isreg
+      - not _platform_clickhouse_password_file.stat.islnk
+      - _platform_clickhouse_password_file.stat.size >= 1
+      - _platform_clickhouse_password_file.stat.size <= 4096
+    fail_msg: CLICKHOUSE_PASSWORD_INPUT_INVALID
+  no_log: true
+
+- name: Read the exact runtime password bytes without trimming
+  ansible.builtin.set_fact:
+    _platform_clickhouse_default_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef], lstrip=False, rstrip=False) }}"
+  no_log: true
+
+- name: Require a nonempty UTF-8 password with the exact byte bound
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_default_password | string | length > 0
+      - _platform_clickhouse_default_password | string | length <= 4096
+      - _platform_clickhouse_default_password | string | hash('sha256') is match('^[0-9a-f]{64}$')
+    fail_msg: CLICKHOUSE_PASSWORD_INPUT_INVALID
+  no_log: true

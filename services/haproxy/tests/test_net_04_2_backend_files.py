@@ -29,6 +29,13 @@ class BackendFileContractTests(unittest.TestCase):
         self.assertNotIn("platform_haproxy_backend_defaults", defaults)
         self.assertIn("backend_defaults: {}", resolve)
 
+    def test_tls_probe_exits_after_verification_without_weakening_checks(self):
+        prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
+        self.assertIn("stdin: 'Q'", prepare)
+        self.assertIn("- -verify_hostname", prepare)
+        self.assertIn("- -verify_return_error", prepare)
+        self.assertIn("- -CAfile", prepare)
+
 
 if __name__ == "__main__":
     unittest.main()

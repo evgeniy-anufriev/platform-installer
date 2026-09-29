@@ -20,7 +20,7 @@ import execution_secret_lease
 import execution_secret_output
 
 
-SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault"))
+SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse"))
 PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096

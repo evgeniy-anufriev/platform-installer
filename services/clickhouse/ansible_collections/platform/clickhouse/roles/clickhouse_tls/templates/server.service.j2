@@ -1,0 +1,20 @@
+# platform-clickhouse-managed: {{ platform_clickhouse_deployment_id }}/{{ clickhouse_member.id }}/server
+[Unit]
+Description=Platform ClickHouse server {{ clickhouse_member.id }}
+After={{ 'network-online.target platform-clickhouse-keeper-' ~ clickhouse_member.unit_id[:16] ~ '.service' if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
+Wants=network-online.target
+Requires={{ 'platform-clickhouse-keeper-' ~ clickhouse_member.unit_id[:16] ~ '.service' if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
+
+[Service]
+Type=simple
+User={{ platform_clickhouse_user }}
+Group={{ platform_clickhouse_group }}
+ExecStart=/usr/bin/clickhouse-server --config-file={{ clickhouse_member.config_directory }}/server.xml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=262144
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

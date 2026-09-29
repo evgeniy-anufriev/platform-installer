@@ -1,0 +1,19 @@
+# platform-clickhouse-managed: {{ platform_clickhouse_deployment_id }}/{{ clickhouse_member.id }}/keeper
+[Unit]
+Description=Platform ClickHouse Keeper {{ clickhouse_member.id }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ platform_clickhouse_user }}
+Group={{ platform_clickhouse_group }}
+ExecStart=/usr/bin/clickhouse-keeper --config-file={{ clickhouse_member.config_directory }}/keeper.xml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=262144
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

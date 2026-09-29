@@ -124,7 +124,9 @@
       - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
       - -verify_return_error
       - -brief
-    stdin: ''
+    # s_client otherwise waits for the HTTPS peer to close its keep-alive
+    # connection and hits timeout after a successful certificate handshake.
+    stdin: 'Q'
   loop: "{{ platform_haproxy_application_backends | selectattr('expectedServerName', 'defined') | subelements('targets') }}"
   loop_control:
     label: "{{ item.0.targetDeploymentId }}/{{ item.1.memberId }}"

@@ -1,0 +1,26 @@
+---
+platform_clickhouse_mode: standalone
+platform_clickhouse_deployment_id: "{{ platform_execution_service_deployment | default('clickhouse', true) }}"
+platform_clickhouse_instances: []
+platform_clickhouse_tls_profile: infrastructure-tls
+platform_clickhouse_tls_directory: ''
+platform_clickhouse_port: 8443
+platform_clickhouse_native_port: 9440
+platform_clickhouse_interserver_port: 9010
+platform_clickhouse_keeper_client_port: 9281
+platform_clickhouse_keeper_raft_port: 9444
+platform_clickhouse_default_credential:
+  passwordSecretRef: ''
+platform_clickhouse_secret_files: {}
+platform_clickhouse_rpm_paths: {}
+platform_clickhouse_verify_only: false
+platform_clickhouse_config_root: /etc/platform-clickhouse
+platform_clickhouse_data_root: /var/lib/platform-clickhouse
+platform_clickhouse_log_root: /var/log/platform-clickhouse
+platform_clickhouse_user: platform-clickhouse
+platform_clickhouse_group: platform-clickhouse
+platform_clickhouse_package_version: 26.8.14.3
+platform_clickhouse_expected_rpm_digests:
+  clickhouse-common-static: b98cfaa7e82a563c0a21276c3dd0a637bf8976f1b65bd7a71f1d625f231954e9
+  clickhouse-server: 3d72d3e909f4dcca5378faeb7d3dd9fbf0741038f7309ff87965fe0efb70e4ee
+  clickhouse-client: 796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7

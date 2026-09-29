@@ -228,10 +228,16 @@ func (candidate *structuralCandidate) applyConfigurationCommand(command EditComm
 		configuration = map[string]any{}
 		target["configuration"] = configuration
 	}
-	if existing, present := configuration[command.Setting]; present && semanticEqual(existing, command.Value) {
+	value := command.Value
+	if setting.EditorShape == "INTEGER" {
+		// Wails transports JSON numbers as float64. Persist schema integers as
+		// integers, not YAML !!float values rejected by Core's integer schema.
+		value, _ = configurationInteger(command.Value)
+	}
+	if existing, present := configuration[command.Setting]; present && semanticEqual(existing, value) {
 		return false, nil
 	}
-	configuration[command.Setting] = deepCopy(command.Value)
+	configuration[command.Setting] = deepCopy(value)
 	candidate.dirty[logical] = true
 	return true, nil
 }

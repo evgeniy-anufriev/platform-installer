@@ -9,7 +9,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:3e92c57ff09461262be6a75d40a21713e7499eb8a984167498a885bd9787385d
+  digest: sha256:a9be5f70160678411d89be76c48c4e014edab1803f44a7d7276723a5825e9cd3
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1

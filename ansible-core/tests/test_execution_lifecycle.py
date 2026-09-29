@@ -38,6 +38,10 @@ def runtime_evidence():
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_controller_admits_clickhouse_as_a_closed_service_type(self):
+        self.assertTrue(execution_controller._safe_service("clickhouse"))
+        self.assertFalse(execution_controller._safe_service("clickhouse-extra"))
+
     def test_controller_output_preparation_failure_terminates_committed_run(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")

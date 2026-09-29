@@ -1,0 +1,42 @@
+<clickhouse>
+  <logger>
+    <level>information</level>
+    <log>{{ clickhouse_member.log_directory | e }}/server.log</log>
+    <errorlog>{{ clickhouse_member.log_directory | e }}/server.err.log</errorlog>
+  </logger>
+  <listen_host>0.0.0.0</listen_host>
+  <https_port>{{ clickhouse_member.https_port }}</https_port>
+  <tcp_port_secure>{{ clickhouse_member.native_port }}</tcp_port_secure>
+  <interserver_https_port>{{ clickhouse_member.interserver_port }}</interserver_https_port>
+  <interserver_https_host>{{ clickhouse_member.address | e }}</interserver_https_host>
+  <path>{{ clickhouse_member.data_directory | e }}/data/</path>
+  <tmp_path>{{ clickhouse_member.data_directory | e }}/tmp/</tmp_path>
+  <user_files_path>{{ clickhouse_member.data_directory | e }}/user_files/</user_files_path>
+  <format_schema_path>{{ clickhouse_member.data_directory | e }}/format_schemas/</format_schema_path>
+  <users_config>{{ clickhouse_member.config_directory | e }}/users.xml</users_config>
+  <openSSL>
+    <server>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <verificationMode>none</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </server>
+    <client>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <loadDefaultCAFile>false</loadDefaultCAFile>
+      <verificationMode>strict</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </client>
+  </openSSL>
+{% if platform_clickhouse_mode == 'raft-ha' %}
+  <zookeeper>
+{% for keeper in _platform_clickhouse_instances %}
+    <node><host>{{ keeper.address | e }}</host><port>{{ keeper.keeper_client_port }}</port><secure>1</secure></node>
+{% endfor %}
+  </zookeeper>
+  <macros><shard>1</shard><replica>{{ clickhouse_member.id | e }}</replica></macros>
+{% endif %}
+</clickhouse>

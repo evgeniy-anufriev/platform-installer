@@ -1,0 +1,12 @@
+apiVersion: platform.installer/compatibility/v1alpha1
+service: clickhouse
+combinations:
+  - os: redos
+    osVersion: "8.0"
+    architecture: x86_64
+    clickhouse: "26.8.14.3-1"
+    source: verified-offline-bundle
+    status: acquired-not-runtime-validated
+  - os: altlinux
+    status: deferred
+status: requires-service-install-09-runtime-evidence

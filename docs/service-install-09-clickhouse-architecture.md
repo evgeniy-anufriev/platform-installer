@@ -1,8 +1,16 @@
 # SERVICE-INSTALL-09 — ClickHouse + ClickHouse Keeper
 
-Status: owner-approved architecture; targeted recheck APPROVE with zero blockers.
-The pinned RPMs have been acquired into ignored DEV import with signed metadata
-and SHA-256 proof, but no ClickHouse runtime is yet published or installed.
+Status: implementation and isolated service/endpoint QA pass; SI09 NOT DONE.
+The pinned RPMs were acquired with signed metadata and SHA-256 proof and
+published in immutable runtime releases. Direct Ansible 1/1, 3/1 and 3/3
+apply/verify/repeat pass, including cross-host replicated writes and owned
+node3 failure/recovery. Direct 3/3 ClickHouse apply/verify and its HTTPS
+HAProxy endpoint also pass. The real nonvisual React/Wails cumulative run
+`installer-f1c76b8b08a861e5cd10257ddc679809` terminated FAILED at HAProxy
+apply, although ClickHouse apply succeeded. The HAProxy TLS-probe timeout was
+fixed and verified by a later direct apply, but the owner declined a repeat
+full-plan run. Consequently the required real-bridge terminal PASS is absent;
+this is partial acceptance only. See `CURRENT_STATE.md` for exact evidence.
 The former all-services one-plan final
 acceptance moves to SERVICE-INSTALL-10 after this milestone; it is not started.
 
@@ -91,7 +99,13 @@ resolved values feed apply, verify and endpoint projection.
 Pin an exact upstream ClickHouse LTS build for RED OS 8 x86_64. Candidate:
 `26.8.14.3`, the official LTS published on 2026-09-28. The four official RPMs
 exist at the ClickHouse LTS package endpoint: `clickhouse-common-static`,
-`clickhouse-server`, `clickhouse-client`, `clickhouse-keeper`. Acquisition uses
+`clickhouse-server`, `clickhouse-client`, `clickhouse-keeper`. The pinned
+`clickhouse-keeper` RPM conflicts with `clickhouse-server` on the same host.
+Because this service deliberately co-locates server and Keeper for every HA
+member, its runtime package closure is the first three RPMs. The exact pinned
+server RPM itself provides `/usr/bin/clickhouse-keeper`; the role verifies RPM
+ownership before starting separate Keeper units. The fourth acquired RPM is
+not a service requirement and must not be installed on a paired host. Acquisition uses
 only `https://packages.clickhouse.com/rpm/lts/` on a trusted Linux DEV
 environment. Pin the official repository metadata key's primary fingerprint
 `3A9EA1193A97B548BE1457D48919F6BD2B48D754`; reject a different key.

@@ -1,0 +1,41 @@
+<clickhouse>
+  <logger>
+    <level>information</level>
+    <log>{{ clickhouse_member.log_directory | e }}/keeper.log</log>
+    <errorlog>{{ clickhouse_member.log_directory | e }}/keeper.err.log</errorlog>
+  </logger>
+  <listen_host>0.0.0.0</listen_host>
+  <keeper_server>
+    <tcp_port_secure>{{ clickhouse_member.keeper_client_port }}</tcp_port_secure>
+    <server_id>{{ clickhouse_member.slot }}</server_id>
+    <log_storage_path>{{ clickhouse_member.data_directory | e }}/keeper/log</log_storage_path>
+    <snapshot_storage_path>{{ clickhouse_member.data_directory | e }}/keeper/snapshots</snapshot_storage_path>
+    <coordination_settings>
+      <operation_timeout_ms>10000</operation_timeout_ms>
+      <session_timeout_ms>30000</session_timeout_ms>
+    </coordination_settings>
+    <raft_configuration>
+      <secure>true</secure>
+{% for keeper in _platform_clickhouse_instances %}
+      <server><id>{{ keeper.slot }}</id><hostname>{{ keeper.address | e }}</hostname><port>{{ keeper.keeper_raft_port }}</port></server>
+{% endfor %}
+    </raft_configuration>
+  </keeper_server>
+  <openSSL>
+    <server>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <verificationMode>strict</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </server>
+    <client>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <loadDefaultCAFile>false</loadDefaultCAFile>
+      <verificationMode>strict</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </client>
+  </openSSL>
+</clickhouse>

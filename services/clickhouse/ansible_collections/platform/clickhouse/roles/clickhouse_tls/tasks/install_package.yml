@@ -1,0 +1,78 @@
+---
+- name: Prove exact direct-Ansible RPM input when no Core source authority exists
+  ansible.builtin.stat:
+    path: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] | default('') }}"
+    checksum_algorithm: sha256
+    follow: false
+  delegate_to: localhost
+  become: false
+  register: _platform_clickhouse_direct_rpm
+  when: platform_resolved_artifact_sources is not defined
+  no_log: true
+
+- name: Reject absent, symlinked or digest-mismatched direct RPM
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_direct_rpm.stat.isreg
+      - not _platform_clickhouse_direct_rpm.stat.islnk
+      - _platform_clickhouse_direct_rpm.stat.checksum == platform_clickhouse_expected_rpm_digests[clickhouse_package_id]
+    fail_msg: CLICKHOUSE_DIRECT_RPM_INVALID
+  when: platform_resolved_artifact_sources is not defined
+  no_log: true
+
+- name: Create narrow direct-Ansible ClickHouse RPM stage
+  ansible.builtin.file:
+    path: /var/tmp/platform-installer/artifacts/clickhouse-direct
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when: platform_resolved_artifact_sources is not defined
+
+- name: Stage the verified direct-Ansible RPM on the target
+  ansible.builtin.copy:
+    src: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] }}"
+    dest: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
+    owner: root
+    group: root
+    mode: '0600'
+  when: platform_resolved_artifact_sources is not defined
+
+- name: Reverify the staged direct-Ansible RPM bytes
+  ansible.builtin.stat:
+    path: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
+    checksum_algorithm: sha256
+  register: _platform_clickhouse_target_rpm
+  when: platform_resolved_artifact_sources is not defined
+  no_log: true
+
+- name: Refuse a direct-Ansible RPM that changed during transport
+  ansible.builtin.assert:
+    that: _platform_clickhouse_target_rpm.stat.checksum == platform_clickhouse_expected_rpm_digests[clickhouse_package_id]
+    fail_msg: CLICKHOUSE_DIRECT_RPM_INVALID
+  when: platform_resolved_artifact_sources is not defined
+  no_log: true
+
+- name: Install exact approved local RPM without repository fallback
+  ansible.builtin.dnf:
+    name: >-
+      {{ (platform_offline_artifact_paths[clickhouse_package_id] | first)
+         if platform_resolved_artifact_sources is defined
+         else '/var/tmp/platform-installer/artifacts/clickhouse-direct/' ~ clickhouse_package_id ~ '-' ~ platform_clickhouse_package_version ~ '-1.x86_64.rpm' }}
+    state: present
+    disablerepo: '*'
+    disable_gpg_check: true
+  no_log: true
+  when: >-
+    platform_resolved_artifact_sources is not defined or
+    platform_resolved_artifact_sources[clickhouse_package_id].source == 'OFFLINE_BUNDLE'
+
+- name: Install exact pinned RPM from the approved configured repository
+  ansible.builtin.dnf:
+    name: "{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1"
+    state: present
+    disable_gpg_check: false
+  no_log: true
+  when:
+    - platform_resolved_artifact_sources is defined
+    - platform_resolved_artifact_sources[clickhouse_package_id].source == 'REPOSITORY'

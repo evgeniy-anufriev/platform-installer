@@ -421,7 +421,11 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		if requiresPKIStorePassword && provider == nil {
 			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
 		}
-		if len(runtimeSecretRequirements) > 0 && (!capability.supportsPayloadVersion(credentialPayloadVersionV3) || provider == nil) {
+		// v4 carries the same runtimeSecretValues object alongside typed inputs.
+		// A v4-only runtime intentionally does not advertise legacy v3.
+		runtimeValuesSupported := capability.supportsPayloadVersion(credentialPayloadVersionV3) ||
+			(capability.TypedRuntimeInputs && capability.supportsPayloadVersion(credentialPayloadVersionV4))
+		if len(runtimeSecretRequirements) > 0 && (!runtimeValuesSupported || provider == nil) {
 			return ExecutionRun{}, errors.New("RUNTIME_SECRET_VALUES_UNAVAILABLE")
 		}
 		if len(typedRuntimeSecretRequirements) > 0 && (!capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) || provider == nil) {

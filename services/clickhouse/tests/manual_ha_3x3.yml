@@ -1,0 +1,37 @@
+---
+- name: Exercise one paired ClickHouse and Keeper member per RED OS QA host
+  hosts: "{{ lookup('ansible.builtin.env', 'PLATFORM_CLICKHOUSE_QA_HOST') }}"
+  connection: local
+  become: true
+  gather_facts: false
+  vars:
+    clickhouse_qa_root: "{{ lookup('ansible.builtin.env', 'PLATFORM_CLICKHOUSE_QA_ROOT') }}"
+    platform_clickhouse_mode: raft-ha
+    platform_clickhouse_deployment_id: clickhouse-qa-ha3x3
+    platform_clickhouse_instances:
+      - {id: clickhouse-1, host: 192.168.56.101, address: 192.168.56.101, roles: [server, keeper]}
+      - {id: clickhouse-2, host: 192.168.56.102, address: 192.168.56.102, roles: [server, keeper]}
+      - {id: clickhouse-3, host: 192.168.56.103, address: 192.168.56.103, roles: [server, keeper]}
+    platform_clickhouse_port: 8460
+    platform_clickhouse_native_port: 9460
+    platform_clickhouse_interserver_port: 9030
+    platform_clickhouse_keeper_client_port: 9300
+    platform_clickhouse_keeper_raft_port: 9470
+    platform_clickhouse_tls_directory: "{{ clickhouse_qa_root }}/pki3x3"
+    platform_clickhouse_default_credential:
+      passwordSecretRef: runtime:clickhouse-default-password
+    platform_clickhouse_secret_files:
+      runtime:clickhouse-default-password: "{{ clickhouse_qa_root }}/default-password"
+    platform_clickhouse_rpm_paths:
+      clickhouse-common-static: "{{ clickhouse_qa_root }}/rpm/clickhouse-common-static-26.8.14.3.x86_64.rpm"
+      clickhouse-server: "{{ clickhouse_qa_root }}/rpm/clickhouse-server-26.8.14.3.x86_64.rpm"
+      clickhouse-client: "{{ clickhouse_qa_root }}/rpm/clickhouse-client-26.8.14.3.x86_64.rpm"
+  pre_tasks:
+    - name: Require an explicit bounded ephemeral QA root and host
+      ansible.builtin.assert:
+        that:
+          - clickhouse_qa_root is match('^/var/tmp/platform-clickhouse-qa-[A-Za-z0-9]+$')
+          - inventory_hostname in ['192.168.56.101', '192.168.56.102', '192.168.56.103']
+        fail_msg: CLICKHOUSE_QA_INPUT_INVALID
+  roles:
+    - role: platform.clickhouse.clickhouse_tls
