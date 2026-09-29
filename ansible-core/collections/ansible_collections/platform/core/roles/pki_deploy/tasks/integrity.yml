@@ -1,0 +1,100 @@
+---
+- name: Validate the previously applied PKI target directory boundary
+  ansible.builtin.assert:
+    that:
+      - "platform_pki_plan.targetDirectory is match('^/.+')"
+      - "platform_pki_plan.targetDirectory not in ['/', '/etc', '/var', '/var/lib']"
+      - "'/..' not in platform_pki_plan.targetDirectory"
+      - "'/pki' in platform_pki_plan.targetDirectory"
+    fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
+
+- name: Inspect trusted source PKI files without exposing content
+  ansible.builtin.stat:
+    path: "{{ platform_pki_state_root }}/{{ _platform_pki_effective_project_id }}/{{ item }}"
+    follow: false
+    checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
+  delegate_to: localhost
+  become: false
+  loop:
+    - "authorities/{{ platform_pki_plan.authorityId }}/ca.crt"
+    - "requests/{{ platform_pki_plan.requestId }}/leaf.crt"
+    - "requests/{{ platform_pki_plan.requestId }}/leaf.key"
+    - "requests/{{ platform_pki_plan.requestId }}/keystore.p12"
+    - "requests/{{ platform_pki_plan.requestId }}/truststore.p12"
+  register: _platform_pki_integrity_sources
+  no_log: true
+
+- name: Require readable regular source PKI material
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - not (item.stat.islnk | default(false))
+      - item.stat.checksum is defined
+    fail_msg: PKI_SOURCE_MATERIAL_UNAVAILABLE
+  loop: "{{ _platform_pki_integrity_sources.results }}"
+  no_log: true
+
+- name: Inspect target PKI directory without following links
+  ansible.builtin.stat:
+    path: "{{ platform_pki_plan.targetDirectory }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: _platform_pki_integrity_directory
+  no_log: true
+
+- name: Reject substituted PKI target directory
+  ansible.builtin.assert:
+    that:
+      - not (_platform_pki_integrity_directory.stat.exists | default(false)) or (_platform_pki_integrity_directory.stat.isdir | default(false) and not (_platform_pki_integrity_directory.stat.islnk | default(false)))
+    fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
+  no_log: true
+
+- name: Inspect deployed PKI files and fingerprint
+  ansible.builtin.stat:
+    path: "{{ platform_pki_plan.targetDirectory }}/{{ item.name }}"
+    follow: false
+    checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
+  loop:
+    - {name: ca-chain.pem, mode: '0644', source: 0}
+    - {name: certificate.pem, mode: '0644', source: 1}
+    - {name: private-key.pem, mode: '0600', source: 2}
+    - {name: keystore.p12, mode: '0600', source: 3}
+    - {name: truststore.p12, mode: '0600', source: 4}
+    - {name: materialization-fingerprint, mode: '0644', source: 5}
+  register: _platform_pki_integrity_targets
+  no_log: true
+
+- name: Initialize PKI target integrity result
+  ansible.builtin.set_fact:
+    _platform_pki_integrity_valid: >-
+      {{ (_platform_pki_integrity_directory.stat.isdir | default(false)) and
+         (_platform_pki_integrity_directory.stat.mode | default('') == '0700') and
+         (_platform_pki_integrity_directory.stat.pw_name | default('') == platform_pki_owner) and
+         (_platform_pki_integrity_directory.stat.gr_name | default('') == platform_pki_group) }}
+  no_log: true
+
+- name: Compare exact PKI bytes and permissions with the trusted source
+  ansible.builtin.set_fact:
+    _platform_pki_integrity_valid: >-
+      {{ (_platform_pki_integrity_valid | bool) and
+         (item.stat.isreg | default(false)) and
+         not (item.stat.islnk | default(false)) and
+         (item.stat.mode | default('') == item.item.mode) and
+         (item.stat.pw_name | default('') == platform_pki_owner) and
+         (item.stat.gr_name | default('') == platform_pki_group) and
+         (item.stat.checksum | default('') ==
+           ((_platform_pki_integrity_sources.results[item.item.source].stat.checksum)
+            if item.item.source < 5 else
+            ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')))) }}
+  loop: "{{ _platform_pki_integrity_targets.results }}"
+  no_log: true
+
+- name: Repair PKI material that does not match the applied plan
+  ansible.builtin.include_tasks: plan.yml
+  when: not (_platform_pki_integrity_valid | bool)

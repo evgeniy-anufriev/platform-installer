@@ -234,7 +234,7 @@ def _environment(release, journal=None, operation=None):
     if os.path.isdir(service_root):
         collections.extend(os.path.join(service_root, name, "ansible_collections") for name in sorted(os.listdir(service_root)) if os.path.isdir(os.path.join(service_root, name, "ansible_collections")))
     environment = dict(os.environ)
-    for inherited in ("ANSIBLE_CALLBACK_PLUGINS", "ANSIBLE_CALLBACK_WHITELIST", "ANSIBLE_CALLBACKS_ENABLED", "ANSIBLE_LOAD_CALLBACK_PLUGINS", "ANSIBLE_STDOUT_CALLBACK"):
+    for inherited in ("ANSIBLE_CALLBACK_PLUGINS", "ANSIBLE_CALLBACK_WHITELIST", "ANSIBLE_CALLBACKS_ENABLED", "ANSIBLE_LOAD_CALLBACK_PLUGINS", "ANSIBLE_STDOUT_CALLBACK", "ANSIBLE_SKIP_TAGS", "ANSIBLE_RUN_TAGS"):
         environment.pop(inherited, None)
     environment.update(
         ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
@@ -504,9 +504,12 @@ def _dispatch(release, journal, manifest, stopped):
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
         identifiers.add(operation["operationId"])
     commands = [(operation, _command(release, journal, operation)) for operation in operations]
+    pki_applied_in_run = False
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
+        if pki_applied_in_run and operation.get("operation") == "SERVICE_APPLY":
+            command = command + ["--skip-tags", "platform_installer_pki_materialization"]
         journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
         credentials_path = None
         secret_inputs_path = None
@@ -559,6 +562,8 @@ def _dispatch(release, journal, manifest, stopped):
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
+        if operation.get("operation") == "PKI_APPLY":
+            pki_applied_in_run = True
     return "SUCCEEDED"
 
 

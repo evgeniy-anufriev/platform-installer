@@ -14,6 +14,15 @@
       - platform_pki_reissue_request_ids | difference(platform_pki_requests | map(attribute='id') | list) | length == 0
     fail_msg: PKI_MATERIALIZATION_RUNTIME_INVALID
 
+- name: Require fresh resolution to match the previously applied frozen PKI plans
+  ansible.builtin.assert:
+    that:
+      - platform_pki_resolve_managed | bool
+      - platform_pki_managed_resolution.pki.materializationPlans | sort(attribute='id') == platform_pki_materialization_plans | sort(attribute='id')
+    fail_msg: PKI_APPLIED_PLAN_MISMATCH
+  when: "'platform_installer_pki_materialization' in ansible_skip_tags"
+  no_log: true
+
 - name: Prepare protected PKI execution roots
   ansible.builtin.file:
     path: "{{ item }}"
@@ -26,11 +35,16 @@
     - "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/requests"
     - "{{ platform_pki_runtime_root }}"
   when: platform_pki_requests | length > 0
+  tags: platform_installer_pki_materialization
 
 - name: Materialize resolved PKI certificate requests
-  ansible.builtin.include_tasks: request.yml
+  ansible.builtin.include_tasks:
+    file: request.yml
+    apply:
+      tags: platform_installer_pki_materialization
   loop: "{{ platform_pki_requests | sort(attribute='id') | list }}"
   loop_control:
     loop_var: platform_pki_request
     label: "{{ platform_pki_request.id }}"
   when: platform_pki_requests | length > 0
+  tags: platform_installer_pki_materialization

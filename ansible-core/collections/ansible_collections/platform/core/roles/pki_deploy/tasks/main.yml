@@ -13,3 +13,12 @@
   loop_control:
     loop_var: platform_pki_plan
     label: "{{ platform_pki_plan.id }}"
+  tags: platform_installer_pki_materialization
+
+- name: Verify previously deployed PKI material before service activation
+  ansible.builtin.include_tasks: integrity.yml
+  loop: "{{ _platform_pki_local_plans | sort(attribute='id') | list }}"
+  loop_control:
+    loop_var: platform_pki_plan
+    label: "{{ platform_pki_plan.id }}"
+  when: "'platform_installer_pki_materialization' in ansible_skip_tags"
