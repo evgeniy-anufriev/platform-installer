@@ -70,6 +70,10 @@ func main() {
 		appOptions = append(appOptions, WithExplicitExecutionNode("desktop-"+*address, *address))
 	}
 	app := NewApp(reader, projectlifecycle.NewService(sources), appOptions...)
+	if err := configureQASecretFileSelection(app); err != nil {
+		_, _ = os.Stderr.WriteString("QA_SECRET_FILE_SELECTION_INVALID\n")
+		return
+	}
 	if err := wails.Run(&options.App{Title: "Platform Installer", Width: 1280, Height: 800, MinWidth: 1024, MinHeight: 720, AssetServer: &assetserver.Options{Assets: assets}, OnStartup: app.startup, OnShutdown: app.shutdown, Bind: []interface{}{app}}); err != nil {
 		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 	}

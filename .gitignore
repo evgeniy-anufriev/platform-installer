@@ -36,11 +36,13 @@ fact_cache/
 
 # Go build/test output
 bin/
+/build/
 *.test
 *.out
 
 # Frontend dependencies
 node_modules/
+/.vite/
 frontend/package.json.md5
 
 # OS/editor metadata

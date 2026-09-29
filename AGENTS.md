@@ -198,6 +198,18 @@ Local integration-test credentials may exist under `.runtime/secrets/`.
 
 ## Test Execution Environment
 
+For every service and affected application flow, acceptance MUST include
+nonvisual React/Wails integration: invoke the actual React handlers/bindings
+against real Wails Go methods and, where relevant, the supported Execution Node
+Core/Ansible path. Use the existing bounded automation seam; do not add a
+production bypass, arbitrary command bridge or test-only save/start path.
+Direct Go harnesses and frontend tests with mocked bindings are supplementary,
+not substitutes for this gate. Record the invoked flow, saved revision, run IDs,
+terminal results and safe event/output evidence. Visual/manual UI inspection is
+separate and is not required by this nonvisual gate; never report it as PASS
+without performing it. If the real bridge cannot be exercised, report the gate
+as unavailable/blocking rather than substituting mocks or marking it passed.
+
 The Windows development workstation is not the canonical runtime for Python/Ansible Core tests.
 
 - Prefer the configured RED OS test VM when Python or Ansible is unavailable locally.

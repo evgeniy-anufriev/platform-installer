@@ -60,10 +60,17 @@ scoped teardown.
   фиксации безопасных свидетельств. Дефект продукта устранять отдельно,
   затем повторять затронутый milestone; не засчитывать прямой Ansible запуск
   вместо полного Installer lifecycle.
-- Если публичная Wails UI может воспроизвести соответствующий edit flow, её
-  acceptance обязательна наряду с Go/Core evidence. UI не заменяет
-  protocol-mediated execution; она доказывает лишь транспорт typed intent в
-  тот же canonical Save lifecycle.
+- Для каждого сервиса обязательна невизуальная React/Wails integration
+  acceptance: реальные React handlers/bindings → реальные Wails Go методы →
+  Core/Ansible на Execution Node. Проверить применимые edit/Save, session-only
+  Secrets, fresh Plan/Approve/Start, поток событий и terminal Result; для
+  сервисов с защищёнными выходами также delivery/receipt/ACK. Использовать
+  существующий automation seam без production bypass. Прямой Go harness и
+  frontend unit tests с mocked bindings дополняют, но не заменяют этот gate.
+  Зафиксировать revision/run IDs/terminal/changed и безопасные свидетельства;
+  plaintext секретов не записывать. Если реальный bridge недоступен, gate
+  остаётся unavailable/blocking, а не PASS по мокам. Визуальная проверка
+  layout/ручные клики — отдельная проверка, не требование этого gate.
 
 ## SERVICE-INSTALL-01 — Keepalived
 
