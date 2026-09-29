@@ -177,7 +177,7 @@ func (t OpenSSHTransport) PutRuntimeSecretLease(ctx context.Context, node Node, 
 		body["apiVersion"] = version
 		body["pkiStorePassword"] = payload.PKIStorePassword
 		body["runtimeSecretValues"] = payload.RuntimeSecretValues
-		if body["runtimeSecretValues"] == nil {
+		if payload.RuntimeSecretValues == nil {
 			body["runtimeSecretValues"] = map[string]string{}
 		}
 		inputs := make([]map[string]any, 0, len(payload.RuntimeSecretInputs))

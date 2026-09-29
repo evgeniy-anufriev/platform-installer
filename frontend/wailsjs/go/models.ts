@@ -2275,15 +2275,15 @@ export namespace main {
   }
 
   export class RuntimeSecretDescriptorView {
-    RequirementRef: string;
-    Purpose: string;
-    ServiceDeployment: string;
-    Setting: string;
-    DisplayLabel: string;
-    RequiredWhen: string;
-    Operations: string[];
-    ReferenceConfigured: boolean;
-    Hosts: string[];
+    requirementRef: string;
+    purpose: string;
+    serviceDeployment?: string;
+    setting?: string;
+    displayLabel: string;
+    requiredWhen?: string;
+    operations?: string[];
+    referenceConfigured: boolean;
+    hosts: string[];
 
     static createFrom(source: any = {}) {
       return new RuntimeSecretDescriptorView(source);
@@ -2291,22 +2291,22 @@ export namespace main {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.RequirementRef = source["RequirementRef"];
-      this.Purpose = source["Purpose"];
-      this.ServiceDeployment = source["ServiceDeployment"];
-      this.Setting = source["Setting"];
-      this.DisplayLabel = source["DisplayLabel"];
-      this.RequiredWhen = source["RequiredWhen"];
-      this.Operations = source["Operations"];
-      this.ReferenceConfigured = source["ReferenceConfigured"];
-      this.Hosts = source["Hosts"];
+      this.requirementRef = source["requirementRef"];
+      this.purpose = source["purpose"];
+      this.serviceDeployment = source["serviceDeployment"];
+      this.setting = source["setting"];
+      this.displayLabel = source["displayLabel"];
+      this.requiredWhen = source["requiredWhen"];
+      this.operations = source["operations"];
+      this.referenceConfigured = source["referenceConfigured"];
+      this.hosts = source["hosts"];
     }
   }
   export class RuntimeSecretDescriptorOperation {
-    Status: string;
-    ProjectRevision: string;
-    DescriptorSetFingerprint: string;
-    Descriptors: RuntimeSecretDescriptorView[];
+    status: string;
+    projectRevision?: string;
+    descriptorSetFingerprint?: string;
+    descriptors?: RuntimeSecretDescriptorView[];
     error?: ProjectOpenError;
 
     static createFrom(source: any = {}) {
@@ -2315,11 +2315,11 @@ export namespace main {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.Status = source["Status"];
-      this.ProjectRevision = source["ProjectRevision"];
-      this.DescriptorSetFingerprint = source["DescriptorSetFingerprint"];
-      this.Descriptors = this.convertValues(
-        source["Descriptors"],
+      this.status = source["status"];
+      this.projectRevision = source["projectRevision"];
+      this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
+      this.descriptors = this.convertValues(
+        source["descriptors"],
         RuntimeSecretDescriptorView,
       );
       this.error = this.convertValues(source["error"], ProjectOpenError);

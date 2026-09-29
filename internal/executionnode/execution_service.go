@@ -333,18 +333,36 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		return ExecutionRun{}, &ExecutionError{Code: PlanBlocked, Findings: append([]Finding(nil), record.Plan.Findings...)}
 	}
 	s.mu.Lock()
-	if prior := s.projects[record.Plan.ProjectIdentity]; prior != "" {
-		if existing := s.sessions[prior]; existing != nil {
-			existing.mu.Lock()
-			state := existing.run.State
-			existing.mu.Unlock()
-			if state == "RUNNING" || state == "STARTING" || state == "CANCELLING" {
-				s.mu.Unlock()
-				return ExecutionRun{}, &ExecutionError{Code: ActiveRunExists, RunID: prior}
+	prior := s.projects[record.Plan.ProjectIdentity]
+	s.mu.Unlock()
+	if prior != "" {
+		// The local session is only a cache. A detached controller may have
+		// become terminal since its last observer poll; only the authoritative
+		// Execution Node may release this project's active-run guard.
+		observed, observeErr := s.client.GetExecution(ctx, node, prior)
+		if observeErr != nil {
+			return ExecutionRun{}, observeErr
+		}
+		if observed.RunID != prior || observed.ProjectIdentity != record.Plan.ProjectIdentity {
+			return ExecutionRun{}, &ExecutionError{Code: OwnershipMismatch, RunID: prior}
+		}
+		switch observed.State {
+		case "SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED":
+			s.mu.Lock()
+			if s.projects[record.Plan.ProjectIdentity] == prior {
+				delete(s.projects, record.Plan.ProjectIdentity)
 			}
+			existing := s.sessions[prior]
+			s.mu.Unlock()
+			if existing != nil {
+				existing.mu.Lock()
+				existing.run = observed
+				existing.mu.Unlock()
+			}
+		default:
+			return ExecutionRun{}, &ExecutionError{Code: ActiveRunExists, RunID: prior}
 		}
 	}
-	s.mu.Unlock()
 	s.mu.Lock()
 	projectRoot := s.projectRoots[planID]
 	s.mu.Unlock()
@@ -393,7 +411,11 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		requiresPKIStorePassword := planRequiresPKIStorePassword(fresh)
 		runtimeSecretRequirements := planRuntimeSecretRequirements(fresh)
 		typedRuntimeSecretRequirements := planRuntimeSecretInputRequirements(fresh)
-		if requiresPKIStorePassword && (!capability.supportsPayloadVersion(credentialPayloadVersionV2) || capability.MaxPayloadBytes < 4096) {
+		// The closed v4 payload carries pkiStorePassword too; v4 runtimes
+		// deliberately advertise only v4, not the legacy payload versions.
+		pkiPayloadSupported := capability.supportsPayloadVersion(credentialPayloadVersionV2) ||
+			(capability.TypedRuntimeInputs && capability.supportsPayloadVersion(credentialPayloadVersionV4))
+		if requiresPKIStorePassword && (!pkiPayloadSupported || capability.MaxPayloadBytes < 4096) {
 			return ExecutionRun{}, errors.New("PKI_STORE_PASSWORD_RUNTIME_UNSUPPORTED")
 		}
 		if requiresPKIStorePassword && provider == nil {

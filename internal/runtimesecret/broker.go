@@ -394,6 +394,11 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
 		}
 	}
+	// Typed inputs share this pending bucket but are authorized and bound by
+	// BindPendingServiceSecretInputs, not by password-map promotion.
+	if len(b.pending.values) == 0 {
+		return nil
+	}
 	next := cloneSecretMap(b.lease.runtimeSecretValues)
 	for reference, value := range b.pending.values {
 		zero(next[reference])
@@ -405,7 +410,11 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 	}
 	zeroSecretMap(b.lease.runtimeSecretValues)
 	b.lease.runtimeSecretValues = next
-	b.clearPendingLocked()
+	zeroSecretMap(b.pending.values)
+	b.pending.values = nil
+	if len(b.pending.typed) == 0 {
+		b.clearPendingLocked()
+	}
 	return nil
 }
 

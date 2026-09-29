@@ -86,7 +86,7 @@ func readAdminToken(data []byte) (VaultInput, error) {
 		}
 		value = []byte(token)
 	}
-	if len(value) == 0 || len(value) > MaxTokenBytes {
+	if len(value) == 0 || len(value) > MaxTokenBytes || bytes.ContainsAny(value, "\r\n") {
 		return VaultInput{}, ErrFile
 	}
 	return VaultInput{Purpose: PurposeAdminToken, Token: append([]byte(nil), value...)}, nil

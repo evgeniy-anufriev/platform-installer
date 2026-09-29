@@ -140,17 +140,23 @@ type ApplicationConfigResult struct {
 }
 
 type RuntimeSecretDescriptorView struct {
-	RequirementRef, Purpose, ServiceDeployment, Setting, DisplayLabel string
-	RequiredWhen                                                      string
-	Operations                                                        []string
-	ReferenceConfigured                                               bool
-	Hosts                                                             []string
+	RequirementRef      string   `json:"requirementRef"`
+	Purpose             string   `json:"purpose"`
+	ServiceDeployment   string   `json:"serviceDeployment,omitempty"`
+	Setting             string   `json:"setting,omitempty"`
+	DisplayLabel        string   `json:"displayLabel"`
+	RequiredWhen        string   `json:"requiredWhen,omitempty"`
+	Operations          []string `json:"operations,omitempty"`
+	ReferenceConfigured bool     `json:"referenceConfigured"`
+	Hosts               []string `json:"hosts"`
 }
 
 type RuntimeSecretDescriptorOperation struct {
-	Status, ProjectRevision, DescriptorSetFingerprint string
-	Descriptors                                       []RuntimeSecretDescriptorView
-	Error                                             *ProjectOpenError `json:"error,omitempty"`
+	Status                   string                        `json:"status"`
+	ProjectRevision          string                        `json:"projectRevision,omitempty"`
+	DescriptorSetFingerprint string                        `json:"descriptorSetFingerprint,omitempty"`
+	Descriptors              []RuntimeSecretDescriptorView `json:"descriptors,omitempty"`
+	Error                    *ProjectOpenError             `json:"error,omitempty"`
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
@@ -198,8 +204,9 @@ type runtimeSecretDescriptorEvidence struct {
 var runtimeSecretDescriptorRequirement = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
 type App struct {
-	ctx    context.Context
-	reader interface {
+	ctx              context.Context
+	chooseSecretFile func(context.Context, runtime.OpenDialogOptions) (string, error)
+	reader           interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
 	projectRevision        func(string) (string, error)
@@ -266,6 +273,7 @@ func NewApp(reader interface {
 	for _, option := range options {
 		option(app)
 	}
+	app.chooseSecretFile = runtime.OpenFileDialog
 	app.configureTargetCredentialLease()
 	return app
 }
@@ -736,7 +744,7 @@ func (a *App) ChoosePendingDeploymentRuntimeSecretFile(input PendingRuntimeSecre
 	if !allowed || bindErr != nil {
 		return "", errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
-	path, err := runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{Title: "Выбрать файл секрета", Filters: []runtime.FileFilter{{DisplayName: "Файлы секрета (*.json, *.age)", Pattern: "*.json;*.age"}}})
+	path, err := a.chooseSecretFile(ctx, runtime.OpenDialogOptions{Title: "Выбрать файл секрета", Filters: []runtime.FileFilter{{DisplayName: "Файлы секрета (*.json, *.age)", Pattern: "*.json;*.age"}}})
 	if err != nil {
 		return "", errors.New("SECRET_FILE_SELECTION_FAILED")
 	}
@@ -917,7 +925,12 @@ func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOpera
 	}
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	if a.installationGeneration != generation || a.current.Root != root || a.current.Project == nil || a.current.Project.ID != projectID || a.execution.context.SelectedHostID != node.ID {
+	currentBinding, bindingErr := a.resolveSelectedExecutionNodeBindingLocked()
+	if a.installationGeneration != generation || a.current.Status != "OPEN" || a.current.Root != root || a.current.Project == nil || a.current.Project.ID != projectID || a.execution.context.Status != "READY" || bindingErr != nil || currentBinding != binding || currentBinding.node != node {
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "PROJECT_CHANGED", Message: projectErrorMessage("PROJECT_CHANGED")}}
+	}
+	currentRuntime, runtimeValid := installationRuntimeBinding(currentBinding.reader.runtimeRelease)
+	if !runtimeValid || currentRuntime != runtimeBinding {
 		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "PROJECT_CHANGED", Message: projectErrorMessage("PROJECT_CHANGED")}}
 	}
 	// A delivered/cleanup-pending remote package may no longer be listable.

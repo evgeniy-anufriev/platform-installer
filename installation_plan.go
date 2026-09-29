@@ -221,7 +221,7 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 		projected := InstallationPlanPhase{ID: phase.ID, Order: phase.Order, Actions: make([]InstallationPlanAction, 0, len(phase.Actions))}
 		for _, action := range phase.Actions {
 			projected.Actions = append(projected.Actions, InstallationPlanAction{ID: action.ID, Type: action.Type, ServiceDeployment: action.ServiceDeployment,
-				Targets: append([]string(nil), action.Targets...), DependsOn: append([]string(nil), action.DependsOn...), Mutating: action.Mutating, Reboot: action.Reboot, Summary: action.Summary})
+				Targets: append([]string{}, action.Targets...), DependsOn: append([]string{}, action.DependsOn...), Mutating: action.Mutating, Reboot: action.Reboot, Summary: action.Summary})
 		}
 		view.Phases = append(view.Phases, projected)
 	}

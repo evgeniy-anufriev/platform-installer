@@ -24,9 +24,38 @@ func TestReadAdminTokenRawAndInitJSON(t *testing.T) {
 		[]byte(`{"root_token":""}`),
 		[]byte(strings.Repeat("x", MaxTokenBytes+1)),
 		{0xff},
+		[]byte("root-token\n"),
+		[]byte("root-token\r\n"),
+		[]byte("root\ntoken"),
+		[]byte("root\rtoken"),
+		[]byte(`{"root_token":"root-token\n"}`),
+		[]byte(`{"root_token":"root-token\r"}`),
 	} {
 		if _, err := ReadVaultInput(PurposeAdminToken, input, nil); !errors.Is(err, ErrFile) {
 			t.Fatal("invalid token file accepted")
+		}
+	}
+}
+
+func TestReadAdminTokenRejectsEncryptedLineTerminatorsWithoutRewriting(t *testing.T) {
+	password := []byte("synthetic-password")
+	for _, plain := range []string{"root-token", "root-token\n", "root-token\r\n"} {
+		ciphertext, err := Encrypt(password, []byte(plain))
+		if err != nil {
+			t.Fatal("fixture encryption failed")
+		}
+		before := append([]byte(nil), ciphertext...)
+		input, err := ReadVaultInput(PurposeAdminToken, ciphertext, password)
+		if plain == "root-token" {
+			if err != nil || string(input.Token) != plain {
+				t.Fatal("valid token changed")
+			}
+			clear(input.Token)
+		} else if !errors.Is(err, ErrFile) {
+			t.Fatal("invalid encrypted header token admitted")
+		}
+		if string(ciphertext) != string(before) {
+			t.Fatal("ciphertext rewritten")
 		}
 	}
 }

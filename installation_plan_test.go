@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -16,6 +17,36 @@ import (
 )
 
 type installationPlanTransport struct{}
+
+func TestInstallationPlanActionEmptyListsMarshalAsArrays(t *testing.T) {
+	app, _, _ := installationPlanApp(t, false)
+	created := app.CreateInstallationPlan()
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	action := created.Plan.Phases[0].Actions[0]
+	if action.DependsOn == nil {
+		t.Fatal("empty dependencies must be a non-nil presentation array")
+	}
+	data, err := json.Marshal(action)
+	if err != nil || !strings.Contains(string(data), `"dependsOn":[]`) {
+		t.Fatalf("dependency JSON shape invalid: %s %v", data, err)
+	}
+	// Both nil and explicit empty source collections have the same wire shape.
+	record := executionnode.PlanRecord{ID: "empty-lists", Plan: executionnode.DeploymentPlan{
+		RuntimeRelease:  app.binding.reader.runtimeRelease,
+		PlanFingerprint: "fingerprint", ProjectRevision: "revision",
+		Phases: []executionnode.DeploymentPlanPhase{{ID: "phase", Actions: []executionnode.DeploymentPlanAction{{ID: "action"}}}},
+	}}
+	view, err := installationPlanView(record, app.binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = json.Marshal(view.Phases[0].Actions[0])
+	if err != nil || !strings.Contains(string(data), `"targets":[]`) || !strings.Contains(string(data), `"dependsOn":[]`) {
+		t.Fatalf("empty list wire shape invalid: %s %v", data, err)
+	}
+}
 
 type outputCapabilityGateTransport struct {
 	secretOutputTransportStub

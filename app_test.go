@@ -579,6 +579,7 @@ type secretOutputTransportStub struct {
 	ackRequest                 executionnode.SecretOutputRequest
 	err                        error
 	listErr                    error
+	onList                     func()
 }
 
 func (*secretOutputTransportStub) BuildProjectSnapshot(ctx context.Context, node executionnode.Node, root string, release map[string]any) (*coreadapter.Snapshot, error) {
@@ -591,6 +592,9 @@ func (s *secretOutputTransportStub) GetSecretOutputCapabilities(context.Context,
 }
 func (s *secretOutputTransportStub) ListPendingSecretOutputs(_ context.Context, _ executionnode.Node, _, project string, limit int, cursor *string) (executionnode.SecretOutputList, error) {
 	s.listCalls++
+	if s.onList != nil {
+		s.onList()
+	}
 	if s.listErr != nil {
 		return executionnode.SecretOutputList{}, s.listErr
 	}
@@ -622,7 +626,9 @@ func TestListPendingSecretOutputsRequiresReadyNodeAndReturnsMetadataOnly(t *test
 	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: service, bundleRoot: "bundle"}))
 	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
 	app.bindExecutionLocked(root, app.current.Project, nil)
-	app.execution.context.SelectedHostID = node.ID
+	if app.execution.context.SelectedHostID != "" || app.execution.context.SelectionKind != "EXPLICIT_EXTERNAL" {
+		t.Fatal("external selection must retain its production context without a project host ID")
+	}
 	if result := app.ListPendingSecretOutputs(nil); result.Status != "UNAVAILABLE" || transport.capabilityCalls != 0 || transport.listCalls != 0 {
 		t.Fatalf("not-ready result=%#v calls=%d/%d", result, transport.capabilityCalls, transport.listCalls)
 	}
@@ -646,7 +652,7 @@ func TestDeliverPendingSecretOutputEncryptsBeforeIdempotentAck(t *testing.T) {
 	projectID, deploymentID := "project-aaaaaaaaaaaaaaaa", "vault-ha"
 	packageID, runID := strings.Repeat("a", 32), "installer-1234"
 	runtimeDigest := "sha256:" + strings.Repeat("b", 64)
-	token, shares := []byte("vault-root-token\n"), []byte(`{"keys":["share-one","share-two"]}`)
+	token, shares := []byte("vault-root-token"), []byte(`{"keys":["share-one","share-two"]}`)
 	meta, _ := json.Marshal(map[string]any{"protocol": "SecretOutputDelivery/v1alpha1", "packageId": packageID, "projectId": projectID, "deploymentId": deploymentID, "sourceRunId": runID, "runtimeDigest": runtimeDigest, "generation": 1, "state": "READY", "entries": []string{"admin-token", "unseal-shares"}})
 	frame := make([]byte, 16)
 	copy(frame, "SOD1")

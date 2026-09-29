@@ -3,6 +3,7 @@ package executionnode
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,29 @@ type lifecycleClient struct {
 	startErr        error
 	ops             []string
 	typedCapability bool
+}
+
+type priorRunClient struct {
+	*lifecycleClient
+	priorState   string
+	observeErr   error
+	wrongProject bool
+}
+
+func (c *priorRunClient) StartExecutionV2(_ context.Context, _ Node, _ ExecutionStartV2Request) (ExecutionStartV2Response, error) {
+	c.starts++
+	return ExecutionStartV2Response{Status: "STARTED", RunID: fmt.Sprintf("installer-%d", c.starts)}, nil
+}
+
+func (c *priorRunClient) GetExecution(_ context.Context, _ Node, runID string) (ExecutionRun, error) {
+	if c.observeErr != nil {
+		return ExecutionRun{}, c.observeErr
+	}
+	project := "project-1"
+	if c.wrongProject {
+		project = "another-project"
+	}
+	return ExecutionRun{RunID: runID, ProjectIdentity: project, State: c.priorState}, nil
 }
 
 func (c *lifecycleClient) CredentialStartCapability(context.Context, Node) (CredentialStartCapability, error) {
@@ -243,6 +267,41 @@ func TestExecutionServiceRequiresBoundPKIStorePasswordBeforeLeasePut(t *testing.
 	}
 }
 
+func TestExecutionServicePKIPasswordWithV4OnlyRuntime(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("missing=%t", missing), func(t *testing.T) {
+			b := &lifecycleBuilder{requiresPKI: true, typedInputs: true}
+			c := &lifecycleClient{typedCapability: true}
+			s := NewExecutionService(b, c)
+			s.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+				if !request.RequiresPKIStorePassword || len(request.RuntimeSecretInputs) != 1 {
+					t.Fatal("missing bound requirements")
+				}
+				password := "pki"
+				if missing {
+					password = ""
+				}
+				return use(TargetCredentialLeasePayload{Username: "operator", Password: "ssh", PKIStorePassword: password, UseTypedRuntimeInputs: true})
+			})
+			p, err := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.ApprovePlan(p.ID, p.Plan.Acknowledgements); err != nil {
+				t.Fatal(err)
+			}
+			_, err = s.Start(context.Background(), Node{}, p.ID)
+			if missing {
+				if err == nil || err.Error() != "PKI_STORE_PASSWORD_UNAVAILABLE" || len(c.ops) != 0 {
+					t.Fatalf("missing PKI admitted: error=%v ops=%v", err, c.ops)
+				}
+			} else if err != nil || strings.Join(c.ops, ",") != "put-lease,start-v2" {
+				t.Fatalf("v4 PKI start: error=%v ops=%v", err, c.ops)
+			}
+		})
+	}
+}
+
 func TestExecutionServiceRejectsMissingPKIStorePasswordBeforeLeasePut(t *testing.T) {
 	b := &lifecycleBuilder{requiresPKI: true}
 	c := &lifecycleClient{}
@@ -320,6 +379,58 @@ func TestExecutionServiceSyncTerminalClearsProjectActiveRun(t *testing.T) {
 	s.mu.Unlock()
 	if active {
 		t.Fatal("terminal run remained active for its project")
+	}
+}
+
+func TestExecutionServiceStartRechecksDetachedPriorRun(t *testing.T) {
+	for _, scenario := range []struct {
+		name, state  string
+		err          error
+		wrongProject bool
+		wantCode     string
+	}{
+		{name: "failed terminal permits fresh start", state: "FAILED"},
+		{name: "succeeded terminal permits fresh start", state: "SUCCEEDED"},
+		{name: "cancelled terminal permits fresh start", state: "CANCELLED"},
+		{name: "interrupted terminal permits fresh start", state: "INTERRUPTED"},
+		{name: "running remains blocked", state: "RUNNING", wantCode: ActiveRunExists},
+		{name: "unknown status remains blocked", state: "UNKNOWN", wantCode: ActiveRunExists},
+		{name: "identity mismatch fails closed", state: "FAILED", wrongProject: true, wantCode: OwnershipMismatch},
+		{name: "unavailable status fails closed", err: &ExecutionError{Code: ExecutionNodeUnavailable}, wantCode: ExecutionNodeUnavailable},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			client := &priorRunClient{lifecycleClient: &lifecycleClient{}, priorState: scenario.state, observeErr: scenario.err, wrongProject: scenario.wrongProject}
+			service := NewExecutionService(&lifecycleBuilder{}, client)
+			first, err := service.CreatePlan(t.Context(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := service.ApprovePlan(first.ID, []string{"ACK_RISK"}); err != nil {
+				t.Fatal(err)
+			}
+			initial, err := service.Start(t.Context(), Node{}, first.ID)
+			if err != nil || initial.RunID != "installer-1" {
+				t.Fatalf("initial=%#v err=%v", initial, err)
+			}
+			second, err := service.CreatePlan(t.Context(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := service.ApprovePlan(second.ID, []string{"ACK_RISK"}); err != nil {
+				t.Fatal(err)
+			}
+			restarted, err := service.Start(t.Context(), Node{}, second.ID)
+			if scenario.wantCode != "" {
+				var executionErr *ExecutionError
+				if !errors.As(err, &executionErr) || executionErr.Code != scenario.wantCode || client.starts != 1 {
+					t.Fatalf("unexpected retry result=%#v err=%v starts=%d", restarted, err, client.starts)
+				}
+				return
+			}
+			if err != nil || restarted.RunID != "installer-2" || client.starts != 2 {
+				t.Fatalf("terminal retry=%#v err=%v starts=%d", restarted, err, client.starts)
+			}
+		})
 	}
 }
 

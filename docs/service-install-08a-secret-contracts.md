@@ -82,7 +82,11 @@ Workstation age/password and remote plaintext/ACK ownership remain exactly as
 parent architecture §6.2. No role/controller integration is claimed in A.
 
 Local file format freeze for D: raw administrative token is nonempty UTF-8
-up to 4096 bytes, unchanged. Bounded init JSON may supply root_token for that
+up to 4096 bytes, unchanged, with no CR or LF (HTTP header safety). Inputs
+containing CR/LF are rejected, never silently trimmed. The Ansible producer
+writes exact root-token bytes without a line terminator. Existing newline-bearing
+files require an explicit operator correction, preserving the encrypted original.
+Bounded init JSON may supply root_token for that
 input. Shares files are UTF-8 JSON up to 65536 bytes before extraction: accepted
 containers are API keys / keys_base64, CLI unseal_keys_hex / unseal_keys_b64,
 or the Installer output container {"keys": [...]}. If both representations
