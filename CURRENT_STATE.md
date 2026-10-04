@@ -1757,3 +1757,15 @@ review. UI-01E is decomposed into E1-E6; UI-01E1 server CRUD integration is
 DONE; UI-01E2 through UI-01E6 and UI-01F1 through UI-01F6 are DONE. UI-01F
 overall is DONE; UI-NET-01 is DONE, UI-01G overall and UI-01H overall are DONE, UI-01I and UI-01J
 are DONE, and UI-01 overall is DONE.
+
+## SI11 latest isolated acceptance: Redis/Sentinel PASS (2026-10-04)
+
+The isolated `qa-redis` 3/3 deployment completed successfully through the
+real nonvisual React/Wails -> Go -> READY Execution Node path. Run
+`installer-fc60535b1137f40104a7c899cd91bb9d` targeted node1, node2 and node3;
+the terminal event sequence ended at 1546 (`Execution controller completed`).
+Saved project revision:
+`sha256:28eb9be0d07f385abd1eb400318d1bc8611efca2857444e78da523e04a632108`.
+No repeat `changed=0` run was performed. This is isolated Redis acceptance,
+not the all-services SI11 plan. Vault remains the next isolated project; do
+not start the cumulative plan before its isolated acceptance is complete.

@@ -264,8 +264,17 @@ func installationResultView(run executionnode.ExecutionRun) *InstallationResultV
 }
 func installationEventView(event executionnode.ExecutionEvent) InstallationEventView {
 	view := InstallationEventView{RunID: event.RunID, Sequence: event.Sequence, Timestamp: event.Timestamp, EventType: event.EventType, Status: event.Status, PhaseID: event.PhaseID, ActionID: event.ActionID, Host: event.Host, ServiceDeployment: event.ServiceDeployment, ElapsedMilliseconds: event.ElapsedMillis, SafeMessage: event.SafeMessage, Redacted: event.Redaction.Applied}
-	if event.Task != nil && !event.Redaction.Applied {
+	taskNameRedacted := false
+	for _, field := range event.Redaction.Fields {
+		if field == "task.name" {
+			taskNameRedacted = true
+			break
+		}
+	}
+	if event.Task != nil && !taskNameRedacted {
 		view.Task = &InstallationTaskView{Role: event.Task.Role, Name: event.Task.Name, UUID: event.Task.UUID}
+	} else if event.Task != nil {
+		view.Task = &InstallationTaskView{Role: event.Task.Role, UUID: event.Task.UUID}
 	}
 	if event.Error != nil {
 		view.ErrorCode = event.Error.Code
