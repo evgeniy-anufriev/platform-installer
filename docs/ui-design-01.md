@@ -202,6 +202,12 @@ runtime credential input. A server record stores transport metadata and, at
 most, a `SecretRef`; it never stores the password or private-key material in
 the project, inventory, logs, diagnostics or application preferences.
 
+The owner-approved Servers layout keeps the vertical order (session credentials,
+server list, Execution Node) while compressing session credentials into a
+single horizontal desktop row. Its status is shown inline with the explanation;
+at narrow widths the fields wrap into a responsive grid. Only long server lists
+scroll independently, while the page header and Execution Node remain visible.
+
 ### Topology
 
 Topology owns a header-level **Add service instance**

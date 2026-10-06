@@ -324,6 +324,14 @@ body {
   font-size: 10px;
   line-height: 1.25;
 }
+.workspace-content:has(> .servers-layout)
+  .session-credentials
+  .session-credentials-status {
+  padding-left: 8px;
+  border-left: 1px solid #dbe3ed;
+  color: #526987;
+  white-space: nowrap;
+}
 .workspace-content:has(> .servers-layout) .session-credentials form {
   grid-template-columns:
     minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) max-content
@@ -722,10 +730,23 @@ button:disabled {
     gap: 4px 7px;
   }
   .workspace-content:has(> .servers-layout) .session-credentials form {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns:
+      minmax(115px, 1fr) minmax(125px, 1fr) minmax(125px, 1.15fr) max-content
+      max-content;
   }
   .workspace-content:has(> .servers-layout) .session-credentials form .actions {
-    grid-column: 3 / 5;
+    grid-column: auto;
+  }
+}
+@media (max-width: 960px) {
+  .workspace-content:has(> .servers-layout) .session-credentials form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-content:has(> .servers-layout) .session-credentials form .actions {
+    grid-column: 1 / -1;
+  }
+  .session-credentials-status {
+    white-space: normal;
   }
 }
 @media (max-width: 800px) {

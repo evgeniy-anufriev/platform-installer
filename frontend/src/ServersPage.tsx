@@ -899,12 +899,21 @@ function SessionCredentialsPanel({
   };
   const effectiveStatus = status?.status || "MISSING";
   return (
-    <section className="card session-credentials">
-      <div>
-        <h2>Учётные данные сеанса</h2>
+    <section
+      className="card session-credentials"
+      aria-labelledby="session-credentials-heading"
+    >
+      <div className="session-credentials-heading">
+        <h2 id="session-credentials-heading">Учётные данные сеанса</h2>
         <p className="muted">
-          Применяются ко всем серверам только в текущем сеансе и не записываются
-          в проект.
+          Для всех серверов текущего сеанса; в проект не записываются.
+        </p>
+        <p className="muted session-credentials-status" aria-live="polite">
+          {effectiveStatus === "PRESENT"
+            ? `Доступны до ${status?.expiresAt || ""}`
+            : effectiveStatus === "EXPIRED"
+              ? "Срок хранения учётных данных истёк"
+              : "Учётные данные не заданы"}
         </p>
       </div>
       <form onSubmit={submit}>
@@ -1008,13 +1017,6 @@ function SessionCredentialsPanel({
           </button>
         </div>
       </form>
-      <p className="muted" aria-live="polite">
-        {effectiveStatus === "PRESENT"
-          ? `Доступны до ${status?.expiresAt || ""}`
-          : effectiveStatus === "EXPIRED"
-            ? "Срок хранения учётных данных истёк"
-            : "Учётные данные не заданы"}
-      </p>
     </section>
   );
 }
