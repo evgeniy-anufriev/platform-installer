@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -52,6 +52,46 @@ function props(
 }
 
 describe("UI-01G2 CertificatesPage", () => {
+  it("shows ordered PKI navigation and the independent TLS/scope branches", async () => {
+    render(<CertificatesPage {...props()} />);
+
+    const navigation = screen.getByRole("navigation", {
+      name: "Разделы сертификатов",
+    });
+    expect(
+      within(navigation)
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "Управляемые центры сертификации",
+      "Профили сертификатов",
+      "Профили TLS",
+      "Области применения сертификатов",
+    ]);
+    expect(
+      screen.getByRole("img", {
+        name: /от него независимо зависят профиль TLS и область применения/,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Управляемые центры сертификации",
+      }).getAttribute("aria-current"),
+    ).toBe("page");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Профили сертификатов" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Профили сертификатов" }).getAttribute(
+        "aria-current",
+      ),
+    ).toBe("page");
+    expect(
+      screen.getByRole("heading", { name: "Профили сертификатов" }),
+    ).toBeTruthy();
+  });
+
   it("sets and replaces the Java-store password in the active session", async () => {
     const user = userEvent.setup();
     const onSetPKIStorePassword = vi.fn().mockResolvedValue({
@@ -109,8 +149,9 @@ describe("UI-01G2 CertificatesPage", () => {
     const onAppend = vi.fn().mockResolvedValue(true);
     render(<CertificatesPage {...props({ onAppend })} />);
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Добавить" })[3],
+      screen.getByRole("button", { name: "Области применения сертификатов" }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
     await userEvent.type(screen.getByLabelText("ID"), "kafka.scope");
     await userEvent.selectOptions(
       screen.getByLabelText("Профиль сертификата"),
@@ -147,8 +188,11 @@ describe("UI-01G2 CertificatesPage", () => {
     expect(screen.queryByText(/SAN preview/i)).toBeNull();
   });
 
-  it("masks stored SecretRef and never renders its runtime name", () => {
+  it("masks stored SecretRef and never renders its runtime name", async () => {
     render(<CertificatesPage {...props()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Профили TLS" }),
+    );
     expect(screen.getByText(/runtime:••••/)).toBeTruthy();
     expect(screen.queryByText("runtime:actual-secret-name")).toBeNull();
   });
@@ -157,8 +201,9 @@ describe("UI-01G2 CertificatesPage", () => {
     const onAppend = vi.fn().mockResolvedValue(true);
     render(<CertificatesPage {...props({ onAppend })} />);
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Изменить" })[1],
+      screen.getByRole("button", { name: "Профили сертификатов" }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Добавить в черновик" }),
     );
@@ -176,8 +221,9 @@ describe("UI-01G2 CertificatesPage", () => {
   it("keeps explicit false distinct from inherited SAN policy", async () => {
     render(<CertificatesPage {...props()} />);
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Изменить" })[1],
+      screen.getByRole("button", { name: "Профили сертификатов" }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
     const selector = screen.getByLabelText(
       "DNS-имена серверов",
     ) as HTMLSelectElement;

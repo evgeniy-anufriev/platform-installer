@@ -359,6 +359,13 @@ managed certificate request may be reissued only as an exact, Core-selected
 action in a fresh approved Installation plan. The Certificates page does not
 trigger a separate issuance path.
 
+The owner-approved Certificates layout uses a left-side ordered PKI type
+navigator and a right-side editor/list for the selected type. The PKCS#12
+session password sits directly below the page heading; the dependency guide is
+a compact strip. Its graph is a CA → certificate profile chain that branches
+to independent TLS profile and certificate scope objects. The bottom Core
+section remains read-only evidence and verification, not certificate issuance.
+
 ## 8. Effective values, origins and opaque data
 
 The UI displays Core's resolved projection; it does not evaluate Ansible.

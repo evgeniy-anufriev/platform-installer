@@ -44,6 +44,13 @@ const labels: Record<PKIKind, string> = {
   tls: "Профили TLS",
   scope: "Области применения сертификатов",
 };
+const kindOrder: PKIKind[] = ["authority", "profile", "tls", "scope"];
+const dependencyHints: Record<PKIKind, string> = {
+  authority: "Используется в профилях сертификатов.",
+  profile: "Ссылается на центр сертификации.",
+  tls: "Использует профиль сертификата.",
+  scope: "Тоже использует профиль сертификата.",
+};
 const operations: Record<
   PKIKind,
   {
@@ -159,6 +166,7 @@ export function CertificatesPage({
   const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
     null,
   );
+  const [selectedKind, setSelectedKind] = useState<PKIKind>("authority");
   const [storePassword, setStorePassword] = useState("");
   const [storePasswordError, setStorePasswordError] = useState("");
   const [storePasswordSaving, setStorePasswordSaving] = useState(false);
@@ -227,84 +235,148 @@ export function CertificatesPage({
           onDiscard={onDiscard}
         />
       </div>
-      <p className="muted">
+      <p className="muted certificate-intro">
         Пустые поля наследуют значения роли и не записываются. DNS/IP здесь
         задаются явно; Core определяет итоговые имена и SAN после проверки.
       </p>
       <article className="card pki-store-password">
-        <h2>Пароль Java-хранилищ PKCS#12 (keystore / truststore)</h2>
-        <p className="muted">
-          Пароль защищает создаваемые хранилища сертификатов. Он хранится только
-          в активном сеансе Installer. Если пароль существующих хранилищ
-          неизвестен, при применении Core пересоздаст их из текущих
-          PEM-сертификатов и ключа.
-        </p>
-        <p role="status">
-          {pkiPasswordPresent
-            ? "Пароль задан в текущем сеансе. Его можно заменить до запуска."
-            : "Пароль не задан в текущем сеансе."}
-        </p>
-        {!sshSessionPresent && (
+        <div className="pki-store-password-copy">
+          <h2>Пароль Java-хранилищ PKCS#12 (keystore / truststore)</h2>
           <p className="muted">
-            Сначала сохраните учётные данные для выбранного Execution Node.
+            Пароль хранится только в активном сеансе Installer. Если пароль
+            существующего хранилища неизвестен, Core пересоздаст его из текущих
+            PEM-сертификатов и ключа при применении.
           </p>
-        )}
-        <label>
-          Новый пароль хранилищ
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={storePassword}
-            onChange={(event) => setStorePassword(event.target.value)}
-            disabled={busy || storePasswordSaving || !sshSessionPresent}
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => void savePKIStorePassword()}
-          disabled={
-            busy ||
-            storePasswordSaving ||
-            !sshSessionPresent ||
-            storePassword.length === 0 ||
-            !onSetPKIStorePassword
-          }
-        >
-          {pkiPasswordPresent
-            ? "Заменить пароль в сеансе"
-            : "Сохранить пароль в сеансе"}
-        </button>
-        {storePasswordError && (
-          <p className="field-error" role="alert">
-            {storePasswordError}
-          </p>
-        )}
-      </article>
-      <div className="certificate-sections">
-        {(Object.keys(labels) as PKIKind[]).map((kind) => (
-          <article className="card certificate-section" key={kind}>
-            <div className="section-head">
-              <div>
-                <h2>{labels[kind]}</h2>
-                <small>{sectionHint(kind)}</small>
-              </div>
-              <button
-                className="outline"
-                disabled={blocked}
-                onClick={() => setEditor({ kind })}
-              >
-                Добавить
-              </button>
-            </div>
-            <CertificateRows
-              kind={kind}
-              rows={allRows[kind]}
-              disabled={blocked}
-              onEdit={(id) => setEditor({ kind, id })}
-              onDelete={remove}
+        </div>
+        <div className="pki-store-password-controls">
+          <label>
+            Новый пароль хранилищ
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={storePassword}
+              onChange={(event) => setStorePassword(event.target.value)}
+              disabled={busy || storePasswordSaving || !sshSessionPresent}
             />
-          </article>
-        ))}
+          </label>
+          <button
+            type="button"
+            onClick={() => void savePKIStorePassword()}
+            disabled={
+              busy ||
+              storePasswordSaving ||
+              !sshSessionPresent ||
+              storePassword.length === 0 ||
+              !onSetPKIStorePassword
+            }
+          >
+            {pkiPasswordPresent
+              ? "Заменить пароль в сеансе"
+              : "Сохранить пароль в сеансе"}
+          </button>
+          <p role="status">
+            {pkiPasswordPresent
+              ? "Пароль задан в текущем сеансе. Его можно заменить до запуска."
+              : "Пароль не задан в текущем сеансе."}
+          </p>
+          {!sshSessionPresent && (
+            <p className="muted">
+              Сначала сохраните учётные данные для выбранного Execution Node.
+            </p>
+          )}
+          {storePasswordError && (
+            <p className="field-error" role="alert">
+              {storePasswordError}
+            </p>
+          )}
+        </div>
+      </article>
+      <section
+        className="certificate-dependency-guide"
+        aria-labelledby="certificate-dependency-heading"
+      >
+        <div>
+          <h2 id="certificate-dependency-heading">
+            Порядок настройки и зависимости
+          </h2>
+          <p>
+            Сначала центр и профиль сертификата; TLS-профиль и область
+            применения — независимые ветви.
+          </p>
+        </div>
+        <div
+          className="certificate-dependency-flow"
+          role="img"
+          aria-label="Центр сертификации ведёт к профилю сертификата; от него независимо зависят профиль TLS и область применения"
+        >
+          <div className="certificate-dependency-chain">
+            <span>1 · Центр сертификации</span>
+            <span aria-hidden="true">→</span>
+            <span>2 · Профиль сертификата</span>
+          </div>
+          <div className="certificate-dependency-branches">
+            <div>
+              <span aria-hidden="true">↗</span>
+              <span>3 · Профиль TLS</span>
+            </div>
+            <div>
+              <span aria-hidden="true">↘</span>
+              <span>4 · Область применения</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="certificate-workspace">
+        <nav className="certificate-type-nav" aria-label="Разделы сертификатов">
+          {kindOrder.map((kind, index) => (
+            <button
+              key={kind}
+              type="button"
+              className={`certificate-type-option${
+                selectedKind === kind ? " selected" : ""
+              }`}
+              aria-label={labels[kind]}
+              aria-current={selectedKind === kind ? "page" : undefined}
+              onClick={() => setSelectedKind(kind)}
+            >
+              <span className="certificate-type-title">
+                <span className="certificate-type-step">{index + 1}</span>
+                <span>{labels[kind]}</span>
+                <span className="certificate-type-count">
+                  {Object.keys(allRows[kind]).length}
+                </span>
+              </span>
+              <small>{dependencyHints[kind]}</small>
+            </button>
+          ))}
+        </nav>
+        <article
+          className="card certificate-section"
+          aria-labelledby="selected-certificate-section"
+        >
+          <div className="section-head">
+            <div>
+              <h2 id="selected-certificate-section">
+                {labels[selectedKind]}
+              </h2>
+              <small>{sectionHint(selectedKind)}</small>
+            </div>
+            <button
+              className="outline"
+              disabled={blocked}
+              onClick={() => setEditor({ kind: selectedKind })}
+            >
+              Добавить
+            </button>
+          </div>
+          <CertificateRows
+            kind={selectedKind}
+            rows={allRows[selectedKind]}
+            disabled={blocked}
+            onEdit={(id) => setEditor({ kind: selectedKind, id })}
+            onDelete={remove}
+          />
+        </article>
       </div>
       <CoreVerification
         verification={verification || { status: "UNVERIFIED" }}

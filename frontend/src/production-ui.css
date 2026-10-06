@@ -823,131 +823,307 @@ button:disabled {
   }
 }
 
-/* Certificates: compact PKI overview while keeping the shared workspace scrollable. */
+/* Certificates: ordered PKI navigation, selected section and Core evidence. */
+.workspace-content:has(> .certificates-page) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 .certificates-page {
-  align-content: start;
-  gap: 9px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: hidden;
 }
 .certificates-page > .title {
-  margin-bottom: 0;
-}
-.certificates-page > .muted {
+  flex: 0 0 auto;
   margin: 0;
-  font-size: 12px;
 }
-.certificate-sections {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-}
-.certificate-sections > .certificate-section {
-  min-width: 0;
-  padding: 12px 14px;
+.certificates-page > .certificate-intro {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.25;
 }
 .pki-store-password {
+  flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr) auto;
+  grid-template-columns: minmax(0, 1.05fr) minmax(370px, 0.95fr);
+  align-items: center;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 9px 12px;
+}
+.pki-store-password-copy,
+.pki-store-password-controls {
+  min-width: 0;
+}
+.pki-store-password-copy h2 {
+  margin: 0 0 3px;
+  font-size: 13px;
+}
+.pki-store-password-copy p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.pki-store-password-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 4px 8px;
+}
+.pki-store-password-controls label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+}
+.pki-store-password-controls input {
+  min-width: 0;
+  min-height: 31px;
+  padding: 5px 8px;
+}
+.pki-store-password-controls > button {
+  min-height: 31px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.pki-store-password-controls > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.25;
+}
+.certificate-dependency-guide {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(225px, 0.75fr) minmax(0, 1.6fr);
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+  padding: 7px 11px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+.certificate-dependency-guide h2 {
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+.certificate-dependency-guide p {
+  margin: 0;
+  color: #526987;
+  font-size: 10px;
+  line-height: 1.25;
+}
+.certificate-dependency-flow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
   align-items: center;
   gap: 6px 12px;
-  padding: 11px 14px;
+  color: #263a55;
+  font-weight: 650;
 }
-.pki-store-password h2,
-.pki-store-password > p {
-  margin: 0;
-}
-.pki-store-password h2 {
-  grid-column: 1;
-  font-size: 14px;
-}
-.pki-store-password > p:first-of-type {
-  grid-column: 1 / 3;
-  grid-row: 2;
-  font-size: 11px;
-}
-.pki-store-password > p[role="status"] {
-  grid-column: 1;
-  grid-row: 3;
-  font-size: 11px;
-}
-.pki-store-password label {
-  grid-column: 2;
-  grid-row: 1 / 4;
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  font-size: 12px;
-}
-.pki-store-password label input {
+.certificate-dependency-chain {
   min-width: 0;
-  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
+  align-items: center;
+  gap: 7px;
+  text-align: center;
 }
-.pki-store-password > button {
-  grid-column: 3;
-  grid-row: 1 / 4;
-  padding: 7px 10px;
-  font-size: 12px;
+.certificate-dependency-chain > span,
+.certificate-dependency-branches > div > span:last-child {
+  font-size: 10px;
 }
-.pki-store-password > .muted:not(:first-of-type),
-.pki-store-password > .field-error {
-  grid-column: 1 / -1;
+.certificate-dependency-chain > span:nth-child(2),
+.certificate-dependency-branches > div > span:first-child {
+  color: #3278bd;
+  font-size: 13px;
+}
+.certificate-dependency-branches {
+  display: grid;
+  gap: 3px;
+  padding-left: 8px;
+  border-left: 1px solid #9cb9d8;
+}
+.certificate-dependency-branches > div {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+}
+.certificate-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(235px, 0.34fr) minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+.certificate-type-nav {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.certificate-type-option {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+  background: #fff;
+  color: #172033;
+  text-align: left;
+}
+.certificate-type-option.selected,
+.certificate-type-option[aria-current="page"] {
+  border-color: #3278bd;
+  background: #edf5ff;
+  box-shadow: inset 3px 0 #3278bd;
+}
+.certificate-type-title {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
+  font-weight: 700;
 }
-.certificate-sections .section-head {
+.certificate-type-step,
+.certificate-type-count {
+  width: 19px;
+  height: 19px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e7eff9;
+  color: #245b91;
+  font-size: 10px;
+}
+.certificate-type-option.selected .certificate-type-step {
+  background: #3278bd;
+  color: #fff;
+}
+.certificate-type-title > span:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+.certificate-type-count {
+  border: 1px solid #c8d7e8;
+  background: #fff;
+}
+.certificate-type-option small {
+  padding-left: 28px;
+  color: #526987;
+  font-size: 10px;
+  line-height: 1.25;
+}
+.certificate-workspace > .certificate-section {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 11px 13px;
+  overflow: auto;
+}
+.certificate-section .section-head {
   align-items: flex-start;
   gap: 8px;
 }
-.certificate-sections .section-head h2 {
+.certificate-section .section-head h2 {
+  margin: 0 0 2px;
   font-size: 14px;
   line-height: 1.25;
 }
-.certificate-sections .section-head small {
-  font-size: 11px;
+.certificate-section .section-head small {
+  font-size: 10px;
   line-height: 1.3;
 }
-.certificate-sections .section-head button,
+.certificate-section .section-head button,
 .certificate-verification button {
   flex: 0 0 auto;
   padding: 6px 9px;
-  font-size: 12px;
+  font-size: 11px;
 }
-.certificate-sections .certificate-rows {
+.certificate-section .certificate-rows {
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 7px;
 }
-.certificate-sections .certificate-row {
+.certificate-section .certificate-row {
   padding: 7px 0;
 }
 .certificate-verification {
-  padding: 12px 14px;
+  flex: 0 0 auto;
+  max-height: 24vh;
+  overflow: auto;
+  margin: 0;
+  padding: 9px 12px;
 }
 .certificate-verification .section-head h2 {
-  font-size: 14px;
+  margin: 0;
+  font-size: 13px;
 }
 .certificate-verification .section-head small,
 .certificate-verification > .muted {
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.3;
 }
-@media (max-width: 900px) {
-  .certificate-sections {
+@media (max-width: 1100px) {
+  .pki-store-password {
     grid-template-columns: minmax(0, 1fr);
   }
-  .pki-store-password {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .certificate-dependency-guide {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .pki-store-password h2,
-  .pki-store-password > p:first-of-type,
-  .pki-store-password > p[role="status"] {
-    grid-column: 1 / -1;
-    grid-row: auto;
+}
+@media (max-width: 900px) {
+  .workspace-content:has(> .certificates-page) {
+    overflow: auto;
   }
-  .pki-store-password label {
+  .certificates-page {
+    min-height: 100%;
+    overflow: visible;
+  }
+  .certificate-workspace {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(220px, auto);
+    overflow: visible;
+  }
+  .certificate-type-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .certificate-workspace > .certificate-section {
+    min-height: 220px;
+  }
+  .certificate-dependency-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .certificate-type-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .certificate-dependency-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pki-store-password-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pki-store-password-controls > button,
+  .pki-store-password-controls > p {
     grid-column: 1;
-    grid-row: auto;
-  }
-  .pki-store-password > button {
-    grid-column: 2;
-    grid-row: auto;
-    align-self: end;
   }
 }
 
