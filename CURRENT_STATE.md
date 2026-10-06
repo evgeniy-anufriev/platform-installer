@@ -24,9 +24,15 @@ verified runtime plus those exact files and passed the product CLI
 It is retained under `.runtime/qa/si11-bundle-candidate-20261006`; the active
 cache and project lock remain on
 `sha256:6eb9d16184caf24f360698df8e626124e5ae0fc35c7d09efef31c676db10eadc`.
-The candidate has not been imported/rebound, activated on the Execution Node,
-or used to build a plan. Thus I02/I04 remain in progress and no service
-installation was started.
+The candidate was imported through the Wails «Проект» screen and explicitly
+bound. The UI displayed the old/new digests and matching catalog before the
+action, then reported «Набор уже привязан»; the saved project lock now points
+to the candidate digest and the active cache contains that digest. The former
+project import bundle was preserved as
+`.runtime/qa/si11-recovered-20261002/bundle.previous-20261006`. The UI still
+shows Execution Node `node1` as not prepared and session credentials as not
+set. Preparation, Verify, plan creation and service installation have not
+been run with the new bundle; I02/I04 remain in progress.
 
 ## SI11 Project Verify diagnostic — prerequisite identified (2026-10-06)
 
