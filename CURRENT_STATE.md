@@ -1,6 +1,6 @@
 # Current state
 
-## SI11 Project Verify diagnostic — pending real failure reproduction (2026-10-06)
+## SI11 Project Verify diagnostic — prerequisite identified (2026-10-06)
 
 The Project Verify UI now displays the bounded diagnostic code returned by
 `VerifyProject` instead of collapsing unknown errors into one message. Go
@@ -8,9 +8,12 @@ publishes only structured or explicitly recognized codes; arbitrary transport
 and process error text is reduced to `PROJECT_VERIFY_FAILED`. The saved project
 is not changed by Verify. Go tests, frontend tests/lint/build, Wails build and
 `git diff --check` passed. The earlier failing Verify response was not present
-in retained logs, so its root cause is still unknown. One read-only Verify on
-the affected project is required to capture the newly visible safe code before
-any cause-specific fix. This does not change SI11 acceptance status.
+in retained logs. A new read-only Wails Verify on the recovered ten-deployment
+S11 project returned `EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED`. The Servers page
+showed selected node1 as not prepared and session credentials as absent; this
+attempt stopped before Core. The UI now explains the runtime-binding
+prerequisite. This does not establish the cause of any earlier READY-node
+Verify failure and does not change SI11 acceptance status.
 
 ## BROWSER-REMOTE-01/02 — HTTP только для dev; HTTPS в версии 1.0 (2026-10-06)
 

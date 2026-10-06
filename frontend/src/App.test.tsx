@@ -2671,6 +2671,28 @@ it("shows a safe Project Verify diagnostic code without exposing backend detail"
   expect(screen.queryByText(/private path and command output/u)).toBeNull();
 });
 
+it("explains missing runtime identity after Project Verify", async () => {
+  const value = api({
+    verifyProject: vi.fn().mockResolvedValue({
+      status: "UNVERIFIED",
+      error: {
+        code: "EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED",
+        message: "internal runtime detail",
+      },
+    }),
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(
+    await screen.findByText(/Нет подтверждённой привязки к runtime узла выполнения/u),
+  ).toBeTruthy();
+  expect(screen.queryByText("internal runtime detail")).toBeNull();
+});
+
 describe("UI-01E3 session credentials", () => {
   it("shows a safe Russian explanation for a rejected private key", async () => {
     const value = api({

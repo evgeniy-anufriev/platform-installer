@@ -123,6 +123,8 @@ const verificationErrorMessage = (code: string): string => {
     return "Для проверки настройте узел выполнения на странице «Серверы». Сохранённый проект не изменён.";
   if (code === "EXECUTION_NODE_READY_REQUIRED")
     return "Для проверки нужен готовый узел выполнения. Откройте «Серверы» и проверьте его состояние.";
+  if (code === "EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED")
+    return "Нет подтверждённой привязки к runtime узла выполнения. На странице «Серверы» задайте учётные данные сеанса, проверьте SSH-ключ и подготовьте узел, затем повторите проверку проекта.";
   const safeCode = /^[A-Z][A-Z0-9_]{0,95}$/u.test(code)
     ? code
     : "PROJECT_VERIFY_FAILED";
