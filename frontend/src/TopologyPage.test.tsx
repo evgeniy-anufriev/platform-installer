@@ -123,7 +123,7 @@ describe("UI-01F3 TopologyPage", () => {
       selectedDeploymentId="alpha" onConfigureDeployment={onConfigureDeployment}
       onConfigureMember={onConfigureMember} />);
     expect(screen.getByRole("heading", { name: "Размещение на серверах" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Настроить ноду" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Настроить участника" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Настроить экземпляр" }));
     expect(onConfigureDeployment).toHaveBeenCalledWith("alpha");
     expect(onConfigureMember).not.toHaveBeenCalled();
@@ -134,6 +134,10 @@ describe("UI-01F3 TopologyPage", () => {
     const onConfigureMember = vi.fn();
     const memberManaged = {
       ...managed,
+      servers: {
+        node1: { hostId: "node1", address: "192.168.56.101" },
+        node2: { hostId: "node2", address: "192.168.56.102" },
+      },
       memberPlacements: [
         { deploymentId: "alpha", memberId: "alpha-primary", hostId: "node1", roles: ["primary"] },
         { deploymentId: "alpha", memberId: "alpha-secondary", hostId: "node2", roles: ["secondary"] },
@@ -146,13 +150,14 @@ describe("UI-01F3 TopologyPage", () => {
     expect(screen.getByText("node1")).toBeTruthy();
     expect(screen.getByText("primary")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Очистить размещение" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "По серверам" }));
+    expect(screen.getByRole("button", {
+      name: "Изменить размещение alpha на сервере node1",
+    })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", {
       name: "Настроить участника alpha-primary на сервере node1",
     }));
     expect(onConfigureMember).toHaveBeenCalledWith("alpha", "alpha-primary");
-
-    await userEvent.click(screen.getByRole("button", { name: "Настроить экземпляр" }));
-    expect(onConfigureDeployment).toHaveBeenCalledWith("alpha");
   });
 
   it("keeps clearing a placement available through the placement editor", async () => {

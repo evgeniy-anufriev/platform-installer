@@ -1145,10 +1145,10 @@ describe("UI-01F3 deployment editor", () => {
     await openTopology(value, h3Project as unknown as OpenResult);
     await userEvent.click(screen.getByRole("button", { name: "По серверам" }));
     expect(
-      screen.getAllByRole("button", { name: "Настроить ноду" }),
+      screen.getAllByRole("button", { name: /Настроить участника/ }),
     ).toHaveLength(2);
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Настроить ноду" })[0],
+      screen.getAllByRole("button", { name: /Настроить участника/ })[0],
     );
     expect(
       (screen.getByLabelText("Экземпляр") as HTMLSelectElement).value,

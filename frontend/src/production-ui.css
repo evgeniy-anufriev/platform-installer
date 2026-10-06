@@ -214,7 +214,7 @@ body {
   min-height: 0;
   max-height: none;
   overflow: hidden;
-  grid-template-rows: minmax(205px, 1fr) minmax(170px, auto);
+  grid-template-rows: minmax(205px, 1fr) minmax(130px, auto);
 }
 .workspace-content:has(> .servers-layout) .server-list-scroll {
   min-height: 0;
@@ -300,6 +300,11 @@ body {
 .session-credentials form .actions button {
   padding: 6px 9px;
 }
+.workspace-content:has(> .servers-layout) .server-table td button {
+  min-height: 34px;
+  padding: 6px 9px;
+  line-height: 1.4;
+}
 .workspace-content:has(> .servers-layout) > .servers-title {
   margin: 4px 0 5px;
 }
@@ -369,7 +374,7 @@ body {
   line-height: 1.2;
 }
 .workspace-content:has(> .servers-layout) > .servers-layout {
-  grid-template-rows: minmax(185px, 0.8fr) minmax(245px, 1.2fr);
+  grid-template-rows: minmax(205px, 1fr) minmax(130px, auto);
   gap: 6px;
   margin-bottom: 0;
 }
@@ -405,6 +410,35 @@ body {
   margin: 3px 0;
   font-size: 11px;
   line-height: 1.2;
+}
+.execution-node-trust-status {
+  align-self: center;
+  color: #087443;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.execution-node-key-dialog h1 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.execution-node-key-dialog p {
+  margin: 8px 0;
+}
+.execution-node-key-dialog [role="group"] {
+  padding: 8px 10px;
+  border: 1px solid #dbe5f1;
+  border-radius: 7px;
+  background: #f7faff;
+}
+.execution-node-key-dialog code {
+  overflow-wrap: anywhere;
+}
+.execution-node-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }
 .execution-node-panel > p {
   margin: 2px 0;
@@ -474,7 +508,7 @@ body {
 }
 @media (max-height: 700px) {
   .workspace-content:has(> .servers-layout) > .servers-layout {
-    grid-template-rows: minmax(145px, 0.75fr) minmax(205px, 1.25fr);
+    grid-template-rows: minmax(145px, 1fr) minmax(120px, auto);
   }
   .workspace-content:has(> .servers-layout) .execution-node-panel {
     gap: 3px 10px;
@@ -652,6 +686,11 @@ body {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+.installation-body:has(> .installation-plan-content) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .installation-body > .card:first-child,
 .installation-body > section > .card:first-child {
@@ -863,7 +902,7 @@ button:disabled {
     grid-column: 1 / -1;
   }
   .workspace-content:has(> .servers-layout) > .servers-layout {
-    grid-template-rows: minmax(175px, 1fr) minmax(160px, auto);
+    grid-template-rows: minmax(175px, 1fr) minmax(120px, auto);
   }
   .workspace-content:has(> .servers-layout) .servers-layout > .card {
     margin: 0;
@@ -1006,6 +1045,120 @@ button:disabled {
   }
   .topology-actions > .danger {
     margin-left: 0;
+  }
+}
+
+/* Selected production layout for Topology / By servers (variant A). */
+.workspace-content:has(> .topology-title) .topology-servers-grid {
+  grid-template-columns: minmax(190px, 0.82fr) minmax(0, 2.1fr) minmax(
+      220px,
+      0.92fr
+    );
+}
+.workspace-content:has(> .topology-title) .topology-servers-grid > .card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.workspace-content:has(> .topology-title)
+  .topology-servers-grid
+  > .topology-list
+  .topology-list-scroll,
+.workspace-content:has(> .topology-title)
+  .topology-servers-grid
+  > .topology-detail
+  .topology-list-scroll {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.topology-servers-grid .topology-row {
+  padding: 9px 10px;
+  border-radius: 7px;
+}
+.topology-servers-grid .topology-detail > .topology-list-scroll {
+  gap: 6px;
+  margin-top: 0;
+}
+.topology-servers-grid .topology-assignment {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 10px;
+}
+.topology-assignment-info {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.topology-assignment-info b {
+  color: #172b4d;
+}
+.topology-assignment-info span {
+  color: #63728a;
+  font-size: 12px;
+}
+.topology-assignment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.topology-assignment-actions button {
+  min-height: 34px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.topology-servers-grid .topology-add-placement {
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.topology-servers-grid .topology-summary dl {
+  grid-template-columns: minmax(82px, 0.8fr) minmax(0, 1.2fr);
+  gap: 7px 10px;
+  margin: 0;
+}
+.topology-servers-grid .topology-summary dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.topology-servers-grid .topology-summary p {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+@media (max-width: 960px) {
+  .workspace-content:has(> .topology-title) .topology-servers-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-content:has(> .topology-title)
+    .topology-servers-grid
+    > .topology-list
+    .topology-list-scroll {
+    max-height: 190px;
+  }
+  .workspace-content:has(> .topology-title)
+    .topology-servers-grid
+    > .topology-detail
+    .topology-list-scroll {
+    max-height: min(54vh, 440px);
+  }
+}
+@media (max-width: 620px) {
+  .topology-servers-grid .topology-assignment {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topology-assignment-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -1726,7 +1879,7 @@ button:disabled {
 
 /* Installation: compact project home, grouped plan and bounded run stream. */
 .installation-page > .title {
-  align-items: center;
+  align-items: flex-end;
   margin: 4px 0 2px;
 }
 .installation-page > .title h1 {
@@ -1752,8 +1905,7 @@ button:disabled {
   line-height: 1.25;
   white-space: nowrap;
 }
-.installation-status-pill.neutral,
-.installation-summary-plan-heading > .readonly {
+.installation-status-pill.neutral {
   border-color: #cbd7e5;
   background: #f1f5f9;
   color: #475569;
@@ -1787,7 +1939,7 @@ button:disabled {
 }
 .installation-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
   gap: 8px;
 }
@@ -1798,54 +1950,100 @@ button:disabled {
 }
 .installation-summary > .installation-summary-plan {
   grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(200px, 0.65fr) minmax(0, 1.35fr);
-  align-items: start;
-  gap: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .installation-summary-plan-heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+}
+.installation-summary-plan-heading > div {
+  min-width: 0;
 }
 .installation-summary-plan-heading h2 {
   margin: 0 0 3px;
   font-size: 14px;
 }
-.installation-summary-plan-heading p,
 .installation-summary-plan > p {
   margin: 0;
   font-size: 11px;
 }
-.installation-summary-plan-heading > .readonly {
+.installation-summary-plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  color: #526987;
+  font-size: 11px;
+}
+.installation-summary-plan-meta > span + span {
+  padding-left: 10px;
+  border-left: 1px solid #cbd7e5;
+}
+.installation-summary-plan-meta > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.installation-summary-plan-heading > button {
   flex: 0 0 auto;
-  max-width: 45%;
-  font-size: 10px;
+  min-height: 34px;
+  padding: 6px 12px;
 }
 .installation-summary-plan-actions {
-  max-height: 170px;
+  max-height: min(48vh, 440px);
+  min-height: 120px;
   overflow: auto;
-  padding-right: 4px;
+  border: 1px solid #d8e2ef;
+  border-radius: 6px;
   scrollbar-gutter: stable;
 }
-.installation-summary-plan-action {
-  display: grid;
-  grid-template-columns: minmax(150px, 0.85fr) minmax(0, 1.15fr);
-  gap: 4px 10px;
-  padding: 5px 0;
-  border-top: 1px solid #e4e9f0;
-  font-size: 10px;
+.installation-summary-plan-actions table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
 }
-.installation-summary-plan-action:first-child {
-  border-top: 0;
+.installation-summary-plan-actions th,
+.installation-summary-plan-actions td {
+  padding: 7px 9px;
+  border-bottom: 1px solid #d8e2ef;
+  text-align: left;
+  vertical-align: middle;
 }
-.installation-summary-plan-action b {
+.installation-summary-plan-actions th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #edf4fb;
+  color: #29466b;
+  font-weight: 650;
+}
+.installation-summary-plan-actions th:first-child,
+.installation-summary-plan-actions td:first-child {
+  width: 38px;
+  text-align: center;
+}
+.installation-summary-plan-actions td:first-child {
+  color: #526987;
+  font-variant-numeric: tabular-nums;
+}
+.installation-summary-plan-actions td:nth-child(2) {
+  width: 58%;
   overflow-wrap: anywhere;
 }
-.installation-summary-plan-action span {
+.installation-summary-plan-actions td:last-child {
   color: #526987;
   overflow-wrap: anywhere;
+}
+.installation-summary-plan-actions tr:last-child td {
+  border-bottom: 0;
+}
+.installation-summary-plan-actions > p {
+  margin: 8px;
+  font-size: 11px;
 }
 .installation-summary > .card > h2,
 .installation-plan-content > .card > h2,
@@ -1882,10 +2080,20 @@ button:disabled {
 }
 .installation-plan-content {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 8px;
-  min-height: 100%;
-  padding-bottom: 4px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.installation-plan-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 4px 4px 0;
+  scrollbar-gutter: stable;
 }
 .installation-plan-content > .card {
   min-width: 0;
@@ -2094,15 +2302,12 @@ button:disabled {
   margin: 6px 0 0;
 }
 .installation-plan-actions {
-  position: sticky;
-  z-index: 4;
-  bottom: 0;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: auto -4px -4px;
+  margin: 0 -4px -4px;
   padding: 9px 10px;
   border-top: 1px solid #d8e2ef;
   background: #f4f7fb;
@@ -2421,10 +2626,24 @@ button:disabled {
   }
   .installation-summary > .installation-summary-plan {
     grid-column: 1;
-    grid-template-columns: minmax(0, 1fr);
   }
-  .installation-summary-plan-action {
-    grid-template-columns: minmax(0, 1fr);
+  .installation-summary-plan-heading {
+    align-items: flex-start;
+  }
+  .installation-summary-plan-meta {
+    display: grid;
+    gap: 4px;
+  }
+  .installation-summary-plan-meta > span + span {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .installation-summary-plan-actions {
+    max-height: 48vh;
+    min-height: 100px;
+  }
+  .installation-summary-plan-actions table {
+    min-width: 520px;
   }
   .installation-plan-content > .card > dl {
     grid-template-columns: max-content minmax(0, 1fr);

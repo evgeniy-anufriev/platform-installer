@@ -772,31 +772,39 @@ function ByServersView({
                     className="topology-assignment"
                     key={`${deployment.deploymentId}:${key}`}
                   >
-                    <b>{deployment.deploymentId}</b>
-                    <span>{text}</span>
-                    <button
-                      className="outline"
-                      onClick={() => {
-                        onSelectedDeploymentChange(deployment.deploymentId);
-                        onEdit(deployment.deploymentId, selected.hostId);
-                      }}
-                      disabled={
-                        disabled ||
-                        !!deployment.state ||
-                        placementLocked(deployment.deploymentId)
-                      }
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      className="outline"
-                      onClick={() => memberId
-                        ? onConfigureMember(deployment.deploymentId, memberId)
-                        : onConfigureDeployment(deployment.deploymentId)}
-                      disabled={deployment.state === "deleting"}
-                    >
-                      {memberId ? "Настроить ноду" : "Настроить сервис"}
-                    </button>
+                    <div className="topology-assignment-info">
+                      <b>{deployment.deploymentId}</b>
+                      <span>{text}</span>
+                    </div>
+                    <div className="topology-assignment-actions">
+                      <button
+                        className="outline"
+                        aria-label={`Изменить размещение ${deployment.deploymentId} на сервере ${selected.hostId}`}
+                        onClick={() => {
+                          onSelectedDeploymentChange(deployment.deploymentId);
+                          onEdit(deployment.deploymentId, selected.hostId);
+                        }}
+                        disabled={
+                          disabled ||
+                          !!deployment.state ||
+                          placementLocked(deployment.deploymentId)
+                        }
+                      >
+                        Изменить
+                      </button>
+                      <button
+                        className="outline"
+                        aria-label={memberId
+                          ? `Настроить участника ${memberId} на сервере ${selected.hostId}`
+                          : `Настроить сервис ${deployment.deploymentId}`}
+                        onClick={() => memberId
+                          ? onConfigureMember(deployment.deploymentId, memberId)
+                          : onConfigureDeployment(deployment.deploymentId)}
+                        disabled={deployment.state === "deleting"}
+                      >
+                        {memberId ? "Настроить участника" : "Настроить сервис"}
+                      </button>
+                    </div>
                   </article>
                 ))
               )}
@@ -839,14 +847,16 @@ function ByServersView({
         <dl>
           <dt>Сервер</dt>
           <dd>{selected?.hostId || "—"}</dd>
+          <dt>Адрес</dt>
+          <dd>{selected?.label.split(" · ").slice(1).join(" · ") || "—"}</dd>
           <dt>Размещений</dt>
           <dd>{assignments.length}</dd>
           <dt>Проверка Core</dt>
           <dd>После сохранения</dd>
         </dl>
         <p className="muted">
-          Изменение открывает редактор экземпляра сервиса; отдельной команды для
-          сервера нет.
+          Настраивайте размещение и параметры сервиса или участника в центральном
+          списке.
         </p>
       </section>
     </div>

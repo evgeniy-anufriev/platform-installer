@@ -1,5 +1,19 @@
 # Current state
 
+## SI11 Redis static-config comparison correction (2026-10-06)
+
+The all-services Wails run `installer-03f22ee35d9881aa3e3e93ae5fd57a8f`
+failed at Redis apply after 9/21 actions (42%): the role's static-config guard
+rejected the existing managed `redis.conf` on node1–node3. The files contain
+the expected TLS paths and data directory in double quotes, while the guard
+previously matched only unquoted paths. The guard now accepts either exact
+representation and still rejects foreign paths, suffixes and broken quoting.
+All 11 Redis contract tests and the apply playbook syntax-check passed on RED
+OS using the current working tree. The failed run remains FAILED; the active
+immutable bundle predates this correction. A new verified bundle and full
+Wails retry are required before SI11 I05 can pass. See the
+[S11 journal](docs/service-install-11-test-journal.md).
+
 ## SI11 ClickHouse stock RPM unit guard (2026-10-06)
 
 The S11 all-services Wails run `installer-c5a3bca0836eee7943dbe584d8e0f344`

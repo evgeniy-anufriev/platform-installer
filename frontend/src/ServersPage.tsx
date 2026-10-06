@@ -569,8 +569,10 @@ function ExecutionNodePanel({
   const [hostKeyProbe, setHostKeyProbe] = useState<HostKeyProbeResult | null>(
     null,
   );
+  const [hostKeyDialogOpen, setHostKeyDialogOpen] = useState(false);
   useEffect(() => {
     setHostKeyProbe(null);
+    setHostKeyDialogOpen(false);
     setReadiness(null);
     setPreparation(null);
   }, [
@@ -603,6 +605,7 @@ function ExecutionNodePanel({
     }
   };
   return (
+    <>
     <section
       className="card execution-node-panel"
       aria-labelledby="execution-node-heading"
@@ -637,22 +640,14 @@ function ExecutionNodePanel({
               credentialStatus?.status !== "PRESENT" ||
               credentialStatus?.sshMode !== "SSH_PRIVATE_KEY"
             }
-            onClick={async () => {
-              setBusy(true);
-              setError("");
+            onClick={() => {
               setHostKeyProbe(null);
-              try {
-                setHostKeyProbe(await onProbe());
-              } catch {
-                setError("Не удалось получить отпечаток ключа SSH.");
-              } finally {
-                setBusy(false);
-              }
+              setHostKeyDialogOpen(true);
             }}
           >
             Получить отпечаток SSH
           </button>
-          {hostKeyProbe?.status === "APPROVAL_REQUIRED" && (
+          {hostKeyProbe?.status === "APPROVAL_REQUIRED" && hostKeyDialogOpen && (
             <div role="group" aria-label="Подтверждение ключа SSH">
               <p>
                 Ключ: <b>{hostKeyProbe.keyType}</b> · Отпечаток:{" "}
@@ -701,10 +696,9 @@ function ExecutionNodePanel({
             </div>
           )}
           {hostKeyProbe?.status === "APPROVED" && (
-            <p role="status">
-              Ключ SSH подтверждён для текущего сеанса. Теперь можно проверить
-              узел.
-            </p>
+            <span className="execution-node-trust-status" role="status">
+              SSH-отпечаток подтверждён
+            </span>
           )}
           {hostKeyProbe?.error && (
             <p className="field-error" role="alert">
@@ -846,6 +840,145 @@ function ExecutionNodePanel({
         </div>
       )}
     </section>
+    {hostKeyDialogOpen && onProbe && (
+      <ExecutionNodeHostKeyDialog
+        label={effective.safeLabel || effective.selectedHostId || "узел выполнения"}
+        onProbe={onProbe}
+        onApprove={onApprove}
+        onDecline={onDecline}
+        disabled={disabled}
+        onApproved={(result) => setHostKeyProbe(result)}
+        onClose={() => setHostKeyDialogOpen(false)}
+      />
+    )}
+    </>
+  );
+}
+
+function ExecutionNodeHostKeyDialog({
+  label,
+  onProbe,
+  onApprove,
+  onDecline,
+  disabled,
+  onApproved,
+  onClose,
+}: {
+  label: string;
+  onProbe: () => Promise<HostKeyProbeResult>;
+  onApprove?: (probeId: string) => Promise<HostKeyProbeResult>;
+  onDecline?: () => Promise<HostKeyProbeResult>;
+  disabled: boolean;
+  onApproved: (result: HostKeyProbeResult) => void;
+  onClose: () => void;
+}) {
+  const [probe, setProbe] = useState<HostKeyProbeResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const runProbe = async () => {
+    setBusy(true);
+    setError("");
+    setProbe(null);
+    try {
+      const result = await onProbe();
+      setProbe(result);
+      if (result.status === "APPROVED") onApproved(result);
+      if (result.error) setError(result.error.message || "Не удалось получить SSH-ключ.");
+    } catch {
+      setError("Не удалось получить отпечаток ключа SSH.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const approve = async () => {
+    if (!probe?.probeId || !onApprove) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await onApprove(probe.probeId);
+      setProbe(result);
+      if (result.status === "APPROVED") onApproved(result);
+      else setError(result.error?.message || "Подтверждение ключа не выполнено.");
+    } catch {
+      setError("Не удалось подтвердить ключ SSH.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const decline = async () => {
+    if (!onDecline) return;
+    setBusy(true);
+    setError("");
+    try {
+      setProbe(await onDecline());
+    } catch {
+      setError("Не удалось отклонить ключ SSH.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const close = async () => {
+    if (probe?.status === "APPROVAL_REQUIRED") await decline();
+    onClose();
+  };
+  return (
+    <div className="modal" role="presentation">
+      <section
+        className="card dialog server-dialog execution-node-key-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="execution-node-key-title"
+      >
+        <h1 id="execution-node-key-title">SSH-ключ узла выполнения</h1>
+        <p>Узел: {label}</p>
+        <p className="muted">
+          Сверьте отпечаток с независимым доверенным источником. Получение ключа
+          по сети само по себе не подтверждает его подлинность.
+        </p>
+        {probe?.status === "APPROVAL_REQUIRED" && (
+          <div role="group" aria-label="Подтверждение ключа SSH">
+            <p>Тип: <b>{probe.keyType}</b></p>
+            <p>Отпечаток: <code>{probe.fingerprint}</code></p>
+            <p className="muted">
+              Не подтверждайте ключ, пока не сверите отпечаток вне этого приложения.
+            </p>
+          </div>
+        )}
+        {probe?.status === "APPROVED" && (
+          <p role="status">Ключ SSH подтверждён для текущего сеанса.</p>
+        )}
+        {error && <p className="field-error" role="alert">{error}</p>}
+        <div className="actions execution-node-key-actions">
+          {probe?.status !== "APPROVED" && (
+            <button type="button" onClick={runProbe} disabled={busy || disabled}>
+              {probe?.status === "APPROVAL_REQUIRED" ? "Получить заново" : "Получить отпечаток"}
+            </button>
+          )}
+          {probe?.status === "APPROVAL_REQUIRED" && (
+            <>
+              <button
+                type="button"
+                onClick={approve}
+                disabled={busy || disabled || !onApprove || !probe.probeId}
+              >
+                Подтверждаю совпадение
+              </button>
+              <button
+                type="button"
+                className="outline"
+                onClick={decline}
+                disabled={busy || !onDecline}
+              >
+                Отклонить
+              </button>
+            </>
+          )}
+          <button type="button" className="outline" onClick={close} disabled={busy}>
+            Закрыть
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

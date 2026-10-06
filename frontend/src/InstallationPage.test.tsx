@@ -63,19 +63,23 @@ describe("InstallationPage", () => {
     );
     expect(screen.queryByLabelText("Стадии установки")).toBeNull();
     expect(screen.queryByText("PREREQUISITES_REQUIRED")).toBeNull();
-    expect(screen.getByText("EXECUTION_NODE_READY_REQUIRED")).toBeTruthy();
     expect(screen.getByText("node1 · 192.0.2.10")).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Следующее действие" }),
+    ).toBeNull();
     expect(screen.queryByText("Сформировать свежий план")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Открыть Серверы" }));
     expect(onOpenServers).toHaveBeenCalledOnce();
   });
 
-  it("shows the Core plan preview on Summary without replacing the full Plan view", () => {
+  it("shows the Core plan preview on Summary and opens the full Plan view", async () => {
+    const user = userEvent.setup();
+    const onTabChange = vi.fn();
     render(
       <InstallationPage
         state={currentPlanState("plan-summary", "sha256:old", false)}
         tab="summary"
-        onTabChange={vi.fn()}
+        onTabChange={onTabChange}
         onOpenServers={vi.fn()}
         busy={false}
         onCreatePlan={vi.fn()}
@@ -123,10 +127,14 @@ describe("InstallationPage", () => {
     expect(
       screen.getByRole("heading", { name: "План установки" }),
     ).toBeTruthy();
-    expect(screen.getByText("Kafka apply")).toBeTruthy();
     expect(
-      screen.getByText("Развёртывание: kafka-main · node1, node2"),
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "Следующее действие" }),
+    ).toBeNull();
+    expect(screen.getByRole("table")).toBeTruthy();
+    expect(screen.getByText("Kafka apply")).toBeTruthy();
+    expect(screen.getByText("node1, node2")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Открыть план" }));
+    expect(onTabChange).toHaveBeenCalledWith("plan");
   });
 
   it("keeps secret material out of Installation navigation", async () => {

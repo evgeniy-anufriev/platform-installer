@@ -25,6 +25,14 @@ deployment editor remains on the right. Topology links select the exact
 deployment/member in that editor. Long parameter lists scroll inside the
 right-hand parameter column rather than moving the service list.
 
+Owner-approved refinement (2026-10-06) for Topology → **By servers** selects a
+compact three-panel layout: a server picker, a scrollable placement list and a
+concise selected-server summary. Placement and service/member configuration
+remain separate actions; member settings are labelled as participant settings,
+not node settings. Long server and placement lists scroll within their panels.
+This refinement supersedes the older static By servers example below, while
+preserving the existing service-settings and member-settings navigation.
+
 ADR-027 (2026-09-15) further separates local **Save**, optional **Project
 Verify**, and mandatory fresh **BuildDeploymentPlan**. The current binding
 semantics are in [the owner-change architecture](ui-save-verify-architecture.md).

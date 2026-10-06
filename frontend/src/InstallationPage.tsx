@@ -178,7 +178,6 @@ export function InstallationPage({
   onRefreshSecretOutputs?: () => void;
   onDeliverSecretOutput?: (packageId: string) => void;
 }) {
-  const prerequisites = state?.prerequisites || [];
   const node = state?.executionNode;
   const presentation = installationDisplay(state, run, runProgress);
   return (
@@ -294,70 +293,71 @@ export function InstallationPage({
                 <p>Сохранённый проект пока недоступен.</p>
               )}
             </article>
-            <article className="card">
-              <h2>Следующее действие</h2>
-              {state?.status === "READY_TO_PLAN" ? (
-                <>
-                  <p>
-                    Условия для нового плана выполнены. Проверка проекта не
-                    заменяет построение нового плана установки.
-                  </p>
-                  <button onClick={onCreatePlan} disabled={busy}>
-                    Сформировать свежий план
-                  </button>
-                </>
-              ) : (
-                <ul className="safe-findings">
-                  {prerequisites.map((item) => (
-                    <li key={item.code}>
-                      <code>{item.code}</code> {item.safeMessage}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
             <article className="card installation-summary-plan">
               <div className="installation-summary-plan-heading">
                 <div>
                   <h2>План установки</h2>
-                  <p className="muted">
-                    {plan?.plan
-                      ? `Для ревизии ${plan.plan.projectRevision}`
-                      : "Свежий план появится после его построения."}
-                  </p>
+                  <div className="installation-summary-plan-meta">
+                    <span>
+                      <b>
+                        {plan?.plan
+                          ? plan.plan.phases.reduce(
+                              (count, phase) => count + phase.actions.length,
+                              0,
+                            )
+                          : 0}
+                      </b>{" "}
+                      действий
+                    </span>
+                    <span>Ревизия: {plan?.plan?.projectRevision || "—"}</span>
+                    <span>
+                      Статус:{" "}
+                      {plan
+                        ? planOperationStatusLabel(plan.status)
+                        : "План не сформирован"}
+                    </span>
+                  </div>
                 </div>
-                <span className="readonly">
-                  {plan
-                    ? planOperationStatusLabel(plan.status)
-                    : "План ещё не сформирован"}
-                </span>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => onTabChange("plan")}
+                >
+                  Открыть план
+                </button>
               </div>
               {plan?.plan ? (
                 <div className="installation-summary-plan-actions">
-                  {plan.plan.phases.flatMap((phase) =>
-                    phase.actions.map((action) => (
-                      <div
-                        className="installation-summary-plan-action"
-                        key={action.id}
-                      >
-                        <b>{action.summary}</b>
-                        <span>
-                          {action.serviceDeployment
-                            ? `Развёртывание: ${action.serviceDeployment} · `
-                            : ""}
-                          {action.targets.join(", ") || "без целевых серверов"}
-                        </span>
-                      </div>
-                    )),
-                  )}
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Действие</th>
+                        <th scope="col">Целевые узлы</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plan.plan.phases
+                        .flatMap((phase) => phase.actions)
+                        .map((action, index) => (
+                          <tr key={action.id}>
+                            <td>{index + 1}</td>
+                            <td>{action.summary}</td>
+                            <td>
+                              {action.targets.join(", ") || "без целевых узлов"}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                   {plan.plan.phases.every(
                     (phase) => phase.actions.length === 0,
                   ) && <p>В плане пока нет действий.</p>}
                 </div>
               ) : (
                 <p className="muted">
-                  Построение плана проверит сохранённую конфигурацию, выбранный
-                  узел выполнения и целевые серверы.
+                  Предварительный список действий появится после формирования
+                  свежего плана.
                 </p>
               )}
             </article>
@@ -498,221 +498,241 @@ function PlanStage({
   };
   return (
     <section className="installation-plan-content">
-      <article className="card">
-        <h2>Новый план установки</h2>
-        <dl>
-          <dt>Статус</dt>
-          <dd>{planOperationStatusLabel(operation.status)}</dd>
-          <dt>Ревизия проекта</dt>
-          <dd>{plan.projectRevision}</dd>
-          <dt>Узел выполнения</dt>
-          <dd>{plan.executionNodeId}</dd>
-          <dt>Истекает</dt>
-          <dd>{plan.expiresAt}</dd>
-        </dl>
-      </article>
-      {!currentPlan && (
+      <div className="installation-plan-scroll">
         <article className="card">
-          <p role="status">
-            Этот план нельзя использовать для текущего состояния проекта.
-            Сохраните или отмените черновик и сформируйте свежий план.
-          </p>
-          {state?.status === "READY_TO_PLAN" && (
-            <button onClick={onCreatePlan} disabled={busy}>
-              Сформировать свежий план
-            </button>
-          )}
+          <h2>Новый план установки</h2>
+          <dl>
+            <dt>Статус</dt>
+            <dd>{planOperationStatusLabel(operation.status)}</dd>
+            <dt>Ревизия проекта</dt>
+            <dd>{plan.projectRevision}</dd>
+            <dt>Узел выполнения</dt>
+            <dd>{plan.executionNodeId}</dd>
+            <dt>Истекает</dt>
+            <dd>{plan.expiresAt}</dd>
+          </dl>
         </article>
-      )}
-      {plan.findings && plan.findings.length > 0 && (
-        <article className="card">
-          <h2>Замечания</h2>
-          <ul className="safe-findings">
-            {plan.findings.map((item, index) => (
-              <li key={`${item.code}:${index}`}>
-                <code>{item.code}</code> {planFindingMessage(item.safeMessage)}
-              </li>
-            ))}
-          </ul>
-        </article>
-      )}
-      {outputRequired && (
-        <details
-          className="card secret-output-setup"
-          open={!outputPasswordPresent}
-        >
-          <summary>
-            Защищённые выходные файлы
-            {outputPasswordPresent ? " · пароль задан" : " · требуется пароль"}
-          </summary>
-          <div className="secret-output-details">
-            <p>
-              Чувствительные результаты будут зашифрованы на этом компьютере.
-              Пароль не отправляется на узел выполнения и хранится только в
-              памяти сеанса.
+        {!currentPlan && (
+          <article className="card">
+            <p role="status">
+              Этот план нельзя использовать для текущего состояния проекта.
+              Сохраните или отмените черновик и сформируйте свежий план.
             </p>
-            {!outputPasswordPresent && (
-              <>
-                <label>
-                  Пароль шифрования
-                  <input
-                    type="password"
-                    value={outputPassword}
-                    onChange={(event) => setOutputPassword(event.target.value)}
-                    disabled={busy}
-                    autoComplete="new-password"
-                  />
-                </label>
-                <label>
-                  Повторите пароль
-                  <input
-                    type="password"
-                    value={outputConfirm}
-                    onChange={(event) => setOutputConfirm(event.target.value)}
-                    disabled={busy}
-                    autoComplete="new-password"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={saveOutputPassword}
-                  disabled={busy || !outputPassword || !outputConfirm}
-                >
-                  Сохранить пароль в сеансе
-                </button>
-              </>
+            {state?.status === "READY_TO_PLAN" && (
+              <button onClick={onCreatePlan} disabled={busy}>
+                Сформировать свежий план
+              </button>
             )}
-            <p>
-              Файлы сохраняются в каталоге secrets/&lt;ID развёртывания&gt;/
-              текущего проекта.
-            </p>
-            {outputError && (
-              <p className="field-error" role="alert">
-                {outputError}
-              </p>
-            )}
-          </div>
-        </details>
-      )}
-      <article className="card installation-plan-phases">
-        <h2>Этапы плана</h2>
-        {!hasActions && (
-          <p role="status">
-            В плане нет действий по развёртыванию сервисов. Проверьте состав и
-            размещение сервисов в проекте.
-          </p>
+          </article>
         )}
-        {plan.phases.map((phase) => (
+        {plan.findings && plan.findings.length > 0 && (
+          <article className="card">
+            <h2>Замечания</h2>
+            <ul className="safe-findings">
+              {plan.findings.map((item, index) => (
+                <li key={`${item.code}:${index}`}>
+                  <code>{item.code}</code>{" "}
+                  {planFindingMessage(item.safeMessage)}
+                </li>
+              ))}
+            </ul>
+          </article>
+        )}
+        {outputRequired && (
           <details
-            className="plan-phase-card"
-            key={phase.id}
-            open={phase.order < 2}
+            className="card secret-output-setup"
+            open={!outputPasswordPresent}
           >
             <summary>
-              <span className="plan-phase-number">{phase.order + 1}</span>
-              <span className="plan-phase-title">
-                <b>
-                  {phase.id === "pki"
-                    ? "Сертификаты"
-                    : phase.id === "apply"
-                      ? "Применение"
-                      : phase.id === "verify"
-                        ? "Проверка и завершение"
-                        : phase.id}
-                </b>
-                <small>
-                  {phase.actions.length}{" "}
-                  {phase.actions.length === 1 ? "действие" : "действий"}
-                  {phase.actions.length > 0 &&
-                    ` · ${[...new Set(phase.actions.flatMap((action) => action.targets))].join(", ") || "без целевых узлов"}`}
-                </small>
-              </span>
-              <span className="plan-phase-state">
-                {plan.status !== "EXECUTABLE"
-                  ? "Есть замечания"
-                  : plan.approved
-                    ? "Готово к выполнению"
-                    : "Ожидает одобрения"}
-              </span>
+              Защищённые выходные файлы
+              {outputPasswordPresent
+                ? " · пароль задан"
+                : " · требуется пароль"}
             </summary>
-            <div className="plan-phase-actions">
-              {phase.actions
-                .slice(
-                  0,
-                  expandedActions[phase.id]
-                    ? phase.actions.length
-                    : Math.min(3, phase.actions.length),
-                )
-                .map((action, index) => (
-                  <div className="plan-action-row" key={action.id}>
-                    <span className="plan-action-number">{index + 1}</span>
-                    <span className="plan-action-description">
-                      <b>{action.summary}</b>
-                      {action.serviceDeployment && (
-                        <small>Развёртывание: {action.serviceDeployment}</small>
-                      )}
-                    </span>
-                    <span className="plan-action-targets">
-                      {action.targets.join(", ") || "без целевых серверов"}
-                    </span>
-                    <span className="plan-action-impact">
-                      {action.mutating ? "Инфраструктура" : "Проверка"}
-                    </span>
-                  </div>
-                ))}
-              {phase.actions.length > 3 && (
-                <button
-                  type="button"
-                  className="link plan-show-more"
-                  aria-expanded={!!expandedActions[phase.id]}
-                  onClick={() =>
-                    setExpandedActions((current) => ({
-                      ...current,
-                      [phase.id]: !current[phase.id],
-                    }))
-                  }
-                >
-                  {expandedActions[phase.id]
-                    ? "Скрыть дополнительные действия"
-                    : `Показать ещё ${phase.actions.length - 3} действий`}
-                </button>
+            <div className="secret-output-details">
+              <p>
+                Чувствительные результаты будут зашифрованы на этом компьютере.
+                Пароль не отправляется на узел выполнения и хранится только в
+                памяти сеанса.
+              </p>
+              {!outputPasswordPresent && (
+                <>
+                  <label>
+                    Пароль шифрования
+                    <input
+                      type="password"
+                      value={outputPassword}
+                      onChange={(event) =>
+                        setOutputPassword(event.target.value)
+                      }
+                      disabled={busy}
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <label>
+                    Повторите пароль
+                    <input
+                      type="password"
+                      value={outputConfirm}
+                      onChange={(event) => setOutputConfirm(event.target.value)}
+                      disabled={busy}
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={saveOutputPassword}
+                    disabled={busy || !outputPassword || !outputConfirm}
+                  >
+                    Сохранить пароль в сеансе
+                  </button>
+                </>
+              )}
+              <p>
+                Файлы сохраняются в каталоге secrets/&lt;ID развёртывания&gt;/
+                текущего проекта.
+              </p>
+              {outputError && (
+                <p className="field-error" role="alert">
+                  {outputError}
+                </p>
               )}
             </div>
           </details>
-        ))}
-      </article>
-      {plan.status === "EXECUTABLE" && !plan.approved && (
-        <article className="card">
-          <h2>Подтверждение</h2>
-          {plan.acknowledgements.map((item) => (
-            <label className="acknowledgement" key={item.code}>
-              <input
-                type="checkbox"
-                checked={acknowledged.includes(item.code)}
-                onChange={(event) =>
-                  setAcknowledged((current) =>
-                    event.target.checked
-                      ? [...current, item.code]
-                      : current.filter((code) => code !== item.code),
-                  )
-                }
-              />{" "}
-              <span>
-                <b>{item.code}</b>
-                <br />
-                {item.summary}
-              </span>
-            </label>
-          ))}
-          <p>
-            <button
-              onClick={() => onApprovePlan(plan.id, requiredCodes)}
-              disabled={busy || !canApprove}
+        )}
+        <article className="card installation-plan-phases">
+          <h2>Этапы плана</h2>
+          {!hasActions && (
+            <p role="status">
+              В плане нет действий по развёртыванию сервисов. Проверьте состав и
+              размещение сервисов в проекте.
+            </p>
+          )}
+          {plan.phases.map((phase) => (
+            <details
+              className="plan-phase-card"
+              key={phase.id}
+              open={phase.order < 2}
             >
-              Одобрить план
-            </button>
-          </p>
+              <summary>
+                <span className="plan-phase-number">{phase.order + 1}</span>
+                <span className="plan-phase-title">
+                  <b>
+                    {phase.id === "pki"
+                      ? "Сертификаты"
+                      : phase.id === "apply"
+                        ? "Применение"
+                        : phase.id === "verify"
+                          ? "Проверка и завершение"
+                          : phase.id}
+                  </b>
+                  <small>
+                    {phase.actions.length}{" "}
+                    {phase.actions.length === 1 ? "действие" : "действий"}
+                    {phase.actions.length > 0 &&
+                      ` · ${[...new Set(phase.actions.flatMap((action) => action.targets))].join(", ") || "без целевых узлов"}`}
+                  </small>
+                </span>
+                <span className="plan-phase-state">
+                  {plan.status !== "EXECUTABLE"
+                    ? "Есть замечания"
+                    : plan.approved
+                      ? "Готово к выполнению"
+                      : "Ожидает одобрения"}
+                </span>
+              </summary>
+              <div className="plan-phase-actions">
+                {phase.actions
+                  .slice(
+                    0,
+                    expandedActions[phase.id]
+                      ? phase.actions.length
+                      : Math.min(3, phase.actions.length),
+                  )
+                  .map((action, index) => (
+                    <div className="plan-action-row" key={action.id}>
+                      <span className="plan-action-number">{index + 1}</span>
+                      <span className="plan-action-description">
+                        <b>{action.summary}</b>
+                        {action.serviceDeployment && (
+                          <small>
+                            Развёртывание: {action.serviceDeployment}
+                          </small>
+                        )}
+                      </span>
+                      <span className="plan-action-targets">
+                        {action.targets.join(", ") || "без целевых серверов"}
+                      </span>
+                      <span className="plan-action-impact">
+                        {action.mutating ? "Инфраструктура" : "Проверка"}
+                      </span>
+                    </div>
+                  ))}
+                {phase.actions.length > 3 && (
+                  <button
+                    type="button"
+                    className="link plan-show-more"
+                    aria-expanded={!!expandedActions[phase.id]}
+                    onClick={() =>
+                      setExpandedActions((current) => ({
+                        ...current,
+                        [phase.id]: !current[phase.id],
+                      }))
+                    }
+                  >
+                    {expandedActions[phase.id]
+                      ? "Скрыть дополнительные действия"
+                      : `Показать ещё ${phase.actions.length - 3} действий`}
+                  </button>
+                )}
+              </div>
+            </details>
+          ))}
         </article>
+        {plan.status === "EXECUTABLE" && !plan.approved && (
+          <article className="card">
+            <h2>Подтверждение</h2>
+            {plan.acknowledgements.map((item) => (
+              <label className="acknowledgement" key={item.code}>
+                <input
+                  type="checkbox"
+                  checked={acknowledged.includes(item.code)}
+                  onChange={(event) =>
+                    setAcknowledged((current) =>
+                      event.target.checked
+                        ? [...current, item.code]
+                        : current.filter((code) => code !== item.code),
+                    )
+                  }
+                />{" "}
+                <span>
+                  <b>{item.code}</b>
+                  <br />
+                  {item.summary}
+                </span>
+              </label>
+            ))}
+          </article>
+        )}
+      </div>
+      {plan.status === "EXECUTABLE" && !plan.approved && (
+        <footer
+          className="installation-plan-actions"
+          aria-label="Подтверждение плана"
+        >
+          <span className="muted" role="status">
+            {canApprove
+              ? "План проверен и готов к одобрению."
+              : "Отметьте обязательные подтверждения, чтобы одобрить план."}
+          </span>
+          <button
+            type="button"
+            onClick={() => onApprovePlan(plan.id, requiredCodes)}
+            disabled={busy || !canApprove}
+          >
+            Одобрить план
+          </button>
+        </footer>
       )}
       {plan.approved && (
         <StartApproval

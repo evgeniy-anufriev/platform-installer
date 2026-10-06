@@ -30,15 +30,31 @@ describe("Execution Node SSH key approval", () => {
     const onApprove = vi.fn().mockResolvedValue({status:"APPROVED", fingerprint:"SHA256:known"});
     render(<ServersPage {...base} credentialStatus={{status:"PRESENT", sshMode:"SSH_PRIVATE_KEY", expiresAt:"future", sudoPasswordStatus:"NOT_PROVIDED", pkiStorePasswordStatus:"MISSING"}} onProbeExecutionNodeHostKey={onProbe} onApproveExecutionNodeHostKey={onApprove} />);
     fireEvent.click(screen.getByRole("button",{name:"Получить отпечаток SSH"}));
+    expect(screen.getByRole("dialog", { name: "SSH-ключ узла выполнения" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Получить отпечаток" }));
     expect(await screen.findByText("SHA256:known")).toBeTruthy();
     expect(onApprove).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button",{name:"Подтверждаю совпадение"}));
     await waitFor(() => expect(onApprove).toHaveBeenCalledWith("opaque-probe"));
-    expect(await screen.findByText(/Ключ SSH подтверждён/)).toBeTruthy();
+    expect(await screen.findByText("Ключ SSH подтверждён для текущего сеанса.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+    expect(await screen.findByText("SSH-отпечаток подтверждён")).toBeTruthy();
   });
 
   it("does not offer probing with password-only session credentials", () => {
     render(<ServersPage {...base} credentialStatus={{status:"PRESENT", sshMode:"SSH_PASSWORD", expiresAt:"future", sudoPasswordStatus:"NOT_PROVIDED", pkiStorePasswordStatus:"MISSING"}} onProbeExecutionNodeHostKey={vi.fn()} />);
     expect((screen.getByRole("button",{name:"Получить отпечаток SSH"}) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("revokes an unapproved probe when the dialog is closed", async () => {
+    const onProbe = vi.fn().mockResolvedValue({status:"APPROVAL_REQUIRED", probeId:"opaque-probe", keyType:"ssh-ed25519", fingerprint:"SHA256:known"});
+    const onDecline = vi.fn().mockResolvedValue({status:"DECLINED"});
+    render(<ServersPage {...base} credentialStatus={{status:"PRESENT", sshMode:"SSH_PRIVATE_KEY", expiresAt:"future", sudoPasswordStatus:"NOT_PROVIDED", pkiStorePasswordStatus:"MISSING"}} onProbeExecutionNodeHostKey={onProbe} onDeclineExecutionNodeHostKey={onDecline} />);
+    fireEvent.click(screen.getByRole("button",{name:"Получить отпечаток SSH"}));
+    fireEvent.click(screen.getByRole("button", { name: "Получить отпечаток" }));
+    expect(await screen.findByText("SHA256:known")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+    await waitFor(() => expect(onDecline).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog", { name: "SSH-ключ узла выполнения" })).toBeNull();
   });
 });

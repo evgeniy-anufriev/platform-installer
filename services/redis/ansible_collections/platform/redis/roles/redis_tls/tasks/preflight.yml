@@ -94,13 +94,13 @@
         or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-port ' ~ item.redis_port ~ '$'))
       - >-
         not _platform_redis_config_file.results[redis_config_index].stat.exists
-        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-cert-file ' ~ (item.config_directory | regex_escape) ~ '/pki/certificate\\.pem$'))
+        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-cert-file (?:"' ~ (item.config_directory | regex_escape) ~ '/pki/certificate\\.pem"|' ~ (item.config_directory | regex_escape) ~ '/pki/certificate\\.pem)$'))
       - >-
         not _platform_redis_config_file.results[redis_config_index].stat.exists
-        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-key-file ' ~ (item.config_directory | regex_escape) ~ '/pki/private-key\\.pem$'))
+        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-key-file (?:"' ~ (item.config_directory | regex_escape) ~ '/pki/private-key\\.pem"|' ~ (item.config_directory | regex_escape) ~ '/pki/private-key\\.pem)$'))
       - >-
         not _platform_redis_config_file.results[redis_config_index].stat.exists
-        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-ca-cert-file ' ~ (item.config_directory | regex_escape) ~ '/pki/ca-chain\\.pem$'))
+        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-ca-cert-file (?:"' ~ (item.config_directory | regex_escape) ~ '/pki/ca-chain\\.pem"|' ~ (item.config_directory | regex_escape) ~ '/pki/ca-chain\\.pem)$'))
       - >-
         not _platform_redis_config_file.results[redis_config_index].stat.exists
         or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-auth-clients yes$'))
@@ -109,7 +109,7 @@
         or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^tls-replication yes$'))
       - >-
         not _platform_redis_config_file.results[redis_config_index].stat.exists
-        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^dir ' ~ (item.data_directory | regex_escape) ~ '$'))
+        or (_platform_redis_existing_config.results[redis_config_index].content | b64decode is search('(?m)^dir (?:"' ~ (item.data_directory | regex_escape) ~ '"|' ~ (item.data_directory | regex_escape) ~ ')$'))
     fail_msg: REDIS_STATIC_CONFIGURATION_MIGRATION_REQUIRED
   no_log: true
   loop: "{{ _platform_redis_local_instances }}"

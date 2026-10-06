@@ -16,6 +16,41 @@ def manifest():
 
 
 class RedisContractTests(unittest.TestCase):
+    def test_redis_quoted_paths_preserve_exact_static_guard(self):
+        role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
+        tasks = yaml.safe_load((role / "tasks" / "preflight.yml").read_text(encoding="utf-8"))
+        guard = next(task for task in tasks if task["name"] == "Reject unsafe Redis static configuration drift")
+        self.assertTrue(guard["no_log"])
+        env = Environment()
+        env.filters.update(b64decode=b64decode, regex_escape=regex_escape)
+        env.tests["search"] = search
+        directory = "/etc/platform-redis/redis-1"
+        data_directory = "/var/lib/platform-redis/redis-1"
+        cases = (
+            ("tls-cert-file", f"{directory}/pki/certificate.pem", 2),
+            ("tls-key-file", f"{directory}/pki/private-key.pem", 3),
+            ("tls-ca-cert-file", f"{directory}/pki/ca-chain.pem", 4),
+            ("dir", data_directory, 7),
+        )
+        for directive, path, index in cases:
+            template = env.from_string("{{ " + guard["ansible.builtin.assert"]["that"][index] + " }}")
+            for value, accepted in (
+                (path, True), ('"' + path + '"', True),
+                ('"' + path, False), (path + '"', False),
+                ('"' + path + '" trailing', False),
+                (path + ".other", False),
+                (path.replace("redis-1", "foreign"), False),
+            ):
+                with self.subTest(directive=directive, value=value):
+                    content = base64.b64encode(f"{directive} {value}\n".encode()).decode()
+                    result = template.render(
+                        _platform_redis_config_file={"results": [{"stat": {"exists": True}}]},
+                        _platform_redis_existing_config={"results": [{"content": content}]},
+                        redis_config_index=0,
+                        item={"config_directory": directory, "data_directory": data_directory},
+                    )
+                    self.assertEqual(result, str(accepted))
+
     def test_sentinel_rewritten_tls_paths_preserve_exact_static_guard(self):
         role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
         tasks = yaml.safe_load((role / "tasks" / "preflight.yml").read_text(encoding="utf-8"))
