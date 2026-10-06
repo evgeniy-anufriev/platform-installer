@@ -19,6 +19,12 @@ the project header carries name/path/edit state. One session credential applies
 to all target servers. Execution details are collapsed by default. The HTML
 includes an explicitly simulated create/edit/review/save flow, never disk writes.
 
+For the current Services page, the owner selected the master-detail layout:
+the deployment list and search stay visible on the left while the selected
+deployment editor remains on the right. Topology links select the exact
+deployment/member in that editor. Long parameter lists scroll inside the
+right-hand parameter column rather than moving the service list.
+
 ADR-027 (2026-09-15) further separates local **Save**, optional **Project
 Verify**, and mandatory fresh **BuildDeploymentPlan**. The current binding
 semantics are in [the owner-change architecture](ui-save-verify-architecture.md).
@@ -195,6 +201,12 @@ The page may accept a password or private-key path only as a current-session
 runtime credential input. A server record stores transport metadata and, at
 most, a `SecretRef`; it never stores the password or private-key material in
 the project, inventory, logs, diagnostics or application preferences.
+
+The owner-approved Servers layout keeps the vertical order (session credentials,
+server list, Execution Node) while compressing session credentials into a
+single horizontal desktop row. Its status is shown inline with the explanation;
+at narrow widths the fields wrap into a responsive grid. Only long server lists
+scroll independently, while the page header and Execution Node remain visible.
 
 ### Topology
 
