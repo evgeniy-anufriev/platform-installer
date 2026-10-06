@@ -2647,6 +2647,30 @@ it("explains a missing trusted Execution Node binding after Project Verify", asy
   expect(screen.queryByText("Trusted binding required")).toBeNull();
 });
 
+it("shows a safe Project Verify diagnostic code without exposing backend detail", async () => {
+  const value = api({
+    verifyProject: vi.fn().mockResolvedValue({
+      status: "UNVERIFIED",
+      error: {
+        code: "PROJECT_SNAPSHOT_RESPONSE_INVALID",
+        message: "private path and command output must remain hidden",
+      },
+    }),
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(
+    await screen.findByText(
+      "Проверка недоступна (код: PROJECT_SNAPSHOT_RESPONSE_INVALID). Сохранённый проект не изменён.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText(/private path and command output/u)).toBeNull();
+});
+
 describe("UI-01E3 session credentials", () => {
   it("shows a safe Russian explanation for a rejected private key", async () => {
     const value = api({

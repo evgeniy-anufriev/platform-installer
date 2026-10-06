@@ -38,6 +38,26 @@ func TestPreparationStepFailurePublishesOnlySafePhase(t *testing.T) {
 	}
 }
 
+func TestProjectVerifyPublishesOnlyBoundedDiagnosticCodes(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID"), "PROJECT_SNAPSHOT_RESPONSE_INVALID"},
+		{&executionnode.ExecutionError{Code: "EXECUTION_NODE_UNAVAILABLE"}, "EXECUTION_NODE_UNAVAILABLE"},
+		{&executionnode.ExecutionError{Code: "CORE_SNAPSHOT_FAILED"}, "CORE_SNAPSHOT_FAILED"},
+		{context.DeadlineExceeded, "PROJECT_VERIFY_TIMEOUT"},
+		{errors.New("ssh failed: /private/path password=secret"), "PROJECT_VERIFY_FAILED"},
+		{errors.New("UPPERCASE_SECRET_VALUE"), "PROJECT_VERIFY_FAILED"},
+		{errors.New(strings.Repeat("A", 97)), "PROJECT_VERIFY_FAILED"},
+	}
+	for _, test := range tests {
+		if got := safeVerificationErrorCode(test.err); got != test.want {
+			t.Errorf("safeVerificationErrorCode(%T) = %q, want %q", test.err, got, test.want)
+		}
+	}
+}
+
 type snapshotReaderStub struct {
 	snapshot *coreadapter.Snapshot
 	err      error

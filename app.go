@@ -631,7 +631,7 @@ func (a *App) verifyProjectWithReaderLocked(reader interface {
 }
 
 func (a *App) setVerificationUnavailableLocked(err error, revision string) ProjectVerification {
-	code := projectErrorCode(err)
+	code := safeVerificationErrorCode(err)
 	if code == "EXECUTION_NODE_NOT_CONFIGURED" || code == "EXECUTION_NODE_UNAVAILABLE" {
 		code = "EXECUTION_NODE_READY_REQUIRED"
 	}
@@ -639,6 +639,33 @@ func (a *App) setVerificationUnavailableLocked(err error, revision string) Proje
 		ProjectRevision: revision, CheckedAt: time.Now().UTC(), Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 	a.current.Verification = evidence
 	return evidence
+}
+
+var verificationErrorCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,95}$`)
+
+// Verify may receive transport/process errors containing paths or command
+// output. Only bounded diagnostic identifiers may cross into the UI.
+func safeVerificationErrorCode(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "PROJECT_VERIFY_TIMEOUT"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "PROJECT_VERIFY_CANCELLED"
+	}
+	var executionError *executionnode.ExecutionError
+	if errors.As(err, &executionError) && verificationErrorCodePattern.MatchString(executionError.Code) {
+		return executionError.Code
+	}
+	switch projectErrorCode(err) {
+	case "EXECUTION_NODE_NOT_CONFIGURED", "EXECUTION_NODE_UNAVAILABLE", "EXECUTION_NODE_READY_REQUIRED",
+		"EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED", "EXECUTION_RUNTIME_IDENTITY_MISMATCH",
+		"EXECUTION_PROTOCOL_RESPONSE_INVALID", "PROJECT_REVISION_CHANGED",
+		"PROJECT_SNAPSHOT_INPUT_INVALID", "PROJECT_SNAPSHOT_RESPONSE_INVALID",
+		"PROJECT_REVISION_UNAVAILABLE", "EXECUTION_BUNDLE_UNAVAILABLE":
+		return projectErrorCode(err)
+	default:
+		return "PROJECT_VERIFY_FAILED"
+	}
 }
 
 func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding, bool) {

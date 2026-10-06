@@ -123,7 +123,10 @@ const verificationErrorMessage = (code: string): string => {
     return "Для проверки настройте узел выполнения на странице «Серверы». Сохранённый проект не изменён.";
   if (code === "EXECUTION_NODE_READY_REQUIRED")
     return "Для проверки нужен готовый узел выполнения. Откройте «Серверы» и проверьте его состояние.";
-  return "Проверка недоступна. Сохранённый проект не изменён.";
+  const safeCode = /^[A-Z][A-Z0-9_]{0,95}$/u.test(code)
+    ? code
+    : "PROJECT_VERIFY_FAILED";
+  return `Проверка недоступна (код: ${safeCode}). Сохранённый проект не изменён.`;
 };
 
 function projectFolderNameError(value: string): string | null {
