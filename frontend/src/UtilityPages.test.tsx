@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { InstallationEventView } from "./backend";
+import { eventTimestampLabel } from "./event-format";
 import { UtilityPages } from "./UtilityPages";
 
 function event(sequence: number): InstallationEventView {
@@ -16,7 +17,7 @@ function event(sequence: number): InstallationEventView {
     serviceDeployment: "service-1",
     task: {
       role: "service",
-      name: `task-${sequence}`,
+      name: `service : task-${sequence}`,
       uuid: `uuid-${sequence}`,
     },
     elapsedMilliseconds: 15,
@@ -42,29 +43,40 @@ describe("UtilityPages logs", () => {
     renderLogs([event(1)]);
     expect(screen.getByRole("columnheader", { name: "Время" })).toBeTruthy();
     expect(
+      screen.getByRole("cell", {
+        name: eventTimestampLabel(event(1).timestamp),
+      }),
+    ).toBeTruthy();
+    expect(
       screen.getByRole("columnheader", { name: "Сообщение" }),
     ).toBeTruthy();
     expect(screen.getAllByText("Задача 1 завершена").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText("Колонки (6 из 17)"));
     const taskColumnToggle = screen.getByLabelText("Задача");
+    fireEvent.click(screen.getByLabelText("Роль задачи"));
     fireEvent.click(taskColumnToggle);
     expect(screen.getByRole("columnheader", { name: "Задача" })).toBeTruthy();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("task-1")).toBeTruthy();
+    expect(within(table).getByText("service")).toBeTruthy();
+    expect(within(table).queryByText("service : task-1")).toBeNull();
     fireEvent.click(taskColumnToggle);
     expect(screen.queryByRole("columnheader", { name: "Задача" })).toBeNull();
   });
 
-  it("pages through all events in batches of 512", () => {
+  it("shows newest events first and pages older events last in batches of 512", () => {
     renderLogs(Array.from({ length: 513 }, (_, index) => event(index + 1)));
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(513);
     expect(screen.getByText("Показаны 1–512 из 513")).toBeTruthy();
+    const newestPageRows = within(table).getAllByRole("row");
+    expect(newestPageRows[1].textContent).toContain("Задача 513 завершена");
+    expect(newestPageRows.at(-1)?.textContent).toContain("Задача 2 завершена");
     fireEvent.click(screen.getByRole("button", { name: "Далее" }));
     expect(within(table).getAllByRole("row")).toHaveLength(2);
     expect(screen.getByText("Показаны 513–513 из 513")).toBeTruthy();
-    expect(screen.getAllByText("Задача 513 завершена").length).toBeGreaterThan(
-      0,
-    );
+    expect(within(table).getByText("Задача 1 завершена")).toBeTruthy();
   });
 
   it("searches all current-run events rather than only the visible page", () => {
@@ -77,5 +89,26 @@ describe("UtilityPages logs", () => {
       0,
     );
   });
-});
 
+  it("moves a newly received event to the top of the newest-first page", () => {
+    const view = renderLogs([event(1), event(2)]);
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("row")[1].textContent).toContain(
+      "Задача 2 завершена",
+    );
+
+    view.rerender(
+      <UtilityPages
+        page="logs"
+        events={[event(1), event(2), event(3)]}
+        runId="run-current"
+        serverTypes={[]}
+        configError={null}
+      />,
+    );
+
+    expect(within(table).getAllByRole("row")[1].textContent).toContain(
+      "Задача 3 завершена",
+    );
+  });
+});

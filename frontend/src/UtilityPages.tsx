@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { InstallationEventView } from "./backend";
+import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
 import "./utility-pages.css";
 
 const LOGS_PAGE_SIZE = 512;
@@ -12,7 +13,11 @@ type EventColumn = {
 
 const eventColumns: EventColumn[] = [
   { key: "sequence", label: "№", value: (event) => String(event.sequence) },
-  { key: "timestamp", label: "Время", value: (event) => event.timestamp },
+  {
+    key: "timestamp",
+    label: "Время",
+    value: (event) => eventTimestampLabel(event.timestamp),
+  },
   {
     key: "eventType",
     label: "Тип события",
@@ -48,7 +53,8 @@ const eventColumns: EventColumn[] = [
   {
     key: "taskName",
     label: "Задача",
-    value: (event) => event.task?.name || (event.task ? "Скрыто" : "—"),
+    value: (event) =>
+      taskNameWithoutRole(event) || (event.task ? "Скрыто" : "—"),
   },
   {
     key: "taskUUID",
@@ -137,7 +143,7 @@ function EventLog({
     setSelectedSequence(undefined);
   }, [runId]);
   const orderedEvents = useMemo(
-    () => [...events].sort((a, b) => a.sequence - b.sequence),
+    () => [...events].sort((a, b) => b.sequence - a.sequence),
     [events],
   );
   const filteredEvents = useMemo(() => {
@@ -160,7 +166,7 @@ function EventLog({
   );
   const selectedEvent =
     filteredEvents.find((event) => event.sequence === selectedSequence) ||
-    filteredEvents.at(-1);
+    filteredEvents[0];
   const visible = eventColumns.filter((column) =>
     visibleColumns.includes(column.key),
   );
@@ -286,7 +292,7 @@ function EventLog({
               <p>{selectedEvent.safeMessage}</p>
               <dl>
                 <dt>Время</dt>
-                <dd>{selectedEvent.timestamp}</dd>
+                <dd>{eventTimestampLabel(selectedEvent.timestamp)}</dd>
                 <dt>Этап / действие</dt>
                 <dd>
                   {[selectedEvent.phaseId, selectedEvent.actionId]
@@ -297,15 +303,12 @@ function EventLog({
                 <dd>{selectedEvent.serviceDeployment || "—"}</dd>
                 <dt>Узел</dt>
                 <dd>{selectedEvent.host || "—"}</dd>
-                <dt>Роль / задача</dt>
+                <dt>Роль задачи</dt>
+                <dd>{selectedEvent.task?.role || "—"}</dd>
+                <dt>Задача</dt>
                 <dd>
-                  {[
-                    selectedEvent.task?.role,
-                    selectedEvent.task?.name ||
-                      (selectedEvent.task ? "Скрыто" : ""),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") || "—"}
+                  {taskNameWithoutRole(selectedEvent) ||
+                    (selectedEvent.task ? "Скрыто" : "—")}
                 </dd>
                 <dt>ID задачи</dt>
                 <dd>{selectedEvent.task?.uuid || "—"}</dd>

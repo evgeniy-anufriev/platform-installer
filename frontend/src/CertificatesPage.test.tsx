@@ -54,6 +54,9 @@ function props(
 describe("UI-01G2 CertificatesPage", () => {
   it("shows ordered PKI navigation and the independent TLS/scope branches", async () => {
     render(<CertificatesPage {...props()} />);
+    expect(
+      screen.queryByText(/Пустые поля наследуют значения роли/),
+    ).toBeNull();
 
     const navigation = screen.getByRole("navigation", {
       name: "Разделы сертификатов",
@@ -74,18 +77,20 @@ describe("UI-01G2 CertificatesPage", () => {
       }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", {
-        name: "Управляемые центры сертификации",
-      }).getAttribute("aria-current"),
+      screen
+        .getByRole("button", {
+          name: "Управляемые центры сертификации",
+        })
+        .getAttribute("aria-current"),
     ).toBe("page");
 
     await userEvent.click(
       screen.getByRole("button", { name: "Профили сертификатов" }),
     );
     expect(
-      screen.getByRole("button", { name: "Профили сертификатов" }).getAttribute(
-        "aria-current",
-      ),
+      screen
+        .getByRole("button", { name: "Профили сертификатов" })
+        .getAttribute("aria-current"),
     ).toBe("page");
     expect(
       screen.getByRole("heading", { name: "Профили сертификатов" }),
@@ -190,9 +195,7 @@ describe("UI-01G2 CertificatesPage", () => {
 
   it("masks stored SecretRef and never renders its runtime name", async () => {
     render(<CertificatesPage {...props()} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Профили TLS" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Профили TLS" }));
     expect(screen.getByText(/runtime:••••/)).toBeTruthy();
     expect(screen.queryByText("runtime:actual-secret-name")).toBeNull();
   });

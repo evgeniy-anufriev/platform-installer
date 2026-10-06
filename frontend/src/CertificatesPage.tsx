@@ -235,10 +235,6 @@ export function CertificatesPage({
           onDiscard={onDiscard}
         />
       </div>
-      <p className="muted certificate-intro">
-        Пустые поля наследуют значения роли и не записываются. DNS/IP здесь
-        задаются явно; Core определяет итоговые имена и SAN после проверки.
-      </p>
       <article className="card pki-store-password">
         <div className="pki-store-password-copy">
           <h2>Пароль Java-хранилищ PKCS#12 (keystore / truststore)</h2>
@@ -356,9 +352,7 @@ export function CertificatesPage({
         >
           <div className="section-head">
             <div>
-              <h2 id="selected-certificate-section">
-                {labels[selectedKind]}
-              </h2>
+              <h2 id="selected-certificate-section">{labels[selectedKind]}</h2>
               <small>{sectionHint(selectedKind)}</small>
             </div>
             <button

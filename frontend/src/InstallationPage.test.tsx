@@ -375,7 +375,12 @@ describe("InstallationPage", () => {
             timestamp: "2026-10-05T07:22:44Z",
             safeMessage: "Ansible task completed",
             host: "node1",
-            task: { name: "Проверка swap", uuid: "task-1" },
+            serviceDeployment: "qa-bind",
+            task: {
+              role: "platform.bind",
+              name: "platform.bind : Проверка swap",
+              uuid: "task-1",
+            },
           }),
           new main.InstallationEventView({
             runId: "run-safe",
@@ -401,12 +406,18 @@ describe("InstallationPage", () => {
     expect(
       screen.getByText(/Последняя завершённая задача: Проверка swap/),
     ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Проверка swap" })).toBeTruthy();
     expect(
       screen.queryByText(/Последняя завершённая задача: Следующая задача/),
     ).toBeNull();
     const eventTimes = container.querySelectorAll("time");
     expect(eventTimes).toHaveLength(2);
     expect(eventTimes[0].getAttribute("datetime")).toBe("2026-10-05T07:22:44Z");
+    const eventTable = screen.getByRole("table");
+    expect(eventTable.querySelector("th:nth-child(3)")?.textContent).toBe(
+      "Развёртывание",
+    );
+    expect(eventTable.textContent).toContain("qa-bind");
   });
 
   it("shows only the newest 512 execution events and follows the latest update", () => {

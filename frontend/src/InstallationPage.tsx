@@ -15,6 +15,7 @@ import {
   type RunProgress,
 } from "./installationPresentation";
 import { executionNodeStatusLabel } from "./executionNodeLabels";
+import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
 
 type InstallationTab = "summary" | "plan" | "execution" | "result";
 
@@ -903,7 +904,7 @@ function ExecutionStage({
         </p>
         {lastTask && (
           <p className="installation-current-task">
-            Последняя завершённая задача: {lastTask.task?.name}{" "}
+            Последняя завершённая задача: {taskNameWithoutRole(lastTask)}{" "}
             {lastTask.host ? `· ${lastTask.host}` : ""} ·{" "}
             {eventStatusLabel(lastTask.status)}
           </p>
@@ -932,6 +933,7 @@ function ExecutionStage({
                     <tr>
                       <th scope="col">Время</th>
                       <th scope="col">Событие / задача</th>
+                      <th scope="col">Развёртывание</th>
                       <th scope="col">Узел</th>
                       <th scope="col">Результат</th>
                     </tr>
@@ -960,12 +962,13 @@ function ExecutionStage({
                             }
                             onClick={() => setSelectedSequence(event.sequence)}
                           >
-                            {event.task?.name ||
+                            {taskNameWithoutRole(event) ||
                               event.safeMessage ||
                               event.eventType}
                           </button>
                           <small>{eventMessageLabel(event.safeMessage)}</small>
                         </td>
+                        <td>{event.serviceDeployment || "—"}</td>
                         <td>{event.host || "—"}</td>
                         <td>{eventStatusLabel(event.status)}</td>
                       </tr>
@@ -1171,15 +1174,6 @@ function eventMessageLabel(message: string): string {
   return labels[message] || message;
 }
 
-function eventTimestampLabel(timestamp: string): string {
-  const date = new Date(timestamp);
-  if (!Number.isFinite(date.getTime())) return "время неизвестно";
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "medium",
-  }).format(date);
-}
-
 function EventDetails({ event }: { event?: InstallationEventView }) {
   return (
     <article className="card execution-event-details">
@@ -1205,12 +1199,10 @@ function EventDetails({ event }: { event?: InstallationEventView }) {
             <dd>{event.serviceDeployment || "—"}</dd>
             <dt>Узел</dt>
             <dd>{event.host || "—"}</dd>
-            <dt>Роль / задача</dt>
-            <dd>
-              {[event.task?.role, event.task?.name]
-                .filter(Boolean)
-                .join(" · ") || "—"}
-            </dd>
+            <dt>Роль задачи</dt>
+            <dd>{event.task?.role || "—"}</dd>
+            <dt>Задача</dt>
+            <dd>{taskNameWithoutRole(event) || "—"}</dd>
             <dt>ID задачи</dt>
             <dd>{event.task?.uuid || "—"}</dd>
             <dt>Длительность</dt>
@@ -1246,7 +1238,10 @@ function EventList({ events }: { events: InstallationEventView[] }) {
                 {event.sequence}
               </span>
               <span>
-                <b>{event.task?.name || eventTypeLabel(event.eventType)}</b>
+                <b>
+                  {taskNameWithoutRole(event) ||
+                    eventTypeLabel(event.eventType)}
+                </b>
                 <small>{eventMessageLabel(event.safeMessage)}</small>
                 <small>
                   <time
