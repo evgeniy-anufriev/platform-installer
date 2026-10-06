@@ -7,10 +7,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
@@ -160,6 +159,16 @@ func (r *installationRunRegistry) knowsRun(runID string) bool {
 	return ok
 }
 
+func (r *installationRunRegistry) runIDs() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ids := make([]string, 0, len(r.runs))
+	for id := range r.runs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // publishKnownInstallationRunLocked binds an authoritative run only while the
 // caller holds App.editMu. Project/node replacement takes that same lock before
 // it clears the registry, which keeps a completed Start in its own generation.
@@ -264,17 +273,10 @@ func installationResultView(run executionnode.ExecutionRun) *InstallationResultV
 }
 func installationEventView(event executionnode.ExecutionEvent) InstallationEventView {
 	view := InstallationEventView{RunID: event.RunID, Sequence: event.Sequence, Timestamp: event.Timestamp, EventType: event.EventType, Status: event.Status, PhaseID: event.PhaseID, ActionID: event.ActionID, Host: event.Host, ServiceDeployment: event.ServiceDeployment, ElapsedMilliseconds: event.ElapsedMillis, SafeMessage: event.SafeMessage, Redacted: event.Redaction.Applied}
-	taskNameRedacted := false
-	for _, field := range event.Redaction.Fields {
-		if field == "task.name" {
-			taskNameRedacted = true
-			break
-		}
-	}
-	if event.Task != nil && !taskNameRedacted {
+	// Applied marks the event as safely redacted, not every task field as hidden.
+	// The closed redaction field list identifies the withheld task name.
+	if event.Task != nil && !slices.Contains(event.Redaction.Fields, "task.name") {
 		view.Task = &InstallationTaskView{Role: event.Task.Role, Name: event.Task.Name, UUID: event.Task.UUID}
-	} else if event.Task != nil {
-		view.Task = &InstallationTaskView{Role: event.Task.Role, UUID: event.Task.UUID}
 	}
 	if event.Error != nil {
 		view.ErrorCode = event.Error.Code
@@ -303,6 +305,10 @@ func installationObserverDiagnostic(err error) string {
 
 func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation {
 	a.editMu.Lock()
+	if a.startInFlight || a.runtimeUpdateInFlight {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_OPERATION_IN_PROGRESS", Message: "Другая операция запуска или обновления набора установки ещё выполняется"}}
+	}
 	if planID == "" || planID != a.installationPlanID {
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_PLAN_NOT_FOUND", Message: projectErrorMessage("INSTALLATION_PLAN_NOT_FOUND")}}
@@ -359,8 +365,18 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(credentialErr), Message: projectErrorMessage(projectErrorCode(credentialErr))}}
 	}
+	if !a.knownRunsTerminalLocked() {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_RUN_ACTIVE", Message: "Предыдущий запуск не подтверждён как завершённый"}}
+	}
 	captured := installationStartContext{generation: a.installationGeneration, root: a.current.Root, projectID: a.current.Project.ID, revision: revision, planID: planID, nodeID: binding.node.ID, runtime: runtimeBinding}
+	a.startInFlight = true
 	a.editMu.Unlock()
+	defer func() {
+		a.editMu.Lock()
+		a.startInFlight = false
+		a.editMu.Unlock()
+	}()
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
 	if outputRequired {
@@ -373,11 +389,34 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNAVAILABLE", Message: "Protected output delivery capabilities were not confirmed; execution was not started."}}
 		}
 	}
+	a.editMu.Lock()
+	if a.installationGeneration != captured.generation || a.current.Root != captured.root || a.installationPlanID != captured.planID {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "START_CONTEXT_CHANGED"}
+	}
+	canonicalRoot, rootErr := canonicalRunProjectRoot(captured.root)
+	if rootErr != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "LOCAL_RUN_RECORD_UNAVAILABLE", Message: "Не удалось подготовить локальную запись запуска"}}
+	}
+	record := localRunRecord{Version: localRunRecordVersion, ProjectRoot: canonicalRoot, ProjectID: captured.projectID, ProjectRevision: captured.revision, PlanID: captured.planID, NodeID: binding.node.ID, NodeAddress: binding.node.Address, NodePort: binding.node.Port, NodeUser: binding.node.User, HostKeyFingerprint: binding.node.HostKey.Fingerprint, State: "PENDING"}
+	if err := writeLocalRunRecord(a.localRunRecordRoot, record); err != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "LOCAL_RUN_RECORD_UNAVAILABLE", Message: "Не удалось сохранить локальную запись запуска; Start не отправлен"}}
+	}
+	a.startOutcomeUnknown = true // a transport failure can conceal a committed run
+	a.editMu.Unlock()
 	run, err := binding.plans.Start(ctx, binding.node, planID)
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 	}
 	a.editMu.Lock()
+	record.State, record.RunID = "RUNNING", run.RunID
+	if err := writeLocalRunRecord(a.localRunRecordRoot, record); err != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Run: ptrInstallationRun(installationRunView(run)), Error: &ProjectOpenError{Code: "LOCAL_RUN_RECORD_UNAVAILABLE", Message: "Запуск состоялся, но его ID не сохранился локально; перепривязка заблокирована"}}
+	}
+	a.startOutcomeUnknown = false
 	currentRevision, currentRevisionErr := installer.ProjectRevision(a.current.Root)
 	currentBinding, currentBindingErr := a.resolveSelectedExecutionNodeBindingLocked()
 	currentRuntime, currentRuntimeOK := InstallationRuntimeBinding{}, false
@@ -420,6 +459,13 @@ func (a *App) GetInstallationRun(runID string) InstallationRunOperation {
 	run, err := client.GetExecution(ctx, binding.node, runID)
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
+	}
+	if rebindTerminalRun(run.State) {
+		record, readErr := readLocalRunRecord(a.localRunRecordRoot, a.current.Root, a.current.Project.ID)
+		if readErr == nil && record != nil && record.RunID == runID && run.ProjectIdentity == record.ProjectID {
+			record.State, record.TerminalState = "TERMINAL", run.State
+			_ = writeLocalRunRecord(a.localRunRecordRoot, *record) // failure keeps rebind fail-closed
+		}
 	}
 	return InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
 }
@@ -505,15 +551,13 @@ func (a *App) forwardInstallationSubscription(ctx context.Context, id string, it
 			if !ok {
 				return
 			}
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, installationEventName, InstallationSubscriptionEvent{SubscriptionID: id, Event: ptrInstallationEvent(installationEventView(event))})
-			}
+			a.events.Publish(a.ctx, installationEventName, InstallationSubscriptionEvent{SubscriptionID: id, Event: ptrInstallationEvent(installationEventView(event))})
 		case err, ok := <-item.sub.Errors:
 			if !ok {
 				return
 			}
-			if a.ctx != nil && err != nil {
-				runtime.EventsEmit(a.ctx, installationEventName, InstallationSubscriptionEvent{SubscriptionID: id, ErrorCode: installationObserverDiagnostic(err)})
+			if err != nil {
+				a.events.Publish(a.ctx, installationEventName, InstallationSubscriptionEvent{SubscriptionID: id, ErrorCode: installationObserverDiagnostic(err)})
 			}
 		}
 	}

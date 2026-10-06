@@ -20,10 +20,12 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"platform-installer/internal/artifactsource"
+	"platform-installer/internal/commandwindow"
 	"platform-installer/internal/executionbundle"
 )
 
@@ -47,12 +49,14 @@ type osRunner struct{}
 
 func (osRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
+	commandwindow.Configure(command)
 	command.Stdin = bytes.NewReader(input)
 	return command.CombinedOutput()
 }
 
 func (osRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
+	commandwindow.Configure(command)
 	command.Stdin = bytes.NewReader(input)
 	output := &boundedOutput{limit: limit}
 	command.Stdout = output
@@ -66,6 +70,7 @@ func (osRunner) RunBounded(ctx context.Context, name string, args []string, inpu
 
 func (osRunner) RunSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, []byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
+	commandwindow.Configure(command)
 	command.Stdin = bytes.NewReader(input)
 	stdout := &boundedOutput{limit: stdoutLimit}
 	stderr := &boundedOutput{limit: stderrLimit}
@@ -102,11 +107,15 @@ func (b *boundedOutput) Write(value []byte) (int, error) {
 // OpenSSHTransport is the one product transport for the pre-Core boundary.
 // It never accepts a caller-defined remote command or destination.
 type OpenSSHTransport struct {
-	Identity       IdentityResolver
-	Runner         commandRunner
-	RepositoryRoot string
-	RuntimeRoot    string
-	StageRoot      string
+	Identity IdentityResolver
+	Runner   commandRunner
+	// CommandGuard holds the UI-approved identity and host-key files stable
+	// across each SSH/SCP child process. Nil preserves the legacy flag path.
+	CommandGuard         func() (func(), error)
+	IsolatedHostKeyTrust bool
+	RepositoryRoot       string
+	RuntimeRoot          string
+	StageRoot            string
 }
 
 func (t OpenSSHTransport) InspectExecutionNode(ctx context.Context, node Node) (Inspection, error) {
@@ -298,7 +307,7 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 	candidate := stage
 	// Storage and detached controllers share the sudo effective UID. Existing
 	// foreign-owned storage fails closed; preparation never repairs it by chown.
-	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer/bootstrap/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
+	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer/bootstrap/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, root}, []byte(storageScript)); err != nil {
 		return Runtime{}, err
 	}
@@ -767,8 +776,21 @@ func (t OpenSSHTransport) sshSeparatedBounded(ctx context.Context, node Node, pr
 	full = append(full, args...)
 	return t.runSeparatedBounded(ctx, "ssh", full, input, stdoutLimit, stderrLimit)
 }
+
+// ProbeTargetHostKey is read-only target host-key discovery from the trusted
+// Execution Node. It never accepts a key or alters trust on either machine.
+func (t OpenSSHTransport) ProbeTargetHostKey(ctx context.Context, node Node, address string, port uint16) ([]byte, error) {
+	if port == 0 || address == "" || len(address) > 253 || strings.ContainsAny(address, " \t\r\n'\";|&$`(){}[]*?!\\") {
+		return nil, errors.New("TARGET_HOST_KEY_PROBE_FAILED")
+	}
+	return t.sshSeparatedBounded(ctx, node, "ssh-keyscan", []string{"-T", "5", "-p", strconv.Itoa(int(port)), "-t", "ed25519,ecdsa,rsa", address}, nil, 16384, 1024)
+}
 func (t OpenSSHTransport) base(node Node, identity string) []string {
-	return []string{"-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=" + node.HostKey.KnownHosts, "-i", identity, "-p", fmt.Sprint(node.Port)}
+	args := []string{}
+	if t.IsolatedHostKeyTrust {
+		args = append(args, "-F", "none", "-o", "GlobalKnownHostsFile=none", "-o", "KnownHostsCommand=none", "-o", "UpdateHostKeys=no")
+	}
+	return append(args, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile="+node.HostKey.KnownHosts, "-i", identity, "-p", fmt.Sprint(node.Port))
 }
 func (t OpenSSHTransport) scpBase(node Node, identity string) []string {
 	args := t.base(node, identity)
@@ -783,6 +805,11 @@ func (t OpenSSHTransport) destination(node Node, value string) string {
 	return node.User + "@" + node.Address + ":" + value
 }
 func (t OpenSSHTransport) run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
+	release, err := t.acquireCommandGuard()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	runner := t.Runner
 	if runner == nil {
 		runner = osRunner{}
@@ -802,6 +829,11 @@ func (t OpenSSHTransport) run(ctx context.Context, name string, args []string, i
 }
 
 func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+	release, guardErr := t.acquireCommandGuard()
+	if guardErr != nil {
+		return nil, guardErr
+	}
+	defer release()
 	runner := t.Runner
 	if runner == nil {
 		runner = osRunner{}
@@ -824,6 +856,11 @@ func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []st
 }
 
 func (t OpenSSHTransport) runSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, error) {
+	release, guardErr := t.acquireCommandGuard()
+	if guardErr != nil {
+		return nil, guardErr
+	}
+	defer release()
 	runner := t.Runner
 	if runner == nil {
 		runner = osRunner{}
@@ -839,6 +876,17 @@ func (t OpenSSHTransport) runSeparatedBounded(ctx context.Context, name string, 
 		return stdout, errors.New("EXECUTION_NODE_TRANSPORT_FAILED")
 	}
 	return stdout, nil
+}
+
+func (t OpenSSHTransport) acquireCommandGuard() (func(), error) {
+	if t.CommandGuard == nil {
+		return func() {}, nil
+	}
+	release, err := t.CommandGuard()
+	if err != nil || release == nil {
+		return nil, errors.New("EXECUTION_NODE_BINDING_INVALID")
+	}
+	return release, nil
 }
 func remoteChecks(bundle executionbundle.Verified) string {
 	var b strings.Builder

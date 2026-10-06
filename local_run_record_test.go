@@ -1,0 +1,107 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func testLocalRunRecord(t *testing.T) (string, localRunRecord) {
+	t.Helper()
+	project := t.TempDir()
+	canonical, err := canonicalRunProjectRoot(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return t.TempDir(), localRunRecord{Version: 1, ProjectRoot: canonical, ProjectID: "project-aaaaaaaaaaaaaaaa", ProjectRevision: "sha256:revision", PlanID: "plan-one", NodeID: "node1", NodeAddress: "192.0.2.1", NodePort: 22, NodeUser: "operator", HostKeyFingerprint: "SHA256:approved", State: "PENDING"}
+}
+
+func TestLocalRunRecordSurvivesReopenAndTransitions(t *testing.T) {
+	root, record := testLocalRunRecord(t)
+	if got, err := readLocalRunRecord(root, record.ProjectRoot, record.ProjectID); err != nil || got != nil {
+		t.Fatalf("absent=%+v err=%v", got, err)
+	}
+	for _, state := range []string{"PENDING", "RUNNING", "TERMINAL"} {
+		record.State = state
+		if state != "PENDING" {
+			record.RunID = "installer-0123456789abcdef"
+		}
+		if state == "TERMINAL" {
+			record.TerminalState = "SUCCEEDED"
+		}
+		if err := writeLocalRunRecord(root, record); err != nil {
+			t.Fatal(err)
+		}
+		got, err := readLocalRunRecord(root, record.ProjectRoot, record.ProjectID)
+		if err != nil || got == nil || *got != record {
+			t.Fatalf("state=%s got=%+v err=%v", state, got, err)
+		}
+	}
+}
+
+func TestLocalRunRecordRejectsInvalidOrForeignState(t *testing.T) {
+	root, record := testLocalRunRecord(t)
+	path, err := localRunRecordPath(root, record.ProjectRoot, record.ProjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":1,"state":"TERMINAL"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readLocalRunRecord(root, record.ProjectRoot, record.ProjectID); err == nil {
+		t.Fatal("malformed record accepted")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	record.ProjectID = "project-other"
+	if _, err := readLocalRunRecord(root, record.ProjectRoot, record.ProjectID); err != nil {
+		t.Fatal(err)
+	}
+	record.State = "RUNNING"
+	if err := writeLocalRunRecord(root, record); err == nil {
+		t.Fatal("running record without run ID accepted")
+	}
+	record.State = "PENDING"
+	record.RunID = "installer-0123"
+	if err := writeLocalRunRecord(root, record); err == nil {
+		t.Fatal("pending record with run ID accepted")
+	}
+}
+
+func TestLocalRunRecordRejectsSymlink(t *testing.T) {
+	root, record := testLocalRunRecord(t)
+	path, err := localRunRecordPath(root, record.ProjectRoot, record.ProjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "foreign.json")
+	if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := readLocalRunRecord(root, record.ProjectRoot, record.ProjectID); err == nil {
+		t.Fatal("symlink record accepted")
+	}
+	if err := writeLocalRunRecord(root, record); err == nil {
+		t.Fatal("symlink destination accepted")
+	}
+}
+
+func TestLocalRunRecordRejectsSymlinkedStore(t *testing.T) {
+	_, record := testLocalRunRecord(t)
+	base := t.TempDir()
+	target := t.TempDir()
+	store := filepath.Join(base, "records")
+	if err := os.Symlink(target, store); err != nil {
+		t.Skipf("directory symlink unavailable: %v", err)
+	}
+	if err := writeLocalRunRecord(store, record); err == nil {
+		t.Fatal("symlinked record store accepted for write")
+	}
+	if _, err := readLocalRunRecord(store, record.ProjectRoot, record.ProjectID); err == nil {
+		t.Fatal("symlinked record store accepted for read")
+	}
+}

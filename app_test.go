@@ -542,7 +542,7 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	app.AppendEditCommand(update.Session.SessionID, installer.EditCommand{Operation: "UpdateServer", HostID: "node1", Address: "192.0.2.11"})
 	updatePlan := app.ReviewStructuralEditSession(update.Session.SessionID)
 	updated := app.CommitStructuralEditPlan(update.Session.SessionID, updatePlan.Plan.PlanID)
-	if updated.Status != "COMMITTED" || updated.Current == nil || updated.Current.Verification.Status != "UNVERIFIED" || reader.calls != 3 {
+	if updated.Status != "COMMITTED" || updated.Current == nil || updated.Current.Verification.Status != "STALE" || reader.calls != 3 {
 		t.Fatalf("save did not stale evidence or called Core: %#v calls=%d", updated, reader.calls)
 	}
 }

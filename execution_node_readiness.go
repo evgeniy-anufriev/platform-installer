@@ -19,11 +19,15 @@ type executionNodeLifecycle interface {
 }
 
 type executionNodeBinding struct {
-	node       executionnode.Node
-	reader     projectReader
-	service    executionNodeLifecycle
-	plans      *executionnode.ExecutionService
-	bundleRoot string
+	node                 executionnode.Node
+	reader               projectReader
+	service              executionNodeLifecycle
+	plans                *executionnode.ExecutionService
+	bundleRoot           string
+	dynamic              bool
+	credentialGeneration uint64
+	hostKeyPin           *approvedExecutionHostKey
+	commandGuard         func() (func(), error)
 }
 
 // ExecutionNodeReadiness contains no connection, host-key, credential, or
@@ -97,13 +101,87 @@ type verificationContinuation struct {
 }
 
 func (a *App) resolveSelectedExecutionNodeBindingLocked() (*executionNodeBinding, error) {
-	if a.binding == nil || a.binding.service == nil || a.binding.reader.transport == nil || a.binding.node.ID == "" || a.binding.bundleRoot == "" {
+	binding, err := a.resolveTrustedExecutionConnectionLocked()
+	if err != nil || binding.bundleRoot == "" {
 		return nil, errors.New("BINDING_REQUIRED")
+	}
+	if binding.dynamic {
+		verified, err := a.verifySelectedBundleLocked()
+		if err != nil || verified.Digest != binding.reader.runtimeRelease["bundleDigest"] {
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+	}
+	return binding, nil
+}
+
+// Trusted connection is transport authority only. It can inspect a node or
+// resolve an already-known run, but cannot authorize Core/plan/Start without
+// resolveSelectedExecutionNodeBindingLocked's runtime release check.
+func (a *App) resolveTrustedExecutionConnectionLocked() (*executionNodeBinding, error) {
+	if a.binding == nil || a.binding.service == nil || a.binding.reader.transport == nil || a.binding.node.ID == "" {
+		return nil, errors.New("BINDING_REQUIRED")
+	}
+	if a.binding.dynamic {
+		id, address, port, err := a.selectedSavedExecutionServerLocked()
+		if err != nil || id != a.binding.node.ID || address != a.binding.node.Address || port != a.binding.node.Port {
+			a.invalidateDynamicBindingLocked()
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+		credentialBinding, err := a.credentialBindingLocked()
+		if err != nil {
+			a.invalidateDynamicBindingLocked()
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+		identity, err := a.secrets.CurrentExecutionIdentity(credentialBinding)
+		if err != nil || identity.Generation != a.binding.credentialGeneration || identity.Username != a.binding.node.User {
+			a.invalidateDynamicBindingLocked()
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+		if a.binding.hostKeyPin == nil {
+			a.invalidateDynamicBindingLocked()
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+		if a.binding.commandGuard == nil {
+			a.invalidateDynamicBindingLocked()
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+		release, guardErr := a.binding.commandGuard()
+		if guardErr != nil {
+			a.invalidateDynamicBindingLocked()
+			return nil, errors.New("BINDING_REQUIRED")
+		}
+		release()
+		return a.binding, nil
 	}
 	if a.execution.context.SelectionKind != "EXPLICIT_EXTERNAL" || a.execution.external == nil || a.execution.external.hostID != a.binding.node.ID {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
 	return a.binding, nil
+}
+
+// A long remote call may outlive its session credential. Never publish its
+// result unless the same private binding is still current after the call.
+func (a *App) revalidateBindingBeforePublicationLocked(binding *executionNodeBinding) error {
+	if !binding.dynamic {
+		return nil
+	}
+	current, err := a.resolveSelectedExecutionNodeBindingLocked()
+	if err != nil || current != binding {
+		a.invalidateDynamicBindingLocked()
+		return errors.New("BINDING_REQUIRED")
+	}
+	return nil
+}
+
+func (a *App) revalidateTrustedConnectionLocked(binding *executionNodeBinding) error {
+	if !binding.dynamic {
+		return nil
+	}
+	current, err := a.resolveTrustedExecutionConnectionLocked()
+	if err != nil || current != binding {
+		return errors.New("BINDING_REQUIRED")
+	}
+	return nil
 }
 
 func readinessFromInspection(binding *executionNodeBinding, label string, inspection executionnode.Inspection) ExecutionNodeReadiness {
@@ -121,7 +199,7 @@ func (a *App) CheckExecutionNode() ExecutionNodeReadiness {
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return a.readinessFailureLocked(errors.New("PROJECT_NOT_OPEN"))
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	binding, err := a.resolveTrustedExecutionConnectionLocked()
 	if err != nil {
 		return a.readinessFailureLocked(err)
 	}
@@ -129,6 +207,12 @@ func (a *App) CheckExecutionNode() ExecutionNodeReadiness {
 	defer cancel()
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {
+		if binding.dynamic {
+			a.invalidateDynamicBindingLocked()
+		}
+		return a.readinessFailureLocked(err)
+	}
+	if err := a.revalidateTrustedConnectionLocked(binding); err != nil {
 		return a.readinessFailureLocked(err)
 	}
 	readiness := readinessFromInspection(binding, a.execution.context.SafeLabel, inspection)
@@ -154,6 +238,12 @@ func (a *App) PlanExecutionNodePreparation() ExecutionNodePreparation {
 	defer cancel()
 	plan, err := binding.service.PlanExecutionNodePreparation(ctx, binding.node, binding.bundleRoot)
 	if err != nil {
+		if binding.dynamic {
+			a.invalidateDynamicBindingLocked()
+		}
+		return preparationFailure(err)
+	}
+	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
 		return preparationFailure(err)
 	}
 	a.execution.setStatus(string(plan.State))
@@ -203,6 +293,12 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 	defer cancel()
 	result, err := binding.service.Prepare(ctx, binding.node, binding.bundleRoot, continuation.planID)
 	if err != nil {
+		if binding.dynamic {
+			a.invalidateDynamicBindingLocked()
+		}
+		return preparationFailure(err)
+	}
+	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
 		return preparationFailure(err)
 	}
 	a.execution.setStatus(string(result.State))
@@ -211,6 +307,12 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 	}
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {
+		if binding.dynamic {
+			a.invalidateDynamicBindingLocked()
+		}
+		return preparationFailure(err)
+	}
+	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
 		return preparationFailure(err)
 	}
 	a.execution.setStatus(string(inspection.State))
