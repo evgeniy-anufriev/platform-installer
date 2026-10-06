@@ -691,35 +691,78 @@ export function ServicesPage({
     }
   };
 
-  if (view === "detail") {
-    if (!selected)
-      return (
-        <section className="card" aria-live="polite">
-          <h1 ref={detailHeading} tabIndex={-1}>
-            Сервис не найден
-          </h1>
-          <p className="muted">
-            Вернитесь к списку и выберите существующий экземпляр сервиса.
-          </p>
-          <button className="outline" onClick={onBackToList}>
-            К списку сервисов
+  const servicePicker = (
+    <aside className="services-picker" aria-label="Список сервисов">
+      <div className="services-picker-head">
+        <h1 ref={listHeading} tabIndex={-1}>
+          Сервисы
+        </h1>
+        <label>
+          Поиск
+          <input
+            aria-label="Поиск сервисов"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="ID или тип сервиса"
+          />
+        </label>
+      </div>
+      <div className="services-picker-list">
+        {filteredRows.map((row) => (
+          <button
+            className={`topology-row${row.state === "deleting" ? " draft-deleting" : ""}`}
+            key={row.deploymentId}
+            onClick={() => onOpenDeployment(row.deploymentId)}
+            disabled={row.state === "deleting"}
+            aria-current={
+              row.deploymentId === selectedDeploymentId ? "page" : undefined
+            }
+          >
+            <strong>{row.deploymentId}</strong>
+            <span>
+              {catalogService(catalog, row.serviceType)?.displayName ||
+                row.serviceType}
+            </span>
+            <small>
+              {row.state === "new"
+                ? "Новый черновик"
+                : row.state === "deleting"
+                  ? "Будет удалён"
+                  : "Сохранён"}
+            </small>
           </button>
-        </section>
-      );
+        ))}
+        {!filteredRows.length && (
+          <div className="services-picker-empty">
+            <p className="muted">Подходящие экземпляры не найдены.</p>
+            {!rows.length && (
+              <button className="outline" onClick={onOpenTopology}>
+                Открыть Топологию
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+
+  if (selected) {
     return (
-      <section className="services-detail">
+      <section className="services-workspace">
+        {servicePicker}
+        <section className="services-detail">
         <div className="page-title topology-title">
           <div>
-            <h1 ref={detailHeading} tabIndex={-1}>
+            <h2 ref={detailHeading} tabIndex={-1}>
               Настройка сервиса
-            </h1>
+            </h2>
             <p>
               {selected.deploymentId} ·{" "}
               {service?.displayName || selected.serviceType}
             </p>
           </div>
           <button className="outline" onClick={onBackToList}>
-            К списку сервисов
+            Скрыть настройки
           </button>
         </div>
         {selected.state === "deleting" && (
@@ -768,6 +811,11 @@ export function ServicesPage({
             </p>
           )}
         </section>
+        <div
+          className="services-parameter-column"
+          role="region"
+          aria-label="Параметры выбранного сервиса"
+        >
         <section className="card services-settings">
           <h2>Параметры сервиса</h2>
           {corePreviewNotice && (
@@ -1148,6 +1196,7 @@ export function ServicesPage({
             )}
           </section>
         )}
+        </div>
         <SessionActions
           commandCount={commandCount}
           busy={busy}
@@ -1293,73 +1342,30 @@ export function ServicesPage({
             </form>
           </dialog>
         )}
+        </section>
       </section>
     );
   }
 
   return (
-    <section className="services-list">
-      <div className="page-title topology-title">
-        <div>
-          <h1 ref={listHeading} tabIndex={-1}>
-            Сервисы
-          </h1>
-          <p>
-            Выберите экземпляр сервиса для настройки поддерживаемых параметров.
-          </p>
-        </div>
-      </div>
-      <section className="card topology-list">
-        <label>
-          Поиск экземпляра сервиса
-          <input
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder="ID или тип сервиса"
-          />
-        </label>
-        <div className="topology-list-scroll">
-          {filteredRows.map((row) => (
-            <button
-              className={`topology-row${row.state === "deleting" ? " draft-deleting" : ""}`}
-              key={row.deploymentId}
-              onClick={() => onOpenDeployment(row.deploymentId)}
-              disabled={row.state === "deleting"}
-            >
-              <strong>{row.deploymentId}</strong>
-              <span>
-                {catalogService(catalog, row.serviceType)?.displayName ||
-                  row.serviceType}
-              </span>
-              <small>
-                {row.state === "new"
-                  ? "Новый черновик"
-                  : row.state === "deleting"
-                    ? "Будет удалён"
-                    : "Сохранён"}
-              </small>
-            </button>
-          ))}
-          {!filteredRows.length && (
-            <div>
-              <p className="muted">
-                Подходящие экземпляры сервисов не найдены.
-              </p>
-              {!rows.length && (
-                <button className="outline" onClick={onOpenTopology}>
-                  Открыть Топологию
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
+    <section className="services-workspace">
+      {servicePicker}
+      <section className="services-detail-empty" aria-live="polite">
+        <h2 ref={detailHeading} tabIndex={-1}>
+          {view === "detail" ? "Сервис не найден" : "Выберите сервис"}
+        </h2>
+        <p className="muted">
+          {view === "detail"
+            ? "Выбранный deployment больше недоступен. Выберите сервис из списка."
+            : "Настройки выбранного сервиса появятся здесь; список останется доступен слева."}
+        </p>
       <SessionActions
         commandCount={commandCount}
         busy={busy}
         onReview={onReview}
         onDiscard={onDiscard}
       />
+      </section>
     </section>
   );
 }

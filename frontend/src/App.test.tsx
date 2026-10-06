@@ -1125,6 +1125,11 @@ describe("UI-01F3 deployment editor", () => {
       await screen.findByRole("heading", { name: "Параметры экземпляра" }),
     ).toBeTruthy();
     expect(
+      screen.getByRole("region", {
+        name: "Параметры выбранного сервиса",
+      }),
+    ).toBeTruthy();
+    expect(
       (screen.getByLabelText("Экземпляр") as HTMLSelectElement).value,
     ).toBe("kafka-kafka-2");
     expect(document.activeElement).toBe(
@@ -1164,8 +1169,19 @@ describe("UI-01F3 deployment editor", () => {
       name: "Настройка сервиса",
     });
     expect(document.activeElement).toBe(detailHeading);
+    expect(screen.getByRole("heading", { name: "Сервисы" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^kafka-main/ }).getAttribute(
+        "aria-current",
+      ),
+    ).toBe("page");
+    expect(
+      screen.getByRole("region", {
+        name: "Параметры выбранного сервиса",
+      }),
+    ).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "К списку сервисов" }),
+      screen.getByRole("button", { name: "Скрыть настройки" }),
     );
     const listHeading = await screen.findByRole("heading", {
       name: "Сервисы",
@@ -1872,11 +1888,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
       await screen.findByRole("heading", { name: "Настройка сервиса" }),
     ).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "К списку сервисов" }),
+      screen.getByRole("button", { name: "Скрыть настройки" }),
     );
     expect(
-      await screen.findByRole("heading", { name: "Сервисы" }),
+      await screen.findByRole("heading", { name: "Выберите сервис" }),
     ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Сервисы" })).toBeTruthy();
     expect(value.getExecutionNodeContext).toBeUndefined();
   });
 
@@ -2129,7 +2146,10 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(await screen.findByText("unknownSetting")).toBeTruthy();
     expect(screen.queryByText("must-not-be-rendered")).toBeNull();
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(
+      screen.getByRole("textbox", { name: "Поиск сервисов" }),
+    ).toBeTruthy();
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
     expect(value.startEditSession).not.toHaveBeenCalled();
   });
 
