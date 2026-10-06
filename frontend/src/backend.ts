@@ -44,6 +44,7 @@ import {
   ClearSessionCredential,
 } from "../wailsjs/go/main/App";
 import type { main } from "../wailsjs/go/models";
+import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
   status: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
@@ -388,6 +389,16 @@ export type SecretOutputDeliveryOperation = {
   error?: { code: string; message: string };
 };
 export interface ProjectBackend {
+  exitApplication?(): Promise<{ status: "EXITING" | "EXIT_AFTER_RUN" }>;
+  subscribeInstallationRunEvents?(handler: (value: {
+    subscriptionId?: string;
+    event?: InstallationEventView;
+    errorCode?: string;
+  }) => void): () => void;
+  chooseRuntimeBundleUpdate?(): Promise<unknown>;
+  confirmRuntimeBundleUpdate?(previewId: string): Promise<unknown>;
+  inspectOrphanRun?(): Promise<unknown>;
+  cancelOrphanRun?(recoveryId: string): Promise<unknown>;
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
   openProject(root: string): Promise<OpenResult>;
@@ -403,6 +414,12 @@ export interface ProjectBackend {
   appendEditCommand(
     sessionId: string,
     command: Record<string, unknown>,
+  ): Promise<EditResult>;
+  amendServiceConfigurationDraft?(
+    sessionId: string,
+    index: number,
+    expected: Record<string, unknown>,
+    replacement: Record<string, unknown> | null,
   ): Promise<EditResult>;
   reviewEditSession(sessionId: string): Promise<EditResult>;
   commitEditPlan(sessionId: string, planId: string): Promise<EditResult>;
@@ -422,6 +439,13 @@ export interface ProjectBackend {
   deliverPendingSecretOutput?(packageId: string): Promise<SecretOutputDeliveryOperation>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
+  getServiceConfigurationPreview?(): Promise<unknown>;
+  probeExecutionNodeHostKey?(): Promise<unknown>;
+  approveExecutionNodeHostKey?(probeId: string): Promise<unknown>;
+  declineExecutionNodeHostKey?(): Promise<unknown>;
+  probeTargetHostKey?(hostId: string): Promise<unknown>;
+  approveTargetHostKey?(probeId: string): Promise<unknown>;
+  declineTargetHostKey?(): Promise<unknown>;
   getInstallationState?(): Promise<InstallationState>;
   createInstallationPlan?(): Promise<InstallationPlanOperation>;
   getInstallationPlan?(planId: string): Promise<InstallationPlanOperation>;
@@ -449,6 +473,8 @@ export interface ProjectBackend {
 }
 
 export const backend: ProjectBackend = {
+  subscribeInstallationRunEvents: (handler) =>
+    EventsOn("installation-run-event", handler),
   getApplicationConfig: GetApplicationConfig,
   chooseProject: () => ChooseProject() as unknown as Promise<OpenResult>,
   openProject: (root) => OpenProject(root) as unknown as Promise<OpenResult>,

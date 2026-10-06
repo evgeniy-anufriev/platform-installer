@@ -1,5 +1,15 @@
 # Current state
 
+## BROWSER-LOCAL / BROWSER-REMOTE — isolated implementation branch (2026-10-06)
+
+The Browser transport lives on `codex/browser-isolation` above the shared App
+prerequisite commit. Local Windows Browser mode and the Linux remote host use
+the same Go `App` and React components as Wails. Remote HTTP requires the
+explicit `-browser-allow-insecure-dev-http` flag and is for development only;
+HTTPS and production security acceptance remain scheduled for v1.0. The clean
+branch passed Go package tests, Go vet, frontend production build and frontend
+tests. Real Browser and React/Wails acceptance have not yet been performed.
+
 ## SERVICE-INSTALL-09 ClickHouse PARTIAL ACCEPTANCE, NOT DONE (2026-09-29)
 
 Owner requested the next service: ClickHouse 1/1 standalone without Keeper,

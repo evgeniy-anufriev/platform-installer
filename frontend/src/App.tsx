@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EventsOn } from "../wailsjs/runtime/runtime";
 import type {
   EditResult,
   ExecutionNodeContext,
@@ -481,8 +480,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setSecretOutputPackages(await api.listPendingSecretOutputs());
   }, [api, installationPlan?.plan]);
   useEffect(() => {
-    if (!(window as unknown as { runtime?: unknown }).runtime) return undefined;
-    return EventsOn("installation-run-event", (value: { subscriptionId?: string; event?: InstallationEventView }) => {
+    if (!api.subscribeInstallationRunEvents) return undefined;
+    return api.subscribeInstallationRunEvents((value: { subscriptionId?: string; event?: InstallationEventView }) => {
       if (value.subscriptionId !== installationSubscription || !value.event) return;
       setInstallationEvents((current) => current.some((event) => event.sequence === value.event!.sequence) ? current : [...current, value.event!].slice(-512));
       if (["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(value.event.status) && api.getInstallationRun) {
@@ -943,6 +942,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               }
             >
               Проверить
+            </button>
+          )}
+          {api.exitApplication && (
+            <button className="outline" onClick={() => void api.exitApplication?.()}>
+              Выход
             </button>
           )}
         </header>

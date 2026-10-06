@@ -875,6 +875,17 @@ with `changed=0`. PKI apply, PostgreSQL apply and verify passed in both cycles.
 
 ## Phase G — Expansion
 
+### BROWSER-LOCAL / BROWSER-REMOTE — alternate React transport
+
+The local Windows Browser host and remote Linux Browser host share the Go App
+and React application with Wails. Remote HTTP is development-only and requires
+`-browser-allow-insecure-dev-http`; credentials and encrypted runtime-secret
+uploads are not protected in transit. Production use requires HTTPS and
+transport/origin security acceptance in v1.0. The local and remote plans are
+documented in [Browser local](browser-mode-local-plan.md) and
+[Browser remote](browser-mode-remote-plan.md). The isolated implementation
+commit does not by itself prove real-browser acceptance.
+
 ### Deferred feature: dependency-aware parallel installation
 
 After the sequential all-services acceptance, consider bounded parallel

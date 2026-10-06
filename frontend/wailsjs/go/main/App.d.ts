@@ -4,12 +4,21 @@ import {installer} from '../models';
 import {main} from '../models';
 import {runtimesecret} from '../models';
 import {projectlifecycle} from '../models';
+import {executionnode} from '../models';
+
+export function AmendServiceConfigurationDraft(arg1:string,arg2:number,arg3:installer.EditCommand,arg4:installer.EditCommand):Promise<main.EditOperationResult>;
 
 export function AppendEditCommand(arg1:string,arg2:installer.EditCommand):Promise<main.EditOperationResult>;
 
+export function ApproveExecutionNodeHostKey(arg1:string):Promise<main.HostKeyProbeResult>;
+
 export function ApproveInstallationPlan(arg1:string,arg2:Array<string>):Promise<main.InstallationPlanOperation>;
 
+export function ApproveTargetHostKey(arg1:string):Promise<main.HostKeyProbeResult>;
+
 export function CancelInstallationRun(arg1:string):Promise<main.InstallationRunOperation>;
+
+export function CancelOrphanRun(arg1:string):Promise<main.OrphanRunRecoveryResult>;
 
 export function CheckExecutionNode():Promise<main.ExecutionNodeReadiness>;
 
@@ -21,6 +30,8 @@ export function ChooseProjectExportParent():Promise<string>;
 
 export function ChooseProjectParent():Promise<string>;
 
+export function ChooseRuntimeBundleUpdate():Promise<main.RuntimeBundleUpdateResult>;
+
 export function ClearSessionCredential():Promise<runtimesecret.Status>;
 
 export function CloseProject():Promise<main.ProjectOpenResult>;
@@ -31,11 +42,17 @@ export function CommitProjectExport(arg1:string):Promise<main.ProjectExportOpera
 
 export function CommitStructuralEditPlan(arg1:string,arg2:string):Promise<main.StructuralEditOperationResult>;
 
+export function ConfirmRuntimeBundleUpdate(arg1:string):Promise<main.RuntimeBundleUpdateResult>;
+
 export function CreateInstallationPlan():Promise<main.InstallationPlanOperation>;
 
 export function CreateProject(arg1:projectlifecycle.CreateProjectRequest):Promise<main.ProjectOpenResult>;
 
 export function CurrentProject():Promise<main.ProjectOpenResult>;
+
+export function DeclineExecutionNodeHostKey():Promise<main.HostKeyProbeResult>;
+
+export function DeclineTargetHostKey():Promise<main.HostKeyProbeResult>;
 
 export function DeliverPendingSecretOutput(arg1:main.SecretOutputDeliveryInput):Promise<main.SecretOutputDeliveryOperation>;
 
@@ -57,9 +74,13 @@ export function GetPendingRuntimeSecretDescriptors(arg1:string):Promise<main.Run
 
 export function GetRuntimeSecretDescriptors():Promise<main.RuntimeSecretDescriptorOperation>;
 
+export function GetServiceConfigurationPreview():Promise<executionnode.ServiceConfigurationPreview>;
+
 export function GetSessionCredentialStatus():Promise<runtimesecret.Status>;
 
 export function GetVerifiedPKIView():Promise<main.VerifiedPKIView>;
+
+export function InspectOrphanRun():Promise<main.OrphanRunRecoveryResult>;
 
 export function ListPendingSecretOutputs(arg1:any):Promise<main.SecretOutputPackagesOperation>;
 
@@ -70,6 +91,10 @@ export function PlanExecutionNodePreparation():Promise<main.ExecutionNodePrepara
 export function PlanProjectExport(arg1:string,arg2:string):Promise<main.ProjectExportOperationResult>;
 
 export function PrepareExecutionNode(arg1:string):Promise<main.ExecutionNodePreparation>;
+
+export function ProbeExecutionNodeHostKey():Promise<main.HostKeyProbeResult>;
+
+export function ProbeTargetHostKey(arg1:string):Promise<main.HostKeyProbeResult>;
 
 export function ReviewEditSession(arg1:string):Promise<main.EditOperationResult>;
 

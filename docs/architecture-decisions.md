@@ -370,3 +370,37 @@ current saved revision/runtime. Prior Project Verify never permits direct
 `StartExecution`, and Installation may request a fresh plan regardless of the
 optional verification badge. See
 [the binding owner-change architecture](ui-save-verify-architecture.md).
+
+## ADR-028: Remote browser access uses the environment network boundary
+
+Status: Accepted by the owner for BROWSER-REMOTE-01/02, 2026-10-06.
+
+The Linux Go application may serve the existing React UI over an explicitly
+configured `host:port` so one operator workstation can use it remotely. The
+deployment environment must restrict that listener to the browser workstation
+and localhost on the Linux host; all other sources are denied. The environment
+team owns the rule and its evidence. The Installer does not provide
+authentication, TLS, reverse-proxy, Keycloak or firewall management in this
+milestone. The later deployment is expected to place the service behind a
+443/TLS load balancer with Keycloak.
+
+This is a one-workstation browser transport over the existing Go `App`, not a
+multi-user service or a new application authority. React uses the same typed
+backend interface for browser and Wails transports. Project paths supplied by
+the browser refer to the Linux host and remain subject to existing Go path and
+transaction checks. An encrypted runtime-secret file selected on the browser
+workstation is submitted in memory to its single typed import operation; the
+file name is not sent and plaintext secret values remain runtime-only.
+
+### ADR-029: Remote Browser HTTP is dev-only until v1.0 HTTPS
+
+Status: Accepted by the owner, 2026-10-06; restricts ADR-028 until the v1.0
+security work is complete.
+
+The current remote Linux Browser transport uses plain HTTP while carrying
+credentials and encrypted runtime-secret file bytes. Source-IP restrictions do
+not protect those values in transit. Remote Linux Browser HTTP is allowed only
+in development with explicit `-browser-allow-insecure-dev-http` opt-in; it is
+not accepted for production systems or data. HTTPS, explicit external HTTPS
+origin handling, and negative origin/transport tests are scheduled for v1.0.
+Local Windows Browser mode and Wails mode are unaffected.
