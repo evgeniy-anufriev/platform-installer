@@ -10,8 +10,23 @@ existing contract assertion was updated to require all three guards. No test,
 RED OS acceptance or Wails run has been performed for this correction; SI11
 I05 remains **ПРОВАЛ** until the selected participants pass both barriers and
 an unassigned host is proven untouched. The full plan remains blocked by four
-`ARTIFACT_SOURCE_OFFLINE_REQUIRED` findings (Kafka and ClickHouse); no bundle
-was changed and no server or plan was touched.
+`ARTIFACT_SOURCE_OFFLINE_REQUIRED` findings (Kafka and ClickHouse); the active
+bundle/cache was not changed, and no server or plan was touched.
+
+## SI11 offline payload candidate prepared (2026-10-06)
+
+The required Kafka archive and three ClickHouse RPMs were already present in
+the local DEV artifact input and their SHA-256 values matched the service
+artifact declarations. A separate candidate bundle was built from the current
+verified runtime plus those exact files and passed the product CLI
+`validate-bundle` check. Candidate digest:
+`sha256:61c914e6c102c28f3ab08edaa3c4da4d812314dae8cd0fe5357f97bba7587c25`.
+It is retained under `.runtime/qa/si11-bundle-candidate-20261006`; the active
+cache and project lock remain on
+`sha256:6eb9d16184caf24f360698df8e626124e5ae0fc35c7d09efef31c676db10eadc`.
+The candidate has not been imported/rebound, activated on the Execution Node,
+or used to build a plan. Thus I02/I04 remain in progress and no service
+installation was started.
 
 ## SI11 Project Verify diagnostic — prerequisite identified (2026-10-06)
 
