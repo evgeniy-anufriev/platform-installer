@@ -124,9 +124,56 @@ describe("UI-01F3 TopologyPage", () => {
       onConfigureMember={onConfigureMember} />);
     expect(screen.getByRole("heading", { name: "Размещение на серверах" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Настроить ноду" })).toBeNull();
-    await userEvent.click(screen.getAllByRole("button", { name: "Настроить сервис" })[0]);
+    await userEvent.click(screen.getByRole("button", { name: "Настроить экземпляр" }));
     expect(onConfigureDeployment).toHaveBeenCalledWith("alpha");
     expect(onConfigureMember).not.toHaveBeenCalled();
+  });
+
+  it("shows role-first member cards and preserves member and deployment settings routes", async () => {
+    const onConfigureDeployment = vi.fn();
+    const onConfigureMember = vi.fn();
+    const memberManaged = {
+      ...managed,
+      memberPlacements: [
+        { deploymentId: "alpha", memberId: "alpha-primary", hostId: "node1", roles: ["primary"] },
+        { deploymentId: "alpha", memberId: "alpha-secondary", hostId: "node2", roles: ["secondary"] },
+      ],
+    } as unknown as OpenResult["managed"];
+    render(<ControlledTopology {...props()} managed={memberManaged}
+      selectedDeploymentId="alpha" onConfigureDeployment={onConfigureDeployment}
+      onConfigureMember={onConfigureMember} />);
+
+    expect(screen.getByText("node1")).toBeTruthy();
+    expect(screen.getByText("primary")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Очистить размещение" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", {
+      name: "Настроить участника alpha-primary на сервере node1",
+    }));
+    expect(onConfigureMember).toHaveBeenCalledWith("alpha", "alpha-primary");
+
+    await userEvent.click(screen.getByRole("button", { name: "Настроить экземпляр" }));
+    expect(onConfigureDeployment).toHaveBeenCalledWith("alpha");
+  });
+
+  it("keeps clearing a placement available through the placement editor", async () => {
+    const onAppend = vi.fn().mockResolvedValue(true);
+    const memberManaged = {
+      ...managed,
+      memberPlacements: [
+        { deploymentId: "alpha", memberId: "alpha-primary", hostId: "node1", roles: ["primary"] },
+      ],
+    } as unknown as OpenResult["managed"];
+    render(<ControlledTopology {...props()} managed={memberManaged}
+      selectedDeploymentId="alpha" onAppend={onAppend} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Изменить размещение" }));
+    await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(onAppend).toHaveBeenCalledWith({
+      operation: "ReconcileDeploymentPlacement",
+      deploymentId: "alpha",
+      members: [],
+    });
   });
 
   it("keeps explicit selection while search temporarily hides it", async () => {

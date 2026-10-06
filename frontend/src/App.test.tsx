@@ -1119,7 +1119,9 @@ describe("UI-01F3 deployment editor", () => {
     expect(screen.getByText("kafka-kafka-1")).toBeTruthy();
     expect(screen.getByText("kafka-kafka-2")).toBeTruthy();
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Настроить ноду" })[1],
+      screen.getByRole("button", {
+        name: "Настроить участника kafka-kafka-2 на сервере node1",
+      }),
     );
     expect(
       await screen.findByRole("heading", { name: "Параметры экземпляра" }),
@@ -1163,7 +1165,7 @@ describe("UI-01F3 deployment editor", () => {
     expect(screen.getAllByText("kafka-main").length).toBeGreaterThan(0);
     expect(screen.getByText("Apache Kafka (kafka)")).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "Настроить сервис" }),
+      screen.getByRole("button", { name: "Настроить экземпляр" }),
     );
     const detailHeading = await screen.findByRole("heading", {
       name: "Настройка сервиса",
@@ -1639,7 +1641,9 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await openTopology(value, withMemberDefault as unknown as OpenResult);
     await userEvent.click(screen.getByRole("button", { name: /kafka-main/ }));
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Настроить ноду" })[1],
+      screen.getByRole("button", {
+        name: "Настроить участника kafka-kafka-2 на сервере node1",
+      }),
     );
     const input = screen.getByRole("spinbutton", {
       name: "kafka-kafka-2: Количество реплик",
@@ -2465,7 +2469,7 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
       screen.getAllByRole("button", { name: /agent-main/ })[0],
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Очистить размещение" }),
+      screen.getByRole("button", { name: "Изменить размещение" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));

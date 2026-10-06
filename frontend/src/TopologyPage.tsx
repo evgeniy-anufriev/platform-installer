@@ -196,7 +196,7 @@ function serviceLabel(service: CatalogService | undefined, id: string) {
 
 function modeLabel(mode: CatalogMode | undefined, id: string) {
   return mode
-    ? `${mode.displayName} (${id})`
+    ? mode.displayName
     : `Неизвестный сохранённый режим (${id})`;
 }
 
@@ -452,13 +452,15 @@ export function TopologyPage({
               </p>
             ) : (
               <>
-                <dl>
+                <dl className="topology-selected-facts">
                   <dt>ID</dt>
                   <dd>{selected.deploymentId}</dd>
                   <dt>Сервис</dt>
                   <dd>{serviceLabel(selectedService, selected.serviceType)}</dd>
                   <dt>Режим</dt>
-                  <dd>{modeLabel(selectedMode, selected.mode)}</dd>
+                  <dd title={selected.mode}>
+                    {modeLabel(selectedMode, selected.mode)}
+                  </dd>
                   <dt>Размещение</dt>
                   <dd>
                     {selectedMode?.placementKind === "MEMBER_SCOPED"
@@ -480,34 +482,40 @@ export function TopologyPage({
                 {!selectedPlacement ? (
                   <p className="muted">Размещение ещё не задано.</p>
                 ) : selectedPlacement.kind === "MEMBER_SCOPED" ? (
-                  <div className="topology-list-scroll">
+                  <div className="topology-placement-list">
                     {selectedPlacement.members.map((member) => (
-                      <article className="topology-assignment" key={member.memberId}>
-                        <b>{member.memberId}</b>
-                        <span>{member.hostId} · {member.roles.join(", ") || "без ролей"}</span>
-                        <button
-                          className="outline"
-                          onClick={() => onConfigureMember(selected.deploymentId, member.memberId)}
-                          disabled={selected.state === "deleting"}
-                        >
-                          Настроить ноду
-                        </button>
-                      </article>
+                      <button
+                        type="button"
+                        className="topology-assignment topology-member-assignment"
+                        key={member.memberId}
+                        onClick={() =>
+                          onConfigureMember(selected.deploymentId, member.memberId)
+                        }
+                        disabled={selected.state === "deleting"}
+                        aria-label={`Настроить участника ${member.memberId} на сервере ${member.hostId}`}
+                        title="Открыть настройки этого участника"
+                      >
+                        <span className="topology-assignment-host">
+                          <b>{member.hostId}</b>
+                          <small>{member.memberId}</small>
+                        </span>
+                        <span className="topology-role-chip">
+                          {member.roles.join(", ") || "Без роли"}
+                        </span>
+                      </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="topology-list-scroll">
+                  <div className="topology-placement-list">
                     {selectedPlacement.hosts.map((host) => (
                       <article className="topology-assignment" key={host.hostId}>
-                        <b>{host.hostId}</b>
-                        <span>{host.roles.join(", ") || "без ролей"}</span>
-                        <button
-                          className="outline"
-                          onClick={() => onConfigureDeployment(selected.deploymentId)}
-                          disabled={selected.state === "deleting"}
-                        >
-                          Настроить сервис
-                        </button>
+                        <span className="topology-assignment-host">
+                          <b>{host.hostId}</b>
+                          <small>Приоритет: {host.priority}</small>
+                        </span>
+                        <span className="topology-role-chip">
+                          {host.roles.join(", ") || "Без роли"}
+                        </span>
                       </article>
                     ))}
                   </div>
@@ -536,24 +544,6 @@ export function TopologyPage({
                       ? "Изменить размещение"
                       : "Добавить размещение"}
                   </button>
-                  {placements.has(selected.deploymentId) && (
-                    <button
-                      className="outline"
-                      onClick={() => {
-                        setPlacementHostContext("");
-                        setPlacementDeploymentId(selected.deploymentId);
-                        setDialog("placement");
-                      }}
-                      disabled={
-                        crudDisabled ||
-                        !!selected.state ||
-                        placementLocked ||
-                        commandLimitReached
-                      }
-                    >
-                      Очистить размещение
-                    </button>
-                  )}
                   <button
                     className="outline"
                     onClick={() => onConfigureDeployment(selected.deploymentId)}
@@ -564,7 +554,7 @@ export function TopologyPage({
                         : "Открыть настройку сервиса."
                     }
                   >
-                    Настроить сервис
+                    Настроить экземпляр
                   </button>
                   <button
                     className="outline danger"

@@ -235,8 +235,14 @@ action and **Save topology** action. It has three local tabs:
 
 - **By services:** three panes — deployment list; logical members, roles and
   host placement for the selected deployment; topology validation and concise
-  deployment summary. Deployment configuration is opened only through Service
-  settings.
+  deployment summary. The selected deployment pane shows concise identity,
+  service, mode, placement and state facts, followed by role-first host cards.
+  Member cards open the matching member section of Service settings; the
+  aligned deployment action opens settings for the selected service instance.
+  Placement editing is the single route for adding, moving or clearing
+  assignments (removing every row and applying an empty placement clears it).
+  Keep one action row for placement, instance settings and deletion; do not
+  repeat settings buttons inside each host card.
 - **By servers:** three panes — server picker; roles and services on the
   selected server; server summary/readiness.
 - **Entry points:** derives one row per endpoint-capable deployment with an

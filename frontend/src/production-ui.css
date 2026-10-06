@@ -902,6 +902,113 @@ button:disabled {
   }
 }
 
+/* Selected production layout for Topology / By services. */
+.workspace-content:has(> .topology-title) .topology-grid {
+  grid-template-columns: minmax(185px, 0.78fr) minmax(0, 1.6fr) minmax(205px, 0.9fr);
+  gap: 8px;
+}
+.workspace-content:has(> .topology-title) .topology-detail {
+  display: flex;
+  flex-direction: column;
+}
+.topology-detail > .topology-selected-facts {
+  grid-template-columns: minmax(84px, 0.7fr) minmax(0, 1.3fr);
+  gap: 8px 12px;
+  margin: 0 0 8px;
+}
+.topology-selected-facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.topology-detail > h3 {
+  margin: 4px 0 8px;
+  padding-top: 9px;
+  border-top: 1px solid #e2e8f0;
+}
+.topology-placement-list {
+  display: grid;
+  flex: 0 1 auto;
+  gap: 7px;
+  min-height: 0;
+  max-height: min(38vh, 330px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.topology-assignment {
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+}
+.topology-assignment-host {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.topology-assignment-host b {
+  color: #172b4d;
+}
+.topology-assignment-host small {
+  color: #63728a;
+  font-size: 11px;
+}
+.topology-assignment .topology-role-chip {
+  justify-self: end;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #e8f2ff;
+  color: #194d8b;
+  font-size: 11px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.topology-member-assignment {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  width: 100%;
+  background: #fff;
+  color: #29415e;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.topology-member-assignment:hover,
+.topology-member-assignment:focus-visible {
+  border-color: #78a9ed;
+  background: #f7faff;
+}
+.topology-member-assignment::after {
+  content: "›";
+  grid-column: 3;
+  grid-row: 1;
+  color: #5279a9;
+  font-size: 20px;
+}
+.topology-actions {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.topology-actions > button {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.topology-actions > .danger {
+  margin-left: auto;
+  color: #b42318;
+}
+@media (max-width: 620px) {
+  .topology-actions > button {
+    flex: 1 1 145px;
+    white-space: normal;
+  }
+  .topology-actions > .danger {
+    margin-left: 0;
+  }
+}
+
 /* Certificates: ordered PKI navigation, selected section and Core evidence. */
 .workspace-content:has(> .certificates-page) {
   display: flex;
