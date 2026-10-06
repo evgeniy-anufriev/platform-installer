@@ -43,6 +43,7 @@ TASK_EVENT_TYPES = frozenset(("TASK_STARTED", "TASK_COMPLETED"))
 TASK_EVENT_STATUSES = frozenset(("RUNNING", "SUCCESS", "CHANGED", "SKIPPED", "FAILED"))
 TASK_DEGRADATION_REASONS = frozenset(("TASK_EVENT_LIMIT", "TASK_EVENT_WRITE_FAILED", "TASK_EVENT_INVALID"))
 RUNTIME_SECRET_INPUT_FILE = re.compile(r"^\.runtime-secret-inputs-[0-9a-f]{64}\.json$")
+RUNTIME_CONNECTION_FILE = re.compile(r"^(?:target-key-[A-Za-z0-9_-]{8}\.pem|bootstrap-[A-Za-z0-9_-]{8}\.json)$")
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
@@ -196,6 +197,39 @@ class Journal(object):
             if stat.S_ISREG(details.st_mode) and details.st_uid == os.geteuid():
                 os.unlink(path)
 
+    def cleanup_runtime_connection_credentials(self):
+        """Remove only owned, exact temporary connection-credential entries."""
+        _assert_private_path(self.directory, directory=True)
+        credentials = os.path.join(self.directory, ".ansible-runtime-credentials.json")
+        try:
+            details = os.lstat(credentials)
+        except FileNotFoundError:
+            pass
+        else:
+            if stat.S_ISREG(details.st_mode) and details.st_uid == os.geteuid():
+                os.unlink(credentials)
+        runtime_dir = os.path.join(self.directory, ".ansible-runtime")
+        if not os.path.lexists(runtime_dir):
+            return
+        _assert_private_path(runtime_dir, directory=True)
+        flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(runtime_dir, flags)
+        try:
+            details = os.fstat(descriptor)
+            if details.st_uid != os.geteuid() or details.st_mode & 0o077:
+                raise LifecycleError("RUN_JOURNAL_PERMISSIONS_INVALID")
+            for name in os.listdir(descriptor):
+                if RUNTIME_CONNECTION_FILE.fullmatch(name) is None:
+                    continue
+                try:
+                    entry = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISREG(entry.st_mode) and entry.st_uid == os.geteuid():
+                    os.unlink(name, dir_fd=descriptor)
+        finally:
+            os.close(descriptor)
+
     def event_lock(self):
         if not os.path.isdir(self.directory) or os.path.islink(self.directory):
             raise LifecycleError("RUN_JOURNAL_INVALID")
@@ -337,12 +371,9 @@ class Journal(object):
             if safe_role:
                 task["role"] = safe_role
             redacted_fields = []
-            if no_log:
-                redacted_fields.append("task.name")
-            else:
-                safe_name = _bounded_text(name, MAX_TASK_NAME)
-                if safe_name:
-                    task["name"] = safe_name
+            safe_name = _bounded_text(name, MAX_TASK_NAME)
+            if safe_name:
+                task["name"] = safe_name
             event = {"apiVersion": "platform.installer/event/v1alpha1", "kind": "ExecutionEvent", "runId": self.run_id, "sequence": 0, "timestamp": utcnow(), "eventType": event_type, "status": status, "task": task, "safeMessage": "Ansible task started" if event_type == "TASK_STARTED" else "Ansible task completed", "redaction": {"applied": True, "fields": redacted_fields}}
             safe_host = _bounded_text(host, MAX_HOST)
             if safe_host:
@@ -566,11 +597,15 @@ def recover(root, unit_active):
                     result = journal.terminal("INTERRUPTED", "CONTROLLER_INTERRUPTED", "Owned controller is no longer active")
                     _complete_recovered_secret_outputs(root, journal, result)
                     journal.cleanup_runtime_secret_inputs()
+                    journal.cleanup_runtime_connection_credentials()
                     recovered.append(run_id)
                 elif status.get("state") in TERMINAL:
                     # A crash may occur after terminal result but before output
-                    # publication/completion. Retry this existing lifecycle only.
-                    _complete_recovered_secret_outputs(root, journal, _read(journal.result_path))
+                    # publication/completion. Wait for the owned unit to stop
+                    # before touching its runtime credentials or outputs.
+                    if not unit_active(metadata.get("unit"), metadata):
+                        _complete_recovered_secret_outputs(root, journal, _read(journal.result_path))
+                        journal.cleanup_runtime_connection_credentials()
             finally:
                 os.close(lock)
         except (OSError, ValueError, LifecycleError):

@@ -150,6 +150,44 @@ func TestPlanStagingAcceptsAnOmittedOptionalRequestID(t *testing.T) {
 	t.Fatal("plan staging command was not issued")
 }
 
+func TestPlanStagingCreatesOnlyTheFixedParentBeforeExclusiveRunDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := &protocolRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	if err := transport.stagePlanProject(context.Background(), testNode(), root, "installer-123", "plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range runner.calls {
+		if call.name != "ssh" || !strings.Contains(call.input, "parent=$base/execution-plan") {
+			continue
+		}
+		checks := []string{
+			`[ -d "$base" ] && [ ! -L "$base" ] || exit 64`,
+			`[ ! -L "$parent" ] || exit 64`,
+			`install -d -m 0700 -- "$parent"`,
+			`[ -d "$parent" ] && [ ! -L "$parent" ] || exit 64`,
+			`[ "$(stat -c %u "$parent")" = "$(id -u)" ] || exit 64`,
+			`mkdir -- "$1"`,
+		}
+		for _, check := range checks {
+			if !strings.Contains(call.input, check) {
+				t.Fatalf("staging safety check missing: %s", check)
+			}
+		}
+		if strings.Index(call.input, `install -d -m 0700 -- "$parent"`) > strings.Index(call.input, `mkdir -- "$1"`) {
+			t.Fatal("run directory created before fixed parent")
+		}
+		if strings.Contains(call.input, `mkdir -p -- "$1"`) {
+			t.Fatal("run directory must remain exclusive")
+		}
+		return
+	}
+	t.Fatal("staging command was not issued")
+}
+
 func TestRuntimeProtocolIsTypedAndNeverCarriesClientCommandMaterial(t *testing.T) {
 	runner := &protocolRunner{}
 	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}

@@ -12,10 +12,10 @@ import (
 )
 
 type lifecycleBuilder struct {
-	calls       int
-	stale       bool
-	requiresPKI bool
-	typedInputs bool
+	calls         int
+	stale         bool
+	requiresPKI   bool
+	typedInputs   bool
 	runtimeValues bool
 }
 
@@ -235,6 +235,31 @@ func TestExecutionServiceV4OnlyRuntimeCarriesPasswordAndTypedInputs(t *testing.T
 	}
 	if got := strings.Join(c.ops, ","); got != "put-lease,start-v2" {
 		t.Fatalf("mixed v4 Start operations=%s", got)
+	}
+}
+
+func TestExecutionServiceDistinguishesMissingServicePasswordsFromPKI(t *testing.T) {
+	b := &lifecycleBuilder{requiresPKI: true, runtimeValues: true}
+	c := &lifecycleClient{typedCapability: true}
+	s := NewExecutionService(b, c)
+	s.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
+		if !request.RequiresPKIStorePassword || len(request.RuntimeSecretRequirements) != 1 {
+			t.Fatal("expected PKI and service-password requirements")
+		}
+		return use(TargetCredentialLeasePayload{Username: "operator", Password: "ssh", PKIStorePassword: "pki"})
+	})
+	plan, err := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApprovePlan(plan.ID, plan.Plan.Acknowledgements); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Start(context.Background(), Node{}, plan.ID); err == nil || err.Error() != "RUNTIME_SECRET_VALUES_UNAVAILABLE" {
+		t.Fatalf("missing service password: %v", err)
+	}
+	if len(c.ops) != 0 {
+		t.Fatalf("missing service password reached node: %v", c.ops)
 	}
 }
 
@@ -468,7 +493,11 @@ func TestExecutionServiceExpiredPlan(t *testing.T) {
 	clock := time.Now()
 	s.now = func() time.Time { return clock }
 	p, _ := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
-	clock = clock.Add(time.Hour)
+	clock = clock.Add(59 * time.Minute)
+	if _, err := s.GetPlan(p.ID); err != nil {
+		t.Fatalf("plan expired before one-hour TTL: %v", err)
+	}
+	clock = clock.Add(time.Minute)
 	if _, err := s.GetPlan(p.ID); err == nil || err.(*ExecutionError).Code != PlanExpired {
 		t.Fatal(err)
 	}

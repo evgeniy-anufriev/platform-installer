@@ -70,6 +70,7 @@ const props = () => ({
   selectedHostId: "",
   onSelectedHostChange: vi.fn(),
   onConfigureDeployment: vi.fn(),
+  onConfigureMember: vi.fn(),
   preview: undefined as EndpointPreview | undefined,
   verificationStatus: "UNVERIFIED" as const,
 });
@@ -103,6 +104,31 @@ function ControlledTopology(input: ReturnType<typeof props>) {
 }
 
 describe("UI-01F3 TopologyPage", () => {
+  it("shows host-scoped placement without inventing a member settings target", async () => {
+    const onConfigureDeployment = vi.fn();
+    const onConfigureMember = vi.fn();
+    const hostManaged = {
+      ...managed,
+      servers: { node1: { hostId: "node1" } },
+      hostPlacements: [{ deploymentId: "alpha", hostId: "node1", roles: [], priority: 100 }],
+    } as unknown as OpenResult["managed"];
+    const hostCatalog = {
+      ...catalog,
+      services: [{
+        ...(catalog!.services![0]),
+        modes: [{ id: "cluster", placementKind: "HOST_SCOPED", roles: [], guidance: { minParticipants: 1, distinctHosts: false } }],
+      }],
+    } as unknown as OpenResult["catalog"];
+    render(<ControlledTopology {...props()} managed={hostManaged} catalog={hostCatalog}
+      selectedDeploymentId="alpha" onConfigureDeployment={onConfigureDeployment}
+      onConfigureMember={onConfigureMember} />);
+    expect(screen.getByRole("heading", { name: "Размещение на серверах" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Настроить ноду" })).toBeNull();
+    await userEvent.click(screen.getAllByRole("button", { name: "Настроить сервис" })[0]);
+    expect(onConfigureDeployment).toHaveBeenCalledWith("alpha");
+    expect(onConfigureMember).not.toHaveBeenCalled();
+  });
+
   it("keeps explicit selection while search temporarily hides it", async () => {
     render(<ControlledTopology {...props()} />);
     await userEvent.click(screen.getByRole("button", { name: /beta/ }));
@@ -112,7 +138,7 @@ describe("UI-01F3 TopologyPage", () => {
     await userEvent.type(screen.getByLabelText("Поиск"), "alpha");
     expect(
       screen.getByText(
-        "Выбранный deployment скрыт фильтром. Очистите поиск, чтобы открыть подробности.",
+        "Выбранный экземпляр скрыт фильтром. Очистите поиск, чтобы открыть подробности.",
       ),
     ).toBeTruthy();
     await userEvent.clear(screen.getByLabelText("Поиск"));
@@ -127,6 +153,21 @@ describe("UI-01F3 TopologyPage", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     ).toHaveProperty("disabled", true);
     expect(screen.getByText("16 / 16 изменений")).toBeTruthy();
+  });
+
+  it("shows remaining shared draft capacity on entry points", () => {
+    render(
+      <ControlledTopology
+        {...props()}
+        activeTab="entryPoints"
+        commandCount={16}
+      />,
+    );
+    expect(screen.getByText("Черновик: 16 из 16 · осталось 0")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Добавить группу" })).toHaveProperty(
+      "disabled",
+      true,
+    );
   });
 
   it("edits endpoint groups only through the published endpoint intent", async () => {
@@ -320,7 +361,7 @@ describe("UI-01F3 TopologyPage", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     ).toHaveProperty("disabled", true);
     expect(
-      screen.getByRole("button", { name: "Удалить deployment" }),
+      screen.getByRole("button", { name: "Удалить экземпляр" }),
     ).toHaveProperty("disabled", true);
   });
 
@@ -348,7 +389,7 @@ describe("UI-01F3 TopologyPage", () => {
       screen.getByRole("button", { name: "Добавить размещение" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Добавить member" }),
+      screen.getByRole("button", { name: "Добавить узел сервиса" }),
     );
     expect(
       (screen.getByLabelText("Member ID 1") as HTMLInputElement).value,
@@ -390,7 +431,7 @@ describe("UI-01F3 TopologyPage", () => {
       screen.getByRole("heading", { name: "Размещение: alpha" }),
     ).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "Добавить member" }),
+      screen.getByRole("button", { name: "Добавить узел сервиса" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(onAppend).toHaveBeenCalledWith({

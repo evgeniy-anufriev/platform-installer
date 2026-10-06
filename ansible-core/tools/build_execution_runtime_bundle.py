@@ -18,6 +18,8 @@ import yaml
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY / "ansible-core" / "collections"))
+from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
 SOURCE_ROOTS = (
     ("ansible-core", REPOSITORY / "ansible-core"),
     ("services", REPOSITORY / "services"),
@@ -82,6 +84,52 @@ def validate_catalog_layout(root):
                 raise ValueError("catalog reference escapes bundle: %s.%s" % (service_type, reference))
             if not candidate.is_file():
                 raise ValueError("catalog reference is missing from bundle: %s" % reference)
+
+
+def write_ui_static_defaults(root):
+    """Derive bounded presentation-only literals from trusted role defaults."""
+    catalog = yaml.safe_load((root / "catalog" / "service-catalog.yml").read_text(encoding="utf-8"))
+    definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
+    result = {}
+    for service_type, definition in sorted(definitions.items()):
+        entrypoints = definition.get("roleEntrypoints", {}) if isinstance(definition, dict) else {}
+        apply = entrypoints.get("apply", {}) if isinstance(entrypoints, dict) else {}
+        parts = apply.get("fqcn", "").split(".") if isinstance(apply, dict) else []
+        if len(parts) != 3 or any(not part or not part.replace("_", "").isalnum() for part in parts):
+            result[service_type] = {}
+            continue
+        defaults_path = root / "services" / service_type / "ansible_collections" / parts[0] / parts[1] / "roles" / parts[2] / "defaults" / "main.yml"
+        if not defaults_path.is_file() or defaults_path.is_symlink():
+            result[service_type] = {}
+            continue
+        defaults = yaml.safe_load(defaults_path.read_text(encoding="utf-8"))
+        if not isinstance(defaults, dict):
+            raise ValueError("invalid role defaults for UI projection")
+        settings = definition.get("configuration", {}).get("settings", {})
+        if not isinstance(settings, dict):
+            raise ValueError("invalid configuration settings for UI projection")
+        projected = {}
+        for setting_id, setting in sorted(settings.items()):
+            if not isinstance(setting, dict) or setting.get("kind") != "MANAGED":
+                continue
+            ui = setting.get("ui", {})
+            if not isinstance(ui, dict) or "x-runtimeSecretRequirement" in ui:
+                continue
+            variable = setting.get("roleVariable")
+            if not isinstance(variable, str) or variable not in defaults:
+                continue
+            value = defaults[variable]
+            if isinstance(value, str) and any(marker in value for marker in ("{{", "}}", "{%", "%}", "{#", "#}")):
+                projected[setting_id] = {"state": "DEFERRED"}
+            elif ordinary_presentation_value(setting, value):
+                projected[setting_id] = {"state": "LITERAL", "value": value}
+            else:
+                projected[setting_id] = {"state": "UNAVAILABLE"}
+        result[service_type] = projected
+    (root / "catalog" / "ui-static-defaults.json").write_text(
+        json.dumps({"apiVersion": "platform.installer/ui-static-defaults/v1alpha1", "services": result}, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8", newline="\n",
+    )
 
 
 def components(root):
@@ -221,6 +269,7 @@ def build(output, runtime, bundle_version, core_version):
             copy_tree(source, temporary / destination)
         copy_tree(runtime, temporary / "runtime")
         validate_catalog_layout(temporary)
+        write_ui_static_defaults(temporary)
         manifest = {
             "apiVersion": "platform.installer/execution-bundle/v1alpha1",
             "kind": "ExecutionRuntimeBundle",

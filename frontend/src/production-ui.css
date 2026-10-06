@@ -1,0 +1,1575 @@
+/* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
+:root {
+  font:
+    14px / 1.4 Inter,
+    "Segoe UI",
+    Arial,
+    sans-serif;
+}
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  margin: 0;
+}
+.shell {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: 190px minmax(0, 1fr);
+  background: #f4f7fb;
+}
+.app-sidebar {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 12px;
+  background: #17233a;
+}
+.app-sidebar .brand {
+  margin: 4px 8px 22px;
+  font-size: 18px;
+  line-height: 1.12;
+}
+.app-sidebar nav button {
+  padding: 10px 12px;
+  border-radius: 7px;
+  text-align: left;
+}
+.app-sidebar nav button.active {
+  background: #3268a4;
+}
+.app-sidebar nav button[aria-current="page"] {
+  color: #fff;
+}
+.app-main {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0 18px 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-header {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 68px;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto minmax(180px, 245px) minmax(
+      155px,
+      190px
+    );
+  grid-template-areas: "identity statuses node installation" "actions actions actions actions";
+  align-items: center;
+  gap: 5px 10px;
+  background: #f4f7fb;
+}
+.app-project-identity {
+  grid-area: identity;
+  min-width: 130px;
+  max-width: none;
+}
+.app-project-identity strong {
+  font-size: 14px;
+}
+.app-project-identity span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.app-header .readonly,
+.app-header .unsaved {
+  padding: 5px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.app-header-statuses {
+  grid-area: statuses;
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+}
+.app-header .execution-node-badge {
+  grid-area: node;
+  min-width: 0;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 9px;
+}
+.installation-global-status {
+  grid-area: installation;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+  padding: 5px 9px;
+  text-align: left;
+  color: #172033;
+  background: white;
+  border: 1px solid #c6d4e5;
+  border-radius: 7px;
+}
+.installation-global-status strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+.installation-global-status small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #526987;
+  font-size: 10px;
+}
+.installation-global-status.running {
+  border-color: #2173b9;
+}
+.installation-global-status.failed {
+  border-color: #a33332;
+}
+.installation-global-status.succeeded {
+  border-color: #147748;
+}
+.app-header-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.app-header-actions button {
+  padding: 6px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.app-banner {
+  flex: 0 0 auto;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.workspace-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.workspace-content:has(> .servers-layout) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.workspace-content:has(> .servers-layout) > .title {
+  flex: 0 0 auto;
+}
+.workspace-content:has(> .servers-layout) > .session-credentials {
+  flex: 0 0 auto;
+  max-height: none;
+  margin: 4px 0 8px;
+  padding: 11px 13px;
+  gap: 7px;
+  overflow: visible;
+}
+.session-credentials > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.session-credentials > div:first-child p {
+  margin: 0;
+  font-size: 11px;
+}
+.session-credentials form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 7px 10px;
+}
+.session-credentials form .checkbox-label {
+  align-self: center;
+  margin: 0;
+  font-size: 12px;
+}
+.session-credentials form .actions {
+  grid-column: 3 / 5;
+  justify-content: flex-end;
+  margin: 0;
+}
+.session-credentials form .field-error {
+  grid-column: 1 / -1;
+}
+.workspace-content:has(> .servers-layout) > .servers-layout {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  grid-template-rows: minmax(205px, 1fr) minmax(170px, auto);
+}
+.workspace-content:has(> .servers-layout) .server-list-scroll {
+  min-height: 0;
+  max-height: none;
+}
+.workspace-content:has(> .servers-layout) .server-list-scroll.empty {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.workspace-content:has(> .servers-layout) .server-list-scroll.empty p {
+  max-width: 520px;
+  margin: 5px 0 12px;
+}
+.workspace-content:has(> .servers-layout) .execution-node-panel {
+  max-height: min(30vh, 215px);
+  padding: 11px 13px;
+  margin: 6px 0 0;
+  overflow: auto;
+}
+.execution-node-panel .execution-node-detail {
+  grid-template-columns: minmax(120px, 155px) minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 8px 0;
+}
+.execution-node-panel > p {
+  margin: 5px 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.execution-node-host-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 5px 0;
+}
+.execution-node-host-key > p:first-child {
+  margin: 0;
+}
+.execution-node-host-key > button {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.execution-node-panel > .actions {
+  gap: 6px;
+  margin-top: 6px;
+}
+.execution-node-panel > .actions button,
+.execution-node-panel > button[aria-label="Выбрать узел выполнения"] {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.workspace-content:has(> .servers-layout) > .draft-actions {
+  flex: 0 0 auto;
+  max-height: 90px;
+  overflow: auto;
+}
+.session-credentials h2 {
+  margin-bottom: 5px;
+}
+.session-credentials > div:first-child p {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.session-credentials form {
+  gap: 7px 10px;
+}
+.session-credentials form input,
+.session-credentials form select {
+  padding: 6px 8px;
+  min-height: 32px;
+}
+.session-credentials form .actions button {
+  padding: 6px 9px;
+}
+.workspace-content:has(> .servers-layout) > .servers-title {
+  margin: 4px 0 5px;
+}
+.workspace-content:has(> .servers-layout) .servers-title p {
+  margin: 2px 0;
+  font-size: 13px;
+}
+.workspace-content:has(> .servers-layout) .session-credentials {
+  margin: 3px 0 6px;
+  padding: 8px 12px;
+  gap: 4px;
+}
+.workspace-content:has(> .servers-layout) .session-credentials h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.workspace-content:has(> .servers-layout)
+  .session-credentials
+  > div:first-child
+  p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.25;
+}
+.workspace-content:has(> .servers-layout) .session-credentials form {
+  grid-template-columns:
+    minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) max-content
+    max-content;
+  align-items: end;
+  gap: 5px 9px;
+}
+.workspace-content:has(> .servers-layout) .session-credentials form label {
+  gap: 2px;
+  margin: 0;
+  font-size: 11px;
+}
+.workspace-content:has(> .servers-layout) .session-credentials form input,
+.workspace-content:has(> .servers-layout) .session-credentials form select {
+  min-height: 29px;
+  padding: 4px 7px;
+}
+.workspace-content:has(> .servers-layout)
+  .session-credentials
+  form
+  .checkbox-label {
+  align-self: center;
+  font-size: 10px;
+}
+.workspace-content:has(> .servers-layout) .session-credentials form .actions {
+  grid-column: 5;
+  justify-content: flex-end;
+  margin: 0;
+}
+.workspace-content:has(> .servers-layout)
+  .session-credentials
+  > .muted:last-child {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.workspace-content:has(> .servers-layout) > .servers-layout {
+  grid-template-rows: minmax(185px, 0.8fr) minmax(245px, 1.2fr);
+  gap: 6px;
+  margin-bottom: 0;
+}
+.workspace-content:has(> .servers-layout) .servers-layout > .card {
+  margin: 0;
+}
+.workspace-content:has(> .servers-layout) .execution-node-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(250px, 1fr);
+  align-content: start;
+  gap: 5px 14px;
+  max-height: none;
+  overflow: visible;
+}
+.execution-node-panel > .execution-node-heading {
+  grid-column: 1 / -1;
+}
+.execution-node-panel > .execution-node-detail,
+.execution-node-panel > p,
+.execution-node-panel > .execution-node-host-key,
+.execution-node-panel > [role="status"],
+.execution-node-panel > [role="alert"] {
+  grid-column: 1;
+}
+.execution-node-panel > .actions {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  align-self: center;
+  margin: 0;
+}
+.execution-node-panel > button[aria-label="Выбрать узел выполнения"],
+.execution-node-panel > .execution-node-change {
+  grid-column: 2;
+  grid-row: 4;
+  align-self: end;
+}
+.workspace-content:has(> .topology-title) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.workspace-content:has(> .topology-title) > .topology-title {
+  flex: 0 0 auto;
+  margin: 4px 0 5px;
+}
+.workspace-content:has(> .topology-title) > .topology-title h1 {
+  margin: 0;
+  font-size: 23px;
+}
+.workspace-content:has(> .topology-title) > .topology-title p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.workspace-content:has(> .topology-title) > .topology-tabs {
+  flex: 0 0 auto;
+  gap: 4px;
+  margin: 2px 0 8px;
+}
+.workspace-content:has(> .topology-title) > .topology-tabs button {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.workspace-content:has(> .topology-title) > .topology-warning {
+  flex: 0 0 auto;
+  margin: 0 0 8px;
+  padding: 9px 12px;
+}
+.workspace-content:has(> .topology-title) > .topology-warning p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.workspace-content:has(> .topology-title) .topology-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(185px, 0.78fr) minmax(0, 1.6fr) minmax(
+      205px,
+      0.9fr
+    );
+  grid-template-rows: minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+.workspace-content:has(> .topology-title) .topology-grid > .card {
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+}
+.workspace-content:has(> .topology-title) .topology-grid > .card > h2 {
+  margin: -12px -12px 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e4ebf2;
+  font-size: 14px;
+}
+.workspace-content:has(> .topology-title) .topology-summary {
+  grid-column: auto;
+}
+.workspace-content:has(> .topology-title) .topology-summary dl {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 5px 10px;
+  font-size: 12px;
+}
+.workspace-content:has(> .topology-title) .topology-summary p {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+.workspace-content:has(> .topology-title) .topology-list-scroll {
+  max-height: none;
+  min-height: 0;
+}
+.workspace-content:has(> .installation-page) {
+  overflow: hidden;
+}
+.workspace-content > .installation-page {
+  height: 100%;
+  min-height: 0;
+}
+.workspace-content .title {
+  margin: 10px 0 8px;
+}
+.workspace-content h1 {
+  font-size: 22px;
+}
+.workspace-content h2 {
+  font-size: 15px;
+}
+.workspace-content .card {
+  margin: 9px 0;
+  padding: 14px;
+}
+.workspace-content .stat {
+  padding: 12px;
+}
+.workspace-content .stat strong {
+  font-size: 22px;
+}
+.workspace-content .server-table td,
+.workspace-content .server-table th {
+  padding: 8px 9px;
+}
+.workspace-content .servers-layout {
+  grid-template-rows: minmax(160px, 1fr) auto;
+  max-height: calc(100% - 155px);
+}
+.workspace-content .server-list-scroll {
+  max-height: none;
+}
+.workspace-content .topology-list-scroll {
+  max-height: min(54vh, 540px);
+}
+.workspace-content .services-setting {
+  padding-block: 10px;
+}
+.workspace-content .installation-page {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+}
+.installation-page > .title,
+.installation-page > .installation-tabs,
+.installation-page > .workflow-strip {
+  flex: 0 0 auto;
+}
+.installation-page > .title p {
+  margin: 1px 0;
+}
+.installation-page > .installation-tabs {
+  margin: 4px 0;
+  gap: 4px;
+  padding: 3px;
+  background: #e5edf6;
+  border-radius: 8px;
+}
+.installation-page > .installation-tabs button {
+  padding: 7px 11px;
+}
+.installation-page > .installation-tabs button.active {
+  background: #fff;
+  color: #194d8b;
+  border-color: #fff;
+  box-shadow: 0 1px 3px #0002;
+}
+.installation-page > .workflow-strip {
+  margin: 3px 0 8px;
+  gap: 0;
+}
+.installation-page > .workflow-strip > div {
+  padding: 7px 10px;
+  border-radius: 0;
+  font-size: 12px;
+}
+.installation-page > .workflow-strip > div:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.installation-page > .workflow-strip > div:last-child {
+  border-radius: 0 7px 7px 0;
+}
+.installation-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+.installation-body > .card:first-child,
+.installation-body > section > .card:first-child {
+  margin-top: 0;
+}
+.installation-stage-content {
+  min-height: 0;
+}
+.installation-stage-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.installation-stage-heading h2,
+.installation-stage-heading p {
+  margin: 0 0 5px;
+}
+.installation-progress {
+  margin: 12px 0;
+}
+.installation-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: #475569;
+}
+.installation-progress progress {
+  width: 100%;
+  height: 13px;
+  accent-color: #176fc1;
+}
+.installation-progress-unavailable {
+  padding: 8px 10px;
+  background: #edf2f8;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.installation-current-action,
+.installation-current-task {
+  margin: 8px 0;
+}
+.installation-event-card {
+  min-height: 0;
+}
+.installation-events {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.installation-events li {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.installation-events li span:last-child {
+  min-width: 0;
+}
+.installation-events b {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.installation-events small {
+  display: block;
+  color: #526987;
+  margin-top: 2px;
+}
+.installation-event-sequence {
+  color: #526987;
+  font-variant-numeric: tabular-nums;
+}
+.action-result-table {
+  max-height: 330px;
+  overflow: auto;
+  border: 1px solid #d8e2ef;
+  border-radius: 7px;
+}
+.action-result-table table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+.action-result-table th,
+.action-result-table td {
+  text-align: left;
+  padding: 8px 9px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+.action-result-table th {
+  position: sticky;
+  top: 0;
+  background: #f2f6fa;
+  font-size: 12px;
+}
+.modal {
+  z-index: 100;
+  padding: 18px;
+}
+.modal > .dialog,
+.modal .dialog {
+  max-height: calc(100dvh - 36px);
+  overflow: auto;
+  box-shadow: 0 18px 50px #0005;
+}
+.dialog-actions,
+.dialog .actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 9px;
+  background: white;
+}
+.runtime-secret-dialog {
+  max-height: calc(100dvh - 36px);
+  overflow: auto;
+}
+.runtime-secret-dialog form {
+  max-height: calc(100dvh - 36px);
+  overflow: auto;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #125b9f;
+  outline-offset: 2px;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+.workspace-content .safe-findings code {
+  color: #9c2525;
+}
+@media (max-width: 1150px) {
+  .shell {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+  .app-main {
+    padding-inline: 10px;
+  }
+  .app-header {
+    grid-template-columns: minmax(125px, 1fr) auto minmax(160px, 220px) minmax(
+        145px,
+        175px
+      );
+    gap: 4px 7px;
+  }
+  .workspace-content:has(> .servers-layout) .session-credentials form {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .workspace-content:has(> .servers-layout) .session-credentials form .actions {
+    grid-column: 3 / 5;
+  }
+}
+@media (max-width: 800px) {
+  .shell {
+    grid-template-columns: 140px minmax(0, 1fr);
+  }
+  .app-sidebar nav {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .app-header {
+    grid-template-columns: minmax(110px, 1fr) minmax(145px, 180px);
+    grid-template-areas: "identity installation" "statuses node" "actions actions";
+  }
+  .app-header-statuses {
+    justify-content: flex-start;
+  }
+  .installation-page > .installation-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .installation-page > .installation-tabs button {
+    white-space: nowrap;
+  }
+  .session-credentials > div:first-child {
+    display: block;
+  }
+  .session-credentials form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-content:has(> .servers-layout) .session-credentials form .actions {
+    grid-column: 1 / -1;
+  }
+  .session-credentials form .actions {
+    grid-column: 1 / -1;
+  }
+  .workspace-content:has(> .servers-layout) > .servers-layout {
+    grid-template-rows: minmax(175px, 1fr) minmax(160px, auto);
+  }
+  .workspace-content:has(> .servers-layout) .servers-layout > .card {
+    margin: 0;
+  }
+  .workspace-content:has(> .servers-layout) .execution-node-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .execution-node-panel > .execution-node-heading,
+  .execution-node-panel > .execution-node-detail,
+  .execution-node-panel > p,
+  .execution-node-panel > .execution-node-host-key,
+  .execution-node-panel > [role="status"],
+  .execution-node-panel > [role="alert"],
+  .execution-node-panel > .actions,
+  .execution-node-panel > button[aria-label="Выбрать узел выполнения"],
+  .execution-node-panel > .execution-node-change {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+@media (max-width: 960px) {
+  .workspace-content:has(> .topology-title) {
+    overflow: auto;
+  }
+  .workspace-content:has(> .topology-title) .topology-grid {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    overflow: visible;
+  }
+  .workspace-content:has(> .topology-title) .topology-grid > .card {
+    min-height: 120px;
+  }
+  .workspace-content:has(> .topology-title) .topology-summary {
+    grid-column: 1;
+  }
+}
+
+/* Certificates: compact PKI overview while keeping the shared workspace scrollable. */
+.certificates-page {
+  align-content: start;
+  gap: 9px;
+}
+.certificates-page > .title {
+  margin-bottom: 0;
+}
+.certificates-page > .muted {
+  margin: 0;
+  font-size: 12px;
+}
+.certificate-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.certificate-sections > .certificate-section {
+  min-width: 0;
+  padding: 12px 14px;
+}
+.pki-store-password {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 11px 14px;
+}
+.pki-store-password h2,
+.pki-store-password > p {
+  margin: 0;
+}
+.pki-store-password h2 {
+  grid-column: 1;
+  font-size: 14px;
+}
+.pki-store-password > p:first-of-type {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  font-size: 11px;
+}
+.pki-store-password > p[role="status"] {
+  grid-column: 1;
+  grid-row: 3;
+  font-size: 11px;
+}
+.pki-store-password label {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+}
+.pki-store-password label input {
+  min-width: 0;
+  padding: 7px 9px;
+}
+.pki-store-password > button {
+  grid-column: 3;
+  grid-row: 1 / 4;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.pki-store-password > .muted:not(:first-of-type),
+.pki-store-password > .field-error {
+  grid-column: 1 / -1;
+  font-size: 11px;
+}
+.certificate-sections .section-head {
+  align-items: flex-start;
+  gap: 8px;
+}
+.certificate-sections .section-head h2 {
+  font-size: 14px;
+  line-height: 1.25;
+}
+.certificate-sections .section-head small {
+  font-size: 11px;
+  line-height: 1.3;
+}
+.certificate-sections .section-head button,
+.certificate-verification button {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+.certificate-sections .certificate-rows {
+  gap: 4px;
+  margin-top: 8px;
+}
+.certificate-sections .certificate-row {
+  padding: 7px 0;
+}
+.certificate-verification {
+  padding: 12px 14px;
+}
+.certificate-verification .section-head h2 {
+  font-size: 14px;
+}
+.certificate-verification .section-head small,
+.certificate-verification > .muted {
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .certificate-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pki-store-password {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pki-store-password h2,
+  .pki-store-password > p:first-of-type,
+  .pki-store-password > p[role="status"] {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .pki-store-password label {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .pki-store-password > button {
+    grid-column: 2;
+    grid-row: auto;
+    align-self: end;
+  }
+}
+
+/* Services overview and schema-driven editor. */
+.services-list {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.services-list > .page-title {
+  flex: 0 0 auto;
+  margin: 4px 0 2px;
+}
+.services-list > .page-title h1,
+.services-detail > .page-title h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.services-list > .page-title p,
+.services-detail > .page-title p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+.services-list > .topology-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+}
+.services-list > .topology-list > label {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(130px, 210px) minmax(180px, 360px);
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.services-list > .topology-list > label input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 9px;
+}
+.services-list .topology-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr));
+  align-content: start;
+  align-items: start;
+  gap: 8px;
+  max-height: none;
+  margin: 0;
+  overflow: auto;
+}
+.services-list .topology-row {
+  min-height: 78px;
+  align-content: center;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 7px;
+}
+.services-list .topology-row strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.services-list .topology-row span,
+.services-list .topology-row small {
+  font-size: 11px;
+}
+.services-list .topology-list-scroll > div {
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  text-align: center;
+}
+.services-list > .services-session-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 0 0;
+}
+.services-list > .services-session-actions .muted {
+  font-size: 12px;
+}
+.services-detail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.services-detail > .page-title {
+  margin: 4px 0 2px;
+}
+.services-detail > .card,
+.services-detail > .services-settings {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 13px;
+}
+.service-secrets-action {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 14px;
+}
+.service-secrets-action h2,
+.services-settings > h2 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+.service-secrets-action p {
+  max-width: 820px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.service-secrets-action > button {
+  min-width: 100px;
+  padding: 7px 12px;
+}
+.service-secrets-action > .error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.services-settings > [role="status"] {
+  margin: 5px 0;
+  font-size: 11px;
+}
+.services-setting-list {
+  gap: 7px;
+}
+.services-setting {
+  grid-template-columns: minmax(180px, 0.85fr) minmax(260px, 1.15fr);
+  align-items: start;
+  gap: 7px 16px;
+  padding-top: 9px;
+}
+.services-setting:first-child {
+  padding-top: 0;
+}
+.services-setting > div:first-child > strong {
+  font-size: 12px;
+}
+.services-setting > div:first-child > small {
+  margin-top: 1px;
+  font-size: 10px;
+}
+.services-setting > div:first-child > .muted {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.services-setting > div:first-child > small.muted {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.services-control {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 8px;
+}
+.services-control > input,
+.services-control > select {
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.services-control > .services-checkbox {
+  grid-column: 1 / -1;
+  font-size: 12px;
+}
+.services-control > .actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0;
+}
+.services-control > .actions button {
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.services-control > .field-error,
+.services-control > .muted {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+}
+.services-member-picker {
+  max-width: 420px;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+  font-size: 12px;
+}
+.services-member-picker select {
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.services-detail > .services-session-actions {
+  justify-content: flex-end;
+  gap: 7px;
+  margin: 0;
+  padding: 3px 0 8px;
+}
+.services-detail > .services-session-actions .muted {
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .services-list > .topology-list > label {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .services-list .topology-list-scroll {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  }
+  .services-setting {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .services-member-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .service-secrets-action {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .service-secrets-action > button {
+    justify-self: start;
+  }
+  .services-list > .services-session-actions,
+  .services-detail > .services-session-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+}
+
+/* Installation: compact project home, grouped plan and bounded run stream. */
+.installation-page > .title {
+  align-items: center;
+  margin: 4px 0 2px;
+}
+.installation-page > .title h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.installation-page > .title p {
+  color: #526987;
+  font-size: 12px;
+}
+.installation-page > .title > .readonly {
+  flex: 0 0 auto;
+  max-width: min(42%, 330px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.installation-page > .title > .installation-status-pill {
+  border-radius: 16px;
+  font-size: 11px;
+}
+.installation-status-pill.neutral,
+.installation-summary-plan-heading > .readonly {
+  border-color: #cbd7e5;
+  background: #f1f5f9;
+  color: #475569;
+}
+.installation-status-pill.running {
+  border-color: #75a9db;
+  background: #eaf4ff;
+  color: #174e83;
+}
+.installation-status-pill.failed {
+  border-color: #e6a5a1;
+  background: #fff1f0;
+  color: #8e2922;
+}
+.installation-status-pill.succeeded {
+  border-color: #8ac9a8;
+  background: #eaf8ef;
+  color: #17633d;
+}
+.installation-page > .installation-tabs {
+  flex-wrap: nowrap;
+}
+.installation-page > .installation-tabs button {
+  min-width: 82px;
+  font-size: 12px;
+}
+.installation-page > .workflow-strip {
+  flex: 0 0 auto;
+}
+.workflow-strip > div {
+  min-width: 0;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+.workflow-strip .workflow-current {
+  border-color: #1f6feb;
+  background: #edf5ff;
+  color: #174ea6;
+  font-weight: 650;
+}
+.installation-body {
+  display: block;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.installation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 8px;
+}
+.installation-summary > .card {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 13px;
+}
+.installation-summary > .installation-summary-plan {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(200px, 0.65fr) minmax(0, 1.35fr);
+  align-items: start;
+  gap: 8px 14px;
+}
+.installation-summary-plan-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.installation-summary-plan-heading h2 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+.installation-summary-plan-heading p,
+.installation-summary-plan > p {
+  margin: 0;
+  font-size: 11px;
+}
+.installation-summary-plan-heading > .readonly {
+  flex: 0 0 auto;
+  max-width: 45%;
+  font-size: 10px;
+}
+.installation-summary-plan-actions {
+  max-height: 170px;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+.installation-summary-plan-action {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.85fr) minmax(0, 1.15fr);
+  gap: 4px 10px;
+  padding: 5px 0;
+  border-top: 1px solid #e4e9f0;
+  font-size: 10px;
+}
+.installation-summary-plan-action:first-child {
+  border-top: 0;
+}
+.installation-summary-plan-action b {
+  overflow-wrap: anywhere;
+}
+.installation-summary-plan-action span {
+  color: #526987;
+  overflow-wrap: anywhere;
+}
+.installation-summary > .card > h2,
+.installation-plan-content > .card > h2,
+.installation-stage-content > .card > h2 {
+  margin: 0 0 7px;
+  font-size: 14px;
+}
+.installation-summary dl {
+  display: grid;
+  grid-template-columns: minmax(68px, 0.55fr) minmax(0, 1fr);
+  gap: 3px 8px;
+  margin: 0;
+  font-size: 11px;
+}
+.installation-summary dt {
+  color: #526987;
+}
+.installation-summary dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.installation-summary > .card p {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+.installation-summary > .card button {
+  padding: 6px 9px;
+  font-size: 11px;
+}
+.installation-summary .safe-findings {
+  gap: 5px;
+  font-size: 11px;
+}
+.installation-plan-content {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.installation-plan-content > .card {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 13px;
+}
+.installation-plan-content > .card > dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+  gap: 4px 9px;
+  margin: 0;
+  font-size: 11px;
+}
+.installation-plan-content > .card > dl dt {
+  color: #526987;
+}
+.installation-plan-content > .card > dl dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.installation-plan-content .safe-findings {
+  gap: 5px;
+  font-size: 11px;
+}
+.installation-plan-content .secret-output-setup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 6px 10px;
+}
+.installation-plan-content .secret-output-setup h2,
+.installation-plan-content .secret-output-setup > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.installation-plan-content .secret-output-setup h2 {
+  font-size: 14px;
+}
+.installation-plan-content .secret-output-setup > p {
+  font-size: 11px;
+}
+.installation-plan-content .secret-output-setup label {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  font-size: 11px;
+}
+.installation-plan-content .secret-output-setup input {
+  min-width: 0;
+  min-height: 31px;
+  padding: 5px 8px;
+}
+.installation-plan-content .secret-output-setup button {
+  justify-self: end;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+.plan-phase {
+  padding: 8px 0;
+}
+.plan-phase h3 {
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.plan-action-row {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  align-items: baseline;
+  gap: 3px 12px;
+  padding: 7px 0;
+  font-size: 11px;
+}
+.plan-action-row > b {
+  font-size: 11px;
+}
+.plan-action-row > span,
+.plan-action-row > small {
+  font-size: 10px;
+}
+.plan-action-row > span:nth-of-type(2),
+.plan-action-row > small {
+  grid-column: 1 / -1;
+}
+.acknowledgement {
+  gap: 7px;
+  margin: 7px 0;
+  font-size: 11px;
+}
+.installation-plan-content > .card > p > button,
+.installation-plan-content > .card > button {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.installation-plan-content > .card > p {
+  margin: 6px 0 0;
+}
+.installation-stage-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(270px, 0.85fr);
+  align-items: start;
+  gap: 8px;
+  height: 100%;
+}
+.installation-stage-content > .card {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 13px;
+}
+.installation-stage-content > .installation-event-card {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.installation-event-card > h2 {
+  flex: 0 0 auto;
+  margin: 0 0 7px;
+  font-size: 14px;
+}
+.installation-events {
+  flex: 1 1 auto;
+  min-height: 90px;
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.installation-events li {
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 6px;
+  padding: 5px 0;
+}
+.installation-events b,
+.installation-events small {
+  font-size: 10px;
+  line-height: 1.3;
+}
+.installation-stage-heading {
+  align-items: center;
+}
+.installation-stage-heading h2 {
+  font-size: 14px;
+}
+.installation-stage-heading p,
+.installation-current-action,
+.installation-current-task,
+.installation-progress-unavailable {
+  font-size: 11px;
+  line-height: 1.35;
+}
+.installation-progress {
+  margin: 8px 0;
+}
+.installation-progress > div {
+  font-size: 11px;
+}
+.installation-progress progress {
+  height: 10px;
+}
+.installation-empty {
+  min-height: 0;
+  margin: 0;
+  padding: 14px;
+}
+.installation-empty > button {
+  width: auto;
+  justify-self: start;
+}
+.action-result-table {
+  max-height: min(42vh, 360px);
+}
+.action-result-table th,
+.action-result-table td {
+  padding: 6px 7px;
+  font-size: 11px;
+}
+.installation-stage-content h3 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+}
+.installation-stage-content > .card > p,
+.installation-stage-content > .card > button {
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .installation-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .installation-summary > .card:last-child {
+    grid-column: 1 / -1;
+  }
+  .installation-stage-content {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+  .installation-stage-content > .installation-event-card {
+    max-height: min(45vh, 390px);
+  }
+}
+@media (max-width: 620px) {
+  .installation-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .installation-summary > .card:last-child {
+    grid-column: auto;
+  }
+  .installation-summary > .installation-summary-plan {
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .installation-summary-plan-action {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .installation-plan-content > .card > dl {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+  .installation-plan-content .secret-output-setup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .installation-plan-content .secret-output-setup h2,
+  .installation-plan-content .secret-output-setup > p {
+    grid-column: 1;
+  }
+  .installation-plan-content .secret-output-setup button {
+    justify-self: start;
+  }
+  .installation-page > .title > .readonly {
+    max-width: 45%;
+    white-space: normal;
+    font-size: 10px;
+  }
+}

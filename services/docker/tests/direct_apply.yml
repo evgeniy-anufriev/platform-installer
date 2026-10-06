@@ -1,0 +1,14 @@
+---
+- name: Direct autonomous Docker role acceptance on one RED OS target
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  vars:
+    platform_docker_account_name: platform-docker
+    platform_docker_account_credential:
+      passwordSecretRef: runtime:docker-account-password
+    platform_docker_secret_files:
+      runtime:docker-account-password: "{{ playbook_dir }}/../../../.runtime/secrets/docker-account-password"
+    platform_docker_tls_directory: "{{ platform_docker_qa_tls_directory }}"
+  roles:
+    - role: platform.docker.docker_rootless

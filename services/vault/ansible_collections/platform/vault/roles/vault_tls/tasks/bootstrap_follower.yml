@@ -8,11 +8,14 @@
   delegate_to: "{{ vault_member.host }}"
   become: true
 
-- name: Wait for the follower to join the initialized seed storage
+- name: Unseal the joining Raft follower with the seed shares
+  ansible.builtin.include_tasks: unseal_member.yml
+
+- name: Confirm the unsealed follower joined the initialized seed storage
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/init"
     method: GET
-    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    ca_path: "{{ hostvars[vault_member.host].platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
     validate_certs: true
     status_code: 200
     return_content: true
@@ -23,6 +26,3 @@
   delay: 2
   until: _platform_vault_follower_init is succeeded and _platform_vault_follower_init.json.initialized | bool
   no_log: true
-
-- name: Unseal the joined Raft follower
-  ansible.builtin.include_tasks: unseal_member.yml

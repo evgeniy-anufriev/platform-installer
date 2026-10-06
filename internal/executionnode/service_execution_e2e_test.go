@@ -29,7 +29,7 @@ func TestUIBE04EProductionKafkaLifecycleE2E(t *testing.T) {
 	if address == "" || user == "" || identity == "" || knownHosts == "" || project == "" {
 		t.Fatal("UI_BE_04E_E2E_PREREQUISITE_MISSING")
 	}
-	bundleRoot, err := filepath.Abs(filepath.Join("..", "..", "bundle"))
+	bundleRoot, err := filepath.Abs(filepath.Join("..", "..", "cache"))
 	if err != nil {
 		t.Fatal(err)
 	}

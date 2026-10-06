@@ -20,13 +20,16 @@ TAG = 'platform_installer_pki_materialization'
 
 class DispatchTests(unittest.TestCase):
     def dispatch(self, operations, outcomes, commands, stopped=None):
-        journal = mock.Mock(root='/state', run_id='run-test', directory='/state/run-test')
-        with mock.patch.object(controller, '_command', side_effect=lambda _r, _j, op: ['ansible-playbook', op['operationId']]), \
-             mock.patch.object(controller, '_environment', return_value={}), \
-             mock.patch.object(controller.execution_secret_lease, 'ansible_password_credentials_for_run', return_value=None), \
-             mock.patch.object(controller.subprocess, 'Popen', side_effect=lambda cmd, **kw: commands.append(cmd)), \
-             mock.patch.object(controller, '_wait_for_operation', side_effect=outcomes):
-            return controller._dispatch('/release', journal, {'operations': operations}, stopped or [False])
+        with tempfile.TemporaryDirectory() as root:
+            journal = mock.Mock(root=root, run_id='run-test', directory=os.path.join(root, 'run-test'))
+            journal.metadata.return_value = {'projectIdentity': 'dispatch-test-project'}
+            with mock.patch.object(controller, '_command', side_effect=lambda _r, _j, op: ['ansible-playbook', op['operationId']]), \
+                 mock.patch.object(controller, '_environment', return_value={}), \
+                 mock.patch.object(controller.execution_target_trust, 'verify', return_value='/run/known_hosts'), \
+                 mock.patch.object(controller.execution_secret_lease, 'ansible_connection_credentials_for_run', return_value=None), \
+                 mock.patch.object(controller.subprocess, 'Popen', side_effect=lambda cmd, **kw: commands.append(cmd)), \
+                 mock.patch.object(controller, '_wait_for_operation', side_effect=outcomes):
+                return controller._dispatch('/release', journal, {'operations': operations}, stopped or [False])
 
     def test_success_is_local_to_dispatch_and_only_affects_later_apply(self):
         operations = [{'operationId': 'before', 'operation': 'SERVICE_APPLY'},

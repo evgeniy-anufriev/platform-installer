@@ -1,0 +1,132 @@
+---
+- name: Resolve selected Docker account for read-only verification
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ platform_docker_account_name }}"
+    fail_key: true
+
+- name: Bind verified UID and private TLS path
+  ansible.builtin.set_fact:
+    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
+  changed_when: false
+
+- name: Check Docker account linger state
+  ansible.builtin.command:
+    argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
+  register: _platform_docker_linger
+  changed_when: false
+
+- name: Require user manager availability without a login session
+  ansible.builtin.assert:
+    that: _platform_docker_linger.stdout == 'Linger=yes'
+    fail_msg: DOCKER_USER_LINGER_DISABLED
+
+- name: Check LXC network, target and user bridge are active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, lxc-net.service, platform-docker-lxc-ready.target, "platform-docker-rootless-{{ platform_docker_account_name }}.service"]
+  register: _platform_docker_system_units
+  changed_when: false
+
+- name: Require active system-side dependency chain
+  ansible.builtin.assert:
+    that: _platform_docker_system_units.stdout_lines == ['active', 'active', 'active']
+    fail_msg: DOCKER_LXC_TARGET_NOT_ACTIVE
+
+- name: Check exact user Docker service is active
+  ansible.builtin.command:
+    argv: [systemctl, --user, is-active, docker.service]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_uid }}/bus"
+  register: _platform_docker_user_unit
+  changed_when: false
+
+- name: Require active rootless user service
+  ansible.builtin.assert:
+    that: _platform_docker_user_unit.stdout == 'active'
+    fail_msg: DOCKER_USER_SERVICE_NOT_ACTIVE
+
+- name: Inspect Docker daemon through the account-local Unix socket
+  ansible.builtin.command:
+    argv: [docker, -H, "unix:///run/user/{{ _platform_docker_uid }}/docker.sock", info, --format, json]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+  register: _platform_docker_info
+  changed_when: false
+  failed_when: false
+  until: _platform_docker_info.rc == 0
+  retries: 20
+  delay: 2
+  no_log: true
+
+- name: Require a reachable account-local Docker daemon
+  ansible.builtin.assert:
+    that: _platform_docker_info.rc == 0
+    fail_msg: DOCKER_ROOTLESS_DAEMON_UNAVAILABLE
+
+- name: Require rootless non-Swarm daemon
+  ansible.builtin.assert:
+    that:
+      - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
+      - (_platform_docker_info.stdout | from_json).Swarm.LocalNodeState == 'inactive'
+    fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
+
+- name: Verify exact Docker Compose CLI plugin
+  ansible.builtin.command:
+    argv: [docker, compose, version, --short]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+  register: _platform_docker_compose_version
+  changed_when: false
+
+- name: Require installed Compose plugin
+  ansible.builtin.assert:
+    that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
+    fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
+
+- name: Verify mutual TLS on the externally published Docker API
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --tlsverify
+      - "--tlscacert={{ _platform_docker_private_tls_dir }}/ca-chain.pem"
+      - "--tlscert={{ _platform_docker_private_tls_dir }}/certificate.pem"
+      - "--tlskey={{ _platform_docker_private_tls_dir }}/private-key.pem"
+      - -H
+      - "tcp://{{ ansible_host | default(inventory_hostname) }}:{{ platform_docker_api_port }}"
+      - version
+      - --format
+      - json
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+  register: _platform_docker_tls_api_version
+  changed_when: false
+  no_log: true
+
+- name: Require valid remote Docker API response
+  ansible.builtin.assert:
+    that:
+      - (_platform_docker_tls_api_version.stdout | from_json).Server.Version is string
+      - (_platform_docker_tls_api_version.stdout | from_json).Server.Version | length > 0
+    fail_msg: DOCKER_TLS_API_UNAVAILABLE
+
+- name: Check system daemon/socket remain inactive
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service, docker.socket]
+  register: _platform_docker_rootful_verify
+  changed_when: false
+  failed_when: false
+
+- name: Forbid active rootful Docker path
+  ansible.builtin.assert:
+    that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
+    fail_msg: DOCKER_ROOTFUL_CONFLICT

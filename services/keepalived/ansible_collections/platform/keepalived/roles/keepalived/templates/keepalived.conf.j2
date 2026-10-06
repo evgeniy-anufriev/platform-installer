@@ -20,7 +20,7 @@ vrrp_instance platform_{{ deployment.key | replace('-', '_') | replace('.', '_')
   interface {{ deployment.value.virtualAddresses[0].interface }}
   virtual_router_id {{ deployment.value.virtualRouterId }}
   priority {{ platform_deployments[deployment.key].priority }}
-  advert_int {{ deployment.value.configuration.advertInterval | default(1) }}
+  advert_int {{ deployment.value.configuration.advertInterval | default(platform_keepalived_advert_interval) }}
   nopreempt
   unicast_src_ip {{ ansible_host | default(inventory_hostname) }}
   unicast_peer {

@@ -241,11 +241,21 @@ func TestOutputEncryptionPasswordIsProjectBoundTransientAndClearedAfterUse(t *te
 	if err := broker.WithOutputEncryptionPassword(Binding{Root: binding.Root, ID: "other"}, func([]byte) error { t.Fatal("cross-project password access"); return nil }); err == nil {
 		t.Fatal("cross-project password access accepted")
 	}
-	now = now.Add(31 * time.Minute)
+	now = now.Add(59 * time.Minute)
+	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { return nil }); err != nil {
+		t.Fatalf("output password expired before one-hour TTL: %v", err)
+	}
+	now = now.Add(time.Minute)
 	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { t.Fatal("expired password access"); return nil }); err == nil {
 		t.Fatal("expired password accepted")
 	}
 	broker.Clear()
+}
+
+func TestBrokerDefaultCredentialAndSecretTTLIsOneHour(t *testing.T) {
+	if broker := NewBroker(); broker.ttl != time.Hour {
+		t.Fatalf("broker TTL=%s, want 1h", broker.ttl)
+	}
 }
 
 func TestBrokerStoresBoundedPKIStorePasswordOnlyInMemory(t *testing.T) {
@@ -293,7 +303,23 @@ func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	if got, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: path, ElevationMode: ElevationNone}); err != nil || got.SSHMode != SSHPrivateKey {
 		t.Fatalf("key status=%#v err=%v", got, err)
 	}
+	identity, err := broker.CurrentExecutionIdentity(binding)
+	if err != nil || identity.Path != path || identity.Username != "installer" || identity.FileInfo == nil || identity.Generation == 0 {
+		t.Fatalf("private identity metadata unavailable: %v", err)
+	}
+	if identity.Digest == [32]byte{} {
+		t.Fatal("missing identity digest")
+	}
+	if _, err := broker.CurrentExecutionIdentity(Binding{Root: "other", ID: "other"}); err == nil {
+		t.Fatal("cross-project identity accepted")
+	}
 	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: t.TempDir(), ElevationMode: ElevationNone}); err == nil || err.Error() != "SESSION_PRIVATE_KEY_NOT_REGULAR" {
 		t.Fatalf("directory error=%v", err)
+	}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "runtime-only"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.CurrentExecutionIdentity(binding); err == nil {
+		t.Fatal("password mode authorized execution identity")
 	}
 }

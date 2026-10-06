@@ -2,6 +2,7 @@ package executionnode
 
 import (
 	"context"
+	"errors"
 	"platform-installer/internal/executionbundle"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestActivationPreparesPrivateExecutionStorageBeforePublication(t *testing.T
 		t.Fatalf("calls=%d", len(runner.calls))
 	}
 	script := runner.calls[0].input
-	for _, expected := range []string{"sudo -n", "_directory(EXECUTION_STATE_ROOT, create=True)"} {
+	for _, expected := range []string{"sudo -n", "PYTHONDONTWRITEBYTECODE=1", "_directory(EXECUTION_STATE_ROOT, create=True)"} {
 		if !strings.Contains(script, expected) {
 			t.Fatalf("missing %s", expected)
 		}
@@ -81,6 +82,45 @@ func TestOpenSSHTransportUsesStrictHostKeyCheckingAndNoDownloader(t *testing.T) 
 	}
 	if strings.Contains(call.input, "curl") || strings.Contains(call.input, "dnf") || strings.Contains(call.input, "pip") {
 		t.Fatalf("inspect invoked downloader: %s", call.input)
+	}
+}
+
+func TestUITransportUsesOnlySessionHostKeyTrustAndGuard(t *testing.T) {
+	runner := &recordingRunner{}
+	guarded, released := 0, 0
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner, IsolatedHostKeyTrust: true, CommandGuard: func() (func(), error) { guarded++; return func() { released++ }, nil }}
+	if _, err := transport.InspectExecutionNode(context.Background(), testNode()); err != nil {
+		t.Fatal(err)
+	}
+	if guarded != 1 || released != 1 || len(runner.calls) != 1 {
+		t.Fatalf("guard=%d release=%d calls=%d", guarded, released, len(runner.calls))
+	}
+	args := strings.Join(runner.calls[0].args, " ")
+	destination := testNode().User + "@" + testNode().Address
+	foundDestination := false
+	for _, arg := range runner.calls[0].args {
+		if arg == destination {
+			foundDestination = true
+			if strings.HasPrefix(arg, "-") {
+				t.Fatal("SSH destination interpreted as option")
+			}
+		}
+	}
+	if !foundDestination {
+		t.Fatal("SSH destination argument missing")
+	}
+	for _, required := range []string{"-F none", "GlobalKnownHostsFile=none", "KnownHostsCommand=none", "StrictHostKeyChecking=yes", "UserKnownHostsFile="} {
+		if !strings.Contains(args, required) {
+			t.Fatalf("missing isolated option %q", required)
+		}
+	}
+	legacy := OpenSSHTransport{Identity: fixedIdentity{}, Runner: &recordingRunner{}}
+	if strings.Contains(strings.Join(legacy.base(testNode(), "runtime-key"), " "), "-F none") {
+		t.Fatal("legacy path changed")
+	}
+	rejected := OpenSSHTransport{Identity: fixedIdentity{}, Runner: &recordingRunner{}, IsolatedHostKeyTrust: true, CommandGuard: func() (func(), error) { return nil, errors.New("key changed") }}
+	if _, err := rejected.InspectExecutionNode(context.Background(), testNode()); err == nil {
+		t.Fatal("changed identity reached transport")
 	}
 }
 

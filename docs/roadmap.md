@@ -769,18 +769,52 @@ Not ready when:
 
 ## Post-UI-02 service installation acceptance
 
-Current next milestone: [SERVICE-INSTALL-09 ClickHouse](service-install-09-clickhouse-architecture.md)
+SERVICE-INSTALL-09 [ClickHouse](service-install-09-clickhouse-architecture.md)
 with standalone 1/1 (no Keeper), paired server+Keeper HA 3/1 and 3/3,
 TLS-only enabled protocols and HTTPS endpoint. The corrected PLAN passed its
 single targeted recheck with zero blockers. The all-services one-plan final
-acceptance moves to SERVICE-INSTALL-10 and includes nine services. Earlier
+acceptance was later reassigned to SERVICE-INSTALL-11. Earlier
 references to SI09 as the final eight-service test below are historical snapshots.
 As of 2026-09-29 SI09 has partial acceptance, not DONE: direct 1/1, 3/1 and
 3/3 service cycles, strict repeat and the ClickHouse HTTPS endpoint pass, but
 the real React/Wails cumulative run ended FAILED at HAProxy apply. The bounded
 HAProxy TLS-probe correction passed direct QA; the owner declined another full
 plan run. A terminal real-bridge PASS remains a future SI09 gate, not inferred
-from direct Ansible evidence. SI10 remains NOT STARTED.
+from direct Ansible evidence. SERVICE-INSTALL-10 is now
+[Docker rootless + Compose](service-docker-rootless-architecture.md), with
+autonomous RED OS and real nonvisual React/Wails -> Go -> Execution Node
+initial/repeat terminal SUCCEEDED, repeat `changed=0`, mutual-TLS API, Compose
+and LXC systemd stop/start/reboot proof. Full regression gates passed; SI10 is
+DONE (2026-10-01). SI11 all-services single-plan acceptance is NOT STARTED.
+
+Owner-revised first SI11 stage, `S11-00 — Installer-free QA baseline`:
+on the dedicated node1/node2/node3 VMs remove confirmed Installer,
+Execution Node and QA-installed service units, configuration, data, packages
+and temporary workspaces. Do not restore VM snapshots or reinstall the OS;
+do not claim the result is a provably fresh OS. Preserve OS access/bootstrap
+baseline (network, SSH technical account and approved repositories), and
+never delete unknown or shared system data merely to satisfy a checklist.
+Scope, pre-clean inventory, phased actions and final absence checks are in
+the [S11-00 cleanup record](service-install-11-cleanup.md). S11-00 is DONE
+(2026-10-01); the all-services run has not begun.
+
+Owner acceptance rule for SI11 after the verified `S11-00` cleanup:
+the complete installation scenario MUST be driven only through the real
+Wails/React interface, as a user would operate it. UI automation may click,
+type and use the native dialogs, but must not call Wails-bound Go methods
+directly, override React handlers/bindings or native dialogs, or invoke
+Go/Ansible/Core operations through QA scripts, CLI or a test-only bridge.
+Project open/edit, Secrets, fresh plan, approval, Start, progress and terminal
+result must all be reached and observed in the interface. Read-only logs may
+corroborate evidence but cannot drive the scenario or replace UI observation.
+If any required operation is unavailable in the UI, SI11 is BLOCKED until that
+product path works; a direct backend call is not an acceptable workaround.
+Ordinary unit/regression gates remain separate and cannot substitute for this
+end-to-end acceptance.
+The staged [SI11 React/Wails UI test cases](service-install-11-ui-test-cases.md)
+cover implemented controls on every page, state transitions and negative
+boundaries before the uninterrupted all-services run. The owner's mention of
+project deletion was an example of a sequence, not an added UI requirement.
 
 After SI09 functional acceptance, plan `EXEC-PLAN-SCOPE-01` separately; it is
 NOT STARTED. The current `BuildDeploymentPlan` emits apply/verify actions for
@@ -874,6 +908,74 @@ with 65 changes; the fresh repeat
 with `changed=0`. PKI apply, PostgreSQL apply and verify passed in both cycles.
 
 ## Phase G — Expansion
+
+### BROWSER-REMOTE-01/02 — Linux backend с браузерной рабочей станции (dev HTTP; HTTPS в v1.0)
+
+Один пользователь открывает React UI на своей рабочей станции, а Go backend
+работает на Linux Execution Node и доступен по настроенному `host:port`.
+Wails остаётся альтернативной тонкой оболочкой над теми же Go-методами.
+HTTP remote разрешён только для dev с явным флагом
+`-browser-allow-insecure-dev-http`; credentials и содержимое runtime-secret
+файлов в HTTP-канале не защищены от наблюдения/изменения. Не использовать с
+production-системами или данными. В v1.0 необходимо реализовать HTTPS и
+подтвердить защиту трафика. Firewall, аутентификация и Keycloak остаются за
+рамками Installer.
+Проектные пути вводятся как пути Linux-узла, файл зашифрованного runtime
+секрета выбирается на компьютере браузера и передаётся только в одну typed
+операцию. План и потоки: [BROWSER-REMOTE](browser-mode-remote-plan.md).
+
+Dev HTTP сам по себе не является production-приёмкой. В v1.0 приёмка должна
+включать HTTPS origins, негативную проверку недоверенных origins,
+доказательство защищённой передачи credentials/secret uploads, а также
+browser путь open/save/export и полный typed API flow.
+
+### RUNTIME-BUNDLE-UX-01 — упростить обновление runtime bundle (будущий)
+
+Убрать повторяющуюся ручную цепочку «собрать bundle → опубликовать в активный
+локальный кэш → обновить `artifactLock` проекта → заново открыть проект →
+подготовить Execution Node». Проверенный immutable bundle должен проходить
+понятный пользователю штатный путь с явным состоянием каждого шага и точной
+диагностикой несовпадения digest/catalog/binding. Не выбирать `latest`
+автоматически, не ослаблять проверку bundle и не менять `artifactLock` через
+обычный ProjectWriter. Отдельно проверить восстановление после прерывания
+публикации и работу с уже открытым проектом. Это отдельный milestone после
+SI11, а не обход текущей проверки доверия.
+
+### UI-UX-01 — production-ready аудит дизайна интерфейса (будущий, неблокирующий)
+
+После функциональной приёмки SI11 провести отдельный неблокирующий аудит.
+Накопленные предложения и конкретные кейсы: [UI-UX-01](ui-ux-01-proposals.md).
+
+### UI-LOGS-01 — страница «Логи» (будущий, не начат)
+
+Реализовать сейчас отключённый раздел навигации как отдельную страницу истории
+выполнений: список доступных run ID, безопасные статусы и результаты и **весь
+доступный подробный поток событий** выбранного запуска в исходном порядке,
+включая события задач Ansible и привязку к host там, где она есть. Вкладки
+«Выполнение» и «Результат» на странице «Установка» предназначены для основных
+этапов, прогресса и итога, а не заменяют полный журнал. Источник страницы
+«Логи» — авторитетные run journal/result через закрытую безопасную проекцию,
+не ограниченный буфер текущего React-сеанса; длинный поток читать частями без
+молчаливого отсечения, а предел хранения или потерю событий показывать явно.
+В тот же подробный журнал включить значимые структурированные события
+оркестрации Installer/Go (например, открытие/Save/Verify проекта, связь с
+Execution Node, планирование, Start/Cancel и получение результата), если их
+можно надёжно привязать к соответствующей операции или run. Показывать
+источник события и сохранять порядок внутри каждого источника; не выдавать
+локальные Go debug-логи за
+авторитетные события выполнения и не дублировать одно действие дважды.
+Корреляцию и хранение Go-событий определить в плане milestone, не создавать
+ради этого вторую модель проекта.
+Предусмотреть понятные пустое/недоступное состояния. Не создавать вторую базу
+желаемого состояния и не выводить секреты, сырые учётные данные или
+неотфильтрованный Ansible output. До реализации кнопка «Логи» остаётся
+отключённой; точный UX и контракт чтения истории определить в плане milestone
+перед разработкой. Это не блокирует текущие SI11-тесты реализованного
+интерфейса.
+При подготовке UI-LOGS-01 посмотреть на пользовательские сценарии и подачу
+журналов в Platform Installer V1 как на источник удачных UX-идей. Не переносить
+оттуда пакеты, модели или контракты без отдельного анализа границ V2; сейчас
+репозиторий V1 для этой заметки не исследовался.
 
 ### Deferred feature: dependency-aware parallel installation
 

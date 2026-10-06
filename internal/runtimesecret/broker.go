@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -98,6 +99,8 @@ type lease struct {
 	username            string
 	sshMode             string
 	sshSecret           []byte
+	privateKeyPath      string
+	privateKeyInfo      os.FileInfo
 	sudoSecret          []byte
 	pkiStorePassword    []byte
 	runtimeSecretValues map[string][]byte
@@ -539,7 +542,7 @@ func WithTTL(ttl time.Duration) Option      { return func(b *Broker) { b.ttl = t
 func WithClock(now func() time.Time) Option { return func(b *Broker) { b.now = now } }
 
 func NewBroker(options ...Option) *Broker {
-	b := &Broker{ttl: 30 * time.Minute, now: time.Now}
+	b := &Broker{ttl: time.Hour, now: time.Now}
 	for _, option := range options {
 		option(b)
 	}
@@ -640,6 +643,7 @@ func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 		input.ElevationMode = ElevationNone
 	}
 	var sshSecret []byte
+	var keyInfo os.FileInfo
 	switch input.SSHMode {
 	case SSHPassword:
 		if len(input.SSHPassword) > maxPasswordBytes {
@@ -653,11 +657,12 @@ func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 		if input.SSHPassword != "" || input.PrivateKeyPath == "" || !filepath.IsAbs(input.PrivateKeyPath) {
 			return nil, errors.New("SESSION_CREDENTIAL_MODE_INVALID")
 		}
-		key, err := readPrivateKey(input.PrivateKeyPath)
+		key, info, err := readPrivateKeyWithInfo(input.PrivateKeyPath)
 		if err != nil {
 			return nil, err
 		}
 		sshSecret = key
+		keyInfo = info
 	default:
 		return nil, errors.New("SESSION_CREDENTIAL_MODE_INVALID")
 	}
@@ -688,42 +693,76 @@ func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 		zero(sudoSecret)
 		return nil, errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
-	return &lease{binding: binding, reference: reference, username: username, sshMode: input.SSHMode, sshSecret: sshSecret, sudoSecret: sudoSecret}, nil
+	keyPath := ""
+	if input.SSHMode == SSHPrivateKey {
+		keyPath = filepath.Clean(input.PrivateKeyPath)
+	}
+	return &lease{binding: binding, reference: reference, username: username, sshMode: input.SSHMode, sshSecret: sshSecret, privateKeyPath: keyPath, privateKeyInfo: keyInfo, sudoSecret: sudoSecret}, nil
+}
+
+// ExecutionIdentity is private application transport metadata. It must never
+// cross Wails, logs or the portable project boundary.
+type ExecutionIdentity struct {
+	Path       string
+	Username   string
+	Digest     [sha256.Size]byte
+	Generation uint64
+	FileInfo   os.FileInfo
+}
+
+func (b *Broker) CurrentExecutionIdentity(binding Binding) (ExecutionIdentity, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
+		if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
+			b.expireLocked(b.lease.generation)
+		}
+		return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
+	}
+	if b.lease.sshMode != SSHPrivateKey || b.lease.privateKeyPath == "" {
+		return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
+	}
+	return ExecutionIdentity{Path: b.lease.privateKeyPath, Username: b.lease.username, Digest: sha256.Sum256(b.lease.sshSecret), Generation: b.lease.generation, FileInfo: b.lease.privateKeyInfo}, nil
 }
 
 func readPrivateKey(path string) ([]byte, error) {
+	value, _, err := readPrivateKeyWithInfo(path)
+	return value, err
+}
+
+func readPrivateKeyWithInfo(path string) ([]byte, os.FileInfo, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		return nil, errors.New("SESSION_PRIVATE_KEY_UNREADABLE")
+		return nil, nil, errors.New("SESSION_PRIVATE_KEY_UNREADABLE")
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("SESSION_PRIVATE_KEY_NOT_REGULAR")
+		return nil, nil, errors.New("SESSION_PRIVATE_KEY_NOT_REGULAR")
 	}
-	file, err := os.Open(path)
+	file, err := openPrivateKey(path)
 	if err != nil {
-		return nil, errors.New("SESSION_PRIVATE_KEY_UNREADABLE")
+		return nil, nil, errors.New("SESSION_PRIVATE_KEY_UNREADABLE")
 	}
 	defer file.Close()
 	opened, err := file.Stat()
-	if err != nil || !opened.Mode().IsRegular() || opened.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("SESSION_PRIVATE_KEY_NOT_REGULAR")
+	if err != nil || !opened.Mode().IsRegular() || opened.Mode()&os.ModeSymlink != 0 || !os.SameFile(info, opened) {
+		return nil, nil, errors.New("SESSION_PRIVATE_KEY_NOT_REGULAR")
 	}
 	contents, err := io.ReadAll(io.LimitReader(file, maxKeyBytes+1))
 	if err != nil {
-		return nil, errors.New("SESSION_PRIVATE_KEY_UNREADABLE")
+		return nil, nil, errors.New("SESSION_PRIVATE_KEY_UNREADABLE")
 	}
 	if len(contents) > maxKeyBytes {
 		zero(contents)
-		return nil, errors.New("SESSION_CREDENTIAL_TOO_LARGE")
+		return nil, nil, errors.New("SESSION_CREDENTIAL_TOO_LARGE")
 	}
 	if err := validatePrivateKey(contents); err != nil {
 		zero(contents)
 		if errors.Is(err, errEncryptedPrivateKey) {
-			return nil, errors.New("SESSION_PRIVATE_KEY_ENCRYPTED_UNSUPPORTED")
+			return nil, nil, errors.New("SESSION_PRIVATE_KEY_ENCRYPTED_UNSUPPORTED")
 		}
-		return nil, errors.New("SESSION_PRIVATE_KEY_INVALID")
+		return nil, nil, errors.New("SESSION_PRIVATE_KEY_INVALID")
 	}
-	return contents, nil
+	return contents, opened, nil
 }
 
 var errEncryptedPrivateKey = errors.New("encrypted private key")

@@ -74,6 +74,9 @@ func (a *App) endpointPreviewLocked() EndpointPreview {
 	if verification.Status == "INVALID" {
 		return EndpointPreview{Status: "INVALID", Findings: append([]VerificationFinding(nil), verification.Findings...), FindingsTruncated: verification.FindingsTruncated}
 	}
+	if verification.Status == "STALE" {
+		return EndpointPreview{Status: "STALE"}
+	}
 	if verification.Status != "VERIFIED" {
 		if verification.Status == "UNVERIFIED" || verification.Status == "" {
 			return EndpointPreview{Status: "NOT_VERIFIED"}

@@ -264,34 +264,18 @@ def target_username_for_run(state_root, run_id):
     return value["username"]
 
 
-def ansible_password_credentials_for_run(state_root, run_id):
-    """Return only Ansible's two accepted password fields for an attached run.
+def ansible_connection_credentials_for_run(state_root, run_id):
+    """Return only attached target SSH/sudo credentials to the controller.
 
-    This is deliberately narrower than the lease payload: it never returns a
-    username, private key, PKI password, or service-secret values.  A
-    private-key lease continues through the established node identity path;
-    this helper exists solely for the closed password transport consumed by
-    ``run_with_runtime_credentials.py``.
+    The fixed runner consumes these in a private, per-operation workspace;
+    PKI and service secrets never cross this adapter.
     """
     attached_path = os.path.join(_root(state_root), "attached", run_id + ".json")
     if not os.path.exists(attached_path):
         return None
-    attached = _read(attached_path)
-    lease_id = attached.get("leaseId") if isinstance(attached, dict) else None
-    if not _safe_id(lease_id):
-        return None
-    path = payload_path(state_root, lease_id, run_id)
-    try:
-        with open(path, "rb") as stream:
-            raw = stream.read(MAX_PAYLOAD_BYTES + 1)
-        value = json.loads(raw.decode("utf-8", "strict"))
-    except (OSError, UnicodeError, ValueError):
-        raise LifecycleError("LEASE_PAYLOAD_INVALID")
-    _payload(value)
+    value = _attached_payload_for_run(state_root, run_id)
     password = value.get("password")
-    if password is None:
-        return None
-    result = {"ansible_password": password}
+    result = {"ansible_password": password} if password is not None else {"privateKey": value["privateKey"]}
     if value.get("sudoPassword") is not None:
         result["ansible_become_password"] = value["sudoPassword"]
     return result

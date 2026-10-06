@@ -44,7 +44,7 @@ class VaultRoleContractTests(unittest.TestCase):
         followers = next(task for task in bootstrap if task["name"].startswith("Join and unseal each Raft follower"))
         self.assertEqual(followers["loop_control"]["loop_var"], "vault_member")
         tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
-        unseal = next(task for task in tasks if task["name"] == "Unseal the joined Raft follower")
+        unseal = next(task for task in tasks if task["name"] == "Unseal the joining Raft follower with the seed shares")
         self.assertEqual(unseal["ansible.builtin.include_tasks"], "unseal_member.yml")
         self.assertNotIn("vault_member", unseal.get("vars", {}))
         loader = DataLoader()
@@ -58,6 +58,99 @@ class VaultRoleContractTests(unittest.TestCase):
                 self.assertEqual(templar.template("{{ vault_member }}"), member)
                 self.assertEqual(templar.template("https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"),
                                  f"https://{address}:{port}/v1/sys/health")
+
+    def test_delegated_follower_tls_uses_the_members_host_plan(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+
+        hostvars = {
+            host: {"platform_pki_selected_consumer_plan": {
+                "targetDirectory": f"/pki/{host}"}}
+            for host in ("node1", "node2", "node3")
+        }
+        loader = DataLoader()
+        for name in ("unseal_member.yml", "bootstrap_follower.yml"):
+            tasks = yaml.safe_load((ROLE / "tasks" / name).read_text(encoding="utf-8"))
+            for task in tasks:
+                uri = task.get("ansible.builtin.uri")
+                if uri is None:
+                    continue
+                self.assertEqual(task["delegate_to"], "{{ vault_member.host }}")
+                for member_host in ("node1", "node2", "node3"):
+                    variables = {
+                        "vault_member": {"host": member_host},
+                        "hostvars": hostvars,
+                        # Bootstrap runs once on node1; this must not leak its
+                        # selected directory into a delegated follower task.
+                        "platform_pki_selected_consumer_plan": hostvars["node1"]["platform_pki_selected_consumer_plan"],
+                    }
+                    with self.subTest(task=task["name"], member_host=member_host):
+                        self.assertEqual(
+                            Templar(loader=loader, variables=variables).template(uri["ca_path"]),
+                            f"/pki/{member_host}/ca-chain.pem",
+                        )
+
+    def test_final_health_verification_uses_each_delegated_hosts_pki_plan(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+
+        tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        health = next(task for task in tasks if task["name"] == "Query Vault health over validated API TLS")
+        self.assertTrue(health["run_once"])
+        self.assertEqual(health["delegate_to"], "{{ item.host }}")
+        self.assertEqual(health["loop"], "{{ _platform_vault_instances }}")
+        hostvars = {
+            host: {"platform_pki_selected_consumer_plan": {"targetDirectory": f"/pki/{host}"}}
+            for host in ("node1", "node2", "node3")
+        }
+        loader = DataLoader()
+        for member_host in ("node1", "node2", "node3"):
+            variables = {
+                "item": {"host": member_host},
+                "hostvars": hostvars,
+                # run_once executes the task body from node1, while each URI
+                # request is delegated to the member's own host.
+                "platform_pki_selected_consumer_plan": hostvars["node1"]["platform_pki_selected_consumer_plan"],
+            }
+            with self.subTest(member_host=member_host):
+                self.assertEqual(
+                    Templar(loader=loader, variables=variables).template(health["ansible.builtin.uri"]["ca_path"]),
+                    f"/pki/{member_host}/ca-chain.pem",
+                )
+
+    def test_raft_membership_verification_uses_seed_hosts_pki_plan_once(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+
+        tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        membership = next(task for task in tasks if task["name"] == "Read the authoritative Raft membership configuration")
+        self.assertTrue(membership["run_once"])
+        self.assertEqual(membership["delegate_to"], "{{ (_platform_vault_instances | first).host }}")
+        hostvars = {
+            host: {"platform_pki_selected_consumer_plan": {"targetDirectory": f"/pki/{host}"}}
+            for host in ("node1", "node2", "node3")
+        }
+        loader = DataLoader()
+        for inventory_host in ("node1", "node2", "node3"):
+            variables = {
+                "_platform_vault_instances": [{"host": "node1"}, {"host": "node2"}, {"host": "node3"}],
+                "hostvars": hostvars,
+                "platform_pki_selected_consumer_plan": hostvars[inventory_host]["platform_pki_selected_consumer_plan"],
+            }
+            with self.subTest(inventory_host=inventory_host):
+                self.assertEqual(
+                    Templar(loader=loader, variables=variables).template(membership["ansible.builtin.uri"]["ca_path"]),
+                    "/pki/node1/ca-chain.pem",
+                )
+
+    def test_follower_waits_for_health_api_before_unsealing(self):
+        tasks = yaml.safe_load((ROLE / "tasks/unseal_member.yml").read_text(encoding="utf-8"))
+        read_health = tasks[0]
+        self.assertEqual(read_health["register"], "_platform_vault_member_health_before")
+        self.assertEqual(read_health["retries"], 30)
+        self.assertEqual(read_health["delay"], 2)
+        self.assertEqual(read_health["until"], "_platform_vault_member_health_before is succeeded")
+        self.assertTrue(read_health["no_log"])
 
     def test_typed_runtime_inputs_are_closed_and_never_logged(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
@@ -180,6 +273,18 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertTrue(material_tasks)
         self.assertTrue(all(task.get("no_log") for task in material_tasks))
 
+    def test_shamir_follower_is_unsealed_before_waiting_for_join_completion(self):
+        tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
+        names = [task["name"] for task in tasks]
+        start = names.index("Start one Raft follower only after the seed is unsealed")
+        unseal = names.index("Unseal the joining Raft follower with the seed shares")
+        joined = names.index("Confirm the unsealed follower joined the initialized seed storage")
+        self.assertLess(start, unseal)
+        self.assertLess(unseal, joined)
+        self.assertEqual(tasks[unseal]["ansible.builtin.include_tasks"], "unseal_member.yml")
+        self.assertTrue(tasks[joined]["no_log"])
+        self.assertIn("_platform_vault_follower_init.json.initialized | bool", tasks[joined]["until"])
+
     def test_standalone_output_is_private_no_overwrite_and_verify_is_read_only(self):
         output = yaml.safe_load((ROLE / "tasks/prepare_output.yml").read_text(encoding="utf-8"))
         output_text = str(output)
@@ -199,6 +304,18 @@ class VaultRoleContractTests(unittest.TestCase):
         verify = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
         self.assertTrue(all("GET" == task.get("ansible.builtin.uri", {}).get("method", "GET") for task in verify
                             if "ansible.builtin.uri" in task))
+
+    def test_verify_output_path_guard_accepts_linux_path_and_rejects_backslash(self):
+        from jinja2 import Environment
+
+        tasks = yaml.safe_load((ROLE / "tasks/read_output.yml").read_text(encoding="utf-8"))
+        guard = next(task for task in tasks if task["name"] ==
+                     "Require an explicit or project-root-derived standalone output path")
+        expression = guard["ansible.builtin.assert"]["that"][-1]
+        evaluate = Environment().compile_expression(expression)
+        self.assertTrue(evaluate(_platform_vault_bootstrap_output_dir=
+                                 "/var/lib/platform-installer/execution/secret-outputs/vault"))
+        self.assertFalse(evaluate(_platform_vault_bootstrap_output_dir="/var/tmp/vault\\unsafe"))
 
     def test_audit_configuration_blocks_incompatible_owned_paths_before_writes(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))

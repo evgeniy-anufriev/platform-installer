@@ -1,0 +1,592 @@
+---
+- name: Reconcile PKI stores from validated PEM material
+  block:
+    - name: Inspect PKI request destination directory without following links
+      ansible.builtin.stat:
+        path: "{{ _platform_pki_request_dir }}"
+        follow: false
+      register: _platform_pki_request_directory_stat
+      no_log: true
+
+    - name: Require protected regular PKI request destination directory
+      ansible.builtin.assert:
+        that:
+          - _platform_pki_request_directory_stat.stat.isdir | default(false)
+          - not (_platform_pki_request_directory_stat.stat.islnk | default(false))
+          - _platform_pki_request_directory_stat.stat.pw_name == platform_pki_owner
+          - _platform_pki_request_directory_stat.stat.mode == '0700'
+        fail_msg: PKI_STORE_PATH_UNSAFE
+      no_log: true
+
+    - name: Create private same-filesystem PKI store staging directory
+      ansible.builtin.tempfile:
+        state: directory
+        path: "{{ _platform_pki_request_dir }}"
+        prefix: .pki-stores-
+      register: _platform_pki_store_stage
+      changed_when: false
+      no_log: true
+
+    - name: Enforce private PKI store staging directory
+      ansible.builtin.file:
+        path: "{{ _platform_pki_store_stage.path }}"
+        state: directory
+        owner: "{{ platform_pki_owner }}"
+        group: "{{ platform_pki_group }}"
+        mode: '0700'
+      changed_when: false
+      no_log: true
+
+    - name: Inspect authoritative PKI PEM files without following links
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ _platform_pki_authority_dir }}/ca.crt"
+        - "{{ _platform_pki_request_dir }}/leaf.key"
+        - "{{ _platform_pki_request_dir }}/leaf.crt"
+      register: _platform_pki_authoritative_pem_stats
+      no_log: true
+
+    - name: Require protected regular authoritative PKI PEM files
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg | default(false)
+          - item.stat.pw_name == platform_pki_owner
+        fail_msg: PKI_AUTHORITATIVE_PEM_INVALID
+      loop: "{{ _platform_pki_authoritative_pem_stats.results }}"
+      no_log: true
+
+    - name: Enforce protected PEM permissions before validation and store generation
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ platform_pki_owner }}"
+        group: "{{ platform_pki_group }}"
+        mode: '0600'
+      loop:
+        - "{{ _platform_pki_authority_dir }}/ca.crt"
+        - "{{ _platform_pki_request_dir }}/leaf.key"
+        - "{{ _platform_pki_request_dir }}/leaf.crt"
+      no_log: true
+
+    - name: Recheck protected PEM permissions
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ _platform_pki_authority_dir }}/ca.crt"
+        - "{{ _platform_pki_request_dir }}/leaf.key"
+        - "{{ _platform_pki_request_dir }}/leaf.crt"
+      register: _platform_pki_protected_pem_stats
+      no_log: true
+
+    - name: Require owner-only PEM permissions
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.pw_name == platform_pki_owner
+          - item.stat.mode == '0600'
+        fail_msg: PKI_AUTHORITATIVE_PEM_INVALID
+      loop: "{{ _platform_pki_protected_pem_stats.results }}"
+      no_log: true
+
+    - name: Verify existing managed leaf certificate chain before store work
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - verify
+          - -CAfile
+          - "{{ _platform_pki_authority_dir }}/ca.crt"
+          - "{{ _platform_pki_request_dir }}/leaf.crt"
+      register: _platform_pki_existing_leaf_chain
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Require existing leaf certificate to chain to the managed CA
+      ansible.builtin.assert:
+        that:
+          - _platform_pki_existing_leaf_chain.rc == 0
+        fail_msg: PKI_AUTHORITATIVE_PEM_CHAIN_INVALID
+      no_log: true
+
+    - name: Derive public key from authoritative leaf private key
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - pkey
+          - -in
+          - "{{ _platform_pki_request_dir }}/leaf.key"
+          - -pubout
+          - -out
+          - "{{ _platform_pki_store_stage.path }}/source-key.pub"
+      changed_when: false
+      no_log: true
+
+    - name: Derive public key from authoritative leaf certificate
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ _platform_pki_request_dir }}/leaf.crt"
+          - -pubkey
+          - -noout
+          - -out
+          - "{{ _platform_pki_store_stage.path }}/source-cert.pub"
+      changed_when: false
+      no_log: true
+
+    - name: Require authoritative leaf key and certificate to match
+      ansible.builtin.command:
+        argv:
+          - cmp
+          - -s
+          - "{{ _platform_pki_store_stage.path }}/source-key.pub"
+          - "{{ _platform_pki_store_stage.path }}/source-cert.pub"
+      register: _platform_pki_leaf_key_certificate_match
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Reject mismatched authoritative leaf key and certificate
+      ansible.builtin.assert:
+        that:
+          - _platform_pki_leaf_key_certificate_match.rc == 0
+        fail_msg: PKI_AUTHORITATIVE_PEM_KEY_CERTIFICATE_MISMATCH
+      no_log: true
+
+    - name: Export authoritative leaf certificate as DER for exact store comparison
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ _platform_pki_request_dir }}/leaf.crt"
+          - -outform
+          - DER
+          - -out
+          - "{{ _platform_pki_store_stage.path }}/expected-leaf.der"
+      changed_when: false
+      no_log: true
+
+    - name: Export authoritative CA certificate as DER for exact store comparison
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ _platform_pki_authority_dir }}/ca.crt"
+          - -outform
+          - DER
+          - -out
+          - "{{ _platform_pki_store_stage.path }}/expected-ca.der"
+      changed_when: false
+      no_log: true
+
+    - name: Inspect existing derived PKI stores without following links
+      ansible.builtin.stat:
+        path: "{{ _platform_pki_request_dir }}/{{ item }}"
+        follow: false
+      loop: [keystore.p12, truststore.p12]
+      register: _platform_pki_store_stats
+      no_log: true
+
+    - name: Reject substituted or unprotected existing PKI store paths
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists or (item.stat.isreg | default(false))
+          - not item.stat.exists or item.stat.pw_name == platform_pki_owner
+          - not item.stat.exists or item.stat.mode == '0600'
+        fail_msg: PKI_STORE_PATH_UNSAFE
+      loop: "{{ _platform_pki_store_stats.results }}"
+      no_log: true
+
+    - name: Check existing PKCS12 keystore password and expected alias
+      ansible.builtin.command:
+        argv:
+          - keytool
+          - -list
+          - -v
+          - -storetype
+          - PKCS12
+          - -keystore
+          - "{{ _platform_pki_request_dir }}/keystore.p12"
+          - -alias
+          - "{{ _platform_pki_request_plans[0].keyAlias }}"
+          - -storepass:file
+          - "{{ _platform_pki_password_file }}"
+      register: _platform_pki_existing_keystore_check
+      changed_when: false
+      failed_when: false
+      when: _platform_pki_store_stats.results[0].stat.exists
+      no_log: true
+
+    - name: Check existing PKCS12 truststore password and expected alias
+      ansible.builtin.command:
+        argv:
+          - keytool
+          - -list
+          - -v
+          - -storetype
+          - PKCS12
+          - -keystore
+          - "{{ _platform_pki_request_dir }}/truststore.p12"
+          - -alias
+          - "{{ _platform_pki_request_plans[0].trustAlias }}"
+          - -storepass:file
+          - "{{ _platform_pki_password_file }}"
+      register: _platform_pki_existing_truststore_check
+      changed_when: false
+      failed_when: false
+      when: _platform_pki_store_stats.results[1].stat.exists
+      no_log: true
+
+    - name: Export existing keystore certificate for identity check
+      ansible.builtin.command:
+        argv:
+          - keytool
+          - -exportcert
+          - -storetype
+          - PKCS12
+          - -keystore
+          - "{{ _platform_pki_request_dir }}/keystore.p12"
+          - -alias
+          - "{{ _platform_pki_request_plans[0].keyAlias }}"
+          - -storepass:file
+          - "{{ _platform_pki_password_file }}"
+          - -file
+          - "{{ _platform_pki_store_stage.path }}/existing-keystore.der"
+      register: _platform_pki_existing_keystore_export
+      changed_when: false
+      failed_when: false
+      when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
+      no_log: true
+
+    - name: Export existing truststore certificate for identity check
+      ansible.builtin.command:
+        argv:
+          - keytool
+          - -exportcert
+          - -storetype
+          - PKCS12
+          - -keystore
+          - "{{ _platform_pki_request_dir }}/truststore.p12"
+          - -alias
+          - "{{ _platform_pki_request_plans[0].trustAlias }}"
+          - -storepass:file
+          - "{{ _platform_pki_password_file }}"
+          - -file
+          - "{{ _platform_pki_store_stage.path }}/existing-truststore.der"
+      register: _platform_pki_existing_truststore_export
+      changed_when: false
+      failed_when: false
+      when: (_platform_pki_existing_truststore_check.rc | default(1)) == 0
+      no_log: true
+
+    - name: Extract existing keystore private key for identity check
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - pkcs12
+          - -in
+          - "{{ _platform_pki_request_dir }}/keystore.p12"
+          - -nocerts
+          - -nodes
+          - -passin
+          - "file:{{ _platform_pki_password_file }}"
+          - -out
+          - "{{ _platform_pki_store_stage.path }}/existing-keystore.key"
+      register: _platform_pki_existing_keystore_key
+      changed_when: false
+      failed_when: false
+      when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
+      no_log: true
+
+    - name: Restrict extracted existing private key permissions
+      ansible.builtin.file:
+        path: "{{ _platform_pki_store_stage.path }}/existing-keystore.key"
+        owner: "{{ platform_pki_owner }}"
+        group: "{{ platform_pki_group }}"
+        mode: '0600'
+      when: (_platform_pki_existing_keystore_key.rc | default(1)) == 0
+      changed_when: false
+      no_log: true
+
+    - name: Derive public key from existing PKCS12 keystore
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - pkey
+          - -in
+          - "{{ _platform_pki_store_stage.path }}/existing-keystore.key"
+          - -pubout
+          - -out
+          - "{{ _platform_pki_store_stage.path }}/existing-keystore.pub"
+      register: _platform_pki_existing_keystore_public
+      changed_when: false
+      failed_when: false
+      when: (_platform_pki_existing_keystore_key.rc | default(1)) == 0
+      no_log: true
+
+    - name: Compare current PKCS12 store contents with authoritative PEM
+      ansible.builtin.command:
+        argv: [cmp, -s, "{{ item.left }}", "{{ item.right }}"]
+      loop:
+        - left: "{{ _platform_pki_store_stage.path }}/existing-keystore.der"
+          right: "{{ _platform_pki_store_stage.path }}/expected-leaf.der"
+          name: keystore_certificate
+        - left: "{{ _platform_pki_store_stage.path }}/existing-truststore.der"
+          right: "{{ _platform_pki_store_stage.path }}/expected-ca.der"
+          name: truststore_certificate
+        - left: "{{ _platform_pki_store_stage.path }}/existing-keystore.pub"
+          right: "{{ _platform_pki_store_stage.path }}/source-key.pub"
+          name: keystore_private_key
+      register: _platform_pki_existing_store_comparisons
+      changed_when: false
+      failed_when: false
+      when:
+        - (_platform_pki_existing_keystore_export.rc | default(1)) == 0
+        - (_platform_pki_existing_truststore_export.rc | default(1)) == 0
+        - (_platform_pki_existing_keystore_public.rc | default(1)) == 0
+      no_log: true
+
+    - name: Determine whether both existing PKCS12 stores are reusable
+      ansible.builtin.set_fact:
+        _platform_pki_existing_stores_match: >-
+          {{ (_platform_pki_existing_keystore_check.rc | default(1)) == 0 and
+             (_platform_pki_existing_truststore_check.rc | default(1)) == 0 and
+             (_platform_pki_existing_store_comparisons.results | default([]) | length) == 3 and
+             (_platform_pki_existing_store_comparisons.results | default([]) | map(attribute='rc') | select('equalto', 0) | list | length) == 3 }}
+
+    - name: Rebuild and publish complete PKCS12 pair when password or content differs
+      when: not (_platform_pki_existing_stores_match | bool)
+      block:
+        - name: Build replacement PKCS12 keystore from validated PEM
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - pkcs12
+              - -export
+              - -name
+              - "{{ _platform_pki_request_plans[0].keyAlias }}"
+              - -inkey
+              - "{{ _platform_pki_request_dir }}/leaf.key"
+              - -in
+              - "{{ _platform_pki_request_dir }}/leaf.crt"
+              - -certfile
+              - "{{ _platform_pki_authority_dir }}/ca.crt"
+              - -out
+              - "{{ _platform_pki_store_stage.path }}/keystore.p12"
+              - -passout
+              - "file:{{ _platform_pki_password_file }}"
+          changed_when: false
+          no_log: true
+
+        - name: Build replacement PKCS12 truststore from validated CA PEM
+          ansible.builtin.command:
+            argv:
+              - keytool
+              - -importcert
+              - -noprompt
+              - -storetype
+              - PKCS12
+              - -alias
+              - "{{ _platform_pki_request_plans[0].trustAlias }}"
+              - -file
+              - "{{ _platform_pki_authority_dir }}/ca.crt"
+              - -keystore
+              - "{{ _platform_pki_store_stage.path }}/truststore.p12"
+              - -storepass:file
+              - "{{ _platform_pki_password_file }}"
+          changed_when: false
+          no_log: true
+
+        - name: Restrict staged PKCS12 candidate permissions
+          ansible.builtin.file:
+            path: "{{ _platform_pki_store_stage.path }}/{{ item }}"
+            owner: "{{ platform_pki_owner }}"
+            group: "{{ platform_pki_group }}"
+            mode: '0600'
+          loop: [keystore.p12, truststore.p12]
+          changed_when: false
+          no_log: true
+
+        - name: Verify candidate keystore alias and entry type
+          ansible.builtin.command:
+            argv:
+              - keytool
+              - -list
+              - -v
+              - -storetype
+              - PKCS12
+              - -keystore
+              - "{{ _platform_pki_store_stage.path }}/keystore.p12"
+              - -alias
+              - "{{ _platform_pki_request_plans[0].keyAlias }}"
+              - -storepass:file
+              - "{{ _platform_pki_password_file }}"
+          register: _platform_pki_candidate_keystore_check
+          changed_when: false
+          no_log: true
+
+        - name: Verify candidate truststore alias and entry type
+          ansible.builtin.command:
+            argv:
+              - keytool
+              - -list
+              - -v
+              - -storetype
+              - PKCS12
+              - -keystore
+              - "{{ _platform_pki_store_stage.path }}/truststore.p12"
+              - -alias
+              - "{{ _platform_pki_request_plans[0].trustAlias }}"
+              - -storepass:file
+              - "{{ _platform_pki_password_file }}"
+          register: _platform_pki_candidate_truststore_check
+          changed_when: false
+          no_log: true
+
+        - name: Export replacement keystore certificate
+          ansible.builtin.command:
+            argv:
+              - keytool
+              - -exportcert
+              - -storetype
+              - PKCS12
+              - -keystore
+              - "{{ _platform_pki_store_stage.path }}/keystore.p12"
+              - -alias
+              - "{{ _platform_pki_request_plans[0].keyAlias }}"
+              - -storepass:file
+              - "{{ _platform_pki_password_file }}"
+              - -file
+              - "{{ _platform_pki_store_stage.path }}/candidate-keystore.der"
+          changed_when: false
+          no_log: true
+
+        - name: Extract replacement keystore private key
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - pkcs12
+              - -in
+              - "{{ _platform_pki_store_stage.path }}/keystore.p12"
+              - -nocerts
+              - -nodes
+              - -passin
+              - "file:{{ _platform_pki_password_file }}"
+              - -out
+              - "{{ _platform_pki_store_stage.path }}/candidate-keystore.key"
+          changed_when: false
+          no_log: true
+
+        - name: Restrict staged extracted private key permissions
+          ansible.builtin.file:
+            path: "{{ _platform_pki_store_stage.path }}/candidate-keystore.key"
+            owner: "{{ platform_pki_owner }}"
+            group: "{{ platform_pki_group }}"
+            mode: '0600'
+          changed_when: false
+          no_log: true
+
+        - name: Derive public key from replacement keystore
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - pkey
+              - -in
+              - "{{ _platform_pki_store_stage.path }}/candidate-keystore.key"
+              - -pubout
+              - -out
+              - "{{ _platform_pki_store_stage.path }}/candidate-keystore.pub"
+          changed_when: false
+          no_log: true
+
+        - name: Export replacement truststore certificate
+          ansible.builtin.command:
+            argv:
+              - keytool
+              - -exportcert
+              - -storetype
+              - PKCS12
+              - -keystore
+              - "{{ _platform_pki_store_stage.path }}/truststore.p12"
+              - -alias
+              - "{{ _platform_pki_request_plans[0].trustAlias }}"
+              - -storepass:file
+              - "{{ _platform_pki_password_file }}"
+              - -file
+              - "{{ _platform_pki_store_stage.path }}/candidate-truststore.der"
+          changed_when: false
+          no_log: true
+
+        - name: Require replacement stores to match authoritative PEM identity
+          ansible.builtin.command:
+            argv: [cmp, -s, "{{ item.left }}", "{{ item.right }}"]
+          loop:
+            - left: "{{ _platform_pki_store_stage.path }}/candidate-keystore.der"
+              right: "{{ _platform_pki_store_stage.path }}/expected-leaf.der"
+            - left: "{{ _platform_pki_store_stage.path }}/candidate-truststore.der"
+              right: "{{ _platform_pki_store_stage.path }}/expected-ca.der"
+            - left: "{{ _platform_pki_store_stage.path }}/candidate-keystore.pub"
+              right: "{{ _platform_pki_store_stage.path }}/source-key.pub"
+          changed_when: false
+          no_log: true
+
+        - name: Require replacement PKCS12 entry types
+          ansible.builtin.assert:
+            that:
+              - "'PrivateKeyEntry' in _platform_pki_candidate_keystore_check.stdout"
+              - "'trustedCertEntry' in _platform_pki_candidate_truststore_check.stdout"
+            fail_msg: PKI_STORE_CANDIDATE_INVALID
+          no_log: true
+
+        - name: Atomically publish validated PKCS12 keystore
+          ansible.builtin.copy:
+            src: "{{ _platform_pki_store_stage.path }}/keystore.p12"
+            dest: "{{ _platform_pki_request_dir }}/keystore.p12"
+            remote_src: true
+            owner: "{{ platform_pki_owner }}"
+            group: "{{ platform_pki_group }}"
+            mode: '0600'
+            unsafe_writes: false
+          register: _platform_pki_keystore_publish
+          no_log: true
+
+        - name: Atomically publish validated PKCS12 truststore
+          ansible.builtin.copy:
+            src: "{{ _platform_pki_store_stage.path }}/truststore.p12"
+            dest: "{{ _platform_pki_request_dir }}/truststore.p12"
+            remote_src: true
+            owner: "{{ platform_pki_owner }}"
+            group: "{{ platform_pki_group }}"
+            mode: '0600'
+            unsafe_writes: false
+          register: _platform_pki_truststore_publish
+          no_log: true
+
+    - name: Recheck published PKCS12 stores
+      ansible.builtin.command:
+        argv:
+          - keytool
+          - -list
+          - -storetype
+          - PKCS12
+          - -keystore
+          - "{{ _platform_pki_request_dir }}/{{ item }}"
+          - -storepass:file
+          - "{{ _platform_pki_password_file }}"
+      loop: [keystore.p12, truststore.p12]
+      changed_when: false
+      no_log: true
+  always:
+    - name: Remove private PKI store staging directory
+      ansible.builtin.file:
+        path: "{{ _platform_pki_store_stage.path }}"
+        state: absent
+      when: _platform_pki_store_stage.path is defined
+      changed_when: false
+      no_log: true

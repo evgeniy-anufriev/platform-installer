@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-snapshot-request/v1alpha2/schema.json",
+  "title": "Read-only v2alpha2 project snapshot request",
+  "type": "object",
+  "required": ["apiVersion", "kind", "requestId", "projectIdentity", "candidateProjectRevision", "projectArchiveDigest", "artifactLockDigest", "catalogLockDigest", "installerOwnedLogicalPaths", "projectContract", "snapshotContract", "editContract"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/project-snapshot-request/v1alpha2"},
+    "kind": {"const": "BuildProjectSnapshotRequest"},
+    "requestId": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "projectIdentity": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"},
+    "candidateProjectRevision": {"$ref": "../v1alpha1/schema.json#/$defs/digest"},
+    "projectArchiveDigest": {"$ref": "../v1alpha1/schema.json#/$defs/digest"},
+    "artifactLockDigest": {"$ref": "../v1alpha1/schema.json#/$defs/digest"},
+    "catalogLockDigest": {"$ref": "../v1alpha1/schema.json#/$defs/digest"},
+    "installerOwnedLogicalPaths": {"const": []},
+    "projectContract": {"const": "v2alpha2"},
+    "snapshotContract": {"const": "v1alpha1"},
+    "editContract": {"const": "none"}
+  },
+  "additionalProperties": false
+}

@@ -3,6 +3,9 @@ import os
 import sys
 import unittest
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "collections"))
+from ansible_collections.platform.core.plugins.action.project_snapshot import _materialize_resolved_members
+
 
 ROOT = os.path.join(
     os.path.dirname(__file__), "..", "collections", "ansible_collections", "platform",
@@ -92,6 +95,34 @@ def resolved(topology_value):
 
 
 class ServiceConfigurationResolutionTests(unittest.TestCase):
+    def test_snapshot_materialization_keeps_three_colocated_inventory_overrides(self):
+        desired = {"serviceDeployments": {"kafka-main": {
+            "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone",
+            "configuration": {"clientPort": 19092},
+        }}}
+        inventory = {"node-a": {"kafka-main": {"members": {
+            member_id: {"roles": ["broker", "controller"], "configuration": {"clientPort": port}}
+            for member_id, port in (("member-1", 19101), ("member-2", 19102), ("member-3", 19103))
+        }}}}
+        resolved_members = {
+            member_id: {"host": "node-a", "roles": ["broker", "controller"]}
+            for member_id in ("member-1", "member-2", "member-3")
+        }
+        topology_result = {"status": "PASS", "topologyFingerprint": "fixed-topology",
+                           "resolvedTopology": {"serviceDeployments": {
+                               "kafka-main": {"serviceType": "kafka", "mode": "kraft-standalone",
+                                              "members": resolved_members}}}}
+        materialized = _materialize_resolved_members(desired, topology_result, inventory, ["node-a"])
+        configuration = self.resolve(materialized, topology_result=topology_result)
+        service = configuration["services"]["kafka-main"]
+        self.assertEqual("DEPLOYMENT_OVERRIDE", service["configuration"]["clientPort"]["source"])
+        for member_id, port in (("member-1", 19101), ("member-2", 19102), ("member-3", 19103)):
+            setting = service["members"][member_id]["configuration"]["clientPort"]
+            self.assertEqual(("MEMBER_OVERRIDE", port), (setting["source"], setting["value"]))
+        self.assertEqual("fixed-topology", topology_result["topologyFingerprint"])
+        self.assertEqual(resolved_members, topology_result["resolvedTopology"]["serviceDeployments"]["kafka-main"]["members"])
+        self.assertNotIn("members", desired["serviceDeployments"]["kafka-main"])
+
     def resolve(self, project_topology, defaults=None, topology_result=None, host_contexts=None, variable_documents=None, service_catalog=None):
         project_topology = project_topology or topology()
         selected_catalog = service_catalog or catalog()

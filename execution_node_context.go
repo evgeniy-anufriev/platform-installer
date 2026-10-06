@@ -48,6 +48,7 @@ type ExecutionNodeContext struct {
 	SelectionKind   string `json:"selectionKind"`
 	SelectionSource string `json:"selectionSource"`
 	SelectedHostID  string `json:"selectedHostId,omitempty"`
+	RuntimeDigest   string `json:"runtimeDigest,omitempty"`
 	SafeLabel       string `json:"safeLabel,omitempty"`
 	Locked          bool   `json:"locked"`
 }

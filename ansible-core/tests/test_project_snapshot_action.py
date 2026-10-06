@@ -7,7 +7,7 @@ from pathlib import Path
 COLLECTIONS = Path(__file__).resolve().parents[1] / "collections"
 sys.path.insert(0, str(COLLECTIONS))
 
-from ansible_collections.platform.core.plugins.action.project_snapshot import ActionModule, snapshot_host, validate_host_desired_values
+from ansible_collections.platform.core.plugins.action.project_snapshot import ActionModule, snapshot_execution_connection, snapshot_host, validate_host_desired_values
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
 
@@ -23,6 +23,17 @@ class ProjectSnapshotActionTests(unittest.TestCase):
         self.assertIsNone(finding)
         _, finding = snapshot_host({"ansible_port": True}, "node1")
         self.assertEqual("HOST_TRANSPORT_PORT_INVALID", finding["code"])
+
+    def test_ssh_destination_aliases_make_private_connection_unsupported(self):
+        host, finding = snapshot_host({"ansible_host": "192.0.2.10", "ansible_port": 22}, "node1")
+        self.assertIsNone(finding)
+        for alias, value in (("ansible_ssh_host", "192.0.2.99"), ("ansible_ssh_port", 2222)):
+            with self.subTest(alias=alias):
+                connection = snapshot_execution_connection({alias: value}, host)
+                self.assertEqual("192.0.2.10", connection["address"])
+                self.assertEqual(22, connection["port"])
+                self.assertTrue(connection["unsupportedOptions"])
+                self.assertNotIn(alias, connection)
 
     def test_host_type_validation_is_deterministic_and_contextual(self):
         class Validator:

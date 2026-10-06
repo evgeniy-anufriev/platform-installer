@@ -1,11 +1,744 @@
 # Current state
 
+## BROWSER-REMOTE-01/02 — HTTP только для dev; HTTPS в версии 1.0 (2026-10-06)
+
+После проверки реализации выяснилось, что удалённый Linux Browser mode
+передаёт учётные данные и содержимое зашифрованных файлов секретов по HTTP;
+ограничение подключений по IP не защищает данные в канале. По решению
+владельца HTTP-запуск разрешён только для dev и требует явного
+`-browser-allow-insecure-dev-http`. Не использовать с production-системами или
+данными. HTTPS, настройка внешнего HTTPS origin и проверка защищённой передачи
+credentials/secrets остаются на версию 1.0. Локальный Windows Browser mode и
+Wails этим ограничением не затронуты.
+
+## RUNTIME-BUNDLE-UX-01A — локальная приёмка перепривязки (2026-10-05)
+
+На странице «Проект» добавлено обнаружение полного проверенного bundle в
+`<project>/bundle/` и явная одноразовая кнопка «Привязать». Приложение
+публикует его в новый локальный `cache/<digest>/` и меняет lock-пару через
+существующий atomic CAS; обычный ProjectWriter по-прежнему не меняет locks.
+Старый repository-root `bundle/` читается только как совместимый fallback,
+если новый cache ещё пуст. Обнаружение без подтверждения не изменяет проект.
+
+Start теперь до отправки на Execution Node устойчиво сохраняет локальную
+операционную запись PENDING для исходного project/node; аварийная отмена
+предыдущего run доступна только после проверки исходного узла, host key,
+runId и projectIdentity. Подключение к Execution Node отделено от проверки
+совместимости project bundle; Core Verify/Prepare/Plan/Start остаются за
+прежним runtime gate. Ошибка публикации, удалившая старый cache root,
+немедленно сбрасывает недействительную привязку App без CAS проекта.
+
+FULL DIFF review: `RB-DIFF-01` был BLOCK, затем после owner-approved
+узкого исправления единственный TARGETED_RECHECK вернул APPROVE, blocking=0.
+`go test ./...`, `go vet ./...`, 111 frontend tests, lint, frontend build,
+Wails build и `git diff --check` прошли. Windows `go test -race` недоступен
+без cgo. Реальный headless React→Wails→Go прогон на одноразовом управляемом
+проекте прошёл: preview не писал проект, подтверждение заменило только
+`artifactLock.digest` в `project.yml`, inventory остался побайтно прежним.
+Целевые серверы не использовались. QA-проекты оставлены в `.runtime/qa/`.
+Прямое удаление тестового cache было отклонено политикой среды; вместо него
+штатный `publish-bundle` восстановил прежний проверенный digest
+`sha256:6eb9d16184caf24f360698df8e626124e5ae0fc35c7d09efef31c676db10eadc`
+как единственную запись активного `cache/` и удалил тестовый digest штатной
+очисткой. Изменения milestone пока не закоммичены,
+общий SI11 installation cycle по-прежнему не завершён.
+
+## SI11 Vault clean bootstrap reset (2026-10-05, latest)
+
+The Vault role now starts and unseals each follower before querying its
+initialized state, and retries the safe readiness GET up to 30 times at two
+second intervals. Static names for `no_log` tasks are forwarded as safe event
+labels without task output, arguments or results. Focused RED OS checks passed:
+event observability 25 tests (4 opt-in skipped), Vault role contract 27 tests,
+and Vault Apply syntax-check. A direct standalone Ansible 3/3 Apply and Verify
+also completed successfully on all three members (zero failed/unreachable).
+This is role evidence only, not the required Wails acceptance.
+
+At the owner's request, the exact three-member Vault deployment was reset with
+the standalone `services/vault/playbooks/clear.yml`. Its check-mode preflight
+passed against all three trusted SSH host keys. The real clear completed with
+`failed=0`, `unreachable=0`; the three exact Vault units are now inactive and
+disabled, and each Raft data directory retains only its ownership marker. The
+Vault package, configuration, certificates, audit/custody data and other
+services were preserved. Swap remains disabled on node1–node3. The temporary
+SSH identity used by the controller was removed immediately after verification.
+
+The current immutable bundle `sha256:80fa875772f49ef7869c98a93b0033ca611ddd9c5ae36d668457a2259d71d3ef`
+was validated, published and activated on node1 through the real Wails
+preparation flow. The isolated Vault project passed verification and a fresh
+three-action plan was approved. Wails run
+`installer-63fd6a29f7a1287d92c0aa2398019475` reached terminal FAILED during
+Vault Verify after PKI and Apply succeeded. The reported failing task on node1
+is `Require an explicit or project-root-derived standalone output path`.
+The runtime projection contained the correct absolute output path. The Vault
+read-only output-path assertion had invalid YAML/Jinja backslash escaping; a
+read-only Jinja compilation of the active bundle reproduced `TemplateSyntaxError`.
+The one-line guard correction passed 28 Vault role tests and Verify syntax-check
+on RED OS. New immutable bundle
+`sha256:6eb9d16184caf24f360698df8e626124e5ae0fc35c7d09efef31c676db10eadc`
+was validated and published; the isolated Vault project was rebound by the
+narrow artifact-lock CAS API. The Vault members were cleared again with the
+owned `clear.yml` (`failed=0`, `unreachable=0`), and Wails was restarted so it
+could rediscover the newly published bundle. In the real Wails UI the node1
+SSH fingerprint was confirmed, the Execution Node reached READY/PREPARED, and
+Core verified the new project revision. The fresh three-action plan for
+revision `sha256:22d12783505819c11642e8b09c2908fe3b97769e27aa5ad4d1ddc804b8361fe1`
+was approved. Run `installer-45c8036f6ec6330cdc5710e8f6b004b7` completed
+`SUCCEEDED`/100%: PKI, Vault Apply and Vault Verify passed on node1–node3.
+The installer workstation received `admin-token.age`, `unseal-shares.age` and
+`complete` under the project `secrets/qa-vault-consumer/`. The receipt names
+this exact run, and both ciphertext SHA-256 values match the receipt. Secret
+contents were not opened. Isolated Vault Wails acceptance is PASS; the wider
+SI11 all-services plan remains in progress.
+
+## SI11 isolated Vault retry after swap removal (2026-10-05)
+
+Owner-authorized QA host preparation disabled disk/zram swap on node1–node3;
+the generated `dev-zram0.swap` unit was masked with `--runtime` so systemd
+would not reactivate it during the run. `/proc/swaps` was empty on all three
+nodes. Through the real Wails UI, the isolated Vault project produced a fresh
+three-action PKI/Apply/Verify plan, target SSH keys were confirmed, and run
+`installer-397c2f2e9ab0e44711341fc3d9691210` started. PKI completed, but
+Vault Apply terminated **FAILED** at sequence 1348 (first failed task 1340).
+The seed on node1 and first follower service on node2 were started; node3 was
+not reached. The follower wait at task 1339 exhausted retries: node2 Vault
+reported `waiting for unseal keys to be supplied`, while the role waits for
+follower `/v1/sys/init` to report initialized before it invokes follower
+unseal. This is a separate Ansible bootstrap-order blocker, not the earlier
+swap preflight. No further run or host reset was attempted. The current run's
+bootstrap outputs were delivered to the workstation project as encrypted
+`admin-token.age` and `unseal-shares.age`; no secret content was inspected.
+Vault acceptance and cumulative S11 remain **BLOCKED** pending owner decision
+on the narrow Ansible correction and recovery path. The UI event-name fix is
+in the worktree but not yet in the running Wails binary.
+
+## SI11 isolated Vault blocker (2026-10-04)
+
+The isolated Vault project `si11-vault-isolated-20261004` was reopened and
+verified through the real Wails UI. Execution Node preparation initially
+failed during bundle staging because a previous privileged Python invocation
+left root-owned `__pycache__` in the digest-specific staging directory. The
+activation command now uses `PYTHONDONTWRITEBYTECODE=1`; the three stale QA
+bytecode files were removed, and Wails preparation subsequently passed.
+The fresh plan for `qa-vault-consumer` contained only PKI, Vault Apply and
+Vault Verify on node1–node3. The owner started run
+`installer-e682505fb9474442971ed10522936204` through Wails. It terminated
+**FAILED**: Vault Raft preflight `Require host swap disabled for Vault Raft`
+failed on all three nodes at events 996–998. Both zram and disk swap are
+active on each target; node1 had about 561 MiB of used zram. Vault acceptance
+is **BLOCKED**, not DONE. No retry or host swap mutation is authorized yet;
+decide how to prepare the QA hosts before another run. The cumulative
+all-services S11 plan remains pending. The UI task-list omission of
+`task.name` was a separate presentation defect: Core emitted the bounded
+field and Go carried it, but the old React list rendered only `safeMessage`.
+The merged UI/UX branch now renders `task.name` where present; live WebView
+verification of the new build is still pending.
+
+## SI11 reusable PKI project template (2026-10-04)
+
+Through the real Wails UI, created and locally saved a three-server project
+(`node1`–`node3`) with portable PKI desired state: managed CA
+`qa-isolated-ca`, certificate profile `qa-isolated-server-client` with both
+`serverAuth` and `clientAuth`, and TLS profile `qa-isolated-tls` referencing
+`runtime:pki-store-password`. Wails exported the project to the ignored QA
+template directory
+`.runtime/qa/templates/si11-pki-template-20261004`; its export preview listed
+four files / 3805 bytes and explicitly excluded session credentials and
+runtime data. The exported template was reopened through Wails and the three
+PKI entities were confirmed visible. No plaintext password or generated
+private key was placed in the project template.
+
+This is reusable PKI **desired state**, not issued certificates. Actual PKI
+materialization belongs to a service plan with real TLS consumers. After
+opening the export, session credentials were cleared; the approved PEM was
+re-entered through Wails and its independently matched host key reconfirmed.
+The original bundle `sha256:f1da…c4f6b8c` was superseded for this QA project by
+the corrected immutable bundle
+`sha256:decb2ada165efeed058e6373a645de09ae3e15e94b6abf0313e92b316e5f0606`.
+It was acquired on the trusted RED OS node from the current worktree, passed
+the normal validator, and its embedded `deployment_plan.py` matched the
+corrected source. The standard publisher placed it in the active bundle cache.
+With owner authorization, the CAS-safe `UpdateArtifactLock` API changed only
+this project's digest; reopening verified project revision
+`sha256:beace1012fd6a2b9f25ee44ba7f3b978835207f4b0788e00d0b7b97f0c0901ea`.
+Wails was restarted to load the active bundle; node1 was rebound and prepared
+through the UI, and target-free Verify returned `Проверено`. No plaintext
+secret was logged. The same project was then used for an isolated Keepalived
+plan: deployment
+`qa-keepalived-isolated` was saved with node1 and node2 placements. The first
+plan was blocked because the provider tuple was absent. Its
+`SERVICE_TARGETS_UNAVAILABLE` finding was secondary: blocked topology omitted
+`placementsByHost` from the snapshot consumed by the planner. The group and
+provider tuple were then copied from the S11 all-services project through the
+Wails UI, and a fresh target-free Verify passed. The fresh plan has no findings
+and lists node1,node2 for both Apply and Verify; it was approved through Wails.
+Start attempts on the old runtime were blocked before run creation by the
+target-host trust scope mismatch. Core now scopes private `targetConnections`
+to the union of exact action targets; focused planner/trust tests passed and
+the authorized targeted independent recheck returned APPROVE. A fresh Wails
+plan for revision `beace…01ea` had no findings and listed only node1,node2 for
+Apply and Verify. Their SSH fingerprints matched workstation `known_hosts` and
+were approved through Wails. Node3 was not probed or approved. Start created
+run `installer-94b7b6c9851f03d81fd98df01ae45435`; the Wails Result view reached
+`Успешно завершено` after event 279 (`Execution controller completed`). This
+is the first successful isolated Keepalived apply+verify run; repeat
+`changed=0` is not yet tested. The project is now a working QA project, not a
+pristine PKI-only template. **PKI-TEMPLATE-03
+is PASSED for bundle availability and target-free Core Verify; certificate
+issuance remains unverified.** The earlier generic UI error was resolved by
+publishing the already-built bundle and preparing the Execution Node. Detailed
+evidence is in the [S11 test journal](docs/service-install-11-test-journal.md).
+
+## SI11 latest Wails run and revised test order (2026-10-04)
+
+The latest all-services run `installer-185fe62605213a283e75eb904172e290`
+ended authoritatively **FAILED** at `08:12:33Z` / sequence 3393; this is not
+just a stale progress label. PKI, BIND, ClickHouse, DNS client, Docker,
+HAProxy and Kafka completed. Keepalived failed at Barrier A
+`Assert every participant produced a passing candidate`; PostgreSQL, Redis and
+Vault were not reached. The Wails Execution and Result views failed to reflect
+the durable terminal result. A host-scope mismatch was found and corrected in
+the uncommitted Keepalived playbook: inventory `platform_targets` contains
+node1, node2 and node3, while the exact `qa-keepalived` plan action targets
+only node1 and node2. Both barriers now share a participant list derived from
+the selected deployment's host placement; standalone Ansible derives it from
+all Keepalived deployments in the project. A three-host RED OS preflight test
+confirmed node1/node2 selected and unassigned node3 skipped in both modes;
+13 focused tests and apply-playbook syntax check passed. The correction is now
+in the verified `f1da…` immutable bundle, and that runtime is prepared on the
+Execution Node. The first isolated Keepalived plan through Wails was blocked
+because the provider tuple was absent. After copying the S11 endpoint group
+and provider values into this project, saving, reconfirming the Execution Node
+binding and verifying again, a fresh plan passed with Apply/Verify targets
+node1,node2 and no findings. The plan was approved through Wails; Start was
+attempted twice and safely blocked before run creation by the plan-vs-manifest
+host-trust scope mismatch described above. Core now fixes the mismatch; the
+corrected runtime still needs Wails preparation and a UI Start retry. The initial
+historical event does not identify the first
+failed loop item, and `failed_when: false` means native-validation SUCCESS
+events do not reveal the original validator return codes; a separate
+historical validation failure cannot be ruled out.
+
+Owner changed the S11 order: before another full-plan run, test Keepalived,
+PostgreSQL, Redis and Vault through separate real Wails plans; then run a new
+cumulative all-services plan. Isolated Keepalived now has terminal Wails PASS
+for Apply+Verify on node1,node2; repeat `changed=0` is not yet tested.
+PostgreSQL is marked successful by the owner after a post-correction runtime
+check: node2 primary/node3 secondary, monitor-origin TLS probes to both, and
+`pg_autoctl` state without `!`. The historical failed run is preserved; no new
+Wails plan was run for the narrow health-check correction by owner decision.
+The Redis isolated project has now been rebound through the standard QA runtime
+publisher to artifact `sha256:77c1d067dd8d13d1732d91556fd6b21af83826ffffb3f88ec3dd8c0b30880ca5`
+and catalog `sha256:2fffcf55c1fda97afa1f712f7b31893f8b81e8ccd1f6909a3666ecfe5bb5cf8b`;
+node1 preparation passed. Redis and Vault Wails plans remain outstanding.
+Do not start the cumulative plan until they are complete.
+Details and acceptance evidence are in the [S11 test journal](docs/service-install-11-test-journal.md).
+
+The owner authorized CLI acquisition as preparation for Wails acceptance. The
+corrected bundle was built on the trusted RED OS acquisition node from the
+current worktree and initially published to a separate QA cache as
+`sha256:f1da6df3aeb4385ed94a499a6f5a0e07fc7213bf96fa0566da767c475c4f6b8c`.
+Its Keepalived `apply.yml` SHA-256 exactly matches the corrected worktree file;
+the previous bundle/cache was preserved at acquisition time. The exact bundle
+has since been verified and published into the active `bundle/` cache using the
+standard publisher. Wails prepared the Execution Node against it and target-free
+Core Verify passed. A Keepalived deployment was added to the existing project
+(no servers were recreated). The initial plan's endpoint findings were fixed
+through Wails using the existing S11 all-services values: group
+`qa-shared-endpoint` (`qa-renamed.example.internal`), VIP
+`192.168.56.111` on `enp0s8`, VRID `42`. After local Save, project Verify first
+reported unavailable because the selected node had lost its trusted binding;
+the UI explained that node1 was only an untrusted candidate. Its SSH
+fingerprint was matched against the existing `known_hosts`, confirmation and
+readiness check were repeated through Wails, and Verify then passed. The new
+plan for revision `sha256:2d598763478061c15753f08d96a5ef06baef17fc2d3820b062b544e48ba217b1`
+has no findings; Apply and Verify targets are exactly node1,node2. It awaits
+owner approval and was not started. No service-side changes occurred.
+
+## SI11 role defaults and override precedence (2026-10-04)
+
+The defaults regression observed in failed run
+`installer-3c61c99fe1fd0d1bd4988c42837d86b5` is corrected in the active
+uncommitted worktree. Core no longer promotes role-default-only values into
+the higher-priority runtime `set_fact` map. Kafka only projects explicit
+deployment values; absent values use role defaults or ordinary inventory
+precedence. The same conditional private-map adapter now preserves standalone
+Vault/Redis/PostgreSQL playbooks, and Keepalived advert interval 1 is a role
+default. RED OS checks passed: Core 477 tests (19 skipped), Kafka 29, Keepalived
+12, Kafka's real Ansible default/inventory/project precedence fixture and
+affected playbook syntax. I05 remains **ПРОВАЛ** until a new immutable runtime
+is exercised through a fresh real Wails full-plan run; the failed historical
+run is not relabeled as passed. Details: [S11 test journal](docs/service-install-11-test-journal.md).
+
+## SI11 PKI reissue implementation gate (2026-10-03)
+
+The owner-approved UI-triggered PKI reissue implementation is uncommitted in
+the active SI11 worktree. The five FULL DIFF blockers PKI-DIFF-01 through
+PKI-DIFF-05 were corrected under the owner's decision. The one permitted
+independent TARGETED_RECHECK returned **PASS** for all five. The corrected
+RED OS Core suite passed (473 tests, 19 skipped), as did focused real Ansible
+reissue/CA/missing-store tests, Go tests/vet and affected race tests, frontend
+lint/tests/build (104 tests), catalog reproducibility and playbook syntax.
+The Wails build had passed before these Core-only blocker corrections; no
+frontend/backend binding changed in them. No new runtime bundle or S11 run
+has been published after this review. Real Wails reissue acceptance and I05
+remain open; passing code gates does not mark S11 installation successful.
+See [S11 test journal](docs/service-install-11-test-journal.md).
+
+## SI11 restart attempt (2026-10-03)
+
+Owner requested restarting S11 with TLS Server + Client enabled. The saved
+`qa-server-profile` was updated and reopened through the real Wails UI; both
+usages are enabled. The owner then explicitly chose to reuse the existing QA
+servers without clearing them. No server cleanup was performed in this retry.
+
+SSH access was restored: the established persistent EXEC key was found in the
+main checkout, and a separate unencrypted PEM QA key was created in the active
+worktree's ignored `.runtime/secrets/` and its public key authorized on
+node1–node3. All three connections and `sudo -n` were checked. The new key's
+fingerprint matched the prior node fingerprints in workstation `known_hosts`;
+host-key approval for all project targets and explicit Execution Node binding
+were completed through Wails. node1 returned READY.
+
+A fresh Wails plan was built for saved revision
+`sha256:ca56a24669eaee851b6b73c2f0a578d71d362d27e48ba9c2de0d96142f057255`,
+containing all ten deployments on node1–node3, with no findings, and approved.
+PKCS#12 and protected-output passwords plus required ClickHouse, PostgreSQL,
+Redis/Sentinel and Docker runtime secrets were supplied through Wails; new QA
+values are stored only in ignored DPAPI files under `.runtime/secrets/`.
+Start was invoked exactly once through Wails, without cleaning any server. Run
+`installer-d471170dcf7d8e11d2325e9596b0364b` reached **FAILED** after 80 events.
+The authoritative safe journal on node1 identifies the failure: PKI action
+`pki:apply`, task `platform.core.pki_materialize : Require explicit
+authorization for certificate reissue`, event 78. Events 79–80 report
+`ANSIBLE_OPERATION_FAILED (ANSIBLE_FAILURE_UNCLASSIFIED)` and
+`EXECUTION_OPERATION_FAILED`. No service apply action started. The run stopped
+at the existing PKI reissue safety guard because the Server+Client profile
+changed the certificate-request fingerprint but the plan supplied no explicit
+reissue request authorization. No retry was started. I05 remains **ПРОВАЛ**;
+the existing reissue operation is not exposed by the Wails plan flow.
+See the live [S11 test journal](docs/service-install-11-test-journal.md).
+
+## SI11 latest continuation (2026-10-03)
+
+After QA nodes were cleared and the Windows route conflict was fixed, the
+temporary `/32` routes through VirtualBox Host-Only restored SSH. A fresh
+approved ten-deployment plan was started through the real Wails UI as run
+`installer-3153a7c00ae8b2488cf429fda6a6ce3b`. It ended **FAILED**: event 1435
+`Ansible operation failed`, event 1436 `Trusted operation failed before
+completion`. Read-only inspection of the retained safe task journal identified
+the failing task on all three nodes: `Require HA Keeper TLS listener or skip it
+for standalone`, waiting approximately 32 seconds for TCP port 9281. Keeper
+units and listeners were active after the run. Their logs repeatedly report
+`certificate verify failed` during Raft communication. The node certificates
+have valid chains and matching node SANs, but OpenSSL reports `SSL server: Yes`,
+`SSL client: No`; client-purpose verification fails as `unsuitable certificate
+purpose`. The Keeper configuration presents the same certificate/key as both
+server and client TLS identity. Thus the confirmed PKI defect is that a
+server-only certificate is reused as the Raft mutual-TLS client identity. The
+Wails Result tab still hides the failed task identity and shows only generic
+terminal events. No files on the QA nodes were changed during diagnosis and no
+retry was started. The correction path is an owner decision: issue a Keeper
+certificate with both required TLS usages, or define a separate client
+certificate, then regenerate PKI and restart the whole plan. I05 remains
+**FAILED**; evidence is in the [S11 test journal](docs/service-install-11-test-journal.md).
+
+The owner-requested one-hour lifetimes are implemented and verified. Focused
+Go tests, `go test ./...`, `go vet ./...`, and `wails build -nopackage -clean`
+pass. In the rebuilt real Wails app, the session SSH credential showed expiry
+`2026-10-03T12:16:35Z`; a newly created and approved ten-deployment plan showed
+`2026-10-03T12:19:38Z`, exactly one hour after creation. After target SSH trust
+was reapproved through the UI and session-only output, PKI, and eight service
+secrets were supplied through their UI forms, Start created run
+`installer-a8a85c7eb298a122d1df7803d85e11e1`. It ended **FAILED** with 136 UI
+events: event 135 `Ansible operation failed`, event 136
+`Trusted operation failed before completion`. The bounded WebView event list
+does not identify the failed task, so the cause is unknown; no further run was
+started. The earlier `RUNTIME_SECRET_VALUES_UNAVAILABLE` did not recur before
+this run, but the failed run does not prove the overall secret/PKI recovery
+path passed. I05 remains **FAILED** pending owner direction on diagnosis.
+
+## SERVICE-INSTALL-11 S11-00 DONE — Installer-free QA baseline (2026-10-01)
+
+SI11 is **IN PROGRESS / BLOCKED after the first all-services Start**, not DONE. The
+real no-argument Wails UI produced an approved plan for revision
+`sha256:5b52f5beec7314555395d363cdb5bf700e2580cf376dcbd613a567b811293ddb`
+with ten deployments and node1/node2/node3 as targets, but Start returned a
+misleading `PKI_STORE_PASSWORD_UNAVAILABLE` before any run ID. The owner
+authorized continued diagnosis. Go now distinguishes missing PKI and service
+passwords; React displays the failed Start. The UI secret form was corrected
+to include a catalog-required username, and Go now recognizes the saved
+two-field reference. Focused and full Go/frontend tests and Wails build pass.
+Continuation 2026-10-02: one WebView attempt initially could not renew the
+expired SSH credential session because the selected key was OpenSSH format
+(`BEGIN OPENSSH PRIVATE KEY`), while the credential field requires an
+unencrypted PEM key parsed as PKCS#8, RSA PKCS#1 or EC SEC1. That rejection
+explains the resulting `BINDING_REQUIRED`; it was not evidence of a Go/Wails
+defect. On a later WebView retry, a compatible PEM credential was accepted,
+`node1`'s SSH fingerprint matched workstation `known_hosts`, UI Check reported
+READY, and the preparation flow completed its confirmation path. This still
+does not prove clean-host runtime delivery because node1 had already received
+runtime via separate QA activation. H06/H07 remain in progress for their
+uncovered cases; the durable PEM/session preflight is recorded in [AGENTS.md](AGENTS.md)
+and the S11 [test cases](docs/service-install-11-ui-test-cases.md). See the live
+[test journal](docs/service-install-11-test-journal.md).
+Later in the same WebView session, H06 switched from node1 to node2 and back.
+Node2 initially required preparation; after in-UI fingerprint approval, the
+Preparation plan/confirmation completed, and a fresh Check returned READY.
+Returning to node1 required a fresh fingerprint confirmation and Check before
+READY was shown again. A narrow exact-prompt UIA handler was added for the
+WebView Preparation confirmation. H06/H07 remain partial: the eligibility of
+an unprobed server, cancellation, and bootstrap on a separately proven clean
+Execution Node have not been covered. In a later WebView run, node3's fingerprint
+matched workstation `known_hosts`; read-only Check returned «Требуется
+подготовка». The owner-authorized UI preparation completed, and a fresh Check
+returned READY. node3 is not a proven clean-host baseline because earlier QA
+may have touched it.
+H08 now PASSES through the real WebView: ten visible server rows were produced
+only as unsaved TEST-NET intents, independently scrolled in both directions
+through the UIA scroll-item pattern, and the Execution Node panel heading stayed
+at the same screen position. Configuration pages remained available while the
+selected draft node was NOT READY, Installation was gated, and Installation
+returned when node1 was READY. All temporary server intents were discarded and
+are absent from the project.
+Seven Docker/PostgreSQL/Redis secret references were saved through UI, while
+their values remain runtime-only. A pre-full-plan audit is recorded in the
+[Russian test journal](docs/service-install-11-test-journal.md). An attempted
+ClickHouse endpoint on an unserved QA group correctly blocked Core planning
+and was removed through UI. A later fresh plan reached `PLAN_REVIEW` without
+that `SERVICE_SECRET_INPUT_PLACEMENT_INVALID` finding. A pre-I Wails C03 retest found a
+verification-status regression: an added runtime-digest lookup revalidated the
+dynamic READY binding during an open draft and erased saved-revision evidence.
+The lookup is now guarded against active EditSession; focused/full Go tests,
+vet and Wails build pass, and real Wails Verify → Review/Save showed
+`VERIFIED → STALE`. A second real Wails case changed Certificate Scope's
+explicit DNS name and saved; the Certificates screen showed STALE without
+presenting the old SAN preview as current. Its initial fallback incorrectly
+said "not verified" for STALE; the React status projection and test were
+corrected, and the rebuilt Wails retest passed. The test DNS value was
+reverted through UI to the original revision, which remains STALE until a
+new Verify. C03 now PASSES. The Russian S11 journal includes a description
+column for every test case. A fresh Wails plan on the current revision again
+reached `PLAN_REVIEW`; eight service passwords plus output/PKI passwords were
+submitted through the real UI. The late-created UI Execution Node binding
+initially lacked its credential-lease provider; after the narrow Go fix,
+Start created authoritative run
+`installer-313e1f3cfe2c0c31350871d6915a1df4`. That run ended `FAILED`
+at PKI target-directory preparation on node1/node2/node3, before service
+installation. During event polling the Windows UI repeatedly opened and
+closed console windows, stealing focus; the user closed the app manually.
+SSH/host-key child processes now request no Windows console window; Go tests,
+vet and Wails build pass, but real UI retest remains pending. I05 remains
+FAILED. The run's PKI task failure (`ANSIBLE_FAILURE_UNCLASSIFIED`) is a
+separate blocker; no all-services installation has passed.
+Read-only follow-up localized the likely cause to private-key target transport:
+the lease accepts a private key, but the controller passes only password-mode
+credentials to Ansible. The Execution Node has no default SSH private key for
+`platform-automation`; node1→node1 without an explicit key returned
+`AUTH_DENIED`. The owner authorized a narrow runtime-only leased-PEM adapter.
+The first independent DIFF review found `S11-KEY-01` in Cancel cleanup.
+After an owner-authorized correction, targeted recheck still BLOCKS: a failed
+`systemctl stop` can leave an active controller, while a subsequent
+`GetExecution` recovery removes its temporary key from a terminal
+`CANCELLED` journal without confirming unit inactivity. The additional
+owner-authorized correction to the unit-status query passed 438 Core tests
+(19 skipped) on RED OS. A further owner-authorized change now retains
+temporary connection files in terminal recovery until unit inactivity is
+confirmed. A final owner-authorized narrow correction moved attached lease
+cleanup behind the same confirmed-inactive check; the regression now uses a
+real attached test lease. The targeted recheck resolved `S11-KEY-01` with
+zero blocking findings, and 439 Core tests pass (19 skipped) on RED OS. No
+The exact correction was published as a new immutable runtime release
+`sha256:79fb40d447c870f0d86d09322489630381e5261325eae6bf6d8c076e9bc6c192`
+and activated on node1 through the supported QA path. The real no-argument
+Wails app reopened the QA project, confirmed node1 READY, built and approved
+a fresh ten-deployment plan for saved revision
+`sha256:a964eba760c607e641a03c07c0d90610667abb8b588fd12d246df81e3d52be49`.
+Output, PKI and eight deployment secrets were supplied through the UI in
+session memory. One Start created authoritative run
+`installer-322051a844b4ed5ffc23e4c2594fe76a`, which ended `FAILED`.
+The real UI shows task-event pairs only as generic start/completed labels for
+`localhost`, then event 135 `Ansible operation failed` and event 136
+`Trusted operation failed before completion`. I05 remains FAILED, and no
+repeat was started. Narrow safe journal inspection places the failure in
+PKI `keytool -list` verification of dedicated PKCS12 stores; its task name is
+redacted by `no_log`. A newly generated QA PKI password may not match stores
+from the earlier run; this is a hypothesis, not a confirmed product defect.
+Password/state diagnosis and another Wails run await owner direction.
+After owner authorization, a fresh Wails plan used the existing protected QA
+PKI password and produced run `installer-f7d80d6b2d587fc222773a39a528e416`.
+PKCS12 verification no longer failed, but the run ended `FAILED` at
+`Prepare deployment-owned PKI target directory` on node1/node2/node3.
+Read-only diagnosis found that the Execution Node has no
+`/var/lib/platform-installer/execution/known_hosts`, while the controller
+requires that file with `StrictHostKeyChecking=yes` for target SSH. The same
+QA PEM reaches all three targets from Windows; this does not establish
+controller-side host trust. No third run was started. I05 remains FAILED;
+target host-trust provisioning needs an owner-approved supported path, not
+disabled host-key checking.
+
+The owner-approved target host-trust handoff is implemented, but I05 remains
+FAILED. The original ignored `.runtime` SI11 project was lost with the archived
+worktree; its exact seven-file portable project was recovered from run
+`installer-f7d80d6b2d587fc222773a39a528e416` into
+`.runtime/qa/si11-recovered-20261002`. Wails confirmed its original revision
+`sha256:a964eba760c607e641a03c07c0d90610667abb8b588fd12d246df81e3d52be49`
+and three correct target addresses. A bounded Core fix now accepts both
+decimal staging IDs and authoritative 32-character hex run IDs when verifying
+run-local target `known_hosts`; its focused RED OS regression passed. New
+immutable runtime `sha256:ca9a38b1fa0943482633809241726833db218a7df557630531e7713797aef1da`
+is active on node1, and the recovered project's lock-set revision is
+`sha256:0371f510d8e7c5f8b3e1fe04019595d93630f31795c6194aeca8ef7ecff678d2`.
+The real Wails WebView confirmed READY node1, independently matched and
+approved SSH host keys for node1/node2/node3, built a clean ten-deployment
+`PLAN_REVIEW`, stored a session-only output password and approved the plan.
+Start was not pressed: the old SI11 DPAPI credential files were ignored runtime
+inputs and did not survive worktree archival. A different older local PKI
+password was safely checked against the existing node1 PKCS12 keystore and
+returned `MISMATCH`; its temporary remote copy was removed. Recover the
+original PKI and service secrets or agree on safe QA PKI/service reset before
+another WebView Start. The [test journal](docs/service-install-11-test-journal.md)
+records the evidence. No new run ID or installation success is claimed.
+
+The independent DIFF blocker `S11-DIFF-01` is now RESOLVED: the Core private
+connection projection rejects `ansible_ssh_host` and `ansible_ssh_port` before
+target trust staging can authorize Start. Targeted recheck APPROVED with zero
+remaining findings in scope. Core (447 tests, 19 skipped), Go, affected race,
+frontend (102 tests), Wails build, catalog/schema reproducibility and scoped
+security/diff checks passed. I05 remains FAILED because a real Start with the
+new immutable runtime has not yet completed.
+
+The owner replaced the clean-OS snapshot/reinstall requirement with bounded
+removal of Installer, Execution Node and QA-installed service state on the
+dedicated node1/node2/node3 VMs (`192.168.56.101`–`.103`). This is an
+**Installer-free QA baseline**, not a claim of a freshly installed OS.
+S11-00 targeted cleanup and final absence audit passed on all three VMs:
+QA units/packages/accounts and confirmed service/runtime data were removed;
+`/etc/hosts` matches its pre-Installer backup; SSH, passwordless sudo,
+systemd-resolved and enabled repositories remain available. The four failed
+OS/VirtualBox units are unrelated to Installer services. This is not a claim
+that OS settings were restored to a pristine image; see the retained-state
+exceptions in the [cleanup record](docs/service-install-11-cleanup.md).
+The original S11-00 baseline did not include an installation run; the first
+all-services run is now recorded above. [Roadmap boundary](docs/roadmap.md).
+SI11 UI test case V02 now PASSES through the real no-argument Wails WebView:
+the saved project opened, the session PEM and independently matched SSH host
+key were approved, node1 reported READY, and Project Verify reported
+`Проверено`. The owner-approved Go staging correction creates the fixed
+`/var/tmp/platform-installer/execution-plan` parent safely before the unique
+run child. The parent is owned by `platform-automation`, mode `0700`, and
+contains no leftover run directories after Verify. Four canonical project file
+digests remained unchanged. Focused/full Go tests, vet, Wails production build
+and diff check passed. D01/D02 targeted DIFF review had previously passed with
+zero blockers; it was not repeated for this bounded staging correction. No
+service installation was performed. V02 UI preparation restored the Execution
+Node runtime on node1, so its current state is no longer the original
+Installer-free S11-00 baseline; a strict fresh S11 restart must re-establish
+that baseline first.
+[V02 plan](docs/si11-v02-trusted-binding-plan.md) and
+[test journal](docs/service-install-11-test-journal.md).
+SI11 V03 Verify→Save status correction is now accepted through real Wails UI.
+The first run had wrongly displayed `UNVERIFIED` after a committed change.
+The owner-approved narrow fix preserves prior verification as `STALE` without
+old findings/identity previews, and prevents read-only node/plan status
+refreshes during a draft from revoking that evidence. In the rebuilt `.exe`,
+Verify showed «Проверено»; a Save changing only disposable
+`node2.desiredHostname` changed canonical `inventory/hosts.yml` from SHA-256
+`20273344…177129` to `135BFA52…2E7977E` and displayed «Проверка устарела».
+Installation remained disabled. The full V03 case now PASSES: a real Wails
+repeat showed that an old approved plan cannot Start with an unsaved draft or
+after Save changes the project revision. React checks current InstallationState,
+plan identity and saved revision before enabling Approve/Start. No service was
+installed.
+Details are in the test journal.
+SI11 V04 now PASSES through the real Wails WebView. Sixteen endpoint-group
+intents reached the shared draft limit; a seventeenth action was disabled,
+Discard left canonical files unchanged, and reopen showed no QA draft data.
+The entry-points page initially omitted remaining command capacity; a bounded
+React label now shows the shared used/remaining count. The rebuilt `.exe`
+showed `16` used and `0` remaining before repeat Discard. Frontend 80/80,
+lint/build, Wails build and diff check passed. No service was installed.
+2026-10-03 S11 continuation: real WebView review of Installation tabs found
+the internal `READY_TO_PLAN` enum exposed as the summary badge. React now maps
+known Installation/plan/run/output statuses to Russian labels and hides unknown
+enum values behind safe generic text. Focused InstallationPage tests 13/13,
+full frontend tests 103/103, lint/build and Wails `-nopackage -clean` pass;
+new executable SHA-256 is
+`6D1484DCC7FA2E090C6A00B63A83A8545AEBCC24A0E9C6006609A71FD9A49730`.
+The rebuilt no-argument app was opened through the actual WebView flow; the
+existing project was selected with its native Wails folder picker. The
+Execution Node session was restored through the UI, node1 fingerprint was
+matched to the existing `known_hosts` entry and confirmed, and read-only Check
+returned READY. The Installation summary then showed «Готов к построению
+плана» and no longer exposed `READY_TO_PLAN` (**this narrow localization
+check passes**). No project files were changed, no plan was created and Start
+was not pressed. Overall L01 remains failed because catalog labels and other
+forms still contain English text. The owner has now authorized recreation of
+the QA PKI after the prior PKCS12 password mismatch. The only existing reset
+path is `ansible-core/playbooks/pki-reissue.yml`; it is not exposed through
+Wails and reissues selected leaf requests while retaining the managed CA. SI11
+acceptance forbids direct Ansible/Core invocation, so no reset was performed;
+owner direction is required on whether this one-time pre-test reset may use the
+existing playbook outside acceptance. Full-plan acceptance itself remains
+Wails-only.
+After `S11-00` is verified, the SI11 installation test must operate
+exclusively through the real Wails/React UI. QA scripts that directly call
+Wails Go bindings, Go, Ansible or Core, or replace UI/native-dialog behavior,
+are forbidden for acceptance. The user-visible interface must support and
+show the complete project-to-terminal flow; missing UI capability blocks SI11
+instead of triggering a backend bypass. Read-only logs can corroborate, not
+replace, the UI result.
+The staged, not-yet-executed coverage matrix for **implemented UI actions** is
+[SI11 UI test cases](docs/service-install-11-ui-test-cases.md). A hypothetical
+project-delete action is not required; it was only an example, not a feature
+request. SI11 UI test cases are in progress; the all-services installation
+cycle remains NOT STARTED.
+S01 navigation now PASSES after a real Wails reopen: all ten structurally
+saved deployments open in their own settings from the service list and
+Topology. Their install-ready configuration remains S05 work.
+S02 now PASSES in real Wails: Vault
+`vault-1` port `8301 → 8311 → 8312` stayed off disk until Save, reopened as
+`8312`, then was restored through UI to `8301` with exact original project,
+group-vars and node1 host-vars hashes. In a separate disposable imported
+fixture, editing Keepalived `advertInterval` through the same UI Save preserved
+a pre-existing unsupported `advancedConfig` value; reopen showed its presence
+but did not reveal raw YAML. The fixture was removed afterward. This is UI
+editor acceptance, not install-ready service configuration.
+In a separate disposable QA copy, S11 S01 now has ten structurally saved
+deployments; the seven newly added service pages opened through the real
+Wails UI, but installation topology/settings are unfinished. S11 S06 is in
+progress. A disposable QA copy now opens in the real Wails WebView with
+immutable bundled defaults visible in input fields and source labels;
+unchanged values do not enable «Применить». A new immutable runtime with
+target-free Core preview is active on QA node1. The owner also approved
+amending one already-applied service-setting command before Save; the real
+Wails WebView passed `8443 → 8444 → 8445 → Reset 8443` with one draft command
+and no canonical file changes. The subsequent S06 continuation found a Go
+blocker: withdrawing the final command left an empty EditSession active.
+The owner-authorized narrow Go/React fix now closes that session. A real Wails
+repeat confirmed that the draft disappears and node1 host-key/readiness flow
+is usable again. The QA topology was then completed enough to expose a Core
+member-setting defect: snapshot materialization replaced inventory-owned
+member configuration with topology-only members. The owner-authorized narrow
+Core fix keeps verified topology identity and member configuration together.
+All 426 RED OS Core tests passed; a new immutable runtime
+`sha256:821c5a158c58acec79948060b9d3a5674ea442f9e58d56351a20493326f7bb3f`
+was published/activated and the disposable QA project's runtime lock set was
+CAS-updated. Real Wails reopen and READY node1 then showed the distinct Vault
+3-on-1 values `8301`/`8302`/`8303` as member overrides, while deployment
+`8300` remained separate and project status remained UNVERIFIED. A real UI
+ClickHouse `8443 → 8444 → Save → Reset → Save` test invalidated Core preview
+at draft/Save, preserved the UNVERIFIED state, and restored exact original
+`project.yml` and group-vars file digests. The draft-only inherited label was
+corrected from «Сохранено» to «Задано» and checked in a rebuilt Wails WebView;
+the verification draft was discarded without changing canonical bytes.
+That repeat exposed a React-only discard defect: after the shared EditSession
+was discarded, the service form retained an unapplied input. The form now
+resets with the shared draft lifecycle. A fresh Wails WebView run passed
+ClickHouse `8443 → 8444` Apply → local `8445` → Discard → `8443` with Apply
+and Reset disabled; the canonical project and group-vars SHA-256 values stayed
+unchanged. Frontend tests 97/97, lint/build and Wails build passed.
+Further real Wails S11 checks passed for Vault member amend/discard, Kafka
+enum edit/discard, Docker bounded-string 32/33-character Review boundary,
+and BIND Zone pattern admission; all test drafts were discarded and checked
+canonical hashes remained unchanged. The first ClickHouse Secrets action
+created only SecretRef draft intents and requested a project Save before
+session-value entry; that draft was discarded. Its one-time QA value was not
+found in any of the seven portable project files, but the full two-step
+session-secret acceptance remains open.
+The subsequent real WebView two-step ClickHouse test saved only a
+`passwordSecretRef` through Review/Save in managed group-vars and then accepted
+a fresh session-only value with no new draft. Neither one-time QA value was
+found in the seven portable project files; the UI now describes only the
+saved reference, not availability of a session value. Real Wails native-file
+dialogs rejected a non-Vault JSON and accepted separate synthetic valid-format
+JSON inputs for both Vault file requirements without changing canonical
+project hashes. The synthetic files are not real Vault credentials and were
+not used for installation. Encrypted-file input and event/journal non-leakage
+remain unverified, so S04 and S06 are not DONE.
+S06 is **IN PROGRESS**: other configuration and secret-safety cases remain.
+No installation was started.
+The separate S07 navigation correction now lists member-to-host placements
+in Topology by services and opens the existing member editor from both
+Topology tabs. S07 navigation now PASSES in real Wails after reopening the
+saved QA project: all three Vault members on node1 opened their distinct
+settings from both tabs, and host-scoped DNS client opened deployment
+settings without a synthetic member. No project bytes changed. See the Russian
+[SI11 test journal](docs/service-install-11-test-journal.md).
+The original disposable QA project has `serviceDeployments: {}`. Its plan has
+empty apply/verify phases, not service-installation actions. The UI now
+explains empty action lists and displays `serviceDeployment` when present;
+the empty-state text passed a real Wails WebView check. A separate future,
+nonblocking [UI-UX-01 production-ready design audit](docs/ui-ux-01-proposals.md) covers
+the entire interface, including layout density and excessive whitespace.
+In a separate disposable QA copy with Kafka, Keepalived and Vault, a real
+target-free Wails plan showed all three deployment IDs and the Russian phase
+labels. Its incomplete topology correctly left planning blocked; no Start was
+attempted. The plan's observed English Core `safeMessage` findings and the
+session output-password mismatch error now have bounded Russian React display
+text, confirmed in the rebuilt WebView. The broad L01 localization case remains
+FAILED because catalog labels and other forms are still open. SI11 I01 now
+PASSES, including all four Installation tabs, stale-plan gating and real
+deployment IDs in a nonempty target-free plan. I02 remains in progress after
+negative and positive session-password UI checks; the application was closed
+to clear that session. See the live test journal.
+
+On 2026-10-02, the current Wails retry reopened the recovered ten-deployment
+project and selected `node1` through the UI. The PEM session credential and
+SSH host fingerprint were handled in WebView; the fingerprint matched the
+workstation's existing `known_hosts`. UI Check reported READY. The UI
+Preparation plan required confirmation; the confirmation action completed and
+the WebView reported `Подготовлен` (project Verify: `Проверено`). An earlier
+QA runtime activation on node1 had happened outside WebView and is not counted
+as user-flow evidence; the UI preparation result is recorded separately.
+A fresh UI plan for revision
+`sha256:85b69051d9e86d17c4eb2e2f81afe007ff43d8023a7050f416f0d0a2cb6baad9`
+reached `PLAN_REVIEW` for ten deployments targeting node1/node2/node3 with no
+Core findings. The missing Docker QA password was generated after owner
+authorization, stored only as DPAPI CurrentUser under ignored
+`.runtime/secrets/`, and submitted through the `qa-docker` Secrets dialog.
+The existing DPAPI output-encryption password was also entered through the UI;
+the plan was approved. Start remains disabled pending the PKI store password.
+The older candidate PKI password was previously proven MISMATCH against the
+existing node1 keystore, so it will not be submitted and no replacement PKI
+password will be guessed. No Start was pressed and no new run ID exists. I05
+remains failed from the prior run and is blocked before Start pending safe
+recovery of the matching original PKI password or an owner-approved QA PKI
+reset. L01 remains failed because ClickHouse catalog labels and other strings
+are still English. The UI automation pre-action tone remains Windows
+`Asterisk` with a three-second warning.
+
+## SERVICE-INSTALL-10 Docker rootless + Compose DONE (2026-10-01)
+
+Owner reassigned SI10 to Docker rootless + Compose; the all-services single-plan
+cycle is SI11, now in progress. [SI10 architecture and evidence](docs/service-docker-rootless-architecture.md).
+Autonomous RED OS Ansible existing-user/create-user apply, verify and strict
+repeat passed (`changed=0`). The two owner-approved DIFF blockers were
+corrected and the single targeted recheck passed with zero blockers. Docker's
+rootless-extras RPM is `noarch`; its exact manifest requirement was corrected
+without weakening the generic source policy. The immutable QA runtime digest
+is `sha256:46fbb7be6578c5e5c004188e7ad6b8b4945ab8519365a820374d4d61e8770165`.
+Real nonvisual React/Wails -> Go -> READY Execution Node plan/start produced
+`installer-b37382a3d07ccc3ce4472f2d251274db` SUCCEEDED and a strict repeat
+`installer-5c5f5df7fa464a1f7ace36eae87209dc` SUCCEEDED. The repeat had
+PKI/Docker apply/verify SUCCESS, zero CHANGED/FAILED tasks and terminal state
+observed through the Wails binding. The selected rootless systemd target,
+bridge and user service stopped on LXC stop, rejected manual start before
+readiness, restored on late LXC start and recovered automatically after QA
+reboot. Compose and mutual-TLS API positive/negative probes passed; rootful
+Docker service/socket stayed inactive. Full RED OS Core suite passed 419 tests
+(19 skipped), focused Docker tests 2/2 and playbook syntax passed. Go full
+test/vet, affected RED OS race tests, frontend lint/67 tests/build, Wails
+production build, catalog/schema reproducibility, focused secret audit and
+`git diff --check` passed. This is completed SI10 Docker evidence, not proof
+that Docker has been installed in the current SI11 all-services cycle.
+
 ## SERVICE-INSTALL-09 ClickHouse PARTIAL ACCEPTANCE, NOT DONE (2026-09-29)
 
 Owner requested the next service: ClickHouse 1/1 standalone without Keeper,
 then 3/1 and 3/3 with one paired server+Keeper member per replica, TLS on all
-enabled protocols and an HTTPS endpoint. The original all-services one-plan
-final acceptance is now SERVICE-INSTALL-10 (nine services). Architecture plan:
+enabled protocols and an HTTPS endpoint. The all-services one-plan final
+acceptance was subsequently assigned to SI11. Architecture plan:
 [SI09](docs/service-install-09-clickhouse-architecture.md). The first FULL
 PLAN review identified source-authenticity and HTTPS-authentication gaps; the
 owner approved signed upstream repository metadata plus exact RPM checksums,
@@ -76,7 +809,8 @@ The owner explicitly declined another cumulative full-plan run and requested
 partial acceptance. Therefore the required real React/Wails -> Go -> Execution
 Node terminal PASS is absent: SI09 remains NOT DONE. The next formal gate is a
 new terminal PASS and strict repeat through the real bridge, if later
-authorized. SERVICE-INSTALL-10 has NOT started.
+authorized. SI10 is Docker acceptance as recorded above; SI11 is now in
+progress, with no all-services installation run yet.
 Owner deferred generic scoped endpoint-provider execution to the separate
 NOT STARTED `EXEC-PLAN-SCOPE-01` milestone after SI09 functional QA. Current
 full-plan execution must not be misreported as selective provider reconcile.
@@ -1757,15 +2491,3 @@ review. UI-01E is decomposed into E1-E6; UI-01E1 server CRUD integration is
 DONE; UI-01E2 through UI-01E6 and UI-01F1 through UI-01F6 are DONE. UI-01F
 overall is DONE; UI-NET-01 is DONE, UI-01G overall and UI-01H overall are DONE, UI-01I and UI-01J
 are DONE, and UI-01 overall is DONE.
-
-## SI11 latest isolated acceptance: Redis/Sentinel PASS (2026-10-04)
-
-The isolated `qa-redis` 3/3 deployment completed successfully through the
-real nonvisual React/Wails -> Go -> READY Execution Node path. Run
-`installer-fc60535b1137f40104a7c899cd91bb9d` targeted node1, node2 and node3;
-the terminal event sequence ended at 1546 (`Execution controller completed`).
-Saved project revision:
-`sha256:28eb9be0d07f385abd1eb400318d1bc8611efca2857444e78da523e04a632108`.
-No repeat `changed=0` run was performed. This is isolated Redis acceptance,
-not the all-services SI11 plan. Vault remains the next isolated project; do
-not start the cumulative plan before its isolated acceptance is complete.

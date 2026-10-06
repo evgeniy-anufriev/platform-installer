@@ -24,7 +24,7 @@ def catalog():
     }}
 
 def snapshot(identity_source="PROJECT_MANIFEST"):
-    return {"project": {"id": "project-a", "identitySource": identity_source}, "projectRevision": DIGEST, "catalogRevision": DIGEST, "validation": {"status": "PASS"}, "findings": [], "hosts": {"node1": {}}, "serviceDeployments": {"provider": {"serviceType": "provider"}, "consumer": {"serviceType": "consumer"}}, "pki": {"certificateIdentities": [{"consumers": [{"deploymentId": "consumer"}]}]}}
+    return {"project": {"id": "project-a", "identitySource": identity_source}, "projectRevision": DIGEST, "catalogRevision": DIGEST, "validation": {"status": "PASS"}, "findings": [], "hosts": {"node1": {}}, "serviceDeployments": {"provider": {"serviceType": "provider"}, "consumer": {"serviceType": "consumer"}}, "topology": {"placementsByHost": {"node1": {"provider": {}, "consumer": {}}}}, "pki": {"certificateIdentities": [{"consumers": [{"deploymentId": "consumer"}]}]}}
 
 def runtime(digest=DIGEST): return {"bundleDigest": digest, "coreVersion": "0.1.0", "catalogDigest": DIGEST, "planningProtocol": "v1alpha1"}
 
@@ -32,6 +32,46 @@ def sources():
     return [{"serviceType": "consumer", "requirementId": "consumer", "name": "consumer", "version": "4.3.1", "os": "redos", "architecture": "x86_64", "digest": DIGEST, "ref": "runtime/artifacts/consumer/consumer.tgz", "sha256": DIGEST, "size": 1, "type": "archive"}]
 
 class DeploymentPlanTests(unittest.TestCase):
+    def test_service_actions_use_only_selected_hosts_for_member_and_host_scoped_placement(self):
+        state = snapshot()
+        state["hosts"] = {"node1": {}, "node2": {}, "node3": {}}
+        state["pki"] = {"certificateIdentities": []}
+        state["topology"] = {"placementsByHost": {
+            "node1": {"provider": {"priority": 70}},
+            "node2": {"consumer": {"members": {"consumer-1": {"roles": ["client"]}}}},
+            "node3": {},
+        }}
+        connections = {
+            host_id: {"address": "192.0.2.%d" % index, "port": 22,
+                      "mode": "ssh", "unsupportedOptions": False}
+            for index, host_id in enumerate(("node1", "node2", "node3"), start=1)
+        }
+        result = PLAN.build_deployment_plan(
+            state, catalog(), runtime(), bundle_artifact_sources=sources(),
+            execution_connections=connections,
+        )
+        self.assertEqual("EXECUTABLE", result["deploymentPlan"]["status"])
+        public = {item["id"]: item for phase in result["deploymentPlan"]["phases"] for item in phase["actions"]}
+        private = {item["operationId"]: item for item in result["executionManifest"]["operations"]}
+        for suffix, hosts in (("provider", ["node1"]), ("consumer", ["node2"])):
+            for prefix in ("apply", "verify"):
+                key = "%s:%s" % (prefix, suffix)
+                self.assertEqual(hosts, public[key]["targets"])
+                self.assertEqual(hosts, private[key]["targets"])
+        self.assertNotIn("node3", json.dumps([item["targets"] for item in private.values() if item["operation"] in ("SERVICE_APPLY", "SERVICE_VERIFY")]))
+        self.assertEqual({"node1", "node2"}, set(result["executionManifest"]["targetConnections"]))
+
+    def test_missing_or_invalid_placement_blocks_execution_without_all_host_fallback(self):
+        for placements in (None, {}, {"node1": {"provider": {}}, "node2": {"consumer": {}}, "node3": []}):
+            with self.subTest(placements=placements):
+                state = snapshot()
+                state["hosts"] = {"node1": {}, "node2": {}, "node3": {}}
+                state["topology"] = {"placementsByHost": placements} if placements is not None else None
+                result = PLAN.build_deployment_plan(state, catalog(), runtime(), bundle_artifact_sources=sources())
+                self.assertEqual("BLOCKED", result["deploymentPlan"]["status"])
+                self.assertIsNone(result["executionManifest"])
+                self.assertIn("SERVICE_TARGETS_UNAVAILABLE", [item["code"] for item in result["deploymentPlan"]["findings"]])
+
     def test_deterministic_public_private_and_schema_safe(self):
         first = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources())
         second = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), "2099-01-01T00:00:00Z", sources())
@@ -94,7 +134,7 @@ class DeploymentPlanTests(unittest.TestCase):
         state["topology"] = {"resolved": {"serviceDeployments": {"provider": {"members": {
             "monitor": {"host": "node1", "roles": ["monitor"]},
             "data": {"host": "node2", "roles": ["database"]},
-        }}}}}
+        }}}}, "placementsByHost": {"node1": {"provider": {}}, "node2": {"provider": {}}}}
         configuration = {"services": {"provider": {"mode": "active", "configuration": {"enabled": {"state": "RESOLVED", "value": True}}, "members": {
             "monitor": {"variableContext": {"hostId": "node1"}, "configuration": {"enabled": {"state": "RESOLVED", "value": True}}},
             "data": {"variableContext": {"hostId": "node2"}, "configuration": {"enabled": {"state": "RESOLVED", "value": True}}},
@@ -156,6 +196,69 @@ class DeploymentPlanTests(unittest.TestCase):
         contracts = Path(__file__).resolve().parents[2] / "contracts"
         self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(plan, contracts / "plan" / "v1alpha2" / "schema.json"))
 
+    def test_changed_pki_request_is_visible_and_privately_bound(self):
+        pki = {"requests": [{"id": "tls--node1", "certificateRequestFingerprint": DIGEST,
+                              "authorityId": "ca", "authorityFingerprint": DIGEST,
+                              "consumers": [{"deploymentId": "consumer", "hostId": "node1"}]}],
+               "materializationPlans": [{"requestId": "tls--node1", "hostId": "node1"}]}
+        old = "sha256:" + "b" * 64
+        selected = [{"requestId": "tls--node1", "expectedOldFingerprint": old,
+                     "desiredFingerprint": DIGEST, "recoveryFingerprint": None,
+                     "authorityId": "ca", "authorityFingerprint": DIGEST}]
+        result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(),
+                                            bundle_artifact_sources=sources(),
+                                            pki_materialization=pki, pki_reissue=selected)
+        plan, manifest = result["deploymentPlan"], result["executionManifest"]
+        reissue, apply = plan["phases"][0]["actions"]
+        self.assertEqual(("PKI_REISSUE", ["node1"]), (reissue["type"], reissue["targets"]))
+        self.assertIn("tls--node1", reissue["summary"])
+        self.assertIn("consumer", reissue["summary"])
+        self.assertIn("node1", reissue["summary"])
+        self.assertEqual(["pki:reissue"], apply["dependsOn"])
+        self.assertEqual(selected, manifest["operations"][0]["reissueRequests"])
+        self.assertNotIn(old, json.dumps(plan))
+        contracts = Path(__file__).resolve().parents[2] / "contracts"
+        self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(plan, contracts / "plan" / "v1alpha2" / "schema.json"))
+
+    def test_reissue_fingerprint_binds_old_and_recovery_observations(self):
+        pki = {"requests": [{"id": "tls--node1", "certificateRequestFingerprint": DIGEST,
+                              "authorityId": "ca", "authorityFingerprint": DIGEST,
+                              "consumers": [{"deploymentId": "consumer", "hostId": "node1"}]}],
+               "materializationPlans": [{"requestId": "tls--node1", "hostId": "node1"}]}
+        selected = [{"requestId": "tls--node1", "expectedOldFingerprint": "sha256:" + "b" * 64,
+                     "desiredFingerprint": DIGEST, "recoveryFingerprint": None,
+                     "authorityId": "ca", "authorityFingerprint": DIGEST}]
+        first = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(),
+                                           pki_materialization=pki, pki_reissue=selected)["deploymentPlan"]
+        changed_old = copy.deepcopy(selected)
+        changed_old[0]["expectedOldFingerprint"] = "sha256:" + "c" * 64
+        changed = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(),
+                                             pki_materialization=pki, pki_reissue=changed_old)["deploymentPlan"]
+        self.assertEqual(first["phases"], changed["phases"])
+        self.assertNotEqual(first["fingerprints"]["plan"], changed["fingerprints"]["plan"])
+        self.assertNotEqual(first["id"], changed["id"])
+        resumed = copy.deepcopy(selected)
+        resumed[0]["recoveryFingerprint"] = DIGEST
+        recovery_plan = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(),
+                                                   pki_materialization=pki, pki_reissue=resumed)["deploymentPlan"]
+        self.assertNotEqual(first["fingerprints"]["plan"], recovery_plan["fingerprints"]["plan"])
+
+    def test_shared_host_request_discloses_both_consuming_deployments(self):
+        pki = {"requests": [{"id": "tls--node1", "certificateRequestFingerprint": DIGEST,
+                              "authorityId": "ca", "authorityFingerprint": DIGEST,
+                              "consumers": [{"deploymentId": "provider", "hostId": "node1"},
+                                            {"deploymentId": "consumer", "hostId": "node1"}]}],
+               "materializationPlans": [{"requestId": "tls--node1", "hostId": "node1"}]}
+        selected = [{"requestId": "tls--node1", "expectedOldFingerprint": "sha256:" + "b" * 64,
+                     "desiredFingerprint": DIGEST, "recoveryFingerprint": None,
+                     "authorityId": "ca", "authorityFingerprint": DIGEST}]
+        plan = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(), bundle_artifact_sources=sources(),
+                                          pki_materialization=pki, pki_reissue=selected)["deploymentPlan"]
+        summary = plan["phases"][0]["actions"][0]["summary"]
+        self.assertIn("consumer", summary)
+        self.assertIn("provider", summary)
+        self.assertIn("node1", summary)
+
     def test_service_secret_requirement_is_catalog_declared_and_private_bound(self):
         value, state = catalog(), snapshot()
         value["definitions"]["provider"].update({"configuration": {"settings": {"credential": {"schema": {"type": "object", "additionalProperties": False, "required": ["passwordSecretRef"], "properties": {"passwordSecretRef": {"type": "string"}}}, "ui": {"label": "Provider password", "x-runtimeSecretRequirement": {"requirementRef": "provider-password", "purpose": "SERVICE_PASSWORD"}}}}}, "roleEntrypoints": {"apply": {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_"}, "verify": {"fqcn": "p.p.r", "variablesPrefix": "platform_provider_"}}})
@@ -185,7 +288,7 @@ class DeploymentPlanTests(unittest.TestCase):
             "vault-1": {"host": "node1", "roles": ["vault"]},
             "vault-2": {"host": "node2", "roles": ["vault"]},
             "vault-3": {"host": "node3", "roles": ["vault"]},
-        }}}}}
+        }}}}, "placementsByHost": {"node1": {"vault-ha": {}}, "node2": {"vault-ha": {}}, "node3": {"vault-ha": {}}}}
         execution_configuration = {"services": {"vault-ha": {
             "mode": "raft-ha", "configuration": {"tlsProfile": {"state": "RESOLVED", "value": "infra-tls"}},
             "members": {"vault-%d" % index: {"variableContext": {"hostId": "node%d" % index}, "configuration": {"tlsProfile": {"state": "RESOLVED", "value": "infra-tls"}}}
@@ -257,10 +360,31 @@ class DeploymentPlanTests(unittest.TestCase):
             }}}}
         values = PLAN._execution_role_variables("vault-ha", definition, "platform_vault_", service,
             ["node1"], resolved, {"node1": {"ansibleHost": "192.0.2.1"}}, "platform_vault_instances")
-        self.assertEqual(8200, values["node1"]["platform_vault_api_port"])
+        self.assertNotIn("platform_vault_api_port", values["node1"])
         self.assertEqual([{}, {"port": 8210}], [
             {key: item[key] for key in item if key == "port"}
             for item in values["node1"]["platform_vault_instances"]])
+
+    def test_role_defaults_are_not_promoted_to_runtime_facts(self):
+        settings = {key: {"roleVariable": "platform_vault_" + key} for key in
+                    ("literal", "reference", "dynamic", "deployment", "document", "member")}
+        definition = {"configuration": {"settings": settings}}
+        base = {
+            "literal": {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": 1},
+            "reference": {"state": "RESOLVED", "source": "STATIC_REFERENCE", "origin": "ROLE_DEFAULT", "value": 2},
+            "dynamic": {"state": "DEFERRED", "source": "RUNTIME_DEFERRED", "reason": "NON_LITERAL_ROLE_DEFAULT"},
+            "deployment": {"state": "RESOLVED", "source": "DEPLOYMENT_OVERRIDE", "value": 3},
+            "document": {"state": "RESOLVED", "source": "DEPLOYMENT_OVERRIDE", "physicalOrigin": "group_vars/all.yml", "value": 4},
+            "member": {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": 5},
+        }
+        member = copy.deepcopy(base)
+        member["member"] = {"state": "RESOLVED", "source": "MEMBER_OVERRIDE", "value": 6}
+        execution = {"services": {"vault-ha": {"mode": "raft-ha", "configuration": base,
+                                           "members": {"vault-1": {"variableContext": {"hostId": "node1"},
+                                                                   "configuration": member}}}}}
+        values = PLAN._execution_role_variables("vault-ha", definition, "platform_vault_", execution, ["node1"])
+        self.assertEqual({"platform_vault_mode": "raft-ha", "platform_vault_deployment": 3,
+                          "platform_vault_document": 4, "platform_vault_member": 6}, values["node1"])
 
     def test_haproxy_provider_apply_follows_explicitly_related_source(self):
         deployments = {"haproxy": {"serviceType": "haproxy"},
@@ -336,7 +460,7 @@ class DeploymentPlanTests(unittest.TestCase):
             "vault-1": {"host": "node1", "roles": ["vault"]},
             "vault-2": {"host": "node1", "roles": ["vault"]},
             "vault-3": {"host": "node1", "roles": ["vault"]},
-        }}}}}
+        }}}}, "placementsByHost": {"node1": {"vault-ha": {}}}}
         result = PLAN.build_deployment_plan(state, value, runtime())
         self.assertEqual(["node1"], result["deploymentPlan"]["requiredCredentials"][0]["hosts"])
         private = result["executionManifest"]["runtimeSecretInputs"][0]

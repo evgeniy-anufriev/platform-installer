@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/service-configuration-preview/v1alpha1/schema.json",
+  "title": "Target-free read-only managed service configuration preview",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "projectRevision", "services"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/service-configuration-preview/v1alpha1"},
+    "kind": {"const": "ServiceConfigurationPreview"},
+    "projectRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "services": {"type": "object", "maxProperties": 512, "propertyNames": {"$ref": "#/$defs/identity"}, "additionalProperties": {"type": "object", "additionalProperties": false, "required": ["configuration", "members"], "properties": {
+      "configuration": {"$ref": "#/$defs/settings"},
+      "members": {"type": "object", "maxProperties": 512, "propertyNames": {"$ref": "#/$defs/identity"}, "additionalProperties": {"$ref": "#/$defs/settings"}}
+    }}}
+  },
+  "$defs": {
+    "identity": {"type": "string", "maxLength": 128, "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
+    "settings": {"type": "object", "maxProperties": 256, "propertyNames": {"type": "string", "maxLength": 128, "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$"}, "additionalProperties": {"type": "object", "additionalProperties": false, "required": ["state", "source"], "properties": {
+      "state": {"enum": ["RESOLVED", "DEFERRED", "UNRESOLVED", "CYCLIC"]},
+      "source": {"enum": ["ROLE_DEFAULT", "DEPLOYMENT_OVERRIDE", "MEMBER_OVERRIDE", "STATIC_REFERENCE", "RUNTIME_DEFERRED"]},
+      "value": {"type": ["string", "integer", "number", "boolean"], "maxLength": 4096}
+    }}}
+  }
+}

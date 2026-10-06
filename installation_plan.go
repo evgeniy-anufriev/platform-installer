@@ -99,6 +99,12 @@ func (a *App) CreateInstallationPlan() InstallationPlanOperation {
 	defer cancel()
 	record, err := binding.plans.CreatePlan(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease)
 	if err != nil {
+		if binding.dynamic {
+			a.invalidateDynamicBindingLocked()
+		}
+		return installationPlanFailure(err)
+	}
+	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
 		return installationPlanFailure(err)
 	}
 	if !installationPlanMatches(record, a.current.Project.ID, revision, binding) {

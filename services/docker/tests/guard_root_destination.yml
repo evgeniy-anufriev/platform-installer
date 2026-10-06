@@ -1,0 +1,14 @@
+---
+- name: Exercise the production Docker destination guard only
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Guard the injected temporary QA destination
+      ansible.builtin.include_role:
+        name: platform.docker.docker_rootless
+        tasks_from: guard_root_destination.yml
+      vars:
+        platform_docker_guard_path: "{{ docker_guard_qa_path }}"
+        platform_docker_guard_marker: '# Platform Installer V2 managed test unit'

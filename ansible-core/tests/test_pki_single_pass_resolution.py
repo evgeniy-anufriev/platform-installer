@@ -287,6 +287,169 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         self.assertEqual([], list(state.rglob("*.*")))
         self.assertFalse((self.root / "service-mutation").exists())
 
+    def _pki_store_apply(self, password, *, success=True, reissue_ids=None):
+        password_file = self.root / "runtime-password"
+        password_file.write_text(password, encoding="utf-8")
+        password_file.chmod(0o600)
+        variables = {
+            "platform_pki_secret_files": {"runtime:qa-missing-password": str(password_file)},
+            "platform_pki_state_root": str(self.root / "pki-state"),
+            "platform_pki_runtime_root": str(self.root / "pki-runtime"),
+            "platform_pki_target_root": str(self.root / "pki-target"),
+        }
+        if reissue_ids is not None:
+            variables["platform_pki_reissue_request_ids"] = reissue_ids
+        output = self.run_play([self.play([self.role()])], extra=variables, success=success)
+        self.assertNotIn(password, output)
+        return output
+
+    def test_changed_request_reissues_once_and_stale_recovery_only_finalizes(self):
+        self.desired["certificateProfiles"]["qa-cert"]["usages"] = ["serverAuth"]
+        self._pki_store_apply("qa-reissue-store-password")
+        state = self.root / "pki-state" / "single-pass-qa"
+        old_certificates = {path.parent.name: path.read_bytes()
+                            for path in (state / "requests").glob("*/leaf.crt")}
+        self.desired["certificateProfiles"]["qa-cert"]["usages"] = ["serverAuth", "clientAuth"]
+        resolved = self.resolve_in_fresh_process()
+        desired = {item["id"]: item["certificateRequestFingerprint"] for item in resolved["requests"]}
+        self.assertEqual(set(old_certificates), set(desired))
+        blocked = self._pki_store_apply("qa-reissue-store-password", success=False)
+        self.assertIn("CERTIFICATE_REISSUE_REQUIRED", blocked)
+        for request_id, old in old_certificates.items():
+            self.assertEqual(old, (state / "requests" / request_id / "leaf.crt").read_bytes())
+
+        self._pki_store_apply("qa-reissue-store-password", reissue_ids=sorted(desired))
+        for request_id, old in old_certificates.items():
+            request = state / "requests" / request_id
+            self.assertNotEqual(old, (request / "leaf.crt").read_bytes())
+            self.assertEqual(desired[request_id], (request / "request-fingerprint").read_text(encoding="ascii").strip())
+            self.assertFalse((state / "reissues" / (request_id + ".fingerprint")).exists())
+        repeated = self._pki_store_apply("qa-reissue-store-password")
+        self.assertRegex(repeated, r"localhost\s+:.*changed=0.*failed=0")
+
+        request_id = sorted(desired)[0]
+        recovery = state / "reissues" / (request_id + ".fingerprint")
+        recovery.write_text(desired[request_id] + "\n", encoding="ascii")
+        recovery.chmod(0o600)
+        current = (state / "requests" / request_id / "leaf.crt").read_bytes()
+        self._pki_store_apply("qa-reissue-store-password", reissue_ids=[request_id])
+        self.assertFalse(recovery.exists())
+        self.assertEqual(current, (state / "requests" / request_id / "leaf.crt").read_bytes())
+
+    def test_changed_authority_blocks_reissue_without_deleting_prior_material(self):
+        self._pki_store_apply("qa-authority-change-password")
+        request, authority = self._pki_request_material_paths()
+        prior = {name: (request / name).read_bytes() for name in
+                 ("leaf.key", "leaf.crt", "request-fingerprint", "keystore.p12", "truststore.p12")}
+        prior_ca = (authority / "authority-fingerprint").read_bytes()
+        self.desired["certificateProfiles"]["qa-cert"]["usages"] = ["serverAuth", "clientAuth"]
+        self.desired["certificateAuthorities"]["qa-ca"]["validityDays"] = 3651
+        selected = [item["id"] for item in self.resolve_in_fresh_process()["requests"]]
+        blocked = self._pki_store_apply("qa-authority-change-password", success=False, reissue_ids=selected)
+        self.assertIn("CERTIFICATE_REISSUE_REQUIRED", blocked)
+        self.assertEqual(prior_ca, (authority / "authority-fingerprint").read_bytes())
+        for name, content in prior.items():
+            self.assertEqual(content, (request / name).read_bytes())
+
+    def test_changed_request_with_missing_derived_store_reissues(self):
+        self._pki_store_apply("qa-missing-store-password")
+        request, _ = self._pki_request_material_paths()
+        old_cert = (request / "leaf.crt").read_bytes()
+        (request / "truststore.p12").unlink()
+        self.desired["certificateProfiles"]["qa-cert"]["usages"] = ["serverAuth", "clientAuth"]
+        selected = [item["id"] for item in self.resolve_in_fresh_process()["requests"]]
+        self._pki_store_apply("qa-missing-store-password", reissue_ids=selected)
+        self.assertTrue((request / "truststore.p12").is_file())
+        self.assertNotEqual(old_cert, (request / "leaf.crt").read_bytes())
+
+    def _pki_request_material_paths(self):
+        state = self.root / "pki-state" / "single-pass-qa"
+        requests = sorted((state / "requests").iterdir())
+        self.assertGreaterEqual(len(requests), 1)
+        request = requests[0]
+        authority = next((state / "authorities").iterdir())
+        return request, authority
+
+    def test_store_password_rotation_preserves_pem_identity_and_repeat_is_clean(self):
+        self._pki_store_apply("qa-initial-store-password")
+        request, authority = self._pki_request_material_paths()
+        unchanged = self._pki_store_apply("qa-initial-store-password")
+        self.assertRegex(unchanged, r"localhost\s+:.*changed=0.*failed=0")
+        authoritative = {
+            path.name: path.read_bytes()
+            for path in (request / "leaf.key", request / "leaf.crt",
+                         request / "request-fingerprint", authority / "ca.crt")
+        }
+
+        changed = self._pki_store_apply("qa-replacement-store-password")
+        self.assertRegex(changed, r"localhost\s+:.*changed=[1-9][0-9]*.*failed=0")
+        for name, content in authoritative.items():
+            path = authority / name if name == "ca.crt" else request / name
+            self.assertEqual(content, path.read_bytes(), name)
+        self.assertTrue((request / "keystore.p12").is_file())
+        self.assertTrue((request / "truststore.p12").is_file())
+
+        repeated = self._pki_store_apply("qa-replacement-store-password")
+        self.assertRegex(repeated, r"localhost\s+:.*changed=0.*failed=0")
+        old_password_file = self.root / "old-password"
+        old_password_file.write_text("qa-initial-store-password", encoding="utf-8")
+        old_password_file.chmod(0o600)
+        old_password_check = subprocess.run([
+            shutil.which("keytool"), "-list", "-storetype", "PKCS12",
+            "-keystore", str(request / "keystore.p12"), "-storepass:file", str(old_password_file),
+        ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+        self.assertNotEqual(0, old_password_check.returncode)
+
+    def test_missing_or_mixed_password_store_repairs_the_complete_pair(self):
+        self._pki_store_apply("qa-original-store-password")
+        request, authority = self._pki_request_material_paths()
+        # Model the durable state left by interruption between the two atomic
+        # replacements: one store uses the new password, the other the old.
+        password_file = self.root / "replacement-password"
+        password_file.write_text("qa-next-store-password", encoding="utf-8")
+        password_file.chmod(0o600)
+        (self.root / "replacement-truststore.p12").unlink(missing_ok=True)
+        trust_alias = self.resolve_in_fresh_process()["materializationPlans"][0]["trustAlias"]
+        subprocess.run([
+            shutil.which("keytool"), "-importcert", "-noprompt", "-storetype", "PKCS12",
+            "-alias", trust_alias, "-file", str(authority / "ca.crt"),
+            "-keystore", str(self.root / "replacement-truststore.p12"),
+            "-storepass:file", str(password_file),
+        ], check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        (self.root / "replacement-truststore.p12").chmod(0o600)
+        (self.root / "replacement-truststore.p12").replace(request / "truststore.p12")
+        chain = subprocess.run([
+            shutil.which("openssl"), "verify", "-CAfile", str(authority / "ca.crt"),
+            str(request / "leaf.crt"),
+        ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+        self.assertEqual(0, chain.returncode, "synthetic authoritative PEM fixture must remain valid")
+
+        healed = self._pki_store_apply("qa-next-store-password")
+        self.assertRegex(healed, r"localhost\s+:.*changed=[1-9][0-9]*.*failed=0")
+        repeated = self._pki_store_apply("qa-next-store-password")
+        self.assertRegex(repeated, r"localhost\s+:.*changed=0.*failed=0")
+        (request / "truststore.p12").unlink()
+        repaired = self._pki_store_apply("qa-next-store-password")
+        self.assertRegex(repaired, r"localhost\s+:.*changed=[1-9][0-9]*.*failed=0")
+        for filename in ("keystore.p12", "truststore.p12"):
+            check = subprocess.run([
+                shutil.which("keytool"), "-list", "-storetype", "PKCS12",
+                "-keystore", str(request / filename), "-storepass:file", str(self.root / "runtime-password"),
+            ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+            self.assertEqual(0, check.returncode, filename)
+
+    def test_invalid_authoritative_pem_blocks_store_replacement(self):
+        self._pki_store_apply("qa-before-invalid-pem")
+        request, _ = self._pki_request_material_paths()
+        stores_before = {name: (request / name).read_bytes()
+                         for name in ("keystore.p12", "truststore.p12")}
+        (request / "leaf.crt").write_text("not a certificate\n", encoding="ascii")
+
+        output = self._pki_store_apply("qa-after-invalid-pem", success=False)
+        self.assertIn("failed=1", output)
+        for name, content in stores_before.items():
+            self.assertEqual(content, (request / name).read_bytes(), name)
+
     def test_no_consumers_stays_empty_and_clean_with_and_without_skip(self):
         for skip in (False, True):
             with self.subTest(skip=skip):
@@ -386,7 +549,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     observations = [{"ansible.builtin.set_fact": {"activation_state": state},
                                      "vars": {"vault_member": variables["_platform_vault_local_instances"][0]}}]
                 elif service == "postgresql":
-                    selected = [named(tasks(service, "resolve_tls.yml"),
+                    selected = [named(tasks(service, "install_tls.yml"),
                                       "Materialize PostgreSQL-owned PEM files from PKI-01 projection")]
                     handlers = [{"name": selected[0]["notify"],
                                  "ansible.builtin.set_fact": {"activation": True}}]

@@ -372,8 +372,8 @@ write-only Go `RuntimeSecretBroker`; the response contains only status metadata:
 mode, availability and expiry. Its internal
 `runtime:ssh-session-<32-hex>` reference is never exposed through Wails/React.
 Query, review, logs and events never return the value or internal reference.
-The lease expires after 30 idle minutes, on project close/replacement or process
-exit, whichever comes first, and is applied to every target `Node` for that
+The lease expires one hour after it is set/replaced, on project
+close/replacement or process exit, whichever comes first, and is applied to every target `Node` for that
 project only by a future trusted Go transport. Execution Node credentials
 remain a separate trusted binding.
 

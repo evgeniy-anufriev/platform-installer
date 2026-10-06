@@ -49,6 +49,26 @@ func TestCredentialStartCapabilityAdmitsExactTypedV4Envelope(t *testing.T) {
 	}
 }
 
+func TestCredentialStartCapabilityPreservesLeaseGateWithPreviewV5(t *testing.T) {
+	base := `{"apiVersion":"platform.installer/execution-capabilities/v1alpha5","kind":"ExecutionCapabilities","bootstrapProtocol":"v1alpha1","coreVersion":"core","catalogDigest":"sha256:` + strings.Repeat("a", 64) + `","schemaDigest":"sha256:` + strings.Repeat("b", 64) + `","runtime":{"bundleVersion":"bundle","bundleDigest":"sha256:` + strings.Repeat("c", 64) + `"},"supportedOperations":["BuildRuntimeSecretDescriptors","BuildServiceConfigurationPreview","PutRuntimeSecretLease"],"executionStart":{"protocol":"StartExecution/v1alpha2"},"targetCredentialLease":{"protocol":"PutRuntimeSecretLease/v1alpha2","payloadVersions":["TargetCredentialLeasePayload/v1alpha4"],"maxPayloadBytes":1114112,"requiredStartProtocol":"StartExecution/v1alpha2"},"runtimeSecretDescriptors":{"protocol":"BuildRuntimeSecretDescriptors/v1alpha2","maxDescriptors":16,"maxHostsPerDescriptor":256,"maxResponseBytes":65536},"serviceConfigurationPreview":{"protocol":"BuildServiceConfigurationPreview/v1alpha1","maxResponseBytes":1048576},"projectSnapshotRequestVersions":[]}`
+	runner := &leaseRunner{response: base}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	capability, err := transport.CredentialStartCapability(context.Background(), testNode())
+	if err != nil || capability.APIVersion != "platform.installer/execution-capabilities/v1alpha5" || !capability.TypedRuntimeInputs {
+		t.Fatalf("v5 capability=%+v err=%v", capability, err)
+	}
+	for _, malformed := range []string{
+		strings.Replace(base, `"maxResponseBytes":1048576`, `"maxResponseBytes":1048577`, 1),
+		strings.Replace(base, `"protocol":"BuildServiceConfigurationPreview/v1alpha1"`, `"protocol":"unknown"`, 1),
+		strings.Replace(base, `"serviceConfigurationPreview":`, `"unexpected":true,"serviceConfigurationPreview":`, 1),
+	} {
+		runner.response = malformed
+		if _, err := transport.CredentialStartCapability(context.Background(), testNode()); err == nil {
+			t.Fatal("malformed v5 capability accepted")
+		}
+	}
+}
+
 func TestPutRuntimeSecretLeaseUsesV2OnlyForBoundedPKIStorePassword(t *testing.T) {
 	id := strings.Repeat("1", 32)
 	runner := &leaseRunner{response: `{"requestId":"` + id + `","startAttemptId":"` + strings.Repeat("2", 32) + `","status":"STORED","leaseId":"` + strings.Repeat("3", 32) + `","stagedExpiresAt":"2026-09-22T12:00:00Z"}`}

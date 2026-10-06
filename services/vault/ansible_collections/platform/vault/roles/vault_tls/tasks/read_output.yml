@@ -17,7 +17,7 @@
       - _platform_vault_bootstrap_output_dir.startswith('/')
       - _platform_vault_bootstrap_output_dir | string | length > 1
       - "'/../' not in (_platform_vault_bootstrap_output_dir ~ '/')"
-      - "'\\' not in _platform_vault_bootstrap_output_dir"
+      - "'\\\\' not in _platform_vault_bootstrap_output_dir"
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
 
 - name: Resolve the verify output path without following a substituted parent

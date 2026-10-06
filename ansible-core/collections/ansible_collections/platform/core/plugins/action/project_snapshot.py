@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import copy
+import json
 import os
 import re
 
@@ -14,13 +15,86 @@ from ansible_collections.platform.core.plugins.module_utils.deployment_plan impo
 from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
 from ansible_collections.platform.core.plugins.module_utils.pki_resolution import resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
+from ansible_collections.platform.core.plugins.module_utils.project_state import canonical_inventory_members
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_resolution import resolve_service_configuration
+from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
 from ansible_collections.platform.core.plugins.module_utils.service_endpoint_resolution import resolve_service_endpoints
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidationError, SchemaValidator
 from ansible_collections.platform.core.plugins.module_utils.topology_resolution import resolve_topology
 
 
 _CANONICAL_PORT = re.compile(r"^(0|[1-9][0-9]*)$")
+
+
+def _materialize_resolved_members(desired_state, topology, inventory_deployments, target_ids):
+    """Keep topology identity and inventory-owned member settings together."""
+    materialized = copy.deepcopy(desired_state)
+    if topology.get("status") != "PASS":
+        return materialized
+    inventory_members, findings = canonical_inventory_members(inventory_deployments, target_ids)
+    if findings:
+        raise ValueError("validated inventory members could not be materialized")
+    for deployment_id, resolved in topology["resolvedTopology"].get("serviceDeployments", {}).items():
+        deployment = materialized.get("serviceDeployments", {}).get(deployment_id)
+        if not isinstance(deployment, dict) or not resolved.get("members"):
+            continue
+        members = copy.deepcopy(resolved["members"])
+        for member_id, member in members.items():
+            source = inventory_members.get((deployment_id, member_id))
+            if source is not None:
+                member["configuration"] = copy.deepcopy(source["configuration"])
+        deployment["members"] = members
+    return materialized
+
+
+def _safe_configuration_preview(configuration, catalog, revision):
+    """Project only bounded, manifest-mapped ordinary values for the UI."""
+    definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
+    services = configuration.get("services", {}) if isinstance(configuration, dict) else {}
+    if not isinstance(services, dict) or len(services) > 512:
+        raise ValueError("configuration preview exceeds deployment limit")
+
+    def scoped(values, settings):
+        result = {}
+        if not isinstance(values, dict) or len(values) > 256:
+            raise ValueError("configuration preview exceeds setting limit")
+        for name, item in sorted(values.items()):
+            descriptor = settings.get(name)
+            if not isinstance(descriptor, dict) or descriptor.get("kind") != "MANAGED" or isinstance(descriptor.get("schema"), dict):
+                continue
+            ui = descriptor.get("ui", {})
+            if not isinstance(ui, dict) or "x-runtimeSecretRequirement" in ui or not isinstance(item, dict):
+                continue
+            state, source = item.get("state"), item.get("source")
+            if state not in ("RESOLVED", "DEFERRED", "UNRESOLVED", "CYCLIC") or source not in ("ROLE_DEFAULT", "DEPLOYMENT_OVERRIDE", "MEMBER_OVERRIDE", "STATIC_REFERENCE", "RUNTIME_DEFERRED"):
+                continue
+            entry = {"state": state, "source": source}
+            value = item.get("value")
+            if state == "RESOLVED" and ordinary_presentation_value(descriptor, value):
+                entry["value"] = value
+            result[name] = entry
+        return result
+
+    projected = {}
+    for deployment_id, service in sorted(services.items()):
+        if not isinstance(service, dict):
+            continue
+        definition = definitions.get(service.get("serviceType"), {})
+        settings = definition.get("configuration", {}).get("settings", {}) if isinstance(definition, dict) else {}
+        if not isinstance(settings, dict):
+            continue
+        members = service.get("members", {})
+        if not isinstance(members, dict) or len(members) > 512:
+            raise ValueError("configuration preview exceeds member limit")
+        projected[deployment_id] = {
+            "configuration": scoped(service.get("configuration", {}), settings),
+            "members": {member_id: scoped(member.get("configuration", {}), settings)
+                        for member_id, member in sorted(members.items()) if isinstance(member, dict)},
+        }
+    result = {"apiVersion": "platform.installer/service-configuration-preview/v1alpha1", "kind": "ServiceConfigurationPreview", "projectRevision": revision, "services": projected}
+    if len(json.dumps(result, ensure_ascii=False, allow_nan=False).encode("utf-8")) > 1024 * 1024:
+        raise ValueError("configuration preview exceeds response limit")
+    return result
 
 
 def snapshot_host(values, host_id):
@@ -52,6 +126,24 @@ def snapshot_host(values, host_id):
                         "safeMessage": "Host SSH port must be an integer between 1 and 65535"}
     result["ansiblePort"] = port
     return result, None
+
+
+def snapshot_execution_connection(values, host):
+    """Return private connection input and fail closed on SSH endpoint aliases."""
+    ssh_override_keys = (
+        "ansible_ssh_args", "ansible_ssh_common_args", "ansible_ssh_extra_args",
+        "ansible_ssh_executable", "ansible_ssh_host_key_checking",
+        "ansible_host_key_checking", "ansible_ssh_user_known_hosts_file",
+        # The SSH plugin accepts these aliases as effective destination and
+        # port inputs too. They cannot be proven equal from ansible_host/port.
+        "ansible_ssh_host", "ansible_ssh_port",
+    )
+    return {
+        "address": host.get("ansibleHost"),
+        "port": host.get("ansiblePort"),
+        "mode": values.get("ansible_connection", "ssh"),
+        "unsupportedOptions": any(key in values for key in ssh_override_keys),
+    }
 
 
 def validate_host_desired_values(validator, schema_path, hostvars, host_ids):
@@ -233,6 +325,13 @@ class ActionModule(ActionBase):
                     transport_findings.append(finding)
                 inventory_deployments[host_id] = values.get("platform_deployments", {})
 
+            # Core-owned, private execution input.  Do not expose raw hostvars
+            # or connection overrides in the public ProjectSnapshot.
+            execution_connections = {}
+            for host_id in target_ids:
+                values = hostvars[host_id]
+                execution_connections[host_id] = snapshot_execution_connection(values, hosts[host_id])
+
             host_addresses = {host_id: {"ansible_host": hosts[host_id]["ansibleHost"]} for host_id in target_ids}
             topology = resolve_topology(
                 manifest, {}, target_ids, catalog,
@@ -269,15 +368,15 @@ class ActionModule(ActionBase):
                     "safeMessage": "Published project schemas could not be evaluated",
                 }]
                 topology["status"] = "BLOCKED"
-            materialized = copy.deepcopy(desired_state)
-            if topology.get("status") == "PASS":
-                for deployment_id, resolved in topology["resolvedTopology"].get("serviceDeployments", {}).items():
-                    deployment = materialized.get("serviceDeployments", {}).get(deployment_id)
-                    if isinstance(deployment, dict) and resolved.get("members"):
-                        deployment["members"] = resolved["members"]
+            materialized = _materialize_resolved_members(
+                desired_state, topology, inventory_deployments, target_ids,
+            )
             configuration = resolve_service_configuration(
                 topology, materialized, catalog, role_defaults, schemas,
             )
+            if self._task.args.get("configuration_only") is True:
+                _, revision = project_documents(project_root, [])
+                return {"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision)}
             deployments = materialized.get("serviceDeployments", {}) if isinstance(materialized, dict) else {}
             definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
             _, _, secret_findings = _service_runtime_secret_requirements(
@@ -335,7 +434,8 @@ class ActionModule(ActionBase):
             # the resolved configuration needed to build a digest-bound
             # execution manifest.
             return {"changed": False, "snapshot": snapshot, "pki_materialization": pki,
-                    "execution_configuration": configuration}
+                    "execution_configuration": configuration,
+                    "execution_connections": execution_connections}
         except (AnsibleError, KeyError, OSError, TypeError, ValueError):
             return {
                 "failed": True,

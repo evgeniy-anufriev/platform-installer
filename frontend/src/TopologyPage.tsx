@@ -218,6 +218,7 @@ export function TopologyPage({
   selectedHostId,
   onSelectedHostChange,
   onConfigureDeployment,
+  onConfigureMember,
   preview,
   verificationStatus,
 }: {
@@ -238,8 +239,9 @@ export function TopologyPage({
   selectedHostId: string;
   onSelectedHostChange: (id: string) => void;
   onConfigureDeployment: (deploymentId: string) => void;
+  onConfigureMember: (deploymentId: string, memberId: string) => void;
   preview?: EndpointPreview;
-  verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
+  verificationStatus: NonNullable<OpenResult["verification"]>["status"];
 }) {
   const [dialog, setDialog] = useState<"add" | "delete" | "placement" | null>(
     null,
@@ -277,6 +279,9 @@ export function TopologyPage({
     : undefined;
   const selectedMode = selected
     ? catalogMode(selectedService, selected.mode)
+    : undefined;
+  const selectedPlacement = selected
+    ? placements.get(selected.deploymentId)
     : undefined;
   const catalogReady = catalog?.status === "READY";
   const commandLimitReached = commandCount >= 16;
@@ -357,7 +362,7 @@ export function TopologyPage({
         <section className="card topology-warning" role="status">
           <b>Каталог недоступен: новые экземпляры нельзя добавить.</b>
           <p>
-            Сохранённые deployment остаются видимыми, а guarded Delete доступен.
+            Сохранённые экземпляры остаются видимыми, защищённое удаление доступно.
             {catalog?.error?.message ? ` ${catalog.error.message}` : ""}
           </p>
         </section>
@@ -395,7 +400,7 @@ export function TopologyPage({
       ) : activeTab === "services" ? (
         <div className="topology-grid">
           <section className="card topology-list">
-            <h2>Deployments</h2>
+            <h2>Экземпляры сервисов</h2>
             <label>
               Поиск
               <input
@@ -437,12 +442,12 @@ export function TopologyPage({
           </section>
 
           <section className="card topology-detail">
-            <h2>Выбранный deployment</h2>
+            <h2>Выбранный экземпляр</h2>
             {!selected ? (
               <p className="muted">Выберите или добавьте экземпляр сервиса.</p>
             ) : !selectedVisible ? (
               <p className="muted">
-                Выбранный deployment скрыт фильтром. Очистите поиск, чтобы
+                Выбранный экземпляр скрыт фильтром. Очистите поиск, чтобы
                 открыть подробности.
               </p>
             ) : (
@@ -456,7 +461,11 @@ export function TopologyPage({
                   <dd>{modeLabel(selectedMode, selected.mode)}</dd>
                   <dt>Размещение</dt>
                   <dd>
-                    {selectedMode?.placementKind || "Недоступно без каталога"}
+                    {selectedMode?.placementKind === "MEMBER_SCOPED"
+                      ? "По экземплярам"
+                      : selectedMode?.placementKind === "HOST_SCOPED"
+                        ? "По серверам"
+                        : "Недоступно без каталога"}
                   </dd>
                   <dt>Состояние</dt>
                   <dd>
@@ -467,6 +476,42 @@ export function TopologyPage({
                         : "Сохранён"}
                   </dd>
                 </dl>
+                <h3>Размещение на серверах</h3>
+                {!selectedPlacement ? (
+                  <p className="muted">Размещение ещё не задано.</p>
+                ) : selectedPlacement.kind === "MEMBER_SCOPED" ? (
+                  <div className="topology-list-scroll">
+                    {selectedPlacement.members.map((member) => (
+                      <article className="topology-assignment" key={member.memberId}>
+                        <b>{member.memberId}</b>
+                        <span>{member.hostId} · {member.roles.join(", ") || "без ролей"}</span>
+                        <button
+                          className="outline"
+                          onClick={() => onConfigureMember(selected.deploymentId, member.memberId)}
+                          disabled={selected.state === "deleting"}
+                        >
+                          Настроить ноду
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="topology-list-scroll">
+                    {selectedPlacement.hosts.map((host) => (
+                      <article className="topology-assignment" key={host.hostId}>
+                        <b>{host.hostId}</b>
+                        <span>{host.roles.join(", ") || "без ролей"}</span>
+                        <button
+                          className="outline"
+                          onClick={() => onConfigureDeployment(selected.deploymentId)}
+                          disabled={selected.state === "deleting"}
+                        >
+                          Настроить сервис
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
                 <div className="actions topology-actions">
                   <button
                     onClick={() => {
@@ -483,7 +528,7 @@ export function TopologyPage({
                     }
                     title={
                       placementLocked
-                        ? "Размещение этого deployment уже добавлено в текущий черновик."
+                        ? "Размещение этого экземпляра уже добавлено в текущий черновик."
                         : undefined
                     }
                   >
@@ -515,7 +560,7 @@ export function TopologyPage({
                     disabled={selected.state === "deleting"}
                     title={
                       selected.state === "deleting"
-                        ? "Настройка недоступна для deployment, который будет удалён."
+                        ? "Настройка недоступна для экземпляра, который будет удалён."
                         : "Открыть настройку сервиса."
                     }
                   >
@@ -528,7 +573,7 @@ export function TopologyPage({
                       crudDisabled || !!selected.state || commandLimitReached
                     }
                   >
-                    Удалить deployment
+                    Удалить экземпляр
                   </button>
                 </div>
               </>
@@ -538,17 +583,17 @@ export function TopologyPage({
           <section className="card topology-summary">
             <h2>Состояние топологии</h2>
             <dl>
-              <dt>Deployments</dt>
+              <dt>Экземпляры</dt>
               <dd>{rows.filter((row) => row.state !== "deleting").length}</dd>
               <dt>Черновик</dt>
               <dd>{commandCount} / 16 изменений</dd>
               <dt>Размещение</dt>
-              <dd>UI-01F4</dd>
+              <dd>Настраивается здесь</dd>
               <dt>Проверка Core</dt>
               <dd>Запускается отдельно после сохранения</dd>
             </dl>
             <p className="muted">
-              F3 не рассчитывает members, роли, cardinality или результат Core.
+              Размещение и роли задаются в проекте; итоговую проверку выполняет Core после сохранения.
             </p>
           </section>
         </div>
@@ -560,6 +605,8 @@ export function TopologyPage({
           selectedHostId={selectedHostId}
           onSelectedHostChange={onSelectedHostChange}
           onSelectedDeploymentChange={onSelectedDeploymentChange}
+          onConfigureDeployment={onConfigureDeployment}
+          onConfigureMember={onConfigureMember}
           onEdit={(deploymentId, hostId) => {
             onSelectedDeploymentChange(deploymentId);
             setPlacementHostContext(hostId);
@@ -653,6 +700,8 @@ function ByServersView({
   selectedHostId,
   onSelectedHostChange,
   onSelectedDeploymentChange,
+  onConfigureDeployment,
+  onConfigureMember,
   onEdit,
   disabled,
   placementLocked,
@@ -663,6 +712,8 @@ function ByServersView({
   selectedHostId: string;
   onSelectedHostChange: (id: string) => void;
   onSelectedDeploymentChange: (id: string) => void;
+  onConfigureDeployment: (deploymentId: string) => void;
+  onConfigureMember: (deploymentId: string, memberId: string) => void;
   onEdit: (deploymentId: string, hostId: string) => void;
   disabled: boolean;
   placementLocked: (deploymentId: string) => boolean;
@@ -676,6 +727,7 @@ function ByServersView({
         .map((member) => ({
           deployment,
           key: `member:${member.memberId}`,
+          memberId: member.memberId,
           text: `${member.memberId}${member.roles.length ? ` · ${member.roles.join(", ")}` : ""}`,
         }));
     if (placement?.kind === "HOST_SCOPED")
@@ -684,6 +736,7 @@ function ByServersView({
         .map((host) => ({
           deployment,
           key: `host:${host.hostId}`,
+          memberId: "",
           text: host.roles.join(", ") || "без ролей",
         }));
     return [];
@@ -724,7 +777,7 @@ function ByServersView({
               {assignments.length === 0 ? (
                 <p className="muted">На этом сервере пока нет размещений.</p>
               ) : (
-                assignments.map(({ deployment, key, text }) => (
+                assignments.map(({ deployment, key, memberId, text }) => (
                   <article
                     className="topology-assignment"
                     key={`${deployment.deploymentId}:${key}`}
@@ -745,6 +798,15 @@ function ByServersView({
                     >
                       Изменить
                     </button>
+                    <button
+                      className="outline"
+                      onClick={() => memberId
+                        ? onConfigureMember(deployment.deploymentId, memberId)
+                        : onConfigureDeployment(deployment.deploymentId)}
+                      disabled={deployment.state === "deleting"}
+                    >
+                      {memberId ? "Настроить ноду" : "Настроить сервис"}
+                    </button>
                   </article>
                 ))
               )}
@@ -764,7 +826,7 @@ function ByServersView({
                 }}
                 disabled={disabled}
               >
-                <option value="">Выберите deployment</option>
+                <option value="">Выберите экземпляр сервиса</option>
                 {rows
                   .filter(
                     (row) => !row.state && !placements.has(row.deploymentId),
@@ -793,7 +855,7 @@ function ByServersView({
           <dd>После сохранения</dd>
         </dl>
         <p className="muted">
-          Изменение открывает общий editor deployment; отдельной команды для
+          Изменение открывает редактор экземпляра сервиса; отдельной команды для
           сервера нет.
         </p>
       </section>
@@ -884,7 +946,7 @@ function PlacementDialog({
             (ids.add(member.memberId), false),
         )
       ) {
-        setError("Укажите уникальные member ID и сервер для каждой строки.");
+        setError("Укажите уникальный ID экземпляра и сервер для каждой строки.");
         return;
       }
       if (
@@ -969,8 +1031,8 @@ function PlacementDialog({
       <form className="card dialog topology-dialog" onSubmit={submit}>
         <h1>Размещение: {row.deploymentId}</h1>
         <p className="muted">
-          {kind === "MEMBER_SCOPED" ? "Members и роли" : "Серверы и роли"}.
-          Apply заменяет полное размещение deployment.
+          {kind === "MEMBER_SCOPED" ? "Экземпляры и роли" : "Серверы и роли"}.
+          Применение заменяет всё размещение выбранного сервиса.
         </p>
         {kind === "MEMBER_SCOPED" ? (
           <>
@@ -1044,7 +1106,7 @@ function PlacementDialog({
               onClick={addMember}
               disabled={!selectable.length}
             >
-              Добавить member
+              Добавить узел сервиса
             </button>
           </>
         ) : (
@@ -1251,7 +1313,7 @@ function AddDeploymentDialog({
       <form className="card dialog topology-dialog" onSubmit={submit}>
         <h1>Добавить экземпляр сервиса</h1>
         <label>
-          Технический ID deployment
+          Технический ID экземпляра сервиса
           <input
             value={deploymentID}
             onChange={(event) => {
@@ -1291,8 +1353,7 @@ function AddDeploymentDialog({
         </label>
         {selectedMode && (
           <p className="topology-guidance">
-            Размещение: <b>{selectedMode.placementKind}</b>
-            {selectedMode.description ? ` · ${selectedMode.description}` : ""}
+            Размещение: <b>{selectedMode.placementKind === "MEMBER_SCOPED" ? "По экземплярам" : selectedMode.placementKind === "HOST_SCOPED" ? "По серверам" : "Неизвестный тип"}</b>
           </p>
         )}
         {error && (
@@ -1301,7 +1362,7 @@ function AddDeploymentDialog({
           </p>
         )}
         <p className="muted">
-          Размещение, endpoint groups и настройки сервиса здесь не создаются.
+          Размещение, группы точек входа и настройки сервиса здесь не создаются.
         </p>
         <div className="actions">
           <button
@@ -1343,11 +1404,11 @@ function DeleteDeploymentDialog({
         aria-modal="true"
         aria-labelledby="delete-deployment-title"
       >
-        <h1 id="delete-deployment-title">Удалить deployment</h1>
+        <h1 id="delete-deployment-title">Удалить экземпляр сервиса</h1>
         <p>
-          <b>{row.deploymentId}</b> будет удалён только после Review и общего
-          сохранения. Размещение, endpoint, dependency, provider и certificate
-          references автоматически не удаляются.
+          <b>{row.deploymentId}</b> будет удалён только после просмотра изменений
+          и общего сохранения. Размещение и связанные ссылки автоматически
+          не удаляются.
         </p>
         {error && (
           <p className="field-error" role="alert">
@@ -1370,7 +1431,7 @@ function DeleteDeploymentDialog({
                 setError("Удаление не добавлено в общий черновик.");
             }}
           >
-            Удалить deployment
+            Удалить экземпляр
           </button>
         </div>
       </section>

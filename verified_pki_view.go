@@ -65,6 +65,9 @@ func (a *App) verifiedPKIViewLocked() VerifiedPKIView {
 	if verification.Status == "INVALID" {
 		return VerifiedPKIView{Status: "INVALID", Findings: append([]VerificationFinding(nil), verification.Findings...), FindingsTruncated: verification.FindingsTruncated}
 	}
+	if verification.Status == "STALE" {
+		return VerifiedPKIView{Status: "STALE"}
+	}
 	if verification.Status != "VERIFIED" {
 		if verification.Status == "UNVERIFIED" || verification.Status == "" {
 			return VerifiedPKIView{Status: "NOT_VERIFIED"}

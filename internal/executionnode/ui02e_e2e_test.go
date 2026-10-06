@@ -36,7 +36,7 @@ func TestUI02EProductionSingleHostKafkaLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_UI02E_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {

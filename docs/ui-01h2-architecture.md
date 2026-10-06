@@ -75,12 +75,14 @@ The existing frontend adapter is extended only with H1's bounded
 and, only where H1 permits it, a copied primitive value). It does not add a
 frontend DTO or expose a raw configuration map.
 
-Each field has ephemeral local form state. **Apply** appends exactly one Set
-intent; **Reset to inherited** appends exactly one Remove intent. Once the
-backend acknowledges the exact `(deploymentId, DEPLOYMENT, setting)` target,
-the control locks until the shared Save or Discard. H2 performs no coalescing,
-replacement, undo, history rewriting or local canonical mutation. The session
-limit remains 16 and its remaining capacity is visible.
+Each field has ephemeral local form state. The first **Apply** appends one Set
+intent; **Reset to inherited** appends Remove for a saved override. The S11
+owner amendment allows explicit re-edit before Save: a guarded session
+operation replaces or withdraws only the already acknowledged command for
+that exact `(deploymentId, DEPLOYMENT, setting)` target. Reset of an unsaved
+Set without a saved override withdraws that command. Other commands and their
+order stay intact, canonical files are not changed before Commit, and the
+shared session limit remains 16. This is not a separate save path.
 
 On an Append failure, no local acknowledged overlay is created. On success,
 the page derives a draft overlay solely from acknowledged intents for display;

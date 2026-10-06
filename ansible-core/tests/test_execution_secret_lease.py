@@ -108,14 +108,23 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
             self.assertIsNone(execution_secret_lease.target_username_for_run(root, "installer-123"))
 
-    def test_controller_can_project_only_closed_attached_ansible_password_fields(self):
+    def test_controller_can_project_only_closed_attached_ansible_connection_fields(self):
         with tempfile.TemporaryDirectory() as root:
             value = payload(); value["sudoPassword"] = "sudo-secret"
             stored = execution_secret_lease.put(root, request(), value)
             self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
-            self.assertEqual({"ansible_password": "secret", "ansible_become_password": "sudo-secret"}, execution_secret_lease.ansible_password_credentials_for_run(root, "installer-123"))
+            self.assertEqual({"ansible_password": "secret", "ansible_become_password": "sudo-secret"}, execution_secret_lease.ansible_connection_credentials_for_run(root, "installer-123"))
             self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
-            self.assertIsNone(execution_secret_lease.ansible_password_credentials_for_run(root, "installer-123"))
+            self.assertIsNone(execution_secret_lease.ansible_connection_credentials_for_run(root, "installer-123"))
+
+    def test_controller_receives_private_key_only_for_attached_run(self):
+        with tempfile.TemporaryDirectory() as root:
+            value = payload(); value["password"] = None; value["privateKey"] = "synthetic-private-key"; value["sudoPassword"] = "sudo-secret"
+            stored = execution_secret_lease.put(root, request(), value)
+            self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
+            self.assertEqual({"privateKey": "synthetic-private-key", "ansible_become_password": "sudo-secret"}, execution_secret_lease.ansible_connection_credentials_for_run(root, "installer-123"))
+            self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))
+            self.assertIsNone(execution_secret_lease.ansible_connection_credentials_for_run(root, "installer-123"))
 
     def test_invalid_identity_or_payload_is_closed(self):
         with tempfile.TemporaryDirectory() as root:

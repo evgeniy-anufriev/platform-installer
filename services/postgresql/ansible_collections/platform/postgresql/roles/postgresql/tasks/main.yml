@@ -105,6 +105,10 @@
     - "{{ platform_postgresql_log_directory }}"
   when: not (platform_postgresql_verify_only | bool)
 
+- name: Install PostgreSQL-owned TLS material after account and base directories exist
+  ansible.builtin.include_tasks: install_tls.yml
+  when: platform_postgresql_tls_profile | length > 0
+
 - name: Discover PostgreSQL initialization state
   ansible.builtin.stat:
     path: "{{ platform_postgresql_data_directory }}/PG_VERSION"
@@ -412,41 +416,7 @@
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
     - platform_postgresql_replication_login.rc | default(1) != 0
 
-- name: Block monitor healthcheck credential reconciliation when TLS verification fails
-  ansible.builtin.assert:
-    that: "'certificate verify failed' not in (platform_postgresql_healthcheck_login.stderr | default('') | lower)"
-    fail_msg: POSTGRES_HEALTHCHECK_CREDENTIAL_TLS_PREREQUISITE_FAILED
-  no_log: true
-  when:
-    - not (platform_postgresql_verify_only | bool)
-    - platform_postgresql_mode == 'pg_auto_failover'
-    - "'database' in _platform_postgresql_member.roles"
-    - platform_postgresql_data_write_state.stdout | trim == 'primary'
-    - platform_postgresql_healthcheck_login.rc | default(0) != 0
-    - platform_postgresql_replication_login.rc | default(1) != 0
-
-- name: Probe monitor healthcheck credential over TLS
-  ansible.builtin.command:
-    argv:
-      - psql
-      - "postgresql://{{ platform_postgresql_healthcheck_credential.username }}@{{ _platform_postgresql_member.address }}:{{ _platform_postgresql_effective_port }}/postgres?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
-      - -Atqc
-      - SELECT 1
-  environment:
-    PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
-  become_user: "{{ platform_postgresql_user }}"
-  delegate_to: "{{ _platform_postgresql_monitor.host }}"
-  register: platform_postgresql_healthcheck_login
-  changed_when: false
-  failed_when: false
-  no_log: true
-  when:
-    - not (platform_postgresql_verify_only | bool)
-    - platform_postgresql_mode == 'pg_auto_failover'
-    - "'database' in _platform_postgresql_member.roles"
-    - platform_postgresql_data_write_state.stdout | trim == 'primary'
-
-- name: Inspect pg_auto_failover healthcheck role privileges
+- name: Inspect pg_auto_failover healthcheck probe role
   ansible.builtin.command:
     argv:
       - psql
@@ -459,7 +429,7 @@
       - -d
       - postgres
       - -Atqc
-      - "SELECT CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ platform_postgresql_healthcheck_credential.username }}' AND rolcanlogin AND NOT rolsuper AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication) THEN 'safe' ELSE 'unsafe' END"
+      - "SELECT CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin AND NOT rolsuper AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND rolpassword IS NULL) THEN 'safe' ELSE 'unsafe' END"
   become_user: "{{ platform_postgresql_user }}"
   register: platform_postgresql_healthcheck_role
   changed_when: false
@@ -469,27 +439,24 @@
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
 
-- name: Reconcile pg_auto_failover monitor healthcheck credential on data members
+- name: Reconcile pg_auto_failover healthcheck probe role without a password
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
     stdin: |
-      \set platform_password '{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_healthcheck_credential.passwordSecretRef]) | trim }}'
       DO $$ BEGIN
-        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ platform_postgresql_healthcheck_credential.username }}') THEN
-          CREATE ROLE {{ platform_postgresql_healthcheck_credential.username }} LOGIN;
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor') THEN
+          CREATE ROLE pgautofailover_monitor LOGIN;
         END IF;
       END $$;
-      ALTER ROLE {{ platform_postgresql_healthcheck_credential.username }} WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'platform_password';
+      ALTER ROLE pgautofailover_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD NULL;
   become_user: "{{ platform_postgresql_user }}"
-  no_log: true
   when:
     - not (platform_postgresql_verify_only | bool)
     - platform_postgresql_mode == 'pg_auto_failover'
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
     - >-
-      platform_postgresql_healthcheck_login.rc | default(1) != 0
-      or platform_postgresql_healthcheck_role.stdout | trim != 'safe'
+      platform_postgresql_healthcheck_role.stdout | trim != 'safe'
 
 - name: Wait for PostgreSQL client endpoint
   ansible.builtin.command:

@@ -5,6 +5,48 @@ acceptance and is not the Vite `?qa=e4` mock. Use the supported Wails developmen
 server and headless Playwright against real bound Go methods. Production builds
 retain no debug endpoint; do not modify dependencies or add a production bypass.
 
+## Embedded Windows WebView2 UI Automation for SI11
+
+SI11's UI-only acceptance uses `scripts/qa-wails-webview-uia.ps1` against the
+actual `build/bin/platform-installer-ui.exe`, launched without arguments. The
+script selects the exact executable path and one process, discovers the Wails
+window and its WebView2 accessibility `Document`, then uses Windows UI
+Automation `InvokePattern`/`ValuePattern` on real controls. It does not use
+Computer Use, a CDP endpoint, JavaScript evaluation, Wails bindings or direct
+Go/Core/Ansible calls. Native dialogs are discovered as same-process owned
+windows and operated by their accessible controls; no dialog substitution is
+used. `Snapshot` lists control labels and enablement only, never input values.
+
+Examples (PowerShell, from the repository root):
+
+```powershell
+& .\scripts\qa-wails-webview-uia.ps1 -Action Windows
+& .\scripts\qa-wails-webview-uia.ps1 -Action Snapshot
+& .\scripts\qa-wails-webview-uia.ps1 -Action Invoke -Name 'Открыть проект'
+& .\scripts\qa-wails-webview-uia.ps1 -Action Snapshot -WindowTitle 'Открыть существующий проект'
+& .\scripts\qa-wails-webview-uia.ps1 -Action Invoke -WindowTitle 'Открыть существующий проект' -Name 'Отмена'
+```
+
+For `SetText`, provide the value through a temporary runtime environment
+variable named by `-InputEnvVar` (or redirected stdin); the script does not
+print its value. Do not put secrets in command-line arguments, logs or the
+repository. Observe the control list before selecting a name/ordinal and
+verify the UI state after each action. Every mutating UI action emits the
+Windows system beep and waits three seconds before resolving its target
+control. If the exact process/window/control is
+ambiguous or unavailable, the script fails closed. This seam proves real
+window interaction, not automatic PASS for unexecuted SI11 cases.
+
+SI11 also checks every visited page, form and dialog for Russian user-facing
+labels, instructions, statuses and actionable errors. Established technical
+names (for example SSH, TLS, Kafka), paths, IDs and diagnostic codes may remain
+literal; internal state names and mixed English prose are not UI labels. Record
+each violation and its real-WebView retest in the Russian SI11 journal.
+
+The separate Playwright/Wails development bridge below remains useful for
+nonvisual regression but does not substitute for SI11's embedded-WebView and
+native-dialog acceptance.
+
 ## Local setup
 
 Run Vite on loopback:

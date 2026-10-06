@@ -1,0 +1,57 @@
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: docker
+  version: "1.0.0-alpha.1"
+  displayName: Docker rootless
+  description: Rootless Docker Engine and Compose with LXC networking and TLS TCP API
+  category: runtime
+modes:
+  create-user:
+    displayName: Create Docker user
+    description: Create a dedicated account using a runtime-only password
+    memberRoles: []
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+    x-requiredRuntimeSecretSettings: [accountCredential]
+  existing-user:
+    displayName: Existing Docker user
+    description: Use an existing eligible account without changing its password
+    memberRoles: []
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+listeners:
+  api: {protocol: tcp, defaultPort: 2376, tlsCapable: true, scope: deployment}
+capabilities: [service.docker.rootless, service.docker.compose]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    accountName: {kind: MANAGED, roleVariable: platform_docker_account_name, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 32}, ui: {label: Docker account, section: Account, order: 10}}
+    tlsProfile: {kind: MANAGED, roleVariable: platform_docker_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 20, x-referenceKind: TLS_PROFILE}}
+    apiPort: {kind: MANAGED, roleVariable: platform_docker_api_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Docker TLS API port, section: Network, order: 30}}
+    apiBindAddress: {kind: MANAGED, roleVariable: platform_docker_api_bind_address, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 64}, ui: {label: External API bind address, section: Network, order: 31}}
+    accountCredential:
+      kind: MANAGED
+      roleVariable: platform_docker_account_credential
+      type: object
+      scopes: [deployment]
+      validation: {required: [passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [passwordSecretRef]
+        properties:
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: New account password, section: Credentials, order: 40, x-runtimeSecretRequirement: {requirementRef: docker-account-password, purpose: SERVICE_PASSWORD}}
+roleEntrypoints:
+  apply: {fqcn: platform.docker.docker_rootless, variablesPrefix: platform_docker_}
+  verify: {fqcn: platform.docker.docker_rootless, variablesPrefix: platform_docker_}
+artifacts: []
+runtimeRequirements:
+  - {id: docker-engine, name: docker-ce, version: "29.7.2", os: redos, architecture: x86_64, requiredOffline: false}
+  - {id: docker-cli, name: docker-ce-cli, version: "29.7.2", os: redos, architecture: x86_64, requiredOffline: false}
+  - {id: docker-rootless, name: docker-ce-rootless-extras, version: "29.7.2", os: redos, architecture: noarch, requiredOffline: false}
+  - {id: docker-compose, name: docker-compose, version: "5.3.1", os: redos, architecture: x86_64, requiredOffline: false}
+  - {id: docker-lxc, name: lxc, version: "7.0.0", os: redos, architecture: x86_64, requiredOffline: false}
+  - {id: docker-fuse-overlayfs, name: fuse-overlayfs, version: "1.7.1", os: redos, architecture: x86_64, requiredOffline: false}
+compatibilityRef: compatibility.yml

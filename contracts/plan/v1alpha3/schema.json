@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha3/schema.json",
+  "title": "Selected-source target-free deployment plan",
+  "type": "object",
+  "required": ["apiVersion", "kind", "id", "createdAt", "projectIdentity", "projectRevision", "planner", "runtimeRelease", "fingerprints", "status", "readiness", "artifactRequirements", "phases", "findings", "selectedSourceDeployment", "targetScope"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/plan/v1alpha3"},
+    "kind": {"const": "DeploymentPlan"},
+    "id": {"type": "string", "minLength": 1},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "projectIdentity": {"type": ["string", "null"]},
+    "projectRevision": {"$ref": "../v1alpha2/schema.json#/$defs/digest"},
+    "planner": {"type": "object", "required": ["coreVersion", "planningProtocol"], "properties": {"coreVersion": {"type": "string", "minLength": 1}, "planningProtocol": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "runtimeRelease": {"$ref": "../v1alpha2/schema.json#/$defs/runtimeRelease"},
+    "fingerprints": {"$ref": "../v1alpha2/schema.json#/$defs/fingerprints"},
+    "status": {"enum": ["EXECUTABLE", "BLOCKED"]},
+    "readiness": {"enum": ["REQUIRES_PREPARATION", "BLOCKED"]},
+    "artifactRequirements": {"type": "array", "items": {"$ref": "../v1alpha2/schema.json#/$defs/artifact"}},
+    "phases": {"type": "array", "items": {"$ref": "../v1alpha2/schema.json#/$defs/phase"}},
+    "requiredCredentials": {"type": "array", "items": {"type": "object", "required": ["requirementRef", "purpose", "hosts"], "properties": {"requirementRef": {"type": "string"}, "purpose": {"type": "string"}, "hosts": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}, "additionalProperties": false}},
+    "acknowledgements": {"type": "array", "items": {"type": "object", "required": ["code", "summary"], "properties": {"code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}, "summary": {"type": "string"}}, "additionalProperties": false}},
+    "findings": {"type": "array", "items": {"$ref": "../../finding/v1alpha1/schema.json"}},
+    "selectedSourceDeployment": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
+    "targetScope": {
+      "type": "object", "required": ["sourceHosts", "providerEffects", "allHosts"],
+      "properties": {
+        "sourceHosts": {"$ref": "#/$defs/hosts"},
+        "allHosts": {"$ref": "#/$defs/hosts"},
+        "providerEffects": {"type": "array", "maxItems": 8, "items": {
+          "type": "object", "required": ["providerDeployment", "providerType", "hosts", "mode", "overwrite"],
+          "properties": {
+            "providerDeployment": {"$ref": "#/$defs/deploymentId"},
+            "providerType": {"enum": ["BIND", "HAPROXY"]},
+            "hosts": {"$ref": "#/$defs/hosts"},
+            "mode": {"enum": ["ADDITIVE", "FULL_RECONCILE"]},
+            "overwrite": {"type": "boolean"}
+          }, "additionalProperties": false
+        }}
+      }, "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "deploymentId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
+    "hosts": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/deploymentId"}}
+  }
+}

@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"sync"
 	"unicode/utf8"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Only replaces the OS picker result. The bound import method and all its
@@ -39,7 +37,7 @@ func configureQASecretFileSelection(app *App) error {
 		}
 	}
 	var mu sync.Mutex
-	app.chooseSecretFile = func(ctx context.Context, _ runtime.OpenDialogOptions) (string, error) {
+	app.chooseSecretFile = func(ctx context.Context, _ DialogOptions) (string, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		if ctx.Err() != nil {

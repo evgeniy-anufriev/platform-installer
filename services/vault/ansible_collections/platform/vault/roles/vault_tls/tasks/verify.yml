@@ -7,7 +7,7 @@
   ansible.builtin.uri:
     url: "https://{{ item.address }}:{{ item.api_port }}/v1/sys/health"
     method: GET
-    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    ca_path: "{{ hostvars[item.host].platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
     validate_certs: true
     status_code: [200, 429, 472, 473, 501, 503]
     return_content: true
@@ -72,11 +72,12 @@
     method: GET
     headers:
       X-Vault-Token: "{{ platform_vault_admin_token }}"
-    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    ca_path: "{{ hostvars[(_platform_vault_instances | first).host].platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
     validate_certs: true
     status_code: 200
     return_content: true
   delegate_to: "{{ (_platform_vault_instances | first).host }}"
+  run_once: true
   register: _platform_vault_raft_configuration
   changed_when: false
   when: platform_vault_mode == 'raft-ha'

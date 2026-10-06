@@ -1,0 +1,22 @@
+---
+platform_docker_mode: create-user
+platform_docker_account_name: platform-docker
+platform_docker_account_credential:
+  passwordSecretRef: ''
+platform_docker_secret_files: {}
+platform_docker_tls_profile: infrastructure-tls
+platform_docker_tls_directory: ''
+platform_docker_api_bind_address: 0.0.0.0
+platform_docker_api_port: 2376
+platform_docker_internal_api_port: 12376
+platform_docker_verify_only: false
+platform_docker_lxc_bridge: lxcbr0
+platform_docker_lxc_veth_limit: 10
+platform_docker_lxc_dns_server: ''
+platform_docker_packages:
+  - docker-ce-29.7.2-1.red80
+  - docker-ce-cli-29.7.2-1.red80
+  - docker-ce-rootless-extras-29.7.2-1.red80
+  - docker-compose-5.3.1-1.red80
+  - lxc-7.0.0-1.red80
+  - fuse-overlayfs-1.7.1-4.red80

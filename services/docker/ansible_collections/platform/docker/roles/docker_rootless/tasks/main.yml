@@ -1,0 +1,26 @@
+---
+- name: Validate Docker rootless inputs and target compatibility
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Validate approved Docker package sources
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: docker-engine, name: docker-ce}
+      - {id: docker-cli, name: docker-ce-cli}
+      - {id: docker-rootless, name: docker-ce-rootless-extras}
+      - {id: docker-compose, name: docker-compose}
+      - {id: docker-lxc, name: lxc}
+      - {id: docker-fuse-overlayfs, name: fuse-overlayfs}
+  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+
+- name: Select exact Docker PKI material
+  ansible.builtin.include_tasks: resolve_tls.yml
+
+- name: Provision rootless Docker without changing other deployments
+  ansible.builtin.include_tasks: provision.yml
+  when: not (platform_docker_verify_only | bool)
+
+- name: Verify Docker rootless and Compose runtime read-only
+  ansible.builtin.include_tasks: verify.yml

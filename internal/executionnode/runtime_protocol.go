@@ -12,11 +12,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"path"
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"platform-installer/internal/artifactsource"
 	"platform-installer/internal/coreadapter"
@@ -201,6 +203,7 @@ type CandidateProjectSnapshotRequest struct {
 
 var candidateOwnedPathPattern = regexp.MustCompile(`^(ansible\.cfg|inventory/hosts\.yml|inventory/group_vars/all/platform-installer\.yml|inventory/host_vars/[a-z0-9][a-z0-9-]{0,62}/platform-installer\.yml)$`)
 var candidateIdentityPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
+var previewSettingIDPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,127}$`)
 
 func validLowerHex(value string, size int) bool {
 	if len(value) != size {
@@ -289,6 +292,115 @@ func (t OpenSSHTransport) BuildProjectSnapshot(ctx context.Context, node Node, p
 		return nil, err
 	}
 	return result.Snapshot, nil
+}
+
+// ServiceConfigurationPreview is a bounded, target-free presentation result.
+// It is never Project Verify evidence or execution authorization.
+type ServiceConfigurationPreview struct {
+	APIVersion      string                               `json:"apiVersion"`
+	Kind            string                               `json:"kind"`
+	ProjectRevision string                               `json:"projectRevision"`
+	Services        map[string]ServiceConfigurationScope `json:"services"`
+	// Populated only from attested runtime evidence after decoding the closed
+	// Core response; this is Wails presentation metadata, not a Core field.
+	RuntimeDigest string          `json:"runtimeDigest,omitempty"`
+	Runtime       RuntimeEvidence `json:"-"`
+}
+
+type ServiceConfigurationScope struct {
+	Configuration map[string]ServiceConfigurationValue            `json:"configuration"`
+	Members       map[string]map[string]ServiceConfigurationValue `json:"members"`
+}
+
+type ServiceConfigurationValue struct {
+	State  string `json:"state"`
+	Source string `json:"source"`
+	Value  any    `json:"value,omitempty"`
+}
+
+func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (ServiceConfigurationPreview, error) {
+	if projectRoot == "" || len(runtimeRelease) == 0 {
+		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_INPUT_INVALID")
+	}
+	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
+	if err != nil || capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha5" || !validServiceConfigurationPreviewCapability(capabilities["serviceConfigurationPreview"], capabilities["supportedOperations"]) {
+		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED")
+	}
+	runID, err := newRunID()
+	if err != nil {
+		return ServiceConfigurationPreview{}, err
+	}
+	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "snapshot"); err != nil {
+		return ServiceConfigurationPreview{}, err
+	}
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildServiceConfigurationPreview", "runId": runID, "runtimeRelease": runtimeRelease})
+	if err != nil {
+		return ServiceConfigurationPreview{}, err
+	}
+	data, err := json.Marshal(response["serviceConfigurationPreview"])
+	if err != nil || len(data) > 1024*1024 {
+		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+	}
+	var result ServiceConfigurationPreview
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&result) != nil || decoder.Decode(new(any)) != io.EOF || result.RuntimeDigest != "" || result.APIVersion != "platform.installer/service-configuration-preview/v1alpha1" || result.Kind != "ServiceConfigurationPreview" || !validSHA256(result.ProjectRevision) || result.Services == nil || len(result.Services) > 512 {
+		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+	}
+	for deploymentID, service := range result.Services {
+		if len(deploymentID) > 128 || !runtimeSecretDeploymentPattern.MatchString(deploymentID) || service.Configuration == nil || service.Members == nil || len(service.Configuration) > 256 || len(service.Members) > 512 || !validPreviewValues(service.Configuration) {
+			return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+		}
+		for memberID, values := range service.Members {
+			if len(memberID) > 128 || !runtimeSecretDeploymentPattern.MatchString(memberID) || values == nil || len(values) > 256 || !validPreviewValues(values) {
+				return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+			}
+		}
+	}
+	runtime, ok := decodeRuntimeEvidence(response["runtimeEvidence"])
+	if !ok || runtime.BundleDigest != runtimeRelease["bundleDigest"] {
+		return ServiceConfigurationPreview{}, errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED")
+	}
+	result.Runtime = runtime
+	result.RuntimeDigest = runtime.BundleDigest
+	return result, nil
+}
+
+func validPreviewValues(values map[string]ServiceConfigurationValue) bool {
+	for settingID, item := range values {
+		if !previewSettingIDPattern.MatchString(settingID) {
+			return false
+		}
+		switch item.State {
+		case "RESOLVED", "DEFERRED", "UNRESOLVED", "CYCLIC":
+		default:
+			return false
+		}
+		switch item.Source {
+		case "ROLE_DEFAULT", "DEPLOYMENT_OVERRIDE", "MEMBER_OVERRIDE", "STATIC_REFERENCE", "RUNTIME_DEFERRED":
+		default:
+			return false
+		}
+		if item.Value != nil {
+			if item.State != "RESOLVED" {
+				return false
+			}
+			switch value := item.Value.(type) {
+			case string:
+				if len(value) > 4096 || !utf8.ValidString(value) {
+					return false
+				}
+			case float64:
+				if math.IsNaN(value) || math.IsInf(value, 0) {
+					return false
+				}
+			case bool:
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // BuildProjectVerificationSnapshot is additive to the UI-01B snapshot query:
@@ -430,7 +542,7 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
 	}
 	capability, err := t.CredentialStartCapability(ctx, node)
-	if err != nil || capability.APIVersion != "platform.installer/execution-capabilities/v1alpha4" || !capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) {
+	if err != nil || (capability.APIVersion != "platform.installer/execution-capabilities/v1alpha4" && capability.APIVersion != "platform.installer/execution-capabilities/v1alpha5") || !capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED")
 	}
 	runID, err := newRunID()
@@ -564,7 +676,7 @@ func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, ar
 		return "", err
 	}
 	remote := "/var/tmp/platform-installer/execution-plan/" + runID
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\numask 077\nmkdir -- \"$1\"\n")); err != nil {
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nbase=/var/tmp/platform-installer\nparent=$base/execution-plan\n[ -d \"$base\" ] && [ ! -L \"$base\" ] || exit 64\n[ ! -L \"$parent\" ] || exit 64\numask 077\ninstall -d -m 0700 -- \"$parent\"\n[ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 64\n[ \"$(stat -c %u \"$parent\")\" = \"$(id -u)\" ] || exit 64\nmkdir -- \"$1\"\n")); err != nil {
 		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
 	owned := true
@@ -1078,6 +1190,32 @@ func decodeFindings(raw any) []Finding {
 }
 
 func (t OpenSSHTransport) runtimeProtocol(ctx context.Context, node Node, request map[string]any) (map[string]any, error) {
+	return t.runtimeProtocolWithPrivateFlag(ctx, node, request, "")
+}
+
+// StageTargetHostTrust is private execution input, not a public Start wire
+// field or portable project mutation. The node verifies the Core-resolved
+// endpoints and binds the resulting file to the exact staged manifest.
+func (t OpenSSHTransport) StageTargetHostTrust(ctx context.Context, node Node, plan DeploymentPlan, approvals []TargetHostKeyApproval) error {
+	if plan.stagingID == "" || !validSHA256(plan.executionManifestDigest) || len(approvals) == 0 || len(approvals) > 256 {
+		return errors.New("TARGET_HOST_TRUST_INVALID")
+	}
+	response, err := t.runtimeProtocolWithPrivateFlag(ctx, node, map[string]any{
+		"stagingId": plan.stagingID, "projectIdentity": plan.ProjectIdentity,
+		"projectRevision": plan.ProjectRevision, "planFingerprint": plan.PlanFingerprint,
+		"runtimeRelease": plan.RuntimeRelease, "manifestDigest": plan.executionManifestDigest,
+		"approvals": approvals,
+	}, "--stage-target-host-trust")
+	if err != nil {
+		return err
+	}
+	if response["status"] != "STAGED" {
+		return errors.New("TARGET_HOST_TRUST_INVALID")
+	}
+	return nil
+}
+
+func (t OpenSSHTransport) runtimeProtocolWithPrivateFlag(ctx context.Context, node Node, request map[string]any, flag string) (map[string]any, error) {
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -1102,6 +1240,12 @@ func (t OpenSSHTransport) runtimeProtocol(ctx context.Context, node Node, reques
 		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
 	}
 	args := []string{"-n", "env", "PYTHONPATH=" + release + "/ansible-core/tools", "python3", release + "/ansible-core/tools/execution_protocol.py", "--runtime-release", release, "--bundle-digest", digest, "--controller", release + "/ansible-core/tools/execution_controller.py"}
+	if flag != "" {
+		if flag != "--stage-target-host-trust" || len(payload) > 65536 {
+			return nil, errors.New("TARGET_HOST_TRUST_INVALID")
+		}
+		args = append(args, flag)
+	}
 	responseLimit := maxExecutionProtocolResponseBytes
 	if request["operation"] == "GetEvents" {
 		responseLimit = maxExecutionEventPageResponseBytes

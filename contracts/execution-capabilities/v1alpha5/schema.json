@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha5/schema.json",
+  "title": "Execution capabilities with target-free service configuration preview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "runtimeSecretDescriptors", "targetCredentialLease", "serviceConfigurationPreview"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-capabilities/v1alpha5"},
+    "kind": {"const": "ExecutionCapabilities"},
+    "bootstrapProtocol": {"$ref": "../v1alpha4/schema.json#/properties/bootstrapProtocol"},
+    "coreVersion": {"$ref": "../v1alpha4/schema.json#/properties/coreVersion"},
+    "catalogDigest": {"$ref": "../v1alpha4/schema.json#/properties/catalogDigest"},
+    "schemaDigest": {"$ref": "../v1alpha4/schema.json#/properties/schemaDigest"},
+    "runtime": {"$ref": "../v1alpha4/schema.json#/properties/runtime"},
+    "supportedOperations": {"type": "array", "uniqueItems": true, "items": {"enum": ["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildServiceConfigurationPreview", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease"]}, "contains": {"const": "BuildServiceConfigurationPreview"}},
+    "projectSnapshotRequestVersions": {"$ref": "../v1alpha4/schema.json#/properties/projectSnapshotRequestVersions"},
+    "executionStart": {"$ref": "../v1alpha4/schema.json#/properties/executionStart"},
+    "targetCredentialLease": {"$ref": "../v1alpha4/schema.json#/properties/targetCredentialLease"},
+    "runtimeSecretDescriptors": {"$ref": "../v1alpha4/schema.json#/properties/runtimeSecretDescriptors"},
+    "serviceConfigurationPreview": {"type": "object", "additionalProperties": false, "required": ["protocol", "maxResponseBytes"], "properties": {"protocol": {"const": "BuildServiceConfigurationPreview/v1alpha1"}, "maxResponseBytes": {"const": 1048576}}}
+  }
+}

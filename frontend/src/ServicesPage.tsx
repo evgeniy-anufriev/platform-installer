@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OpenResult, PendingRuntimeSecretFileInput, PendingRuntimeSecretValuesInput, RuntimeSecretDescriptorOperation } from "./backend";
+import type {
+  OpenResult,
+  PendingRuntimeSecretFileInput,
+  PendingRuntimeSecretValuesInput,
+  RuntimeSecretDescriptorOperation,
+  ServiceConfigurationPreview,
+} from "./backend";
 import type { CertificateIntent } from "./CertificatesPage";
 import type { DeploymentIntent, PlacementIntent } from "./TopologyPage";
 
@@ -32,7 +38,7 @@ type Row = {
   state?: "new" | "deleting";
 };
 type Value = string | number | boolean;
-type RuntimeSecretReference = { passwordSecretRef: string };
+type RuntimeSecretReference = { passwordSecretRef: string; username?: string };
 type ConfigurationValue = Value | RuntimeSecretReference;
 type Scope = "DEPLOYMENT" | "MEMBER";
 type MemberRow = {
@@ -114,7 +120,11 @@ function settingValue(
   intents: ConfigurationIntent[],
 ): { overridePresent: boolean; state: string; value?: ConfigurationValue } {
   const saved = overrides.find((entry) => entry.setting === setting);
-  let result: { overridePresent: boolean; state: string; value?: ConfigurationValue } = {
+  let result: {
+    overridePresent: boolean;
+    state: string;
+    value?: ConfigurationValue;
+  } = {
     overridePresent: saved?.overridePresent || false,
     state: saved?.state || "EDITABLE",
     value: saved?.value,
@@ -202,7 +212,8 @@ function finalDeploymentIDs(
 ) {
   const ids = new Set(Object.keys(managed?.deployments || {}));
   for (const intent of intents) {
-    if (intent.operation === "CreateServiceDeployment") ids.add(intent.deploymentId);
+    if (intent.operation === "CreateServiceDeployment")
+      ids.add(intent.deploymentId);
     else ids.delete(intent.deploymentId);
   }
   return [...ids].sort((left, right) => left.localeCompare(right));
@@ -228,9 +239,150 @@ function settingTitle(setting: CatalogSetting) {
   return setting.label || setting.id;
 }
 
+function previewValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    if (
+      value.length > 4096 ||
+      /[\u0000-\u001f\u007f]/u.test(value) ||
+      ["{{", "}}", "{%", "%}", "{#", "#}"].some((marker) =>
+        value.includes(marker),
+      )
+    )
+      return null;
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "Да" : "Нет";
+  return null;
+}
+
+function displayedInputValue(
+  setting: CatalogSetting,
+  current: {
+    overridePresent: boolean;
+    state: string;
+    value?: ConfigurationValue;
+  },
+  coreValue?: { state: string; value?: string | number | boolean },
+  deploymentOverride?: {
+    overridePresent: boolean;
+    state: string;
+    value?: ConfigurationValue;
+  },
+): string {
+  const ordinary = (value: unknown): string => {
+    if (previewValue(value) === null) return "";
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    )
+      return inputValue(value, setting.editorShape);
+    return "";
+  };
+  if (current.overridePresent) return ordinary(current.value);
+  // A current Core result takes precedence even when it says that the value
+  // cannot be resolved; falling back to a literal would mislabel it as exact.
+  if (coreValue)
+    return coreValue.state === "RESOLVED" ? ordinary(coreValue.value) : "";
+  if (deploymentOverride?.overridePresent)
+    return ordinary(deploymentOverride.value);
+  return setting.staticDefaultState === "LITERAL"
+    ? ordinary(setting.staticDefaultValue)
+    : "";
+}
+
+function SettingPreview({
+  setting,
+  current,
+  deploymentOverride,
+  coreValue,
+}: {
+  setting: CatalogSetting;
+  current: {
+    overridePresent: boolean;
+    state: string;
+    value?: ConfigurationValue;
+  };
+  deploymentOverride?: {
+    overridePresent: boolean;
+    state: string;
+    value?: ConfigurationValue;
+  };
+  coreValue?: {
+    state: string;
+    source: string;
+    value?: string | number | boolean;
+  };
+}) {
+  if (setting.editorShape === "RUNTIME_SECRET_REFERENCE_OBJECT")
+    return (
+      <small className="muted">
+        {current.overridePresent || deploymentOverride?.overridePresent
+          ? "Ссылка на секрет задана. Наличие значения в текущей сессии здесь не подтверждается."
+          : "Ссылка на секрет не задана. Настройте её через «Секреты»."}
+      </small>
+    );
+  if (setting.kind !== "MANAGED" || setting.editorShape === "UNSUPPORTED")
+    return (
+      <small className="muted">
+        {current.overridePresent || deploymentOverride?.overridePresent
+          ? "Переопределение задано"
+          : "Точное значение недоступно"}
+        . Значение этого параметра недоступно для просмотра.
+      </small>
+    );
+  const own =
+    current.overridePresent && current.state === "EDITABLE"
+      ? previewValue(current.value)
+      : null;
+  const inherited =
+    deploymentOverride?.overridePresent &&
+    deploymentOverride.state === "EDITABLE"
+      ? previewValue(deploymentOverride.value)
+      : null;
+  const fallback =
+    setting.staticDefaultState === "LITERAL"
+      ? previewValue(setting.staticDefaultValue)
+      : null;
+  const resolved =
+    coreValue?.state === "RESOLVED" ? previewValue(coreValue.value) : null;
+  const coreSource =
+    coreValue?.source === "MEMBER_OVERRIDE"
+      ? "Переопределено для ноды"
+      : coreValue?.source === "DEPLOYMENT_OVERRIDE"
+        ? "Переопределено для сервиса"
+        : coreValue?.source === "ROLE_DEFAULT"
+          ? "По умолчанию"
+          : "Разрешено Core";
+  return (
+    <small className="muted" aria-live="polite">
+      {resolved !== null
+        ? `${coreSource}: ${resolved}`
+        : coreValue?.state === "DEFERRED"
+          ? "Вычисляется при выполнении"
+          : own !== null
+            ? `Переопределено ${deploymentOverride ? "для ноды" : "для сервиса"}: ${own}`
+            : current.overridePresent
+              ? "Переопределено; итоговое значение вычисляется при выполнении"
+              : inherited !== null
+                ? `Задано для сервиса: ${inherited}; итоговое значение ожидает Core`
+                : deploymentOverride?.overridePresent
+                  ? "Задано для сервиса; итоговое значение ожидает Core"
+                  : fallback !== null
+                    ? `По умолчанию: ${fallback}`
+                    : setting.staticDefaultState === "DEFERRED"
+                      ? "Вычисляется при выполнении"
+                      : "Значение по умолчанию пока недоступно"}
+    </small>
+  );
+}
+
 export function ServicesPage({
   managed,
   catalog,
+  effectivePreview,
+  corePreviewNotice,
   deploymentIntents,
   placementIntents,
   certificateIntents,
@@ -242,12 +394,14 @@ export function ServicesPage({
   view,
   selectedDeploymentId,
   selectedMemberId,
+  focusMemberSettings,
   onSelectedMemberChange,
   onOpenDeployment,
   onBackToList,
   onOpenTopology,
   onManageCertificates,
   onAppend,
+  onAmend,
   onReview,
   onDiscard,
   onGetPendingRuntimeSecretDescriptors,
@@ -256,6 +410,8 @@ export function ServicesPage({
 }: {
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
+  effectivePreview?: ServiceConfigurationPreview;
+  corePreviewNotice?: string;
   deploymentIntents: DeploymentIntent[];
   placementIntents: PlacementIntent[];
   certificateIntents: CertificateIntent[];
@@ -267,28 +423,47 @@ export function ServicesPage({
   view: "list" | "detail";
   selectedDeploymentId: string;
   selectedMemberId: string;
+  focusMemberSettings: boolean;
   onSelectedMemberChange: (memberId: string) => void;
   onOpenDeployment: (deploymentId: string) => void;
   onBackToList: () => void;
   onOpenTopology: () => void;
   onManageCertificates: (memberId?: string) => void;
   onAppend: (intent: ConfigurationIntent) => Promise<boolean>;
+  onAmend: (
+    previous: ConfigurationIntent,
+    replacement: ConfigurationIntent | null,
+  ) => Promise<boolean>;
   onReview: () => void;
   onDiscard: () => void;
-  onGetPendingRuntimeSecretDescriptors?: (serviceDeployment: string) => Promise<RuntimeSecretDescriptorOperation>;
-  onSetPendingDeploymentRuntimeSecretValues?: (input: PendingRuntimeSecretValuesInput) => Promise<void>;
-  onChoosePendingDeploymentRuntimeSecretFile?: (input: PendingRuntimeSecretFileInput) => Promise<string>;
+  onGetPendingRuntimeSecretDescriptors?: (
+    serviceDeployment: string,
+  ) => Promise<RuntimeSecretDescriptorOperation>;
+  onSetPendingDeploymentRuntimeSecretValues?: (
+    input: PendingRuntimeSecretValuesInput,
+  ) => Promise<void>;
+  onChoosePendingDeploymentRuntimeSecretFile?: (
+    input: PendingRuntimeSecretFileInput,
+  ) => Promise<string>;
 }) {
   const [filter, setFilter] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [secretOperation, setSecretOperation] = useState<RuntimeSecretDescriptorOperation | null>(null);
+  const [secretOperation, setSecretOperation] =
+    useState<RuntimeSecretDescriptorOperation | null>(null);
+  const secretDialogRef = useRef<HTMLDialogElement>(null);
   const [secretValues, setSecretValues] = useState<Record<string, string>>({});
+  const [secretUsernames, setSecretUsernames] = useState<
+    Record<string, string>
+  >({});
   const [secretBusy, setSecretBusy] = useState(false);
   const [secretError, setSecretError] = useState("");
   const [inputEncryptionPassword, setInputEncryptionPassword] = useState("");
-  const [secretFileStates, setSecretFileStates] = useState<Record<string, string>>({});
+  const [secretFileStates, setSecretFileStates] = useState<
+    Record<string, string>
+  >({});
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
+  const memberSettingsHeading = useRef<HTMLHeadingElement>(null);
   const rows = useMemo(
     () => rowsFor(managed, deploymentIntents),
     [managed, deploymentIntents],
@@ -328,11 +503,32 @@ export function ServicesPage({
     if (view === "detail") detailHeading.current?.focus();
   }, [view, selectedDeploymentId]);
   useEffect(() => {
+    if (view !== "detail" || !focusMemberSettings || !selectedMember) return;
+    memberSettingsHeading.current?.focus();
+    memberSettingsHeading.current?.scrollIntoView?.({ block: "start" });
+  }, [
+    view,
+    focusMemberSettings,
+    selected?.deploymentId,
+    selectedMember?.memberId,
+  ]);
+  useEffect(() => {
     if (view === "list") listHeading.current?.focus();
   }, [view]);
   useEffect(() => {
     if (view === "detail" && selectedDeploymentId && !selected) onBackToList();
   }, [view, selectedDeploymentId, selected, onBackToList]);
+  useEffect(() => {
+    const dialog = secretDialogRef.current;
+    if (!dialog) return;
+    if (secretOperation && !dialog.open) {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    } else if (!secretOperation && dialog.open) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+  }, [secretOperation]);
   useEffect(() => {
     if (
       selectedMemberId &&
@@ -344,6 +540,7 @@ export function ServicesPage({
 
   const closeSecrets = () => {
     setSecretValues({});
+    setSecretUsernames({});
     setSecretError("");
     setSecretOperation(null);
     setInputEncryptionPassword("");
@@ -354,12 +551,23 @@ export function ServicesPage({
     setSecretBusy(true);
     setSecretError("");
     try {
-      const operation = await onGetPendingRuntimeSecretDescriptors(selected.deploymentId);
+      const operation = await onGetPendingRuntimeSecretDescriptors(
+        selected.deploymentId,
+      );
       const descriptors = (operation.descriptors || []).filter(
-        (item) => ["SERVICE_PASSWORD", "SERVICE_ADMIN_TOKEN", "SERVICE_UNSEAL_SHARES"].includes(item.purpose) && item.serviceDeployment === selected.deploymentId,
+        (item) =>
+          [
+            "SERVICE_PASSWORD",
+            "SERVICE_ADMIN_TOKEN",
+            "SERVICE_UNSEAL_SHARES",
+          ].includes(item.purpose) &&
+          item.serviceDeployment === selected.deploymentId,
       );
       if (operation.status !== "READY" || !descriptors.length) {
-        setSecretError(operation.error?.message || "Для этого deployment нет доступных требований к секретам.");
+        setSecretError(
+          operation.error?.message ||
+            "Для этого deployment нет доступных требований к секретам.",
+        );
         return;
       }
       setSecretOperation({ ...operation, descriptors });
@@ -371,11 +579,23 @@ export function ServicesPage({
   };
   const submitSecrets = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selected || !secretOperation || !onSetPendingDeploymentRuntimeSecretValues) return;
-    const descriptors = (secretOperation.descriptors || []).filter((item) => item.purpose === "SERVICE_PASSWORD");
-    if (descriptors.length === 0) { closeSecrets(); return; }
+    if (
+      !selected ||
+      !secretOperation ||
+      !onSetPendingDeploymentRuntimeSecretValues
+    )
+      return;
+    const descriptors = (secretOperation.descriptors || []).filter(
+      (item) => item.purpose === "SERVICE_PASSWORD",
+    );
+    if (descriptors.length === 0) {
+      closeSecrets();
+      return;
+    }
     const values: Record<string, string> = {};
-    for (const descriptor of descriptors) values[descriptor.requirementRef] = secretValues[descriptor.requirementRef] || "";
+    for (const descriptor of descriptors)
+      values[descriptor.requirementRef] =
+        secretValues[descriptor.requirementRef] || "";
     if (Object.values(values).some((value) => !value)) {
       setSecretError("Заполните все обязательные значения.");
       return;
@@ -386,43 +606,85 @@ export function ServicesPage({
       const referencesAdded = descriptors.filter(
         (descriptor) => !descriptor.referenceConfigured && descriptor.setting,
       );
+      if (
+        referencesAdded.some((descriptor) => {
+          const setting = settings.find(
+            (item) => item.id === descriptor.setting,
+          );
+          return (
+            setting?.runtimeSecretUsernameRequired &&
+            !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(
+              secretUsernames[descriptor.requirementRef] || "",
+            )
+          );
+        })
+      ) {
+        setSecretError(
+          "Укажите допустимое имя пользователя для этого секрета.",
+        );
+        return;
+      }
       for (const descriptor of referencesAdded) {
+        const setting = settings.find((item) => item.id === descriptor.setting);
+        const username = secretUsernames[descriptor.requirementRef] || "";
         const appended = await onAppend({
           operation: "SetServiceConfigurationValue",
           deploymentId: selected.deploymentId,
           scope: "DEPLOYMENT",
           setting: descriptor.setting!,
-          value: { passwordSecretRef: `runtime:${descriptor.requirementRef}` },
+          value: setting?.runtimeSecretUsernameRequired
+            ? {
+                username,
+                passwordSecretRef: `runtime:${descriptor.requirementRef}`,
+              }
+            : { passwordSecretRef: `runtime:${descriptor.requirementRef}` },
         });
         if (!appended) {
-          setSecretError("Ссылка на секрет не добавлена в черновик. Значение не сохранено.");
+          setSecretError(
+            "Ссылка на секрет не добавлена в черновик. Значение не сохранено.",
+          );
           return;
         }
       }
       if (referencesAdded.length) {
         setSecretValues({});
-        setSecretError("Ссылки добавлены в черновик. Сохраните проект и затем введите значения ещё раз.");
+        setSecretError(
+          "Ссылки добавлены в черновик. Сохраните проект и затем введите значения ещё раз.",
+        );
         return;
       }
-      await onSetPendingDeploymentRuntimeSecretValues({ serviceDeployment: selected.deploymentId, values });
+      await onSetPendingDeploymentRuntimeSecretValues({
+        serviceDeployment: selected.deploymentId,
+        values,
+      });
       closeSecrets();
     } catch {
       setSecretValues({});
-      setSecretError("Значения не приняты: обновите требования и повторите ввод.");
+      setSecretError(
+        "Значения не приняты: обновите требования и повторите ввод.",
+      );
     } finally {
       setSecretBusy(false);
     }
   };
 
-  const chooseSecretFile = async (purpose: "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES") => {
+  const chooseSecretFile = async (
+    purpose: "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES",
+  ) => {
     if (!selected || !onChoosePendingDeploymentRuntimeSecretFile) return;
     setSecretBusy(true);
     setSecretError("");
     try {
-      const status = await onChoosePendingDeploymentRuntimeSecretFile({serviceDeployment: selected.deploymentId, purpose, encryptionPassword: inputEncryptionPassword});
-      setSecretFileStates((current) => ({...current, [purpose]: status}));
+      const status = await onChoosePendingDeploymentRuntimeSecretFile({
+        serviceDeployment: selected.deploymentId,
+        purpose,
+        encryptionPassword: inputEncryptionPassword,
+      });
+      setSecretFileStates((current) => ({ ...current, [purpose]: status }));
     } catch {
-      setSecretError("Файл не принят. Проверьте формат/пароль и повторите выбор.");
+      setSecretError(
+        "Файл не принят. Проверьте формат/пароль и повторите выбор.",
+      );
     } finally {
       setInputEncryptionPassword("");
       setSecretBusy(false);
@@ -437,7 +699,7 @@ export function ServicesPage({
             Сервис не найден
           </h1>
           <p className="muted">
-            Вернитесь к списку и выберите существующий deployment.
+            Вернитесь к списку и выберите существующий экземпляр сервиса.
           </p>
           <button className="outline" onClick={onBackToList}>
             К списку сервисов
@@ -462,12 +724,12 @@ export function ServicesPage({
         </div>
         {selected.state === "deleting" && (
           <section className="card topology-warning" role="status">
-            Этот deployment будет удалён; настройка недоступна.
+            Этот экземпляр будет удалён; настройка недоступна.
           </section>
         )}
         {!catalogReady && (
           <section className="card topology-warning" role="status">
-            Совместимый READY-каталог недоступен. Сохранённые overrides остаются
+            Совместимый каталог недоступен. Сохранённые переопределения остаются
             без изменений, но редактирование отключено.
           </section>
         )}
@@ -479,15 +741,54 @@ export function ServicesPage({
         <section className="card service-secrets-action">
           <div>
             <h2>Секреты</h2>
-            <p className="muted">Для выбранного режима показаны только разрешённые каталогом поля. Значения остаются в памяти приложения, не сохраняются в проекте и перед запуском повторно сверяются Core с новым планом.</p>
+            <p className="muted">
+              Для выбранного режима показаны только разрешённые каталогом поля.
+              Значения остаются в памяти приложения, не сохраняются в проекте и
+              перед запуском повторно сверяются Core с новым планом.
+            </p>
           </div>
-          <button className="outline" disabled={busy || structuralDisabled || !!selected.state || secretBusy || !onGetPendingRuntimeSecretDescriptors || (!onSetPendingDeploymentRuntimeSecretValues && !onChoosePendingDeploymentRuntimeSecretFile)} onClick={() => void openSecrets()}>
+          <button
+            className="outline"
+            disabled={
+              busy ||
+              structuralDisabled ||
+              !!selected.state ||
+              secretBusy ||
+              !onGetPendingRuntimeSecretDescriptors ||
+              (!onSetPendingDeploymentRuntimeSecretValues &&
+                !onChoosePendingDeploymentRuntimeSecretFile)
+            }
+            onClick={() => void openSecrets()}
+          >
             Секреты
           </button>
-          {secretError && !secretOperation && <p className="error" role="alert">{secretError}</p>}
+          {secretError && !secretOperation && (
+            <p className="error" role="alert">
+              {secretError}
+            </p>
+          )}
         </section>
         <section className="card services-settings">
-          <h2>Параметры deployment</h2>
+          <h2>Параметры сервиса</h2>
+          {corePreviewNotice && (
+            <p className="muted" role="status">
+              {corePreviewNotice}
+            </p>
+          )}
+          {effectivePreview &&
+            !effectivePreview.services[selected.deploymentId] && (
+              <p className="muted" role="status">
+                Core не вернул разрешённые значения для этого сервиса. Возможно,
+                топология проекта ещё не завершена; показаны безопасные
+                локальные значения.
+              </p>
+            )}
+          {effectivePreview?.services[selected.deploymentId] && (
+            <p className="muted" role="status">
+              Значения получены из Core для текущей сохранённой ревизии. Это не
+              проверка проекта.
+            </p>
+          )}
           {!service ? (
             <>
               <p className="muted">
@@ -501,7 +802,8 @@ export function ServicesPage({
           ) : settings.length === 0 ? (
             <>
               <p className="muted">
-                Каталог не объявляет доступных параметров для этого deployment.
+                Каталог не объявляет доступных параметров для этого экземпляра
+                сервиса.
               </p>
               {!catalogReady && savedOverrides.length > 0 && (
                 <SavedOverrides overrides={savedOverrides} />
@@ -518,7 +820,7 @@ export function ServicesPage({
                   setting.id,
                   configurationIntents,
                 );
-                const locked = configurationIntents.some(
+                const pending = configurationIntents.find(
                   (intent) =>
                     intent.deploymentId === selected.deploymentId &&
                     intent.scope === "DEPLOYMENT" &&
@@ -531,13 +833,25 @@ export function ServicesPage({
                 const disabled =
                   busy ||
                   structuralDisabled ||
-                  locked ||
                   !editable ||
-                  commandCount >= 16;
+                  (commandCount >= 16 && !pending);
+                const savedOverride = savedOverrides.some(
+                  (entry) =>
+                    entry.setting === setting.id && entry.overridePresent,
+                );
                 const draftKey = `${selected.deploymentId}\u0000${setting.id}`;
-                const raw =
-                  drafts[draftKey] ??
-                  inputValue(current.value, setting.editorShape);
+                const baseRaw = displayedInputValue(
+                  setting,
+                  current,
+                  pending
+                    ? undefined
+                    : effectivePreview?.services[selected.deploymentId]
+                        ?.configuration[setting.id],
+                );
+                const draftRaw = drafts[draftKey];
+                const raw = draftRaw ?? baseRaw;
+                const draftChanged =
+                  draftRaw !== undefined && draftRaw !== baseRaw;
                 const value = valueFor(setting, raw);
                 const invalidNumber =
                   (setting.editorShape === "INTEGER" ||
@@ -553,6 +867,16 @@ export function ServicesPage({
                       {setting.description && (
                         <p className="muted">{setting.description}</p>
                       )}
+                      <SettingPreview
+                        setting={setting}
+                        current={current}
+                        coreValue={
+                          pending
+                            ? undefined
+                            : effectivePreview?.services[selected.deploymentId]
+                                ?.configuration[setting.id]
+                        }
+                      />
                     </div>
                     {editable ? (
                       <div className="services-control">
@@ -585,7 +909,12 @@ export function ServicesPage({
                                 }))
                               }
                             >
-                              <option value="">Выберите TLS profile</option>
+                              <option value="">Выберите профиль TLS</option>
+                              {raw && !tlsProfileIDs.includes(raw) && (
+                                <option value={raw} disabled>
+                                  {raw} · нет в управляемом списке
+                                </option>
+                              )}
                               {tlsProfileIDs.map((id) => (
                                 <option key={id} value={id}>
                                   {id}
@@ -594,7 +923,7 @@ export function ServicesPage({
                             </select>
                             {!tlsProfileIDs.length && (
                               <small className="muted">
-                                Нет доступного managed TLS profile.
+                                Нет доступного управляемого профиля TLS.
                               </small>
                             )}
                             <button
@@ -618,7 +947,9 @@ export function ServicesPage({
                                 }))
                               }
                             >
-                              <option value="">Выберите deployment</option>
+                              <option value="">
+                                Выберите экземпляр сервиса
+                              </option>
                               {deploymentIDs.map((id) => (
                                 <option key={id} value={id}>
                                   {id}
@@ -627,7 +958,7 @@ export function ServicesPage({
                             </select>
                             {!deploymentIDs.length && (
                               <small className="muted">
-                                Нет доступного managed deployment.
+                                Нет доступного управляемого экземпляра сервиса.
                               </small>
                             )}
                           </>
@@ -696,33 +1027,63 @@ export function ServicesPage({
                           <button
                             disabled={
                               disabled ||
+                              !draftChanged ||
                               value === undefined ||
                               invalidNumber ||
                               invalidTextValue
                             }
-                            onClick={() =>
-                              onAppend({
+                            onClick={async () => {
+                              const next: ConfigurationIntent = {
                                 operation: "SetServiceConfigurationValue",
                                 deploymentId: selected.deploymentId,
                                 scope: "DEPLOYMENT",
                                 setting: setting.id,
                                 value: value as Value,
-                              })
-                            }
+                              };
+                              return pending
+                                ? onAmend(pending, next)
+                                : onAppend(next);
+                            }}
                           >
                             Применить
                           </button>
                           <button
                             className="outline"
-                            disabled={disabled || !current.overridePresent}
-                            onClick={() =>
-                              onAppend({
+                            disabled={
+                              disabled ||
+                              (!savedOverride && !pending && !draftChanged) ||
+                              (!!pending &&
+                                pending.operation ===
+                                  "RemoveServiceConfigurationOverride")
+                            }
+                            onClick={async () => {
+                              if (!savedOverride && !pending) {
+                                setDrafts((old) => {
+                                  const next = { ...old };
+                                  delete next[draftKey];
+                                  return next;
+                                });
+                                return;
+                              }
+                              const next: ConfigurationIntent = {
                                 operation: "RemoveServiceConfigurationOverride",
                                 deploymentId: selected.deploymentId,
                                 scope: "DEPLOYMENT",
                                 setting: setting.id,
-                              })
-                            }
+                              };
+                              const accepted = pending
+                                ? await onAmend(
+                                    pending,
+                                    savedOverride ? next : null,
+                                  )
+                                : await onAppend(next);
+                              if (accepted)
+                                setDrafts((old) => {
+                                  const updated = { ...old };
+                                  delete updated[draftKey];
+                                  return updated;
+                                });
+                            }}
                           >
                             Сбросить
                           </button>
@@ -730,9 +1091,8 @@ export function ServicesPage({
                       </div>
                     ) : (
                       <p className="muted">
-                        {locked
-                          ? "Изменение уже добавлено в текущий черновик."
-                          : "Этот параметр доступен только для просмотра в текущем интерфейсе."}
+                        Этот параметр доступен только для просмотра в текущем
+                        интерфейсе.
                       </p>
                     )}
                   </div>
@@ -743,9 +1103,11 @@ export function ServicesPage({
         </section>
         {members.length > 0 && (
           <section className="card services-settings">
-            <h2>Параметры member</h2>
+            <h2 ref={memberSettingsHeading} tabIndex={-1}>
+              Параметры экземпляра
+            </h2>
             <label className="services-member-picker">
-              Member
+              Экземпляр
               <select
                 value={selectedMemberId}
                 onChange={(event) => onSelectedMemberChange(event.target.value)}
@@ -763,6 +1125,12 @@ export function ServicesPage({
                 deploymentId={selected.deploymentId}
                 member={selectedMember}
                 settings={settings}
+                deploymentOverrides={savedOverrides}
+                effectivePreview={
+                  effectivePreview?.services[selected.deploymentId]?.members[
+                    selectedMember.memberId
+                  ]
+                }
                 catalogReady={catalogReady}
                 tlsProfileIDs={tlsProfileIDs}
                 deploymentIDs={deploymentIDs}
@@ -775,6 +1143,7 @@ export function ServicesPage({
                   onManageCertificates(selectedMember.memberId)
                 }
                 onAppend={onAppend}
+                onAmend={onAmend}
               />
             )}
           </section>
@@ -786,31 +1155,140 @@ export function ServicesPage({
           onDiscard={onDiscard}
         />
         {secretOperation && (
-          <dialog className="runtime-secret-dialog" open aria-label="Секреты сервиса">
+          <dialog
+            ref={secretDialogRef}
+            className="runtime-secret-dialog"
+            aria-label="Секреты сервиса"
+            onCancel={(event) => {
+              event.preventDefault();
+              closeSecrets();
+            }}
+          >
             <form method="dialog" onSubmit={submitSecrets}>
               <h2>Секреты: {selected.deploymentId}</h2>
-              <p className="muted">Значения остаются только в памяти приложения и перед запуском сверяются с требованиями Core.</p>
-              {(secretOperation.descriptors || []).filter((descriptor) => descriptor.purpose === "SERVICE_PASSWORD").map((descriptor) => (
-                <label key={descriptor.requirementRef}>
-                  {descriptor.displayLabel}
-                  <input type="password" autoComplete="new-password" value={secretValues[descriptor.requirementRef] || ""} disabled={secretBusy} onChange={(event) => setSecretValues((current) => ({ ...current, [descriptor.requirementRef]: event.target.value }))} />
-                </label>
-              ))}
-              {(secretOperation.descriptors || []).filter((descriptor) => descriptor.purpose === "SERVICE_ADMIN_TOKEN" || descriptor.purpose === "SERVICE_UNSEAL_SHARES").map((descriptor) => (
-                <div key={descriptor.requirementRef} className="runtime-secret-file-input">
-                  <strong>{descriptor.displayLabel}</strong>
-                  <p className="muted">{descriptor.requiredWhen === "INITIALIZED" ? "Для уже инициализированного сервиса" : "Для повторного запуска sealed-сервиса"}</p>
-                  <label>Пароль файла age, если файл зашифрован
-                    <input type="password" autoComplete="new-password" value={inputEncryptionPassword} disabled={secretBusy} onChange={(event) => setInputEncryptionPassword(event.target.value)} />
-                  </label>
-                  <button type="button" className="outline" disabled={secretBusy || !onChoosePendingDeploymentRuntimeSecretFile} onClick={() => void chooseSecretFile(descriptor.purpose as "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES")}>Выбрать файл</button>
-                  <small aria-live="polite">{secretFileStates[descriptor.purpose] === "STORED" ? "Файл принят и сохранён только в сессии." : secretFileStates[descriptor.purpose] === "CANCELLED" ? "Выбор отменён." : "Файл не выбран."}</small>
-                </div>
-              ))}
-              {secretError && <p className="error" role="alert">{secretError}</p>}
+              <p className="muted">
+                Значения остаются только в памяти приложения и перед запуском
+                сверяются с требованиями Core.
+              </p>
+              {(secretOperation.descriptors || [])
+                .filter(
+                  (descriptor) => descriptor.purpose === "SERVICE_PASSWORD",
+                )
+                .map((descriptor) => (
+                  <div key={descriptor.requirementRef}>
+                    {settings.find((item) => item.id === descriptor.setting)
+                      ?.runtimeSecretUsernameRequired &&
+                      !descriptor.referenceConfigured && (
+                        <label className="runtime-secret-username">
+                          Имя пользователя
+                          <input
+                            type="text"
+                            autoComplete="username"
+                            value={
+                              secretUsernames[descriptor.requirementRef] || ""
+                            }
+                            disabled={secretBusy}
+                            onChange={(event) =>
+                              setSecretUsernames((current) => ({
+                                ...current,
+                                [descriptor.requirementRef]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      )}
+                    <label>
+                      {descriptor.displayLabel}
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        value={secretValues[descriptor.requirementRef] || ""}
+                        disabled={secretBusy}
+                        onChange={(event) =>
+                          setSecretValues((current) => ({
+                            ...current,
+                            [descriptor.requirementRef]: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                ))}
+              {(secretOperation.descriptors || [])
+                .filter(
+                  (descriptor) =>
+                    descriptor.purpose === "SERVICE_ADMIN_TOKEN" ||
+                    descriptor.purpose === "SERVICE_UNSEAL_SHARES",
+                )
+                .map((descriptor) => (
+                  <div
+                    key={descriptor.requirementRef}
+                    className="runtime-secret-file-input"
+                  >
+                    <strong>{descriptor.displayLabel}</strong>
+                    <p className="muted">
+                      {descriptor.requiredWhen === "INITIALIZED"
+                        ? "Для уже инициализированного сервиса"
+                        : "Для повторного запуска запечатанного сервиса"}
+                    </p>
+                    <label>
+                      Пароль файла age, если файл зашифрован
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        value={inputEncryptionPassword}
+                        disabled={secretBusy}
+                        onChange={(event) =>
+                          setInputEncryptionPassword(event.target.value)
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="outline"
+                      disabled={
+                        secretBusy ||
+                        !onChoosePendingDeploymentRuntimeSecretFile
+                      }
+                      onClick={() =>
+                        void chooseSecretFile(
+                          descriptor.purpose as
+                            "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES",
+                        )
+                      }
+                    >
+                      Выбрать файл
+                    </button>
+                    <small aria-live="polite">
+                      {secretFileStates[descriptor.purpose] === "STORED"
+                        ? "Файл принят и сохранён только в сессии."
+                        : secretFileStates[descriptor.purpose] === "CANCELLED"
+                          ? "Выбор отменён."
+                          : "Файл не выбран."}
+                    </small>
+                  </div>
+                ))}
+              {secretError && (
+                <p className="error" role="alert">
+                  {secretError}
+                </p>
+              )}
               <div className="actions">
-                <button type="submit" disabled={secretBusy}>{(secretOperation.descriptors || []).some((item) => item.purpose === "SERVICE_PASSWORD") ? "Сохранить в сессии" : "Готово"}</button>
-                <button type="button" className="outline" disabled={secretBusy} onClick={closeSecrets}>Отмена</button>
+                <button type="submit" disabled={secretBusy}>
+                  {(secretOperation.descriptors || []).some(
+                    (item) => item.purpose === "SERVICE_PASSWORD",
+                  )
+                    ? "Сохранить в сессии"
+                    : "Готово"}
+                </button>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={secretBusy}
+                  onClick={closeSecrets}
+                >
+                  Отмена
+                </button>
               </div>
             </form>
           </dialog>
@@ -827,14 +1305,13 @@ export function ServicesPage({
             Сервисы
           </h1>
           <p>
-            Выберите deployment для настройки безопасно поддерживаемых
-            параметров.
+            Выберите экземпляр сервиса для настройки поддерживаемых параметров.
           </p>
         </div>
       </div>
       <section className="card topology-list">
         <label>
-          Поиск deployment
+          Поиск экземпляра сервиса
           <input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
@@ -865,7 +1342,9 @@ export function ServicesPage({
           ))}
           {!filteredRows.length && (
             <div>
-              <p className="muted">Подходящие deployments не найдены.</p>
+              <p className="muted">
+                Подходящие экземпляры сервисов не найдены.
+              </p>
               {!rows.length && (
                 <button className="outline" onClick={onOpenTopology}>
                   Открыть Топологию
@@ -896,15 +1375,18 @@ function SavedOverrides({
 }) {
   return (
     <div className="services-saved-overrides">
-      <p className="muted">Сохранённые overrides (только просмотр):</p>
+      <p className="muted">Сохранённые переопределения (только просмотр):</p>
       <ul>
         {overrides.map((override) => (
           <li key={override.setting}>
             <code>{override.setting}</code> ·{" "}
             {override.overridePresent
-              ? "override сохранён"
-              : "override отсутствует"}{" "}
-            · {override.state}
+              ? "переопределение сохранено"
+              : "переопределения нет"}{" "}
+            ·{" "}
+            {override.state === "EDITABLE"
+              ? "доступно для изменения"
+              : "только просмотр"}
           </li>
         ))}
       </ul>
@@ -916,6 +1398,8 @@ function MemberSettings({
   deploymentId,
   member,
   settings,
+  deploymentOverrides,
+  effectivePreview,
   catalogReady,
   tlsProfileIDs,
   deploymentIDs,
@@ -926,10 +1410,16 @@ function MemberSettings({
   deleting,
   onManageCertificates,
   onAppend,
+  onAmend,
 }: {
   deploymentId: string;
   member: MemberRow;
   settings: CatalogSetting[];
+  deploymentOverrides: MemberRow["configuration"];
+  effectivePreview?: Record<
+    string,
+    { state: string; source: string; value?: string | number | boolean }
+  >;
   catalogReady: boolean;
   tlsProfileIDs: string[];
   deploymentIDs: string[];
@@ -940,6 +1430,10 @@ function MemberSettings({
   deleting: boolean;
   onManageCertificates: () => void;
   onAppend: (intent: ConfigurationIntent) => Promise<boolean>;
+  onAmend: (
+    previous: ConfigurationIntent,
+    replacement: ConfigurationIntent | null,
+  ) => Promise<boolean>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const memberSettings = settings.filter((setting) =>
@@ -947,12 +1441,14 @@ function MemberSettings({
   );
   if (!memberSettings.length)
     return (
-      <p className="muted">Каталог не объявляет member-scoped параметров.</p>
+      <p className="muted">
+        Каталог не объявляет параметров отдельного экземпляра.
+      </p>
     );
   return (
     <>
       <p className="muted">
-        Host: {member.hostId} · Роли: {member.roles.join(", ") || "не заданы"}
+        Сервер: {member.hostId} · Роли: {member.roles.join(", ") || "не заданы"}
       </p>
       <div className="services-setting-list">
         {memberSettings.map((setting) => {
@@ -964,23 +1460,48 @@ function MemberSettings({
             setting.id,
             intents,
           );
-          const locked = intents.some(
+          const deploymentOverride = settingValue(
+            deploymentOverrides,
+            deploymentId,
+            "DEPLOYMENT",
+            "",
+            setting.id,
+            intents,
+          );
+          const pending = intents.find(
             (intent) =>
               intent.deploymentId === deploymentId &&
               intent.scope === "MEMBER" &&
               intent.memberId === member.memberId &&
               intent.setting === setting.id,
           );
+          const deploymentPending = intents.some(
+            (intent) =>
+              intent.deploymentId === deploymentId &&
+              intent.scope === "DEPLOYMENT" &&
+              intent.setting === setting.id,
+          );
           const editable = isEditable(setting, catalogReady) && !deleting;
           const disabled =
             busy ||
             structuralDisabled ||
-            locked ||
             !editable ||
-            commandCount >= 16;
+            (commandCount >= 16 && !pending);
+          const savedOverride = member.configuration.some(
+            (entry) => entry.setting === setting.id && entry.overridePresent,
+          );
           const draftKey = `${deploymentId}\u0000${member.memberId}\u0000${setting.id}`;
-          const raw =
-            drafts[draftKey] ?? inputValue(current.value, setting.editorShape);
+          const baseRaw = displayedInputValue(
+            setting,
+            current,
+            pending || deploymentPending
+              ? undefined
+              : effectivePreview?.[setting.id],
+            deploymentOverride,
+          );
+          const draftRaw = drafts[draftKey];
+          const raw = draftRaw ?? baseRaw;
+          const draftChanged = draftRaw !== undefined && draftRaw !== baseRaw;
           const value = valueFor(setting, raw);
           const invalidNumber =
             (setting.editorShape === "INTEGER" ||
@@ -996,6 +1517,16 @@ function MemberSettings({
                 {setting.description && (
                   <p className="muted">{setting.description}</p>
                 )}
+                <SettingPreview
+                  setting={setting}
+                  current={current}
+                  deploymentOverride={deploymentOverride}
+                  coreValue={
+                    pending || deploymentPending
+                      ? undefined
+                      : effectivePreview?.[setting.id]
+                  }
+                />
               </div>
               {editable ? (
                 <div className="services-control">
@@ -1028,7 +1559,12 @@ function MemberSettings({
                           }))
                         }
                       >
-                        <option value="">Выберите TLS profile</option>
+                        <option value="">Выберите профиль TLS</option>
+                        {raw && !tlsProfileIDs.includes(raw) && (
+                          <option value={raw} disabled>
+                            {raw} · нет в управляемом списке
+                          </option>
+                        )}
                         {tlsProfileIDs.map((id) => (
                           <option key={id} value={id}>
                             {id}
@@ -1037,7 +1573,7 @@ function MemberSettings({
                       </select>
                       {!tlsProfileIDs.length && (
                         <small className="muted">
-                          Нет доступного managed TLS profile.
+                          Нет доступного управляемого профиля TLS.
                         </small>
                       )}
                       <button
@@ -1061,7 +1597,7 @@ function MemberSettings({
                           }))
                         }
                       >
-                        <option value="">Выберите deployment</option>
+                        <option value="">Выберите экземпляр сервиса</option>
                         {deploymentIDs.map((id) => (
                           <option key={id} value={id}>
                             {id}
@@ -1070,7 +1606,7 @@ function MemberSettings({
                       </select>
                       {!deploymentIDs.length && (
                         <small className="muted">
-                          Нет доступного managed deployment.
+                          Нет доступного управляемого экземпляра сервиса.
                         </small>
                       )}
                     </>
@@ -1138,35 +1674,62 @@ function MemberSettings({
                     <button
                       disabled={
                         disabled ||
+                        !draftChanged ||
                         value === undefined ||
                         invalidNumber ||
                         invalidTextValue
                       }
-                      onClick={() =>
-                        onAppend({
+                      onClick={async () => {
+                        const next: ConfigurationIntent = {
                           operation: "SetServiceConfigurationValue",
                           deploymentId,
                           scope: "MEMBER",
                           memberId: member.memberId,
                           setting: setting.id,
                           value: value as Value,
-                        })
-                      }
+                        };
+                        return pending
+                          ? onAmend(pending, next)
+                          : onAppend(next);
+                      }}
                     >
                       Применить
                     </button>
                     <button
                       className="outline"
-                      disabled={disabled || !current.overridePresent}
-                      onClick={() =>
-                        onAppend({
+                      disabled={
+                        disabled ||
+                        (!savedOverride && !pending && !draftChanged) ||
+                        (!!pending &&
+                          pending.operation ===
+                            "RemoveServiceConfigurationOverride")
+                      }
+                      onClick={async () => {
+                        if (!savedOverride && !pending) {
+                          setDrafts((old) => {
+                            const next = { ...old };
+                            delete next[draftKey];
+                            return next;
+                          });
+                          return;
+                        }
+                        const next: ConfigurationIntent = {
                           operation: "RemoveServiceConfigurationOverride",
                           deploymentId,
                           scope: "MEMBER",
                           memberId: member.memberId,
                           setting: setting.id,
-                        })
-                      }
+                        };
+                        const accepted = pending
+                          ? await onAmend(pending, savedOverride ? next : null)
+                          : await onAppend(next);
+                        if (accepted)
+                          setDrafts((old) => {
+                            const updated = { ...old };
+                            delete updated[draftKey];
+                            return updated;
+                          });
+                      }}
                     >
                       Сбросить
                     </button>
@@ -1174,9 +1737,8 @@ function MemberSettings({
                 </div>
               ) : (
                 <p className="muted">
-                  {locked
-                    ? "Изменение уже добавлено в текущий черновик."
-                    : "Этот параметр доступен только для просмотра в текущем интерфейсе."}
+                  Этот параметр доступен только для просмотра в текущем
+                  интерфейсе.
                 </p>
               )}
             </div>

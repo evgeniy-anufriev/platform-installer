@@ -29,7 +29,7 @@ func TestEXECOBS01ProductionKafkaObserverE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := (executionbundle.Cache{Root: filepath.Join(repo, "bundle")}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
+	bundle, err := (executionbundle.Cache{Root: filepath.Join(repo, "cache")}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
 		t.Fatal(err)
 	}

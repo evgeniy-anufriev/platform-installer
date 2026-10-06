@@ -1,0 +1,135 @@
+import { describe, expect, it } from "vitest";
+import type { InstallationEventView, InstallationPlanView } from "./backend";
+import {
+  actionResultLabel,
+  beginRunProgress,
+  installationDisplay,
+  observeRunEvent,
+} from "./installationPresentation";
+
+const plan = {
+  id: "plan-1",
+  status: "EXECUTABLE",
+  projectRevision: "sha256:project",
+  planFingerprint: "sha256:plan",
+  executionNodeId: "node1",
+  runtime: {
+    bundleDigest: "sha256:bundle",
+    coreVersion: "core",
+    catalogDigest: "sha256:catalog",
+    protocol: "protocol",
+  },
+  expiresAt: "2026-10-04T12:00:00Z",
+  approved: true,
+  acknowledgements: [],
+  phases: [
+    {
+      id: "apply",
+      order: 0,
+      actions: [
+        {
+          id: "apply:one",
+          type: "SERVICE_APPLY",
+          serviceDeployment: "one",
+          targets: ["node1"],
+          dependsOn: [],
+          mutating: true,
+          reboot: "NONE",
+          summary: "Apply one",
+        },
+        {
+          id: "verify:one",
+          type: "SERVICE_VERIFY",
+          serviceDeployment: "one",
+          targets: ["node1"],
+          dependsOn: ["apply:one"],
+          mutating: false,
+          reboot: "NONE",
+          summary: "Verify one",
+        },
+      ],
+    },
+  ],
+} as InstallationPlanView;
+
+const event = (
+  sequence: number,
+  eventType: string,
+  actionId?: string,
+  runId = "run-1",
+): InstallationEventView =>
+  ({
+    apiVersion: "platform.installer/event/v1alpha1",
+    kind: "InstallationEventView",
+    runId,
+    sequence,
+    timestamp: "2026-10-04T12:00:00Z",
+    eventType,
+    status: "SUCCESS",
+    actionId,
+    safeMessage: "safe",
+    redacted: true,
+  }) as unknown as InstallationEventView;
+
+describe("installation status presentation", () => {
+  it("shows blocked and approved-but-not-started states separately", () => {
+    expect(installationDisplay().label).toBe("План не готов");
+    expect(
+      installationDisplay({ status: "PLAN_APPROVED" } as never).label,
+    ).toBe("Установка не начата");
+  });
+
+  it("counts completed plan actions and rejects a percentage after a sequence gap", () => {
+    let progress = beginRunProgress("run-1", plan);
+    progress = observeRunEvent(progress, event(1, "RUN_STARTED"));
+    progress = observeRunEvent(
+      progress,
+      event(2, "ACTION_STARTED", "apply:one"),
+    );
+    progress = observeRunEvent(
+      progress,
+      event(3, "ACTION_COMPLETED", "apply:one"),
+    );
+    expect(
+      installationDisplay(
+        undefined,
+        { run: { runId: "run-1", state: "RUNNING", sequence: 3 } } as never,
+        progress,
+      ).percent,
+    ).toBe(50);
+    expect(actionResultLabel("apply:one", "RUNNING", progress)).toBe("Успешно");
+    expect(actionResultLabel("verify:one", "SUCCEEDED", progress)).toBe(
+      "Событие не получено",
+    );
+    progress = observeRunEvent(
+      progress,
+      event(5, "ACTION_COMPLETED", "verify:one"),
+    );
+    expect(
+      installationDisplay(
+        undefined,
+        { run: { runId: "run-1", state: "RUNNING", sequence: 5 } } as never,
+        progress,
+      ).percent,
+    ).toBeUndefined();
+    expect(actionResultLabel("verify:one", "FAILED", progress)).toBe("Успешно");
+  });
+
+  it("reserves 100 percent for the authoritative successful terminal state", () => {
+    const progress = beginRunProgress("run-1", plan);
+    expect(
+      installationDisplay(
+        undefined,
+        { run: { runId: "run-1", state: "FAILED", sequence: 1 } } as never,
+        progress,
+      ).percent,
+    ).toBe(0);
+    expect(
+      installationDisplay(
+        undefined,
+        { run: { runId: "run-1", state: "SUCCEEDED", sequence: 1 } } as never,
+        progress,
+      ).percent,
+    ).toBe(100);
+  });
+});

@@ -1,0 +1,8 @@
+# Platform Installer V2 managed LXC readiness target
+[Unit]
+Description=LXC network ready for Platform Installer rootless Docker
+BindsTo=lxc-net.service
+After=lxc-net.service
+
+[Install]
+WantedBy=lxc-net.service

@@ -1,0 +1,81 @@
+---
+- name: Validate bounded Docker desired inputs
+  ansible.builtin.assert:
+    that:
+      - platform_docker_mode in ['create-user', 'existing-user']
+      - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
+      - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
+      - platform_docker_tls_profile is string
+      - platform_docker_tls_profile | length > 0 or platform_docker_tls_directory | length > 0
+      - platform_docker_api_port | int >= 1
+      - platform_docker_api_port | int <= 65535
+      - platform_docker_internal_api_port | int == 12376
+      - (platform_docker_api_port | int) != (platform_docker_internal_api_port | int)
+      - platform_docker_api_bind_address == '0.0.0.0' or platform_docker_api_bind_address == (ansible_host | default(inventory_hostname))
+      - platform_docker_lxc_bridge == 'lxcbr0'
+      - platform_docker_lxc_veth_limit | int >= 1
+      - platform_docker_lxc_veth_limit | int <= 64
+    fail_msg: DOCKER_ROOTLESS_INPUT_INVALID
+
+- name: Inspect target RED OS identity
+  ansible.builtin.slurp:
+    src: /etc/os-release
+  register: _platform_docker_os_release
+
+- name: Inspect target machine architecture
+  ansible.builtin.command:
+    argv: [uname, -m]
+  register: _platform_docker_architecture
+  changed_when: false
+
+- name: Require supported RED OS target
+  ansible.builtin.assert:
+    that:
+      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
+      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^VERSION_ID=\"?8\\.0(?:\\.[0-9]+)?\"?$')
+      - _platform_docker_architecture.stdout == 'x86_64'
+    fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
+
+- name: Inspect rootful Docker daemon and socket
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service, docker.socket]
+  register: _platform_docker_rootful_units
+  changed_when: false
+  failed_when: false
+
+- name: Refuse active rootful Docker ownership conflict
+  ansible.builtin.assert:
+    that: "'active' not in _platform_docker_rootful_units.stdout_lines"
+    fail_msg: DOCKER_ROOTFUL_CONFLICT
+
+- name: Validate create-user runtime SecretRef
+  ansible.builtin.assert:
+    that:
+      - platform_docker_account_credential is mapping
+      - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
+      - platform_docker_secret_files is mapping
+      - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
+  when: platform_docker_mode == 'create-user'
+  no_log: true
+
+- name: Inspect create-user runtime password file on the controller
+  ansible.builtin.stat:
+    path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
+    follow: false
+  delegate_to: localhost
+  become: false
+  register: _platform_docker_password_file
+  when: platform_docker_mode == 'create-user'
+  no_log: true
+
+- name: Require bounded regular runtime password file
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_password_file.stat.isreg
+      - not _platform_docker_password_file.stat.islnk
+      - _platform_docker_password_file.stat.size >= 1
+      - _platform_docker_password_file.stat.size <= 4096
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
+  when: platform_docker_mode == 'create-user'
+  no_log: true

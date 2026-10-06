@@ -57,6 +57,10 @@ func TestEndpointPreviewInvalidAndSelectionChangeNeverExposeRows(t *testing.T) {
 	if current := app.GetEndpointPreview(); current.Status != "CURRENT" || len(current.Endpoints) != 1 {
 		t.Fatalf("current=%#v", current)
 	}
+	app.current.Verification.Status = "STALE"
+	if stale := app.GetEndpointPreview(); stale.Status != "STALE" || len(stale.Endpoints) != 0 || len(stale.Providers) != 0 || len(stale.Findings) != 0 {
+		t.Fatalf("stale=%#v", stale)
+	}
 	app.execution.bind(app.current.Root, project.ID, map[string]map[string]any{"node1": {"ansibleHost": "192.0.2.11"}})
 	if _, err := app.SelectExecutionNode("node1"); err != nil {
 		t.Fatal(err)

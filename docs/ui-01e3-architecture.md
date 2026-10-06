@@ -66,7 +66,7 @@ E3 includes:
 - exactly one SSH authentication mode: `SSH_PASSWORD` or `SSH_PRIVATE_KEY`;
 - an optional, separate sudo password;
 - explicit replacement and clearing;
-- 30-minute idle expiry and lifecycle cleanup;
+- one-hour expiry from credential set/replacement and lifecycle cleanup;
 - status-only Wails queries and Servers-page rendering;
 - safe, bounded ingestion of a user-selected private-key file;
 - negative tests proving non-disclosure and zero project mutation.
@@ -250,10 +250,10 @@ swapping it under the broker lock; the previous lease is then cleared. A failed
 replacement leaves the previous valid lease intact. No new coordinator,
 project-context transaction or generation subsystem is added above App.
 
-Idle lifetime is 30 minutes. Set/replacement and future trusted internal
-credential resolution count as activity. Status polling, page rendering and
-navigation do not extend the lifetime. The timer validates the lease generation
-before clearing it so an old callback cannot erase a replacement.
+The lease expires one hour after credential set/replacement. Credential reads,
+status polling, page rendering and navigation do not extend this fixed deadline.
+The timer validates the lease generation before clearing it so an old callback
+cannot erase a replacement.
 
 Expiry overwrites and drops all secret byte slices and the opaque reference,
 then retains only a non-secret in-memory marker containing the same project

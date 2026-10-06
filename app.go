@@ -6,14 +6,14 @@ import (
 	"errors"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"platform-installer/internal/appconfig"
 	"platform-installer/internal/coreadapter"
+	"platform-installer/internal/executionbundle"
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
@@ -121,6 +121,22 @@ func notVerified() ProjectVerification {
 	return ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification", Status: "UNVERIFIED"}
 }
 
+func verificationAfterSave(previous ProjectVerification) ProjectVerification {
+	if previous.Status != "VERIFIED" && previous.Status != "INVALID" && previous.Status != "STALE" {
+		return notVerified()
+	}
+	return ProjectVerification{
+		APIVersion:      "platform.installer/project-verification/v1alpha1",
+		Kind:            "ProjectVerification",
+		Status:          "STALE",
+		ProjectIdentity: previous.ProjectIdentity,
+		ProjectRevision: previous.ProjectRevision,
+		ExecutionNodeID: previous.ExecutionNodeID,
+		Runtime:         previous.Runtime,
+		CheckedAt:       previous.CheckedAt,
+	}
+}
+
 type ProjectOpenError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -202,10 +218,14 @@ type runtimeSecretDescriptorEvidence struct {
 }
 
 var runtimeSecretDescriptorRequirement = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+var runtimeSecretUsername = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
+var verificationSettingName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,127}$`)
 
 type App struct {
 	ctx              context.Context
-	chooseSecretFile func(context.Context, runtime.OpenDialogOptions) (string, error)
+	dialogs          DialogProvider
+	events           ApplicationEventPublisher
+	chooseSecretFile secretFileChooser
 	reader           interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
@@ -221,11 +241,23 @@ type App struct {
 	secrets                *runtimesecret.Broker
 	execution              *executionNodeContextStore
 	binding                *executionNodeBinding
+	availableBundleRoot    string
+	bundleCacheRoot        string
+	bundlePublisher        func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
+	localRunRecordRoot     string
+	bundlePreview          *runtimeBundlePreview
+	orphanRecovery         *orphanRunRecovery
+	pendingHostKey         *pendingExecutionHostKey
+	pendingTargetHostKey   *pendingTargetHostKey
+	approvedTargetHostKeys map[string]approvedTargetHostKey
 	continuation           *verificationContinuation
 	export                 *installer.ProjectExport
 	installationPlanID     string
 	installationRuns       *installationRunRegistry
 	installationGeneration uint64
+	startInFlight          bool
+	startOutcomeUnknown    bool
+	runtimeUpdateInFlight  bool
 	runtimeSecretEvidence  *runtimeSecretDescriptorEvidence
 }
 
@@ -260,6 +292,18 @@ func WithTrustedExecutionNodeBinding(binding executionNodeBinding) AppOption {
 	}
 }
 
+func WithAvailableExecutionBundle(root string) AppOption {
+	return func(app *App) { app.availableBundleRoot = root }
+}
+
+func WithBundleCacheRoot(root string) AppOption {
+	return func(app *App) { app.bundleCacheRoot = root }
+}
+
+func WithLocalRunRecordRoot(root string) AppOption {
+	return func(app *App) { app.localRunRecordRoot = root }
+}
+
 type projectLifecycle interface {
 	CreateProject(context.Context, projectlifecycle.CreateProjectRequest) (projectlifecycle.Result, error)
 	OpenProject(context.Context, string) (projectlifecycle.Result, error)
@@ -269,12 +313,12 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry()}
+	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry(), approvedTargetHostKeys: map[string]approvedTargetHostKey{}, localRunRecordRoot: defaultLocalRunRecordRoot(), events: noopEventPublisher{}}
 	for _, option := range options {
 		option(app)
 	}
-	app.chooseSecretFile = runtime.OpenFileDialog
 	app.configureTargetCredentialLease()
+	app.configureTargetHostTrust()
 	return app
 }
 
@@ -323,6 +367,8 @@ func (a *App) shutdown(context.Context) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.secrets.Close()
+	a.pendingHostKey = nil
+	a.invalidateDynamicBindingLocked()
 	a.installationRuns.clear()
 	a.execution.clear()
 	a.continuation = nil
@@ -333,7 +379,7 @@ func (a *App) ChooseProject() ProjectOpenResult {
 	if a.ctx == nil {
 		return a.failure("UI_NOT_READY")
 	}
-	root, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Открыть существующий проект"})
+	root, err := a.openDirectory(a.ctx, DialogOptions{Title: "Открыть существующий проект"})
 	if err != nil {
 		return a.failure("PROJECT_SELECTION_FAILED")
 	}
@@ -347,7 +393,7 @@ func (a *App) ChooseProjectParent() string {
 	if a.ctx == nil {
 		return ""
 	}
-	root, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Выбрать папку для нового проекта"})
+	root, err := a.openDirectory(a.ctx, DialogOptions{Title: "Выбрать папку для нового проекта"})
 	if err != nil {
 		return ""
 	}
@@ -360,7 +406,7 @@ func (a *App) ChooseProjectExportParent() string {
 	if a.ctx == nil {
 		return ""
 	}
-	root, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Выбрать папку для экспорта проекта"})
+	root, err := a.openDirectory(a.ctx, DialogOptions{Title: "Выбрать папку для экспорта проекта"})
 	if err != nil {
 		return ""
 	}
@@ -382,6 +428,8 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 	if err != nil {
 		return a.failure(projectErrorCode(err))
 	}
+	a.pendingHostKey = nil
+	a.invalidateDynamicBindingLocked()
 	a.secrets.Clear()
 	a.installationRuns.clear()
 	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts, Catalog: result.Catalog, Verification: notVerified()}
@@ -392,10 +440,16 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 func (a *App) OpenProject(root string) ProjectOpenResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	a.bundlePreview = nil
+	a.orphanRecovery = nil
 	a.reconcileEditSessionLocked()
 	if a.activeSession != "" {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
+	a.pendingHostKey = nil
+	a.pendingTargetHostKey = nil
+	clear(a.approvedTargetHostKeys)
+	a.invalidateDynamicBindingLocked()
 	a.clearProjectExportLocked()
 	if a.lifecycle == nil {
 		return a.failure("PROJECT_OPEN_BLOCKED")
@@ -465,12 +519,18 @@ func (a *App) openExternalProjectLocked(local projectlifecycle.Result) ProjectOp
 func (a *App) CloseProject() ProjectOpenResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	a.bundlePreview = nil
+	a.orphanRecovery = nil
 	a.reconcileEditSessionLocked()
 	if a.activeSession != "" {
 		return a.failure("EDIT_SESSION_ACTIVE")
 	}
 	a.clearProjectExportLocked()
 	a.secrets.Clear()
+	a.pendingHostKey = nil
+	a.pendingTargetHostKey = nil
+	clear(a.approvedTargetHostKeys)
+	a.invalidateDynamicBindingLocked()
 	a.execution.clear()
 	a.continuation = nil
 	a.installationGeneration++
@@ -503,7 +563,7 @@ func (a *App) VerifyProject() ProjectVerification {
 		}
 		return a.verifyProjectWithBindingLocked(binding, revision, true)
 	}
-	return a.verifyProjectWithReaderLocked(a.reader, revision)
+	return a.verifyProjectWithReaderLocked(a.reader, revision, nil)
 }
 
 func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revision string, inspect bool) ProjectVerification {
@@ -512,6 +572,12 @@ func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revi
 		defer cancel()
 		inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 		if err != nil {
+			if binding.dynamic {
+				a.invalidateDynamicBindingLocked()
+			}
+			return a.setVerificationUnavailableLocked(err, revision)
+		}
+		if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
 			return a.setVerificationUnavailableLocked(err, revision)
 		}
 		a.execution.setStatus(string(inspection.State))
@@ -519,12 +585,12 @@ func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revi
 			return a.setVerificationUnavailableLocked(errors.New("EXECUTION_NODE_READY_REQUIRED"), revision)
 		}
 	}
-	return a.verifyProjectWithReaderLocked(binding.reader, revision)
+	return a.verifyProjectWithReaderLocked(binding.reader, revision, binding)
 }
 
 func (a *App) verifyProjectWithReaderLocked(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
-}, revision string) ProjectVerification {
+}, revision string, binding *executionNodeBinding) ProjectVerification {
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
 	verificationReader, ok := reader.(interface {
@@ -547,7 +613,13 @@ func (a *App) verifyProjectWithReaderLocked(reader interface {
 	evidence.Findings, evidence.FindingsTruncated = safeVerificationFindings(verifiedSnapshot.Snapshot.Findings)
 	if after != revision || verifiedSnapshot.Snapshot.ProjectRevision != revision {
 		return a.setVerificationUnavailableLocked(errors.New("PROJECT_REVISION_CHANGED"), revision)
-	} else if verifiedSnapshot.Snapshot.Status == "PASS" && !verifiedSnapshot.Snapshot.Partial {
+	}
+	if binding != nil {
+		if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
+			return a.setVerificationUnavailableLocked(err, revision)
+		}
+	}
+	if verifiedSnapshot.Snapshot.Status == "PASS" && !verifiedSnapshot.Snapshot.Partial {
 		evidence.Status = "VERIFIED"
 		a.current.Snapshot = verifiedSnapshot.Snapshot
 	} else {
@@ -582,6 +654,15 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			continue
 		}
 		finding := VerificationFinding{Code: code, Summary: message, Severity: boundedFindingString(raw["status"], 32)}
+		if code == "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN" {
+			if details, ok := raw["safeDetails"].(map[string]any); ok {
+				property := boundedFindingString(details["property"], 128)
+				deployment := boundedFindingString(details["deploymentId"], 64)
+				if verificationSettingName.MatchString(property) && runtimeSecretDescriptorRequirement.MatchString(deployment) {
+					finding.Summary = "Неизвестный параметр конфигурации «" + property + "» у сервиса «" + deployment + "»."
+				}
+			}
+		}
 		if finding.Severity == "" {
 			finding.Severity = "UNKNOWN"
 		}
@@ -614,7 +695,12 @@ func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Sta
 	if err != nil {
 		return runtimesecret.Status{}, err
 	}
-	return a.secrets.Set(binding, input)
+	status, err := a.secrets.Set(binding, input)
+	if err == nil {
+		a.pendingHostKey = nil
+		a.invalidateDynamicBindingLocked()
+	}
+	return status, err
 }
 
 func (a *App) GetSessionCredentialStatus() (runtimesecret.Status, error) {
@@ -721,30 +807,11 @@ func (a *App) SetSecretOutputEncryptionPassword(input OutputEncryptionPasswordIn
 // ChoosePendingDeploymentRuntimeSecretFile imports one trusted typed-secret
 // file without returning its path or contents to the Wails/React boundary.
 func (a *App) ChoosePendingDeploymentRuntimeSecretFile(input PendingRuntimeSecretFileInput) (string, error) {
-	a.editMu.Lock()
-	if a.ctx == nil {
-		a.editMu.Unlock()
-		return "", errors.New("UI_NOT_READY")
-	}
-	descriptors, err := a.pendingRuntimeSecretDescriptorsLocked(input.ServiceDeployment)
+	binding, ctx, err := a.pendingRuntimeSecretFileBinding(input)
 	if err != nil {
-		a.editMu.Unlock()
 		return "", err
 	}
-	allowed := false
-	for _, descriptor := range descriptors {
-		if descriptor.Purpose == input.Purpose && descriptor.ServiceDeployment == input.ServiceDeployment && (input.Purpose == secretfiles.PurposeAdminToken || input.Purpose == secretfiles.PurposeUnsealShares) {
-			allowed = true
-			break
-		}
-	}
-	binding, bindErr := a.credentialBindingLocked()
-	ctx := a.ctx
-	a.editMu.Unlock()
-	if !allowed || bindErr != nil {
-		return "", errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
-	}
-	path, err := a.chooseSecretFile(ctx, runtime.OpenDialogOptions{Title: "Выбрать файл секрета", Filters: []runtime.FileFilter{{DisplayName: "Файлы секрета (*.json, *.age)", Pattern: "*.json;*.age"}}})
+	path, err := a.openFile(ctx, DialogOptions{Title: "Выбрать файл секрета", Filters: []DialogFilter{{DisplayName: "Файлы секрета (*.json, *.age)", Pattern: "*.json;*.age"}}})
 	if err != nil {
 		return "", errors.New("SECRET_FILE_SELECTION_FAILED")
 	}
@@ -756,6 +823,45 @@ func (a *App) ChoosePendingDeploymentRuntimeSecretFile(input PendingRuntimeSecre
 		return "", errors.New("SECRET_FILE_INVALID")
 	}
 	defer clear(fileBytes)
+	return a.importPendingDeploymentRuntimeSecretFileBound(input, fileBytes, binding)
+}
+
+func (a *App) importPendingDeploymentRuntimeSecretFile(input PendingRuntimeSecretFileInput, fileBytes []byte) (string, error) {
+	binding, _, err := a.pendingRuntimeSecretFileBinding(input)
+	if err != nil {
+		return "", err
+	}
+	return a.importPendingDeploymentRuntimeSecretFileBound(input, fileBytes, binding)
+}
+
+func (a *App) pendingRuntimeSecretFileBinding(input PendingRuntimeSecretFileInput) (runtimesecret.Binding, context.Context, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if a.ctx == nil {
+		return runtimesecret.Binding{}, nil, errors.New("UI_NOT_READY")
+	}
+	descriptors, err := a.pendingRuntimeSecretDescriptorsLocked(input.ServiceDeployment)
+	if err != nil {
+		return runtimesecret.Binding{}, nil, err
+	}
+	allowed := false
+	for _, descriptor := range descriptors {
+		if descriptor.Purpose == input.Purpose && descriptor.ServiceDeployment == input.ServiceDeployment && (input.Purpose == secretfiles.PurposeAdminToken || input.Purpose == secretfiles.PurposeUnsealShares) {
+			allowed = true
+			break
+		}
+	}
+	binding, bindErr := a.credentialBindingLocked()
+	if !allowed || bindErr != nil {
+		return runtimesecret.Binding{}, nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+	}
+	return binding, a.ctx, nil
+}
+
+func (a *App) importPendingDeploymentRuntimeSecretFileBound(input PendingRuntimeSecretFileInput, fileBytes []byte, binding runtimesecret.Binding) (string, error) {
+	if len(fileBytes) == 0 || len(fileBytes) > secretfiles.MaxEncryptedBytes {
+		return "", errors.New("SECRET_FILE_INVALID")
+	}
 	password := []byte(input.EncryptionPassword)
 	defer clear(password)
 	parsed, err := secretfiles.ReadVaultInput(input.Purpose, fileBytes, password)
@@ -838,7 +944,13 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 				continue
 			}
 			value, valid := override.Value.(map[string]any)
-			referenceConfigured = valid && len(value) == 1 && value["passwordSecretRef"] == "runtime:"+setting.RuntimeSecretRequirementRef
+			referenceConfigured = valid && value["passwordSecretRef"] == "runtime:"+setting.RuntimeSecretRequirementRef
+			if setting.RuntimeSecretUsernameRequired {
+				username, ok := value["username"].(string)
+				referenceConfigured = referenceConfigured && len(value) == 2 && ok && runtimeSecretUsername.MatchString(username)
+			} else {
+				referenceConfigured = referenceConfigured && len(value) == 1
+			}
 			break
 		}
 		result = append(result, RuntimeSecretDescriptorView{RequirementRef: setting.RuntimeSecretRequirementRef, Purpose: "SERVICE_PASSWORD", ServiceDeployment: serviceDeployment, Setting: settingID, DisplayLabel: setting.Label, ReferenceConfigured: referenceConfigured})
@@ -1092,6 +1204,8 @@ func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 		return runtimesecret.Status{}, err
 	}
 	a.secrets.Clear()
+	a.pendingHostKey = nil
+	a.invalidateDynamicBindingLocked()
 	a.runtimeSecretEvidence = nil
 	return runtimesecret.Status{Status: runtimesecret.StatusMissing, SudoPasswordStatus: runtimesecret.SudoNotProvided, PKIStorePasswordStatus: runtimesecret.PKIStorePasswordMissing}, nil
 }
@@ -1104,7 +1218,22 @@ func (a *App) GetExecutionNodeContext() (ExecutionNodeContext, error) {
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
 	}
-	return a.execution.context, nil
+	// A draft cannot authorize execution, but merely rendering its node panel
+	// must not revoke verification evidence for the still-saved revision.
+	if a.activeSession == "" && a.binding != nil && a.binding.dynamic {
+		_, _ = a.resolveSelectedExecutionNodeBindingLocked()
+	}
+	context := a.execution.context
+	// Revalidating a dynamic binding while a draft is open may revoke the
+	// verification of the still-saved revision. The draft is not executable.
+	if a.activeSession == "" && context.Status == "READY" {
+		if binding, err := a.resolveSelectedExecutionNodeBindingLocked(); err == nil {
+			if digest, ok := binding.reader.runtimeRelease["bundleDigest"].(string); ok {
+				context.RuntimeDigest = digest
+			}
+		}
+	}
+	return context, nil
 }
 
 // SelectExecutionNode changes only the current safe project-server selection.
@@ -1120,6 +1249,8 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 		return ExecutionNodeContext{}, err
 	}
 	if !sameExecutionNodeTarget(before, a.execution.context) {
+		a.pendingHostKey = nil
+		a.invalidateDynamicBindingLocked()
 		a.clearRuntimeSecretDescriptorEvidenceLocked()
 		a.current.Snapshot = nil
 		a.current.Verification = notVerified()
@@ -1321,6 +1452,30 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 	return result
 }
 
+// AmendServiceConfigurationDraft replaces or withdraws one acknowledged
+// setting command in the current unsaved session. It cannot edit other intents.
+func (a *App) AmendServiceConfigurationDraft(sessionID string, index int, expected installer.EditCommand, replacement *installer.EditCommand) EditOperationResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	if sessionID == "" || sessionID != a.activeSession {
+		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+	}
+	session, err := a.sessions.AmendConfiguration(sessionID, index, expected, replacement, a.editor)
+	if err != nil {
+		return a.editFailure(err)
+	}
+	if session.CommandCount == 0 {
+		if !a.sessions.Discard(sessionID, a.editor) {
+			return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
+		}
+		a.activeSession, a.editor = "", nil
+		a.execution.discardDraft(currentProjectHosts(a.current))
+		return EditOperationResult{Status: "DISCARDED"}
+	}
+	return EditOperationResult{Status: "EDITING", Session: &session}
+}
+
 // ReviewEditSession is retained only as a shape-compatible legacy endpoint.
 func (a *App) ReviewEditSession(string) EditOperationResult {
 	return a.editFailure(errors.New("EDIT_CONTRACT_SUPERSEDED"))
@@ -1366,6 +1521,9 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 		}
 	}
 	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
+		a.pendingTargetHostKey = nil
+		clear(a.approvedTargetHostKeys)
+		previousVerification := a.current.Verification
 		a.clearRuntimeSecretDescriptorEvidenceLocked()
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
 			return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
@@ -1381,6 +1539,8 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 			a.current.Diagnostics = a.managedServerTypeDiagnostics(managed)
 			a.bindExecutionLocked(a.current.Root, a.current.Project, managedSnapshotHosts(managed))
 		} else {
+			a.pendingHostKey = nil
+			a.invalidateDynamicBindingLocked()
 			a.current.Managed = nil
 			a.current.Snapshot = nil
 			a.current.Counts.Servers = 0
@@ -1388,7 +1548,7 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 			a.execution.bind(a.current.Root, a.current.Project.ID, nil)
 		}
 		a.continuation = nil
-		a.current.Verification = notVerified()
+		a.current.Verification = verificationAfterSave(previousVerification)
 	}
 	if result.Status != "COMMITTED" && result.Status != "COMMITTED_REFRESH_FAILED" {
 		a.sessions.FinishCommit(sessionID, planID, false)
@@ -1453,6 +1613,10 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 }
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
+	a.pendingHostKey = nil
+	a.pendingTargetHostKey = nil
+	clear(a.approvedTargetHostKeys)
+	a.invalidateDynamicBindingLocked()
 	a.clearRuntimeSecretDescriptorEvidenceLocked()
 	a.installationGeneration++
 	a.continuation = nil
@@ -1479,6 +1643,98 @@ func (a *App) CurrentProject() ProjectOpenResult {
 	return a.current
 }
 
+// GetServiceConfigurationPreview obtains a read-only Core projection for the
+// exact saved revision. It neither changes Verify state nor creates a plan.
+func (a *App) GetServiceConfigurationPreview() (executionnode.ServiceConfigurationPreview, error) {
+	a.editMu.Lock()
+	if a.current.Status != "OPEN" || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.execution.context.Status != "READY" {
+		a.editMu.Unlock()
+		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE")
+	}
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	if err != nil {
+		a.editMu.Unlock()
+		return executionnode.ServiceConfigurationPreview{}, err
+	}
+	transport, ok := binding.reader.transport.(interface {
+		BuildServiceConfigurationPreview(context.Context, executionnode.Node, string, map[string]any) (executionnode.ServiceConfigurationPreview, error)
+	})
+	if !ok {
+		a.editMu.Unlock()
+		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED")
+	}
+	root := a.current.Root
+	revision, err := installer.ProjectRevision(root)
+	if err != nil || revision != a.current.Managed.ProjectRevision {
+		a.editMu.Unlock()
+		return executionnode.ServiceConfigurationPreview{}, errors.New("PROJECT_REVISION_CHANGED")
+	}
+	a.editMu.Unlock()
+	ctx, cancel := a.operationContext(90 * time.Second)
+	defer cancel()
+	preview, err := transport.BuildServiceConfigurationPreview(ctx, binding.node, root, binding.reader.runtimeRelease)
+	if err != nil {
+		return executionnode.ServiceConfigurationPreview{}, err
+	}
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	after, err := installer.ProjectRevision(root)
+	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateBindingBeforePublicationLocked(binding) != nil {
+		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_STALE")
+	}
+	for deploymentID, scoped := range preview.Services {
+		deployment, present := a.current.Managed.Deployments[deploymentID]
+		if !present {
+			return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+		}
+		var service *projectlifecycle.ProjectCatalogService
+		for index := range a.current.Catalog.Services {
+			if a.current.Catalog.Services[index].ID == deployment.ServiceType {
+				service = &a.current.Catalog.Services[index]
+				break
+			}
+		}
+		if service == nil {
+			return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+		}
+		filter := func(values map[string]executionnode.ServiceConfigurationValue) {
+			for settingID, item := range values {
+				var descriptor *projectlifecycle.ProjectCatalogSetting
+				for index := range service.ConfigurationSettings {
+					if service.ConfigurationSettings[index].ID == settingID {
+						descriptor = &service.ConfigurationSettings[index]
+						break
+					}
+				}
+				if descriptor == nil || descriptor.Kind != "MANAGED" || descriptor.EditorShape == "UNSUPPORTED" || descriptor.EditorShape == "RUNTIME_SECRET_REFERENCE_OBJECT" {
+					delete(values, settingID)
+					continue
+				}
+				if item.State != "RESOLVED" || !projectlifecycle.SafePresentationValue(*descriptor, item.Value) {
+					item.Value = nil
+					values[settingID] = item
+				}
+			}
+		}
+		filter(scoped.Configuration)
+		for memberID, values := range scoped.Members {
+			found := false
+			for _, placement := range a.current.Managed.MemberPlacements {
+				if placement.DeploymentID == deploymentID && placement.MemberID == memberID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+			}
+			filter(values)
+		}
+	}
+	preview.RuntimeDigest = preview.Runtime.BundleDigest
+	return preview, nil
+}
+
 func (a *App) failure(code string) ProjectOpenResult {
 	return ProjectOpenResult{Status: "ERROR", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 }
@@ -1491,6 +1747,9 @@ func projectErrorCode(err error) string {
 	if err == nil || err.Error() == "" {
 		return "PROJECT_OPEN_FAILED"
 	}
+	if strings.HasPrefix(err.Error(), "EXECUTION_NODE_TRANSPORT_FAILED") {
+		return "EXECUTION_NODE_UNAVAILABLE"
+	}
 	return err.Error()
 }
 
@@ -1500,10 +1759,40 @@ func projectErrorMessage(code string) string {
 		return "Не настроен READY Execution Node для read-only открытия проекта."
 	case "EXECUTION_NODE_UNAVAILABLE":
 		return "Execution Node недоступен. Проект на диске не изменён."
+	case "EXECUTION_NODE_PREPARE_INSPECT_FAILED":
+		return "Подготовка остановилась при повторной проверке узла. Проверьте соединение и повторите подготовку. Проект не изменён."
+	case "EXECUTION_NODE_PREPARE_STAGE_FAILED":
+		return "Подготовка остановилась при передаче проверенного runtime bundle. Проверьте доступность узла и свободное место. Проект не изменён."
+	case "EXECUTION_NODE_PREPARE_ACTIVATE_FAILED":
+		return "Подготовка остановилась при активации runtime на узле. Проверьте состояние узла; повторная подготовка безопасна. Проект не изменён."
 	case "EXECUTION_NODE_READY_REQUIRED":
 		return "Требуется READY Execution Node. Проверьте или подготовьте его на странице Серверы."
 	case "EXECUTION_NODE_BINDING_REQUIRED":
 		return "Выбранный Execution Node не имеет доверенного runtime binding. Откройте страницу Серверы."
+	case "EXECUTION_NODE_PEM_REQUIRED":
+		return "Для узла выполнения нужен приватный ключ PEM текущего сеанса. SSH-пароль можно использовать для целевых серверов."
+	case "EXECUTION_NODE_USER_INVALID":
+		return "Имя технического пользователя не подходит для подключения к узлу выполнения."
+	case "EXECUTION_NODE_HOST_KEY_PROBE_FAILED":
+		return "Не удалось получить ключ SSH выбранного узла. Подключение не подтверждено."
+	case "EXECUTION_NODE_HOST_KEY_APPROVAL_STALE":
+		return "Данные ключа SSH изменились или истекли. Повторите получение отпечатка."
+	case "TARGET_HOST_TRUST_PROJECT_UNAVAILABLE", "TARGET_HOST_TRUST_PROJECT_STALE", "TARGET_HOST_TRUST_STALE":
+		return "Проект изменился. Сохраните изменения и повторно подтвердите SSH-ключи целевых серверов."
+	case "TARGET_HOST_TRUST_SERVER_INVALID":
+		return "У сохранённого сервера нет допустимого адреса или SSH-порта."
+	case "TARGET_HOST_KEY_PROBE_FAILED":
+		return "Не удалось получить SSH-ключ целевого сервера. Подключение не подтверждено."
+	case "TARGET_HOST_KEY_APPROVAL_STALE":
+		return "Отпечаток целевого сервера устарел. Получите его снова и сверьте независимо."
+	case "TARGET_HOST_TRUST_REQUIRED":
+		return "Перед запуском подтвердите SSH-ключ каждого целевого сервера на странице Серверы."
+	case "TARGET_HOST_TRUST_INVALID":
+		return "Подтверждённые SSH-ключи не соответствуют адресам текущего плана. Запуск заблокирован."
+	case "EXECUTION_NODE_BINDING_INVALID":
+		return "Доверенная привязка узла изменилась. Повторно проверьте ключ и подключение."
+	case "EXECUTION_BUNDLE_UNAVAILABLE":
+		return "Для проекта нет одного совместимого проверенного runtime bundle."
 	case "PROJECT_CHANGES_UNSAVED":
 		return "Сначала сохраните или отмените несохранённые изменения проекта."
 	case "PROJECT_REVISION_UNAVAILABLE":

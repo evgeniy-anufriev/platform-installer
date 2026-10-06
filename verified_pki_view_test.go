@@ -53,6 +53,10 @@ func TestVerifiedPKIViewRequiresExactCurrentEvidence(t *testing.T) {
 	if current := app.GetVerifiedPKIView(); current.Status != "CURRENT" || len(current.Identities) != 1 {
 		t.Fatalf("current=%#v", current)
 	}
+	app.current.Verification.Status = "STALE"
+	if stale := app.GetVerifiedPKIView(); stale.Status != "STALE" || len(stale.Identities) != 0 || len(stale.Findings) != 0 {
+		t.Fatalf("stale=%#v", stale)
+	}
 	app.current.Verification = ProjectVerification{Status: "INVALID", Findings: []VerificationFinding{{Code: "CERTIFICATE_REISSUE_REQUIRED", Summary: "safe"}}}
 	invalid := app.GetVerifiedPKIView()
 	if invalid.Status != "INVALID" || len(invalid.Identities) != 0 || len(invalid.Findings) != 1 {

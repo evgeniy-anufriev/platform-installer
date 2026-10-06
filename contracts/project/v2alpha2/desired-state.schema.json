@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha2/desired-state.schema.json",
+  "title": "Platform desired state with reference-only provider declarations",
+  "allOf": [
+    {"$ref": "../v2alpha1/desired-state.schema.json"},
+    {
+      "type": "object",
+      "properties": {
+        "serviceDeployments": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "x-providerLifecycle": {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {"mode": {"const": "EXTERNAL"}},
+                "additionalProperties": false
+              }
+            },
+            "if": {"required": ["x-providerLifecycle"]},
+            "then": {"properties": {"serviceType": {"enum": ["bind", "haproxy", "keepalived"]}}}
+          }
+        }
+      }
+    }
+  ]
+}

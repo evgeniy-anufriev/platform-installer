@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -142,6 +143,86 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 	state.updated = s.now()
 	state.public.ExpiresAt = state.updated.Add(s.ttl)
 	return state.public, nil
+}
+
+// AmendConfiguration changes only one previously acknowledged configuration
+// command. The expected command is a compare-and-swap guard against a stale UI;
+// structural commands and other draft targets are never rewritten.
+func (s *EditSessionStore) AmendConfiguration(sessionID string, index int, expected EditCommand, replacement *EditCommand, backend *Backend) (EditSession, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.expireLocked()
+	state := s.sessions[sessionID]
+	if state == nil {
+		return EditSession{}, blocked("EDIT_SESSION_EXPIRED", "Edit session is absent or expired", "sessionId")
+	}
+	if state.busy {
+		return EditSession{}, blocked("EDIT_SESSION_BUSY", "Edit session review is in progress", "sessionId")
+	}
+	if backend == nil || index < 0 || index >= len(state.commands) {
+		return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Configuration draft changed", "command")
+	}
+	normalize := func(command *EditCommand) {
+		command.APIVersion = EditCommandAPIVersionV9
+		command.Kind = "EditCommand"
+		command.BaseProjectRevision = state.public.BaseProjectRevision
+	}
+	normalize(&expected)
+	prior := state.commands[index]
+	if !isConfigurationCommand(prior) || !isConfigurationCommand(expected) {
+		return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Only configuration draft commands can be amended", "command")
+	}
+	want, err := json.Marshal(expected)
+	if err != nil {
+		return EditSession{}, blocked("INVALID_EDIT_COMMAND", "Expected command cannot be encoded", "command")
+	}
+	old, err := json.Marshal(prior)
+	if err != nil || !bytes.Equal(want, old) {
+		return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Configuration draft changed", "command")
+	}
+	if replacement != nil {
+		normalize(replacement)
+		if !isConfigurationCommand(*replacement) || !sameConfigurationTarget(prior, *replacement) {
+			return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Configuration target cannot change", "command")
+		}
+		if err := backend.validateCommand(*replacement); err != nil {
+			return EditSession{}, err
+		}
+	}
+	newBytes := 0
+	if replacement != nil {
+		encoded, err := json.Marshal(replacement)
+		if err != nil {
+			return EditSession{}, blocked("INVALID_EDIT_COMMAND", "Replacement command cannot be encoded", "command")
+		}
+		newBytes = len(encoded)
+	}
+	if state.public.EncodedBytes-len(old)+newBytes > maxSessionBytes {
+		return EditSession{}, blocked("EDIT_SESSION_LIMIT", "Edit session byte limit was reached", "command")
+	}
+	if replacement == nil {
+		state.commands = append(state.commands[:index], state.commands[index+1:]...)
+	} else {
+		state.commands[index] = *replacement
+	}
+	if state.public.ReviewedPlanID != "" {
+		backend.plans.Discard(state.public.ReviewedPlanID)
+	}
+	state.public.CommandCount = len(state.commands)
+	state.public.EncodedBytes += newBytes - len(old)
+	state.public.Status = "EDITING"
+	state.public.ReviewedPlanID = ""
+	state.updated = s.now()
+	state.public.ExpiresAt = state.updated.Add(s.ttl)
+	return state.public, nil
+}
+
+func isConfigurationCommand(command EditCommand) bool {
+	return command.Operation == "SetServiceConfigurationValue" || command.Operation == "RemoveServiceConfigurationOverride"
+}
+
+func sameConfigurationTarget(a, b EditCommand) bool {
+	return a.DeploymentID == b.DeploymentID && a.Scope == b.Scope && a.MemberID == b.MemberID && a.Setting == b.Setting
 }
 
 func (s *EditSessionStore) Review(ctx context.Context, backend *Backend, sessionID string) (*EditPlan, error) {

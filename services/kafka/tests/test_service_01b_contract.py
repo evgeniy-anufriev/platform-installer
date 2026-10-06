@@ -49,6 +49,15 @@ class Service01BContractTests(unittest.TestCase):
         self.assertEqual("platform_kafka_instances | length > 0", explicit["when"])
         self.assertNotIn("platform_project", explicit["when"])
 
+    def test_managed_projection_leaves_absent_settings_to_ansible_defaults(self):
+        with (ROLE / "tasks" / "project_runtime.yml").open(encoding="utf-8") as stream:
+            tasks = yaml.safe_load(stream)
+        by_name = {task["name"]: task for task in tasks}
+        self.assertNotIn("platform_kafka_quorum_mode", by_name["Project deployment-scoped Kafka identity"]["ansible.builtin.set_fact"])
+        task = by_name["Project explicit deployment-scoped Kafka settings"]
+        self.assertIn("'quorumMode' in", task["when"])
+        self.assertIn("platform_kafka_quorum_mode", task["ansible.builtin.set_fact"])
+
     def test_role_blocks_identity_port_and_storage_collisions(self):
         source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
         self.assertIn("Reject duplicate Kafka node IDs", source)

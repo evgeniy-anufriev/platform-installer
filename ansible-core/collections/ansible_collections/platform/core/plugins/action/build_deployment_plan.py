@@ -6,6 +6,7 @@ from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
 
 from ansible_collections.platform.core.plugins.module_utils.deployment_plan import build_deployment_plan
+from ansible_collections.platform.core.plugins.module_utils.pki_reissue_state import inspect_reissue
 
 
 class ActionModule(ActionBase):
@@ -14,7 +15,15 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         del tmp, task_vars
         try:
-            result = build_deployment_plan(self._task.args.get("snapshot"), self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), self._task.args.get("pki_materialization"), self._task.args.get("execution_configuration"))
+            snapshot = self._task.args.get("snapshot")
+            pki = self._task.args.get("pki_materialization")
+            project = snapshot.get("project", {}) if isinstance(snapshot, dict) else {}
+            reissue = []
+            if (isinstance(pki, dict) and pki.get("status") == "PASS" and
+                    project.get("identitySource") == "PROJECT_MANIFEST" and
+                    isinstance(snapshot.get("validation"), dict) and snapshot["validation"].get("status") == "PASS"):
+                reissue = inspect_reissue(self._task.args.get("pki_state_root"), project.get("id"), pki.get("requests", []))
+            result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue)
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
             if destination and manifest:

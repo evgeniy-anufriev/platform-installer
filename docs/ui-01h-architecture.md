@@ -329,14 +329,15 @@ Review, Save and Discard controls. It does not add per-field, per-service or
 remote save.
 
 The shared Review limit remains exactly 16 acknowledged commands. Form input
-may change locally before **Apply**, but Apply appends exactly one Set or Remove
-command. After acknowledgement that exact `(deploymentId, scope, memberId?,
-setting)` target is locked until Save or Discard; UI-01H performs no backend
-coalescing, command rewriting, implicit undo or replacement. The page shows
-remaining capacity from the existing shared session state. At zero capacity it
-preserves local/draft state, disables further Apply and shows the existing
-safe `EDIT_SESSION_LIMIT` recovery: Save the acknowledged draft or Discard all
-changes and re-enter.
+may change locally before **Apply**; the initial Apply appends one Set or Remove
+command. S11 owner amendment: before Save, the operator may explicitly amend
+that same setting. A bounded compare-and-swap session operation replaces or
+withdraws only its acknowledged configuration command; unrelated intents,
+their order, canonical files and the 16-command cap are unchanged. **Reset**
+withdraws an unsaved Set when no saved override exists, or explicitly stages
+Remove when one does. There is no automatic command coalescing, hidden undo or
+per-setting save. At zero capacity, new commands remain disabled; amending an
+already acknowledged setting remains available.
 
 For a `TLS_PROFILE` field, the control lists only saved IDs from
 `ManagedProjectView.PKI.TLSProfiles`, with a clear inherited option and a

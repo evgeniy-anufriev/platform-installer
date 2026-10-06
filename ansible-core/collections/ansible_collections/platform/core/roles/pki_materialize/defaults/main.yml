@@ -16,7 +16,7 @@ platform_pki_policy_defaults:
   leafValidityDays: 365
   keyAlgorithm: RSA
   keySize: 3072
-  usages: [serverAuth]
+  usages: [serverAuth, clientAuth]
   scope: HOST
   targetRoot: /etc/platform-installer/pki
   sanPolicy:

@@ -1,0 +1,9 @@
+---
+- name: Validate exact Docker TLS material without provisioning
+  hosts: platform_targets
+  gather_facts: false
+  tasks:
+    - name: Resolve Docker TLS material through the production role task
+      ansible.builtin.include_role:
+        name: platform.docker.docker_rootless
+        tasks_from: resolve_tls.yml

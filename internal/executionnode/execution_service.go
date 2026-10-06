@@ -97,6 +97,22 @@ type DeploymentPlanAction struct {
 	Summary           string
 }
 
+// TargetHostKeyApproval is runtime-only operator approval for one exact
+// Core-planned SSH endpoint. It never enters the portable project or plan.
+type TargetHostKeyApproval struct {
+	HostID    string `json:"hostId"`
+	Address   string `json:"address"`
+	Port      int    `json:"port"`
+	KeyType   string `json:"keyType"`
+	PublicKey string `json:"publicKey"`
+}
+
+type TargetHostTrustStager interface {
+	StageTargetHostTrust(context.Context, Node, DeploymentPlan, []TargetHostKeyApproval) error
+}
+
+type TargetHostTrustProvider func(DeploymentPlan) ([]TargetHostKeyApproval, error)
+
 type PlanRecord struct {
 	ID        string
 	Plan      DeploymentPlan
@@ -179,25 +195,27 @@ func (s *Subscription) Close() {
 }
 
 type ExecutionService struct {
-	startMu            sync.Mutex
-	builder            PlanBuilder
-	client             ExecutionClient
-	now                func() time.Time
-	ttl                time.Duration
-	mu                 sync.Mutex
-	plans              map[string]PlanRecord
-	sessions           map[string]*session
-	projects           map[string]string
-	projectRoots       map[string]string
-	serviceRequests    map[string]ServicePlanRequest
-	probe              TargetRepositoryProbe
-	projectionStager   RuntimeProjectionStager
-	credentialProvider TargetCredentialLeaseProvider
-	pendingStarts      map[string]pendingStart
+	startMu             sync.Mutex
+	builder             PlanBuilder
+	client              ExecutionClient
+	now                 func() time.Time
+	ttl                 time.Duration
+	mu                  sync.Mutex
+	plans               map[string]PlanRecord
+	sessions            map[string]*session
+	projects            map[string]string
+	projectRoots        map[string]string
+	serviceRequests     map[string]ServicePlanRequest
+	probe               TargetRepositoryProbe
+	projectionStager    RuntimeProjectionStager
+	credentialProvider  TargetCredentialLeaseProvider
+	targetTrustProvider TargetHostTrustProvider
+	targetTrustStager   TargetHostTrustStager
+	pendingStarts       map[string]pendingStart
 }
 
 func NewExecutionService(builder PlanBuilder, client ExecutionClient) *ExecutionService {
-	return &ExecutionService{builder: builder, client: client, now: time.Now, ttl: 15 * time.Minute, plans: map[string]PlanRecord{}, sessions: map[string]*session{}, projects: map[string]string{}, projectRoots: map[string]string{}, serviceRequests: map[string]ServicePlanRequest{}, pendingStarts: map[string]pendingStart{}}
+	return &ExecutionService{builder: builder, client: client, now: time.Now, ttl: time.Hour, plans: map[string]PlanRecord{}, sessions: map[string]*session{}, projects: map[string]string{}, projectRoots: map[string]string{}, serviceRequests: map[string]ServicePlanRequest{}, pendingStarts: map[string]pendingStart{}}
 }
 
 // ConfigureTargetCredentialLease installs the existing runtime-only
@@ -206,6 +224,12 @@ func (s *ExecutionService) ConfigureTargetCredentialLease(provider TargetCredent
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.credentialProvider = provider
+}
+
+func (s *ExecutionService) ConfigureTargetHostTrust(provider TargetHostTrustProvider, stager TargetHostTrustStager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.targetTrustProvider, s.targetTrustStager = provider, stager
 }
 
 func (s *ExecutionService) ConfigureServiceExecution(probe TargetRepositoryProbe, stager RuntimeProjectionStager) {
@@ -383,6 +407,21 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if fresh.stagingID == "" || fresh.executionManifestDigest == "" {
 		return ExecutionRun{}, errors.New("EXECUTION_START_BINDING_MISSING")
 	}
+	s.mu.Lock()
+	trustProvider, trustStager := s.targetTrustProvider, s.targetTrustStager
+	s.mu.Unlock()
+	if len(planTargetHostIDs(fresh)) > 0 {
+		if trustProvider == nil || trustStager == nil {
+			return ExecutionRun{}, errors.New("TARGET_HOST_TRUST_REQUIRED")
+		}
+		approvals, trustErr := trustProvider(fresh)
+		if trustErr != nil {
+			return ExecutionRun{}, trustErr
+		}
+		if trustErr = trustStager.StageTargetHostTrust(ctx, node, fresh, approvals); trustErr != nil {
+			return ExecutionRun{}, trustErr
+		}
+	}
 	if prepare != nil {
 		s.mu.Lock()
 		request, ok := s.serviceRequests[planID]
@@ -442,8 +481,14 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 				return ExecutionRun{}, err
 			}
 			err = provider(TargetCredentialLeaseRequest{RequiresPKIStorePassword: requiresPKIStorePassword, RuntimeSecretRequirements: append([]string(nil), runtimeSecretRequirements...), RuntimeSecretInputs: append([]RuntimeSecretInputRequirement(nil), typedRuntimeSecretRequirements...)}, func(payload TargetCredentialLeasePayload) error {
-				if requiresPKIStorePassword != (payload.PKIStorePassword != "") || !sameRuntimeSecretRequirementSet(runtimeSecretRequirements, payload.RuntimeSecretValues) || (len(typedRuntimeSecretRequirements) > 0 && (!payload.UseTypedRuntimeInputs || !sameRuntimeSecretInputSet(typedRuntimeSecretRequirements, payload.RuntimeSecretInputs))) {
+				if requiresPKIStorePassword != (payload.PKIStorePassword != "") {
 					return errors.New("PKI_STORE_PASSWORD_UNAVAILABLE")
+				}
+				if !sameRuntimeSecretRequirementSet(runtimeSecretRequirements, payload.RuntimeSecretValues) {
+					return errors.New("RUNTIME_SECRET_VALUES_UNAVAILABLE")
+				}
+				if len(typedRuntimeSecretRequirements) > 0 && (!payload.UseTypedRuntimeInputs || !sameRuntimeSecretInputSet(typedRuntimeSecretRequirements, payload.RuntimeSecretInputs)) {
+					return errors.New("RUNTIME_SECRET_INPUTS_UNAVAILABLE")
 				}
 				lease, leaseErr := client.PutRuntimeSecretLease(ctx, node, CredentialLeaseRequest{RequestID: requestID, StartAttemptID: attempt, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease}, payload, capability.MaxPayloadBytes)
 				if leaseErr == nil {
@@ -476,6 +521,23 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	s.sessions[run.RunID] = &session{run: run, project: fresh.ProjectIdentity, lastSequence: run.Sequence, subs: map[uint64]*Subscription{}}
 	s.mu.Unlock()
 	return run, nil
+}
+
+func planTargetHostIDs(plan DeploymentPlan) []string {
+	seen := make(map[string]bool)
+	for _, phase := range plan.Phases {
+		for _, action := range phase.Actions {
+			for _, id := range action.Targets {
+				seen[id] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for id := range seen {
+		result = append(result, id)
+	}
+	slices.Sort(result)
+	return result
 }
 
 func planRequiresPKIStorePassword(plan DeploymentPlan) bool {

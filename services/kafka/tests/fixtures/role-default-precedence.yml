@@ -1,0 +1,24 @@
+---
+- name: Verify Kafka project projection preserves Ansible precedence
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  pre_tasks:
+    - name: Load typed QA desired state
+      ansible.builtin.include_vars:
+        file: "{{ qa_project_file }}"
+  tasks:
+    - name: Project managed Kafka runtime input
+      ansible.builtin.include_role:
+        name: platform.kafka.kafka_kraft
+        tasks_from: project_runtime.yml
+        public: true
+
+    - name: Assert effective Kafka role values
+      ansible.builtin.assert:
+        fail_msg: "retention={{ platform_kafka_log_retention_hours }} type={{ platform_kafka_log_retention_hours | type_debug }}"
+        that:
+          - platform_kafka_quorum_mode == qa_expected_quorum_mode
+          - platform_kafka_log_retention_hours is integer
+          - platform_kafka_log_retention_hours == qa_expected_retention
+          - platform_kafka_advanced_config == qa_expected_advanced

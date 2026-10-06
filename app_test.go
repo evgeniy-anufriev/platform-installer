@@ -25,6 +25,19 @@ import (
 	"platform-installer/internal/secretfiles"
 )
 
+func TestPreparationStepFailurePublishesOnlySafePhase(t *testing.T) {
+	for _, code := range []string{
+		"EXECUTION_NODE_PREPARE_INSPECT_FAILED",
+		"EXECUTION_NODE_PREPARE_STAGE_FAILED",
+		"EXECUTION_NODE_PREPARE_ACTIVATE_FAILED",
+	} {
+		failure := preparationFailure(&executionnode.PreparationStepError{Code: code})
+		if failure.Error == nil || failure.Error.Code != code || failure.Error.Message == "" || strings.Contains(failure.Error.Message, "private-key") {
+			t.Fatalf("unsafe preparation failure for %s: %+v", code, failure)
+		}
+	}
+}
+
 type snapshotReaderStub struct {
 	snapshot *coreadapter.Snapshot
 	err      error
@@ -38,6 +51,19 @@ type verificationReader struct {
 }
 
 type verificationTransportStub struct{}
+
+type bindingChangeVerificationTransport struct {
+	verificationTransportStub
+	onVerify func()
+}
+
+func (s bindingChangeVerificationTransport) BuildProjectVerificationSnapshot(ctx context.Context, node executionnode.Node, root string, release map[string]any) (executionnode.ProjectVerificationSnapshot, error) {
+	result, err := s.verificationTransportStub.BuildProjectVerificationSnapshot(ctx, node, root, release)
+	if s.onVerify != nil {
+		s.onVerify()
+	}
+	return result, err
+}
 
 func (verificationTransportStub) BuildProjectSnapshot(ctx context.Context, node executionnode.Node, root string, release map[string]any) (*coreadapter.Snapshot, error) {
 	result, err := (verificationTransportStub{}).BuildProjectVerificationSnapshot(ctx, node, root, release)
@@ -60,10 +86,14 @@ type executionLifecycleStub struct {
 	inspection                 executionnode.Inspection
 	plan                       executionnode.Plan
 	prepared                   executionnode.Result
+	onInspect                  func()
 }
 
 func (s *executionLifecycleStub) InspectExecutionNode(context.Context, executionnode.Node) (executionnode.Inspection, error) {
 	s.inspectCalls++
+	if s.onInspect != nil {
+		s.onInspect()
+	}
 	return s.inspection, nil
 }
 func (s *executionLifecycleStub) PlanExecutionNodePreparation(context.Context, executionnode.Node, string) (executionnode.Plan, error) {
@@ -165,6 +195,37 @@ func TestPendingServiceSecretsUseSavedCatalogAndRequireNoExecutionNode(t *testin
 	}
 }
 
+func TestPendingServiceSecretDescriptorAcceptsExactUsernameReference(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		value      map[string]any
+		configured bool
+	}{
+		{name: "exact", value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password"}, configured: true},
+		{name: "missing username", value: map[string]any{"passwordSecretRef": "runtime:postgresql-admin-password"}},
+		{name: "wrong reference", value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:other-password"}},
+		{name: "extra field", value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password", "extra": true}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			app := NewApp(snapshotReaderStub{}, lifecycleStub{})
+			app.current = ProjectOpenResult{
+				Status: "OPEN", Root: t.TempDir(), Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"},
+				Managed: &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{
+					"postgres-main": {DeploymentID: "postgres-main", ServiceType: "postgresql", Mode: "standalone", Configuration: []installer.ManagedConfigurationOverride{{Setting: "adminSuperuser", OverridePresent: true, State: "EDITABLE", Value: test.value}}},
+				}},
+				Catalog: &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{
+					ID: "postgresql", Modes: []projectlifecycle.ProjectCatalogMode{{ID: "standalone", RequiredRuntimeSecretSettings: []string{"adminSuperuser"}}},
+					ConfigurationSettings: []projectlifecycle.ProjectCatalogSetting{{ID: "adminSuperuser", EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "postgresql-admin-password", RuntimeSecretUsernameRequired: true, Label: "Administrator password"}},
+				}}},
+			}
+			operation := app.GetPendingRuntimeSecretDescriptors("postgres-main")
+			if operation.Status != "READY" || len(operation.Descriptors) != 1 || operation.Descriptors[0].ReferenceConfigured != test.configured {
+				t.Fatalf("descriptor status=%s configured=%t", operation.Status, len(operation.Descriptors) == 1 && operation.Descriptors[0].ReferenceConfigured)
+			}
+		})
+	}
+}
+
 type lifecycleStub struct {
 	result projectlifecycle.Result
 	err    error
@@ -258,6 +319,48 @@ func TestAppAppendAcceptsV8ServiceConfigurationOperations(t *testing.T) {
 	remove := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{Operation: "RemoveServiceConfigurationOverride", DeploymentID: "kafka-main", Scope: "DEPLOYMENT", Setting: "enabled"})
 	if remove.Error != nil || remove.Session == nil || remove.Session.CommandCount != 2 {
 		t.Fatalf("remove=%#v", remove)
+	}
+}
+
+func TestAmendLastConfigurationCommandClosesDraftAndRestoresSavedNodeAccess(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(editorReaderStub{}, lifecycleStub{}, testApplicationConfig())
+	app.current = ProjectOpenResult{
+		Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationManaged,
+		Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"},
+		Managed: &installer.ManagedProjectView{Servers: map[string]installer.ManagedServer{
+			"node1": {HostID: "node1", Address: "192.0.2.10"},
+		}},
+	}
+	app.execution.bind(root, app.current.Project.ID, managedSnapshotHosts(app.current.Managed))
+	started := app.StartEditSession()
+	if started.Session == nil {
+		t.Fatalf("start=%#v", started)
+	}
+	command := installer.EditCommand{Operation: "SetServiceConfigurationValue", DeploymentID: "kafka-main", Scope: "DEPLOYMENT", Setting: "port", Value: 9092}
+	appended := app.AppendEditCommand(started.Session.SessionID, command)
+	if appended.Error != nil || appended.Session == nil || appended.Session.CommandCount != 1 {
+		t.Fatalf("append=%#v", appended)
+	}
+	if _, _, _, err := app.selectedSavedExecutionServerLocked(); err == nil {
+		t.Fatal("active draft unexpectedly authorized saved node access")
+	}
+	withdrawn := app.AmendServiceConfigurationDraft(started.Session.SessionID, 0, command, nil)
+	if withdrawn.Status != "DISCARDED" || withdrawn.Error != nil || app.activeSession != "" || app.editor != nil || app.sessions.Active(started.Session.SessionID) {
+		t.Fatalf("withdrawal left an active draft: %#v", withdrawn)
+	}
+	if id, address, _, err := app.selectedSavedExecutionServerLocked(); err != nil || id != "node1" || address != "192.0.2.10" {
+		t.Fatalf("saved node remained blocked: %q %q %v", id, address, err)
+	}
+	if next := app.StartEditSession(); next.Session == nil || next.Error != nil {
+		t.Fatalf("new edit session blocked: %#v", next)
+	}
+	contents, err := os.ReadFile(filepath.Join(root, "project.yml"))
+	if err != nil || string(contents) != "name: unchanged\n" {
+		t.Fatalf("withdrawal changed canonical project: %q %v", contents, err)
 	}
 }
 
@@ -538,12 +641,66 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	if app.VerifyProject().Status != "VERIFIED" {
 		t.Fatal("could not restore verified evidence")
 	}
+	verifiedRevision := app.current.Verification.ProjectRevision
+	app.binding = &executionNodeBinding{dynamic: true}
+	app.execution.setStatus("READY")
+	app.installationPlanID = "old-plan"
 	update := app.StartEditSession()
 	app.AppendEditCommand(update.Session.SessionID, installer.EditCommand{Operation: "UpdateServer", HostID: "node1", Address: "192.0.2.11"})
+	if _, err := app.GetExecutionNodeContext(); err != nil || app.binding == nil || app.current.Verification.Status != "VERIFIED" {
+		t.Fatalf("draft status read revoked saved verification: binding=%#v verification=%#v err=%v", app.binding, app.current.Verification, err)
+	}
+	state := app.GetInstallationState()
+	if state.Plan.Status != "PLAN_STALE_OR_EXPIRED" || app.binding == nil || app.current.Verification.Status != "VERIFIED" {
+		t.Fatalf("draft plan status read revoked saved verification: state=%#v verification=%#v", state, app.current.Verification)
+	}
 	updatePlan := app.ReviewStructuralEditSession(update.Session.SessionID)
 	updated := app.CommitStructuralEditPlan(update.Session.SessionID, updatePlan.Plan.PlanID)
-	if updated.Status != "COMMITTED" || updated.Current == nil || updated.Current.Verification.Status != "UNVERIFIED" || reader.calls != 3 {
+	if updated.Status != "COMMITTED" || updated.Current == nil || updated.Current.Verification.Status != "STALE" || updated.Current.Verification.ProjectRevision != verifiedRevision || updated.Current.Managed.ProjectRevision == verifiedRevision || reader.calls != 3 {
 		t.Fatalf("save did not stale evidence or called Core: %#v calls=%d", updated, reader.calls)
+	}
+	if len(updated.Current.Verification.Findings) != 0 || updated.Current.Snapshot != nil {
+		t.Fatalf("stale evidence exposed previous findings or snapshot: %#v", updated.Current)
+	}
+}
+
+func TestVerificationAfterSaveKeepsOnlySafeStaleIdentity(t *testing.T) {
+	for _, status := range []string{"VERIFIED", "INVALID", "STALE"} {
+		t.Run(status, func(t *testing.T) {
+			previous := ProjectVerification{Status: status, ProjectIdentity: "project-old", ProjectRevision: "sha256:old", Findings: []VerificationFinding{{Code: "OLD_FINDING"}}, Error: &ProjectOpenError{Code: "OLD_ERROR"}}
+			stale := verificationAfterSave(previous)
+			if stale.Status != "STALE" || stale.ProjectRevision != "sha256:old" || len(stale.Findings) != 0 || stale.Error != nil {
+				t.Fatalf("stale=%#v", stale)
+			}
+		})
+	}
+	for _, status := range []string{"", "UNVERIFIED", "VERIFYING", "UNAVAILABLE"} {
+		if got := verificationAfterSave(ProjectVerification{Status: status}); got.Status != "UNVERIFIED" {
+			t.Fatalf("status %q became %q", status, got.Status)
+		}
+	}
+}
+
+func TestUnknownServiceSettingVerificationFindingNamesSafeProperty(t *testing.T) {
+	const fallback = "Configuration property is not declared by the service schema"
+	findings, truncated := safeVerificationFindings([]map[string]any{
+		{
+			"code": "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", "status": "BLOCKED", "safeMessage": fallback,
+			"safeDetails": map[string]any{"deploymentId": "qa-postgresql", "property": "healthcheckCredential"},
+		},
+		{
+			"code": "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", "status": "BLOCKED", "safeMessage": fallback,
+			"safeDetails": map[string]any{"deploymentId": "qa-postgresql", "property": "password\nsecret"},
+		},
+	})
+	if truncated || len(findings) != 2 {
+		t.Fatalf("findings=%#v truncated=%t", findings, truncated)
+	}
+	if findings[0].Summary != "Неизвестный параметр конфигурации «healthcheckCredential» у сервиса «qa-postgresql»." {
+		t.Fatalf("safe property missing: %#v", findings[0])
+	}
+	if findings[1].Summary != fallback {
+		t.Fatalf("unsafe property appeared in UI finding: %#v", findings[1])
 	}
 }
 
@@ -633,6 +790,10 @@ func TestListPendingSecretOutputsRequiresReadyNodeAndReturnsMetadataOnly(t *test
 		t.Fatalf("not-ready result=%#v calls=%d/%d", result, transport.capabilityCalls, transport.listCalls)
 	}
 	app.execution.context.Status = "READY"
+	context, err := app.GetExecutionNodeContext()
+	if err != nil || context.RuntimeDigest != release["bundleDigest"] || context.SelectedHostID != "" {
+		t.Fatalf("READY external context lost attested runtime identity: context=%#v err=%v", context, err)
+	}
 	result := app.ListPendingSecretOutputs(nil)
 	if result.Status != "READY" || len(result.Packages) != 1 || transport.capabilityCalls != 1 || transport.listCalls != 1 {
 		t.Fatalf("result=%#v calls=%d/%d", result, transport.capabilityCalls, transport.listCalls)
@@ -760,6 +921,44 @@ func TestE5TrustedBindingAndPreparationContinuation(t *testing.T) {
 	completed := app.PrepareExecutionNode(preparation.PlanID)
 	if completed.Status != "PREPARED" || completed.Verification == nil || completed.Verification.Status != "VERIFIED" || stub.prepareCalls != 1 || stub.inspectCalls < 2 {
 		t.Fatalf("completed=%#v prepareCalls=%d inspectCalls=%d", completed, stub.prepareCalls, stub.inspectCalls)
+	}
+}
+
+func TestV02ReadinessDoesNotPublishAfterInFlightBindingInvalidation(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := executionnode.Node{ID: "qa-node", Address: "192.0.2.10"}
+	reader := projectReader{transport: verificationTransportStub{}, node: node, runtimeRelease: map[string]any{"bundleDigest": "sha256:" + strings.Repeat("d", 64)}}
+	stub := &executionLifecycleStub{inspection: executionnode.Inspection{State: executionnode.Ready}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+	stub.onInspect = func() { app.binding.dynamic = true }
+	result := app.CheckExecutionNode()
+	if result.Error == nil || app.execution.context.Status == "READY" || app.binding != nil || app.current.Snapshot != nil {
+		t.Fatalf("in-flight invalidation published READY: %#v", result)
+	}
+}
+
+func TestV02VerificationDoesNotPublishAfterInFlightBindingInvalidation(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := executionnode.Node{ID: "qa-node", Address: "192.0.2.10"}
+	release := map[string]any{"bundleDigest": "sha256:" + strings.Repeat("d", 64), "catalogDigest": "sha256:" + strings.Repeat("e", 64), "coreVersion": "test-core", "planningProtocol": executionbundle.ProtocolVersion}
+	transport := &bindingChangeVerificationTransport{}
+	reader := projectReader{transport: transport, node: node, runtimeRelease: release}
+	stub := &executionLifecycleStub{inspection: executionnode.Inspection{State: executionnode.Ready}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+	transport.onVerify = func() { app.binding.dynamic = true }
+	result := app.VerifyProject()
+	if result.Status != "UNVERIFIED" || app.execution.context.Status == "READY" || app.binding != nil || app.current.Snapshot != nil {
+		t.Fatalf("in-flight invalidation published verification: %#v", result)
 	}
 }
 

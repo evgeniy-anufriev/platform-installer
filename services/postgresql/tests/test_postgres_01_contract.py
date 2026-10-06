@@ -69,19 +69,18 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_pgpass_covers_pg_autoctl_replication_database(self):
         self.assertIn(":*:{{ platform_postgresql_replication_credential.username }}:", self.failover)
 
-    def test_monitor_healthcheck_has_a_dedicated_runtime_credential(self):
-        self.assertIn("platform_postgresql_healthcheck_credential", self.failover)
-        self.assertIn(":postgres:{{ platform_postgresql_healthcheck_credential.username }}:", self.failover)
+    def test_monitor_healthcheck_uses_upstream_probe_identity_and_monitor_scoped_tls_trust(self):
+        self.assertIn("hostssl postgres pgautofailover_monitor", self.hba)
+        self.assertIn("{{ monitor.address }}/32 trust", self.hba)
+        self.assertNotIn("host postgres pgautofailover_monitor", self.hba)
+        self.assertNotIn("pgautofailover_monitor", self.failover)
 
-    def test_monitor_healthcheck_hba_is_tls_only_and_monitor_scoped(self):
-        self.assertIn("hostssl postgres {{ platform_postgresql_healthcheck_credential.username }}", self.hba)
-        self.assertIn("{{ monitor.address }}/32", self.hba)
-        self.assertNotIn("host postgres {{ platform_postgresql_healthcheck_credential.username }}", self.hba)
-
-    def test_monitor_healthcheck_role_is_least_privilege_and_password_is_reconciled_only_after_failure(self):
-        self.assertIn("Probe monitor healthcheck credential over TLS", self.main)
+    def test_monitor_healthcheck_role_is_least_privilege_and_has_no_password(self):
+        self.assertIn("Reconcile pg_auto_failover healthcheck probe role without a password", self.main)
         self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION", self.main)
-        self.assertIn("platform_postgresql_healthcheck_login.rc | default(1) != 0", self.main)
+        self.assertIn("rolpassword IS NULL", self.main)
+        self.assertIn("PASSWORD NULL", self.main)
+        self.assertNotIn("healthcheckCredential", self.main + self.failover)
 
     def test_postgres_login_shell_has_pg_autoctl_environment(self):
         self.assertIn("Persist pg_autoctl environment for the PostgreSQL login shell", self.failover)
@@ -111,7 +110,6 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         task_names = (
             "Probe data-to-monitor credential over TLS",
             "Probe replication credential over TLS on the writable data member",
-            "Probe monitor healthcheck credential over TLS",
         )
         for task_name in task_names:
             start = self.main.index(task_name)
@@ -127,18 +125,52 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("{{ _platform_postgresql_monitor.port }}", task)
 
     def test_tls_material_is_reloaded_by_the_pg_autoctl_owned_postgres_process(self):
-        self.assertIn("notify: Reload PostgreSQL TLS material", self.tls)
+        install_tls = (ROLE / "tasks/install_tls.yml").read_text(encoding="utf-8")
+        self.assertIn("notify: Reload PostgreSQL TLS material", install_tls)
         self.assertIn("pg_ctl, reload, -D", self.handlers)
         self.assertLess(
             self.main.index("Apply changed PostgreSQL TLS material before TLS credential probes"),
             self.main.index("Probe data-to-monitor credential over TLS"),
         )
 
+    def test_service_account_and_base_directories_precede_owned_tls_materialization(self):
+        names = [task.get("name") for task in yaml.safe_load(self.main)]
+        self.assertLess(
+            names.index("Resolve the exact PostgreSQL PKI consumer plan before mutation"),
+            names.index("Install approved PostgreSQL packages from the configured system repository"),
+        )
+        self.assertLess(
+            names.index("Install approved PostgreSQL packages from the configured system repository"),
+            names.index("Ensure PostgreSQL service account exists"),
+        )
+        self.assertLess(
+            names.index("Ensure PostgreSQL service account exists"),
+            names.index("Create deployment and member PostgreSQL directories"),
+        )
+        self.assertLess(
+            names.index("Create deployment and member PostgreSQL directories"),
+            names.index("Install PostgreSQL-owned TLS material after account and base directories exist"),
+        )
+        install_tls = yaml.safe_load((ROLE / "tasks/install_tls.yml").read_text(encoding="utf-8"))
+        tls_directory = next(task for task in install_tls
+                             if task.get("name") == "Create PostgreSQL-owned TLS directory after account setup")
+        self.assertEqual("{{ platform_postgresql_user }}", tls_directory["ansible.builtin.file"]["owner"])
+        self.assertEqual("{{ platform_postgresql_group }}", tls_directory["ansible.builtin.file"]["group"])
+
     def test_tls_verification_failure_blocks_credential_ddl(self):
         self.assertIn("Block monitor credential reconciliation when TLS verification fails", self.main)
         self.assertIn("Block replication credential reconciliation when TLS verification fails", self.main)
-        self.assertIn("Block monitor healthcheck credential reconciliation when TLS verification fails", self.main)
+        self.assertNotIn("healthcheck_login", self.main)
         self.assertIn("certificate verify failed", self.main)
+
+    def test_healthcheck_password_is_not_a_catalog_or_runtime_secret(self):
+        service_root = Path(__file__).resolve().parents[1]
+        manifest = (service_root / "service.yml").read_text(encoding="utf-8")
+        schema = (service_root / "configuration.schema.json").read_text(encoding="utf-8")
+        self.assertNotIn("healthcheckCredential", manifest)
+        self.assertNotIn("healthcheck-password", manifest)
+        self.assertNotIn("healthcheckCredential", schema)
+        self.assertNotIn("healthcheck-password", schema)
 
     def test_serving_certificate_guard_reloads_only_on_a_network_fingerprint_mismatch(self):
         self.assertIn("Derive PostgreSQL network listener leaf fingerprint", self.main)

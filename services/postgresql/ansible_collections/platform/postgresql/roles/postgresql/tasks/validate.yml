@@ -106,9 +106,5 @@
       - platform_postgresql_replication_credential.passwordSecretRef | length > 0
       - platform_postgresql_replication_credential.passwordSecretRef in platform_postgresql_secret_files
       - platform_postgresql_secret_files[platform_postgresql_replication_credential.passwordSecretRef] | length > 0
-      - platform_postgresql_healthcheck_credential.username == 'pgautofailover_monitor'
-      - platform_postgresql_healthcheck_credential.passwordSecretRef | length > 0
-      - platform_postgresql_healthcheck_credential.passwordSecretRef in platform_postgresql_secret_files
-      - platform_postgresql_secret_files[platform_postgresql_healthcheck_credential.passwordSecretRef] | length > 0
     fail_msg: POSTGRES_AUTO_FAILOVER_AUTH_INVALID
   when: platform_postgresql_mode == 'pg_auto_failover'

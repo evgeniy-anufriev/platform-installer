@@ -1,0 +1,22 @@
+# Platform Installer V2 managed rootless Docker user unit
+[Unit]
+Description=Platform Installer rootless Docker
+Documentation=https://docs.docker.com/engine/security/rootless/
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PATH=/usr/libexec/lxc:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=lxc-user-nic
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=builtin
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_DETACH_NETNS=false
+Environment="DOCKERD_ROOTLESS_ROOTLESSKIT_FLAGS=-p {{ platform_docker_api_bind_address }}:{{ platform_docker_api_port }}:{{ platform_docker_internal_api_port }}/tcp"
+ExecStartPre=/usr/bin/systemctl is-active --quiet platform-docker-lxc-ready.target
+ExecStart=/usr/bin/dockerd-rootless.sh -H unix:///run/user/{{ _platform_docker_uid }}/docker.sock -H tcp://0.0.0.0:{{ platform_docker_internal_api_port }} --tlsverify --tlscacert={{ _platform_docker_private_tls_dir }}/ca-chain.pem --tlscert={{ _platform_docker_private_tls_dir }}/certificate.pem --tlskey={{ _platform_docker_private_tls_dir }}/private-key.pem
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

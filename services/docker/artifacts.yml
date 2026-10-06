@@ -1,0 +1,9 @@
+apiVersion: platform.installer/artifacts/v1alpha1
+service: docker
+artifacts: []
+packageSource:
+  kind: system-repository
+  distribution: RED OS
+  packages: [docker-ce, docker-ce-cli, docker-ce-rootless-extras, docker-compose, lxc, fuse-overlayfs]
+  offlineBundle: deferred
+status: candidate-system-repository-acceptance

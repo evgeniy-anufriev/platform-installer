@@ -25,6 +25,49 @@ func TestValidateCommandRejectsCrossOperationFieldsAndNonRuntimeRefs(t *testing.
 	}
 }
 
+func TestAmendConfigurationDraftReplacesAndWithdrawsOnlyExpectedTarget(t *testing.T) {
+	store := NewEditSessionStore()
+	backend := NewBackend(nil, WithServerTypes([]string{"infra"}))
+	revision := "sha256:" + strings.Repeat("a", 64)
+	session, err := store.Start("project-1", t.TempDir(), "MANAGED_PROJECT", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := EditCommand{Operation: "SetServiceConfigurationValue", DeploymentID: "clickhouse", Scope: "DEPLOYMENT", Setting: "port", Value: 8444}
+	if _, err := store.Append(session.SessionID, first, backend); err != nil {
+		t.Fatal(err)
+	}
+	other := EditCommand{Operation: "SetServiceConfigurationValue", DeploymentID: "clickhouse", Scope: "MEMBER", MemberID: "node-1", Setting: "port", Value: 8445}
+	if _, err := store.Append(session.SessionID, other, backend); err != nil {
+		t.Fatal(err)
+	}
+	changed := first
+	changed.Value = 8446
+	state, err := store.AmendConfiguration(session.SessionID, 0, first, &changed, backend)
+	if err != nil || state.CommandCount != 2 {
+		t.Fatalf("replace: %+v %v", state, err)
+	}
+	if store.sessions[session.SessionID].commands[0].Value != 8446 || store.sessions[session.SessionID].commands[1].Value != 8445 {
+		t.Fatal("unrelated command changed")
+	}
+	if _, err := store.AmendConfiguration(session.SessionID, 0, first, nil, backend); err == nil || err.Error() != "EDIT_COMMAND_CONFLICT" {
+		t.Fatalf("stale expected command accepted: %v", err)
+	}
+	wrongTarget := changed
+	wrongTarget.MemberID = "node-1"
+	wrongTarget.Scope = "MEMBER"
+	if _, err := store.AmendConfiguration(session.SessionID, 0, changed, &wrongTarget, backend); err == nil || err.Error() != "EDIT_COMMAND_CONFLICT" {
+		t.Fatalf("cross-target replacement accepted: %v", err)
+	}
+	state, err = store.AmendConfiguration(session.SessionID, 0, changed, nil, backend)
+	if err != nil || state.CommandCount != 1 {
+		t.Fatalf("withdraw: %+v %v", state, err)
+	}
+	if store.sessions[session.SessionID].commands[0].MemberID != "node-1" {
+		t.Fatal("wrong command withdrawn")
+	}
+}
+
 func TestValidateCommandV9AcceptsPublishedCatalogServiceAndModeIdentifiers(t *testing.T) {
 	base := EditCommand{APIVersion: EditCommandAPIVersionV9, Kind: "EditCommand", BaseProjectRevision: "sha256:" + strings.Repeat("a", 64), Operation: "CreateServiceDeployment", DeploymentID: "postgres-ha", ServiceType: "postgresql", Mode: "pg_auto_failover"}
 	if err := validateCommand(base); err != nil {

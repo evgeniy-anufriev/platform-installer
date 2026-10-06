@@ -1,0 +1,484 @@
+---
+- name: Install exact approved RED OS Docker rootless package closure
+  ansible.builtin.dnf:
+    name: "{{ platform_docker_packages }}"
+    state: present
+    update_cache: false
+
+- name: Recheck that package installation did not activate rootful Docker
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service, docker.socket]
+  register: _platform_docker_rootful_postinstall
+  changed_when: false
+  failed_when: false
+
+- name: Refuse post-install rootful daemon/socket conflict
+  ansible.builtin.assert:
+    that: "'active' not in _platform_docker_rootful_postinstall.stdout_lines"
+    fail_msg: DOCKER_ROOTFUL_CONFLICT
+
+- name: Validate installed RootlessKit LXC helper ownership
+  ansible.builtin.stat:
+    path: /usr/libexec/lxc/lxc-user-nic
+    follow: false
+  register: _platform_docker_lxc_helper
+
+- name: Require trusted executable LXC helper
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_lxc_helper.stat.isreg
+      - not _platform_docker_lxc_helper.stat.islnk
+      - _platform_docker_lxc_helper.stat.pw_name == 'root'
+      - _platform_docker_lxc_helper.stat.mode in ['4755', '4750']
+    fail_msg: DOCKER_LXC_HELPER_UNSAFE
+
+- name: Check required rootless binaries
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: [/usr/bin/dockerd-rootless.sh, /usr/bin/rootlesskit, /usr/bin/newuidmap, /usr/bin/newgidmap, /usr/libexec/docker/cli-plugins/docker-compose]
+  register: _platform_docker_binaries
+
+- name: Require complete installed rootless and Compose binaries
+  ansible.builtin.assert:
+    that: _platform_docker_binaries.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
+    fail_msg: DOCKER_RUNTIME_PACKAGE_INCOMPLETE
+
+- name: Check whether dedicated Docker account already exists
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ platform_docker_account_name }}"]
+  register: _platform_docker_existing_account
+  changed_when: false
+  failed_when: _platform_docker_existing_account.rc not in [0, 2]
+  when: platform_docker_mode == 'create-user'
+
+- name: Create dedicated Docker account in locked state only if absent
+  ansible.builtin.user:
+    name: "{{ platform_docker_account_name }}"
+    create_home: true
+    system: false
+    shell: /bin/bash
+    state: present
+  when:
+    - platform_docker_mode == 'create-user'
+    - _platform_docker_existing_account.rc == 2
+
+- name: Check create-user password state without reading the stored hash
+  ansible.builtin.command:
+    argv: [passwd, -S, "{{ platform_docker_account_name }}"]
+  register: _platform_docker_password_state
+  changed_when: false
+  when: platform_docker_mode == 'create-user'
+  no_log: true
+
+- name: Require supported account password state
+  ansible.builtin.assert:
+    that: _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP', 'PS']
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_STATE_INVALID
+  when: platform_docker_mode == 'create-user'
+
+- name: Derive account password hash without a Python passlib dependency
+  ansible.builtin.command:
+    argv: [openssl, passwd, -6, -stdin]
+    stdin: >-
+      {{ lookup('ansible.builtin.file',
+          platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
+          lstrip=False, rstrip=False) }}
+    stdin_add_newline: false
+  delegate_to: localhost
+  become: false
+  register: _platform_docker_account_password_hash
+  changed_when: false
+  when:
+    - platform_docker_mode == 'create-user'
+    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
+  no_log: true
+
+- name: Require a complete SHA-512 crypt result before password activation
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_account_password_hash.stdout.startswith('$6$')
+      - _platform_docker_account_password_hash.stdout.split('$') | map('length') | list == [0, 1, 16, 86]
+      - _platform_docker_account_password_hash.stdout is match('^[./A-Za-z0-9$]+$')
+    fail_msg: DOCKER_ACCOUNT_HASH_INVALID
+  when:
+    - platform_docker_mode == 'create-user'
+    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
+  no_log: true
+
+- name: Set create-user password only while the account is locked or unset
+  ansible.builtin.command:
+    argv: [chpasswd, -e]
+    stdin: "{{ platform_docker_account_name }}:{{ _platform_docker_account_password_hash.stdout }}"
+  when:
+    - platform_docker_mode == 'create-user'
+    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
+  no_log: true
+
+- name: Resolve selected account through NSS
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ platform_docker_account_name }}"
+    fail_key: true
+
+- name: Bind account UID and home to the exact NSS entry
+  ansible.builtin.set_fact:
+    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
+    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
+  changed_when: false
+
+- name: Validate selected account is not privileged or home-less
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_uid | int >= 1000
+      - _platform_docker_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
+    fail_msg: DOCKER_ACCOUNT_INELIGIBLE
+
+- name: Read native subordinate UID and GID allocation
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop: [/etc/subuid, /etc/subgid]
+  register: _platform_docker_subid_files
+
+- name: Require OS-allocated subordinate ranges for selected account
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_platform_docker_subid_files.results[0].content | b64decode)
+        is search('(?m)^' ~ platform_docker_account_name ~ ':[0-9]+:[0-9]+$')
+      - >-
+        (_platform_docker_subid_files.results[1].content | b64decode)
+        is search('(?m)^' ~ platform_docker_account_name ~ ':[0-9]+:[0-9]+$')
+      - >-
+        (((_platform_docker_subid_files.results[0].content | b64decode).splitlines()
+          | select('match', '^' ~ platform_docker_account_name ~ ':') | first).split(':')[2] | int) >= 65536
+      - >-
+        (((_platform_docker_subid_files.results[1].content | b64decode).splitlines()
+          | select('match', '^' ~ platform_docker_account_name ~ ':') | first).split(':')[2] | int) >= 65536
+    fail_msg: DOCKER_SUBID_ALLOCATION_REQUIRED
+
+- name: Inspect shared LXC usernet destination before modification
+  ansible.builtin.include_tasks: guard_root_destination.yml
+  vars:
+    platform_docker_guard_path: /etc/lxc/lxc-usernet
+    platform_docker_guard_marker: ''
+
+- name: Inspect existing LXC usernet entry without replacing foreign settings
+  ansible.builtin.command:
+    argv: [grep, -E, "^{{ platform_docker_account_name }}[[:space:]]", /etc/lxc/lxc-usernet]
+  register: _platform_docker_existing_usernet
+  changed_when: false
+  failed_when: _platform_docker_existing_usernet.rc not in [0, 1, 2]
+  when: _platform_docker_guard_file.stat.exists
+
+- name: Refuse a conflicting LXC usernet entry
+  ansible.builtin.assert:
+    that:
+      - >-
+        not _platform_docker_guard_file.stat.exists or
+        _platform_docker_existing_usernet.rc != 0 or
+        _platform_docker_existing_usernet.stdout_lines ==
+        [platform_docker_account_name ~ ' veth ' ~ platform_docker_lxc_bridge ~ ' ' ~ (platform_docker_lxc_veth_limit | string)]
+    fail_msg: DOCKER_LXC_USERNET_CONFLICT
+
+- name: Add only selected account's LXC usernet allocation
+  ansible.builtin.lineinfile:
+    path: /etc/lxc/lxc-usernet
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+    regexp: "^{{ platform_docker_account_name }}[[:space:]]"
+    line: "{{ platform_docker_account_name }} veth {{ platform_docker_lxc_bridge }} {{ platform_docker_lxc_veth_limit }}"
+
+- name: Inspect LXC dnsmasq override for foreign ownership
+  ansible.builtin.stat:
+    path: /etc/lxc/platform-docker-dnsmasq.conf
+    follow: false
+  register: _platform_docker_lxc_dnsmasq_file
+
+- name: Refuse an unsafe existing LXC dnsmasq override before reading it
+  ansible.builtin.assert:
+    that:
+      - not (_platform_docker_lxc_dnsmasq_file.stat.islnk | default(false))
+      - not _platform_docker_lxc_dnsmasq_file.stat.exists or (_platform_docker_lxc_dnsmasq_file.stat.isreg | default(false))
+      - not _platform_docker_lxc_dnsmasq_file.stat.exists or _platform_docker_lxc_dnsmasq_file.stat.pw_name == 'root'
+    fail_msg: DOCKER_LXC_DNSMASQ_CONFIG_NOT_OWNED
+
+- name: Read existing Docker-owned LXC dnsmasq override
+  ansible.builtin.slurp:
+    src: /etc/lxc/platform-docker-dnsmasq.conf
+  register: _platform_docker_lxc_dnsmasq_content
+  when: _platform_docker_lxc_dnsmasq_file.stat.exists
+
+- name: Refuse replacement of a foreign LXC dnsmasq override
+  ansible.builtin.assert:
+    that:
+      - not (_platform_docker_lxc_dnsmasq_file.stat.islnk | default(false))
+      - >-
+        not _platform_docker_lxc_dnsmasq_file.stat.exists or
+        (_platform_docker_lxc_dnsmasq_content.content | b64decode).startswith('# Platform Installer V2 managed Docker LXC DHCP-only configuration')
+    fail_msg: DOCKER_LXC_DNSMASQ_CONFIG_NOT_OWNED
+
+- name: Inspect shared LXC network configuration before modification
+  ansible.builtin.include_tasks: guard_root_destination.yml
+  vars:
+    platform_docker_guard_path: /etc/sysconfig/lxc-net
+    platform_docker_guard_marker: ''
+    platform_docker_guard_required: true
+
+- name: Inspect active LXC dnsmasq configuration reference
+  ansible.builtin.command:
+    argv: [grep, -E, '^LXC_DHCP_CONFILE=', /etc/sysconfig/lxc-net]
+  register: _platform_docker_lxc_dhcp_config
+  changed_when: false
+  failed_when: _platform_docker_lxc_dhcp_config.rc not in [0, 1]
+
+- name: Refuse to replace a foreign LXC dnsmasq configuration
+  ansible.builtin.assert:
+    that:
+      - >-
+        _platform_docker_lxc_dhcp_config.rc == 1 or
+        _platform_docker_lxc_dhcp_config.stdout_lines ==
+        ['LXC_DHCP_CONFILE=/etc/lxc/platform-docker-dnsmasq.conf']
+    fail_msg: DOCKER_LXC_DHCP_CONFIG_CONFLICT
+
+- name: Inspect target resolver's non-stub upstream file
+  ansible.builtin.stat:
+    path: /run/systemd/resolve/resolv.conf
+    follow: true
+  register: _platform_docker_upstream_resolver_file
+
+- name: Read target resolver addresses for LXC DHCP
+  ansible.builtin.slurp:
+    src: "{{ '/run/systemd/resolve/resolv.conf' if _platform_docker_upstream_resolver_file.stat.isreg | default(false) else '/etc/resolv.conf' }}"
+  register: _platform_docker_upstream_resolvers
+
+- name: Select explicit or target-resolved Docker LXC DNS address
+  ansible.builtin.set_fact:
+    _platform_docker_lxc_dns_server: >-
+      {{ platform_docker_lxc_dns_server if platform_docker_lxc_dns_server | length > 0 else
+         ((_platform_docker_upstream_resolvers.content | b64decode |
+           regex_findall('(?m)^nameserver +([0-9.]+)') |
+           reject('match', '^(127[.]|0[.]0[.]0[.]0$)') | list | first) | default('')) }}
+  changed_when: false
+
+- name: Require a non-loopback IPv4 DNS server for LXC DHCP
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_lxc_dns_server is match('^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})[.]){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$')
+      - not _platform_docker_lxc_dns_server.startswith('127.')
+      - _platform_docker_lxc_dns_server != '0.0.0.0'
+    fail_msg: DOCKER_LXC_DNS_SERVER_UNAVAILABLE
+
+- name: Keep LXC DHCP while allowing existing host DNS to own port 53
+  ansible.builtin.copy:
+    dest: /etc/lxc/platform-docker-dnsmasq.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Platform Installer V2 managed Docker LXC DHCP-only configuration
+      port=0
+      dhcp-option=option:dns-server,{{ _platform_docker_lxc_dns_server }}
+  register: _platform_docker_lxc_dnsmasq_config_change
+
+- name: Select DHCP-only LXC dnsmasq configuration without replacing other settings
+  ansible.builtin.lineinfile:
+    path: /etc/sysconfig/lxc-net
+    regexp: '^LXC_DHCP_CONFILE='
+    line: LXC_DHCP_CONFILE=/etc/lxc/platform-docker-dnsmasq.conf
+  register: _platform_docker_lxc_dnsmasq_reference_change
+
+- name: Restart LXC network only when its managed DHCP configuration changes
+  ansible.builtin.systemd_service:
+    name: lxc-net.service
+    state: restarted
+  when: >-
+    _platform_docker_lxc_dnsmasq_config_change is changed or
+    _platform_docker_lxc_dnsmasq_reference_change is changed
+
+- name: Ensure LXC network is enabled and active before Docker
+  ansible.builtin.systemd_service:
+    name: lxc-net.service
+    enabled: true
+    state: started
+
+- name: Prove configured LXC bridge is active
+  ansible.builtin.command:
+    argv: [ip, link, show, "{{ platform_docker_lxc_bridge }}"]
+  changed_when: false
+
+- name: Enable account's user manager without a login session
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ platform_docker_account_name }}"]
+    creates: "/var/lib/systemd/linger/{{ platform_docker_account_name }}"
+
+- name: Inspect selected account's home and unit path components
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ _platform_docker_home }}"
+    - "{{ _platform_docker_home }}/.config"
+    - "{{ _platform_docker_home }}/.config/systemd"
+    - "{{ _platform_docker_home }}/.config/systemd/user"
+    - "{{ _platform_docker_home }}/.config/docker"
+    - "{{ _platform_docker_home }}/.config/docker/pki"
+  register: _platform_docker_home_components
+
+- name: Reject symlinked or foreign Docker account paths
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.islnk | default(false))
+      - not item.stat.exists or (item.stat.isdir | default(false))
+      - not item.stat.exists or item.stat.pw_name == platform_docker_account_name
+    fail_msg: DOCKER_ACCOUNT_PATH_UNSAFE
+    quiet: true
+  loop: "{{ _platform_docker_home_components.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Create user-unit directories without changing existing permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+  loop:
+    - "{{ _platform_docker_home }}/.config"
+    - "{{ _platform_docker_home }}/.config/systemd"
+    - "{{ _platform_docker_home }}/.config/systemd/user"
+
+- name: Create private Docker configuration and PKI directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0700'
+  loop:
+    - "{{ _platform_docker_home }}/.config/docker"
+    - "{{ _platform_docker_home }}/.config/docker/pki"
+
+- name: Bind private Docker TLS directory
+  ansible.builtin.set_fact:
+    _platform_docker_private_tls_dir: "{{ _platform_docker_home }}/.config/docker/pki"
+  changed_when: false
+
+- name: Copy exact PKI material into account-private runtime directory
+  ansible.builtin.copy:
+    src: "{{ _platform_docker_tls_source }}/{{ item }}"
+    dest: "{{ _platform_docker_private_tls_dir }}/{{ item }}"
+    remote_src: true
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0600'
+  loop: [ca-chain.pem, certificate.pem, private-key.pem]
+  no_log: true
+  notify: Restart rootless Docker bridge
+
+- name: Inspect existing user Docker unit for foreign ownership
+  ansible.builtin.stat:
+    path: "{{ _platform_docker_home }}/.config/systemd/user/docker.service"
+    follow: false
+  register: _platform_docker_existing_user_unit
+
+- name: Read an existing user Docker unit before replacement
+  ansible.builtin.slurp:
+    src: "{{ _platform_docker_home }}/.config/systemd/user/docker.service"
+  register: _platform_docker_existing_user_unit_content
+  when: _platform_docker_existing_user_unit.stat.exists
+
+- name: Reject an unowned existing user Docker unit
+  ansible.builtin.assert:
+    that:
+      - not (_platform_docker_existing_user_unit.stat.islnk | default(false))
+      - >-
+        not _platform_docker_existing_user_unit.stat.exists or
+        (_platform_docker_existing_user_unit_content.content | b64decode).startswith('# Platform Installer V2 managed rootless Docker user unit')
+    fail_msg: DOCKER_USER_UNIT_NOT_OWNED
+
+- name: Install managed rootless Docker user unit
+  ansible.builtin.template:
+    src: docker.service.j2
+    dest: "{{ _platform_docker_home }}/.config/systemd/user/docker.service"
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0644'
+  notify: Restart rootless Docker bridge
+
+- name: Inspect existing system Docker unit destinations
+  ansible.builtin.include_tasks: guard_root_destination.yml
+  loop:
+    - { path: /etc/systemd/system/platform-docker-lxc-ready.target, marker: '# Platform Installer V2 managed LXC readiness target' }
+    - { path: "/etc/systemd/system/platform-docker-rootless-{{ platform_docker_account_name }}.service", marker: '# Platform Installer V2 managed rootless Docker system/user bridge' }
+  vars:
+    platform_docker_guard_path: "{{ item.path }}"
+    platform_docker_guard_marker: "{{ item.marker }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Install system LXC readiness target
+  ansible.builtin.template:
+    src: platform-docker-lxc-ready.target.j2
+    dest: /etc/systemd/system/platform-docker-lxc-ready.target
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart rootless Docker bridge
+
+- name: Install selected-account system/user bridge
+  ansible.builtin.template:
+    src: platform-docker-rootless-bridge.service.j2
+    dest: "/etc/systemd/system/platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart rootless Docker bridge
+
+- name: Reload system unit graph
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Ensure selected account's user manager is active
+  ansible.builtin.systemd_service:
+    name: "user@{{ _platform_docker_uid }}.service"
+    state: started
+
+- name: Reload selected account's user unit graph
+  ansible.builtin.command:
+    argv: [systemctl, --user, daemon-reload]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_uid }}/bus"
+  changed_when: false
+
+- name: Disable direct user-manager auto-start of Docker
+  ansible.builtin.command:
+    argv: [systemctl, --user, disable, docker.service]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_uid }}/bus"
+  register: _platform_docker_user_disable
+  changed_when: "'Removed' in _platform_docker_user_disable.stdout or 'Removed' in _platform_docker_user_disable.stderr"
+
+- name: Enable and activate target from every LXC network start
+  ansible.builtin.systemd_service:
+    name: platform-docker-lxc-ready.target
+    enabled: true
+    state: started
+
+- name: Enable and activate selected-account bridge after target
+  ansible.builtin.systemd_service:
+    name: "platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    enabled: true
+    state: started
+
+- name: Apply pending Docker restart only after target and bridge exist
+  ansible.builtin.meta: flush_handlers

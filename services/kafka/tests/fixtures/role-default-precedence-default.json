@@ -1,0 +1,11 @@
+{
+  "platform_desired_state": {
+    "serviceDeployments": {
+      "kafka-precedence-test": {
+        "serviceType": "kafka",
+        "identity": {"clusterId": "test-id"},
+        "configuration": {}
+      }
+    }
+  }
+}

@@ -61,14 +61,18 @@ Derived verification evidence contains only:
 
 - project identity and exact raw-byte canonical project revision;
 - attested immutable bundle/Core/catalog/protocol identity;
-- `UNVERIFIED`, `VERIFYING`, `VERIFIED` or `INVALID`;
+- `UNVERIFIED`, `VERIFYING`, `VERIFIED`, `INVALID` or `STALE`;
 - bounded safe findings and `checkedAt`.
 
 It is in-memory application/runtime state for this milestone, not portable
 desired state, a project marker, validation history or second project store.
-Semantic Save makes the resulting revision `UNVERIFIED`. Core blocking/partial
-results make the exact saved revision `INVALID`; transport/readiness/runtime
-evidence failure returns a typed error while the project remains `UNVERIFIED`.
+First Save without prior verification leaves the resulting revision
+`UNVERIFIED`. A semantic Save after `VERIFIED` or `INVALID` makes the previous
+evidence `STALE`: its old revision identity may be retained for display, but
+findings and identity/SAN previews are not current evidence. Core
+blocking/partial results make the exact saved revision `INVALID`;
+transport/readiness/runtime evidence failure returns a typed error while the
+project remains `UNVERIFIED`.
 A failed/cancelled Verify never undoes Save.
 
 Verify may automatically run a read-only readiness check. If preparation is

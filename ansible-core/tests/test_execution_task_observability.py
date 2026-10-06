@@ -60,6 +60,7 @@ class _Task(object):
         self._role = _Role()
         self.no_log = no_log
         self._name = name
+        self.name = name
 
     def get_name(self):
         return self._name
@@ -111,7 +112,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual({"degraded": True, "reason": "TASK_EVENT_LIMIT"}, marker)
             self.assertEqual(5, journal.status()["sequence"])
 
-    def test_task_capacity_retains_one_redacted_failed_task_in_critical_reserve(self):
+    def test_task_capacity_retains_one_failed_task_in_critical_reserve(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)
             with mock.patch.object(execution_lifecycle, "MAX_EVENTS", 8), mock.patch.object(execution_lifecycle, "CRITICAL_EVENT_RESERVE", 4):
@@ -120,12 +121,12 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
                 self.assertIsNotNone(journal.task_event("TASK_STARTED", "RUNNING", "task-2"))
                 # The next ordinary event is truncated at the task threshold.
                 self.assertIsNone(journal.task_event("TASK_COMPLETED", "SUCCESS", "task-2", host="node1"))
-                failed = journal.task_event("TASK_COMPLETED", "FAILED", "task-3", host="node2", name="unsafe rendered secret", no_log=True)
+                failed = journal.task_event("TASK_COMPLETED", "FAILED", "task-3", host="node2", name="Unseal a Vault member", no_log=True)
                 self.assertIsNotNone(failed)
                 self.assertEqual("FAILED", failed["status"])
                 self.assertEqual("task-3", failed["task"]["uuid"])
-                self.assertNotIn("name", failed["task"])
-                self.assertEqual(["task.name"], failed["redaction"]["fields"])
+                self.assertEqual("Unseal a Vault member", failed["task"]["name"])
+                self.assertEqual([], failed["redaction"]["fields"])
                 self.assertEqual("ANSIBLE_TASK_FAILED", failed["error"]["code"])
                 self.assertIsNone(journal.task_event("TASK_COMPLETED", "FAILED", "task-4", host="node3"))
                 self.assertTrue(Path(journal.task_failure_reported_path).exists())
@@ -223,11 +224,11 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "SIZE_INVALID"):
                 journal.event_page(0, 10)
 
-    def test_callback_redacts_no_log_and_never_persists_result_payload(self):
+    def test_callback_keeps_static_no_log_task_name_and_never_persists_result_payload(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)
             callback = execution_events_json.CallbackModule()
-            task = _Task(name="rendered secret value", no_log=True)
+            task = _Task(name="Unseal a Vault member", no_log=True)
             result = _Result(task, {"changed": True, "stdout": "secret-output", "cmd": "secret-command", "_ansible_no_log": True})
             environment = {"PLATFORM_EXECUTION_RUN_ID": "run-1", "PLATFORM_EXECUTION_PHASE_ID": "apply", "PLATFORM_EXECUTION_ACTION_ID": "apply:kafka-main", "PLATFORM_EXECUTION_SERVICE_DEPLOYMENT": "kafka-main"}
             with mock.patch.object(execution_events_json, "EXECUTION_STATE_ROOT", root), mock.patch.dict(os.environ, environment, clear=False):
@@ -237,11 +238,12 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual(["TASK_STARTED", "TASK_COMPLETED"], [event["eventType"] for event in events])
             self.assertEqual("CHANGED", events[1]["status"])
             self.assertEqual("node1", events[1]["host"])
-            self.assertNotIn("name", events[0]["task"])
-            self.assertEqual(["task.name"], events[1]["redaction"]["fields"])
+            self.assertEqual("Unseal a Vault member", events[0]["task"]["name"])
+            self.assertEqual("Unseal a Vault member", events[1]["task"]["name"])
+            self.assertEqual([], events[1]["redaction"]["fields"])
             self.assert_events_match_contract(events)
             serialized = json.dumps(events)
-            for forbidden in ("rendered secret value", "secret-output", "secret-command", "stdout", "cmd"):
+            for forbidden in ("secret-output", "secret-command", "stdout", "cmd"):
                 self.assertNotIn(forbidden, serialized)
 
     def test_callback_sanitizes_display_name_and_failure_is_generic(self):
@@ -314,7 +316,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             journal = _active_journal(root)
             journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
             operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
-            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             events = journal.events()
             diagnostics = [event for event in events if event.get("error", {}).get("code") == "TASK_EVENT_STREAM_TRUNCATED"]
@@ -336,7 +338,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
 
         secret = "sensitive-vault-token-canary"
         operation = {"operationId": "apply:vault-ha", "phaseId": "apply", "operation": "SERVICE_APPLY",
-                     "serviceType": "vault", "serviceDeployment": "vault-ha"}
+                     "serviceType": "vault", "serviceDeployment": "vault-ha", "targets": ["node1"]}
         requirements = [{"requirementRef": "si-" + "a" * 40, "purpose": "SERVICE_ADMIN_TOKEN",
                          "serviceDeployment": "vault-ha", "manifestRequirementRef": "vault-admin-token",
                          "hosts": ["node1"], "requiredWhen": "INITIALIZED",
@@ -358,6 +360,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
 
             with mock.patch.object(execution_secret_lease, "runtime_secret_inputs_for_operation",
                                    return_value=[{"requirementRef": requirements[0]["requirementRef"], "purpose": "SERVICE_ADMIN_TOKEN", "value": secret}]), \
+                 mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), \
                  mock.patch.object(execution_controller.subprocess, "Popen", side_effect=launch), \
                  mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
                 state = execution_controller._dispatch("/runtime/release", journal,
@@ -377,7 +380,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             journal = _active_journal(root)
             journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
             operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
-            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_FailedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(2, "KAFKA_IDENTITY_MATERIALIZATION_BLOCKED")):
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_FailedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(2, "KAFKA_IDENTITY_MATERIALIZATION_BLOCKED")):
                 with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "EXECUTION_OPERATION_FAILED"):
                     execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False])
             events = journal.events()
@@ -556,7 +559,7 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
             self.assertEqual({"SUCCESS", "CHANGED", "SKIPPED"}, {event["status"] for event in completions})
             self.assertTrue(all("elapsedMilliseconds" in event for event in completions))
 
-    def test_real_no_log_success_and_failure_redact_task_identity_and_payload(self):
+    def test_real_no_log_hides_templated_task_name_and_payload(self):
         for module, expected, task_status in (("debug", "SUCCEEDED", "SUCCESS"), ("fail", "FAILED", "FAILED")):
             with self.subTest(module=module):
                 tasks = (
@@ -578,8 +581,8 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
                     self.assertEqual({task_status}, {event["status"] for event in results})
                     for event in details:
                         self.assertEqual(starts[0]["task"]["uuid"], event["task"]["uuid"])
-                        self.assertNotIn("name", event["task"])
-                        self.assertEqual({"applied": True, "fields": ["task.name"]}, event["redaction"])
+                        self.assertEqual("Скрытая задача", event["task"]["name"])
+                        self.assertEqual({"applied": True, "fields": []}, event["redaction"])
                         self.assertIn(event["safeMessage"], ("Ansible task started", "Ansible task completed"))
                     for event in results:
                         self.assertGreaterEqual(event["elapsedMilliseconds"], 0)

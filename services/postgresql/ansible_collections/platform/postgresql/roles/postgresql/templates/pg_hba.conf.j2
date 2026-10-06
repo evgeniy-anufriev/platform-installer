@@ -9,7 +9,10 @@ host all {{ platform_postgresql_admin_superuser.username }} ::1/128 scram-sha-25
 {% if platform_postgresql_mode == 'pg_auto_failover' %}
 # HA traffic is TLS-only; no plaintext host rule is permitted.
 {% for monitor in platform_postgresql_instances | selectattr('roles', 'contains', 'monitor') %}
-hostssl postgres {{ platform_postgresql_healthcheck_credential.username }} {{ monitor.address }}/32 {{ platform_postgresql_failover_auth }}
+# pg_auto_failover 2.2 sends a fixed, non-secret probe password and only checks
+# whether PostgreSQL accepts a protocol connection. Scope this trust exception
+# to that dedicated role, database, TLS connections, and the monitor /32.
+hostssl postgres pgautofailover_monitor {{ monitor.address }}/32 trust
 {% endfor %}
 {% for member in platform_postgresql_instances %}
 hostssl pg_auto_failover {{ platform_postgresql_monitor_credential.username }} {{ member.address }}/32 {{ platform_postgresql_failover_auth }}

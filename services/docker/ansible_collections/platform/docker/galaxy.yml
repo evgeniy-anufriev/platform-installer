@@ -1,0 +1,9 @@
+namespace: platform
+name: docker
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer V2]
+description: Rootless Docker and Compose for RED OS
+license: [MIT]
+tags: [docker, rootless]
+dependencies: {}

@@ -62,7 +62,7 @@ saved project revision + selected READY node + attested runtime
  RunObserver subscription / terminal execution evidence
 ~~~
 
-The Go facade binds every plan to the open project root, canonical saved revision, selected node and attested runtime. It clears an active plan when project context changes or a semantic Save changes revision. The existing 15-minute plan TTL and mandatory fresh replan immediately before Start remain authoritative.
+The Go facade binds every plan to the open project root, canonical saved revision, selected node and attested runtime. It clears an active plan when project context changes or a semantic Save changes revision. An approved installation plan remains valid for one hour from creation; mandatory fresh-revision/runtime checks immediately before Start remain authoritative. The workstation target-credential lease expires one hour after credential set/replacement. Service runtime-password values are bound to that lease and do not extend its deadline when submitted or replaced. The local output-encryption password has its own one-hour deadline from confirmation. Reads and UI navigation do not extend these deadlines. The separate Execution Node preparation plan has a one-hour confirmation window from creation. These windows do not extend the Execution Node's staged lease, whose lifecycle remains controlled by its existing protocol.
 
 An active execution retains its immutable plan revision. A later Save may proceed under ADR-027, but UI shows ACTIVE_EXECUTION_USES_PREVIOUS_REVISION; it never alters, restarts or cancels that run. Navigation detaches the visual subscriber only. It never cancels remote work. A known runId can reconnect through GetExecution and RunObserver; after process restart UI-02 does not guess a current run from time or another deployment.
 
@@ -315,7 +315,18 @@ credential requirement remain solely in the digest-bound private
 derives `runtime-projection/v1alpha2` from that manifest.  It scopes authority
 by deployment and a common Core role performs the existing target-local
 repository probe only during lifecycle execution, then realizes precisely the
-Core-authorised fallback.  The mutable
+Core-authorised fallback.
+
+For each `SERVICE_APPLY` and `SERVICE_VERIFY`, Core takes `targets` from the
+saved deployment placement in the current snapshot, not from the whole
+`platform_targets` inventory group. The digest-bound private operation carries
+the same non-empty host set; the Execution Node validates it and limits the
+Ansible invocation to those hosts plus localhost for imported Core controller
+plays. Missing or malformed placement blocks planning, with no all-host
+fallback. This Installer invocation rule does not alter standalone playbooks:
+their target scope remains the operator-provided inventory/Ansible limit.
+
+The mutable
 `platform_resolved_artifact_sources` map is deliberately not an Ansible
 extra-var: that role creates and updates it through `set_fact`, while the
 immutable authority remains the source-policy input.  Repository compatibility

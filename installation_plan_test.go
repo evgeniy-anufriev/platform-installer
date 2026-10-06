@@ -94,10 +94,14 @@ func (installationPlanTransport) BuildProjectSnapshot(context.Context, execution
 type installationPlanBuilder struct {
 	blocked bool
 	calls   int
+	onBuild func()
 }
 
 func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ executionnode.Node, root string, release map[string]any) (executionnode.DeploymentPlan, error) {
 	b.calls++
+	if b.onBuild != nil {
+		b.onBuild()
+	}
 	revision, err := installer.ProjectRevision(root)
 	if err != nil {
 		return executionnode.DeploymentPlan{}, err
@@ -173,6 +177,15 @@ func TestInstallationPlanRejectsUnknownPlanIDWithoutNodeCall(t *testing.T) {
 	result := app.GetInstallationPlan("not-current")
 	if result.Error == nil || result.Error.Code != "INSTALLATION_PLAN_NOT_FOUND" || builder.calls != 0 || client.starts != 0 {
 		t.Fatalf("result=%#v builder=%d starts=%d", result, builder.calls, client.starts)
+	}
+}
+
+func TestV02PlanDoesNotPublishAfterInFlightBindingInvalidation(t *testing.T) {
+	app, builder, _ := installationPlanApp(t, false)
+	builder.onBuild = func() { app.binding.dynamic = true }
+	result := app.CreateInstallationPlan()
+	if result.Plan != nil || result.Error == nil || app.installationPlanID != "" || app.execution.context.Status == "READY" || app.binding != nil {
+		t.Fatalf("in-flight invalidation published plan: %#v", result)
 	}
 }
 

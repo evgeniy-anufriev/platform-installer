@@ -7,8 +7,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"math"
 	"os"
@@ -143,6 +145,8 @@ type ProjectCatalogSetting struct {
 	MinLength                     *int     `json:"minLength,omitempty"`
 	MaxLength                     *int     `json:"maxLength,omitempty"`
 	Enum                          []any    `json:"enum,omitempty"`
+	StaticDefaultState            string   `json:"staticDefaultState,omitempty"`
+	StaticDefaultValue            any      `json:"staticDefaultValue,omitempty"`
 }
 
 type ProjectCatalogUI struct {
@@ -761,11 +765,20 @@ func catalogMatchesLock(value catalog, lock struct {
 }
 
 func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView {
+	staticDefaults := readUIStaticDefaults(verified)
 	services := make([]ProjectCatalogService, 0, len(value.Definitions))
 	for id, definition := range value.Definitions {
 		settings := make([]ProjectCatalogSetting, 0, len(definition.Configuration.Settings))
 		for settingID, setting := range definition.Configuration.Settings {
-			settings = append(settings, projectCatalogSetting(settingID, setting))
+			projection := projectCatalogSetting(settingID, setting)
+			if entry, ok := staticDefaults[id][settingID]; ok {
+				if entry.State == "DEFERRED" {
+					projection.StaticDefaultState = "DEFERRED"
+				} else if entry.State == "LITERAL" && SafePresentationValue(projection, entry.Value) {
+					projection.StaticDefaultState, projection.StaticDefaultValue = "LITERAL", entry.Value
+				}
+			}
+			settings = append(settings, projection)
 		}
 		sort.Slice(settings, func(left, right int) bool {
 			return catalogSettingOrderLess(settings[left], settings[right])
@@ -795,6 +808,126 @@ func (value catalog) view(verified executionbundle.Verified) *ProjectCatalogView
 		return catalogOrderLess(services[left].UI.Order, services[left].DisplayName, services[left].ID, services[right].UI.Order, services[right].DisplayName, services[right].ID)
 	})
 	return &ProjectCatalogView{Status: "READY", ExpectedBundleDigest: verified.Digest, ExpectedCatalogDigest: verified.Manifest.CatalogDigest, BundleVersion: verified.Manifest.BundleVersion, Services: services}
+}
+
+type uiStaticDefaultEntry struct {
+	State string `json:"state"`
+	Value any    `json:"value,omitempty"`
+}
+
+func readUIStaticDefaults(verified executionbundle.Verified) map[string]map[string]uiStaticDefaultEntry {
+	const component = "catalog/ui-static-defaults.json"
+	found := false
+	for _, item := range verified.Manifest.Components {
+		if item.Path == component {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil // Compatibility with previously published immutable bundles.
+	}
+	data, err := executionbundle.ReadVerifiedComponent(verified, component, 1024*1024)
+	if err != nil {
+		return nil
+	}
+	var document struct {
+		APIVersion string                                     `json:"apiVersion"`
+		Services   map[string]map[string]uiStaticDefaultEntry `json:"services"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&document) != nil || document.APIVersion != "platform.installer/ui-static-defaults/v1alpha1" || len(document.Services) > 4096 {
+		return nil
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return nil
+	}
+	for _, settings := range document.Services {
+		if len(settings) > 4096 {
+			return nil
+		}
+		for _, entry := range settings {
+			if entry.State != "LITERAL" && entry.State != "DEFERRED" && entry.State != "UNAVAILABLE" {
+				return nil
+			}
+		}
+	}
+	return document.Services
+}
+
+// SafePresentationValue admits only bounded values of the trusted closed UI shape.
+// It never admits secret-reference objects or opaque configuration.
+func SafePresentationValue(setting ProjectCatalogSetting, value any) bool {
+	if setting.Kind != "MANAGED" {
+		return false
+	}
+	switch setting.EditorShape {
+	case "BOOLEAN":
+		_, ok := value.(bool)
+		return ok
+	case "INTEGER", "NUMBER":
+		number, ok := value.(float64)
+		if !ok || math.IsNaN(number) || math.IsInf(number, 0) || setting.Minimum == nil || setting.Maximum == nil || number < *setting.Minimum || number > *setting.Maximum {
+			return false
+		}
+		return setting.EditorShape != "INTEGER" || math.Trunc(number) == number
+	case "ENUM":
+		for _, choice := range setting.Enum {
+			if text, ok := choice.(string); ok && safePreviewText(text) && text == value {
+				return true
+			}
+			if flag, ok := choice.(bool); ok && flag == value {
+				return true
+			}
+			if number, ok := presentationNumber(choice); ok {
+				if given, valid := presentationNumber(value); valid && number == given {
+					return true
+				}
+			}
+		}
+		return false
+	case "BOUNDED_STRING":
+		text, ok := value.(string)
+		return ok && safePreviewText(text) && setting.MinLength != nil && setting.MaxLength != nil && utf8.RuneCountInString(text) >= *setting.MinLength && utf8.RuneCountInString(text) <= *setting.MaxLength
+	case "DNS_DOMAIN":
+		text, ok := value.(string)
+		return ok && safePreviewText(text) && ValidDNSDomain(text)
+	case "TLS_PROFILE", "SERVICE_DEPLOYMENT":
+		text, ok := value.(string)
+		return ok && safePreviewText(text) && len(text) > 0 && len(text) <= 128 && catalogIdentifierPattern.MatchString(text)
+	}
+	return false
+}
+
+func presentationNumber(value any) (float64, bool) {
+	switch number := value.(type) {
+	case int:
+		return float64(number), number >= -(1<<53) && number <= 1<<53
+	case int64:
+		return float64(number), number >= -(1<<53) && number <= 1<<53
+	case float64:
+		return number, !math.IsNaN(number) && !math.IsInf(number, 0) && math.Abs(number) <= 1<<53
+	default:
+		return 0, false
+	}
+}
+
+func safePreviewText(value string) bool {
+	if !utf8.ValidString(value) || len(value) > 4096 {
+		return false
+	}
+	for _, marker := range []string{"{{", "}}", "{%", "%}", "{#", "#}"} {
+		if strings.Contains(value, marker) {
+			return false
+		}
+	}
+	for _, char := range value {
+		if char < 0x20 || char == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetting {

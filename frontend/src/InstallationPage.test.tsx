@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { InstallationPage } from "./InstallationPage";
+import { main } from "../wailsjs/go/models";
 
 const state = {
   apiVersion: "platform.installer/installation-state/v1alpha1" as const,
@@ -15,19 +16,50 @@ const state = {
   },
   executionNode: { status: "NOT_PREPARED", safeLabel: "node1 · 192.0.2.10" },
   plan: { status: "NOT_CREATED" as const },
-  prerequisites: [{
-    code: "EXECUTION_NODE_READY_REQUIRED",
-    destination: "servers" as const,
-    safeMessage: "A READY Execution Node is required before creating an installation plan.",
-  }],
+  prerequisites: [
+    {
+      code: "EXECUTION_NODE_READY_REQUIRED",
+      destination: "servers" as const,
+      safeMessage:
+        "A READY Execution Node is required before creating an installation plan.",
+    },
+  ],
 };
+
+const currentPlanState = (
+  planId: string,
+  revision: string,
+  approved: boolean,
+) => ({
+  ...state,
+  status: approved ? ("PLAN_APPROVED" as const) : ("PLAN_REVIEW" as const),
+  project: { ...state.project, revision },
+  executionNode: { status: "READY", safeLabel: "node1 · 192.0.2.10" },
+  plan: {
+    status: approved ? ("PLAN_APPROVED" as const) : ("PLAN_REVIEW" as const),
+    planId,
+  },
+  prerequisites: [],
+});
 
 describe("InstallationPage", () => {
   it("renders only safe prerequisite state and routes preparation to Servers", async () => {
     const user = userEvent.setup();
     const onOpenServers = vi.fn();
-    render(<InstallationPage state={state} tab="summary" onTabChange={vi.fn()} onOpenServers={onOpenServers} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} />);
+    render(
+      <InstallationPage
+        state={state}
+        tab="summary"
+        onTabChange={vi.fn()}
+        onOpenServers={onOpenServers}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+      />,
+    );
 
+    expect(screen.getByRole("status").textContent).toBe("План не готов");
+    expect(screen.queryByText("PREREQUISITES_REQUIRED")).toBeNull();
     expect(screen.getByText("EXECUTION_NODE_READY_REQUIRED")).toBeTruthy();
     expect(screen.getByText("node1 · 192.0.2.10")).toBeTruthy();
     expect(screen.queryByText("Сформировать свежий план")).toBeNull();
@@ -35,12 +67,81 @@ describe("InstallationPage", () => {
     expect(onOpenServers).toHaveBeenCalledOnce();
   });
 
+  it("shows the Core plan preview on Summary without replacing the full Plan view", () => {
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-summary", "sha256:old", false)}
+        tab="summary"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        plan={{
+          status: "PLAN_REVIEW",
+          plan: {
+            id: "plan-summary",
+            status: "EXECUTABLE",
+            projectRevision: "sha256:old",
+            planFingerprint: "sha256:plan",
+            executionNodeId: "node1",
+            runtime: {
+              bundleDigest: "sha256:bundle",
+              coreVersion: "core",
+              catalogDigest: "sha256:catalog",
+              protocol: "protocol",
+            },
+            expiresAt: "2026-09-22T10:00:00Z",
+            approved: false,
+            acknowledgements: [],
+            phases: [
+              {
+                id: "apply",
+                order: 0,
+                actions: [
+                  {
+                    id: "apply:kafka-main",
+                    type: "SERVICE_APPLY",
+                    serviceDeployment: "kafka-main",
+                    targets: ["node1", "node2"],
+                    dependsOn: [],
+                    mutating: true,
+                    reboot: "NONE",
+                    summary: "Kafka apply",
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "План установки" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Kafka apply")).toBeTruthy();
+    expect(
+      screen.getByText("Развёртывание: kafka-main · node1, node2"),
+    ).toBeTruthy();
+  });
+
   it("keeps secret material out of Installation navigation", async () => {
     const user = userEvent.setup();
     const onTabChange = vi.fn();
-    render(<InstallationPage state={state} tab="summary" onTabChange={onTabChange} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} />);
+    render(
+      <InstallationPage
+        state={state}
+        tab="summary"
+        onTabChange={onTabChange}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+      />,
+    );
 
-    await user.click(screen.getByRole("button", { name: "План" }));
+    await user.click(screen.getByRole("tab", { name: "План" }));
     expect(onTabChange).toHaveBeenCalledWith("plan");
     expect(screen.queryByText("Runtime secrets")).toBeNull();
   });
@@ -48,9 +149,61 @@ describe("InstallationPage", () => {
   it("shows the bounded plan and requires each exact acknowledgement", async () => {
     const user = userEvent.setup();
     const onApprovePlan = vi.fn();
-    render(<InstallationPage state={{ ...state, status: "PLAN_REVIEW", plan: { status: "PLAN_REVIEW", planId: "plan-1" } }} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={{ status: "PLAN_REVIEW", plan: { id: "plan-1", status: "EXECUTABLE", projectRevision: "sha256:old", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-22T10:00:00Z", approved: false, acknowledgements: [{ code: "ACK_RISK", summary: "Review the planned change" }], phases: [{ id: "apply", order: 0, actions: [{ id: "apply:kafka-main", type: "SERVICE_APPLY", serviceDeployment: "kafka-main", targets: ["node1"], dependsOn: [], mutating: true, reboot: "NONE", summary: "Apply Kafka" }] }] } }} />);
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-1", "sha256:old", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={onApprovePlan}
+        plan={{
+          status: "PLAN_REVIEW",
+          plan: {
+            id: "plan-1",
+            status: "EXECUTABLE",
+            projectRevision: "sha256:old",
+            planFingerprint: "sha256:plan",
+            executionNodeId: "node1",
+            runtime: {
+              bundleDigest: "sha256:bundle",
+              coreVersion: "core",
+              catalogDigest: "sha256:catalog",
+              protocol: "protocol",
+            },
+            expiresAt: "2026-09-22T10:00:00Z",
+            approved: false,
+            acknowledgements: [
+              { code: "ACK_RISK", summary: "Review the planned change" },
+            ],
+            phases: [
+              {
+                id: "apply",
+                order: 0,
+                actions: [
+                  {
+                    id: "apply:kafka-main",
+                    type: "SERVICE_APPLY",
+                    serviceDeployment: "kafka-main",
+                    targets: ["node1"],
+                    dependsOn: [],
+                    mutating: true,
+                    reboot: "NONE",
+                    summary: "Apply Kafka",
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    );
 
+    expect(screen.getByText("План готов к рассмотрению")).toBeTruthy();
+    expect(screen.queryByText("PLAN_REVIEW")).toBeNull();
     expect(screen.getByText("Apply Kafka")).toBeTruthy();
+    expect(screen.getByText("Развёртывание: kafka-main")).toBeTruthy();
     const approve = screen.getByRole("button", { name: "Одобрить план" });
     expect(approve).toHaveProperty("disabled", true);
     await user.click(screen.getByRole("checkbox"));
@@ -61,22 +214,385 @@ describe("InstallationPage", () => {
   it("starts only an already approved plan and renders safe execution state", async () => {
     const user = userEvent.setup();
     const onStart = vi.fn();
-    const plan = { status: "PLAN_APPROVED" as const, plan: { id: "plan-1", status: "EXECUTABLE" as const, projectRevision: "sha256:old", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-22T10:00:00Z", approved: true, acknowledgements: [], phases: [] } };
-    render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} onStart={onStart} plan={plan} />);
+    const plan = {
+      status: "PLAN_APPROVED" as const,
+      plan: {
+        id: "plan-1",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: true,
+        acknowledgements: [],
+        phases: [],
+      },
+    };
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-1", "sha256:old", true)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        onStart={onStart}
+        plan={plan}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Начать выполнение" }));
     expect(onStart).toHaveBeenCalledWith("plan-1");
   });
 
-  it("requires a write-only PKI password before starting a plan that needs it", async () => {
+  it("shows the safe Start failure instead of saying that nothing happened", () => {
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-1", "sha256:old", true)}
+        tab="execution"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        run={
+          new main.InstallationRunOperation({
+            status: "BLOCKED",
+            error: {
+              code: "START_PREREQUISITE_MISSING",
+              message: "Требуется подготовка.",
+            },
+          })
+        }
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "START_PREREQUISITE_MISSING",
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Требуется подготовка.",
+    );
+    expect(screen.queryByText("В этом сеансе запуск ещё не начат.")).toBeNull();
+  });
+
+  it("localizes a live run state and does not expose the protocol value", () => {
+    const run = new main.InstallationRunOperation({
+      status: "RUNNING",
+      run: { runId: "run-safe", state: "RUNNING", sequence: 4 },
+    });
+    const { container } = render(
+      <InstallationPage
+        state={currentPlanState("plan-1", "sha256:old", false)}
+        tab="execution"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        run={run}
+        runProgress={{
+          runId: "run-safe",
+          lastSequence: 4,
+          complete: true,
+          actionIds: ["a", "b"],
+          completedActionIds: ["a"],
+          actionOutcomes: { a: "SUCCESS" },
+        }}
+        events={[
+          new main.InstallationEventView({
+            runId: "run-safe",
+            sequence: 3,
+            eventType: "TASK_COMPLETED",
+            status: "SUCCESS",
+            timestamp: "2026-10-05T07:22:44Z",
+            safeMessage: "Ansible task completed",
+            host: "node1",
+            task: { name: "Проверка swap", uuid: "task-1" },
+          }),
+          new main.InstallationEventView({
+            runId: "run-safe",
+            sequence: 4,
+            eventType: "TASK_STARTED",
+            status: "RUNNING",
+            timestamp: "2026-10-05T07:22:45Z",
+            safeMessage: "Ansible task started",
+            host: "node2",
+            task: { name: "Следующая задача", uuid: "task-2" },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Идёт установка" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("RUNNING")).toBeNull();
+    expect(screen.getByText(/Запуск: run-safe/)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain(
+      "Идёт установка · 50%",
+    );
+    expect(
+      screen.getByText(/Последняя завершённая задача: Проверка swap/),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(/Последняя завершённая задача: Следующая задача/),
+    ).toBeNull();
+    const eventTimes = container.querySelectorAll("time");
+    expect(eventTimes).toHaveLength(2);
+    expect(eventTimes[0].getAttribute("datetime")).toBe(
+      "2026-10-05T07:22:44Z",
+    );
+  });
+
+  it("explains phases without deployment actions instead of presenting them as service work", () => {
+    const plan = {
+      status: "PLAN_REVIEW" as const,
+      plan: {
+        id: "plan-empty",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: false,
+        acknowledgements: [],
+        phases: [
+          { id: "apply", order: 0, actions: [] },
+          { id: "verify", order: 1, actions: [] },
+        ],
+      },
+    };
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-empty", "sha256:old", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        plan={plan}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "В плане нет действий по развёртыванию сервисов. Проверьте состав и размещение сервисов в проекте.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "1. Применение" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "2. Проверка" })).toBeTruthy();
+    expect(screen.queryByText(/Развёртывание:/)).toBeNull();
+  });
+
+  it("shows known Core plan findings in Russian without merging repeated codes", () => {
+    const plan = {
+      status: "PLAN_BLOCKED" as const,
+      plan: {
+        id: "plan-findings",
+        status: "BLOCKED" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: false,
+        acknowledgements: [],
+        phases: [],
+        findings: [
+          {
+            code: "ENDPOINT_PROVIDER_FIELD_REQUIRED",
+            safeMessage:
+              "Endpoint provider deployment requires endpointGroupRef",
+          },
+          {
+            code: "ENDPOINT_PROVIDER_FIELD_REQUIRED",
+            safeMessage:
+              "Endpoint provider deployment requires virtualAddresses",
+          },
+        ],
+      },
+    };
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-findings", "sha256:old", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        plan={plan}
+      />,
+    );
+    expect(
+      screen.getByText("Для сервиса-поставщика укажите группу точек входа."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Для сервиса-поставщика укажите виртуальные IP-адреса."),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByText("ENDPOINT_PROVIDER_FIELD_REQUIRED"),
+    ).toHaveLength(2);
+    expect(
+      screen.queryByText(
+        "Endpoint provider deployment requires endpointGroupRef",
+      ),
+    ).toBeNull();
+  });
+
+  it("never offers Start for a draft or an approved plan bound to an old revision", () => {
+    const onStart = vi.fn();
+    const onCreatePlan = vi.fn();
+    const plan = {
+      status: "PLAN_APPROVED" as const,
+      plan: {
+        id: "plan-old",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: true,
+        acknowledgements: [],
+        phases: [],
+      },
+    };
+    const view = render(
+      <InstallationPage
+        state={currentPlanState("plan-old", "sha256:old", true)}
+        draftActive
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={onCreatePlan}
+        onApprovePlan={vi.fn()}
+        onStart={onStart}
+        plan={plan}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Начать выполнение" }),
+    ).toHaveProperty("disabled", true);
+    view.rerender(
+      <InstallationPage
+        state={{
+          ...currentPlanState("plan-old", "sha256:new", true),
+          status: "READY_TO_PLAN",
+          plan: { status: "PLAN_STALE_OR_EXPIRED" },
+        }}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={onCreatePlan}
+        onApprovePlan={vi.fn()}
+        onStart={onStart}
+        plan={plan}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Начать выполнение" }),
+    ).toHaveProperty("disabled", true);
+    expect(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    ).toHaveProperty("disabled", false);
+    view.rerender(
+      <InstallationPage
+        state={undefined}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={onCreatePlan}
+        onApprovePlan={vi.fn()}
+        onStart={onStart}
+        plan={plan}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Начать выполнение" }),
+    ).toHaveProperty("disabled", true);
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("shows PKI password status and links to Certificates without collecting it", async () => {
     const user = userEvent.setup();
     const onStart = vi.fn();
-    const onSetPKIStorePassword = vi.fn().mockResolvedValue({ status: "PRESENT", sudoPasswordStatus: "NOT_PROVIDED", pkiStorePasswordStatus: "PRESENT" });
-    const plan = { status: "PLAN_APPROVED" as const, plan: { id: "plan-pki", status: "EXECUTABLE" as const, projectRevision: "sha256:old", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-22T10:00:00Z", approved: true, pkiStorePasswordRequired: true, acknowledgements: [], phases: [] } };
-    render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} onStart={onStart} plan={plan} credentialStatus={{ status: "PRESENT", sudoPasswordStatus: "NOT_PROVIDED", pkiStorePasswordStatus: "MISSING" }} onSetPKIStorePassword={onSetPKIStorePassword} />);
-    expect(screen.getByRole("button", { name: "Начать выполнение" })).toHaveProperty("disabled", true);
-    await user.type(screen.getByLabelText("Пароль хранилища PKI"), "write-only");
-    await user.click(screen.getByRole("button", { name: "Добавить пароль в сеанс" }));
-    expect(onSetPKIStorePassword).toHaveBeenCalledWith("write-only");
+    const onOpenCertificates = vi.fn();
+    const plan = {
+      status: "PLAN_APPROVED" as const,
+      plan: {
+        id: "plan-pki",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: true,
+        pkiStorePasswordRequired: true,
+        acknowledgements: [],
+        phases: [],
+      },
+    };
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-pki", "sha256:old", true)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        onOpenCertificates={onOpenCertificates}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        onStart={onStart}
+        plan={plan}
+        credentialStatus={{
+          status: "PRESENT",
+          sudoPasswordStatus: "NOT_PROVIDED",
+          pkiStorePasswordStatus: "MISSING",
+        }}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Начать выполнение" }),
+    ).toHaveProperty("disabled", true);
+    expect(
+      screen.getByText(/Пароль Java-хранилищ PKCS#12: не задан/),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText(/Пароль/)).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Открыть «Сертификаты»" }),
+    );
+    expect(onOpenCertificates).toHaveBeenCalledOnce();
     expect(onStart).not.toHaveBeenCalled();
   });
 
@@ -84,36 +600,210 @@ describe("InstallationPage", () => {
     const user = userEvent.setup();
     const onApprovePlan = vi.fn();
     const setOutputPassword = vi.fn().mockResolvedValue(undefined);
-    const plan = { status: "PLAN_REVIEW" as const, plan: { id: "plan-vault", status: "EXECUTABLE" as const, projectRevision: "sha256:revision", planFingerprint: "sha256:plan", executionNodeId: "node1", runtime: { bundleDigest: "sha256:bundle", coreVersion: "core", catalogDigest: "sha256:catalog", protocol: "protocol" }, expiresAt: "2026-09-26T10:00:00Z", approved: false, secretOutputEncryptionRequired: true, secretOutputEncryptionPasswordPresent: false, acknowledgements: [{ code: "ACK_RISK", summary: "Review changes" }], phases: [] } };
-    const view = render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={plan} onSetOutputEncryptionPassword={setOutputPassword} />);
+    const plan = {
+      status: "PLAN_REVIEW" as const,
+      plan: {
+        id: "plan-vault",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:revision",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-26T10:00:00Z",
+        approved: false,
+        secretOutputEncryptionRequired: true,
+        secretOutputEncryptionPasswordPresent: false,
+        acknowledgements: [{ code: "ACK_RISK", summary: "Review changes" }],
+        phases: [],
+      },
+    };
+    const view = render(
+      <InstallationPage
+        state={currentPlanState("plan-vault", "sha256:revision", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={onApprovePlan}
+        plan={plan}
+        onSetOutputEncryptionPassword={setOutputPassword}
+      />,
+    );
     const approve = screen.getByRole("button", { name: "Одобрить план" });
     expect(approve).toHaveProperty("disabled", true);
     await user.type(screen.getByLabelText("Пароль шифрования"), "session-only");
     await user.type(screen.getByLabelText("Повторите пароль"), "session-only");
-    await user.click(screen.getByRole("button", { name: "Сохранить пароль в сеансе" }));
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить пароль в сеансе" }),
+    );
     await user.click(screen.getByRole("checkbox"));
     expect(approve).toHaveProperty("disabled", false);
     await user.click(approve);
-    expect(setOutputPassword).toHaveBeenCalledWith("session-only", "session-only");
+    expect(setOutputPassword).toHaveBeenCalledWith(
+      "session-only",
+      "session-only",
+    );
     expect(onApprovePlan).toHaveBeenCalledWith("plan-vault", ["ACK_RISK"]);
     // Fresh backend state after expiry must override the previous local ACK.
-    view.rerender(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={{ ...plan, plan: { ...plan.plan, secretOutputEncryptionPasswordPresent: false } }} onSetOutputEncryptionPassword={setOutputPassword} />);
+    view.rerender(
+      <InstallationPage
+        state={currentPlanState("plan-vault", "sha256:revision", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={onApprovePlan}
+        plan={{
+          ...plan,
+          plan: { ...plan.plan, secretOutputEncryptionPasswordPresent: false },
+        }}
+        onSetOutputEncryptionPassword={setOutputPassword}
+      />,
+    );
     expect(screen.getByLabelText("Пароль шифрования")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty("disabled", true);
-    view.rerender(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={onApprovePlan} plan={{ ...plan, plan: { ...plan.plan, id: "replacement-plan", secretOutputEncryptionPasswordPresent: false } }} onSetOutputEncryptionPassword={setOutputPassword} />);
+    expect(
+      screen.getByRole("button", { name: "Одобрить план" }),
+    ).toHaveProperty("disabled", true);
+    view.rerender(
+      <InstallationPage
+        state={currentPlanState("replacement-plan", "sha256:revision", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={onApprovePlan}
+        plan={{
+          ...plan,
+          plan: {
+            ...plan.plan,
+            id: "replacement-plan",
+            secretOutputEncryptionPasswordPresent: false,
+          },
+        }}
+        onSetOutputEncryptionPassword={setOutputPassword}
+      />,
+    );
     expect(screen.getByLabelText("Пароль шифрования")).toBeTruthy();
+  });
+
+  it("shows a Russian error when the session output passwords do not match", async () => {
+    const user = userEvent.setup();
+    const plan = {
+      status: "PLAN_REVIEW" as const,
+      plan: {
+        id: "plan-password",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: false,
+        secretOutputEncryptionRequired: true,
+        acknowledgements: [],
+        phases: [],
+      },
+    };
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-password", "sha256:old", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        plan={plan}
+        onSetOutputEncryptionPassword={vi
+          .fn()
+          .mockRejectedValue("SECRET_OUTPUT_PASSWORD_INVALID")}
+      />,
+    );
+    await user.type(
+      screen.getByLabelText("Пароль шифрования"),
+      "first-session-value",
+    );
+    await user.type(
+      screen.getByLabelText("Повторите пароль"),
+      "second-session-value",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить пароль в сеансе" }),
+    );
+    expect(
+      screen.getByText(
+        "Пароли шифрования не совпадают или не подходят. Проверьте оба поля.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("SECRET_OUTPUT_PASSWORD_INVALID")).toBeNull();
   });
 
   it("shows only safe output-delivery status and package metadata", async () => {
     const user = userEvent.setup();
     const refresh = vi.fn();
     const deliver = vi.fn();
-    render(<InstallationPage state={state} tab="result" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()} secretOutputPackages={{ status: "READY", packages: [{ protocol: "SecretOutputDelivery/v1alpha1", packageId: "pkg-safe", projectId: "project-1", deploymentId: "vault-ha", sourceRunId: "run-safe", runtimeDigest: "sha256:runtime", generation: 1, state: "READY", entries: ["admin-token", "unseal-shares"] }] }} outputDelivery={{ status: "DELIVERED", directory: "C:\\VaultSecrets\\vault-ha" }} onRefreshSecretOutputs={refresh} onDeliverSecretOutput={deliver} />);
-    expect(screen.getByText("Зашифрованные файлы сохранены: C:\\VaultSecrets\\vault-ha")).toBeTruthy();
+    render(
+      <InstallationPage
+        state={state}
+        tab="result"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        secretOutputPackages={{
+          status: "READY",
+          packages: [
+            {
+              protocol: "SecretOutputDelivery/v1alpha1",
+              packageId: "pkg-safe",
+              projectId: "project-1",
+              deploymentId: "vault-ha",
+              sourceRunId: "run-safe",
+              runtimeDigest: "sha256:runtime",
+              generation: 1,
+              state: "READY",
+              entries: ["admin-token", "unseal-shares"],
+            },
+          ],
+        }}
+        outputDelivery={{
+          status: "DELIVERED",
+          directory: "C:\\VaultSecrets\\vault-ha",
+        }}
+        onRefreshSecretOutputs={refresh}
+        onDeliverSecretOutput={deliver}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Зашифрованные файлы сохранены: C:\\VaultSecrets\\vault-ha",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("DELIVERED")).toBeNull();
     expect(screen.getByText(/Защищённый пакет · vault-ha/)).toBeTruthy();
+    expect(screen.getByText(/Состояние: Ожидает получения/)).toBeTruthy();
+    expect(screen.queryByText(/Состояние: READY/)).toBeNull();
     expect(screen.queryByText(/root token|unseal key/i)).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Проверить ожидающие файлы" }));
-    await user.click(screen.getByRole("button", { name: "Получить и сохранить зашифрованно" }));
+    await user.click(
+      screen.getByRole("button", { name: "Проверить ожидающие файлы" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Получить и сохранить зашифрованно" }),
+    );
     expect(refresh).toHaveBeenCalledOnce();
     expect(deliver).toHaveBeenCalledWith("pkg-safe");
   });

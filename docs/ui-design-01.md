@@ -81,6 +81,28 @@ below, three-pane views collapse into a vertical sequence; at narrower widths
 the sidebar collapses to icons with accessible labels, local tabs scroll
 horizontally, and tables retain horizontal scrolling rather than hiding data.
 
+The production target is a fixed-height application shell, not a vertically
+scrolling browser page. The project, saved/draft state, Execution Node and
+installation status remain visible in the compact header on every page. Long
+lists, tables, forms and task events scroll inside their own bounded regions;
+primary page actions and dialog actions remain reachable at 1024 × 720. A
+dialog is centred within the viewport, has a bounded scrolling form and a
+visible action footer, and retains keyboard focus until closed. Its opening
+control receives focus again on close. The HTML mockup demonstrates these
+layout and interaction goals; it is not proof that the production Wails UI
+already meets them.
+
+The global installation label has distinct **plan not ready**, **not started**,
+**running**, **failed** and **completed** states. It reflects the authoritative
+run/plan lifecycle, not the currently selected tab or the number of callback
+events. During execution, progress is confirmed plan actions divided by total
+planned actions; the current action, deployment and target host remain visible.
+On failure, the last confirmed percentage remains visible. Only a terminal
+successful run reaches 100%. An observer disconnect is shown separately from
+execution failure. If the backend cannot provide a trustworthy action count,
+show the stage and current task without inventing a percentage. The mockup's
+state selector changes demonstration data only and never starts execution.
+
 ## 3. Installation as the project home
 
 The page has six compact regions in this order:
@@ -210,6 +232,11 @@ cross-file transition is designed.
 the same schema-driven **Service settings** detail screen opened from
 the global Services page. It does not create a topology-specific configuration
 editor or a parallel save path.
+The selected deployment also lists its current member-to-host placements and
+offers **Configure member** for each `(deploymentId, memberId)`. The By servers
+view offers the same navigation from each member assignment. Both routes open
+the existing member section of Service settings; host-scoped deployments,
+which have no member identity, open deployment settings instead.
 
 Containers remain a future application-runtime capability, not a global
 navigation item in the current desktop shell. When introduced, they must stay
@@ -234,14 +261,25 @@ Service credential inputs remain in the selected service's Secrets dialog.
 | Local page | Primary content and boundary |
 | --- | --- |
 | Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |
-| Preparation | Execution Node selection/configuration entry point, desired prerequisites, observed readiness, planned preparation and result; it never changes service placement |
 | Plan | Core-owned action order, dependencies, deployments and exact target hosts, with Execution Node shown separately. Empty, stale and blocked plans are explicit; editing configuration invalidates approval. Generate remains on Summary; approval/start belongs to UI-02, not editor save. No per-task dry-run changes are invented before execution. |
 | Execution | active run progress, explicit confirmation state, safe task events and final PLAY RECAP; it is read-only for the active execution and does not parse/redact callback text in the frontend |
 | Result | Observed outcome for a specific runId/planId: successful, failed, skipped and unfinished actions, host-level results where reported, timings and verify outcome. Viewing does not rerun verify. Active runs have no final result; observer disconnect is not execution failure. |
 
-Preparation hides implementation detail in normal mode. Advanced mode may
-show checks such as SSH/elevation, package source and payload checks, but not
-passwords or raw private-key data.
+On Servers, Execution Node preparation may reveal advanced SSH/elevation,
+package-source and payload checks, but never passwords or raw private-key data.
+Installation Result groups plan actions by deployment and target, retaining
+success, failure, skipped and unfinished outcomes as reported by the backend;
+the detailed task stream belongs in a bounded region, not the main progress
+counter. The page must distinguish an active run from a completed Result and
+must not imply that opening Result performs another verification.
+
+All user-facing navigation, actions, empty states and safe diagnostics use
+Russian. Product and protocol names, IDs and standard technical abbreviations
+may remain in their original spelling. Unavailable future pages must not look
+like available actions. Keyboard focus, visible focus indication and modal
+focus return are part of acceptance, not optional polish. Saved project counts
+must come from the local managed projection; absence of a current Core snapshot
+is displayed as unknown/not checked, never as a misleading zero.
 
 ## 6. Service editor architecture
 
@@ -297,9 +335,17 @@ are shown as inherited role defaults and are not written merely because they
 are displayed.
 
 Advanced mode may show issuer, SAN, EKU, validity, fingerprints and store
-format. It never shows private keys, store passwords, password files, raw
-OpenSSL/keytool commands or PKI runtime paths. Imported/external CA, renewal,
-rotation, JKS and mTLS remain unavailable until their separate contracts exist.
+format. The page has a write-only input for the runtime password protecting
+generated PKCS#12 Java keystore/truststore files; the value is held in the
+active Installer session and never redisplayed or saved in project state.
+Private keys, password files, raw OpenSSL/keytool commands and PKI runtime
+paths remain hidden. A password change can rebuild derived stores from the
+existing validated PEM identity without issuing a new certificate. Imported/
+external CA, automatic certificate renewal, JKS and general mTLS editing remain
+unavailable until their separate contracts exist. An explicitly changed
+managed certificate request may be reissued only as an exact, Core-selected
+action in a fresh approved Installation plan. The Certificates page does not
+trigger a separate issuance path.
 
 ## 8. Effective values, origins and opaque data
 

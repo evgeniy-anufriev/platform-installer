@@ -1,0 +1,15 @@
+---
+- name: Read-only Docker rootless RED OS preflight
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Validate Docker role inputs and target without mutation
+      ansible.builtin.include_role:
+        name: platform.docker.docker_rootless
+        tasks_from: validate.yml
+      vars:
+        platform_docker_mode: existing-user
+        platform_docker_account_name: qa-docker
+        platform_docker_tls_directory: /etc/ssl
+        platform_docker_api_bind_address: 0.0.0.0

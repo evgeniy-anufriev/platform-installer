@@ -52,6 +52,59 @@ function props(
 }
 
 describe("UI-01G2 CertificatesPage", () => {
+  it("sets and replaces the Java-store password in the active session", async () => {
+    const user = userEvent.setup();
+    const onSetPKIStorePassword = vi.fn().mockResolvedValue({
+      status: "PRESENT",
+      sudoPasswordStatus: "NOT_PROVIDED",
+      pkiStorePasswordStatus: "PRESENT",
+    });
+    const view = render(
+      <CertificatesPage
+        {...props({
+          credentialStatus: {
+            status: "PRESENT",
+            sudoPasswordStatus: "NOT_PROVIDED",
+            pkiStorePasswordStatus: "MISSING",
+          },
+          onSetPKIStorePassword,
+        })}
+      />,
+    );
+    const input = screen.getByLabelText("Новый пароль хранилищ");
+    await user.type(input, "first-test-password");
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить пароль в сеансе" }),
+    );
+    expect(onSetPKIStorePassword).toHaveBeenNthCalledWith(
+      1,
+      "first-test-password",
+    );
+    expect((input as HTMLInputElement).value).toBe("");
+
+    view.rerender(
+      <CertificatesPage
+        {...props({
+          credentialStatus: {
+            status: "PRESENT",
+            sudoPasswordStatus: "NOT_PROVIDED",
+            pkiStorePasswordStatus: "PRESENT",
+          },
+          onSetPKIStorePassword,
+        })}
+      />,
+    );
+    await user.type(input, "replacement-test-password");
+    await user.click(
+      screen.getByRole("button", { name: "Заменить пароль в сеансе" }),
+    );
+    expect(onSetPKIStorePassword).toHaveBeenNthCalledWith(
+      2,
+      "replacement-test-password",
+    );
+    expect((input as HTMLInputElement).value).toBe("");
+  });
+
   it("uses typed scope intent for direct source inputs without calculating SAN", async () => {
     const onAppend = vi.fn().mockResolvedValue(true);
     render(<CertificatesPage {...props({ onAppend })} />);
@@ -60,7 +113,7 @@ describe("UI-01G2 CertificatesPage", () => {
     );
     await userEvent.type(screen.getByLabelText("ID"), "kafka.scope");
     await userEvent.selectOptions(
-      screen.getByLabelText("Certificate profile"),
+      screen.getByLabelText("Профиль сертификата"),
       "server.profile",
     );
     await userEvent.click(screen.getByRole("checkbox", { name: "node1" }));
@@ -68,11 +121,11 @@ describe("UI-01G2 CertificatesPage", () => {
       screen.getByRole("checkbox", { name: "kafka-main/kafka-kafka-1" }),
     );
     await userEvent.type(
-      screen.getByLabelText("Explicit DNS names"),
+      screen.getByLabelText("Явные DNS-имена"),
       "kafka.example.test",
     );
     await userEvent.type(
-      screen.getByLabelText("Explicit IP addresses"),
+      screen.getByLabelText("Явные IP-адреса"),
       "192.0.2.10",
     );
     await userEvent.click(
@@ -126,7 +179,7 @@ describe("UI-01G2 CertificatesPage", () => {
       screen.getAllByRole("button", { name: "Изменить" })[1],
     );
     const selector = screen.getByLabelText(
-      "includeHostDns",
+      "DNS-имена серверов",
     ) as HTMLSelectElement;
     expect(selector.value).toBe("false");
     await userEvent.selectOptions(selector, "");
@@ -194,5 +247,47 @@ describe("UI-01G2 CertificatesPage", () => {
     );
     expect(screen.getByText(/CERTIFICATE_REISSUE_REQUIRED/)).toBeTruthy();
     expect(screen.queryByText("kafka.example.test")).toBeNull();
+  });
+
+  it("shows stale saved-revision evidence without a current PKI view", () => {
+    render(
+      <CertificatesPage
+        {...props({
+          verification: { status: "STALE" },
+          verifiedPKI: undefined,
+        })}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Проверка устарела: запустите проверку сохранённой ревизии снова.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Проект ещё не проверен Core.")).toBeNull();
+  });
+
+  it("shows the safe verification error instead of stale PKI view status", () => {
+    render(
+      <CertificatesPage
+        {...props({
+          verification: {
+            status: "UNVERIFIED",
+            error: {
+              code: "PROJECT_SNAPSHOT_FAILED",
+              message:
+                "Core не смог построить снимок проекта. Проект на диске не изменён.",
+            },
+          },
+          verifiedPKI: { status: "NOT_VERIFIED" },
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Core не смог построить снимок проекта. Проект на диске не изменён.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Проект ещё не проверен Core.")).toBeNull();
   });
 });

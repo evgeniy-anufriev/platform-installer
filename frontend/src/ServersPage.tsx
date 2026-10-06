@@ -3,10 +3,65 @@ import type {
   ExecutionNodeContext,
   ExecutionNodePreparation,
   ExecutionNodeReadiness,
+  HostKeyProbeResult,
   OpenResult,
   SessionCredentialInput,
   SessionCredentialStatus,
 } from "./backend";
+import {
+  executionNodePreparationLabel,
+  executionNodeSelectionLabel,
+  executionNodeStatusLabel,
+} from "./executionNodeLabels";
+
+const verificationLabel = (status: string): string => {
+  switch (status) {
+    case "VERIFIED":
+      return "Проверено";
+    case "INVALID":
+      return "Ошибки проверки";
+    case "STALE":
+      return "Проверка устарела";
+    case "UNAVAILABLE":
+      return "Проверка недоступна";
+    default:
+      return "Не проверено";
+  }
+};
+
+const sessionCredentialErrors: Record<string, string> = {
+  SESSION_CREDENTIAL_INPUT_INVALID: "Проверьте имя технического пользователя.",
+  SESSION_CREDENTIAL_TOO_LARGE: "Учётные данные превышают допустимый размер.",
+  SESSION_CREDENTIAL_MODE_INVALID:
+    "Проверьте выбранный способ SSH и обязательные поля.",
+  SESSION_PRIVATE_KEY_UNREADABLE: "Не удалось прочитать файл приватного ключа.",
+  SESSION_PRIVATE_KEY_NOT_REGULAR: "Приватный ключ должен быть обычным файлом.",
+  SESSION_PRIVATE_KEY_ENCRYPTED_UNSUPPORTED:
+    "Зашифрованный приватный ключ не поддерживается.",
+  SESSION_PRIVATE_KEY_INVALID:
+    "Нужен поддерживаемый незашифрованный приватный ключ PEM.",
+  SESSION_CREDENTIAL_UNAVAILABLE:
+    "Не удалось сохранить учётные данные в текущем сеансе.",
+};
+
+function sessionCredentialErrorText(reason: unknown): string {
+  const raw =
+    typeof reason === "string"
+      ? reason
+      : reason &&
+          typeof reason === "object" &&
+          "message" in reason &&
+          typeof reason.message === "string"
+        ? reason.message
+        : "";
+  const code =
+    raw.match(/\b(?:SESSION_CREDENTIAL|SESSION_PRIVATE_KEY)_[A-Z_]+\b/)?.[0] ||
+    "";
+  return (
+    sessionCredentialErrors[code] ||
+    sessionCredentialErrors.SESSION_CREDENTIAL_UNAVAILABLE
+  );
+}
 
 export type ServerIntent = Record<string, unknown> & {
   operation: "CreateServer" | "UpdateServer" | "DeleteServer";
@@ -24,6 +79,7 @@ type Dialog =
   | { mode: "add" }
   | { mode: "edit"; row: Row }
   | { mode: "delete"; row: Row }
+  | { mode: "target-key"; row: Row }
   | null;
 type ServerType = { id: string; displayName: string };
 
@@ -105,6 +161,12 @@ export function ServersPage({
   executionNode,
   onSelectExecutionNode,
   onCheckExecutionNode,
+  onProbeExecutionNodeHostKey,
+  onApproveExecutionNodeHostKey,
+  onDeclineExecutionNodeHostKey,
+  onProbeTargetHostKey,
+  onApproveTargetHostKey,
+  onDeclineTargetHostKey,
   onPlanExecutionNodePreparation,
   onPrepareExecutionNode,
 }: {
@@ -128,10 +190,20 @@ export function ServersPage({
   executionNode: ExecutionNodeContext | null;
   onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
   onCheckExecutionNode: () => Promise<ExecutionNodeReadiness>;
+  onProbeExecutionNodeHostKey?: () => Promise<HostKeyProbeResult>;
+  onApproveExecutionNodeHostKey?: (
+    probeId: string,
+  ) => Promise<HostKeyProbeResult>;
+  onDeclineExecutionNodeHostKey?: () => Promise<HostKeyProbeResult>;
+  onProbeTargetHostKey?: (hostId: string) => Promise<HostKeyProbeResult>;
+  onApproveTargetHostKey?: (probeId: string) => Promise<HostKeyProbeResult>;
+  onDeclineTargetHostKey?: () => Promise<HostKeyProbeResult>;
   onPlanExecutionNodePreparation: () => Promise<ExecutionNodePreparation>;
   onPrepareExecutionNode: (planId: string) => Promise<ExecutionNodePreparation>;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [approvedTargets, setApprovedTargets] = useState<string[]>([]);
+  useEffect(() => setApprovedTargets([]), [managed?.projectRevision]);
   const visible = rows(snapshot, managed, intents);
   const firstSave = empty;
   const crudDisabled = busy || structuralDisabled;
@@ -231,6 +303,23 @@ export function ServersPage({
                             </button>
                             {" · "}
                             <button
+                              className="link"
+                              onClick={() =>
+                                setDialog({ mode: "target-key", row })
+                              }
+                              disabled={
+                                disableCrud ||
+                                commandCount > 0 ||
+                                !managed?.servers?.[row.hostId] ||
+                                !onProbeTargetHostKey
+                              }
+                            >
+                              {approvedTargets.includes(row.hostId)
+                                ? "SSH-ключ подтверждён"
+                                : "Проверить SSH-ключ"}
+                            </button>
+                            {" · "}
+                            <button
                               className="link danger"
                               onClick={() => setDialog({ mode: "delete", row })}
                               disabled={disableCrud}
@@ -253,6 +342,10 @@ export function ServersPage({
           disabled={busy}
           onSelect={onSelectExecutionNode}
           onCheck={onCheckExecutionNode}
+          credentialStatus={credentialStatus}
+          onProbe={onProbeExecutionNodeHostKey}
+          onApprove={onApproveExecutionNodeHostKey}
+          onDecline={onDeclineExecutionNodeHostKey}
           onPlan={onPlanExecutionNodePreparation}
           onPrepare={onPrepareExecutionNode}
         />
@@ -261,7 +354,7 @@ export function ServersPage({
         <section className="card draft-actions">
           <p>
             Черновик: {commandCount}. Перед сохранением будет показан локальный
-            structural preview затрагиваемых документов.
+            предварительный просмотр структуры затрагиваемых документов.
           </p>
           <button className="outline" onClick={onDiscard} disabled={busy}>
             Отменить все изменения
@@ -312,7 +405,130 @@ export function ServersPage({
           }}
         />
       )}
+      {dialog?.mode === "target-key" &&
+        onProbeTargetHostKey &&
+        onApproveTargetHostKey &&
+        onDeclineTargetHostKey && (
+          <TargetHostKeyDialog
+            row={dialog.row}
+            onProbe={onProbeTargetHostKey}
+            onApprove={onApproveTargetHostKey}
+            onDecline={onDeclineTargetHostKey}
+            onApproved={() =>
+              setApprovedTargets((items) => [
+                ...new Set([...items, dialog.row.hostId]),
+              ])
+            }
+            onClose={() => setDialog(null)}
+          />
+        )}
     </>
+  );
+}
+
+function TargetHostKeyDialog({
+  row,
+  onProbe,
+  onApprove,
+  onDecline,
+  onApproved,
+  onClose,
+}: {
+  row: Row;
+  onProbe: (hostId: string) => Promise<HostKeyProbeResult>;
+  onApprove: (probeId: string) => Promise<HostKeyProbeResult>;
+  onDecline: () => Promise<HostKeyProbeResult>;
+  onApproved: () => void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [probe, setProbe] = useState<HostKeyProbeResult | null>(null);
+  const [error, setError] = useState("");
+  const close = async () => {
+    if (probe?.status === "APPROVAL_REQUIRED")
+      await onDecline().catch(() => undefined);
+    onClose();
+  };
+  const runProbe = async () => {
+    setBusy(true);
+    setError("");
+    setProbe(null);
+    try {
+      const next = await onProbe(row.hostId);
+      setProbe(next);
+      if (next.error)
+        setError(next.error.message || "Не удалось получить ключ сервера.");
+    } catch {
+      setError("Не удалось получить ключ сервера.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const approve = async () => {
+    if (!probe?.probeId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await onApprove(probe.probeId);
+      setProbe(next);
+      if (next.status === "APPROVED") onApproved();
+      else setError(next.error?.message || "Подтверждение ключа отклонено.");
+    } catch {
+      setError("Не удалось подтвердить ключ сервера.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="modal" role="presentation">
+      <section
+        className="card dialog server-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="target-key-title"
+      >
+        <h1 id="target-key-title">SSH-ключ сервера {row.hostId}</h1>
+        <p>
+          Адрес: {row.address}:{row.port}
+        </p>
+        <p className="muted">
+          Сверьте отпечаток с независимым доверенным источником. Получение ключа
+          по сети само по себе не подтверждает его подлинность.
+        </p>
+        <button type="button" onClick={runProbe} disabled={busy}>
+          Получить отпечаток
+        </button>
+        {probe?.status === "APPROVAL_REQUIRED" && (
+          <div role="group" aria-label="Подтверждение ключа целевого сервера">
+            <p>Тип: {probe.keyType}</p>
+            <p>
+              Отпечаток: <code>{probe.fingerprint}</code>
+            </p>
+            <button type="button" onClick={approve} disabled={busy}>
+              Подтверждаю совпадение
+            </button>
+          </div>
+        )}
+        {probe?.status === "APPROVED" && (
+          <p role="status">
+            Ключ подтверждён для текущего проекта и сохранённой ревизии.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="field-error">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          className="outline"
+          onClick={close}
+          disabled={busy}
+        >
+          Закрыть
+        </button>
+      </section>
+    </div>
   );
 }
 
@@ -322,6 +538,10 @@ function ExecutionNodePanel({
   disabled,
   onSelect,
   onCheck,
+  credentialStatus,
+  onProbe,
+  onApprove,
+  onDecline,
   onPlan,
   onPrepare,
 }: {
@@ -330,6 +550,10 @@ function ExecutionNodePanel({
   disabled: boolean;
   onSelect: (hostId: string) => Promise<ExecutionNodeContext>;
   onCheck: () => Promise<ExecutionNodeReadiness>;
+  credentialStatus: SessionCredentialStatus | null;
+  onProbe?: () => Promise<HostKeyProbeResult>;
+  onApprove?: (probeId: string) => Promise<HostKeyProbeResult>;
+  onDecline?: () => Promise<HostKeyProbeResult>;
   onPlan: () => Promise<ExecutionNodePreparation>;
   onPrepare: (planId: string) => Promise<ExecutionNodePreparation>;
 }) {
@@ -342,6 +566,18 @@ function ExecutionNodePanel({
   );
   const [preparation, setPreparation] =
     useState<ExecutionNodePreparation | null>(null);
+  const [hostKeyProbe, setHostKeyProbe] = useState<HostKeyProbeResult | null>(
+    null,
+  );
+  useEffect(() => {
+    setHostKeyProbe(null);
+    setReadiness(null);
+    setPreparation(null);
+  }, [
+    context?.selectedHostId,
+    credentialStatus?.expiresAt,
+    credentialStatus?.sshMode,
+  ]);
   const effective: Partial<ExecutionNodeContext> & {
     status: string;
     selectionSource: string;
@@ -372,25 +608,117 @@ function ExecutionNodePanel({
       aria-labelledby="execution-node-heading"
     >
       <div className="execution-node-heading">
-        <h2 id="execution-node-heading">Execution Node</h2>
-        <span className="readonly">{effective.status}</span>
+        <h2 id="execution-node-heading">Узел выполнения</h2>
+        <span className="readonly">
+          {executionNodeStatusLabel(effective.status)}
+        </span>
       </div>
       <div className="execution-node-detail">
         <span>Выбранный узел</span>
         <b>{effective.safeLabel || "Не выбран"}</b>
         <span>Источник выбора</span>
-        <b>{effective.selectionSource}</b>
+        <b>{executionNodeSelectionLabel(effective.selectionSource)}</b>
       </div>
       <p className="muted">
-        Выбор хранится только в приложении и не записывается в проект. Проверка
-        не изменяет узел. Подготовка выполняется только после подтверждения.
+        Выбор узла хранится только в приложении и не меняет проект. Подготовка —
+        только после подтверждения.
       </p>
+      {onProbe && context?.selectionKind === "PROJECT_SERVER" && (
+        <div className="execution-node-host-key">
+          <p className="muted">
+            Нужен PEM-ключ сеанса; перед подключением сверьте SSH-отпечаток вне
+            приложения.
+          </p>
+          <button
+            className="outline"
+            disabled={
+              disabled ||
+              busy ||
+              credentialStatus?.status !== "PRESENT" ||
+              credentialStatus?.sshMode !== "SSH_PRIVATE_KEY"
+            }
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              setHostKeyProbe(null);
+              try {
+                setHostKeyProbe(await onProbe());
+              } catch {
+                setError("Не удалось получить отпечаток ключа SSH.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Получить отпечаток SSH
+          </button>
+          {hostKeyProbe?.status === "APPROVAL_REQUIRED" && (
+            <div role="group" aria-label="Подтверждение ключа SSH">
+              <p>
+                Ключ: <b>{hostKeyProbe.keyType}</b> · Отпечаток:{" "}
+                <code>{hostKeyProbe.fingerprint}</code>
+              </p>
+              <p className="muted">
+                Не подтверждайте ключ, пока не сверите отпечаток вне этого
+                приложения.
+              </p>
+              <button
+                disabled={
+                  disabled || busy || !onApprove || !hostKeyProbe.probeId
+                }
+                onClick={async () => {
+                  if (!hostKeyProbe.probeId || !onApprove) return;
+                  setBusy(true);
+                  setError("");
+                  try {
+                    setHostKeyProbe(await onApprove(hostKeyProbe.probeId));
+                  } catch {
+                    setError("Не удалось подтвердить ключ SSH.");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Подтверждаю совпадение
+              </button>
+              <button
+                className="outline"
+                disabled={busy || !onDecline}
+                onClick={async () => {
+                  if (!onDecline) return;
+                  setBusy(true);
+                  try {
+                    setHostKeyProbe(await onDecline());
+                  } catch {
+                    setError("Не удалось отклонить ключ SSH.");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Отклонить
+              </button>
+            </div>
+          )}
+          {hostKeyProbe?.status === "APPROVED" && (
+            <p role="status">
+              Ключ SSH подтверждён для текущего сеанса. Теперь можно проверить
+              узел.
+            </p>
+          )}
+          {hostKeyProbe?.error && (
+            <p className="field-error" role="alert">
+              {hostKeyProbe.error.message}
+            </p>
+          )}
+        </div>
+      )}
       {readiness && (
         <p
           className={readiness.error ? "field-error" : "muted"}
           role={readiness.error ? "alert" : undefined}
         >
-          Проверка: <b>{readiness.status}</b>
+          Проверка: <b>{executionNodeStatusLabel(readiness.status)}</b>
           {readiness.error ? ` · ${readiness.error.message}` : ""}
         </p>
       )}
@@ -399,9 +727,9 @@ function ExecutionNodePanel({
           className={preparation.error ? "field-error" : "muted"}
           role={preparation.error ? "alert" : undefined}
         >
-          Подготовка: <b>{preparation.status}</b>
+          Подготовка: <b>{executionNodePreparationLabel(preparation.status)}</b>
           {preparation.verification
-            ? ` · Проверка проекта: ${preparation.verification.status}`
+            ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
             : ""}
           {preparation.error ? ` · ${preparation.error.message}` : ""}
         </p>
@@ -449,7 +777,7 @@ function ExecutionNodePanel({
                 if (!planId) return;
                 if (
                   !window.confirm(
-                    "Подготовить выбранный Execution Node? Это может активировать проверенный runtime.",
+                    "Подготовить выбранный узел выполнения? Это может активировать проверенное окружение.",
                   )
                 )
                   return;
@@ -472,21 +800,21 @@ function ExecutionNodePanel({
       {!changing ? (
         <button
           className="outline"
-          aria-label="Выбрать Execution Node"
+          aria-label="Выбрать узел выполнения"
           onClick={() => {
             setSelected(context?.selectedHostId || rows[0]?.hostId || "");
             setChanging(true);
           }}
           disabled={disabled || rows.length === 0}
         >
-          Выбрать Execution Node
+          Выбрать узел выполнения
         </button>
       ) : (
         <div className="execution-node-change">
           <label>
             Сервер проекта
             <select
-              aria-label="Сервер проекта для Execution Node"
+              aria-label="Сервер проекта для узла выполнения"
               value={selected}
               onChange={(event) => setSelected(event.target.value)}
               disabled={busy || disabled}
@@ -564,9 +892,7 @@ function SessionCredentialsPanel({
       });
       clearDraft();
     } catch (reason) {
-      setError(
-        typeof reason === "string" ? reason : "SESSION_CREDENTIAL_UNAVAILABLE",
-      );
+      setError(sessionCredentialErrorText(reason));
     } finally {
       setBusy(false);
     }
@@ -671,11 +997,7 @@ function SessionCredentialsPanel({
                 await onClear();
                 clearDraft();
               } catch (reason) {
-                setError(
-                  typeof reason === "string"
-                    ? reason
-                    : "SESSION_CREDENTIAL_UNAVAILABLE",
-                );
+                setError(sessionCredentialErrorText(reason));
               } finally {
                 setBusy(false);
               }
@@ -858,11 +1180,15 @@ function ServerDialog({
               setPortMode(event.target.value as typeof portMode)
             }
           >
-            <option value="inherit">Использовать inherited/default</option>
+            {mode === "add" && (
+              <option value="inherit">
+                Наследовать порт (не задавать явно)
+              </option>
+            )}
             {mode === "edit" && <option value="unchanged">Не изменять</option>}
             <option value="explicit">Задать явно</option>
             {mode === "edit" && (
-              <option value="clear">Убрать Installer override</option>
+              <option value="clear">Убрать переопределение инсталлера</option>
             )}
           </select>
         </label>
@@ -930,7 +1256,7 @@ function DeleteDialog({
       >
         <h1 id="delete-title">Удалить сервер</h1>
         <p>
-          Сервер <b>{row.hostId}</b> будет удалён из inventory. Связанные
+          Сервер <b>{row.hostId}</b> будет удалён из инвентаря. Связанные
           сервисы и размещение автоматически не удаляются.
         </p>
         <div className="actions">

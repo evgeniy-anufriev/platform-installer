@@ -3,13 +3,16 @@
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
-    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    ca_path: "{{ hostvars[vault_member.host].platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
     validate_certs: true
     status_code: [200, 429, 472, 473, 501, 503]
     return_content: true
   delegate_to: "{{ vault_member.host }}"
   register: _platform_vault_member_health_before
   changed_when: false
+  retries: 30
+  delay: 2
+  until: _platform_vault_member_health_before is succeeded
   no_log: true
 
 - name: Require recovery material only when this member is sealed
@@ -25,7 +28,7 @@
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/unseal"
     method: PUT
-    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    ca_path: "{{ hostvars[vault_member.host].platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
     validate_certs: true
     status_code: 200
     body_format: json
@@ -42,7 +45,7 @@
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
-    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    ca_path: "{{ hostvars[vault_member.host].platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
     validate_certs: true
     status_code: [200, 429, 472, 473, 501, 503]
     return_content: true

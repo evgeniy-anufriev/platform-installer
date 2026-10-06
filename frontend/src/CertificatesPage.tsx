@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type {
   OpenResult,
+  SessionCredentialStatus,
   VerificationStatus,
   VerifiedPKIView,
 } from "./backend";
@@ -38,10 +39,10 @@ export type CertificateSourceOptions = {
 };
 
 const labels: Record<PKIKind, string> = {
-  authority: "Managed CA",
-  profile: "Certificate profiles",
-  tls: "TLS profiles",
-  scope: "Certificate scopes",
+  authority: "Управляемые центры сертификации",
+  profile: "Профили сертификатов",
+  tls: "Профили TLS",
+  scope: "Области применения сертификатов",
 };
 const operations: Record<
   PKIKind,
@@ -131,7 +132,9 @@ export function CertificatesPage({
   sourceOptions,
   verification,
   verifiedPKI,
+  credentialStatus,
   onAppend,
+  onSetPKIStorePassword,
   onReview,
   onDiscard,
   onVerify,
@@ -145,7 +148,9 @@ export function CertificatesPage({
   sourceOptions: CertificateSourceOptions;
   verification?: VerificationStatus;
   verifiedPKI?: VerifiedPKIView;
+  credentialStatus?: SessionCredentialStatus | null;
   onAppend: (intent: CertificateIntent) => Promise<boolean>;
+  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
   onReview: () => void;
   onDiscard: () => void;
   onVerify?: () => void;
@@ -154,7 +159,33 @@ export function CertificatesPage({
   const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
     null,
   );
+  const [storePassword, setStorePassword] = useState("");
+  const [storePasswordError, setStorePasswordError] = useState("");
+  const [storePasswordSaving, setStorePasswordSaving] = useState(false);
   const blocked = busy || structuralDisabled || commandCount >= 16;
+  const pkiPasswordPresent =
+    credentialStatus?.pkiStorePasswordStatus === "PRESENT";
+  const sshSessionPresent = credentialStatus?.status === "PRESENT";
+  const savePKIStorePassword = async () => {
+    if (!onSetPKIStorePassword) return;
+    setStorePasswordError("");
+    setStorePasswordSaving(true);
+    try {
+      await onSetPKIStorePassword(storePassword);
+      setStorePassword("");
+    } catch (reason) {
+      const code = typeof reason === "string" ? reason : "";
+      setStorePasswordError(
+        code === "PKI_STORE_PASSWORD_INPUT_INVALID"
+          ? "Пароль не соответствует допустимым ограничениям."
+          : code === "PKI_STORE_PASSWORD_UNAVAILABLE"
+            ? "Сначала сохраните учётные данные для выбранного Execution Node."
+            : "Не удалось сохранить пароль в текущем сеансе.",
+      );
+    } finally {
+      setStorePasswordSaving(false);
+    }
+  };
   const allRows = useMemo(
     () => ({
       authority: rowsFor("authority", managed, intents),
@@ -185,8 +216,8 @@ export function CertificatesPage({
           )}
           <h1>Сертификаты</h1>
           <p>
-            PKI intent проекта. Выпуск, materialization и применение здесь не
-            выполняются.
+            Желаемые параметры сертификатов проекта. Выпуск и применение
+            сертификатов выполняются отдельно.
           </p>
         </div>
         <DraftActions
@@ -197,33 +228,84 @@ export function CertificatesPage({
         />
       </div>
       <p className="muted">
-        Пустые поля наследуются из role defaults и не записываются. DNS/IP —
-        прямые desired inputs; Core вычисляет identity и SAN после Verify.
+        Пустые поля наследуют значения роли и не записываются. DNS/IP здесь
+        задаются явно; Core определяет итоговые имена и SAN после проверки.
       </p>
-      {(Object.keys(labels) as PKIKind[]).map((kind) => (
-        <article className="card certificate-section" key={kind}>
-          <div className="section-head">
-            <div>
-              <h2>{labels[kind]}</h2>
-              <small>{sectionHint(kind)}</small>
-            </div>
-            <button
-              className="outline"
-              disabled={blocked}
-              onClick={() => setEditor({ kind })}
-            >
-              Добавить
-            </button>
-          </div>
-          <CertificateRows
-            kind={kind}
-            rows={allRows[kind]}
-            disabled={blocked}
-            onEdit={(id) => setEditor({ kind, id })}
-            onDelete={remove}
+      <article className="card pki-store-password">
+        <h2>Пароль Java-хранилищ PKCS#12 (keystore / truststore)</h2>
+        <p className="muted">
+          Пароль защищает создаваемые хранилища сертификатов. Он хранится только
+          в активном сеансе Installer. Если пароль существующих хранилищ
+          неизвестен, при применении Core пересоздаст их из текущих
+          PEM-сертификатов и ключа.
+        </p>
+        <p role="status">
+          {pkiPasswordPresent
+            ? "Пароль задан в текущем сеансе. Его можно заменить до запуска."
+            : "Пароль не задан в текущем сеансе."}
+        </p>
+        {!sshSessionPresent && (
+          <p className="muted">
+            Сначала сохраните учётные данные для выбранного Execution Node.
+          </p>
+        )}
+        <label>
+          Новый пароль хранилищ
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={storePassword}
+            onChange={(event) => setStorePassword(event.target.value)}
+            disabled={busy || storePasswordSaving || !sshSessionPresent}
           />
-        </article>
-      ))}
+        </label>
+        <button
+          type="button"
+          onClick={() => void savePKIStorePassword()}
+          disabled={
+            busy ||
+            storePasswordSaving ||
+            !sshSessionPresent ||
+            storePassword.length === 0 ||
+            !onSetPKIStorePassword
+          }
+        >
+          {pkiPasswordPresent
+            ? "Заменить пароль в сеансе"
+            : "Сохранить пароль в сеансе"}
+        </button>
+        {storePasswordError && (
+          <p className="field-error" role="alert">
+            {storePasswordError}
+          </p>
+        )}
+      </article>
+      <div className="certificate-sections">
+        {(Object.keys(labels) as PKIKind[]).map((kind) => (
+          <article className="card certificate-section" key={kind}>
+            <div className="section-head">
+              <div>
+                <h2>{labels[kind]}</h2>
+                <small>{sectionHint(kind)}</small>
+              </div>
+              <button
+                className="outline"
+                disabled={blocked}
+                onClick={() => setEditor({ kind })}
+              >
+                Добавить
+              </button>
+            </div>
+            <CertificateRows
+              kind={kind}
+              rows={allRows[kind]}
+              disabled={blocked}
+              onEdit={(id) => setEditor({ kind, id })}
+              onDelete={remove}
+            />
+          </article>
+        ))}
+      </div>
       <CoreVerification
         verification={verification || { status: "UNVERIFIED" }}
         view={verifiedPKI}
@@ -277,14 +359,19 @@ function CoreVerification({
   onVerify: () => void;
 }) {
   const status =
-    view?.status ||
-    (verification.status === "INVALID"
+    verification.status === "INVALID"
       ? "INVALID"
-      : verification.status === "VERIFIED"
-        ? "STALE"
-        : verification.status === "VERIFYING"
-          ? "NOT_VERIFIED"
-          : "NOT_VERIFIED");
+      : verification.status === "UNAVAILABLE"
+        ? "UNAVAILABLE"
+        : verification.status === "STALE"
+          ? "STALE"
+          : verification.status === "VERIFIED"
+            ? view?.status === "CURRENT"
+              ? "CURRENT"
+              : "STALE"
+            : verification.status === "VERIFYING"
+              ? "NOT_VERIFIED"
+              : view?.status || "NOT_VERIFIED";
   const findings = view?.findings || verification.findings || [];
   return (
     <article className="card certificate-verification">
@@ -292,7 +379,7 @@ function CoreVerification({
         <div>
           <h2>Проверка Core</h2>
           <small>
-            Identity и SAN отображаются только из текущего Core evidence.
+            Имена и SAN отображаются только по актуальным данным проверки Core.
           </small>
         </div>
         <button disabled={disabled} onClick={onVerify}>
@@ -300,8 +387,8 @@ function CoreVerification({
         </button>
       </div>
       <p className="muted">
-        Влияние provider VIP определяет Core после сохранения и проверки. Этот
-        экран не создаёт сертификаты и не запускает reissue.
+        Влияние виртуального IP поставщика определяет Core после сохранения и
+        проверки. Этот экран не выпускает и не перевыпускает сертификаты.
       </p>
       {status === "CURRENT" && view?.identities?.length ? (
         <div className="verified-identities">
@@ -309,7 +396,7 @@ function CoreVerification({
             <section key={identity.id} className="verified-identity">
               <b>{identity.id}</b>
               <small>
-                {identity.scope} · TLS profile: {identity.tlsProfileId}
+                {identity.scope} · Профиль TLS: {identity.tlsProfileId}
               </small>
               <div>
                 <span>DNS: </span>
@@ -320,7 +407,7 @@ function CoreVerification({
                 {identity.ipAddresses.join(", ") || "—"}
               </div>
               <div>
-                <span>Consumers: </span>
+                <span>Потребители: </span>
                 {identity.consumers
                   .map(
                     (consumer) =>
@@ -333,7 +420,7 @@ function CoreVerification({
         </div>
       ) : status === "CURRENT" ? (
         <p className="muted">
-          Core подтвердил проект; сертификатных consumers нет.
+          Core подтвердил проект; потребителей сертификатов нет.
         </p>
       ) : (
         <p className={status === "INVALID" ? "field-error" : "muted"}>
@@ -362,19 +449,20 @@ function verificationMessage(status: string, error?: string) {
     case "INVALID":
       return "Core обнаружил ошибки проверки. Сохранённый проект не откатывается.";
     case "STALE":
-      return "Проверка устарела: сохраните изменения и запустите проверку снова.";
+      return "Проверка устарела: запустите проверку сохранённой ревизии снова.";
     case "UNAVAILABLE":
-      return error || "Для проверки нужен READY Execution Node.";
+      return error || "Для проверки нужен готовый узел выполнения.";
     default:
-      return "Проект ещё не проверен Core.";
+      return error || "Проект ещё не проверен Core.";
   }
 }
 
 function sectionHint(kind: PKIKind) {
-  if (kind === "authority") return "Только MANAGED CA.";
-  if (kind === "profile") return "CA, usages, SAN policy и subject overrides.";
-  if (kind === "tls") return "Только ссылка на runtime secret, без пароля.";
-  return "Источники hosts, deployments, members и явные DNS/IP.";
+  if (kind === "authority") return "Только управляемый центр сертификации.";
+  if (kind === "profile")
+    return "Центр сертификации, назначения ключа, правила SAN и параметры владельца.";
+  if (kind === "tls") return "Только ссылка на секрет, без самого пароля.";
+  return "Источники: серверы, сервисы, их экземпляры и явные DNS/IP.";
 }
 
 function DraftActions({
@@ -561,7 +649,8 @@ function CertificateDialog({
       dnsNames,
       ipAddresses,
     });
-    if (!result) return setError("Проверьте поля Certificate Scope.");
+    if (!result)
+      return setError("Проверьте поля области применения сертификатов.");
     setError("");
     await onSubmit(id.trim(), result);
   };
@@ -590,7 +679,7 @@ function CertificateDialog({
         {kind === "authority" && (
           <>
             <label>
-              Common Name
+              Общее имя (CN)
               <input
                 value={commonName}
                 onChange={(event) => setCommonName(event.target.value)}
@@ -598,7 +687,7 @@ function CertificateDialog({
               />
             </label>
             <OptionalNumber
-              label="Validity days"
+              label="Срок действия (дней)"
               value={validityDays}
               onChange={setValidityDays}
             />
@@ -629,25 +718,25 @@ function CertificateDialog({
         {kind === "tls" && (
           <>
             <ReferenceSelect
-              label="Certificate profile"
+              label="Профиль сертификата"
               value={profileRef}
               values={profileIds}
               onChange={setProfileRef}
             />
             <label>
-              Scope
+              Область применения
               <select
                 value={scope}
                 onChange={(event) => setScope(event.target.value)}
               >
-                <option value="">Inherited</option>
-                <option>HOST</option>
-                <option>MEMBER</option>
-                <option>DEPLOYMENT</option>
+                <option value="">Наследуется</option>
+                <option value="HOST">Сервер</option>
+                <option value="MEMBER">Экземпляр</option>
+                <option value="DEPLOYMENT">Развёртывание</option>
               </select>
             </label>
             <label>
-              Runtime SecretRef
+              Ссылка на runtime-секрет
               <input
                 value={secretInput}
                 onChange={(event) => {
@@ -664,7 +753,7 @@ function CertificateDialog({
             </label>
             <p className="muted">
               Пароль не вводится, не отображается и не проверяется. Сохраняется
-              только runtime reference.
+              только ссылка на runtime-секрет.
             </p>
           </>
         )}
@@ -717,7 +806,7 @@ function OptionalText({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Inherited"
+        placeholder="Наследуется"
       />
     </label>
   );
@@ -739,7 +828,7 @@ function OptionalNumber({
         min="1"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Inherited"
+        placeholder="Наследуется"
       />
     </label>
   );
@@ -789,44 +878,44 @@ function ProfileFields(props: {
   subject: PKIEntity;
   onSubject: (value: PKIEntity) => void;
 }) {
-  const policyKeys = [
-    "includeHostDns",
-    "includeHostIp",
-    "includeEndpointFqdns",
-    "includeEndpointWildcard",
-    "includeEndpointVip",
-  ];
+  const policyLabels: Record<string, string> = {
+    includeHostDns: "DNS-имена серверов",
+    includeHostIp: "IP-адреса серверов",
+    includeEndpointFqdns: "FQDN точек входа",
+    includeEndpointWildcard: "Wildcard-имена точек входа",
+    includeEndpointVip: "Виртуальные IP точек входа",
+  };
   return (
     <>
       <ReferenceSelect
-        label="Certificate authority"
+        label="Центр сертификации"
         value={props.authorityRef}
         values={props.authorityIds}
         onChange={props.onAuthorityRef}
       />
       <label>
-        Key algorithm
+        Алгоритм ключа
         <select
           value={props.keyAlgorithm}
           onChange={(event) => props.onKeyAlgorithm(event.target.value)}
         >
-          <option value="">Inherited</option>
+          <option value="">Наследуется</option>
           <option>RSA</option>
           <option>EC</option>
         </select>
       </label>
       <OptionalNumber
-        label="Key size"
+        label="Размер ключа"
         value={props.keySize}
         onChange={props.onKeySize}
       />
       <OptionalNumber
-        label="Validity days"
+        label="Срок действия (дней)"
         value={props.validityDays}
         onChange={props.onValidityDays}
       />
       <fieldset>
-        <legend>Usages</legend>
+        <legend>Назначение сертификата</legend>
         {["serverAuth", "clientAuth"].map((usage) => (
           <label key={usage}>
             <input
@@ -840,17 +929,19 @@ function ProfileFields(props: {
                 )
               }
             />
-            {usage}
+            {usage === "serverAuth"
+              ? "Серверная аутентификация"
+              : "Клиентская аутентификация"}
           </label>
         ))}
       </fieldset>
       <fieldset>
-        <legend>SAN policy overrides</legend>
-        {policyKeys.map((key) => (
+        <legend>Переопределение правил SAN</legend>
+        {Object.keys(policyLabels).map((key) => (
           <label key={key}>
-            {key}
+            {policyLabels[key]}
             <select
-              aria-label={key}
+              aria-label={policyLabels[key]}
               value={
                 typeof props.sanPolicy[key] === "boolean"
                   ? String(props.sanPolicy[key])
@@ -863,15 +954,15 @@ function ProfileFields(props: {
                 props.onSanPolicy(next);
               }}
             >
-              <option value="">Inherited</option>
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
+              <option value="">Наследуется</option>
+              <option value="true">Включено</option>
+              <option value="false">Выключено</option>
             </select>
           </label>
         ))}
       </fieldset>
       <fieldset>
-        <legend>Subject overrides</legend>
+        <legend>Переопределение полей субъекта</legend>
         {["C", "ST", "L", "O", "OU"].map((key) => (
           <label key={key}>
             {key}
@@ -909,31 +1000,31 @@ function ScopeFields(props: {
   return (
     <>
       <ReferenceSelect
-        label="Certificate profile"
+        label="Профиль сертификата"
         value={props.profileRef}
         values={props.profileIds}
         onChange={props.onProfileRef}
       />
       <label>
-        Scope
+        Область применения
         <select
           value={props.scope}
           onChange={(event) => props.onScope(event.target.value)}
         >
-          <option value="">Inherited</option>
-          <option>HOST</option>
-          <option>MEMBER</option>
-          <option>DEPLOYMENT</option>
+          <option value="">Наследуется</option>
+          <option value="HOST">Сервер</option>
+          <option value="MEMBER">Экземпляр</option>
+          <option value="DEPLOYMENT">Развёртывание</option>
         </select>
       </label>
       <ReferenceChoices
-        label="Hosts"
+        label="Серверы"
         values={props.sourceOptions.hosts}
         selected={props.hosts}
         onChange={props.onHosts}
       />
       <ReferenceChoices
-        label="Deployments"
+        label="Развёртывания"
         values={props.sourceOptions.deployments}
         selected={props.deployments}
         onChange={props.onDeployments}
@@ -944,12 +1035,12 @@ function ScopeFields(props: {
         onChange={props.onMembers}
       />
       <OptionalText
-        label="Explicit DNS names"
+        label="Явные DNS-имена"
         value={props.dnsNames}
         onChange={props.onDNSNames}
       />
       <OptionalText
-        label="Explicit IP addresses"
+        label="Явные IP-адреса"
         value={props.ipAddresses}
         onChange={props.onIPAddresses}
       />
@@ -1013,9 +1104,9 @@ function MemberChoices({
   ];
   return (
     <fieldset>
-      <legend>Members</legend>
+      <legend>Экземпляры</legend>
       {!options.length && (
-        <small>Нет member-scoped placement в текущем черновике.</small>
+        <small>В текущем черновике нет размещённых экземпляров.</small>
       )}
       {options.map((value) => (
         <label key={key(value)}>

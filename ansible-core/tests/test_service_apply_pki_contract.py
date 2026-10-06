@@ -43,6 +43,17 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("_platform_pki_reissue_active", tasks)
         self.assertIn("Preserve prior PKI request material before explicit reissue", tasks)
         self.assertIn("Remove superseded PKI request material during explicit reissue", tasks)
+        self.assertIn("not _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists", tasks)
+        self.assertLess(tasks.index("Preserve prior PKI request material before explicit reissue"),
+                        tasks.index("Start an explicitly authorized PKI reissue after complete backup"))
+        self.assertLess(tasks.index("Start an explicitly authorized PKI reissue after complete backup"),
+                        tasks.index("Remove superseded PKI request material during explicit reissue"))
+        self.assertLess(tasks.index("Reject managed certificate authority policy change before reissue cleanup"),
+                        tasks.index("Preserve prior PKI request material before explicit reissue"))
+        self.assertLess(tasks.index("Reject managed certificate authority policy change before reissue cleanup"),
+                        tasks.index("Remove superseded PKI request material during explicit reissue"))
+        self.assertIn("Preserve existing derived PKCS12 stores before explicit reissue", tasks)
+        self.assertIn("platform_pki_request_files.results[item.index].stat.isreg | default(false)", tasks)
         self.assertIn("CERTIFICATE_REISSUE_REQUIRED", tasks)
 
     def test_pki_deploy_publishes_a_non_secret_change_signal(self):
@@ -53,6 +64,18 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(deploy_tasks, encoding="utf-8") as handle:
             tasks = handle.read()
         self.assertIn("platform_pki_material_changed:", tasks)
+
+    def test_kafka_secret_bearing_config_render_suppresses_logs_and_diffs(self):
+        path = os.path.join(
+            ROOT,
+            "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml",
+        )
+        with open(path, encoding="utf-8") as handle:
+            tasks = handle.read()
+        render = tasks[tasks.index("- name: Render deterministic member server.properties"):]
+        render = render[:render.index("\n- name:")]
+        self.assertIn("diff: false", render)
+        self.assertIn("no_log: true", render)
 
     def test_controller_side_validate_manifest_fallback_does_not_require_inventory_dir(self):
         validate = os.path.join(ROOT, "ansible-core/playbooks/validate.yml")

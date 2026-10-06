@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -234,6 +234,25 @@ type MockApi = ProjectBackend & {
   verifyProject: ReturnType<typeof vi.fn>;
 };
 
+it("shows a verified incoming bundle but binds only after explicit confirmation", async () => {
+  const preview = {
+    status: "PREVIEW", previewId: "one-use-token",
+    currentArtifactDigest: "sha256:old", newArtifactDigest: "sha256:new",
+    newCatalogDigest: "sha256:catalog", bundleVersion: "2", coreVersion: "2",
+  };
+  const chooseRuntimeBundleUpdate = vi.fn().mockResolvedValue(preview);
+  const confirmRuntimeBundleUpdate = vi.fn().mockResolvedValue({ status: "UPDATED" });
+  const value = api({ chooseRuntimeBundleUpdate, confirmRuntimeBundleUpdate });
+  value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
+  value.openProject.mockResolvedValue(project as unknown as OpenResult);
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  expect(await screen.findByText("sha256:new")).toBeTruthy();
+  expect(confirmRuntimeBundleUpdate).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "Привязать" }));
+  await waitFor(() => expect(confirmRuntimeBundleUpdate).toHaveBeenCalledWith("one-use-token"));
+});
+
 function api(overrides: Record<string, unknown> = {}): MockApi {
   return {
     getApplicationConfig: vi.fn().mockResolvedValue({
@@ -253,6 +272,10 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
       session: { sessionId: sessionID, commandCount: 0 },
     }),
     appendEditCommand: vi.fn().mockResolvedValue({
+      status: "EDITING",
+      session: { sessionId: sessionID, commandCount: 1 },
+    }),
+    amendServiceConfigurationDraft: vi.fn().mockResolvedValue({
       status: "EDITING",
       session: { sessionId: sessionID, commandCount: 1 },
     }),
@@ -317,6 +340,28 @@ async function openCertificates(
   await userEvent.click(screen.getByRole("button", { name: "Сертификаты" }));
 }
 
+it("restores Logs, Help, About and Settings navigation without requiring an open project", async () => {
+  render(<App api={api()} />);
+
+  await userEvent.click(await screen.findByRole("button", { name: "Журналы" }));
+  expect(screen.getByRole("heading", { name: "Журналы" })).toBeTruthy();
+  expect(screen.getByText("Событий пока нет")).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Справка" }));
+  expect(screen.getByRole("heading", { name: "Справка" })).toBeTruthy();
+  expect(screen.getByText(/На странице «Проект» нажмите «Проверить новый набор»/)).toBeTruthy();
+  expect(screen.getByText(/Не меняйте digest вручную/)).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "О программе" }));
+  expect(screen.getByRole("heading", { name: "О программе" })).toBeTruthy();
+  expect(screen.getAllByText("Platform Installer V2").length).toBeGreaterThan(0);
+  expect(screen.getByText("v1")).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
+  expect(screen.getByRole("heading", { name: "Настройки" })).toBeTruthy();
+  expect(screen.getByText(/Учётные данные сеанса и секреты не сохраняются/)).toBeTruthy();
+});
+
 it("shows the read-only Installation state without requesting a deployment plan", async () => {
   const getInstallationState = vi.fn().mockResolvedValue({
     apiVersion: "platform.installer/installation-state/v1alpha1",
@@ -330,11 +375,14 @@ it("shows the read-only Installation state without requesting a deployment plan"
     },
     executionNode: { status: "READY", safeLabel: "node1 · 192.0.2.10" },
     plan: { status: "NOT_CREATED" },
-    prerequisites: [{
-      code: "EXECUTION_NODE_BINDING_REQUIRED",
-      destination: "servers",
-      safeMessage: "The selected Execution Node has no trusted runtime binding.",
-    }],
+    prerequisites: [
+      {
+        code: "EXECUTION_NODE_BINDING_REQUIRED",
+        destination: "servers",
+        safeMessage:
+          "The selected Execution Node has no trusted runtime binding.",
+      },
+    ],
   });
   const value = api({
     getExecutionNodeContext: vi.fn().mockResolvedValue({ status: "READY" }),
@@ -343,11 +391,15 @@ it("shows the read-only Installation state without requesting a deployment plan"
   value.chooseProject.mockResolvedValue(project);
   render(<App api={value} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Установка" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Установка" }),
+  );
 
   expect(screen.getByText("EXECUTION_NODE_BINDING_REQUIRED")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "План" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "План" })).toBeTruthy();
   expect(getInstallationState).toHaveBeenCalled();
 });
 
@@ -356,7 +408,7 @@ it("adds a certificate authority through the shared structural draft", async () 
   await openCertificates(value);
   await userEvent.click(screen.getAllByRole("button", { name: "Добавить" })[0]);
   await userEvent.type(screen.getByLabelText("ID"), "platform-ca");
-  await userEvent.type(screen.getByLabelText("Common Name"), "Platform CA");
+  await userEvent.type(screen.getByLabelText("Общее имя (CN)"), "Platform CA");
   await userEvent.click(
     screen.getByRole("button", { name: "Добавить в черновик" }),
   );
@@ -524,6 +576,8 @@ function f4AcceptanceBackend() {
         session: { sessionId: sessionID, commandCount: pending.length },
       } as never;
     },
+    amendServiceConfigurationDraft: async () =>
+      ({ status: "BLOCKED" }) as never,
     reviewEditSession: async () =>
       ({
         status: "READY",
@@ -546,9 +600,9 @@ function f4AcceptanceBackend() {
             ...(
               command.members as Array<{
                 memberId: string;
-              hostId: string;
-              roles?: string[];
-              priority: number;
+                hostId: string;
+                roles?: string[];
+                priority: number;
               }>
             ).map((item) => ({
               deploymentId,
@@ -617,10 +671,20 @@ describe("UI-01E2 server editor", () => {
       (screen.getByRole("button", { name: "Топология" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false);
+    expect(
+      screen
+        .getByRole("button", { name: "Топология" })
+        .classList.contains("future"),
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole("button", { name: "Установка" })
+        .classList.contains("future"),
+    ).toBe(false);
     expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
   });
 
-  it("keeps Installation gated until a read-only Execution Node check is READY and confirms preparation", async () => {
+  it("keeps Installation visible before readiness while preparation stays on Servers", async () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockResolvedValue({
         status: "NOT_PREPARED",
@@ -644,7 +708,7 @@ describe("UI-01E2 server editor", () => {
       (await screen.findByRole("button", {
         name: "Установка",
       })) as HTMLButtonElement,
-    ).toHaveProperty("disabled", true);
+    ).toHaveProperty("disabled", false);
     await userEvent.click(
       screen.getByRole("button", { name: "Проверить узел" }),
     );
@@ -652,6 +716,11 @@ describe("UI-01E2 server editor", () => {
     expect(
       (screen.getByRole("button", { name: "Установка" }) as HTMLButtonElement)
         .disabled,
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole("button", { name: "Установка" })
+        .classList.contains("future"),
     ).toBe(false);
     await userEvent.click(
       screen.getByRole("button", { name: "Спланировать подготовку" }),
@@ -664,7 +733,7 @@ describe("UI-01E2 server editor", () => {
       screen.getByRole("button", { name: "Подтвердить подготовку" }),
     );
     expect(value.prepareExecutionNode).toHaveBeenCalledWith("prepare-plan");
-    expect(await screen.findByText(/Проверка проекта: VERIFIED/)).toBeTruthy();
+    expect(await screen.findByText(/Проверка проекта: Проверено/)).toBeTruthy();
   });
 
   it("requires a name before creating a metadata-only project", async () => {
@@ -677,7 +746,7 @@ describe("UI-01E2 server editor", () => {
       screen.getAllByRole("button", { name: "Создать проект" })[0],
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Выбрать parent" }),
+      screen.getByRole("button", { name: "Выбрать родительскую папку" }),
     );
     await userEvent.click(
       screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
@@ -695,6 +764,69 @@ describe("UI-01E2 server editor", () => {
       displayName: "Test",
       compatibilitySourceId: "default",
     });
+  });
+
+  it("rejects unsafe project folder names before calling the backend", async () => {
+    const value = api({
+      chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),
+      createProject: vi.fn(),
+    });
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" })[0],
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Выбрать родительскую папку" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Название проекта"),
+      "invalid/name",
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "одной папки Windows",
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
+    );
+    expect(value.createProject).not.toHaveBeenCalled();
+  });
+
+  it("keeps the opened project and creation form when the backend rejects a new project", async () => {
+    const value = api({
+      chooseProject: vi.fn().mockResolvedValue(emptyProject),
+      chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),
+      createProject: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        error: {
+          code: "PROJECT_DESTINATION_EXISTS",
+          message: "Destination already exists.",
+        },
+      }),
+    });
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть проект" }),
+    );
+    expect(await screen.findByText("Проект ещё не настроен")).toBeTruthy();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" })[0],
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Выбрать родительскую папку" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Название проекта"),
+      "existing-project",
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Создать проект" }).at(-1)!,
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "PROJECT_DESTINATION_EXISTS",
+    );
+    expect(screen.getByLabelText("Название проекта")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(screen.getByText("Проект ещё не настроен")).toBeTruthy();
   });
 
   it("adds a first server as a transient v1alpha3 CreateServer intent", async () => {
@@ -785,6 +917,12 @@ describe("UI-01E2 server editor", () => {
     const value = api();
     await openServers(value);
     await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    expect(
+      screen.queryByRole("option", { name: /Наследовать порт/ }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("option", { name: "Убрать переопределение инсталлера" }),
+    ).toBeTruthy();
     await userEvent.selectOptions(screen.getByLabelText("SSH-порт"), "clear");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
@@ -962,7 +1100,7 @@ describe("UI-01E2 server editor", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Сохранить проект" }),
     );
-    expect(await screen.findByText("Не проверено")).toBeTruthy();
+    expect(await screen.findByText("Проверка устарела")).toBeTruthy();
     expect(await screen.findByText("node1.changed.internal")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
     expect(value.verifyProject).toHaveBeenCalledOnce();
@@ -971,6 +1109,46 @@ describe("UI-01E2 server editor", () => {
 });
 
 describe("UI-01F3 deployment editor", () => {
+  it("shows each selected service member with its host and opens that member's settings", async () => {
+    const value = api();
+    await openTopology(value, h3Project as unknown as OpenResult);
+    await userEvent.click(screen.getByRole("button", { name: /kafka-main/ }));
+    expect(
+      screen.getByRole("heading", { name: "Размещение на серверах" }),
+    ).toBeTruthy();
+    expect(screen.getByText("kafka-kafka-1")).toBeTruthy();
+    expect(screen.getByText("kafka-kafka-2")).toBeTruthy();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Настроить ноду" })[1],
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Параметры экземпляра" }),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText("Экземпляр") as HTMLSelectElement).value,
+    ).toBe("kafka-kafka-2");
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Параметры экземпляра" }),
+    );
+    expect(value.startEditSession).not.toHaveBeenCalled();
+  });
+
+  it("opens the exact member settings from Topology by servers", async () => {
+    const value = api();
+    await openTopology(value, h3Project as unknown as OpenResult);
+    await userEvent.click(screen.getByRole("button", { name: "По серверам" }));
+    expect(
+      screen.getAllByRole("button", { name: "Настроить ноду" }),
+    ).toHaveLength(2);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Настроить ноду" })[0],
+    );
+    expect(
+      (screen.getByLabelText("Экземпляр") as HTMLSelectElement).value,
+    ).toBe("kafka-kafka-1");
+    expect(value.startEditSession).not.toHaveBeenCalled();
+  });
+
   it("opens Topology without an Execution Node and renders saved deployments", async () => {
     const value = api();
     await openTopology(value);
@@ -1008,7 +1186,7 @@ describe("UI-01F3 deployment editor", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     );
     await userEvent.type(
-      screen.getByLabelText("Технический ID deployment"),
+      screen.getByLabelText("Технический ID экземпляра сервиса"),
       "kafka-extra",
     );
     await userEvent.selectOptions(screen.getByLabelText("Режим"), "single");
@@ -1024,7 +1202,7 @@ describe("UI-01F3 deployment editor", () => {
     expect(await screen.findByText("Новый черновик")).toBeTruthy();
     expect(screen.getByText("1 / 16 изменений")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Удалить deployment" }),
+      screen.getByRole("button", { name: "Удалить экземпляр" }),
     ).toHaveProperty("disabled", true);
   });
 
@@ -1035,7 +1213,7 @@ describe("UI-01F3 deployment editor", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     );
     await userEvent.type(
-      screen.getByLabelText("Технический ID deployment"),
+      screen.getByLabelText("Технический ID экземпляра сервиса"),
       "kafka-main",
     );
     await userEvent.click(
@@ -1064,10 +1242,10 @@ describe("UI-01F3 deployment editor", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     ).toHaveProperty("disabled", true);
     await userEvent.click(
-      screen.getByRole("button", { name: "Удалить deployment" }),
+      screen.getByRole("button", { name: "Удалить экземпляр" }),
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Удалить deployment" }).at(-1)!,
+      screen.getAllByRole("button", { name: "Удалить экземпляр" }).at(-1)!,
     );
     expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
       operation: "DeleteServiceDeployment",
@@ -1101,7 +1279,7 @@ describe("UI-01F3 deployment editor", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     );
     await userEvent.type(
-      screen.getByLabelText("Технический ID deployment"),
+      screen.getByLabelText("Технический ID экземпляра сервиса"),
       "kafka-extra",
     );
     await userEvent.click(
@@ -1171,7 +1349,7 @@ describe("UI-01F3 deployment editor", () => {
       screen.getByRole("button", { name: "Добавить экземпляр" }),
     );
     await userEvent.type(
-      screen.getByLabelText("Технический ID deployment"),
+      screen.getByLabelText("Технический ID экземпляра сервиса"),
       "kafka-extra",
     );
     await userEvent.click(
@@ -1230,10 +1408,10 @@ describe("UI-01F3 deployment editor", () => {
     });
     await openTopology(value);
     await userEvent.click(
-      screen.getByRole("button", { name: "Удалить deployment" }),
+      screen.getByRole("button", { name: "Удалить экземпляр" }),
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Удалить deployment" }).at(-1)!,
+      screen.getAllByRole("button", { name: "Удалить экземпляр" }).at(-1)!,
     );
     await userEvent.click(
       screen.getByRole("button", { name: "Просмотреть изменения" }),
@@ -1249,6 +1427,270 @@ describe("UI-01F3 deployment editor", () => {
 });
 
 describe("UI-01H2 services navigation and safe settings", () => {
+  it("shows an immutable bundled default before READY without Verify or editing", async () => {
+    const withDefault = {
+      ...project,
+      catalog: {
+        ...project.catalog,
+        services: project.catalog.services.map((service) => ({
+          ...service,
+          configurationSettings: service.configurationSettings.map((setting) =>
+            setting.id === "replicaCount"
+              ? {
+                  ...setting,
+                  staticDefaultState: "LITERAL",
+                  staticDefaultValue: 3,
+                }
+              : setting,
+          ),
+        })),
+      },
+    };
+    const value = api();
+    value.chooseProject.mockResolvedValue(withDefault);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(screen.getByText("По умолчанию: 3")).toBeTruthy();
+    expect(
+      screen.getByRole("spinbutton", { name: "Количество реплик" }),
+    ).toHaveProperty("value", "3");
+    expect(screen.getByRole("button", { name: "Применить" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(value.verifyProject).not.toHaveBeenCalled();
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+  });
+
+  it("shows READY Core value and source without invoking Verify", async () => {
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue({
+        status: "READY",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+        runtimeDigest: "sha256:runtime-a",
+      }),
+      getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+        projectRevision: "sha256:old",
+        runtimeDigest: "sha256:runtime-a",
+        services: {
+          "kafka-main": {
+            configuration: {
+              replicaCount: {
+                state: "RESOLVED",
+                source: "ROLE_DEFAULT",
+                value: 5,
+              },
+            },
+            members: {},
+          },
+        },
+      }),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Значения получены из Core для текущей сохранённой ревизии. Это не проверка проекта.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("spinbutton", { name: "Количество реплик" }),
+    ).toHaveProperty("value", "5");
+    expect(screen.getByRole("button", { name: "Применить" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce();
+    expect(value.verifyProject).not.toHaveBeenCalled();
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+  });
+
+  it("keeps local values visible when the READY Core projection is unavailable", async () => {
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue({
+        status: "READY",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+        runtimeDigest: "sha256:runtime-a",
+      }),
+      getServiceConfigurationPreview: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED"),
+        ),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(
+      await screen.findByText(
+        "Core-проекция недоступна для текущей сохранённой ревизии. Код: SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED. Показаны безопасные локальные значения.",
+      ),
+    ).toBeTruthy();
+    expect(value.verifyProject).not.toHaveBeenCalled();
+  });
+
+  it("does not present an empty READY Core projection as resolved values", async () => {
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue({
+        status: "READY",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+        runtimeDigest: "sha256:runtime-a",
+      }),
+      getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+        projectRevision: "sha256:old",
+        runtimeDigest: "sha256:runtime-a",
+        services: {},
+      }),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(
+      await screen.findByText(
+        /Core не вернул разрешённые значения для этого сервиса/,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(
+        /Значения получены из Core для текущей сохранённой ревизии/,
+      ),
+    ).toBeNull();
+    expect(value.verifyProject).not.toHaveBeenCalled();
+  });
+
+  it("explains why READY cannot start Core projection without runtime identity", async () => {
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue({ status: "READY" }),
+      getServiceConfigurationPreview: vi.fn(),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(
+      screen.getByText(
+        "Core-проекция недоступна: runtime узла выполнения не подтверждён. Показаны безопасные локальные значения.",
+      ),
+    ).toBeTruthy();
+    expect(value.getServiceConfigurationPreview).not.toHaveBeenCalled();
+  });
+
+  it("fills a member field from inherited defaults without saving it until explicit edit", async () => {
+    const withMemberDefault = {
+      ...h3Project,
+      catalog: {
+        ...h3Project.catalog,
+        services: h3Project.catalog.services.map((service) => ({
+          ...service,
+          configurationSettings: service.configurationSettings.map((setting) =>
+            setting.id === "replicaCount"
+              ? {
+                  ...setting,
+                  scopes: ["deployment", "member"],
+                  staticDefaultState: "LITERAL",
+                  staticDefaultValue: 3,
+                }
+              : setting,
+          ),
+        })),
+      },
+    };
+    const value = api();
+    await openTopology(value, withMemberDefault as unknown as OpenResult);
+    await userEvent.click(screen.getByRole("button", { name: /kafka-main/ }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Настроить ноду" })[1],
+    );
+    const input = screen.getByRole("spinbutton", {
+      name: "kafka-kafka-2: Количество реплик",
+    });
+    const apply = input
+      .closest(".services-setting")
+      ?.querySelector("button") as HTMLButtonElement;
+    expect(input).toHaveProperty("value", "3");
+    expect(apply).toHaveProperty("disabled", true);
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+    await userEvent.clear(input);
+    await userEvent.type(input, "4");
+    expect(apply).toHaveProperty("disabled", false);
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+    await userEvent.click(apply);
+    expect(value.appendEditCommand).toHaveBeenCalledOnce();
+  });
+
+  it("hides a previous Core value when the same node switches runtime releases", async () => {
+    let activeDigest = "sha256:runtime-a";
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockImplementation(async () => ({
+        status: "READY",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+        runtimeDigest: activeDigest,
+      })),
+      checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
+      getServiceConfigurationPreview: vi.fn().mockImplementation(async () => ({
+        projectRevision: "sha256:old",
+        runtimeDigest: activeDigest,
+        services: {
+          "kafka-main": {
+            configuration: {
+              replicaCount: {
+                state: "RESOLVED",
+                source: "ROLE_DEFAULT",
+                value: activeDigest.endsWith("a") ? 5 : 7,
+              },
+            },
+            members: {},
+          },
+        },
+      })),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
+
+    activeDigest = "sha256:runtime-b";
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Проверить узел" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(await screen.findByText("По умолчанию: 7")).toBeTruthy();
+    expect(screen.queryByText("По умолчанию: 5")).toBeNull();
+    expect(value.getServiceConfigurationPreview).toHaveBeenCalledTimes(2);
+    expect(value.verifyProject).not.toHaveBeenCalled();
+  });
+
   it("adds only runtime references before accepting Redis secret values into memory", async () => {
     const redisProject = {
       ...project,
@@ -1256,7 +1698,11 @@ describe("UI-01H2 services navigation and safe settings", () => {
         ...project.managed,
         deployments: {
           ...project.managed.deployments,
-          "redis-main": { deploymentId: "redis-main", serviceType: "redis", mode: "standalone" },
+          "redis-main": {
+            deploymentId: "redis-main",
+            serviceType: "redis",
+            mode: "standalone",
+          },
         },
       },
       catalog: {
@@ -1271,7 +1717,15 @@ describe("UI-01H2 services navigation and safe settings", () => {
             ui: {},
             endpointConsumer: false,
             endpointProvider: false,
-            modes: [{ id: "standalone", displayName: "Standalone", placementKind: "MEMBER_SCOPED", roles: ["redis"], guidance: { minParticipants: 1, distinctHosts: false } }],
+            modes: [
+              {
+                id: "standalone",
+                displayName: "Standalone",
+                placementKind: "MEMBER_SCOPED",
+                roles: ["redis"],
+                guidance: { minParticipants: 1, distinctHosts: false },
+              },
+            ],
             configurationSettings: [],
           },
         ],
@@ -1279,15 +1733,17 @@ describe("UI-01H2 services navigation and safe settings", () => {
     };
     const getPendingRuntimeSecretDescriptors = vi.fn().mockResolvedValue({
       status: "READY",
-      descriptors: [{
-        requirementRef: "redis-password",
-        purpose: "SERVICE_PASSWORD",
-        serviceDeployment: "redis-main",
-        setting: "redisCredential",
-        displayLabel: "Redis password",
-        referenceConfigured: false,
-        hosts: ["node1"],
-      }],
+      descriptors: [
+        {
+          requirementRef: "redis-password",
+          purpose: "SERVICE_PASSWORD",
+          serviceDeployment: "redis-main",
+          setting: "redisCredential",
+          displayLabel: "Redis password",
+          referenceConfigured: false,
+          hosts: ["node1"],
+        },
+      ],
     });
     const setPendingDeploymentRuntimeSecretValues = vi.fn();
     const value = api({
@@ -1296,12 +1752,19 @@ describe("UI-01H2 services navigation and safe settings", () => {
     });
     value.chooseProject.mockResolvedValue(redisProject);
     render(<App api={value} />);
-    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^redis-main/ }));
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
-    await userEvent.type(screen.getByLabelText("Redis password"), "not-persisted");
-    await userEvent.click(screen.getByRole("button", { name: "Сохранить в сессии" }));
+    await userEvent.type(
+      screen.getByLabelText("Redis password"),
+      "not-persisted",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сессии" }),
+    );
     expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
       operation: "SetServiceConfigurationValue",
       deploymentId: "redis-main",
@@ -1312,6 +1775,85 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(setPendingDeploymentRuntimeSecretValues).not.toHaveBeenCalled();
     expect(screen.getByText(/Ссылки добавлены в черновик/)).toBeTruthy();
     expect(screen.queryByText("not-persisted")).toBeNull();
+  });
+
+  it("requires the catalog-declared username when adding a runtime secret reference", async () => {
+    const usernameProject = {
+      ...project,
+      catalog: {
+        ...project.catalog,
+        services: [
+          {
+            ...project.catalog.services[0],
+            configurationSettings: [
+              {
+                id: "adminSuperuser",
+                kind: "MANAGED",
+                scopes: ["deployment"],
+                label: "Administrator password",
+                editorShape: "RUNTIME_SECRET_REFERENCE_OBJECT",
+                runtimeSecretRequirementRef: "postgresql-admin-password",
+                runtimeSecretUsernameRequired: true,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const value = api({
+      getPendingRuntimeSecretDescriptors: vi.fn().mockResolvedValue({
+        status: "READY",
+        descriptors: [
+          {
+            requirementRef: "postgresql-admin-password",
+            purpose: "SERVICE_PASSWORD",
+            serviceDeployment: "kafka-main",
+            setting: "adminSuperuser",
+            displayLabel: "Administrator password",
+            referenceConfigured: false,
+            hosts: ["node1"],
+          },
+        ],
+      }),
+    });
+    value.chooseProject.mockResolvedValue(usernameProject);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
+    await userEvent.type(
+      screen.getByLabelText("Administrator password"),
+      "session-only",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сессии" }),
+    );
+    expect(
+      screen.getByText(
+        "Укажите допустимое имя пользователя для этого секрета.",
+      ),
+    ).toBeTruthy();
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+    await userEvent.type(
+      screen.getByLabelText("Имя пользователя"),
+      "platform_admin",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сессии" }),
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "SetServiceConfigurationValue",
+      deploymentId: "kafka-main",
+      scope: "DEPLOYMENT",
+      setting: "adminSuperuser",
+      value: {
+        username: "platform_admin",
+        passwordSecretRef: "runtime:postgresql-admin-password",
+      },
+    });
   });
 
   it("opens one Services list/detail view without an Execution Node and returns to the list", async () => {
@@ -1342,32 +1884,45 @@ describe("UI-01H2 services navigation and safe settings", () => {
     const value = api({
       getPendingRuntimeSecretDescriptors: vi.fn().mockResolvedValue({
         status: "READY",
-        descriptors: [{
-          requirementRef: "vault-admin-token",
-          purpose: "SERVICE_ADMIN_TOKEN",
-          serviceDeployment: "kafka-main",
-          displayLabel: "Administrative token",
-          requiredWhen: "INITIALIZED",
-          operations: ["SERVICE_APPLY", "SERVICE_VERIFY"],
-          hosts: ["node1"],
-        }],
+        descriptors: [
+          {
+            requirementRef: "vault-admin-token",
+            purpose: "SERVICE_ADMIN_TOKEN",
+            serviceDeployment: "kafka-main",
+            displayLabel: "Administrative token",
+            requiredWhen: "INITIALIZED",
+            operations: ["SERVICE_APPLY", "SERVICE_VERIFY"],
+            hosts: ["node1"],
+          },
+        ],
       }),
-      choosePendingDeploymentRuntimeSecretFile: vi.fn().mockResolvedValue("STORED"),
+      choosePendingDeploymentRuntimeSecretFile: vi
+        .fn()
+        .mockResolvedValue("STORED"),
     });
     value.chooseProject.mockResolvedValue(project);
     render(<App api={value} />);
-    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
-    await userEvent.type(screen.getByLabelText(/Пароль файла age/), "temporary-input-password");
+    await userEvent.type(
+      screen.getByLabelText(/Пароль файла age/),
+      "temporary-input-password",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Выбрать файл" }));
-    expect(value.choosePendingDeploymentRuntimeSecretFile).toHaveBeenCalledWith({
-      serviceDeployment: "kafka-main",
-      purpose: "SERVICE_ADMIN_TOKEN",
-      encryptionPassword: "temporary-input-password",
-    });
-    expect(screen.getByText("Файл принят и сохранён только в сессии.")).toBeTruthy();
+    expect(value.choosePendingDeploymentRuntimeSecretFile).toHaveBeenCalledWith(
+      {
+        serviceDeployment: "kafka-main",
+        purpose: "SERVICE_ADMIN_TOKEN",
+        encryptionPassword: "temporary-input-password",
+      },
+    );
+    expect(
+      screen.getByText("Файл принят и сохранён только в сессии."),
+    ).toBeTruthy();
     expect(value.getExecutionNodeContext).toBeUndefined();
     expect(value.appendEditCommand).not.toHaveBeenCalled();
   });
@@ -1401,6 +1956,141 @@ describe("UI-01H2 services navigation and safe settings", () => {
         "Этот параметр доступен только для просмотра в текущем интерфейсе.",
       ),
     ).toBeTruthy();
+  });
+
+  it("clears unapplied service form input when the shared draft is discarded", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    let field = screen.getByRole("spinbutton", { name: "Количество реплик" });
+    await userEvent.type(field, "3");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    await userEvent.clear(field);
+    await userEvent.type(field, "4");
+    expect(field).toHaveProperty("value", "4");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Отменить черновик" }),
+    );
+    expect(value.discardEditSession).toHaveBeenCalledWith(sessionID);
+    field = screen.getByRole("spinbutton", { name: "Количество реплик" });
+    expect(field).toHaveProperty("value", "");
+    expect(screen.getByRole("button", { name: "Применить" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(value.commitEditPlan).not.toHaveBeenCalled();
+  });
+
+  it("lets an operator amend or reset an applied unsaved setting without touching other draft commands", async () => {
+    const withDefault = {
+      ...project,
+      catalog: {
+        ...project.catalog,
+        services: project.catalog.services.map((service) => ({
+          ...service,
+          configurationSettings: service.configurationSettings.map((setting) =>
+            setting.id === "replicaCount"
+              ? {
+                  ...setting,
+                  staticDefaultState: "LITERAL",
+                  staticDefaultValue: 3,
+                }
+              : setting,
+          ),
+        })),
+      },
+    };
+    const value = api({
+      amendServiceConfigurationDraft: vi
+        .fn()
+        .mockImplementation(
+          async (
+            _session: string,
+            _index: number,
+            _old: unknown,
+            next: unknown,
+          ) =>
+            next === null
+              ? { status: "DISCARDED" }
+              : {
+                  status: "EDITING",
+                  session: { sessionId: sessionID, commandCount: 1 },
+                },
+        ),
+    });
+    value.chooseProject.mockResolvedValue(withDefault);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    const field = screen.getByRole("spinbutton", { name: "Количество реплик" });
+    const apply = screen.getByRole("button", { name: "Применить" });
+    const reset = screen.getByRole("button", { name: "Сбросить" });
+    expect(field).toHaveProperty("value", "3");
+    expect(apply).toHaveProperty("disabled", true);
+    expect(reset).toHaveProperty("disabled", true);
+    await userEvent.clear(field);
+    await userEvent.type(field, "4");
+    await userEvent.click(apply);
+    expect(field).toHaveProperty("value", "4");
+    expect(field).toHaveProperty("disabled", false);
+    expect(reset).toHaveProperty("disabled", false);
+    await userEvent.clear(field);
+    await userEvent.type(field, "5");
+    await userEvent.click(apply);
+    expect(value.amendServiceConfigurationDraft).toHaveBeenCalledWith(
+      sessionID,
+      0,
+      {
+        operation: "SetServiceConfigurationValue",
+        deploymentId: "kafka-main",
+        scope: "DEPLOYMENT",
+        setting: "replicaCount",
+        value: 4,
+      },
+      {
+        operation: "SetServiceConfigurationValue",
+        deploymentId: "kafka-main",
+        scope: "DEPLOYMENT",
+        setting: "replicaCount",
+        value: 5,
+      },
+    );
+    expect(screen.getByText("Изменений в черновике: 1 из 16")).toBeTruthy();
+    await userEvent.click(reset);
+    expect(value.amendServiceConfigurationDraft).toHaveBeenLastCalledWith(
+      sessionID,
+      0,
+      {
+        operation: "SetServiceConfigurationValue",
+        deploymentId: "kafka-main",
+        scope: "DEPLOYMENT",
+        setting: "replicaCount",
+        value: 5,
+      },
+      null,
+    );
+    const resetField = screen.getByRole("spinbutton", {
+      name: "Количество реплик",
+    });
+    const resetApply = screen.getByRole("button", { name: "Применить" });
+    expect(resetField).toHaveProperty("value", "3");
+    expect(resetApply).toHaveProperty("disabled", true);
+    expect(value.appendEditCommand).toHaveBeenCalledTimes(1);
+    expect(value.commitEditPlan).not.toHaveBeenCalled();
+    expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
+    await userEvent.clear(resetField);
+    await userEvent.type(resetField, "6");
+    await userEvent.click(resetApply);
+    expect(value.startEditSession).toHaveBeenCalledTimes(2);
+    expect(value.appendEditCommand).toHaveBeenCalledTimes(2);
   });
 
   it("keeps saved override identity read-only when the exact catalog is unavailable", async () => {
@@ -1469,6 +2159,57 @@ describe("UI-01H2 services navigation and safe settings", () => {
 });
 
 describe("UI-01H3 member settings and TLS navigation", () => {
+  it("shows a safe inherited TLS ID even when no managed profile option matches", async () => {
+    const withoutMatchingProfile = {
+      ...h3Project,
+      managed: {
+        ...h3Project.managed,
+        pki: { ...h3Project.managed.pki, tlsProfiles: {} },
+      },
+      catalog: {
+        ...h3Project.catalog,
+        services: h3Project.catalog.services.map((service) => ({
+          ...service,
+          configurationSettings: service.configurationSettings.map((setting) =>
+            setting.id === "tlsProfile"
+              ? {
+                  ...setting,
+                  staticDefaultState: "LITERAL",
+                  staticDefaultValue: "infrastructure-tls",
+                }
+              : setting,
+          ),
+        })),
+      },
+    };
+    const value = api();
+    value.chooseProject.mockResolvedValue(withoutMatchingProfile);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    const deployment = screen.getByLabelText(
+      "TLS profile",
+    ) as HTMLSelectElement;
+    expect(deployment.value).toBe("infrastructure-tls");
+    expect(deployment.selectedOptions[0].disabled).toBe(true);
+    expect(
+      screen.getAllByText("По умолчанию: infrastructure-tls"),
+    ).toHaveLength(2);
+    expect(value.appendEditCommand).not.toHaveBeenCalled();
+    await userEvent.selectOptions(
+      screen.getByLabelText("Экземпляр"),
+      "kafka-kafka-1",
+    );
+    const member = screen.getByLabelText(
+      "kafka-kafka-1: TLS profile",
+    ) as HTMLSelectElement;
+    expect(member.value).toBe("infrastructure-tls");
+    expect(member.selectedOptions[0].disabled).toBe(true);
+  });
+
   it("uses the composite deployment/member target for a trusted member TLS override", async () => {
     const value = api();
     value.chooseProject.mockResolvedValue(h3Project);
@@ -1479,7 +2220,7 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     await userEvent.selectOptions(
-      screen.getByLabelText("Member"),
+      screen.getByLabelText("Экземпляр"),
       "kafka-kafka-2",
     );
     await userEvent.selectOptions(
@@ -1498,7 +2239,7 @@ describe("UI-01H3 member settings and TLS navigation", () => {
       value: "infrastructure-tls",
     });
     await userEvent.selectOptions(
-      screen.getByLabelText("Member"),
+      screen.getByLabelText("Экземпляр"),
       "kafka-kafka-1",
     );
     expect(
@@ -1517,7 +2258,7 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     await userEvent.selectOptions(
-      screen.getByLabelText("Member"),
+      screen.getByLabelText("Экземпляр"),
       "kafka-kafka-2",
     );
     await userEvent.click(
@@ -1533,9 +2274,9 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     expect(
       await screen.findByRole("heading", { name: "Настройка сервиса" }),
     ).toBeTruthy();
-    expect((screen.getByLabelText("Member") as HTMLSelectElement).value).toBe(
-      "kafka-kafka-2",
-    );
+    expect(
+      (screen.getByLabelText("Экземпляр") as HTMLSelectElement).value,
+    ).toBe("kafka-kafka-2");
   });
 
   it("removes a member override through the same exact composite target", async () => {
@@ -1597,10 +2338,10 @@ describe("UI-TEST-01 F4 placement acceptance", () => {
       await screen.findByRole("button", { name: "Добавить размещение" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Добавить member" }),
+      screen.getByRole("button", { name: "Добавить узел сервиса" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Добавить member" }),
+      screen.getByRole("button", { name: "Добавить узел сервиса" }),
     );
     expect(
       (screen.getByLabelText("Member ID 1") as HTMLInputElement).value,
@@ -1746,35 +2487,197 @@ describe("UI-01I2 project export", () => {
           planDigest: "sha256:plan",
           sourceProjectRevision: "sha256:project",
           destinationRoot: "C:/Exports/portable-project",
-          documents: [{ logicalPath: "project.yml", size: 20, digest: "sha256:file" }],
+          documents: [
+            { logicalPath: "project.yml", size: 20, digest: "sha256:file" },
+          ],
           aggregateSize: 20,
           excludedCategories: ["RUNTIME_CREDENTIALS", "LOGS"],
         },
       }),
       commitProjectExport: vi.fn().mockResolvedValue({
         status: "EXPORTED",
-        result: { status: "EXPORTED", destinationRoot: "C:/Exports/portable-project" },
+        result: {
+          status: "EXPORTED",
+          destinationRoot: "C:/Exports/portable-project",
+        },
       }),
     });
     value.chooseProject.mockResolvedValue(project);
     value.openProject.mockResolvedValue(project);
     render(<App api={value} />);
-    await userEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
-    await userEvent.click(screen.getByRole("button", { name: "Экспортировать проект" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть проект" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Экспортировать проект" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Выбрать" }));
-    await userEvent.type(screen.getByLabelText("Имя новой папки"), "portable-project");
-    await userEvent.click(screen.getByRole("button", { name: "Проверить состав" }));
-    expect(value.planProjectExport).toHaveBeenCalledWith("C:/Exports", "portable-project");
+    await userEvent.type(
+      screen.getByLabelText("Имя новой папки"),
+      "portable-project",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Проверить состав" }),
+    );
+    expect(value.planProjectExport).toHaveBeenCalledWith(
+      "C:/Exports",
+      "portable-project",
+    );
     expect(await screen.findByText("C:/Exports/portable-project")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Экспортировать" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Экспортировать" }),
+    );
     expect(value.commitProjectExport).toHaveBeenCalledWith("sha256:plan");
     expect(await screen.findByText(/Экспорт завершён/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Открыть экспортированный проект" }));
-    expect(value.openProject).toHaveBeenCalledWith("C:/Exports/portable-project");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть экспортированный проект" }),
+    );
+    expect(value.openProject).toHaveBeenCalledWith(
+      "C:/Exports/portable-project",
+    );
   });
 });
 
+it("shows a Russian explanation for REFERENCE_IN_USE in Review", async () => {
+  const value = api({
+    reviewEditSession: vi.fn().mockResolvedValue({
+      status: "BLOCKED",
+      plan: {
+        saveAllowed: false,
+        finding: {
+          code: "REFERENCE_IN_USE",
+          safeMessage: "Referenced entity must be cleared before removal",
+        },
+      },
+    }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Просмотреть изменения" }),
+  );
+  expect(
+    await screen.findByText(
+      "Объект используется. Сначала удалите связанные ссылки.",
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText("Referenced entity must be cleared before removal"),
+  ).toBeNull();
+});
+
+it("shows a Russian explanation for INVALID_VALUE in Review", async () => {
+  const value = api({
+    reviewEditSession: vi.fn().mockResolvedValue({
+      status: "BLOCKED",
+      plan: {
+        saveAllowed: false,
+        finding: {
+          code: "INVALID_VALUE",
+          safeMessage:
+            "Configuration value does not match the catalog descriptor",
+        },
+      },
+    }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Просмотреть изменения" }),
+  );
+  expect(
+    await screen.findByText("Значение не соответствует ограничениям каталога."),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText(
+      "Configuration value does not match the catalog descriptor",
+    ),
+  ).toBeNull();
+});
+
+it("explains the READY Execution Node prerequisite after Project Verify", async () => {
+  const value = api({
+    verifyProject: vi.fn().mockResolvedValue({
+      status: "UNVERIFIED",
+      error: {
+        code: "EXECUTION_NODE_READY_REQUIRED",
+        message: "Execution Node is not READY",
+      },
+    }),
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(value.verifyProject).toHaveBeenCalledOnce();
+  expect(
+    await screen.findByText(
+      "Для проверки нужен готовый узел выполнения. Откройте «Серверы» и проверьте его состояние.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText("Execution Node is not READY")).toBeNull();
+});
+
+it("explains a missing trusted Execution Node binding after Project Verify", async () => {
+  const value = api({
+    verifyProject: vi.fn().mockResolvedValue({
+      status: "UNVERIFIED",
+      error: { code: "BINDING_REQUIRED", message: "Trusted binding required" },
+    }),
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(
+    await screen.findByText(
+      "Для проверки настройте узел выполнения на странице «Серверы». Сохранённый проект не изменён.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText("Trusted binding required")).toBeNull();
+});
+
 describe("UI-01E3 session credentials", () => {
+  it("shows a safe Russian explanation for a rejected private key", async () => {
+    const value = api({
+      setSessionCredential: vi
+        .fn()
+        .mockRejectedValue(new Error("SESSION_PRIVATE_KEY_INVALID")),
+    });
+    await openServers(value);
+    await userEvent.type(
+      screen.getByLabelText("Технический пользователь"),
+      "installer",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("SSH-аутентификация"),
+      "SSH_PRIVATE_KEY",
+    );
+    await userEvent.type(
+      screen.getByLabelText("Абсолютный путь к приватному ключу"),
+      "C:/qa/key.pem",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сеансе" }),
+    );
+    expect(
+      await screen.findByText(
+        "Нужен поддерживаемый незашифрованный приватный ключ PEM.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("SESSION_PRIVATE_KEY_INVALID")).toBeNull();
+  });
+
   it("submits write-only credentials and clears transient fields after success", async () => {
     const value = api();
     await openServers(value);

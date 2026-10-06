@@ -5,6 +5,7 @@ platform_keepalived_config_file: /etc/keepalived/keepalived.conf
 platform_keepalived_candidate_file: /etc/keepalived/keepalived.conf.platform-candidate
 platform_keepalived_haproxy_check_path: /usr/libexec/platform-keepalived/check-haproxy-ready
 platform_keepalived_verify_only: false
+platform_keepalived_advert_interval: 1
 # The package playbook owns prepare -> activate -> reconcile. It is deliberate
 # that the role does not expose a single-host "apply" bypass around its cluster
 # barriers.

@@ -1,0 +1,41 @@
+{
+  "$id": "https://platform.installer/schemas/services/docker/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accountCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "accountName": {
+      "maxLength": 32,
+      "minLength": 1,
+      "type": "string"
+    },
+    "apiBindAddress": {
+      "maxLength": 64,
+      "minLength": 1,
+      "type": "string"
+    },
+    "apiPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "Docker rootless desired configuration",
+  "type": "object"
+}

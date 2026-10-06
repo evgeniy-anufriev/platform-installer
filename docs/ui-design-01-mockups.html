@@ -43,6 +43,23 @@
     @media (max-width:900px){.execution-global{display:block}.execution-state-grid{grid-template-columns:1fr 1fr}}
     .global button[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
     .nav-gate{margin:14px 0;padding:10px 12px;border:1px solid #d5b36a;border-radius:7px;background:light-dark(#fff7df,#3a301d);color:light-dark(#765300,#ffe29a)}
+    /* Target desktop shell: only bounded work areas scroll, never the window. */
+    html,body{height:100%;overflow:hidden}body{margin:0}.app{width:100%;max-width:none;height:100dvh;min-height:0;border:0;border-radius:0;box-shadow:none;grid-template-columns:190px minmax(0,1fr)}
+    .side{min-height:0;overflow-y:auto}.content{min-width:0;min-height:0;padding:14px 20px;display:flex;flex-direction:column;overflow:hidden}
+    .project-context{flex:0 0 auto;display:grid;grid-template-columns:minmax(150px,1fr) auto auto auto;gap:8px 16px;margin-bottom:12px;padding-bottom:12px}
+    .project-context small{font-size:11px}.project-context .execution-global{align-items:center}.project-context .execution-global-status{white-space:nowrap}
+    .run-global{display:grid;gap:2px;min-width:170px;padding:5px 9px;border:1px solid light-dark(#c6d4e5,#455770);border-radius:7px;background:light-dark(#fff,#1c2838);color:inherit;text-align:left;font:inherit;cursor:pointer}
+    .run-global b{font-size:12px}.run-global small{font-size:10px}.run-global[data-state="running"]{border-color:#2173b9}.run-global[data-state="failed"]{border-color:#b23b38}.run-global[data-state="succeeded"]{border-color:#147748}
+    .page{min-height:0;flex:1;overflow:hidden;display:flex;flex-direction:column;gap:10px}.page[hidden]{display:none}.page>.head,.page>.project-head,.page>.server-head,.page>.tabs,.page>.workflow-strip,.page>.crumb,.page>.demo-control{flex:0 0 auto}
+    .page>.installation-view,.page>.topology-view,.page>.servers-layout,.page>.triple,.page>.card,.page>.service-layout{min-height:0;overflow:auto}
+    .page .head h1{font-size:21px}.page .head p{margin:2px 0}.tabs{margin:3px 0 2px}.workflow-strip{grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 3px}.workflow-step{align-items:center;padding:6px 10px}.workflow-step small{font-size:10px}
+    .servers-layout{grid-template-rows:minmax(100px,1fr) auto}.server-list-scroll{max-height:none;min-height:0}.triple{min-height:0}.triple>.card{min-height:0;overflow:auto}
+    .dialog{display:flex;flex-direction:column;max-height:calc(100dvh - 36px);padding:18px;overflow:auto}.dialog>.form,.dialog>form,.dialog>.body{min-height:0;overflow:auto}.dialog .footer{position:sticky;bottom:0;flex:0 0 auto;padding-top:10px;background:light-dark(#fff,#172536)}
+    .modal{position:fixed;z-index:20;padding:18px}.modal[hidden]{display:none}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #125b9f;outline-offset:2px}
+    .demo-control{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}.demo-control label{margin:0}.demo-control select{width:auto;min-width:155px}.run-progress{width:100%;height:12px;accent-color:#176fc1}.run-progress-label{display:flex;justify-content:space-between;gap:8px;font-size:12px}.run-state-note{padding:8px 10px;border-radius:6px;background:light-dark(#edf2f8,#223148)}
+    @media(max-width:1450px){.project-context{grid-template-columns:minmax(150px,1fr) auto auto}.project-context #review-changes{display:none}}
+    @media(max-width:1150px){.app{grid-template-columns:160px minmax(0,1fr)}}
+    @media(max-width:900px){.content{padding:10px}.project-context{grid-template-columns:1fr auto}.project-context #edit-state{display:none}.global button{font-size:12px;height:auto}.triple{grid-template-columns:1fr}.workflow-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
   </style>
 </head>
 <body>
@@ -63,7 +80,7 @@
       </nav>
     </aside>
     <main class="content">
-      <header class="project-context"><div><b id="context-name">Производственный контур</b><small id="context-path">~/projects/production · Демонстрационный проект</small></div><div class="execution-global"><button class="execution-global-status" id="execution-global-status" type="button" data-page-link="servers" title="Открыть Execution Node на странице Серверы"><span class="status-dot warn">●</span> Execution Node: <b id="execution-global-state">NOT_PREPARED</b> · <span id="execution-global-node">node1</span></button><small>Статус приложения · не часть project.yml</small></div><div><span id="edit-state" role="status">Нет несохранённых изменений</span><br><small>Макет · без записи файлов и запуска на серверах</small></div><button class="btn" id="review-changes" type="button" disabled>Просмотреть изменения</button></header>
+      <header class="project-context"><div><b id="context-name">Производственный контур</b><small id="context-path">~/projects/production · Демонстрационный проект</small></div><div class="execution-global"><button class="execution-global-status" id="execution-global-status" type="button" data-page-link="servers" title="Открыть узел выполнения на странице «Серверы»"><span class="status-dot warn">●</span> Узел выполнения: <b id="execution-global-state">Не подготовлен</b> · <span id="execution-global-node">node1</span></button></div><button class="run-global" id="run-global" data-state="idle" type="button" data-page-link="installation" aria-label="Открыть состояние установки"><b id="run-global-label">Установка: не начата</b><small id="run-global-detail">Сначала сформируйте план</small></button><div><span id="edit-state" role="status">Нет несохранённых изменений</span><small>Макет · данные не записываются</small></div><button class="btn" id="review-changes" type="button" disabled>Просмотреть изменения</button></header>
       <div class="nav-gate" id="navigation-gate" role="status" hidden>Execution Node нужен для «Проверить» и «Сформировать план», но не для редактирования и сохранения.</div>
       <section class="page" id="projects" hidden><div class="crumb">Проекты</div><div class="project-head"><div><h1>Проекты</h1><p class="muted">Открыть, создать, импортировать или безопасно экспортировать Ansible project</p></div><div class="project-actions"><button class="btn" type="button" data-open-dialog="import-dialog">Импорт проекта</button><button class="btn" type="button" data-open-dialog="export-dialog">Экспорт проекта</button><button class="btn main">Открыть проект</button></div></div><div class="card transfer-card"><h2>Производственный контур</h2><div class="body"><div class="row">Путь <b>~/projects/production</b></div><div class="row">Inventory <b>inventory/hosts.yml</b></div><div class="row">Catalog lock <b>kafka 4.3.1</b></div><div class="row">Совместимость <b class="ok">PASS</b></div><p class="muted">Экспорт переносит только portable desired state. Факты, логи, generated state и секреты исключаются.</p></div></div></section>
       <section class="page" id="servers" hidden>
@@ -74,9 +91,10 @@
       </section>
       <section class="page" id="installation"><div class="head"><div><h1>Установка</h1><p class="muted">Готовность, план и выполнение проекта</p></div><div class="plan-action" id="summary-plan-action"><small id="plan-prerequisite" class="warn">Нужны READY Execution Node, сохранённый проект и отсутствие несохранённых изменений. Предварительная проверка проекта необязательна.</small><button class="btn main" id="create-plan" type="button" disabled>Сформировать свежий план</button></div></div><nav class="tabs" aria-label="Разделы установки"><button type="button" data-installation="summary" aria-selected="true">Сводка</button><button type="button" data-installation="plan" aria-selected="false">План</button><button type="button" data-installation="execution" aria-selected="false">Выполнение</button><button type="button" data-installation="result" aria-selected="false">Результат</button></nav>
         <div class="workflow-strip" aria-label="Стадии установки"><div class="workflow-step" id="workflow-plan" aria-current="step"><span class="workflow-number">1</span><span><b>План</b><small>Свежий BuildDeploymentPlan</small></span></div><div class="workflow-step" id="workflow-execute"><span class="workflow-number">2</span><span><b>Выполнение</b><small>Только по одобренному плану</small></span></div><div class="workflow-step" id="workflow-result"><span class="workflow-number">3</span><span><b>Результат</b><small>Наблюдаемый итог запуска</small></span></div></div>
+        <div class="demo-control"><label for="demo-run-state">Показать состояние макета</label><select id="demo-run-state"><option value="blocked">План не готов</option><option value="idle">Одобрен, не запущен</option><option value="running">Идёт установка</option><option value="failed">Ошибка установки</option><option value="succeeded">Установка завершена</option></select><small>Переключатель меняет только демонстрацию; вкладки не меняют состояние запуска.</small></div>
         <section class="installation-view" id="installation-summary"><article class="card prerequisite-card"><h2>Execution Node · prerequisite</h2><div class="body"><div class="row"><span>Выбранный узел</span><b>node1 · 192.168.56.101</b></div><div class="row"><span>Готовность</span><b id="installation-node-state" class="warn">NOT_PREPARED</b></div><div class="row"><span>Источник истины</span><span>Servers / application lifecycle</span></div><p class="muted">Установка не выбирает и не подготавливает Execution Node. Откройте <button class="link" type="button" data-page-link="servers">Серверы</button>, чтобы проверить или подготовить его.</p></div></article><div class="summary-pair"><article class="card"><h2>Сохранённый проект</h2><div class="body"><div class="row">Состояние <b class="ok">Сохранено</b></div><div class="row">Проверка проекта <b class="warn">UNVERIFIED</b></div><p><button class="btn">Проверить сохранённый проект</button></p><p class="muted">Проверка необязательна и не заменяет свежий план перед выполнением.</p></div></article><article class="card"><h2>Требуется внимание</h2><div class="body"><div class="row"><span>Execution Node</span><button class="link" type="button" data-page-link="servers">Открыть Серверы</button></div><div class="row"><span>Kafka / kafka-main: настройка</span><button class="link" type="button" data-open-service-settings>Настроить сервис</button></div><div class="row"><span>PKI materialization</span><button class="link" type="button" data-page-link="certificates">Открыть сертификаты</button></div></div></article></div><article class="card plan-preview"><h2>План установки</h2><div class="plan-tabs"><span>Серверы</span><span>Сервисы</span><span>Сертификаты</span></div><div class="body"><div class="row">Целевые серверы <b>node1, node2, node3</b><span class="warn">после свежего плана</span></div><div class="row">Kafka / kafka-main · broker/controller <b>apply</b><span>после плана</span></div><div class="row">infrastructure-tls · Kafka <b>materialize</b><span>после плана</span></div></div></article></section>
         <section class="installation-view" id="installation-services" hidden><h2 class="install-title">Сервисы</h2><div class="triple"><article class="card"><h2>Deployments</h2><div class="body"><div class="sel">Kafka / kafka-main<br><small>1 member</small></div><div class="row">PostgreSQL / billing <span class="ok">готово</span></div><div class="row">Redis / cache <span class="ok">готово</span></div></div></article><article class="card"><h2>Выбранный deployment</h2><div class="body"><div class="row">Сервис <b>Kafka</b></div><div class="row">Экземпляр <b>kafka-main</b></div><div class="row">Режим <b>Одиночный узел</b></div><div class="row">Роли <span><span class="chip">broker</span><span class="chip">controller</span></span></div><p><button class="btn" type="button" data-open-service-settings>Открыть настройки сервиса</button></p><p class="muted">Детали конфигурации открываются отдельно и определяются service manifest.</p></div></article><article class="card"><h2>Проверка</h2><div class="body"><div class="notice">✓ Конфигурация и роли валидны</div><div class="row">Configuration findings <b class="ok">0</b></div><div class="row">Topology findings <b class="ok">0</b></div><div class="row">Секреты <b>только ссылки</b></div></div></article></div></section>
-        <section class="installation-view" id="installation-certificates" hidden><h2 class="install-title">Сертификаты</h2><div class="triple"><article class="card"><h2>Infrastructure TLS</h2><div class="body"><div class="sel">infrastructure-tls<br><small>используется Kafka / kafka-main</small></div><div class="row">CA <b>platform-ca</b></div><div class="row">Certificate profiles <b>1</b></div><p><button class="btn">Настроить PKI intent</button></p></div></article><article class="card"><h2>Расчётный preview</h2><div class="body"><div class="row">Scope <b>kafka-main</b></div><div class="row">SAN <b>3 hostname</b></div><div class="row">Store format <b>PKCS12</b></div><p class="muted">Идентичности и fingerprints читаются из generated state; private keys и пароли не отображаются.</p></div></article><article class="card"><h2>Material state</h2><div class="body"><div class="notice">Требуется materialization</div><div class="row">Последняя verify <b>—</b></div><div class="row">Fingerprint <b>read-only</b></div><p><button class="btn">Открыть безопасные findings</button></p></div></article></div></section>
+        <section class="installation-view" id="installation-certificates" hidden><h2 class="install-title">Сертификаты</h2><div class="triple"><article class="card"><h2>Infrastructure TLS</h2><div class="body"><div class="sel">infrastructure-tls<br><small>используется Kafka / kafka-main</small></div><div class="row">CA <b>platform-ca</b></div><div class="row">Certificate profiles <b>1</b></div><p><button class="btn">Настроить PKI intent</button></p></div></article><article class="card"><h2>Расчётный preview</h2><div class="body"><div class="row">Scope <b>kafka-main</b></div><div class="row">SAN <b>3 hostname</b></div><div class="row">Store format <b>PKCS12</b></div><p class="muted">Идентичности и fingerprints читаются из generated state; private keys и пароль не отображаются повторно.</p><p>Пароль Java-хранилищ: задан в текущем сеансе</p><button class="btn" data-page-link="certificates">Изменить на странице «Сертификаты»</button></div></article><article class="card"><h2>Material state</h2><div class="body"><div class="notice">Требуется materialization</div><div class="row">Последняя verify <b>—</b></div><div class="row">Fingerprint <b>read-only</b></div><p><button class="btn">Открыть безопасные findings</button></p></div></article></div></section>
         <section class="installation-view" id="installation-execution" hidden><h2 class="install-title">Выполнение</h2><div class="triple"><article class="card"><h2>Текущий запуск</h2><div class="body"><div class="sel">План ещё не сформирован<br><small>Откройте Серверы и подготовьте Execution Node</small></div><div class="row">Операция <b>—</b></div><div class="row">Подтверждение <b>ожидает</b></div></div></article><article class="card"><h2>Этапы</h2><div class="body"><div class="row">Validate <b class="warn">ожидает</b></div><div class="row">Plan <b class="warn">заблокирован</b></div><div class="row">Apply <b>—</b></div><div class="row">Verify <b>—</b></div></div></article><article class="card"><h2>Безопасный вывод</h2><div class="body"><pre class="run-log">Ожидание готового плана.
 Runtime secrets redacted.
 Task events and PLAY RECAP will appear here.</pre></div></article></div></section>
@@ -138,7 +156,7 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
     certificatePage.id = 'certificates';
     certificatePage.className = 'page';
     certificatePage.hidden = true;
-    certificatePage.innerHTML = '<div class="crumb">Проект</div><h1>Сертификаты</h1><p class="muted">PKI-профили для сервисов. Выпуск и применение выполняются на этапе установки.</p>';
+    certificatePage.innerHTML = '<div class="crumb">Проект</div><h1>Сертификаты</h1><p class="muted">PKI-профили для сервисов. Выпуск и применение выполняются на этапе установки.</p><article class="card"><h2>Пароль Java-хранилищ PKCS#12 (keystore / truststore)</h2><p>Пароль хранится только в активном сеансе. Если старый пароль неизвестен, Core пересоздаст хранилища из проверенных PEM-материалов.</p><p>Состояние: задан в текущем сеансе</p><label>Новый пароль хранилищ<input type="password" autocomplete="new-password"></label><button class="btn">Заменить пароль в сеансе</button></article>';
     root.querySelector('main').append(certificatePage);
     const certificateView = root.querySelector('#installation-certificates');
     certificateView.hidden = false;
@@ -283,13 +301,14 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
       </tbody></table></div><details><summary>Перед подтверждением</summary><p>В production: planId, revision проекта, точные targets, зависимости и предупреждения из Core. При изменении конфигурации план устаревает и требует пересоздания.</p></details>
       <p><button class="btn" disabled>Подтвердить план и выполнить</button></p><small>Недоступно в макете. Не запускает серверы и не заменяет сохранение конфигурации.</small></div></article></section>
       <section class="installation-view" id="installation-result" hidden><h2 class="install-title">Результат</h2>
-      <p class="muted">Отдельный пример завершённого запуска · demo-result-001 · план demo-plan-001</p>
-      <article class="card"><div class="body"><div class="head"><div><b class="warn">Завершено с ошибкой проверки</b><p>2 этапа успешны · 1 с ошибкой · 0 пропущено</p></div><span>Длительность: 9 мин 07 с</span></div>
+      <p class="run-state-note" id="result-pending">Запуск не начат. Итог появится только после терминального результата.</p>
+      <p class="muted" id="result-reference" hidden>Демонстрационный итог · demo-result-001 · план demo-plan-001</p>
+      <article class="card" id="result-demo" hidden><div class="body"><div class="head"><div><b class="warn" id="result-headline">Завершено с ошибкой проверки</b><p id="result-counts">2 действия успешны · 1 с ошибкой · 0 пропущено</p></div><span>Длительность: 9 мин 07 с</span></div>
       <div class="row"><span>Execution Node: node1</span><span>Targets: node1, node2, node3</span></div>
       <div class="server-table"><table class="task-table"><thead><tr><th>Этап плана</th><th>Результат</th><th>Серверы</th><th>Длительность</th></tr></thead><tbody>
       <tr><td>PKI apply</td><td>Успешно</td><td>node1, node2, node3</td><td>1 мин 12 с</td></tr>
       <tr><td>Kafka apply</td><td>Успешно</td><td>node1, node2, node3</td><td>5 мин 40 с</td></tr>
-      <tr><td>Kafka verify</td><td class="warn">Ошибка</td><td>node2: проверка не пройдена</td><td>2 мин 15 с</td></tr>
+      <tr><td>Kafka verify</td><td class="warn" id="result-verify-state">Ошибка</td><td id="result-verify-host">node2: проверка не пройдена</td><td>2 мин 15 с</td></tr>
       </tbody></table></div><details><summary>Подробности проверки</summary><p>Пример безопасной диагностики: node2 не достиг ожидаемой готовности. Успешный apply не означает успешный verify. Реальные findings, host results и recap поступят от backend.</p></details>
       <p class="muted">Результат наблюдаемого запуска, а не новая проверка. Открытие вкладки не запускает verify повторно. Для активного запуска итог ещё не определён; потеря связи с observer не означает FAILED.</p>
       </div></article></section>`);
@@ -447,7 +466,81 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
       button.textContent = 'Просмотреть изменения';
       button.addEventListener('click', reviewDraft);
     });
-    root.querySelector('#installation-execution').innerHTML = `<h2 class="install-title">Выполнение</h2><p class="muted">Демонстрационный запуск · не связан с реальными серверами</p><article class="card"><div class="body"><div class="head"><div><b>Kafka · Применение конфигурации</b><p>Выполняется · 4 мин 32 с</p></div><span class="chip">События поступают</span></div><div class="row"><span>Запуск <code>demo-run-001</code></span><span>Execution Node · node1</span></div><p>Текущая задача: ожидание готовности сервиса · node2 · 18 с</p><small>PKI: завершено · Kafka apply: выполняется · Verify: ожидает</small><details><summary>Подробные задачи Ansible</summary><div class="server-table"><table class="task-table"><thead><tr><th>Задача</th><th>Сервер</th><th>Статус</th><th>Время</th></tr></thead><tbody><tr><td>Подготовка конфигурации</td><td>—</td><td>Старт задачи</td><td>—</td></tr><tr><td>Подготовка конфигурации</td><td>node1</td><td>Без изменений</td><td>2 с</td></tr><tr><td>Ожидание готовности сервиса</td><td>node2</td><td>Выполняется</td><td>18 с</td></tr><tr><td>Скрытая задача</td><td>node3</td><td>Успешно</td><td>1 с</td></tr></tbody></table></div><p class="muted">Host у старта задачи может отсутствовать. Секретные значения не показываются. Длительности здесь — примеры.</p></details><details><summary>Технические сведения</summary><p>Источник UI: типизированная подписка RunObserver через backend. Локальная техническая копия событий не отображается в интерфейсе.</p></details></div></article>`;
+    root.querySelector('#installation-execution').innerHTML = `<h2 class="install-title">Выполнение</h2><p class="muted">Демонстрационный запуск · не связан с реальными серверами</p><article class="card"><div class="body"><div class="head"><div><b id="run-stage-label">Запуск не начат</b><p id="run-stage-detail">Сначала сформируйте и одобрите свежий план.</p></div><span class="chip" id="run-stage-badge">Ожидание</span></div><div class="row"><span>План <code>demo-plan-001</code></span><span>Узел выполнения · node1</span></div><div class="run-progress-label"><span id="run-progress-caption">0 из 11 действий плана подтверждены</span><b id="run-progress-percent">0%</b></div><progress class="run-progress" id="run-progress" max="11" value="0" aria-label="Подтверждённые действия плана"></progress><p class="run-state-note" id="run-current-task">Текущего действия нет.</p><div class="server-table"><table class="task-table"><thead><tr><th>Действие плана</th><th>Целевой сервер</th><th>Состояние</th></tr></thead><tbody><tr><td>PKI · подготовка TLS</td><td>node1–node3</td><td id="run-action-pki">Ожидает</td></tr><tr><td>Kafka / kafka-main · применение</td><td>node1–node3</td><td id="run-action-apply">Ожидает</td></tr><tr><td>Kafka / kafka-main · проверка</td><td>node1–node3</td><td id="run-action-verify">Ожидает</td></tr></tbody></table></div><details><summary>Подробные задачи Ansible</summary><p class="muted">Имя задачи, целевой сервер и исход берутся из безопасных событий backend; счётчик событий не является процентом установки. Секретные значения не показываются.</p></details></div></article>`;
+    const runStates = {
+      blocked: {label:'Установка: план не готов',detail:'Подготовьте узел и сформируйте план',stage:'Запуск недоступен',caption:'0 из 11 демонстрационных действий',current:'Сначала сформируйте и одобрите свежий план.',count:0,badge:'План не готов',pki:'Ожидает',apply:'Ожидает',verify:'Ожидает'},
+      idle: {label:'Установка: не начата',detail:'План одобрен · ожидает запуска',stage:'Запуск не начат',caption:'0 из 11 действий плана подтверждены',current:'Одобренный план ожидает запуска.',count:0,badge:'Ожидание',pki:'Ожидает',apply:'Ожидает',verify:'Ожидает'},
+      running: {label:'Установка: идёт · 55%',detail:'6 из 11 действий · Kafka / kafka-main',stage:'Kafka / kafka-main · применение',caption:'6 из 11 действий плана подтверждены',current:'Текущая задача: ожидание готовности сервиса · node2 · 18 с',count:6,badge:'Выполняется',pki:'Успешно',apply:'Выполняется',verify:'Ожидает'},
+      failed: {label:'Установка: ошибка · 73%',detail:'8 из 11 действий · ошибка на node2',stage:'Kafka / kafka-main · проверка',caption:'8 из 11 действий плана подтверждены',current:'Ошибка: проверка готовности не пройдена · node2. Остальные действия не считаются выполненными.',count:8,badge:'Ошибка',pki:'Успешно',apply:'Успешно',verify:'Ошибка'},
+      succeeded: {label:'Установка: выполнено · 100%',detail:'11 из 11 действий · проверка пройдена',stage:'План выполнен',caption:'11 из 11 действий плана подтверждены',current:'Все действия завершены; итог доступен в разделе «Результат».',count:11,badge:'Завершено',pki:'Успешно',apply:'Успешно',verify:'Успешно'}
+    };
+    const renderRunState = state => {
+      const data = runStates[state];
+      const global = root.querySelector('#run-global');
+      global.dataset.state = state;
+      root.querySelector('#run-global-label').textContent = data.label;
+      root.querySelector('#run-global-detail').textContent = data.detail;
+      if (state !== 'blocked') {
+        root.querySelector('#execution-global-state').textContent = 'Готов';
+        root.querySelector('#installation-node-state').textContent = 'Готов';
+        root.querySelector('#installation-node-state').className = 'ok';
+        root.querySelector('#plan-prerequisite').textContent = state === 'running' ? 'Идёт выполнение одобренного плана. Новый запуск пока недоступен.' : state === 'idle' ? 'План одобрен. Запуск выполняется только после подтверждения.' : 'Для нового запуска нужен свежий план сохранённой ревизии.';
+      } else {
+        root.querySelector('#execution-global-state').textContent = 'Не подготовлен';
+        root.querySelector('#installation-node-state').textContent = 'Не подготовлен';
+        root.querySelector('#installation-node-state').className = 'warn';
+        root.querySelector('#plan-prerequisite').textContent = 'Нужны готовый узел выполнения, сохранённый проект и отсутствие несохранённых изменений. Предварительная проверка проекта необязательна.';
+      }
+      root.querySelector('#run-stage-label').textContent = data.stage;
+      root.querySelector('#run-stage-detail').textContent = data.detail;
+      root.querySelector('#run-stage-badge').textContent = data.badge;
+      root.querySelector('#run-progress-caption').textContent = state === 'blocked' ? 'План ещё не создан' : data.caption;
+      root.querySelector('#run-progress-percent').textContent = state === 'blocked' ? '—' : `${Math.round(data.count / 11 * 100)}%`;
+      root.querySelector('#run-progress').hidden = state === 'blocked';
+      root.querySelector('#run-progress').value = data.count;
+      root.querySelector('#run-current-task').textContent = data.current;
+      ['pki','apply','verify'].forEach(key => root.querySelector(`#run-action-${key}`).textContent = data[key]);
+      const terminal = state === 'failed' || state === 'succeeded';
+      root.querySelector('#result-pending').hidden = terminal;
+      root.querySelector('#result-pending').textContent = state === 'running' ? 'Установка продолжается. Итог пока неизвестен; потеря связи с наблюдателем не означает ошибку.' : 'Запуск не начат. Итог появится только после терминального результата.';
+      root.querySelector('#result-reference').hidden = !terminal;
+      root.querySelector('#result-demo').hidden = !terminal;
+      root.querySelector('#result-headline').textContent = state === 'succeeded' ? 'Установка и проверка завершены успешно' : 'Завершено с ошибкой проверки';
+      root.querySelector('#result-counts').textContent = state === 'succeeded' ? '3 этапа успешны · 0 с ошибкой · 0 пропущено' : '2 этапа успешны · 1 с ошибкой · 0 пропущено';
+      root.querySelector('#result-verify-state').textContent = state === 'succeeded' ? 'Успешно' : 'Ошибка';
+      root.querySelector('#result-verify-state').className = state === 'succeeded' ? 'ok' : 'warn';
+      root.querySelector('#result-verify-host').textContent = state === 'succeeded' ? 'node1, node2, node3' : 'node2: проверка не пройдена';
+      setWorkflowStage(state === 'blocked' || state === 'idle' ? 'workflow-plan' : state === 'running' ? 'workflow-execute' : 'workflow-result');
+    };
+    root.querySelector('#demo-run-state').addEventListener('change', event => renderRunState(event.target.value));
+    renderRunState('blocked');
+    // Demo-only dialog behavior: bounded viewport, initial focus, Escape and focus return.
+    let dialogTrigger = null;
+    root.addEventListener('click', event => {
+      const trigger = event.target.closest('[data-open-dialog],[data-open-server-dialog]');
+      if (trigger) dialogTrigger = trigger;
+      if (event.target.closest('[data-close-dialog],[data-close-server-dialog],#close-review,#cancel-create-project')) {
+        queueMicrotask(() => { if (dialogTrigger?.isConnected) dialogTrigger.focus(); });
+      }
+    }, true);
+    const dialogs = [...root.querySelectorAll('.modal')];
+    const firstFocusable = dialog => dialog.querySelector('input:not([disabled]),select:not([disabled]),button:not([disabled])');
+    dialogs.forEach(dialog => new MutationObserver(() => {
+      if (!dialog.hidden) firstFocusable(dialog)?.focus();
+    }).observe(dialog, {attributes:true,attributeFilter:['hidden']}));
+    document.addEventListener('keydown', event => {
+      const dialog = dialogs.find(item => !item.hidden);
+      if (!dialog) return;
+      if (event.key === 'Escape') {
+        event.preventDefault(); dialog.hidden = true; dialogTrigger?.focus(); return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
     // Start the design review at the project entry point, not a simulated run.
     root.querySelector('[data-page="projects"]').click();
   </script>

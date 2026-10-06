@@ -1,4 +1,38 @@
 ---
+- name: Resolve exact Keepalived deployment participants
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _platform_keepalived_deployment_ids: >-
+      {{ platform_desired_state.serviceDeployments | default({}) | dict2items
+         | selectattr('value.serviceType', 'equalto', 'keepalived')
+         | map(attribute='key') | list }}
+    _platform_keepalived_selected_deployment: "{{ platform_execution_service_deployment | default('', true) }}"
+  tags: [keepalived-participant-scope]
+  tasks:
+    - name: Collect hosts assigned to the current Keepalived deployment
+      ansible.builtin.set_fact:
+        _platform_keepalived_participants: "{{ (_platform_keepalived_participants | default([])) + [item] }}"
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      loop_control:
+        label: "{{ item }}"
+      when: >-
+        (
+          _platform_keepalived_selected_deployment | length > 0
+          and _platform_keepalived_selected_deployment in (hostvars[item].platform_deployments | default({}))
+        ) or (
+          _platform_keepalived_selected_deployment | length == 0
+          and (_platform_keepalived_deployment_ids
+            | intersect(hostvars[item].platform_deployments | default({}) | list)
+            | length > 0)
+        )
+
+    - name: Require at least one participant for the Keepalived action
+      ansible.builtin.assert:
+        that: _platform_keepalived_participants | default([]) | length > 0
+        fail_msg: KEEPALIVED_DEPLOYMENT_PARTICIPANTS_EMPTY
+
 - name: Phase A - prepare and validate Keepalived candidates
   hosts: platform_targets
   become: true
@@ -13,12 +47,11 @@
   connection: local
   gather_facts: false
   vars:
-    _platform_keepalived_participants: "{{ groups['platform_targets'] | default([]) | sort }}"
+    _platform_keepalived_participants: "{{ hostvars['localhost']._platform_keepalived_participants | default([]) }}"
   tasks:
     - name: Assert every participant produced a passing candidate
       ansible.builtin.assert:
         that:
-          - _platform_keepalived_participants | length > 0
           - hostvars[item].platform_keepalived_candidate_checksum | default('') | length > 0
           - hostvars[item].platform_keepalived_candidate_validation_rc | default(1) | int == 0
         fail_msg: "KEEPALIVED_CANDIDATE_BARRIER_FAILED: {{ item }}"
@@ -40,7 +73,7 @@
   connection: local
   gather_facts: false
   vars:
-    _platform_keepalived_participants: "{{ groups['platform_targets'] | default([]) | sort }}"
+    _platform_keepalived_participants: "{{ hostvars['localhost']._platform_keepalived_participants | default([]) }}"
   tasks:
     - name: Assert every active configuration matches and validates
       ansible.builtin.assert:

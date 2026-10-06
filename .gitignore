@@ -2,6 +2,7 @@
 .runtime/
 runs/
 bundle/
+cache/
 
 # Local user-created project workspaces
 Projects/

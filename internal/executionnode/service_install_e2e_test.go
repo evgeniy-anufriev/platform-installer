@@ -39,7 +39,7 @@ func TestServiceInstall01KeepalivedLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -157,7 +157,7 @@ func TestServiceInstall02BindLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -274,7 +274,7 @@ func TestServiceInstall03DNSClientLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -385,7 +385,7 @@ func TestServiceInstall04HAProxyLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -496,7 +496,7 @@ func TestServiceInstall05KafkaLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -602,8 +602,8 @@ func TestServiceInstall06PostgreSQLLifecycle(t *testing.T) {
 	address, user, identity, knownHosts := os.Getenv("PLATFORM_EXEC01A_ADDRESS"), os.Getenv("PLATFORM_EXEC01A_USER"), os.Getenv("PLATFORM_EXEC01A_IDENTITY"), os.Getenv("PLATFORM_EXEC01A_KNOWN_HOSTS")
 	targetUser, targetPassword, targetSudoPassword, pkiStorePassword := os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_USER"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_SUDO_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_PKI_STORE_PASSWORD")
 	adminPassword, monitorPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_ADMIN_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_MONITOR_PASSWORD")
-	replicationPassword, healthcheckPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_REPLICATION_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_HEALTHCHECK_PASSWORD")
-	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiStorePassword == "" || adminPassword == "" || monitorPassword == "" || replicationPassword == "" || healthcheckPassword == "" {
+	replicationPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_REPLICATION_PASSWORD")
+	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiStorePassword == "" || adminPassword == "" || monitorPassword == "" || replicationPassword == "" {
 		t.Fatal("SERVICE_INSTALL_06_E2E_PREREQUISITE_MISSING")
 	}
 	repo, err := filepath.Abs(filepath.Join("..", ".."))
@@ -612,7 +612,7 @@ func TestServiceInstall06PostgreSQLLifecycle(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -623,14 +623,13 @@ func TestServiceInstall06PostgreSQLLifecycle(t *testing.T) {
 	transport := OpenSSHTransport{Identity: e2eIdentity{path: identity}}
 	service := NewExecutionService(transport, transport)
 	service.ConfigureTargetCredentialLease(func(request TargetCredentialLeaseRequest, use func(TargetCredentialLeasePayload) error) error {
-		if !request.RequiresPKIStorePassword || len(request.RuntimeSecretRequirements) != 4 {
+		if !request.RequiresPKIStorePassword || len(request.RuntimeSecretRequirements) != 3 {
 			return os.ErrInvalid
 		}
 		return use(TargetCredentialLeasePayload{Username: targetUser, Password: targetPassword, SudoPassword: targetSudoPassword, PKIStorePassword: pkiStorePassword, RuntimeSecretValues: map[string]string{
 			"postgresql-admin-password":       adminPassword,
 			"postgresql-monitor-password":     monitorPassword,
 			"postgresql-replication-password": replicationPassword,
-			"postgresql-healthcheck-password": healthcheckPassword,
 		}})
 	})
 	release := map[string]any{"bundleDigest": bundle.Digest, "coreVersion": bundle.Manifest.CoreVersion, "catalogDigest": bundle.Manifest.CatalogDigest, "planningProtocol": "v1alpha1"}
@@ -723,7 +722,7 @@ func TestServiceInstall01PrepareCumulativeProject(t *testing.T) {
 	}
 	cacheRoot := os.Getenv("PLATFORM_SERVICE_INSTALL_01_BUNDLE_CACHE")
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(repo, "bundle")
+		cacheRoot = filepath.Join(repo, "cache")
 	}
 	bundle, err := (executionbundle.Cache{Root: cacheRoot}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
@@ -826,7 +825,7 @@ func configureIsolatedPostgreSQLProjectThroughGo(t *testing.T, repository string
 		{Operation: "ReconcileDeploymentPlacement", DeploymentID: "service-install-06-postgresql", Members: []installer.PlacementMember{{MemberID: "postgres-monitor", HostID: "node1", Roles: []string{"monitor"}}, {MemberID: "postgres-1", HostID: "node2", Roles: []string{"database"}}, {MemberID: "postgres-2", HostID: "node3", Roles: []string{"database"}}}},
 		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "tlsProfile", Value: "service-install-postgresql-tls"},
 		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "adminSuperuser", Value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password"}},
-		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "monitorCredential", Value: secretRef("postgresql-monitor-password")}, {Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "replicationCredential", Value: secretRef("postgresql-replication-password")}, {Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "healthcheckCredential", Value: secretRef("postgresql-healthcheck-password")},
+		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "monitorCredential", Value: secretRef("postgresql-monitor-password")}, {Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "replicationCredential", Value: secretRef("postgresql-replication-password")},
 	}
 	for _, command := range commands {
 		if _, err := sessions.Append(session.SessionID, command, backend); err != nil {
@@ -1321,7 +1320,6 @@ func configurePostgreSQLProjectThroughGo(t *testing.T, repository string, bundle
 		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "adminSuperuser", Value: map[string]any{"username": "platform_admin", "passwordSecretRef": "runtime:postgresql-admin-password"}},
 		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "monitorCredential", Value: secretRef("postgresql-monitor-password")},
 		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "replicationCredential", Value: secretRef("postgresql-replication-password")},
-		{Operation: "SetServiceConfigurationValue", DeploymentID: "service-install-06-postgresql", Scope: "DEPLOYMENT", Setting: "healthcheckCredential", Value: secretRef("postgresql-healthcheck-password")},
 	}
 	for _, command := range commands {
 		if _, err := sessions.Append(session.SessionID, command, backend); err != nil {

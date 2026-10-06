@@ -33,19 +33,6 @@
       "minLength": 1,
       "type": "string"
     },
-    "healthcheckCredential": {
-      "additionalProperties": false,
-      "properties": {
-        "passwordSecretRef": {
-          "minLength": 1,
-          "type": "string"
-        }
-      },
-      "required": [
-        "passwordSecretRef"
-      ],
-      "type": "object"
-    },
     "monitorCredential": {
       "additionalProperties": false,
       "properties": {

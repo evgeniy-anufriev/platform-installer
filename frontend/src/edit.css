@@ -428,6 +428,12 @@
   font: inherit;
   background: #fff;
 }
+.services-control button:disabled {
+  background: #e8edf3;
+  color: #667085;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
 .services-saved-overrides ul {
   margin: 8px 0 0;
   padding-left: 20px;
@@ -564,7 +570,7 @@
   padding: 9px 0;
   border-bottom: 1px solid #e6eaf0;
 }
-@media (max-width: 1080px) {
+@media (max-width: 960px) {
   .entry-grid {
     grid-template-columns: 1fr;
   }
@@ -601,6 +607,7 @@
     grid-template-columns: 1fr;
   }
 }
-.installation-page{max-width:980px}.installation-tabs{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}.installation-tabs button.active{background:#1f6feb;color:#fff;border-color:#1f6feb}.workflow-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.workflow-strip>div{padding:12px 14px;border:1px solid #d9e1ec;border-radius:8px;color:#64748b;background:#fff}.workflow-strip .workflow-current{border-color:#1f6feb;color:#174ea6;background:#edf5ff;font-weight:650}.safe-findings{margin:0;padding-left:20px;display:grid;gap:10px}.safe-findings code{display:inline;margin:0;color:#a33}.installation-empty{min-height:180px;display:grid;align-content:center}@media(max-width:720px){.workflow-strip{grid-template-columns:1fr}}
+.installation-page{max-width:980px}.installation-tabs{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}.installation-tabs button.active{background:#1f6feb;color:#fff;border-color:#1f6feb}.workflow-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.workflow-strip>div{padding:12px 14px;border:1px solid #d9e1ec;border-radius:8px;color:#64748b;background:#fff}.workflow-strip .workflow-current{border-color:#1f6feb;color:#174ea6;background:#edf5ff;font-weight:650}@media(max-width:720px){.workflow-strip{grid-template-columns:1fr}}
+.safe-findings{margin:0;padding-left:20px;display:grid;gap:10px}.safe-findings code{display:inline;margin:0;color:#a33}.installation-empty{min-height:180px;display:grid;align-content:center}
 .service-secrets-action{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}.service-secrets-action h2{margin:0 0 4px}.service-secrets-action p{margin:0}.service-secrets-action .error{grid-column:1/-1}.runtime-secret-dialog{width:min(460px,calc(100vw - 32px));border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 18px 54px #0f172a44;padding:0}.runtime-secret-dialog::backdrop{background:#0f172a66}.runtime-secret-dialog form{display:grid;gap:14px;padding:22px}.runtime-secret-dialog h2{margin:0}.runtime-secret-dialog label{display:grid;gap:6px;font-weight:650}.runtime-secret-dialog input{min-height:40px;border:1px solid #cbd5e1;border-radius:6px;padding:8px;font:inherit}@media(max-width:720px){.service-secrets-action{grid-template-columns:1fr}.service-secrets-action button{justify-self:start}}
 .plan-phase{border-top:1px solid #e2e7ef;padding:14px 0}.plan-phase:first-of-type{border-top:0;padding-top:0}.plan-phase h3{font-size:14px;margin:0 0 9px}.plan-action-row{display:grid;gap:4px;padding:10px 0}.plan-action-row span,.plan-action-row small{color:#667085}.acknowledgement{display:flex;gap:9px;align-items:flex-start;margin:12px 0;color:#334155}.acknowledgement input{margin-top:4px}

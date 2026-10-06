@@ -18,9 +18,6 @@ platform_postgresql_monitor_credential:
 platform_postgresql_replication_credential:
   username: pgautofailover_replicator
   passwordSecretRef: ''
-platform_postgresql_healthcheck_credential:
-  username: pgautofailover_monitor
-  passwordSecretRef: ''
 platform_postgresql_failover_auth: scram-sha-256
 platform_postgresql_advanced_config: {}
 platform_postgresql_instances: []

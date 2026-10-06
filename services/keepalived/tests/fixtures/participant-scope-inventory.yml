@@ -1,0 +1,25 @@
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+    node1:
+      ansible_connection: local
+      platform_deployments:
+        keepalived-qa: {priority: 150}
+    node2:
+      ansible_connection: local
+      platform_deployments:
+        keepalived-qa: {priority: 120}
+    node3:
+      ansible_connection: local
+  children:
+    platform_targets:
+      hosts:
+        node1: {}
+        node2: {}
+        node3: {}
+  vars:
+    platform_desired_state:
+      serviceDeployments:
+        keepalived-qa:
+          serviceType: keepalived

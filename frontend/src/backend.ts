@@ -1,4 +1,5 @@
 import {
+  AmendServiceConfigurationDraft,
   AppendEditCommand,
   ChooseProject,
   ChooseProjectExportParent,
@@ -9,14 +10,21 @@ import {
   CreateProject,
   DiscardEditSession,
   GetApplicationConfig,
+  GetServiceConfigurationPreview,
   GetEndpointPreview,
   GetVerifiedPKIView,
   GetRuntimeSecretDescriptors,
-	GetPendingRuntimeSecretDescriptors,
-	ListPendingSecretOutputs,
-	SetSecretOutputEncryptionPassword,
-	DeliverPendingSecretOutput,
+  GetPendingRuntimeSecretDescriptors,
+  ListPendingSecretOutputs,
+  SetSecretOutputEncryptionPassword,
+  DeliverPendingSecretOutput,
   GetExecutionNodeContext,
+  ProbeExecutionNodeHostKey,
+  ApproveExecutionNodeHostKey,
+  DeclineExecutionNodeHostKey,
+  ProbeTargetHostKey,
+  ApproveTargetHostKey,
+  DeclineTargetHostKey,
   GetInstallationState,
   CreateInstallationPlan,
   GetInstallationPlan,
@@ -29,6 +37,10 @@ import {
   GetSessionCredentialStatus,
   CheckExecutionNode,
   OpenProject,
+  ChooseRuntimeBundleUpdate,
+  ConfirmRuntimeBundleUpdate,
+  InspectOrphanRun,
+  CancelOrphanRun,
   PlanExecutionNodePreparation,
   PlanProjectExport,
   PrepareExecutionNode,
@@ -44,9 +56,10 @@ import {
   ClearSessionCredential,
 } from "../wailsjs/go/main/App";
 import type { main } from "../wailsjs/go/models";
+import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
-  status: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
+  status: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID" | "STALE" | "UNAVAILABLE";
   projectRevision?: string;
   executionNodeId?: string;
   runtime?: {
@@ -135,6 +148,8 @@ export type OpenResult = main.ProjectOpenResult & {
   managed?: ManagedProjectView;
   verification?: VerificationStatus;
 };
+export type RuntimeBundleUpdate = main.RuntimeBundleUpdateResult;
+export type OrphanRunRecovery = main.OrphanRunRecoveryResult;
 export type EditResult = Omit<main.EditOperationResult, "plan" | "commit"> & {
   plan?: {
     planId?: string;
@@ -177,6 +192,7 @@ export type ExecutionNodeContext = {
   selectionKind: string;
   selectionSource: string;
   selectedHostId?: string;
+  runtimeDigest?: string;
   safeLabel?: string;
   locked: boolean;
 };
@@ -254,7 +270,8 @@ export type InstallationRunView = main.InstallationRunView;
 export type InstallationResultView = main.InstallationResultView;
 export type InstallationRunOperation = main.InstallationRunOperation;
 export type InstallationEventView = main.InstallationEventView;
-export type InstallationSubscriptionResult = main.InstallationSubscriptionResult;
+export type InstallationSubscriptionResult =
+  main.InstallationSubscriptionResult;
 export type EndpointPreview = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
   endpoints?: Array<{ deploymentId: string; fqdn: string }>;
@@ -296,6 +313,14 @@ export type ExecutionNodeReadiness = {
   findings?: Array<{ code: string; safeMessage: string }>;
   error?: { code: string; message: string };
 };
+export type HostKeyProbeResult = {
+  status: string;
+  probeId?: string;
+  safeLabel?: string;
+  keyType?: string;
+  fingerprint?: string;
+  error?: { code: string; message: string };
+};
 export type ExecutionNodePreparation = {
   status: string;
   planId?: string;
@@ -332,7 +357,11 @@ export type ProjectExportOperationResult = {
 };
 export type RuntimeSecretDescriptor = {
   requirementRef: string;
-  purpose: "PKI_STORE_PASSWORD" | "SERVICE_PASSWORD" | "SERVICE_ADMIN_TOKEN" | "SERVICE_UNSEAL_SHARES";
+  purpose:
+    | "PKI_STORE_PASSWORD"
+    | "SERVICE_PASSWORD"
+    | "SERVICE_ADMIN_TOKEN"
+    | "SERVICE_UNSEAL_SHARES";
   serviceDeployment?: string;
   setting?: string;
   displayLabel: string;
@@ -347,6 +376,28 @@ export type RuntimeSecretDescriptorOperation = {
   descriptorSetFingerprint?: string;
   descriptors?: RuntimeSecretDescriptor[];
   error?: { code: string; message: string };
+};
+export type ServiceConfigurationPreview = {
+  apiVersion: string;
+  kind: string;
+  projectRevision: string;
+  runtimeDigest?: string;
+  services: Record<
+    string,
+    {
+      configuration: Record<
+        string,
+        { state: string; source: string; value?: string | number | boolean }
+      >;
+      members: Record<
+        string,
+        Record<
+          string,
+          { state: string; source: string; value?: string | number | boolean }
+        >
+      >;
+    }
+  >;
 };
 export type RuntimeSecretValuesInput = {
   projectRevision: string;
@@ -388,6 +439,16 @@ export type SecretOutputDeliveryOperation = {
   error?: { code: string; message: string };
 };
 export interface ProjectBackend {
+  exitApplication?(): Promise<{ status: "EXITING" | "EXIT_AFTER_RUN" }>;
+  subscribeInstallationRunEvents?(handler: (value: {
+    subscriptionId?: string;
+    event?: InstallationEventView;
+    errorCode?: string;
+  }) => void): () => void;
+  chooseRuntimeBundleUpdate?(): Promise<RuntimeBundleUpdate>;
+  confirmRuntimeBundleUpdate?(previewId: string): Promise<RuntimeBundleUpdate>;
+  inspectOrphanRun?(): Promise<OrphanRunRecovery>;
+  cancelOrphanRun?(recoveryId: string): Promise<OrphanRunRecovery>;
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
   openProject(root: string): Promise<OpenResult>;
@@ -404,6 +465,12 @@ export interface ProjectBackend {
     sessionId: string,
     command: Record<string, unknown>,
   ): Promise<EditResult>;
+  amendServiceConfigurationDraft(
+    sessionId: string,
+    index: number,
+    expected: Record<string, unknown>,
+    replacement: Record<string, unknown> | null,
+  ): Promise<EditResult>;
   reviewEditSession(sessionId: string): Promise<EditResult>;
   commitEditPlan(sessionId: string, planId: string): Promise<EditResult>;
   discardEditSession(sessionId: string): Promise<EditResult>;
@@ -413,15 +480,37 @@ export interface ProjectBackend {
   ): Promise<SessionCredentialStatus>;
   setPKIStorePassword?(value: string): Promise<SessionCredentialStatus>;
   getRuntimeSecretDescriptors?(): Promise<RuntimeSecretDescriptorOperation>;
-  setDeploymentRuntimeSecretValues?(input: RuntimeSecretValuesInput): Promise<void>;
-  getPendingRuntimeSecretDescriptors?(serviceDeployment: string): Promise<RuntimeSecretDescriptorOperation>;
-  setPendingDeploymentRuntimeSecretValues?(input: PendingRuntimeSecretValuesInput): Promise<void>;
-  choosePendingDeploymentRuntimeSecretFile?(input: PendingRuntimeSecretFileInput): Promise<string>;
-  listPendingSecretOutputs?(cursor?: string | null): Promise<SecretOutputPackagesOperation>;
-  setSecretOutputEncryptionPassword?(password: string, confirm: string): Promise<void>;
-  deliverPendingSecretOutput?(packageId: string): Promise<SecretOutputDeliveryOperation>;
+  setDeploymentRuntimeSecretValues?(
+    input: RuntimeSecretValuesInput,
+  ): Promise<void>;
+  getPendingRuntimeSecretDescriptors?(
+    serviceDeployment: string,
+  ): Promise<RuntimeSecretDescriptorOperation>;
+  setPendingDeploymentRuntimeSecretValues?(
+    input: PendingRuntimeSecretValuesInput,
+  ): Promise<void>;
+  choosePendingDeploymentRuntimeSecretFile?(
+    input: PendingRuntimeSecretFileInput,
+  ): Promise<string>;
+  listPendingSecretOutputs?(
+    cursor?: string | null,
+  ): Promise<SecretOutputPackagesOperation>;
+  setSecretOutputEncryptionPassword?(
+    password: string,
+    confirm: string,
+  ): Promise<void>;
+  deliverPendingSecretOutput?(
+    packageId: string,
+  ): Promise<SecretOutputDeliveryOperation>;
   clearSessionCredential?(): Promise<SessionCredentialStatus>;
   getExecutionNodeContext?(): Promise<ExecutionNodeContext>;
+  getServiceConfigurationPreview?(): Promise<ServiceConfigurationPreview>;
+  probeExecutionNodeHostKey?(): Promise<HostKeyProbeResult>;
+  approveExecutionNodeHostKey?(probeId: string): Promise<HostKeyProbeResult>;
+  declineExecutionNodeHostKey?(): Promise<HostKeyProbeResult>;
+  probeTargetHostKey?(hostId: string): Promise<HostKeyProbeResult>;
+  approveTargetHostKey?(probeId: string): Promise<HostKeyProbeResult>;
+  declineTargetHostKey?(): Promise<HostKeyProbeResult>;
   getInstallationState?(): Promise<InstallationState>;
   createInstallationPlan?(): Promise<InstallationPlanOperation>;
   getInstallationPlan?(planId: string): Promise<InstallationPlanOperation>;
@@ -431,7 +520,10 @@ export interface ProjectBackend {
   ): Promise<InstallationPlanOperation>;
   startApprovedInstallation?(planId: string): Promise<InstallationRunOperation>;
   getInstallationRun?(runId: string): Promise<InstallationRunOperation>;
-  subscribeInstallationRun?(runId: string, afterSequence: number): Promise<InstallationSubscriptionResult>;
+  subscribeInstallationRun?(
+    runId: string,
+    afterSequence: number,
+  ): Promise<InstallationSubscriptionResult>;
   unsubscribeInstallationRun?(subscriptionId: string): Promise<void>;
   cancelInstallationRun?(runId: string): Promise<InstallationRunOperation>;
   getEndpointPreview?(): Promise<EndpointPreview>;
@@ -445,10 +537,18 @@ export interface ProjectBackend {
     destinationParent: string,
     directoryName: string,
   ): Promise<ProjectExportOperationResult>;
-  commitProjectExport?(planDigest: string): Promise<ProjectExportOperationResult>;
+  commitProjectExport?(
+    planDigest: string,
+  ): Promise<ProjectExportOperationResult>;
 }
 
 export const backend: ProjectBackend = {
+  subscribeInstallationRunEvents: (handler) =>
+    EventsOn("installation-run-event", handler),
+  chooseRuntimeBundleUpdate: ChooseRuntimeBundleUpdate,
+  confirmRuntimeBundleUpdate: ConfirmRuntimeBundleUpdate,
+  inspectOrphanRun: InspectOrphanRun,
+  cancelOrphanRun: CancelOrphanRun,
   getApplicationConfig: GetApplicationConfig,
   chooseProject: () => ChooseProject() as unknown as Promise<OpenResult>,
   openProject: (root) => OpenProject(root) as unknown as Promise<OpenResult>,
@@ -463,6 +563,13 @@ export const backend: ProjectBackend = {
       sessionId,
       command as never,
     ) as unknown as Promise<EditResult>,
+  amendServiceConfigurationDraft: (sessionId, index, expected, replacement) =>
+    AmendServiceConfigurationDraft(
+      sessionId,
+      index,
+      expected as never,
+      replacement as never,
+    ) as unknown as Promise<EditResult>,
   reviewEditSession: (sessionId) =>
     ReviewStructuralEditSession(sessionId) as unknown as Promise<EditResult>,
   commitEditPlan: (sessionId, planId) =>
@@ -475,32 +582,76 @@ export const backend: ProjectBackend = {
   getSessionCredentialStatus: GetSessionCredentialStatus,
   setSessionCredential: (input) => SetSessionCredential(input as never),
   setPKIStorePassword: SetPKIStorePassword,
-  getRuntimeSecretDescriptors: () => GetRuntimeSecretDescriptors() as unknown as Promise<RuntimeSecretDescriptorOperation>,
-  setDeploymentRuntimeSecretValues: (input) => SetDeploymentRuntimeSecretValues(input as never),
-  getPendingRuntimeSecretDescriptors: (serviceDeployment) => GetPendingRuntimeSecretDescriptors(serviceDeployment) as unknown as Promise<RuntimeSecretDescriptorOperation>,
-  setPendingDeploymentRuntimeSecretValues: (input) => SetPendingDeploymentRuntimeSecretValues(input as never),
-  choosePendingDeploymentRuntimeSecretFile: (input) => ChoosePendingDeploymentRuntimeSecretFile(input as never),
-  listPendingSecretOutputs: (cursor = null) => ListPendingSecretOutputs(cursor) as unknown as Promise<SecretOutputPackagesOperation>,
-  setSecretOutputEncryptionPassword: (password, confirm) => SetSecretOutputEncryptionPassword({ password, confirm } as never),
-  deliverPendingSecretOutput: (packageId) => DeliverPendingSecretOutput({ packageId } as never) as unknown as Promise<SecretOutputDeliveryOperation>,
+  getRuntimeSecretDescriptors: () =>
+    GetRuntimeSecretDescriptors() as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  setDeploymentRuntimeSecretValues: (input) =>
+    SetDeploymentRuntimeSecretValues(input as never),
+  getPendingRuntimeSecretDescriptors: (serviceDeployment) =>
+    GetPendingRuntimeSecretDescriptors(
+      serviceDeployment,
+    ) as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  setPendingDeploymentRuntimeSecretValues: (input) =>
+    SetPendingDeploymentRuntimeSecretValues(input as never),
+  choosePendingDeploymentRuntimeSecretFile: (input) =>
+    ChoosePendingDeploymentRuntimeSecretFile(input as never),
+  listPendingSecretOutputs: (cursor = null) =>
+    ListPendingSecretOutputs(
+      cursor,
+    ) as unknown as Promise<SecretOutputPackagesOperation>,
+  setSecretOutputEncryptionPassword: (password, confirm) =>
+    SetSecretOutputEncryptionPassword({ password, confirm } as never),
+  deliverPendingSecretOutput: (packageId) =>
+    DeliverPendingSecretOutput({
+      packageId,
+    } as never) as unknown as Promise<SecretOutputDeliveryOperation>,
   clearSessionCredential: ClearSessionCredential,
   getExecutionNodeContext: GetExecutionNodeContext,
+  getServiceConfigurationPreview: () =>
+    GetServiceConfigurationPreview() as unknown as Promise<ServiceConfigurationPreview>,
+  probeExecutionNodeHostKey: () =>
+    ProbeExecutionNodeHostKey() as unknown as Promise<HostKeyProbeResult>,
+  approveExecutionNodeHostKey: (probeId) =>
+    ApproveExecutionNodeHostKey(
+      probeId,
+    ) as unknown as Promise<HostKeyProbeResult>,
+  declineExecutionNodeHostKey: () =>
+    DeclineExecutionNodeHostKey() as unknown as Promise<HostKeyProbeResult>,
+  probeTargetHostKey: (hostId) =>
+    ProbeTargetHostKey(hostId) as unknown as Promise<HostKeyProbeResult>,
+  approveTargetHostKey: (probeId) =>
+    ApproveTargetHostKey(probeId) as unknown as Promise<HostKeyProbeResult>,
+  declineTargetHostKey: () =>
+    DeclineTargetHostKey() as unknown as Promise<HostKeyProbeResult>,
   getInstallationState: () =>
     GetInstallationState() as unknown as Promise<InstallationState>,
   createInstallationPlan: () =>
     CreateInstallationPlan() as unknown as Promise<InstallationPlanOperation>,
   getInstallationPlan: (planId) =>
-    GetInstallationPlan(planId) as unknown as Promise<InstallationPlanOperation>,
+    GetInstallationPlan(
+      planId,
+    ) as unknown as Promise<InstallationPlanOperation>,
   approveInstallationPlan: (planId, acknowledgements) =>
     ApproveInstallationPlan(
       planId,
       acknowledgements,
     ) as unknown as Promise<InstallationPlanOperation>,
-  startApprovedInstallation: (planId) => StartApprovedInstallation(planId) as unknown as Promise<InstallationRunOperation>,
-  getInstallationRun: (runId) => GetInstallationRun(runId) as unknown as Promise<InstallationRunOperation>,
-  subscribeInstallationRun: (runId, afterSequence) => SubscribeInstallationRun(runId, afterSequence) as unknown as Promise<InstallationSubscriptionResult>,
-  unsubscribeInstallationRun: (subscriptionId) => UnsubscribeInstallationRun(subscriptionId),
-  cancelInstallationRun: (runId) => CancelInstallationRun(runId) as unknown as Promise<InstallationRunOperation>,
+  startApprovedInstallation: (planId) =>
+    StartApprovedInstallation(
+      planId,
+    ) as unknown as Promise<InstallationRunOperation>,
+  getInstallationRun: (runId) =>
+    GetInstallationRun(runId) as unknown as Promise<InstallationRunOperation>,
+  subscribeInstallationRun: (runId, afterSequence) =>
+    SubscribeInstallationRun(
+      runId,
+      afterSequence,
+    ) as unknown as Promise<InstallationSubscriptionResult>,
+  unsubscribeInstallationRun: (subscriptionId) =>
+    UnsubscribeInstallationRun(subscriptionId),
+  cancelInstallationRun: (runId) =>
+    CancelInstallationRun(
+      runId,
+    ) as unknown as Promise<InstallationRunOperation>,
   getEndpointPreview: () =>
     GetEndpointPreview() as unknown as Promise<EndpointPreview>,
   getVerifiedPKIView: () =>
@@ -522,5 +673,7 @@ export const backend: ProjectBackend = {
       directoryName,
     ) as unknown as Promise<ProjectExportOperationResult>,
   commitProjectExport: (planDigest) =>
-    CommitProjectExport(planDigest) as unknown as Promise<ProjectExportOperationResult>,
+    CommitProjectExport(
+      planDigest,
+    ) as unknown as Promise<ProjectExportOperationResult>,
 };

@@ -1,0 +1,20 @@
+# Platform Installer V2 managed rootless Docker system/user bridge
+[Unit]
+Description=Start rootless Docker for {{ platform_docker_account_name }} after LXC network
+BindsTo=platform-docker-lxc-ready.target
+After=platform-docker-lxc-ready.target user@{{ _platform_docker_uid }}.service
+Requires=user@{{ _platform_docker_uid }}.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User={{ platform_docker_account_name }}
+Environment=XDG_RUNTIME_DIR=/run/user/{{ _platform_docker_uid }}
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ _platform_docker_uid }}/bus
+ExecStart=/usr/bin/systemctl --user start docker.service
+ExecStop=/usr/bin/systemctl --user stop docker.service
+TimeoutStartSec=180
+TimeoutStopSec=180
+
+[Install]
+WantedBy=lxc-net.service

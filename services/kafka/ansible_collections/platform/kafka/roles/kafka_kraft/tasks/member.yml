@@ -160,6 +160,8 @@
     mode: '0640'
   register: platform_kafka_member_config
   when: not (platform_kafka_verify_only | bool)
+  diff: false
+  no_log: true
 
 - name: Inspect member KRaft metadata
   ansible.builtin.stat:

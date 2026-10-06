@@ -33,6 +33,7 @@
 - name: Inspect runtime-only PKI store password file
   ansible.builtin.stat:
     path: "{{ _platform_pki_password_file }}"
+    follow: false
   register: platform_pki_password_file_stat
   no_log: true
 
@@ -41,6 +42,8 @@
     that:
       - platform_pki_password_file_stat.stat.exists
       - platform_pki_password_file_stat.stat.isreg
+      - not (platform_pki_password_file_stat.stat.islnk | default(false))
+      - platform_pki_password_file_stat.stat.pw_name == platform_pki_owner
       - platform_pki_password_file_stat.stat.mode == '0600'
     fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
   no_log: true
@@ -48,18 +51,30 @@
 - name: Inspect existing PKI request fingerprint marker
   ansible.builtin.stat:
     path: "{{ _platform_pki_request_dir }}/request-fingerprint"
+    follow: false
   register: platform_pki_request_marker
 
 - name: Inspect persistent PKI request material consistency
   ansible.builtin.stat:
     path: "{{ _platform_pki_request_dir }}/{{ item }}"
+    follow: false
   loop: [leaf.key, leaf.crt, keystore.p12, truststore.p12]
   register: platform_pki_request_files
 
 - name: Inspect explicit PKI reissue recovery marker
   ansible.builtin.stat:
     path: "{{ _platform_pki_reissue_marker }}"
+    follow: false
   register: platform_pki_reissue_marker
+
+- name: Reject substituted PKI request and recovery state
+  ansible.builtin.assert:
+    that:
+      - not platform_pki_request_marker.stat.exists or (platform_pki_request_marker.stat.isreg | default(false))
+      - not platform_pki_reissue_marker.stat.exists or (platform_pki_reissue_marker.stat.isreg | default(false))
+      - not item.stat.exists or (item.stat.isreg | default(false))
+    fail_msg: PKI_REQUEST_STATE_INCOMPLETE
+  loop: "{{ platform_pki_request_files.results }}"
 
 - name: Read explicit PKI reissue recovery marker
   ansible.builtin.command:
@@ -83,7 +98,8 @@
         (not platform_pki_request_marker.stat.exists and
          not (platform_pki_request_files.results | map(attribute='stat.exists') | select | list | length)) or
         (platform_pki_request_marker.stat.exists and
-         (platform_pki_request_files.results | map(attribute='stat.exists') | select | list | length) == 4) or
+         (platform_pki_request_files.results[0].stat.isreg | default(false)) and
+         (platform_pki_request_files.results[1].stat.isreg | default(false))) or
         _platform_pki_reissue_resumable
     fail_msg: PKI_REQUEST_STATE_INCOMPLETE
 
@@ -100,18 +116,69 @@
   changed_when: false
   when: platform_pki_request_marker.stat.exists
 
+- name: Recognize an interrupted reissue whose leaf identity is already recorded
+  ansible.builtin.set_fact:
+    _platform_pki_reissue_materialized: >-
+      {{ _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
+         (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
+         (platform_pki_request_files.results[0].stat.isreg | default(false)) and
+         (platform_pki_request_files.results[1].stat.isreg | default(false)) }}
+
 - name: Determine whether certificate reissue is required
   ansible.builtin.set_fact:
     _platform_pki_reissue_required: >-
-      {{ platform_pki_request_marker.stat.exists and
+      {{ not _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
          ((platform_pki_existing_request_fingerprint.stdout | default('') | trim) != platform_pki_request.certificateRequestFingerprint or
           _platform_pki_reissue_requested) }}
-    _platform_pki_reissue_active: "{{ _platform_pki_reissue_resumable }}"
+    _platform_pki_reissue_active: "{{ _platform_pki_reissue_resumable and not _platform_pki_reissue_materialized }}"
 
 - name: Require explicit authorization for certificate reissue
   ansible.builtin.assert:
     that:
       - not _platform_pki_reissue_required or _platform_pki_reissue_requested
+    fail_msg: CERTIFICATE_REISSUE_REQUIRED
+
+- name: Inspect authority material before any PKI reissue cleanup
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ _platform_pki_authority_dir }}/ca.key"
+    - "{{ _platform_pki_authority_dir }}/ca.crt"
+  register: platform_pki_authority_files
+
+- name: Inspect managed certificate authority fingerprint marker
+  ansible.builtin.stat:
+    path: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
+    follow: false
+  register: platform_pki_authority_marker
+
+- name: Reject partial or substituted managed certificate authority state
+  ansible.builtin.assert:
+    that:
+      - >-
+        (not platform_pki_authority_marker.stat.exists and
+         not (platform_pki_authority_files.results | map(attribute='stat.exists') | select | list | length)) or
+        (platform_pki_authority_marker.stat.isreg | default(false) and
+         (platform_pki_authority_files.results[0].stat.isreg | default(false)) and
+         (platform_pki_authority_files.results[1].stat.isreg | default(false)))
+    fail_msg: PKI_AUTHORITY_STATE_INCOMPLETE
+
+- name: Read managed certificate authority fingerprint marker
+  ansible.builtin.command:
+    argv: [cat, "{{ _platform_pki_authority_dir }}/authority-fingerprint"]
+  register: platform_pki_existing_authority_fingerprint
+  changed_when: false
+  when: platform_pki_authority_marker.stat.exists
+
+- name: Reject managed certificate authority policy change before reissue cleanup
+  ansible.builtin.assert:
+    that:
+      - >-
+        not platform_pki_authority_marker.stat.exists or
+        (platform_pki_existing_authority_fingerprint.stdout | trim) == platform_pki_request.authorityFingerprint
+      - >-
+        not (platform_pki_request_marker.stat.exists or platform_pki_reissue_marker.stat.exists) or platform_pki_authority_marker.stat.exists
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
 - name: Create protected PKI reissue transaction directory
@@ -122,20 +189,6 @@
     group: "{{ platform_pki_group }}"
     mode: '0700'
   when: _platform_pki_reissue_required
-
-- name: Start an explicitly authorized PKI reissue transaction
-  ansible.builtin.copy:
-    content: "{{ platform_pki_request.certificateRequestFingerprint }}\n"
-    dest: "{{ _platform_pki_reissue_marker }}"
-    owner: "{{ platform_pki_owner }}"
-    group: "{{ platform_pki_group }}"
-    mode: '0600'
-  when: _platform_pki_reissue_required
-  register: _platform_pki_reissue_marker_created
-
-- name: Mark explicitly authorized PKI reissue as active
-  ansible.builtin.set_fact:
-    _platform_pki_reissue_active: "{{ _platform_pki_reissue_active or _platform_pki_reissue_required }}"
 
 - name: Create protected PKI reissue backup directory
   ansible.builtin.file:
@@ -154,9 +207,39 @@
     owner: "{{ platform_pki_owner }}"
     group: "{{ platform_pki_group }}"
     mode: '0600'
-  loop: [leaf.key, leaf.crt, keystore.p12, truststore.p12, request-fingerprint]
+  loop: [leaf.key, leaf.crt, request-fingerprint]
   when: _platform_pki_reissue_required
   no_log: true
+
+- name: Preserve existing derived PKCS12 stores before explicit reissue
+  ansible.builtin.copy:
+    src: "{{ _platform_pki_request_dir }}/{{ item.name }}"
+    dest: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissue-backups/{{ platform_pki_request.id }}-{{ platform_pki_existing_request_fingerprint.stdout | trim | hash('sha256') }}/{{ item.name }}"
+    remote_src: true
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0600'
+  loop:
+    - {name: keystore.p12, index: 2}
+    - {name: truststore.p12, index: 3}
+  when:
+    - _platform_pki_reissue_required
+    - platform_pki_request_files.results[item.index].stat.isreg | default(false)
+  no_log: true
+
+- name: Start an explicitly authorized PKI reissue after complete backup
+  ansible.builtin.copy:
+    content: "{{ platform_pki_request.certificateRequestFingerprint }}\n"
+    dest: "{{ _platform_pki_reissue_marker }}"
+    owner: "{{ platform_pki_owner }}"
+    group: "{{ platform_pki_group }}"
+    mode: '0600'
+  when: _platform_pki_reissue_required
+  register: _platform_pki_reissue_marker_created
+
+- name: Mark explicitly authorized PKI reissue as active
+  ansible.builtin.set_fact:
+    _platform_pki_reissue_active: "{{ _platform_pki_reissue_active or _platform_pki_reissue_required }}"
 
 - name: Remove superseded PKI request material during explicit reissue
   ansible.builtin.file:
@@ -179,44 +262,6 @@
         not platform_pki_request_marker.stat.exists or
         (platform_pki_existing_request_fingerprint.stdout | trim) == platform_pki_request.certificateRequestFingerprint or
         _platform_pki_reissue_active
-    fail_msg: CERTIFICATE_REISSUE_REQUIRED
-
-- name: Inspect authority material consistency
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - "{{ _platform_pki_authority_dir }}/ca.key"
-    - "{{ _platform_pki_authority_dir }}/ca.crt"
-  register: platform_pki_authority_files
-
-- name: Inspect managed certificate authority fingerprint marker
-  ansible.builtin.stat:
-    path: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
-  register: platform_pki_authority_marker
-
-- name: Read managed certificate authority fingerprint marker
-  ansible.builtin.command:
-    argv: [cat, "{{ _platform_pki_authority_dir }}/authority-fingerprint"]
-  register: platform_pki_existing_authority_fingerprint
-  changed_when: false
-  when: platform_pki_authority_marker.stat.exists
-
-- name: Reject partial managed certificate authority state
-  ansible.builtin.assert:
-    that:
-      - >-
-        (not platform_pki_authority_marker.stat.exists and
-         not (platform_pki_authority_files.results | map(attribute='stat.exists') | select | list | length)) or
-        (platform_pki_authority_marker.stat.exists and
-         (platform_pki_authority_files.results | map(attribute='stat.exists') | select | list | length) == 2)
-    fail_msg: PKI_AUTHORITY_STATE_INCOMPLETE
-
-- name: Reject managed certificate authority policy change during reconcile
-  ansible.builtin.assert:
-    that:
-      - >-
-        not platform_pki_authority_marker.stat.exists or
-        (platform_pki_existing_authority_fingerprint.stdout | trim) == platform_pki_request.authorityFingerprint
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
 - name: Prepare persistent managed authority and request directories
@@ -310,34 +355,11 @@
     group: "{{ platform_pki_group }}"
     mode: '0600'
 
-- name: Complete explicit PKI reissue transaction after recording identity
+- name: Validate authoritative PEM and reconcile derived PKCS12 stores
+  ansible.builtin.include_tasks: stores.yml
+
+- name: Complete explicit PKI reissue transaction after materialization
   ansible.builtin.file:
     path: "{{ _platform_pki_reissue_marker }}"
     state: absent
-  when: _platform_pki_reissue_active
-
-- name: Build PKCS12 keystore atomically in runtime workspace
-  ansible.builtin.command:
-    argv: [openssl, pkcs12, -export, -name, "{{ _platform_pki_request_plans[0].keyAlias }}", -inkey, "{{ _platform_pki_request_dir }}/leaf.key", -in, "{{ _platform_pki_request_dir }}/leaf.crt", -certfile, "{{ _platform_pki_authority_dir }}/ca.crt", -out, "{{ _platform_pki_request_dir }}/keystore.p12", -passout, "file:{{ _platform_pki_password_file }}"]
-  args:
-    creates: "{{ _platform_pki_request_dir }}/keystore.p12"
-  no_log: true
-
-- name: Build PKCS12 truststore once
-  ansible.builtin.command:
-    argv: [keytool, -importcert, -noprompt, -storetype, PKCS12, -alias, "{{ _platform_pki_request_plans[0].trustAlias }}", -file, "{{ _platform_pki_authority_dir }}/ca.crt", -keystore, "{{ _platform_pki_request_dir }}/truststore.p12", "-storepass:file", "{{ _platform_pki_password_file }}"]
-  args:
-    creates: "{{ _platform_pki_request_dir }}/truststore.p12"
-  no_log: true
-
-- name: Verify managed certificate chain read-only
-  ansible.builtin.command:
-    argv: [openssl, verify, -CAfile, "{{ _platform_pki_authority_dir }}/ca.crt", "{{ _platform_pki_request_dir }}/leaf.crt"]
-  changed_when: false
-
-- name: Verify dedicated PKCS12 key and trust stores read-only
-  ansible.builtin.command:
-    argv: [keytool, -list, -storetype, PKCS12, -keystore, "{{ _platform_pki_request_dir }}/{{ item }}", "-storepass:file", "{{ _platform_pki_password_file }}"]
-  loop: [keystore.p12, truststore.p12]
-  changed_when: false
-  no_log: true
+  when: _platform_pki_reissue_active or _platform_pki_reissue_materialized

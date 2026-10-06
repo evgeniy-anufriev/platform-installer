@@ -175,7 +175,7 @@ export function EntryPointsView({
   providerIntents: ProviderIntent[];
   deploymentIntents: DeploymentIntent[];
   preview?: EndpointPreview;
-  verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
+  verificationStatus: NonNullable<OpenResult["verification"]>["status"];
   busy: boolean;
   disabled: boolean;
   commandCount: number;
@@ -234,6 +234,11 @@ export function EntryPointsView({
           <p>
             Группы адресов, назначения потребителей и read-only результат Core.
           </p>
+          {commandCount > 0 && (
+            <p className="muted">
+              Черновик: {commandCount} из 16 · осталось {Math.max(0, 16 - commandCount)}
+            </p>
+          )}
         </div>
         <button
           onClick={() => setDialog({ mode: "add" })}
@@ -508,7 +513,7 @@ function PreviewCard({
 }: {
   preview?: EndpointPreview;
   status: string;
-  verificationStatus: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID";
+  verificationStatus: NonNullable<OpenResult["verification"]>["status"];
   providerChangePending: boolean;
 }) {
   if (status !== "CURRENT")

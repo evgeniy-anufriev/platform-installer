@@ -1,8 +1,11 @@
+import base64
 import hashlib
 import io
 import json
 import os
+import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 import tarfile
@@ -17,6 +20,7 @@ from execution_lifecycle import Journal, LifecycleError, digest, recover, retain
 import execution_lifecycle
 import execution_controller
 import execution_protocol
+import execution_target_trust
 
 
 def metadata(run_id="run-1", project="project-1"):
@@ -38,6 +42,39 @@ def runtime_evidence():
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_staged_host_trust_survives_authoritative_hex_run_id(self):
+        with tempfile.TemporaryDirectory() as root:
+            runs = Path(root, "runs")
+            runs.mkdir(mode=0o700)
+            staging = runs / "installer-123456"
+            staging.mkdir(mode=0o700)
+            manifest = {
+                "projectIdentity": "project-1", "projectRevision": "sha256:" + "1" * 64,
+                "planFingerprint": "sha256:" + "2" * 64,
+                "runtimeRelease": {"bundleDigest": "sha256:" + "3" * 64},
+                "operations": [{"operation": "PKI_APPLY"}],
+                "targetConnections": {"node1": {"address": "192.0.2.1", "port": 22,
+                                                "mode": "ssh", "unsupportedOptions": False}},
+            }
+            path = staging / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            path.chmod(0o600)
+            kind = "ssh-ed25519"
+            key = base64.b64encode(len(kind).to_bytes(4, "big") + kind.encode() + b"a" * 32).decode()
+            execution_target_trust.stage(root, {
+                "stagingId": staging.name, "projectIdentity": manifest["projectIdentity"],
+                "projectRevision": manifest["projectRevision"],
+                "planFingerprint": manifest["planFingerprint"],
+                "runtimeRelease": manifest["runtimeRelease"],
+                "manifestDigest": digest(manifest),
+                "approvals": [{"hostId": "node1", "address": "192.0.2.1", "port": 22,
+                               "keyType": kind, "publicKey": key}],
+            })
+            run = runs / ("installer-" + "a1" * 16)
+            staging.rename(run)
+            self.assertEqual(str(run / "known_hosts"),
+                             execution_target_trust.verify(root, run.name, manifest))
+
     def test_controller_admits_clickhouse_as_a_closed_service_type(self):
         self.assertTrue(execution_controller._safe_service("clickhouse"))
         self.assertFalse(execution_controller._safe_service("clickhouse-extra"))
@@ -261,6 +298,26 @@ class ExecutionLifecycleTests(unittest.TestCase):
             self.assertEqual(revision, result["projectSnapshot"]["projectRevision"])
             self.assertEqual(runtime_evidence(), result["runtimeEvidence"])
 
+    def test_fast_configuration_preview_uses_fixed_target_free_playbook(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as release:
+            journal = Journal(root, "run-preview")
+            project = Path(journal.directory, "project")
+            Path(project, "inventory").mkdir(parents=True)
+            revision = "sha256:" + "a" * 64
+            preview = {"apiVersion": "platform.installer/service-configuration-preview/v1alpha1", "kind": "ServiceConfigurationPreview", "projectRevision": revision, "services": {}}
+
+            def completed(command, **kwargs):
+                self.assertIn("-i", command)
+                self.assertTrue(command[-3].endswith("service-configuration-preview.yml"))
+                self.assertEqual("platform.core.project_snapshot_json", kwargs["env"]["ANSIBLE_CALLBACKS_ENABLED"])
+                Path(kwargs["env"]["PLATFORM_PROJECT_SNAPSHOT_OUTPUT"]).write_text(json.dumps(preview), encoding="utf-8")
+                return subprocess_completed(0)
+
+            with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
+                result = execution_protocol.core_operation({"runId": "run-preview", "runtimeRelease": {}}, root, release, "BuildServiceConfigurationPreview", runtime_evidence())
+            self.assertEqual(preview, result["serviceConfigurationPreview"])
+            self.assertEqual(runtime_evidence(), result["runtimeEvidence"])
+
     def _candidate_archive(self, path, members):
         with tarfile.open(path, "w:") as archive:
             for name, content, member_type in members:
@@ -443,6 +500,14 @@ class ExecutionLifecycleTests(unittest.TestCase):
             symlink_path.symlink_to(foreign)
             non_regular_path = Path(journal.directory, ".runtime-secret-inputs-" + hashlib.sha256(b"other:vault").hexdigest() + ".json")
             non_regular_path.mkdir()
+            runtime_dir = Path(journal.directory, ".ansible-runtime")
+            runtime_dir.mkdir(mode=0o700)
+            key_path = runtime_dir / "target-key-12345678.pem"
+            key_path.write_text("synthetic-private-key", encoding="utf-8")
+            bootstrap_path = runtime_dir / "bootstrap-12345678.json"
+            bootstrap_path.write_text("{}", encoding="utf-8")
+            connection_input = Path(journal.directory, ".ansible-runtime-credentials.json")
+            connection_input.write_text("synthetic", encoding="utf-8")
             self.assertEqual(["run-1"], recover(root, lambda _unit, _metadata: False))
             self.assertEqual([], recover(root, lambda _unit, _metadata: False))
             self.assertEqual("INTERRUPTED", journal.status()["state"])
@@ -450,6 +515,9 @@ class ExecutionLifecycleTests(unittest.TestCase):
             self.assertTrue(symlink_path.is_symlink())
             self.assertEqual("foreign", foreign.read_text(encoding="utf-8"))
             self.assertTrue(non_regular_path.is_dir())
+            self.assertFalse(key_path.exists())
+            self.assertFalse(bootstrap_path.exists())
+            self.assertFalse(connection_input.exists())
 
     def test_cancel_missing_controller_removes_typed_secret_input_file(self):
         with tempfile.TemporaryDirectory() as root:
@@ -460,10 +528,160 @@ class ExecutionLifecycleTests(unittest.TestCase):
             journal.transition("RUNNING", "running")
             secret_path = Path(journal.directory, ".runtime-secret-inputs-" + hashlib.sha256(b"apply:vault").hexdigest() + ".json")
             secret_path.write_text('{"value":"secret-canary"}', encoding="utf-8")
+            runtime_dir = Path(journal.directory, ".ansible-runtime")
+            runtime_dir.mkdir(mode=0o700)
+            key_path = runtime_dir / "target-key-12345678.pem"
+            key_path.write_text("synthetic-private-key", encoding="utf-8")
+            connection_input = Path(journal.directory, ".ansible-runtime-credentials.json")
+            connection_input.write_text("synthetic", encoding="utf-8")
             with mock.patch.object(execution_protocol, "active", return_value=False):
                 result = execution_protocol.cancel({"runId": "run-1"}, root)
+                repeated = execution_protocol.cancel({"runId": "run-1"}, root)
             self.assertEqual("INTERRUPTED", result["run"]["state"])
+            self.assertTrue(repeated["idempotent"])
             self.assertFalse(secret_path.exists())
+            self.assertFalse(key_path.exists())
+            self.assertFalse(connection_input.exists())
+
+    def test_cancel_active_unit_cleans_key_only_after_confirmed_stop(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            manifest = {"projectIdentity": "project-1", "planFingerprint": metadata()["planFingerprint"], "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            journal.transition("RUNNING", "running")
+            runtime_dir = Path(journal.directory, ".ansible-runtime")
+            runtime_dir.mkdir(mode=0o700)
+            key_path = runtime_dir / "target-key-12345678.pem"
+            key_path.write_text("synthetic-private-key", encoding="utf-8")
+            bootstrap_path = runtime_dir / "bootstrap-12345678.json"
+            bootstrap_path.write_text("{}", encoding="utf-8")
+            connection_input = Path(journal.directory, ".ansible-runtime-credentials.json")
+            connection_input.write_text("synthetic", encoding="utf-8")
+            def stopped(_command, **_kwargs):
+                self.assertTrue(key_path.exists())
+                self.assertEqual("CANCELLED", journal.status()["state"])
+            with mock.patch.object(execution_protocol, "active", side_effect=[True, False, False]), mock.patch.object(execution_protocol.subprocess, "check_call", side_effect=stopped) as stop:
+                result = execution_protocol.cancel({"runId": "run-1"}, root)
+                repeated = execution_protocol.cancel({"runId": "run-1"}, root)
+            self.assertEqual(1, stop.call_count)
+            self.assertFalse(result["idempotent"])
+            self.assertEqual("CANCELLED", repeated["run"]["state"])
+            self.assertTrue(repeated["idempotent"])
+            self.assertFalse(key_path.exists())
+            self.assertFalse(bootstrap_path.exists())
+            self.assertFalse(connection_input.exists())
+
+    def test_cancel_stop_failure_retains_key_until_unit_is_inactive(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            manifest = {"projectIdentity": "project-1", "planFingerprint": metadata()["planFingerprint"], "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            journal.transition("RUNNING", "running")
+            runtime_dir = Path(journal.directory, ".ansible-runtime")
+            runtime_dir.mkdir(mode=0o700)
+            key_path = runtime_dir / "target-key-12345678.pem"
+            key_path.write_text("synthetic-private-key", encoding="utf-8")
+            with mock.patch.object(execution_protocol, "active", side_effect=[True, True, False]), mock.patch.object(execution_protocol.subprocess, "check_call", side_effect=[subprocess.CalledProcessError(1, "systemctl"), None]) as stop:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    execution_protocol.cancel({"runId": "run-1"}, root)
+                self.assertTrue(key_path.exists())
+                repeated = execution_protocol.cancel({"runId": "run-1"}, root)
+            self.assertEqual(2, stop.call_count)
+            self.assertTrue(repeated["idempotent"])
+            self.assertFalse(key_path.exists())
+
+    def test_unit_status_query_failure_cannot_authorize_cancel_cleanup(self):
+        current = metadata()
+        unit = current["unit"]
+        result = subprocess.CompletedProcess([], 1, stdout="inactive")
+        with mock.patch.object(execution_protocol.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(LifecycleError, "EXECUTION_UNIT_STATUS_UNAVAILABLE"):
+                execution_protocol.active(unit, current)
+        with mock.patch.object(execution_protocol.subprocess, "run", side_effect=OSError("systemd unavailable")):
+            with self.assertRaisesRegex(LifecycleError, "EXECUTION_UNIT_STATUS_UNAVAILABLE"):
+                execution_protocol.active(unit, current)
+        for state, expected in (("active", True), ("deactivating", True), ("inactive", False), ("failed", False)):
+            with self.subTest(state=state), mock.patch.object(execution_protocol.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout=state + "\n")):
+                self.assertEqual(expected, execution_protocol.active(unit, current))
+
+    def test_cancel_status_query_failure_retains_key_then_retry_cleans_after_inactive(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            manifest = {"projectIdentity": "project-1", "planFingerprint": metadata()["planFingerprint"], "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            journal.transition("RUNNING", "running")
+            runtime_dir = Path(journal.directory, ".ansible-runtime")
+            runtime_dir.mkdir(mode=0o700)
+            key_path = runtime_dir / "target-key-12345678.pem"
+            key_path.write_text("synthetic-private-key", encoding="utf-8")
+            connection_input = Path(journal.directory, ".ansible-runtime-credentials.json")
+            connection_input.write_text("synthetic", encoding="utf-8")
+            with mock.patch.object(execution_protocol, "active", side_effect=[LifecycleError("EXECUTION_UNIT_STATUS_UNAVAILABLE"), True, LifecycleError("EXECUTION_UNIT_STATUS_UNAVAILABLE"), False]), mock.patch.object(execution_protocol.subprocess, "check_call") as stop:
+                with self.assertRaisesRegex(LifecycleError, "EXECUTION_UNIT_STATUS_UNAVAILABLE"):
+                    execution_protocol.cancel({"runId": "run-1"}, root)
+                self.assertEqual("RUNNING", journal.status()["state"])
+                self.assertTrue(key_path.exists())
+                with self.assertRaisesRegex(LifecycleError, "EXECUTION_UNIT_STATUS_UNAVAILABLE"):
+                    execution_protocol.cancel({"runId": "run-1"}, root)
+                self.assertEqual("CANCELLED", journal.status()["state"])
+                self.assertTrue(key_path.exists())
+                repeated = execution_protocol.cancel({"runId": "run-1"}, root)
+            self.assertEqual(1, stop.call_count)
+            self.assertTrue(repeated["idempotent"])
+            self.assertFalse(key_path.exists())
+            self.assertFalse(connection_input.exists())
+
+    def test_cancel_failed_stop_get_retains_key_until_confirmed_inactive(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            manifest = {"projectIdentity": "project-1", "planFingerprint": metadata()["planFingerprint"], "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            journal.transition("RUNNING", "running")
+            runtime_dir = Path(journal.directory, ".ansible-runtime")
+            runtime_dir.mkdir(mode=0o700)
+            key_path = runtime_dir / "target-key-12345678.pem"
+            key_path.write_text("synthetic-private-key", encoding="utf-8")
+            connection_input = Path(journal.directory, ".ansible-runtime-credentials.json")
+            connection_input.write_text("synthetic", encoding="utf-8")
+            lease_request = {"requestId": "1" * 32, "startAttemptId": "2" * 32,
+                             "projectIdentity": "project-1", "projectRevision": "sha256:" + "a" * 64,
+                             "planFingerprint": metadata()["planFingerprint"],
+                             "executionManifestDigest": metadata()["manifestDigest"],
+                             "runtimeRelease": {"bundleDigest": metadata()["runtimeRelease"],
+                                                "coreVersion": "test-core", "catalogDigest": "sha256:" + "b" * 64,
+                                                "planningProtocol": "v1alpha1"}}
+            lease_payload = {"apiVersion": execution_protocol.execution_secret_lease.PAYLOAD_VERSION,
+                             "kind": "TargetCredentialLeasePayload", "username": "test-operator",
+                             "password": "synthetic-password", "privateKey": None, "sudoPassword": None}
+            stored = execution_protocol.execution_secret_lease.put(root, lease_request, lease_payload)
+            self.assertTrue(execution_protocol.execution_secret_lease.attach(root, stored["leaseId"], lease_request, "run-1"))
+            payload_path = Path(execution_protocol.execution_secret_lease.payload_path(root, stored["leaseId"], "run-1"))
+            status_unavailable = LifecycleError("EXECUTION_UNIT_STATUS_UNAVAILABLE")
+            with mock.patch.object(execution_protocol, "active", side_effect=[True, True, True, status_unavailable, status_unavailable, False, False]), mock.patch.object(execution_protocol.subprocess, "check_call", side_effect=subprocess.CalledProcessError(1, "systemctl")):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    execution_protocol.cancel({"runId": "run-1"}, root)
+                self.assertEqual("CANCELLED", journal.status()["state"])
+                self.assertTrue(key_path.exists())
+                self.assertEqual("CANCELLED", execution_protocol.get({"runId": "run-1"}, root)["run"]["state"])
+                self.assertTrue(key_path.exists())
+                self.assertTrue(connection_input.exists())
+                self.assertTrue(payload_path.exists())
+                self.assertEqual("test-operator", execution_protocol.execution_secret_lease.target_username_for_run(root, "run-1"))
+                with self.assertRaisesRegex(LifecycleError, "EXECUTION_UNIT_STATUS_UNAVAILABLE"):
+                    execution_protocol.get({"runId": "run-1"}, root)
+                self.assertTrue(key_path.exists())
+                self.assertTrue(connection_input.exists())
+                self.assertTrue(payload_path.exists())
+                self.assertEqual("test-operator", execution_protocol.execution_secret_lease.target_username_for_run(root, "run-1"))
+                self.assertEqual("CANCELLED", execution_protocol.get({"runId": "run-1"}, root)["run"]["state"])
+            self.assertFalse(key_path.exists())
+            self.assertFalse(connection_input.exists())
+            self.assertFalse(payload_path.exists())
+            self.assertIsNone(execution_protocol.execution_secret_lease.target_username_for_run(root, "run-1"))
 
     def test_terminal_result_is_exactly_once_under_a_race(self):
         with tempfile.TemporaryDirectory() as root:
@@ -483,6 +701,152 @@ class ExecutionLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(LifecycleError, "MANIFEST_INVALID"):
                 execution_controller._dispatch(root, journal, {"operations": [{"operationId": "same", "operation": "PKI_APPLY"}, {"operationId": "same", "operation": "PKI_APPLY"}]}, [False])
 
+    def test_concurrent_pki_apply_for_same_project_is_rejected_until_deploy_finishes(self):
+        with tempfile.TemporaryDirectory() as root:
+            first = Journal(root, "run-first")
+            second = Journal(root, "run-second")
+            first.initialize(metadata("run-first", "same-project"))
+            second.initialize(metadata("run-second", "same-project"))
+            operation = {"operationId": "pki:apply", "operation": "PKI_APPLY", "phaseId": "apply"}
+            manifest = {"operations": [operation]}
+            entered_ansible = threading.Event()
+            finish_ansible = threading.Event()
+            first_result = []
+
+            def wait_for_pki(_process, _stopped):
+                entered_ansible.set()
+                if threading.current_thread().name == "first-pki-apply":
+                    if not finish_ansible.wait(5):
+                        raise AssertionError("first PKI apply did not finish its simulated materialize+deploy interval")
+                return 0, ""
+
+            def run_first():
+                try:
+                    first_result.append(execution_controller._dispatch(root, first, manifest, [False]))
+                except Exception as error:  # surfaced in the owning test thread
+                    first_result.append(error)
+
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "pki-apply.yml"]), \
+                 mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/tmp/known_hosts"), \
+                 mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value=None), \
+                 mock.patch.object(execution_controller.subprocess, "Popen", return_value=object()) as launch, \
+                 mock.patch.object(execution_controller, "_wait_for_operation", side_effect=wait_for_pki):
+                thread = threading.Thread(target=run_first, name="first-pki-apply")
+                thread.start()
+                self.assertTrue(entered_ansible.wait(5), "first PKI apply did not enter the protected operation")
+                with self.assertRaisesRegex(LifecycleError, "PKI_APPLY_ALREADY_RUNNING"):
+                    execution_controller._dispatch(root, second, manifest, [False])
+                self.assertEqual(1, launch.call_count, "the rejected operation must not launch Ansible")
+                finish_ansible.set()
+                thread.join(5)
+                self.assertFalse(thread.is_alive())
+            self.assertEqual(["SUCCEEDED"], first_result)
+            self.assertTrue(Path(root, "projects", "same-project", ".pki-apply.lock").is_file())
+            # The advisory lock is released after the operation even though its
+            # protected lock-file inode remains for the next run.
+            retry_lock = execution_controller._acquire_project_pki_apply_lock(second)
+            os.close(retry_lock)
+
+    def test_reissue_uses_the_same_project_pki_lock(self):
+        with tempfile.TemporaryDirectory() as root:
+            first = Journal(root, "run-first")
+            second = Journal(root, "run-second")
+            first.initialize(metadata("run-first", "same-project"))
+            second.initialize(metadata("run-second", "same-project"))
+            descriptor = execution_controller._acquire_project_pki_apply_lock(first)
+            operation = {"operationId": "pki:reissue", "operation": "PKI_REISSUE", "phaseId": "pki",
+                         "reissueRequests": [{"requestId": "tls--node1", "expectedOldFingerprint": "sha256:" + "a" * 64,
+                                              "desiredFingerprint": "sha256:" + "b" * 64, "recoveryFingerprint": None}]}
+            try:
+                with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook"]), \
+                     mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/tmp/known_hosts"), \
+                     mock.patch.object(execution_controller.subprocess, "Popen") as launch:
+                    with self.assertRaisesRegex(LifecycleError, "PKI_APPLY_ALREADY_RUNNING"):
+                        execution_controller._dispatch(root, second, {"operations": [operation]}, [False])
+                    launch.assert_not_called()
+            finally:
+                os.close(descriptor)
+
+    def test_reissue_command_selects_only_manifest_bound_request_ids(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            (Path(journal.directory) / "runtime-projection.json").write_text("{}", encoding="utf-8")
+            operation = {"operationId": "pki:reissue", "operation": "PKI_REISSUE",
+                         "reissueRequests": [{"requestId": "tls--node1"}]}
+            command = execution_controller._command(root, journal, operation)
+            self.assertIn("pki-reissue.yml", " ".join(command))
+            self.assertEqual('{"platform_pki_reissue_request_ids":["tls--node1"]}', command[-1])
+
+    @unittest.skipUnless(shutil.which("ansible"), "real Ansible CLI is required")
+    def test_reissue_command_extra_var_arrives_as_ansible_list(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            (Path(journal.directory) / "runtime-projection.json").write_text("{}", encoding="utf-8")
+            operation = {"operationId": "pki:reissue", "operation": "PKI_REISSUE",
+                         "reissueRequests": [{"requestId": "tls--node1"}]}
+            extra = execution_controller._command(root, journal, operation)[-1]
+            result = subprocess.run(
+                ["ansible", "localhost", "-i", "localhost,", "-c", "local", "-m", "debug",
+                 "-a", "msg={{ platform_pki_reissue_request_ids | type_debug }}", "-e", extra],
+                capture_output=True, text=True, timeout=30, check=False)
+            self.assertEqual(0, result.returncode, result.stderr[-2000:])
+            self.assertIn('"msg": "list"', result.stdout)
+
+    def test_reissue_rechecks_marker_under_lock_before_launch(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            request_dir = Path(root, "pki", "project-1", "requests", "tls--node1")
+            request_dir.mkdir(parents=True)
+            (request_dir / "request-fingerprint").write_text("sha256:" + "c" * 64 + "\n", encoding="ascii")
+            for name in ("leaf.key", "leaf.crt"):
+                (request_dir / name).write_bytes(b"test")
+            authority_dir = Path(root, "pki", "project-1", "authorities", "platform-ca")
+            authority_dir.mkdir(parents=True)
+            (authority_dir / "authority-fingerprint").write_text("sha256:" + "d" * 64 + "\n", encoding="ascii")
+            for name in ("ca.key", "ca.crt"):
+                (authority_dir / name).write_bytes(b"test")
+            operation = {"operationId": "pki:reissue", "operation": "PKI_REISSUE", "phaseId": "pki",
+                         "reissueRequests": [{"requestId": "tls--node1", "expectedOldFingerprint": "sha256:" + "a" * 64,
+                                              "desiredFingerprint": "sha256:" + "b" * 64, "recoveryFingerprint": None,
+                                              "authorityId": "platform-ca", "authorityFingerprint": "sha256:" + "d" * 64}]}
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook"]), \
+                 mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/tmp/known_hosts"), \
+                 mock.patch.object(execution_controller.subprocess, "Popen") as launch:
+                with self.assertRaisesRegex(LifecycleError, "PKI_REISSUE_PLAN_STALE"):
+                    execution_controller._dispatch(root, journal, {"operations": [operation]}, [False])
+                launch.assert_not_called()
+
+    def test_pki_apply_locks_are_independent_between_projects(self):
+        with tempfile.TemporaryDirectory() as root:
+            first = Journal(root, "run-first")
+            second = Journal(root, "run-second")
+            first.initialize(metadata("run-first", "project-one"))
+            second.initialize(metadata("run-second", "project-two"))
+            first_lock = execution_controller._acquire_project_pki_apply_lock(first)
+            try:
+                second_lock = execution_controller._acquire_project_pki_apply_lock(second)
+                os.close(second_lock)
+                with self.assertRaisesRegex(LifecycleError, "PKI_APPLY_ALREADY_RUNNING"):
+                    execution_controller._acquire_project_pki_apply_lock(first)
+            finally:
+                os.close(first_lock)
+
+    def test_pki_apply_lock_rejects_symlink_substitution(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            journal.initialize(metadata())
+            execution_controller._generated_state_path(root, "project-1")
+            lock_path = Path(root, "projects", "project-1", ".pki-apply.lock")
+            target = Path(root, "foreign-lock")
+            target.write_text("", encoding="utf-8")
+            lock_path.symlink_to(target)
+            with self.assertRaisesRegex(LifecycleError, "PKI_APPLY_LOCK_UNAVAILABLE"):
+                execution_controller._acquire_project_pki_apply_lock(journal)
+            self.assertEqual("", target.read_text(encoding="utf-8"))
+
     def test_service_dispatch_requires_existing_runtime_projection(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1"); journal.initialize(metadata())
@@ -492,19 +856,44 @@ class ExecutionLifecycleTests(unittest.TestCase):
     def test_redis_is_an_admitted_generic_service_operation(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1"); journal.initialize(metadata())
-            operation = {"operationId": "apply:redis-main", "operation": "SERVICE_APPLY", "serviceType": "redis", "serviceDeployment": "redis-main"}
+            operation = {"operationId": "apply:redis-main", "operation": "SERVICE_APPLY", "serviceType": "redis", "serviceDeployment": "redis-main", "targets": ["node1"]}
             projection_id = hashlib.sha256(operation["operationId"].encode("utf-8")).hexdigest()
             Path(journal.directory, ".runtime-projection-" + projection_id + ".json").write_text("{}", encoding="utf-8")
             command = execution_controller._command("/runtime/release", journal, operation)
             self.assertEqual("/runtime/release/services/redis/playbooks/apply.yml", command[3])
             self.assertIn("platform_execution_service_deployment=redis-main", command)
+            self.assertEqual("localhost:node1", command[command.index("--limit") + 1])
             self.assertEqual("SERVICE_APPLY", operation["operation"])
+
+    def test_service_limit_rejects_missing_broad_or_conflicting_targets(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1"); journal.initialize(metadata())
+            base = {"operationId": "verify:docker", "operation": "SERVICE_VERIFY", "serviceType": "docker", "serviceDeployment": "docker"}
+            digest_id = hashlib.sha256(base["operationId"].encode("utf-8")).hexdigest()
+            Path(journal.directory, ".runtime-projection-" + digest_id + ".json").write_text("{}", encoding="utf-8")
+            for targets in (None, [], ["all"], ["localhost"], ["node1", "node1"], ["node1:node2"], ["node2", "node1"], ["node1", 2]):
+                with self.subTest(targets=targets):
+                    operation = dict(base)
+                    if targets is not None:
+                        operation["targets"] = targets
+                    with self.assertRaisesRegex(LifecycleError, "EXECUTION_MANIFEST_INVALID"):
+                        execution_controller._command("/runtime/release", journal, operation)
+            operation = dict(base, targets=["node1"], roleVariablesPrefix="platform_docker_",
+                             roleVariablesByHost={"node2": {"platform_docker_mode": "create-user"}})
+            with self.assertRaisesRegex(LifecycleError, "EXECUTION_MANIFEST_INVALID"):
+                execution_controller._command("/runtime/release", journal, operation)
+            operation["targets"] = ["node1", "node2", "node3"]
+            operation["roleVariablesByHost"] = {
+                host: {"platform_docker_mode": "create-user"} for host in operation["targets"]
+            }
+            command = execution_controller._command("/runtime/release", journal, operation)
+            self.assertEqual("localhost:node1:node2:node3", command[command.index("--limit") + 1])
 
     def test_generic_source_authority_invocation_does_not_shadow_resolution_fact(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1")
             journal.initialize(metadata())
-            operation = {"operationId": "apply:kafka", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka", "requiresArtifactSources": True}
+            operation = {"operationId": "apply:kafka", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka", "targets": ["node1"], "requiresArtifactSources": True}
             digest_id = hashlib.sha256(operation["operationId"].encode("utf-8")).hexdigest()
             Path(journal.directory, ".runtime-projection-" + digest_id + ".json").write_text("{}", encoding="utf-8")
             command = execution_controller._command(root, journal, operation)
@@ -535,9 +924,29 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 self.assertEqual(0o600, stat.S_IMODE(credential_path.stat().st_mode))
                 return Completed()
 
-            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_password_credentials_for_run", return_value={"ansible_password": "test", "ansible_become_password": "test"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value={"ansible_password": "test", "ansible_become_password": "test"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             self.assertEqual({"ansible_password": "test", "ansible_become_password": "test"}, captured["credentials"])
+            self.assertFalse(Path(journal.directory, ".ansible-runtime-credentials.json").exists())
+
+    def test_controller_private_key_lease_disables_missing_prepared_identity(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1"); journal.initialize(metadata())
+            operation = {"operation": "CORE_DELAY", "operationId": "core:delay", "phaseId": "apply"}
+            captured = {}
+            def opened(command, **kwargs):
+                captured["command"] = command
+                captured["env"] = kwargs["env"]
+                credential_path = Path(command[command.index("--credentials-file") + 1])
+                captured["credentials"] = json.loads(credential_path.read_text(encoding="utf-8"))
+                self.assertEqual(0o600, stat.S_IMODE(credential_path.stat().st_mode))
+                return object()
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value={"privateKey": "synthetic-private-key"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+                self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
+            self.assertEqual({"privateKey": "synthetic-private-key"}, captured["credentials"])
+            self.assertNotIn("IdentityFile=", captured["env"]["ANSIBLE_SSH_ARGS"])
+            self.assertIn("StrictHostKeyChecking=yes", captured["env"]["ANSIBLE_SSH_ARGS"])
+            self.assertNotIn("ANSIBLE_PRIVATE_KEY_FILE", captured["env"])
             self.assertFalse(Path(journal.directory, ".ansible-runtime-credentials.json").exists())
 
     def test_output_reservation_terminal_recovery_finishes_ready_publication(self):

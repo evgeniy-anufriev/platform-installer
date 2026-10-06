@@ -66,6 +66,17 @@ type Result struct {
 	Runtime                  Runtime
 }
 
+// PreparationStepError exposes only the failed preparation boundary to the UI.
+// The underlying transport error remains internal: it may contain command
+// arguments, local paths, or remote output and must not cross Wails.
+type PreparationStepError struct {
+	Code  string
+	cause error
+}
+
+func (e *PreparationStepError) Error() string { return e.Code }
+func (e *PreparationStepError) Unwrap() error { return e.cause }
+
 // ServiceExecutionRequest is the production boundary for one service run.
 // Requirements and bundle candidates are package metadata. The request does
 // not contain a selected source; source selection remains in artifactsource.
@@ -185,7 +196,7 @@ func WithBundleCache(cache executionbundle.Cache) Option {
 }
 
 func NewService(transport Transport, options ...Option) *Service {
-	service := &Service{transport: transport, now: time.Now, ttl: 10 * time.Minute, plans: map[string]Plan{}}
+	service := &Service{transport: transport, now: time.Now, ttl: time.Hour, plans: map[string]Plan{}}
 	for _, option := range options {
 		option(service)
 	}
@@ -236,7 +247,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	}
 	inspection, err := s.InspectExecutionNode(ctx, node)
 	if err != nil {
-		return Result{}, err
+		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_INSPECT_FAILED", cause: err}
 	}
 	bundle, err := s.resolveBundle(bundleRoot, inspection)
 	if err != nil || bundle.Digest != plan.BundleDigest {
@@ -255,12 +266,12 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	}
 	stage, err := s.transport.StageVerifiedBundle(ctx, node, bundle)
 	if err != nil {
-		return Result{}, err
+		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_STAGE_FAILED", cause: err}
 	}
 	runtime, err := s.transport.ActivateStagedRuntime(ctx, node, stage, bundle)
 	if err != nil {
 		_ = s.transport.DiscardStagedRuntime(context.Background(), node, stage)
-		return Result{}, err
+		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_ACTIVATE_FAILED", cause: err}
 	}
 	_ = s.transport.DiscardStagedRuntime(context.Background(), node, stage)
 	result.Changed, result.Runtime = true, runtime

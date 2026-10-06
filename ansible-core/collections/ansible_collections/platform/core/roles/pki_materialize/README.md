@@ -11,3 +11,14 @@ Execution Node. Используйте `pki-apply.yml`, read-only `pki-verify.ym
 `defaults/main.yml`. Plans, runtime roots и generated identities редактировать
 нельзя. `platform_pki_secret_files` содержит только mapping SecretRef →
 runtime-only file, а не значения секретов.
+
+Installer удерживает project-scoped advisory lock на Execution Node на всём
+интервале `pki-apply.yml` или `pki-reissue.yml`, включая target deployment.
+Для параллельного ручного запуска того же проекта оператор должен обернуть
+весь `ansible-playbook ... pki-apply.yml ...` или
+`ansible-playbook ... pki-reissue.yml ...` в `flock -n` на
+`<execution-state-root>/projects/<project-id>/.pki-apply.lock`. Обычный
+standalone Ansible запуск остаётся поддержан. Прямой вызов playbook без
+`flock` не сериализуется с Installer и не должен выполняться параллельно с
+его PKI-операциями. Lock-файл после выполнения не удаляют; блокировка
+снимается ОС при завершении процесса.

@@ -181,6 +181,100 @@ export namespace executionnode {
       this.entries = source["entries"];
     }
   }
+  export class ServiceConfigurationValue {
+    state: string;
+    source: string;
+    value?: any;
+
+    static createFrom(source: any = {}) {
+      return new ServiceConfigurationValue(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.state = source["state"];
+      this.source = source["source"];
+      this.value = source["value"];
+    }
+  }
+  export class ServiceConfigurationScope {
+    configuration: Record<string, ServiceConfigurationValue>;
+    members: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new ServiceConfigurationScope(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.configuration = this.convertValues(
+        source["configuration"],
+        ServiceConfigurationValue,
+        true,
+      );
+      this.members = source["members"];
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ServiceConfigurationPreview {
+    apiVersion: string;
+    kind: string;
+    projectRevision: string;
+    services: Record<string, ServiceConfigurationScope>;
+    runtimeDigest?: string;
+
+    static createFrom(source: any = {}) {
+      return new ServiceConfigurationPreview(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.projectRevision = source["projectRevision"];
+      this.services = this.convertValues(
+        source["services"],
+        ServiceConfigurationScope,
+        true,
+      );
+      this.runtimeDigest = source["runtimeDigest"];
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
 }
 
 export namespace installer {
@@ -1374,6 +1468,7 @@ export namespace main {
     selectionKind: string;
     selectionSource: string;
     selectedHostId?: string;
+    runtimeDigest?: string;
     safeLabel?: string;
     locked: boolean;
 
@@ -1387,6 +1482,7 @@ export namespace main {
       this.selectionKind = source["selectionKind"];
       this.selectionSource = source["selectionSource"];
       this.selectedHostId = source["selectedHostId"];
+      this.runtimeDigest = source["runtimeDigest"];
       this.safeLabel = source["safeLabel"];
       this.locked = source["locked"];
     }
@@ -1570,6 +1666,46 @@ export namespace main {
     }
   }
 
+  export class HostKeyProbeResult {
+    status: string;
+    probeId?: string;
+    safeLabel?: string;
+    keyType?: string;
+    fingerprint?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new HostKeyProbeResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.probeId = source["probeId"];
+      this.safeLabel = source["safeLabel"];
+      this.keyType = source["keyType"];
+      this.fingerprint = source["fingerprint"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class InstallationAcknowledgement {
     code: string;
     summary: string;
@@ -2115,6 +2251,44 @@ export namespace main {
     }
   }
 
+  export class OrphanRunRecoveryResult {
+    status: string;
+    recoveryId?: string;
+    runId?: string;
+    runState?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new OrphanRunRecoveryResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.recoveryId = source["recoveryId"];
+      this.runId = source["runId"];
+      this.runState = source["runState"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class OutputEncryptionPasswordInput {
     password: string;
     confirm: string;
@@ -2274,6 +2448,54 @@ export namespace main {
     }
   }
 
+  export class RuntimeBundleUpdateResult {
+    status: string;
+    previewId?: string;
+    currentArtifactDigest?: string;
+    currentCatalogDigest?: string;
+    newArtifactDigest?: string;
+    newCatalogDigest?: string;
+    bundleVersion?: string;
+    coreVersion?: string;
+    projectRevision?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeBundleUpdateResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.previewId = source["previewId"];
+      this.currentArtifactDigest = source["currentArtifactDigest"];
+      this.currentCatalogDigest = source["currentCatalogDigest"];
+      this.newArtifactDigest = source["newArtifactDigest"];
+      this.newCatalogDigest = source["newCatalogDigest"];
+      this.bundleVersion = source["bundleVersion"];
+      this.coreVersion = source["coreVersion"];
+      this.projectRevision = source["projectRevision"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class RuntimeSecretDescriptorView {
     requirementRef: string;
     purpose: string;
@@ -2856,6 +3078,8 @@ export namespace projectlifecycle {
     minLength?: number;
     maxLength?: number;
     enum?: any[];
+    staticDefaultState?: string;
+    staticDefaultValue?: any;
 
     static createFrom(source: any = {}) {
       return new ProjectCatalogSetting(source);
@@ -2880,6 +3104,8 @@ export namespace projectlifecycle {
       this.minLength = source["minLength"];
       this.maxLength = source["maxLength"];
       this.enum = source["enum"];
+      this.staticDefaultState = source["staticDefaultState"];
+      this.staticDefaultValue = source["staticDefaultValue"];
     }
   }
   export class ProjectCatalogUI {

@@ -27,7 +27,7 @@ modes:
         monitor: {minimum: 1, maximum: 1}
         database: {minimum: 2, maximum: 2}
     x-maturity: implemented-postgres-01b
-    x-requiredRuntimeSecretSettings: [adminSuperuser, monitorCredential, replicationCredential, healthcheckCredential]
+    x-requiredRuntimeSecretSettings: [adminSuperuser, monitorCredential, replicationCredential]
   patroni:
     displayName: Patroni
     description: Deferred compatibility fixture; not implemented by POSTGRES-01
@@ -87,19 +87,6 @@ configuration:
         properties:
           passwordSecretRef: {type: string, minLength: 1}
       ui: {label: Replication credential password, section: High Availability, order: 51, x-runtimeSecretRequirement: {requirementRef: postgresql-replication-password, purpose: SERVICE_PASSWORD}}
-    healthcheckCredential:
-      kind: MANAGED
-      roleVariable: platform_postgresql_healthcheck_credential
-      type: object
-      scopes: [deployment]
-      validation: {required: [passwordSecretRef]}
-      schema:
-        type: object
-        additionalProperties: false
-        required: [passwordSecretRef]
-        properties:
-          passwordSecretRef: {type: string, minLength: 1}
-      ui: {label: Monitor healthcheck credential password, section: High Availability, order: 52, x-runtimeSecretRequirement: {requirementRef: postgresql-healthcheck-password, purpose: SERVICE_PASSWORD}}
     advancedConfig: {kind: ADVANCED, roleVariable: platform_postgresql_advanced_config, type: object, scopes: [deployment], validation: {additionalProperties: true}, ui: {label: Advanced PostgreSQL settings, section: Advanced, order: 90}}
 x-reservedAdvancedProperties: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
 roleEntrypoints:

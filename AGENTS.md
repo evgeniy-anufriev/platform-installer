@@ -210,6 +210,22 @@ separate and is not required by this nonvisual gate; never report it as PASS
 without performing it. If the real bridge cannot be exercised, report the gate
 as unavailable/blocking rather than substituting mocks or marking it passed.
 
+Before every real WebView test session that uses SSH credentials, prepare a
+private key in an unencrypted PEM encoding accepted by the current
+`internal/runtimesecret` validator. If no compatible key is available, create
+one before starting the WebView test and ensure its public key is already
+authorized on the intended QA hosts. OpenSSH `BEGIN OPENSSH PRIVATE KEY`
+format is not accepted by this credential field; the current validator accepts
+RSA/EC keys parsed as PKCS#8, RSA PKCS#1 or EC SEC1 PEM, and rejects encrypted
+keys. Keep private keys only in `.runtime/secrets/`; never display, print or
+copy their contents into project data, logs or documentation. Before testing,
+confirm the credential session has not expired. After expiry, renew credentials
+through the UI and repeat the host-key probe, independent fingerprint
+comparison and explicit UI approval before checking or preparing the node. Do
+not bypass host-key trust. If a compatible authorized PEM key or valid session
+is unavailable, stop before launching the WebView acceptance flow and record
+the prerequisite as blocked.
+
 The Windows development workstation is not the canonical runtime for Python/Ansible Core tests.
 
 - Prefer the configured RED OS test VM when Python or Ansible is unavailable locally.
@@ -247,13 +263,27 @@ mechanism.
 ## Local Test Artifacts
 
 The local cache retains only the current immutable offline bundle under
-`bundle/<digest>/`; publishing a replacement prunes the prior local digest.
+`cache/<digest>/`; publishing a replacement prunes the prior local digest.
 Its service payloads live inside the verified
 bundle at `runtime/artifacts/<service>/`. A DEV import source is runtime-only
 input under `.runtime/artifacts/<service>/`, never a second subtree of
-`bundle/`.
+`cache/`.
 
 They are local test inputs and must not be committed.
+
+For any Wails/UI test that depends on a newly acquired, built or otherwise
+updated bundle, a QA cache is staging only. After bundle validation succeeds,
+publish that exact verified bundle with the standard `publish-bundle` command
+into the active repository-root `cache/` before launching/restarting Wails
+or running Verify, Execution Node preparation, Plan or Start. Confirm the
+publisher's returned digest equals the bundle digest locked by the project;
+do not proceed on a mismatch. Publishing replaces the active cache and prunes
+its previous digest, so preserve any still-needed prior bundle in an approved
+QA cache before publication. Never substitute a manual copy into `cache/`.
+The customer-supplied `<project>/bundle/` is an import source, not this cache.
+For existing local installations, the old repository-root `bundle/` cache is
+read-only fallback when `cache/` has no verified bundle; do not delete it as
+part of a rename.
 
 ## Desktop build process cleanup
 

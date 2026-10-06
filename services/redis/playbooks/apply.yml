@@ -11,6 +11,7 @@
     - name: Apply trusted runtime Redis configuration
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
   roles:
     - role: platform.redis.redis_tls
       platform_redis_verify_only: false

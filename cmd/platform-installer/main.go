@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -38,7 +39,11 @@ func (b executionNodeBundleBuilder) BuildOnExecutionNode(ctx context.Context, no
 }
 
 func main() {
-	command := flag.String("command", "", "inspect, acquire, prepare or execution-watch")
+	flag.Usage = func() {
+		writeCLIUsage(flag.CommandLine.Output())
+		flag.PrintDefaults()
+	}
+	command := flag.String("command", "", "CLI operation; see -help for the complete list")
 	runID := flag.String("run-id", "", "execution-watch: required explicit run ID")
 	nodeID := flag.String("node-id", "", "execution-watch: stable node ID (default external-<address>)")
 	runtimeRoot := flag.String("runtime-root", ".runtime", "execution-watch: Installer runtime root for the local derived event mirror")
@@ -49,7 +54,7 @@ func main() {
 	knownHosts := flag.String("known-hosts", "", "trusted known_hosts path")
 	fingerprint := flag.String("fingerprint", "", "operator-approved host fingerprint")
 	bundle := flag.String("bundle", "", "explicit verified bundle root")
-	cacheRoot := flag.String("cache", "bundle", "project-root immutable bundle cache")
+	cacheRoot := flag.String("cache", "cache", "local immutable bundle cache")
 	port := flag.Uint("port", 22, "SSH port")
 	version := flag.String("bundle-version", "", "acquisition bundle version")
 	artifact := flag.String("artifact", "", "explicit DEV artifact file outside the bundle cache")
@@ -190,6 +195,25 @@ func main() {
 	default:
 		fatal("EXECUTION_NODE_COMMAND_INVALID")
 	}
+}
+
+func writeCLIUsage(w io.Writer) {
+	fmt.Fprintln(w, "Platform Installer CLI (developer/operator tools; project bundle updates are performed in the desktop UI).")
+	fmt.Fprintln(w, "Usage: platform-installer -command <name> [flags]")
+	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "  validate-bundle   Verify a supplied immutable bundle (-bundle). Does not publish it.")
+	fmt.Fprintln(w, "  publish-bundle    Verify and publish a bundle into the local immutable cache (-bundle, -cache).")
+	fmt.Fprintln(w, "  import-artifact   DEV-only: rebuild a bundle with an explicit verified artifact on a trusted node.")
+	fmt.Fprintln(w, "  inspect           Inspect a trusted Execution Node.")
+	fmt.Fprintln(w, "  acquire           DEV-only: acquire a runtime bundle on a trusted acquisition node.")
+	fmt.Fprintln(w, "  prepare           Prepare a selected Execution Node using a verified bundle.")
+	fmt.Fprintln(w, "  probe-repository  Probe a target node's approved repository for one artifact requirement.")
+	fmt.Fprintln(w, "  execution-watch   Follow an existing run's detailed events without changing its outcome.")
+	fmt.Fprintln(w, "Developer bundle preparation on a trusted environment with Python/Core:")
+	fmt.Fprintln(w, "  python ansible-core/tools/build_execution_runtime_bundle.py --runtime-input <runtime-dir> --output <new-bundle-dir> --bundle-version <version> --core-version <version>")
+	fmt.Fprintln(w, "  platform-installer -command validate-bundle -bundle <new-bundle-dir>")
+	fmt.Fprintln(w, "Transfer the entire validated bundle directory through the approved channel into <project>/bundle; the desktop UI detects it and requires explicit Bind confirmation.")
+	fmt.Fprintln(w, "Flags:")
 }
 
 func insideBundleCache(source, cache string) bool {

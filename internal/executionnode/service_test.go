@@ -2,9 +2,25 @@ package executionnode
 
 import (
 	"context"
+	"errors"
 	"platform-installer/internal/executionbundle"
 	"testing"
+	"time"
 )
+
+func TestPreparationStepErrorDoesNotExposeTransportDetail(t *testing.T) {
+	cause := errors.New("private-key-path and remote output must stay internal")
+	for _, code := range []string{
+		"EXECUTION_NODE_PREPARE_INSPECT_FAILED",
+		"EXECUTION_NODE_PREPARE_STAGE_FAILED",
+		"EXECUTION_NODE_PREPARE_ACTIVATE_FAILED",
+	} {
+		err := &PreparationStepError{Code: code, cause: cause}
+		if err.Error() != code || !errors.Is(err, cause) {
+			t.Fatalf("unsafe step error %q: %v", code, err)
+		}
+	}
+}
 
 type fakeTransport struct{ inspection Inspection }
 
@@ -36,6 +52,13 @@ func TestPrepareRejectsPlanTampering(t *testing.T) {
 	result, err := service.Prepare(context.Background(), testNode(), t.TempDir(), "plan")
 	if err != nil || result.Findings[0].Code != "EXECUTION_NODE_PLAN_INVALID" {
 		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+func TestPreparationPlanDefaultTTLIsOneHour(t *testing.T) {
+	service := NewService(&fakeTransport{})
+	if service.ttl != time.Hour {
+		t.Fatalf("preparation plan TTL=%s, want 1h", service.ttl)
 	}
 }
 

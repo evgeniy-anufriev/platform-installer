@@ -1,0 +1,36 @@
+---
+- name: Create PostgreSQL-owned TLS directory after account setup
+  ansible.builtin.file:
+    path: "{{ _platform_postgresql_tls_directory }}"
+    state: directory
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0700'
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Materialize PostgreSQL-owned PEM files from PKI-01 projection
+  ansible.builtin.copy:
+    src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
+    dest: "{{ _platform_postgresql_tls_directory }}/{{ item.name }}"
+    remote_src: true
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: ca-chain.pem, mode: '0644'}
+    - {name: certificate.pem, mode: '0644'}
+    - {name: private-key.pem, mode: '0600'}
+  no_log: true
+  notify: Reload PostgreSQL TLS material
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Check PostgreSQL-owned TLS files read-only
+  ansible.builtin.stat:
+    path: "{{ _platform_postgresql_tls_directory }}/{{ item }}"
+  loop: [ca-chain.pem, certificate.pem, private-key.pem]
+  register: platform_postgresql_owned_tls_files
+
+- name: Require PostgreSQL-owned TLS files
+  ansible.builtin.assert:
+    that: platform_postgresql_owned_tls_files.results | map(attribute='stat.exists') | list | min
+    fail_msg: POSTGRES_TLS_FILES_NOT_DEPLOYED

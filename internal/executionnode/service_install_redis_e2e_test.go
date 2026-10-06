@@ -25,15 +25,15 @@ func TestServiceInstall07RedisLifecycle(t *testing.T) {
 	targetUser, targetPassword, targetSudoPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_USER"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_01_TARGET_SUDO_PASSWORD")
 	pkiPassword, redisPassword, sentinelPassword := os.Getenv("PLATFORM_SERVICE_INSTALL_PKI_STORE_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_REDIS_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_REDIS_SENTINEL_PASSWORD")
 	postgresAdmin, postgresMonitor := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_ADMIN_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_MONITOR_PASSWORD")
-	postgresReplication, postgresHealthcheck := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_REPLICATION_PASSWORD"), os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_HEALTHCHECK_PASSWORD")
-	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiPassword == "" || redisPassword == "" || sentinelPassword == "" || postgresAdmin == "" || postgresMonitor == "" || postgresReplication == "" || postgresHealthcheck == "" {
+	postgresReplication := os.Getenv("PLATFORM_SERVICE_INSTALL_POSTGRES_REPLICATION_PASSWORD")
+	if address == "" || user == "" || identity == "" || knownHosts == "" || targetUser == "" || targetPassword == "" || targetSudoPassword == "" || pkiPassword == "" || redisPassword == "" || sentinelPassword == "" || postgresAdmin == "" || postgresMonitor == "" || postgresReplication == "" {
 		t.Fatal("SERVICE_INSTALL_07_E2E_PREREQUISITE_MISSING")
 	}
 	repository, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := (executionbundle.Cache{Root: filepath.Join(repository, "bundle")}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
+	bundle, err := (executionbundle.Cache{Root: filepath.Join(repository, "cache")}).Resolve("", executionbundle.Platform{OS: "redos", Version: "8.0.3", Architecture: "x86_64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestServiceInstall07RedisLifecycle(t *testing.T) {
 		available := map[string]string{
 			"redis-password": redisPassword, "redis-sentinel-password": sentinelPassword,
 			"postgresql-admin-password": postgresAdmin, "postgresql-monitor-password": postgresMonitor,
-			"postgresql-replication-password": postgresReplication, "postgresql-healthcheck-password": postgresHealthcheck,
+			"postgresql-replication-password": postgresReplication,
 		}
 		values := make(map[string]string, len(request.RuntimeSecretRequirements))
 		for _, requirement := range request.RuntimeSecretRequirements {
@@ -83,7 +83,7 @@ func TestServiceInstall07RedisLifecycle(t *testing.T) {
 			{MemberID: "redis-ha31-b", HostID: "node1", Roles: []string{"redis", "sentinel"}},
 			{MemberID: "redis-ha31-c", HostID: "node1", Roles: []string{"redis", "sentinel"}},
 		}, "service-install-07-redis-ha-31-tls", 6379)
-		runRedisInstallCycles(t, ctx, service, observer, node, ha31, ha31ID, release, 2, []string{"pki-store-password", "postgresql-admin-password", "postgresql-monitor-password", "postgresql-replication-password", "postgresql-healthcheck-password", "redis-password", "redis-sentinel-password"}, "redis-ha31-a", 26379)
+		runRedisInstallCycles(t, ctx, service, observer, node, ha31, ha31ID, release, 2, []string{"pki-store-password", "postgresql-admin-password", "postgresql-monitor-password", "postgresql-replication-password", "redis-password", "redis-sentinel-password"}, "redis-ha31-a", 26379)
 	}
 
 	ha33Root := qaServiceInstall07Root(t, repository, "PLATFORM_SERVICE_INSTALL_07_HA_33_PROJECT", "service-install-07-redis-ha-33")

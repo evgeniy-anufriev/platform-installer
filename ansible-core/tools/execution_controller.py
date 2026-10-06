@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -18,9 +19,10 @@ import tempfile
 from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, digest, retain
 import execution_secret_lease
 import execution_secret_output
+import execution_target_trust
 
 
-SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse"))
+SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
 PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096
@@ -152,11 +154,7 @@ def _terminal(journal, state, code, summary):
         details = os.lstat(secret)
         if not os.path.islink(secret) and os.path.isfile(secret):
             os.unlink(secret)
-    credentials = os.path.join(journal.directory, ".ansible-runtime-credentials.json")
-    if os.path.lexists(credentials):
-        details = os.lstat(credentials)
-        if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
-            os.unlink(credentials)
+    journal.cleanup_runtime_connection_credentials()
     for name in os.listdir(journal.directory):
         if not name.startswith(".runtime-secret-"):
             continue
@@ -170,6 +168,21 @@ def _terminal(journal, state, code, summary):
 
 def _safe_service(value):
     return isinstance(value, str) and value in SERVICE_TYPES
+
+
+def _service_targets(operation):
+    """Admit only exact Core-selected inventory host IDs to Ansible --limit."""
+    targets = operation.get("targets")
+    if (not isinstance(targets, list) or not 1 <= len(targets) <= 256 or
+            any(not isinstance(host, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", host) is None or
+                host in ("all", "localhost") for host in targets)):
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    if targets != sorted(set(targets)):
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    role_variables = _role_variables_by_host(operation)
+    if role_variables is not None and set(role_variables) != set(targets):
+        raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    return targets
 
 
 def _role_variables_by_host(operation):
@@ -234,13 +247,56 @@ def _generated_state_path(state_root, project_identity):
     return path
 
 
+def _acquire_project_pki_apply_lock(journal):
+    """Acquire a crash-released, project-scoped lock for the complete PKI apply.
+
+    The lock is held by the fixed controller while its one pki-apply playbook
+    performs both materialization and target deployment. It lives beside the
+    controller-owned generated state, never in the portable project or a
+    run-specific workspace.
+    """
+    metadata = journal.metadata()
+    project_identity = metadata.get("projectIdentity") if isinstance(metadata, dict) else None
+    generated_state = _generated_state_path(journal.root, project_identity)
+    project_dir = os.path.dirname(os.path.dirname(generated_state))
+    lock_path = os.path.join(project_dir, ".pki-apply.lock")
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError:
+        raise LifecycleError("PKI_APPLY_LOCK_UNAVAILABLE")
+    try:
+        details = os.fstat(descriptor)
+        if (not stat.S_ISREG(details.st_mode) or details.st_uid != os.geteuid()):
+            raise LifecycleError("PKI_APPLY_LOCK_UNSAFE")
+        os.fchmod(descriptor, 0o600)
+        details = os.fstat(descriptor)
+        if stat.S_IMODE(details.st_mode) != 0o600:
+            raise LifecycleError("PKI_APPLY_LOCK_UNSAFE")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise LifecycleError("PKI_APPLY_ALREADY_RUNNING")
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
 def _command(release, journal, operation):
     kind = operation.get("operation")
-    if kind == "PKI_APPLY":
+    if kind in ("PKI_APPLY", "PKI_REISSUE"):
         projection = os.path.join(journal.directory, "runtime-projection.json")
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
-        return ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-apply.yml"), "-e", "@" + projection]
+        command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-reissue.yml" if kind == "PKI_REISSUE" else "pki-apply.yml"), "-e", "@" + projection]
+        if kind == "PKI_REISSUE":
+            selected = operation.get("reissueRequests")
+            if (operation.get("operationId") != "pki:reissue" or not isinstance(selected, list) or
+                    not selected or len(selected) > 256 or any(not isinstance(item, dict) or not isinstance(item.get("requestId"), str) for item in selected)):
+                raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+            command.extend(["-e", json.dumps({"platform_pki_reissue_request_ids": [item["requestId"] for item in selected]}, separators=(",", ":"))])
+        return command
     if kind in ("SERVICE_APPLY", "SERVICE_VERIFY") and _safe_service(operation.get("serviceType")):
         action = "apply" if kind == "SERVICE_APPLY" else "verify"
         operation_id = operation.get("operationId")
@@ -252,7 +308,9 @@ def _command(release, journal, operation):
         deployment = operation.get("serviceDeployment")
         if not isinstance(deployment, str) or not deployment or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" for char in deployment):
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+        targets = _service_targets(operation)
         command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "services", operation["serviceType"], "playbooks", action + ".yml"), "-e", "@" + projection]
+        command.extend(["--limit", "localhost:" + ":".join(targets)])
         command.extend(["-e", "platform_execution_service_deployment=" + deployment])
         if operation.get("requiresArtifactSources") is True:
             command.extend(["-e", "platform_artifact_source_authority_active=true"])
@@ -264,20 +322,27 @@ def _command(release, journal, operation):
     raise LifecycleError("EXECUTION_OPERATION_UNKNOWN")
 
 
-def _environment(release, journal=None, operation=None):
+def _environment(release, journal=None, operation=None, leased_private_key=False):
     collections = [os.path.join(release, "ansible-core", "collections")]
     service_root = os.path.join(release, "services")
     if os.path.isdir(service_root):
         collections.extend(os.path.join(service_root, name, "ansible_collections") for name in sorted(os.listdir(service_root)) if os.path.isdir(os.path.join(service_root, name, "ansible_collections")))
     environment = dict(os.environ)
+    environment.pop("ANSIBLE_PRIVATE_KEY_FILE", None)
+    for inherited in ("ANSIBLE_SSH_ARGS", "ANSIBLE_SSH_COMMON_ARGS", "ANSIBLE_SSH_EXTRA_ARGS",
+                      "ANSIBLE_SSH_EXECUTABLE", "ANSIBLE_HOST_KEY_CHECKING", "ANSIBLE_SSH_HOST_KEY_CHECKING"):
+        environment.pop(inherited, None)
     for inherited in ("ANSIBLE_CALLBACK_PLUGINS", "ANSIBLE_CALLBACK_WHITELIST", "ANSIBLE_CALLBACKS_ENABLED", "ANSIBLE_LOAD_CALLBACK_PLUGINS", "ANSIBLE_STDOUT_CALLBACK", "ANSIBLE_SKIP_TAGS", "ANSIBLE_RUN_TAGS"):
         environment.pop(inherited, None)
+    trust_file = os.path.join(journal.directory, "known_hosts") if journal is not None else os.path.join(EXECUTION_STATE_ROOT, "known_hosts")
+    ssh_args = ("-F none -o UserKnownHostsFile=%s -o GlobalKnownHostsFile=none -o KnownHostsCommand=none -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes" % trust_file)
+    if not leased_private_key:
+        ssh_args = "-o IdentityFile=%s/identities/default/id_ed25519 %s" % (EXECUTION_STATE_ROOT, ssh_args)
     environment.update(
         ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
         ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections),
-        ANSIBLE_SSH_ARGS=("-o IdentityFile=%s/identities/default/id_ed25519 -o IdentitiesOnly=yes "
-                          "-o UserKnownHostsFile=%s/known_hosts -o StrictHostKeyChecking=yes" %
-                          (EXECUTION_STATE_ROOT, EXECUTION_STATE_ROOT)))
+        ANSIBLE_SSH_ARGS=ssh_args,
+        ANSIBLE_HOST_KEY_CHECKING="True")
     if journal is not None and operation is not None:
         environment.update({
             "ANSIBLE_CALLBACKS_ENABLED": "platform.core.execution_events_json",
@@ -544,13 +609,27 @@ def _dispatch(release, journal, manifest, stopped):
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
+        if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY"):
+            execution_target_trust.verify(journal.root, journal.run_id, manifest)
         if pki_applied_in_run and operation.get("operation") == "SERVICE_APPLY":
             command = command + ["--skip-tags", "platform_installer_pki_materialization"]
-        journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
+        pki_lock_descriptor = (_acquire_project_pki_apply_lock(journal)
+                               if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY") else None)
         credentials_path = None
         secret_inputs_path = None
         try:
-            credentials = execution_secret_lease.ansible_password_credentials_for_run(journal.root, journal.run_id)
+            if operation.get("operation") == "PKI_REISSUE":
+                bundle_root = release if os.path.isdir(os.path.join(release, "ansible-core")) else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                module_utils = os.path.join(bundle_root, "ansible-core", "collections", "ansible_collections", "platform", "core", "plugins", "module_utils")
+                if module_utils not in sys.path:
+                    sys.path.insert(0, module_utils)
+                from pki_reissue_state import assert_reissue_unchanged
+                try:
+                    assert_reissue_unchanged(journal.root, journal.metadata()["projectIdentity"], operation["reissueRequests"])
+                except ValueError as error:
+                    raise LifecycleError(str(error)) from None
+            journal.event("ACTION_STARTED", "RUNNING", "Trusted operation started", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
+            credentials = execution_secret_lease.ansible_connection_credentials_for_run(journal.root, journal.run_id)
             if credentials is not None:
                 credentials_path = os.path.join(journal.directory, ".ansible-runtime-credentials.json")
                 descriptor = os.open(credentials_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -582,7 +661,8 @@ def _dispatch(release, journal, manifest, stopped):
                         except OSError: pass
                         raise
                     command.extend(["-e", "@" + secret_inputs_path])
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_environment(release, journal, operation))
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       env=_environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials)))
             completed = _wait_for_operation(process, stopped)
         finally:
             for temporary_path in (credentials_path, secret_inputs_path):
@@ -590,6 +670,8 @@ def _dispatch(release, journal, manifest, stopped):
                     details = os.lstat(temporary_path)
                     if not stat.S_ISLNK(details.st_mode) and stat.S_ISREG(details.st_mode):
                         os.unlink(temporary_path)
+            if pki_lock_descriptor is not None:
+                os.close(pki_lock_descriptor)
         if completed is None:
             return "CANCELLED"
         returncode, error_code = completed
@@ -622,6 +704,8 @@ def main():
         if manifest.get("projectIdentity") != metadata.get("projectIdentity") or manifest.get("planFingerprint") != metadata.get("planFingerprint") or manifest.get("runtimeRelease", {}).get("bundleDigest") != args.bundle_digest or metadata.get("runtimeRelease") != args.bundle_digest:
             return _terminal(journal, "FAILED", "EXECUTION_IDENTITY_MISMATCH", "Manifest identity does not match run ownership") and 2
         _secret_output_declarations(manifest)
+        if execution_target_trust.required(manifest):
+            execution_target_trust.verify(args.state_root, args.run_id, manifest)
         if not os.path.isdir(args.runtime_release) or os.path.islink(args.runtime_release):
             return _terminal(journal, "FAILED", "EXECUTION_RUNTIME_RELEASE_MISMATCH", "Immutable runtime release is unavailable") and 2
         try:

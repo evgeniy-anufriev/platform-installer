@@ -214,6 +214,30 @@ def _pki_consumers(snapshot):
     return sorted(deployments)
 
 
+def _deployment_targets(snapshot, deployment_ids, known_hosts):
+    """Copy validated inventory placement into per-deployment action targets."""
+    if not deployment_ids:
+        return {}, []
+    topology = snapshot.get("topology") if isinstance(snapshot, dict) else None
+    placements = topology.get("placementsByHost") if isinstance(topology, dict) else None
+    selected = {deployment_id: set() for deployment_id in deployment_ids}
+    if not isinstance(placements, dict):
+        return {}, [_finding("SERVICE_TARGETS_UNAVAILABLE", "topology.placementsByHost", "Service placement is unavailable")]
+    findings = []
+    for host_id, host_placements in placements.items():
+        if (not isinstance(host_id, str) or host_id not in known_hosts or
+                not isinstance(host_placements, dict)):
+            findings.append(_finding("SERVICE_TARGETS_UNAVAILABLE", "topology.placementsByHost", "Service placement is invalid"))
+            continue
+        for deployment_id in host_placements:
+            if deployment_id in selected:
+                selected[deployment_id].add(host_id)
+    for deployment_id in deployment_ids:
+        if not selected[deployment_id]:
+            findings.append(_finding("SERVICE_TARGETS_UNAVAILABLE", "serviceDeployments.%s" % deployment_id, "Service has no selected target hosts"))
+    return {key: sorted(value) for key, value in selected.items()}, findings
+
+
 _PKI_STORE_PASSWORD_REQUIREMENT_REF = "pki-store-password"
 _PKI_STORE_PASSWORD_PURPOSE = "PKI_STORE_PASSWORD"
 _PKI_STORE_PASSWORD_RUNTIME_REF = "runtime:pki-store-password"
@@ -464,7 +488,18 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
             role_variable = entry.get("roleVariable") if isinstance(entry, dict) else None
             if not isinstance(role_variable, str) or not role_variable.startswith(prefix):
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
-            if not isinstance(resolved, dict) or resolved.get("state") != "RESOLVED" or "value" not in resolved:
+            if not isinstance(resolved, dict):
+                raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+            # A read-only Core projection of a role default is not an override.
+            # Leave it to normal Ansible role/inventory precedence at execution.
+            if (resolved.get("state") == "RESOLVED" and
+                    (resolved.get("source") == "ROLE_DEFAULT" or
+                     (resolved.get("source") == "STATIC_REFERENCE" and resolved.get("origin") == "ROLE_DEFAULT"))):
+                continue
+            if (resolved.get("state") == "DEFERRED" and
+                    resolved.get("reason") == "NON_LITERAL_ROLE_DEFAULT"):
+                continue
+            if resolved.get("state") != "RESOLVED" or "value" not in resolved:
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
             result[role_variable] = copy.deepcopy(resolved["value"])
         return result
@@ -484,7 +519,10 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         # A package-declared client port is represented per member in the
         # existing member list. Other settings keep the host-conflict guard.
         if member_port_variable is not None:
-            variables[member_port_variable] = by_host[host_id][member_port_variable]
+            if member_port_variable in by_host[host_id]:
+                variables[member_port_variable] = by_host[host_id][member_port_variable]
+            else:
+                variables.pop(member_port_variable, None)
         if by_host[host_id] != role_values(deployment_values) and by_host[host_id] != variables:
             raise ValueError("EXECUTION_CONFIGURATION_HOST_CONFLICT")
         by_host[host_id] = variables
@@ -547,7 +585,7 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
     return result
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
@@ -587,18 +625,70 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     executable = not findings
     artifact_digest = canonical_digest(artifact_requirements)
     targets = sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else []
+    deployment_targets, target_findings = _deployment_targets(snapshot, sorted(deployments), set(targets))
+    findings.extend(target_findings)
+    executable = not findings
     pki_consumers = _pki_consumers(snapshot)
+    reissue = pki_reissue if pki_reissue is not None else []
+    if not isinstance(reissue, list) or len(reissue) > 256:
+        raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+    request_ids = [item.get("requestId") for item in reissue if isinstance(item, dict)]
+    requests = pki_materialization.get("requests", []) if isinstance(pki_materialization, dict) else []
+    request_by_id = {item.get("id"): item for item in requests if isinstance(item, dict)}
+    desired_by_id = {key: item.get("certificateRequestFingerprint") for key, item in request_by_id.items()}
+    if len(request_ids) != len(reissue) or any(not isinstance(item, str) or item not in request_by_id for item in request_ids) or request_ids != sorted(set(request_ids)) or any(
+            set(item) != {"requestId", "expectedOldFingerprint", "desiredFingerprint", "recoveryFingerprint", "authorityId", "authorityFingerprint"} or
+            desired_by_id.get(item["requestId"]) != item["desiredFingerprint"] or
+            request_by_id[item["requestId"]].get("authorityId") != item["authorityId"] or
+            request_by_id[item["requestId"]].get("authorityFingerprint") != item["authorityFingerprint"] or
+            not isinstance(item["desiredFingerprint"], str) or DIGEST_PATTERN.fullmatch(item["desiredFingerprint"]) is None or
+            (item["expectedOldFingerprint"] is not None and
+             (not isinstance(item["expectedOldFingerprint"], str) or DIGEST_PATTERN.fullmatch(item["expectedOldFingerprint"]) is None)) or
+            (item["recoveryFingerprint"] is not None and item["recoveryFingerprint"] != item["desiredFingerprint"]) or
+            (item["expectedOldFingerprint"] is None and item["recoveryFingerprint"] is None)
+            for item in reissue):
+        raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+    materialization_plans = pki_materialization.get("materializationPlans", []) if isinstance(pki_materialization, dict) else []
+    target_values = {item.get("hostId") for item in materialization_plans if isinstance(item, dict)
+                     and item.get("requestId") in request_ids}
+    covered_requests = {item.get("requestId") for item in materialization_plans if isinstance(item, dict)
+                        and item.get("requestId") in request_ids}
+    if reissue and (not pki_consumers or not target_values or covered_requests != set(request_ids) or
+                    any(not isinstance(host, str) or host not in targets for host in target_values)):
+        raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+    scope_labels = []
+    for request_id in request_ids:
+        consumers = request_by_id[request_id].get("consumers")
+        if not isinstance(consumers, list) or not consumers or len(consumers) > 4096:
+            raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+        deployments_for_request, hosts_for_request = set(), set()
+        for consumer in consumers:
+            if not isinstance(consumer, dict) or consumer.get("deploymentId") not in deployments or consumer.get("hostId") not in targets:
+                raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+            deployments_for_request.add(consumer["deploymentId"])
+            hosts_for_request.add(consumer["hostId"])
+        plan_hosts = {item.get("hostId") for item in materialization_plans if isinstance(item, dict) and item.get("requestId") == request_id}
+        if hosts_for_request != plan_hosts:
+            raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+        scope_labels.append("%s (сервисы: %s; серверы: %s)" %
+                            (request_id, ", ".join(sorted(deployments_for_request)), ", ".join(sorted(hosts_for_request))))
+    reissue_summary = "Перевыпустить сертификаты: " + "; ".join(scope_labels)
+    if reissue and len(reissue_summary.encode("utf-8")) > 512:
+        raise ValueError("PKI_REISSUE_SCOPE_TOO_LARGE")
+    reissue_targets = sorted(target_values)
     actions = []
     if pki_consumers:
-        actions.append({"id": "pki:apply", "type": "PKI_APPLY", "targets": targets, "dependsOn": [], "mutating": True, "reboot": "NONE", "summary": "Materialize approved PKI inputs"})
+        if reissue:
+            actions.append({"id": "pki:reissue", "type": "PKI_REISSUE", "targets": reissue_targets, "dependsOn": [], "mutating": True, "reboot": "NONE", "summary": reissue_summary})
+        actions.append({"id": "pki:apply", "type": "PKI_APPLY", "targets": targets, "dependsOn": ["pki:reissue"] if reissue else [], "mutating": True, "reboot": "NONE", "summary": "Materialize approved PKI inputs"})
     apply_actions = []
     for deployment_id, deployment in sorted(deployments.items()):
         dependencies = _service_dependencies(deployment_id, deployment, definitions, deployments)
         if deployment_id in pki_consumers:
             dependencies.append("pki:apply")
-        apply_actions.append({"id": "apply:%s" % deployment_id, "type": "SERVICE_APPLY", "serviceDeployment": deployment_id, "targets": targets, "dependsOn": sorted(set(dependencies)), "mutating": True, "reboot": "NONE", "summary": "Apply service deployment %s" % deployment_id})
+        apply_actions.append({"id": "apply:%s" % deployment_id, "type": "SERVICE_APPLY", "serviceDeployment": deployment_id, "targets": deployment_targets.get(deployment_id, []), "dependsOn": sorted(set(dependencies)), "mutating": True, "reboot": "NONE", "summary": "Apply service deployment %s" % deployment_id})
     apply_actions = _ordered_apply_actions(apply_actions)
-    verify_actions = [{"id": "verify:%s" % deployment_id, "type": "SERVICE_VERIFY", "serviceDeployment": deployment_id, "targets": targets, "dependsOn": ["apply:%s" % deployment_id], "mutating": False, "reboot": "NONE", "summary": "Verify service deployment %s" % deployment_id} for deployment_id in sorted(deployments)]
+    verify_actions = [{"id": "verify:%s" % deployment_id, "type": "SERVICE_VERIFY", "serviceDeployment": deployment_id, "targets": deployment_targets.get(deployment_id, []), "dependsOn": ["apply:%s" % deployment_id], "mutating": False, "reboot": "NONE", "summary": "Verify service deployment %s" % deployment_id} for deployment_id in sorted(deployments)]
     phases = []
     if actions:
         phases.append({"id": "pki", "order": len(phases), "actions": actions})
@@ -613,6 +703,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         "runtimeRelease": release,
         "artifactRequirements": artifact_requirements,
         "requiredCredentials": required_credentials,
+        "pkiReissueEvidenceDigest": canonical_digest(reissue) if reissue else None,
         "phases": phases,
         "acknowledgements": [],
         "status": "EXECUTABLE" if executable else "BLOCKED",
@@ -648,7 +739,10 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                 role_entrypoint = ((definition.get("roleEntrypoints") or {}).get(entrypoint) or {}) if isinstance(definition, dict) else {}
                 prefix = role_entrypoint.get("variablesPrefix") if isinstance(role_entrypoint, dict) else None
                 item = {"operationId": action["id"], "phaseId": phase["id"], "operation": action["type"], "serviceDeployment": action.get("serviceDeployment"), "serviceType": deployment.get("serviceType") if isinstance(deployment, dict) else None, "requiresArtifactSources": action.get("serviceDeployment") in authority_deployments}
+                if action["type"] == "PKI_REISSUE":
+                    item["reissueRequests"] = [dict(value) for value in reissue]
                 if action["type"] in ("SERVICE_APPLY", "SERVICE_VERIFY"):
+                    item["targets"] = list(action["targets"])
                     if isinstance(prefix, str) and re.fullmatch(r"platform_[a-z0-9_]{1,96}_", prefix) is not None:
                         item["roleVariablesPrefix"] = prefix
                         topology = snapshot.get("topology", {}) if isinstance(snapshot.get("topology"), dict) else {}
@@ -684,4 +778,21 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             for item in runtime_secret_outputs
         ]
         manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "runtimeSecretInputs": service_input_private, "runtimeSecretOutputs": runtime_secret_outputs, "runtimeSecretDescriptorSetFingerprint": canonical_digest(descriptor_set), "pkiMaterializationPlans": materialization_plans}
+        if execution_connections is not None:
+            # Bind SSH trust only for hosts that an action in this exact plan
+            # can contact. The target-free snapshot contains every inventory
+            # target, which may be broader than service placement for this
+            # plan; passing it through would require approval for unrelated
+            # servers and disagree with Go's plan-scoped approval set.
+            plan_target_ids = sorted({
+                host_id
+                for phase in phases
+                for action in phase.get("actions", [])
+                for host_id in action.get("targets", [])
+            })
+            manifest["targetConnections"] = {
+                host_id: execution_connections[host_id]
+                for host_id in plan_target_ids
+                if host_id in execution_connections
+            }
     return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}

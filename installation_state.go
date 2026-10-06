@@ -57,7 +57,7 @@ func (a *App) GetInstallationState() InstallationState {
 		Kind:          "InstallationState",
 		Status:        installationStatePrerequisitesRequired,
 		ExecutionNode: installationNodeState(a.execution.context),
-		Plan:          a.installationPlanStateLocked(),
+		Plan:          InstallationPlanState{Status: installationPlanNotCreated},
 	}
 	if a.current.Status != "OPEN" || a.current.Root == "" || a.current.Project == nil || a.current.Project.ID == "" {
 		return state.withPrerequisite("PROJECT_NOT_OPEN", "project", "Open or create a project before installation.")
@@ -74,8 +74,12 @@ func (a *App) GetInstallationState() InstallationState {
 		HasUnsavedChanges:  a.activeSession != "",
 	}
 	if a.activeSession != "" {
+		if a.installationPlanID != "" {
+			state.Plan.Status = "PLAN_STALE_OR_EXPIRED"
+		}
 		return state.withPrerequisite("PROJECT_CHANGES_UNSAVED", "project", "Save or discard the current changes before creating an installation plan.")
 	}
+	state.Plan = a.installationPlanStateLocked()
 	if a.execution.context.Status != "READY" {
 		return state.withPrerequisite("EXECUTION_NODE_READY_REQUIRED", "servers", "A READY Execution Node is required before creating an installation plan.")
 	}

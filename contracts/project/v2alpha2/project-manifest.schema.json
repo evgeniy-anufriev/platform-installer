@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project/v2alpha2/project-manifest.schema.json",
+  "title": "Platform portable project manifest with reference-only providers",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "desiredStateContract", "catalogLock", "artifactLock"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/v2alpha2"},
+    "kind": {"const": "PlatformProject"},
+    "metadata": {"$ref": "../v2alpha1/project-manifest.schema.json#/$defs/metadata"},
+    "desiredStateContract": {"const": "platform.installer/project-desired-state/v2alpha2"},
+    "desiredState": {"$ref": "desired-state.schema.json"},
+    "catalogLock": {"$ref": "../v2alpha1/project-manifest.schema.json#/$defs/catalogLock"},
+    "artifactLock": {"$ref": "../v2alpha1/project-manifest.schema.json#/$defs/artifactLock"}
+  },
+  "patternProperties": {"^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true},
+  "additionalProperties": false
+}

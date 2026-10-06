@@ -1,0 +1,32 @@
+---
+- name: Inspect exact shared or system destination before write
+  ansible.builtin.stat:
+    path: "{{ platform_docker_guard_path }}"
+    follow: false
+  register: _platform_docker_guard_file
+
+- name: Refuse a symlink, non-file or foreign-owned destination
+  ansible.builtin.assert:
+    that:
+      - not (_platform_docker_guard_file.stat.islnk | default(false))
+      - not _platform_docker_guard_file.stat.exists or (_platform_docker_guard_file.stat.isreg | default(false))
+      - not _platform_docker_guard_file.stat.exists or _platform_docker_guard_file.stat.pw_name == 'root'
+      - not (platform_docker_guard_required | default(false)) or _platform_docker_guard_file.stat.exists
+    fail_msg: DOCKER_SHARED_DESTINATION_UNSAFE
+
+- name: Read existing managed destination marker
+  ansible.builtin.slurp:
+    src: "{{ platform_docker_guard_path }}"
+  register: _platform_docker_guard_content
+  when:
+    - _platform_docker_guard_file.stat.exists
+    - platform_docker_guard_marker | default('') | length > 0
+
+- name: Refuse a foreign existing managed destination
+  ansible.builtin.assert:
+    that:
+      - >-
+        not _platform_docker_guard_file.stat.exists or
+        (platform_docker_guard_marker | default('') | length == 0) or
+        (_platform_docker_guard_content.content | b64decode).startswith(platform_docker_guard_marker)
+    fail_msg: DOCKER_SHARED_DESTINATION_NOT_OWNED

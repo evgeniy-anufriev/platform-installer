@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
 )
@@ -38,7 +37,7 @@ func TestSecretFileSelectionSeamRetainsImportGuards(t *testing.T) {
 				t.Fatal(err)
 			}
 			called := false
-			a.chooseSecretFile = func(context.Context, runtime.OpenDialogOptions) (string, error) {
+			a.chooseSecretFile = func(context.Context, DialogOptions) (string, error) {
 				called = true
 				switch scenario {
 				case "cancel":

@@ -9,6 +9,7 @@
     - name: Apply trusted runtime PostgreSQL configuration
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
   roles:
     - role: platform.postgresql.postgresql
       platform_postgresql_verify_only: true

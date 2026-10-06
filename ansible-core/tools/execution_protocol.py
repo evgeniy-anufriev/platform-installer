@@ -22,9 +22,10 @@ import yaml
 
 from execution_lifecycle import ACTIVE, Journal, LifecycleError, digest, recover, validate_ownership
 import execution_secret_lease
+import execution_target_trust
 
 
-OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
+OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildServiceConfigurationPreview", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
 MAX_CANDIDATE_ARCHIVE_BYTES = 32 * 1024 * 1024
@@ -79,7 +80,19 @@ def unit_name(run_id):
 def active(unit, metadata):
     if not isinstance(metadata, dict) or metadata.get("unit") != unit:
         return False
-    return subprocess.call(["systemctl", "is-active", "--quiet", unit], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+    try:
+        result = subprocess.run(["systemctl", "show", "--property=ActiveState", "--value", unit],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=False)
+    except OSError:
+        raise LifecycleError("EXECUTION_UNIT_STATUS_UNAVAILABLE")
+    if result.returncode != 0:
+        raise LifecycleError("EXECUTION_UNIT_STATUS_UNAVAILABLE")
+    state = result.stdout.strip()
+    if state in ("active", "activating", "deactivating", "reloading"):
+        return True
+    if state in ("inactive", "failed"):
+        return False
+    raise LifecycleError("EXECUTION_UNIT_STATUS_UNAVAILABLE")
 
 
 def owned(journal):
@@ -119,7 +132,7 @@ def _capabilities_v4(args):
     required = ("bundleVersion", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest")
     if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
-    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha4", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha2", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha5", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha2", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "serviceConfigurationPreview": {"protocol": "BuildServiceConfigurationPreview/v1alpha1", "maxResponseBytes": 1048576}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
 
 
 def _v2_start_request(value):
@@ -160,6 +173,8 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
     if not isinstance(staging_id, str) or not os.path.isfile(manifest_path) or os.path.islink(manifest_path): raise LifecycleError("EXECUTION_MANIFEST_MISSING")
     with open(manifest_path, "r", encoding="utf-8") as stream: manifest = json.load(stream)
     if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]: raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
+    if execution_target_trust.required(manifest):
+        execution_target_trust.verify(state_root, staging_id, manifest)
     requirements = manifest.get("runtimeSecretRequirements", [])
     typed_requirements = manifest.get("runtimeSecretInputs", [])
     if not isinstance(requirements, list) or len(requirements) > 16:
@@ -600,8 +615,8 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     if operation == "ValidateProject":
         playbook, inventory = "validate.yml", os.path.join(project, "inventory", "hosts.yml")
         extra = {"platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_validation_artifact": os.path.join(journal.directory, "validation.json")}
-    elif operation == "BuildProjectSnapshot":
-        playbook, inventory = "project-snapshot.yml", os.path.join(project, "inventory", "hosts.yml")
+    elif operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
+        playbook, inventory = ("project-snapshot.yml" if operation == "BuildProjectSnapshot" else "service-configuration-preview.yml"), os.path.join(project, "inventory", "hosts.yml")
         snapshot_request = _validated_snapshot_request(value)
         if snapshot_request is None:
             owned_paths = []
@@ -645,7 +660,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         sources = bundle_manifest.get("artifactSources", []) if isinstance(bundle_manifest, dict) else None
         if not isinstance(sources, list):
             raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
-        extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources}
+        extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources, "platform_execution_state_root": state_root}
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
     else:
@@ -655,7 +670,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     try:
         os.write(descriptor, json.dumps(extra, ensure_ascii=True, sort_keys=True).encode("utf-8")); os.close(descriptor)
         os.chmod(vars_path, 0o600)
-        if operation == "BuildProjectSnapshot":
+        if operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
             candidate = value.get("snapshotRequest") is not None
             if candidate:
                 environment = _candidate_ansible_environment(project, release, os.path.join(journal.directory, "project-snapshot.json"))
@@ -677,7 +692,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             cwd=project if operation == "BuildProjectSnapshot" and value.get("snapshotRequest") is not None else None,
         )
         if completed.returncode:
-            if operation == "BuildProjectSnapshot":
+            if operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
                 snapshot_path = os.path.join(journal.directory, "project-snapshot.json")
                 if os.path.isfile(snapshot_path) and not os.path.islink(snapshot_path):
                     with open(snapshot_path, "r", encoding="utf-8") as stream:
@@ -692,7 +707,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             raise CoreOperationError(code or "CORE_OPERATION_FAILED", diagnostic)
     finally:
         if os.path.exists(vars_path): os.unlink(vars_path)
-    if operation == "BuildProjectSnapshot":
+    if operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
         snapshot_path = os.path.join(journal.directory, "project-snapshot.json")
         if not os.path.isfile(snapshot_path) or os.path.islink(snapshot_path):
             raise LifecycleError("PROJECT_SNAPSHOT_RESPONSE_MISSING")
@@ -702,6 +717,12 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             raise CoreOperationError(snapshot["adapterError"].get("code") or "PROJECT_SNAPSHOT_FAILED", {"findings": [snapshot["adapterError"]]})
         if not isinstance(snapshot, dict) or not snapshot.get("projectRevision"):
             raise LifecycleError("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+        if operation == "BuildServiceConfigurationPreview":
+            if snapshot.get("apiVersion") != "platform.installer/service-configuration-preview/v1alpha1" or snapshot.get("kind") != "ServiceConfigurationPreview" or not isinstance(snapshot.get("services"), dict):
+                raise LifecycleError("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+            if runtime_identity is None:
+                raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
+            return {"serviceConfigurationPreview": snapshot, "runtimeEvidence": runtime_identity}
         request_value = value.get("snapshotRequest")
         if request_value is not None and snapshot.get("projectRevision") != request_value.get("candidateProjectRevision"):
             raise LifecycleError("PROJECT_SNAPSHOT_REVISION_MISMATCH")
@@ -734,14 +755,14 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     return {"validation": "PASS"}
 
 
-def snapshot(value, state_root, runtime_release, runtime_identity):
+def snapshot(value, state_root, runtime_release, runtime_identity, operation="BuildProjectSnapshot"):
     """Return a Core snapshot and remove the request-owned staging directory."""
     journal = Journal(state_root, value["runId"])
     stage_identity = _snapshot_stage_identity(value, journal)
     if stage_identity is None:
         raise LifecycleError("PROJECT_SNAPSHOT_STAGING_NOT_OWNED")
     try:
-        return core_operation(value, state_root, runtime_release, "BuildProjectSnapshot", runtime_identity)
+        return core_operation(value, state_root, runtime_release, operation, runtime_identity)
     finally:
         _cleanup_snapshot_staging(value, journal, stage_identity)
 
@@ -786,7 +807,7 @@ def get(value, state_root):
     if result["run"].get("state") not in ACTIVE:
         if not active(metadata.get("unit"), metadata):
             journal.cleanup_runtime_secret_inputs()
-        execution_secret_lease.cleanup_run(state_root, journal.run_id)
+            execution_secret_lease.cleanup_run(state_root, journal.run_id)
     if os.path.exists(journal.result_path):
         with open(journal.result_path, "r", encoding="utf-8") as stream:
             result["result"] = json.load(stream)
@@ -814,19 +835,30 @@ def cancel(value, state_root):
     try:
         metadata, status = owned(journal), journal.status()
         if status.get("state") not in ACTIVE:
-            if not active(metadata.get("unit"), metadata):
+            unit_active = active(metadata.get("unit"), metadata)
+            if status.get("state") == "CANCELLED" and unit_active:
+                subprocess.check_call(["systemctl", "stop", metadata["unit"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                unit_active = active(metadata.get("unit"), metadata)
+                if unit_active:
+                    raise LifecycleError("EXECUTION_CANCEL_NOT_STOPPED")
+            if not unit_active:
                 journal.cleanup_runtime_secret_inputs()
+                journal.cleanup_runtime_connection_credentials()
             return {"run": status, "idempotent": True}
         if not active(metadata.get("unit"), metadata):
             journal.terminal("INTERRUPTED", "CONTROLLER_INTERRUPTED", "Owned controller is no longer active")
             journal.cleanup_runtime_secret_inputs()
+            journal.cleanup_runtime_connection_credentials()
             return {"run": journal.status(), "idempotent": True}
         # Commit cancellation before asking systemd to terminate the whole
         # owned cgroup.  The controller can then never race a child SIGTERM
         # into a contradictory FAILED terminal result.
         journal.terminal("CANCELLED", "EXECUTION_CANCELLED", "Cancellation requested")
         subprocess.check_call(["systemctl", "stop", metadata["unit"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if active(metadata.get("unit"), metadata):
+            raise LifecycleError("EXECUTION_CANCEL_NOT_STOPPED")
         journal.cleanup_runtime_secret_inputs()
+        journal.cleanup_runtime_connection_credentials()
         return {"run": journal.status(), "idempotent": False}
     finally:
         os.close(lock)
@@ -842,10 +874,24 @@ def main():
     parser.add_argument("--stage-run-id")
     parser.add_argument("--stage-request-id")
     parser.add_argument("--expected-archive-digest")
+    parser.add_argument("--stage-target-host-trust", action="store_true")
     parser.add_argument("--cleanup-snapshot-run-id")
     parser.add_argument("--cleanup-request-id")
     parser.add_argument("--cleanup-archive-digest")
     args = parser.parse_args()
+    if args.stage_target_host_trust:
+        def unique_pairs(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise LifecycleError("TARGET_HOST_TRUST_INVALID")
+                value[key] = item
+            return value
+        data = sys.stdin.buffer.read(65537)
+        if len(data) > 65536:
+            raise LifecycleError("TARGET_HOST_TRUST_INVALID")
+        execution_target_trust.stage(args.state_root, json.loads(data, object_pairs_hook=unique_pairs))
+        return reply({"status": "STAGED"})
     if args.stage_candidate_archive is not None:
         if not args.stage_run_id or not args.stage_request_id or not args.expected_archive_digest:
             raise LifecycleError("PROJECT_CANDIDATE_STAGING_INVALID")
@@ -877,6 +923,11 @@ def main():
             if candidate.get("artifactLockDigest") != args.bundle_digest or runtime_release.get("bundleDigest") != args.bundle_digest:
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         return reply(snapshot(value, args.state_root, args.runtime_release, runtime_evidence(args)))
+    if operation == "BuildServiceConfigurationPreview":
+        runtime_release = value.get("runtimeRelease")
+        if not isinstance(runtime_release, dict) or runtime_release.get("bundleDigest") != args.bundle_digest or "snapshotRequest" in value:
+            raise LifecycleError("SERVICE_CONFIGURATION_PREVIEW_INPUT_INVALID")
+        return reply(snapshot(value, args.state_root, args.runtime_release, runtime_evidence(args), operation))
     if operation == "BuildRuntimeSecretDescriptors":
         runtime_release = value.get("runtimeRelease")
         if not isinstance(runtime_release, dict) or runtime_release.get("bundleDigest") != args.bundle_digest or _validated_snapshot_request(value) is None:

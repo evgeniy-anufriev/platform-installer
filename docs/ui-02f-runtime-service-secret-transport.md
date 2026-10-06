@@ -57,12 +57,16 @@ creates no requirement.  Core then reads the actual opaque `runtime:*`
 reference only from the explicitly declared setting value.  It never infers
 secret semantics from names or shapes.
 
-The initial use is the four PostgreSQL settings:
+The initial use is the three PostgreSQL settings:
 
 - `adminSuperuser.passwordSecretRef`;
 - `monitorCredential.passwordSecretRef`;
 - `replicationCredential.passwordSecretRef`;
-- `healthcheckCredential.passwordSecretRef`.
+
+The pg_auto_failover monitor health-check does not consume a configurable
+password: upstream pg_auto_failover 2.2 uses a fixed probe identity. PostgreSQL
+provisions that dedicated least-privilege role with a monitor-IP-scoped,
+TLS-only HBA rule, so it is not a runtime secret requirement.
 
 PKI retains its existing Core-derived fixed requirement.  A generic Core
 collector merges the two trusted sources in stable requirement-ref order and

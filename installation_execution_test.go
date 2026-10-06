@@ -28,6 +28,24 @@ func TestInstallationEventViewIsClosedAndRedacted(t *testing.T) {
 	}
 }
 
+func TestInstallationEventViewPreservesOnlyUnredactedTaskName(t *testing.T) {
+	base := executionnode.ExecutionEvent{
+		RunID: "installer-123", Sequence: 2, EventType: "TASK_STARTED", Status: "RUNNING",
+		SafeMessage: "Ansible task started", Task: &executionnode.ExecutionEventTask{UUID: "task-1", Role: "platform.vault", Name: "Require host swap disabled for Vault Raft"},
+		Redaction: executionnode.ExecutionRedaction{Applied: true, Fields: []string{"stdout"}},
+	}
+	view := installationEventView(base)
+	if view.Task == nil || view.Task.Name != base.Task.Name || !view.Redacted {
+		t.Fatalf("safe task name lost from redacted event: %#v", view)
+	}
+	base.Task.Name = ""
+	base.Redaction.Fields = []string{"task.name"}
+	view = installationEventView(base)
+	if view.Task != nil || !view.Redacted || view.SafeMessage != "Ansible task started" {
+		t.Fatalf("redacted task name escaped or fallback lost: %#v", view)
+	}
+}
+
 func TestInstallationObserverDiagnosticIsClosed(t *testing.T) {
 	if got := installationObserverDiagnostic(errors.New("ssh failed /private/path secret")); got != observabilityDegraded {
 		t.Fatalf("hostile observer error became %q", got)
