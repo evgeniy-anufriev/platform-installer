@@ -39,6 +39,55 @@ func TestLocalRunRecordSurvivesReopenAndTransitions(t *testing.T) {
 	}
 }
 
+func TestRestoreLocalRunRecordAfterUnsentStart(t *testing.T) {
+	for _, withPrevious := range []bool{false, true} {
+		t.Run(map[bool]string{false: "remove_new_reservation", true: "restore_previous_terminal"}[withPrevious], func(t *testing.T) {
+			root, pending := testLocalRunRecord(t)
+			var previous *localRunRecord
+			if withPrevious {
+				old := pending
+				old.State, old.RunID, old.TerminalState = "TERMINAL", "installer-0123456789abcdef", "FAILED"
+				if err := writeLocalRunRecord(root, old); err != nil {
+					t.Fatal(err)
+				}
+				previous = &old
+			}
+			if err := writeLocalRunRecord(root, pending); err != nil {
+				t.Fatal(err)
+			}
+			if err := restoreLocalRunRecordAfterUnsentStart(root, pending, previous); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readLocalRunRecord(root, pending.ProjectRoot, pending.ProjectID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !withPrevious && got != nil {
+				t.Fatalf("new pending record remained: %+v", got)
+			}
+			if withPrevious && (got == nil || *got != *previous) {
+				t.Fatalf("previous record not restored: got=%+v want=%+v", got, previous)
+			}
+		})
+	}
+}
+
+func TestRestoreLocalRunRecordRequiresExactPendingReservation(t *testing.T) {
+	root, pending := testLocalRunRecord(t)
+	changed := pending
+	changed.PlanID = "another-plan"
+	if err := writeLocalRunRecord(root, changed); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreLocalRunRecordAfterUnsentStart(root, pending, nil); err == nil {
+		t.Fatal("changed local reservation was cleared")
+	}
+	got, err := readLocalRunRecord(root, changed.ProjectRoot, changed.ProjectID)
+	if err != nil || got == nil || *got != changed {
+		t.Fatalf("record changed after rejected cleanup: got=%+v err=%v", got, err)
+	}
+}
+
 func TestLocalRunRecordRejectsInvalidOrForeignState(t *testing.T) {
 	root, record := testLocalRunRecord(t)
 	path, err := localRunRecordPath(root, record.ProjectRoot, record.ProjectID)

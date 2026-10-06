@@ -123,6 +123,35 @@ func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ execu
 
 type installationPlanClient struct{ starts int }
 
+func TestPreDispatchStartFailureDoesNotLeaveActiveRunReservation(t *testing.T) {
+	app, _, client := installationPlanApp(t, false)
+	app.localRunRecordRoot = t.TempDir()
+	created := app.CreateInstallationPlan()
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	if approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"}); approved.Error != nil {
+		t.Fatal(approved.Error)
+	}
+
+	first := app.StartApprovedInstallation(created.Plan.ID)
+	if first.Error == nil || first.Error.Code != "EXECUTION_START_BINDING_MISSING" || client.starts != 0 {
+		t.Fatalf("first start=%#v error=%+v starts=%d", first, first.Error, client.starts)
+	}
+	record, err := readLocalRunRecord(app.localRunRecordRoot, app.current.Root, app.current.Project.ID)
+	if err != nil || record != nil || app.startOutcomeUnknown {
+		t.Fatalf("pre-dispatch reservation remains: record=%+v unknown=%t err=%v", record, app.startOutcomeUnknown, err)
+	}
+
+	second := app.StartApprovedInstallation(created.Plan.ID)
+	if second.Error == nil || second.Error.Code == "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("retry was blocked by stale reservation: %#v", second)
+	}
+	if client.starts != 0 {
+		t.Fatalf("test client unexpectedly started a remote run: %d", client.starts)
+	}
+}
+
 func (c *installationPlanClient) StartExecution(context.Context, executionnode.Node, executionnode.ExecutionStartRequest) (executionnode.ExecutionRun, error) {
 	c.starts++
 	return executionnode.ExecutionRun{}, errors.New("Start must not be called by UI-02B")
@@ -224,7 +253,7 @@ func installationPlanApp(t *testing.T, blocked bool) (*App, *installationPlanBui
 	t.Helper()
 	root := t.TempDir()
 	writeInstallationProject(t, root)
-	node := executionnode.Node{ID: "node-1", Address: "192.0.2.10"}
+	node := executionnode.Node{ID: "node-1", Address: "192.0.2.10", Port: 22, User: "operator", HostKey: executionnode.HostKeyPolicy{Fingerprint: "SHA256:approved"}}
 	release := map[string]any{
 		"bundleDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		"coreVersion":  "test-core", "catalogDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "planningProtocol": "platform.installer/execution-runtime/v1alpha1",

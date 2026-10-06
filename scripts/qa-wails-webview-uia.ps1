@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Windows', 'TreeSummary', 'Restore', 'CloseWindow', 'Snapshot', 'ListOptions', 'Fingerprint', 'FindText', 'ReadStatus', 'ReadCapacity', 'ReadFindings', 'ReadPlanState', 'ReadDeploymentTargets', 'ReadPlanTail', 'ReadRunEvents', 'ReadServerTail', 'ReadSensitivePresence', 'ReadValue', 'ReadSelectedOption', 'ReadToggle', 'Invoke', 'ConfirmPreparation', 'Select', 'AddSelection', 'Expand', 'ChooseOption', 'ChooseOptionByKeyboard', 'Toggle', 'Focus', 'ScrollIntoView', 'SetText', 'TypeText')]
+    [ValidateSet('Windows', 'TreeSummary', 'Restore', 'CloseWindow', 'Snapshot', 'ListOptions', 'Fingerprint', 'FindText', 'ReadStatus', 'ReadCapacity', 'ReadFindings', 'ReadPlanState', 'ReadDeploymentTargets', 'ReadPlanTail', 'ReadRunEvents', 'ReadServerTail', 'ReadSensitivePresence', 'ReadValue', 'ReadSelectedOption', 'ReadToggle', 'Invoke', 'ConfirmPreparation', 'Select', 'SelectTab', 'AddSelection', 'Expand', 'ChooseOption', 'ChooseOptionByKeyboard', 'Toggle', 'Focus', 'ScrollIntoView', 'SetText', 'TypeText')]
     [string]$Action = 'Snapshot',
     [string]$WindowTitle = 'Platform Installer',
     [string]$Name = '',
@@ -62,7 +62,7 @@ $matchingWindows = @($candidates | Where-Object { $_.Current.Name -eq $WindowTit
 if ($matchingWindows.Count -ne 1) {
     throw 'QA_WEBVIEW_WINDOW_NOT_UNIQUE'
 }
-if ($Action -in @('Restore', 'CloseWindow', 'Invoke', 'ConfirmPreparation', 'Select', 'AddSelection', 'Expand', 'ChooseOption', 'ChooseOptionByKeyboard', 'Toggle', 'Focus', 'ScrollIntoView', 'SetText', 'TypeText')) {
+if ($Action -in @('Restore', 'CloseWindow', 'Invoke', 'ConfirmPreparation', 'Select', 'SelectTab', 'AddSelection', 'Expand', 'ChooseOption', 'ChooseOptionByKeyboard', 'Toggle', 'Focus', 'ScrollIntoView', 'SetText', 'TypeText')) {
     [System.Media.SystemSounds]::Question.Play()
     try { [Console]::Beep(587, 140) } catch { }
     Start-Sleep -Seconds 3
@@ -367,6 +367,7 @@ $controls = @(
         $element = $elements.Item($i)
         $type = $element.Current.ControlType
         if ($type -eq [System.Windows.Automation.ControlType]::Button -or
+            $type -eq [System.Windows.Automation.ControlType]::TabItem -or
             $type -eq [System.Windows.Automation.ControlType]::Edit -or
             $type -eq [System.Windows.Automation.ControlType]::ComboBox -or
             $type -eq [System.Windows.Automation.ControlType]::Spinner -or
@@ -403,6 +404,7 @@ if (-not $Name) { throw 'QA_WEBVIEW_CONTROL_NAME_REQUIRED' }
 $wantedType = switch ($Action) {
     'Invoke' { [System.Windows.Automation.ControlType]::Button }
     'Select' { [System.Windows.Automation.ControlType]::ListItem }
+    'SelectTab' { [System.Windows.Automation.ControlType]::TabItem }
     'AddSelection' { [System.Windows.Automation.ControlType]::ListItem }
     'ScrollIntoView' { [System.Windows.Automation.ControlType]::DataItem }
     'Expand' { [System.Windows.Automation.ControlType]::ComboBox }
@@ -480,7 +482,7 @@ if ($Action -eq 'Invoke') {
         [System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern
     )) { throw 'QA_WEBVIEW_INVOKE_UNAVAILABLE' }
     $pattern.Invoke()
-} elseif ($Action -eq 'Select') {
+} elseif ($Action -in @('Select', 'SelectTab')) {
     $pattern = $null
     if (-not $target.TryGetCurrentPattern(
         [System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern

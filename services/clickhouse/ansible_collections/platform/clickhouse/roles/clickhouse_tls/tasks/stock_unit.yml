@@ -1,0 +1,55 @@
+---
+- name: Locate the installed stock ClickHouse server unit
+  ansible.builtin.command:
+    argv: [systemctl, show, clickhouse-server.service, --property=FragmentPath, --value]
+  register: _platform_clickhouse_stock_fragment
+  changed_when: false
+
+- name: Require a real stock unit fragment before changing its enablement
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_stock_fragment.stdout is match('^/.+/clickhouse-server[.]service$')
+    fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
+
+- name: Identify the RPM owning the stock ClickHouse server unit
+  ansible.builtin.command:
+    argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', "{{ _platform_clickhouse_stock_fragment.stdout }}"]
+  register: _platform_clickhouse_stock_unit_owner
+  changed_when: false
+  failed_when: false
+
+- name: Refuse to change a stock unit outside the exact pinned server RPM
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_stock_unit_owner.rc == 0
+      - _platform_clickhouse_stock_unit_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
+    fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
+
+- name: Check stock ClickHouse server activity after RPM installation
+  ansible.builtin.command:
+    argv: [systemctl, is-active, clickhouse-server.service]
+  register: _platform_clickhouse_stock_after_install
+  changed_when: false
+  failed_when: false
+
+- name: Preserve an active stock ClickHouse server for explicit conflict handling
+  ansible.builtin.assert:
+    that: _platform_clickhouse_stock_after_install.stdout != 'active'
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
+
+- name: Disable the inactive RPM-provided stock ClickHouse server unit
+  ansible.builtin.systemd_service:
+    name: clickhouse-server.service
+    enabled: false
+
+- name: Confirm the RPM stock unit stayed inactive
+  ansible.builtin.command:
+    argv: [systemctl, is-active, clickhouse-server.service]
+  register: _platform_clickhouse_stock_after_disable
+  changed_when: false
+  failed_when: false
+
+- name: Refuse concurrent activation of the RPM stock unit
+  ansible.builtin.assert:
+    that: _platform_clickhouse_stock_after_disable.stdout != 'active'
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE

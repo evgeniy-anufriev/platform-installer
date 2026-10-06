@@ -1,5 +1,28 @@
 # Current state
 
+## SI11 ClickHouse stock RPM unit guard (2026-10-06)
+
+The S11 all-services Wails run `installer-c5a3bca0836eee7943dbe584d8e0f344`
+failed at ClickHouse apply because the RPM-enabled stock
+`clickhouse-server.service` was active beside the managed member unit on
+node1. The ClickHouse role now disables that stock unit after package install
+only if it is inactive and its unit file belongs to the exact pinned server
+RPM. It never stops an active unit; the existing preflight remains fail-closed.
+Focused RED OS QA on node2 passed with `changed=1` initially and `changed=0`
+on repeat. The node1 active-unit negative test failed safely with `changed=0`.
+The stock RPM unit on node1 was then stopped and disabled as a separate QA
+operation without deleting its data. The focused role check on node1/node2
+passed with `changed=0`; node3 needed one disable (`changed=1`) and its repeat
+passed with `changed=0`. All three stock units are now inactive/disabled and
+all three managed ClickHouse server units remain active. A new bundle built
+from the current sources and existing offline payloads passed validation and
+was published to the active cache at
+`sha256:8f07fa35fb20551684f1e2606bd7749f19eef6c4f4b572339c17e8f4d667c310`.
+The main apply playbook syntax check and `git diff --check` passed. This does
+not close I05: no new Wails installation run has exercised the fix. A real
+reboot was not part of the focused check. See the
+[S11 journal](docs/service-install-11-test-journal.md).
+
 ## SI11 Keepalived participant-scoped apply guard (2026-10-06)
 
 The Keepalived Apply playbook now conditions each prepare, activate and

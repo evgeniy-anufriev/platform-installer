@@ -306,7 +306,7 @@ export function EntryPointsView({
             </div>
           )}
         </section>
-        <section className="card">
+        <section className="card entry-consumers">
           <h2>Назначения consumers</h2>
           {deployments.length === 0 ? (
             <p className="muted">Нет deployments.</p>

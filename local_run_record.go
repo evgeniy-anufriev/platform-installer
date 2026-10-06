@@ -186,6 +186,37 @@ func writeLocalRunRecord(storeRoot string, record localRunRecord) error {
 	return syncLocalRunRecordDir(storeRoot)
 }
 
+// restoreLocalRunRecordAfterUnsentStart rolls back only the exact PENDING
+// reservation written for a Start request that the trusted lifecycle layer
+// proves was never dispatched. A prior terminal record is restored verbatim.
+func restoreLocalRunRecordAfterUnsentStart(storeRoot string, pending localRunRecord, previous *localRunRecord) error {
+	if pending.State != "PENDING" || pending.RunID != "" || !validLocalRunRecord(pending) {
+		return errors.New("LOCAL_RUN_RECORD_INVALID")
+	}
+	current, err := readLocalRunRecord(storeRoot, pending.ProjectRoot, pending.ProjectID)
+	if err != nil || current == nil || *current != pending {
+		return errors.New("LOCAL_RUN_RECORD_CHANGED")
+	}
+	if previous != nil {
+		return writeLocalRunRecord(storeRoot, *previous)
+	}
+	path, err := localRunRecordPath(storeRoot, pending.ProjectRoot, pending.ProjectID)
+	if err != nil {
+		return err
+	}
+	if err := safeLocalRunRecordRoot(storeRoot); err != nil {
+		return err
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("LOCAL_RUN_RECORD_INVALID")
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("LOCAL_RUN_RECORD_UNAVAILABLE: %w", err)
+	}
+	return syncLocalRunRecordDir(storeRoot)
+}
+
 func safeLocalRunRecordRoot(root string) error {
 	info, err := os.Lstat(root)
 	if errors.Is(err, os.ErrNotExist) {

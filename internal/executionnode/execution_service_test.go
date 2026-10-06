@@ -14,6 +14,7 @@ import (
 type lifecycleBuilder struct {
 	calls         int
 	stale         bool
+	targets       []string
 	requiresPKI   bool
 	typedInputs   bool
 	runtimeValues bool
@@ -34,6 +35,9 @@ func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ stri
 	}
 	if b.runtimeValues {
 		plan.RequiredCredentials = append(plan.RequiredCredentials, RequiredCredential{RequirementRef: "clickhouse-default-password", Purpose: "SERVICE_PASSWORD", Hosts: []string{"node1"}})
+	}
+	if b.targets != nil {
+		plan.Phases = []DeploymentPlanPhase{{ID: "apply", Actions: []DeploymentPlanAction{{ID: "apply:service", Targets: append([]string(nil), b.targets...)}}}}
 	}
 	return plan, nil
 }
@@ -271,6 +275,11 @@ func TestExecutionServiceRetriesUnknownStartWithSameAttempt(t *testing.T) {
 	_ = s.ApprovePlan(p.ID, []string{"ACK_RISK"})
 	if _, err := s.Start(context.Background(), Node{}, p.ID); err == nil {
 		t.Fatal("unknown Start unexpectedly succeeded")
+	} else {
+		var notDispatched *StartNotDispatchedError
+		if errors.As(err, &notDispatched) {
+			t.Fatalf("transport error after dispatch was marked safe to retry: %v", err)
+		}
 	}
 	c.startErr = nil
 	if _, err := s.Start(context.Background(), Node{}, p.ID); err != nil {
@@ -278,6 +287,24 @@ func TestExecutionServiceRetriesUnknownStartWithSameAttempt(t *testing.T) {
 	}
 	if len(c.requests) != 2 || c.requests[0].StartAttemptID == "" || c.requests[0].StartAttemptID != c.requests[1].StartAttemptID {
 		t.Fatalf("retry generated a new start attempt: %#v", c.requests)
+	}
+}
+
+func TestExecutionServiceMarksTargetTrustRejectionAsNotDispatched(t *testing.T) {
+	b := &lifecycleBuilder{targets: []string{"node1"}}
+	c := &lifecycleClient{}
+	s := NewExecutionService(b, c)
+	p, err := s.CreatePlan(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApprovePlan(p.ID, p.Plan.Acknowledgements); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Start(context.Background(), Node{}, p.ID)
+	var notDispatched *StartNotDispatchedError
+	if !errors.As(err, &notDispatched) || err.Error() != "TARGET_HOST_TRUST_REQUIRED" || c.starts != 0 {
+		t.Fatalf("pre-dispatch rejection=%v starts=%d", err, c.starts)
 	}
 }
 

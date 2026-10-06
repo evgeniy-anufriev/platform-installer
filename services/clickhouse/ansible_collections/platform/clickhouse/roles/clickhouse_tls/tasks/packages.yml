@@ -22,6 +22,9 @@
     loop_var: clickhouse_package_id
     label: "{{ clickhouse_package_id }}"
 
+- name: Prevent the pinned RPM stock unit from starting beside managed members
+  ansible.builtin.include_tasks: stock_unit.yml
+
 - name: Prove HA Keeper executable is supplied by the pinned server RPM
   ansible.builtin.command:
     argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', /usr/bin/clickhouse-keeper]

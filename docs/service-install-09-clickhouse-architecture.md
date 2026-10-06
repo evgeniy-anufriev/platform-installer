@@ -134,6 +134,12 @@ memory. Do not stop an unrelated ClickHouse instance or remove foreign data.
 The role creates only its owned instance resources and verifies identity
 before overwriting or clearing. Running Keeper log/snapshot and ClickHouse
 data survive repeat apply; repeat `changed=0` must reflect real idempotence.
+The pinned server RPM enables its stock `clickhouse-server.service` as a package
+side effect. After package installation, the role disables that unit only when
+its unit file belongs to the exact pinned RPM and the unit is inactive. It
+never stops an active stock unit; preflight continues to reject one as a
+foreign-service conflict. This prevents the stock service from starting on a
+later reboot alongside Installer-managed member units.
 Teardown is a separate narrow, explicitly authorized, identity-checked QA
 operation; no host-wide package purge.
 

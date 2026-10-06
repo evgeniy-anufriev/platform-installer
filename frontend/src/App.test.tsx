@@ -345,7 +345,7 @@ it("restores Logs, Help, About and Settings navigation without requiring an open
 
   await userEvent.click(await screen.findByRole("button", { name: "Журналы" }));
   expect(screen.getByRole("heading", { name: "Журналы" })).toBeTruthy();
-  expect(screen.getByText("Событий пока нет")).toBeTruthy();
+  expect(screen.getByText("События появятся здесь после запуска плана.")).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "Справка" }));
   expect(screen.getByRole("heading", { name: "Справка" })).toBeTruthy();

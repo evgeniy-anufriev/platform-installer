@@ -109,6 +109,13 @@ execution failure. If the backend cannot provide a trustworthy action count,
 show the stage and current task without inventing a percentage. The mockup's
 state selector changes demonstration data only and never starts execution.
 
+For the Execution tab, the owner selected layout B: a compact full-width
+status/progress summary, followed by a wide event table and a right-hand details
+panel for the selected event. The live table keeps the latest 512 events only
+and auto-scrolls to the newest event on updates; it has no pagination. This is
+presentation-only and does not change run lifecycle, progress calculation or
+the separate «Журналы» page.
+
 ## 3. Installation as the project home
 
 The page has six compact regions in this order:

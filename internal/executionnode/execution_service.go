@@ -21,10 +21,23 @@ import (
 // deliberately not used as an API and are never needed to make lifecycle
 // decisions.
 type ExecutionError struct {
-	Code     string
-	RunID    string
-	Findings []Finding
+	Code          string
+	RunID         string
+	Findings      []Finding
+	notDispatched bool
 }
+
+func (e *ExecutionError) StartWasNotDispatched() bool { return e.notDispatched }
+
+// StartNotDispatchedError proves that Start returned before the credentialed
+// StartExecution request was handed to the transport. Callers may safely
+// release a local PENDING reservation; transport errors after dispatch remain
+// ambiguous and are deliberately not wrapped in this type.
+type StartNotDispatchedError struct{ cause error }
+
+func (e *StartNotDispatchedError) Error() string             { return e.cause.Error() }
+func (e *StartNotDispatchedError) Unwrap() error             { return e.cause }
+func (*StartNotDispatchedError) StartWasNotDispatched() bool { return true }
 
 func (e *ExecutionError) Error() string {
 	if e.RunID == "" {
@@ -343,9 +356,22 @@ func (s *ExecutionService) StartService(ctx context.Context, node Node, planID s
 	})
 }
 
-func (s *ExecutionService) start(ctx context.Context, node Node, planID string, prepare func(DeploymentPlan, ServicePlanRequest, string) error) (ExecutionRun, error) {
+func (s *ExecutionService) start(ctx context.Context, node Node, planID string, prepare func(DeploymentPlan, ServicePlanRequest, string) error) (result ExecutionRun, resultErr error) {
 	s.startMu.Lock()
 	defer s.startMu.Unlock()
+	startRequestDispatched := false
+	defer func() {
+		if resultErr != nil && !startRequestDispatched {
+			var executionErr *ExecutionError
+			if errors.As(resultErr, &executionErr) {
+				copy := *executionErr
+				copy.notDispatched = true
+				resultErr = &copy
+			} else {
+				resultErr = &StartNotDispatchedError{cause: resultErr}
+			}
+		}
+	}()
 	record, err := s.GetPlan(planID)
 	if err != nil {
 		return ExecutionRun{}, err
@@ -504,6 +530,9 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 		s.pendingStarts[planID] = pending
 		s.mu.Unlock()
 	}
+	// Set the boundary immediately before handing the request to the transport:
+	// any error from this call may conceal a committed remote Start.
+	startRequestDispatched = true
 	response, err := client.StartExecutionV2(ctx, node, ExecutionStartV2Request{StartAttemptID: pending.attemptID, ProjectIdentity: fresh.ProjectIdentity, ProjectRevision: fresh.ProjectRevision, PlanFingerprint: fresh.PlanFingerprint, ExecutionManifestDigest: fresh.executionManifestDigest, RuntimeRelease: fresh.RuntimeRelease, LeaseID: pending.leaseID})
 	if err != nil {
 		return ExecutionRun{}, err

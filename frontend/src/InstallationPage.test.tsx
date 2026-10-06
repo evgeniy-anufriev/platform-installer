@@ -401,6 +401,69 @@ describe("InstallationPage", () => {
     expect(eventTimes[0].getAttribute("datetime")).toBe("2026-10-05T07:22:44Z");
   });
 
+  it("shows only the newest 512 execution events and follows the latest update", () => {
+    const run = new main.InstallationRunOperation({
+      status: "RUNNING",
+      run: { runId: "run-window", state: "RUNNING", sequence: 600 },
+    });
+    const events = Array.from({ length: 600 }, (_, index) => {
+      const sequence = index + 1;
+      return new main.InstallationEventView({
+        runId: "run-window",
+        sequence,
+        eventType: "TASK_COMPLETED",
+        status: "SUCCESS",
+        timestamp: `2026-10-05T07:22:${String(sequence % 60).padStart(2, "0")}Z`,
+        safeMessage: `Сообщение события ${sequence}`,
+        host: "node1",
+        task: { name: `Задача ${sequence}`, uuid: `task-${sequence}` },
+      });
+    });
+    const props = {
+      state: currentPlanState("plan-1", "sha256:old", false),
+      tab: "execution" as const,
+      onTabChange: vi.fn(),
+      onOpenServers: vi.fn(),
+      busy: false,
+      onCreatePlan: vi.fn(),
+      onApprovePlan: vi.fn(),
+      run,
+      events,
+      onStart: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    const { container, rerender } = render(<InstallationPage {...props} />);
+    const table = screen.getByRole("table");
+    expect(screen.getByText("Показаны последние 512; всего 600")).toBeTruthy();
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(512);
+    expect(table.querySelector("tbody tr")?.textContent).toContain("Задача 89");
+    expect(screen.getAllByText("Сообщение события 600").length).toBeGreaterThan(
+      0,
+    );
+
+    const scrollContainer = container.querySelector(
+      ".execution-event-table-scroll",
+    ) as HTMLDivElement;
+    Object.defineProperty(scrollContainer, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    rerender(
+      <InstallationPage
+        {...props}
+        events={[
+          ...events,
+          new main.InstallationEventView({
+            ...events[599],
+            sequence: 601,
+            safeMessage: "Новейшее событие",
+          }),
+        ]}
+      />,
+    );
+    expect(scrollContainer.scrollTop).toBe(1200);
+  });
+
   it("explains phases without deployment actions instead of presenting them as service work", () => {
     const plan = {
       status: "PLAN_REVIEW" as const,

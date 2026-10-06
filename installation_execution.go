@@ -369,6 +369,11 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_RUN_ACTIVE", Message: "Предыдущий запуск не подтверждён как завершённый"}}
 	}
+	previousRecord, recordErr := readLocalRunRecord(a.localRunRecordRoot, a.current.Root, a.current.Project.ID)
+	if recordErr != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "LOCAL_RUN_RECORD_UNAVAILABLE", Message: "Не удалось проверить локальную запись запуска; Start не отправлен"}}
+	}
 	captured := installationStartContext{generation: a.installationGeneration, root: a.current.Root, projectID: a.current.Project.ID, revision: revision, planID: planID, nodeID: binding.node.ID, runtime: runtimeBinding}
 	a.startInFlight = true
 	a.editMu.Unlock()
@@ -408,6 +413,15 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	a.editMu.Unlock()
 	run, err := binding.plans.Start(ctx, binding.node, planID)
 	if err != nil {
+		var dispatchStatus interface{ StartWasNotDispatched() bool }
+		if errors.As(err, &dispatchStatus) && dispatchStatus.StartWasNotDispatched() {
+			a.editMu.Lock()
+			restoreErr := restoreLocalRunRecordAfterUnsentStart(a.localRunRecordRoot, record, previousRecord)
+			if restoreErr == nil && a.installationGeneration == captured.generation && a.current.Root == captured.root {
+				a.startOutcomeUnknown = false
+			}
+			a.editMu.Unlock()
+		}
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 	}
 	a.editMu.Lock()

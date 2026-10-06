@@ -842,7 +842,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         setInstallationEvents((current) =>
           current.some((event) => event.sequence === value.event!.sequence)
             ? current
-            : [...current, value.event!].slice(-512),
+            : [...current, value.event!],
         );
         const nextProgress = runProgressRef.current
           ? observeRunEvent(runProgressRef.current, value.event)

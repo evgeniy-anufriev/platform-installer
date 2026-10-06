@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   InstallationEventView,
   InstallationPlanOperation,
@@ -24,6 +24,7 @@ const tabLabels: Array<{ id: InstallationTab; label: string }> = [
   { id: "execution", label: "Выполнение" },
   { id: "result", label: "Результат" },
 ];
+const executionEventWindowSize = 512;
 
 const verificationLabel = (status: string) => {
   switch (status) {
@@ -794,6 +795,20 @@ function ExecutionStage({
   busy: boolean;
   onCancel: (runId: string) => void;
 }) {
+  const [selectedSequence, setSelectedSequence] = useState<number>();
+  const eventScrollRef = useRef<HTMLDivElement>(null);
+  const visibleEvents = events.slice(-executionEventWindowSize);
+  const selectedEvent =
+    events.find((event) => event.sequence === selectedSequence) ||
+    events.at(-1);
+  useEffect(() => {
+    setSelectedSequence(undefined);
+  }, [run?.run?.runId]);
+  useEffect(() => {
+    const scrollContainer = eventScrollRef.current;
+    if (scrollContainer)
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+  }, [events.length]);
   if (!run?.run)
     return (
       <article className="card installation-empty">
@@ -815,8 +830,8 @@ function ExecutionStage({
     .reverse()
     .find((event) => event.eventType === "TASK_COMPLETED" && event.task?.name);
   return (
-    <section className="installation-stage-content">
-      <article className="card">
+    <section className="execution-stage-content">
+      <article className="card execution-overview">
         <div className="installation-stage-heading">
           <div>
             <h2>{display.label}</h2>
@@ -874,7 +889,75 @@ function ExecutionStage({
           </p>
         )}
       </article>
-      <EventList events={events} />
+      <div className="execution-event-workspace">
+        <article className="card execution-event-table-card">
+          <div className="execution-event-title">
+            <h2>События выполнения</h2>
+            <span>
+              {events.length > executionEventWindowSize
+                ? `Показаны последние ${executionEventWindowSize}; всего ${events.length}`
+                : `Всего событий: ${events.length}`}
+            </span>
+          </div>
+          {events.length === 0 ? (
+            <p>События ещё не получены.</p>
+          ) : (
+            <>
+              <div
+                className="execution-event-table-scroll"
+                ref={eventScrollRef}
+              >
+                <table className="execution-event-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Время</th>
+                      <th scope="col">Событие / задача</th>
+                      <th scope="col">Узел</th>
+                      <th scope="col">Результат</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleEvents.map((event) => (
+                      <tr
+                        key={`${event.runId}-${event.sequence}`}
+                        className={
+                          selectedEvent?.sequence === event.sequence
+                            ? "is-selected"
+                            : ""
+                        }
+                      >
+                        <td>
+                          <time dateTime={event.timestamp || undefined}>
+                            {eventTimestampLabel(event.timestamp)}
+                          </time>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="execution-event-select"
+                            aria-pressed={
+                              selectedEvent?.sequence === event.sequence
+                            }
+                            onClick={() => setSelectedSequence(event.sequence)}
+                          >
+                            {event.task?.name ||
+                              event.safeMessage ||
+                              event.eventType}
+                          </button>
+                          <small>{eventMessageLabel(event.safeMessage)}</small>
+                        </td>
+                        <td>{event.host || "—"}</td>
+                        <td>{eventStatusLabel(event.status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </article>
+        <EventDetails event={selectedEvent} />
+      </div>
     </section>
   );
 }
@@ -1015,6 +1098,8 @@ function ResultStage({
 
 function eventStatusLabel(status: string): string {
   switch (status) {
+    case "PENDING":
+      return "ожидает";
     case "SUCCESS":
       return "успешно";
     case "CHANGED":
@@ -1027,9 +1112,43 @@ function eventStatusLabel(status: string): string {
       return "выполняется";
     case "CANCELLED":
       return "отменено";
+    case "INTERRUPTED":
+      return "прервано";
     default:
       return "ожидает";
   }
+}
+
+function eventTypeLabel(eventType: string): string {
+  const labels: Record<string, string> = {
+    RUN_STARTED: "Запуск начат",
+    PHASE_STARTED: "Этап начат",
+    ACTION_STARTED: "Действие начато",
+    TASK_STARTED: "Задача начата",
+    TASK_COMPLETED: "Задача завершена",
+    ACTION_COMPLETED: "Действие завершено",
+    PHASE_COMPLETED: "Этап завершён",
+    RUN_COMPLETED: "Запуск завершён",
+    DIAGNOSTIC: "Диагностика",
+  };
+  return labels[eventType] || eventType;
+}
+
+function eventMessageLabel(message: string): string {
+  const labels: Record<string, string> = {
+    "Detached controller accepted": "Контроллер принят",
+    "Fixed Core controller started": "Контроллер Core запущен",
+    "Execution controller is running": "Контроллер выполнения работает",
+    "Trusted operation started": "Доверенная операция начата",
+    "Ansible task started": "Задача Ansible начата",
+    "Ansible task completed": "Задача Ansible завершена",
+    "Ansible operation failed": "Операция Ansible завершилась ошибкой",
+    "Detailed task observability was truncated":
+      "Подробная запись событий задач ограничена",
+    "Detailed task observability was degraded":
+      "Подробная запись событий задач неполна",
+  };
+  return labels[message] || message;
 }
 
 function eventTimestampLabel(timestamp: string): string {
@@ -1039,6 +1158,58 @@ function eventTimestampLabel(timestamp: string): string {
     dateStyle: "short",
     timeStyle: "medium",
   }).format(date);
+}
+
+function EventDetails({ event }: { event?: InstallationEventView }) {
+  return (
+    <article className="card execution-event-details">
+      <h2>Детали события</h2>
+      {!event ? (
+        <p>Выберите событие, чтобы посмотреть подробности.</p>
+      ) : (
+        <>
+          <strong>
+            {eventTypeLabel(event.eventType)} · {eventStatusLabel(event.status)}
+          </strong>
+          <p>{eventMessageLabel(event.safeMessage)}</p>
+          <dl>
+            <dt>Время</dt>
+            <dd>{eventTimestampLabel(event.timestamp)}</dd>
+            <dt>Событие</dt>
+            <dd>{eventTypeLabel(event.eventType)}</dd>
+            <dt>Этап</dt>
+            <dd>{event.phaseId || "—"}</dd>
+            <dt>Действие</dt>
+            <dd>{event.actionId || "—"}</dd>
+            <dt>Развёртывание</dt>
+            <dd>{event.serviceDeployment || "—"}</dd>
+            <dt>Узел</dt>
+            <dd>{event.host || "—"}</dd>
+            <dt>Роль / задача</dt>
+            <dd>
+              {[event.task?.role, event.task?.name]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+            </dd>
+            <dt>ID задачи</dt>
+            <dd>{event.task?.uuid || "—"}</dd>
+            <dt>Длительность</dt>
+            <dd>
+              {event.elapsedMilliseconds === undefined
+                ? "—"
+                : `${event.elapsedMilliseconds} мс`}
+            </dd>
+            <dt>Ошибка</dt>
+            <dd>
+              {[event.errorCode, event.errorSummary]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+            </dd>
+          </dl>
+        </>
+      )}
+    </article>
+  );
 }
 
 function EventList({ events }: { events: InstallationEventView[] }) {
@@ -1055,9 +1226,8 @@ function EventList({ events }: { events: InstallationEventView[] }) {
                 {event.sequence}
               </span>
               <span>
-                <b>
-                  {event.task?.name || event.safeMessage || event.eventType}
-                </b>
+                <b>{event.task?.name || eventTypeLabel(event.eventType)}</b>
+                <small>{eventMessageLabel(event.safeMessage)}</small>
                 <small>
                   <time
                     className="installation-event-time"
