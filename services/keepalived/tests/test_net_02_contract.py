@@ -65,7 +65,13 @@ class Net02KeepalivedContractTests(unittest.TestCase):
         self.assertIn("hostvars[item].platform_keepalived_candidate_validation_rc", playbook)
         self.assertIn("KEEPALIVED_CANDIDATE_BARRIER_FAILED", playbook)
         self.assertEqual(2, playbook.count("loop: \"{{ _platform_keepalived_participants }}\""))
-        self.assertEqual(2, playbook.count("hostvars['localhost']._platform_keepalived_participants"))
+        self.assertEqual(5, playbook.count("hostvars['localhost']._platform_keepalived_participants"))
+        self.assertEqual(
+            3,
+            playbook.count(
+                "when: inventory_hostname in (hostvars['localhost']._platform_keepalived_participants | default([]))"
+            ),
+        )
         self.assertNotIn("_platform_keepalived_participants: \"{{ groups['platform_targets']", playbook)
         self.assertIn("platform_keepalived_lifecycle_phase: activate", playbook)
         self.assertLess(

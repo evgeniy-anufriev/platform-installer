@@ -1,5 +1,18 @@
 # Current state
 
+## SI11 Keepalived participant-scoped apply guard (2026-10-06)
+
+The Keepalived Apply playbook now conditions each prepare, activate and
+reconcile role invocation on membership in the participant list already used
+by the two cluster barriers. Unassigned hosts that remain in
+`platform_targets` should therefore not execute service-role tasks. The
+existing contract assertion was updated to require all three guards. No test,
+RED OS acceptance or Wails run has been performed for this correction; SI11
+I05 remains **ПРОВАЛ** until the selected participants pass both barriers and
+an unassigned host is proven untouched. The full plan remains blocked by four
+`ARTIFACT_SOURCE_OFFLINE_REQUIRED` findings (Kafka and ClickHouse); no bundle
+was changed and no server or plan was touched.
+
 ## SI11 Project Verify diagnostic — prerequisite identified (2026-10-06)
 
 The Project Verify UI now displays the bounded diagnostic code returned by

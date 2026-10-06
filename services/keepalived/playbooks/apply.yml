@@ -41,6 +41,7 @@
     - role: platform.keepalived.keepalived
       platform_keepalived_verify_only: false
       platform_keepalived_lifecycle_phase: prepare
+      when: inventory_hostname in (hostvars['localhost']._platform_keepalived_participants | default([]))
 
 - name: Barrier A - release activation only after every candidate passes
   hosts: localhost
@@ -67,6 +68,7 @@
     - role: platform.keepalived.keepalived
       platform_keepalived_verify_only: false
       platform_keepalived_lifecycle_phase: activate
+      when: inventory_hostname in (hostvars['localhost']._platform_keepalived_participants | default([]))
 
 - name: Barrier B - release service reconcile only after active validation
   hosts: localhost
@@ -93,3 +95,4 @@
     - role: platform.keepalived.keepalived
       platform_keepalived_verify_only: false
       platform_keepalived_lifecycle_phase: reconcile
+      when: inventory_hostname in (hostvars['localhost']._platform_keepalived_participants | default([]))
