@@ -890,7 +890,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   }, [api, installationSubscription, installationRun?.run?.state]);
   useEffect(() => {
     if (
-      installationTab !== "result" ||
+      !["execution", "result"].includes(installationTab) ||
       !installationRun?.run ||
       !api.getInstallationRun
     )
