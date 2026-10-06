@@ -1521,8 +1521,13 @@ button:disabled {
   text-overflow: ellipsis;
 }
 .installation-page > .title > .installation-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   border-radius: 16px;
   font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 .installation-status-pill.neutral,
 .installation-summary-plan-heading > .readonly {
@@ -1551,20 +1556,6 @@ button:disabled {
 .installation-page > .installation-tabs button {
   min-width: 82px;
   font-size: 12px;
-}
-.installation-page > .workflow-strip {
-  flex: 0 0 auto;
-}
-.workflow-strip > div {
-  min-width: 0;
-  padding: 6px 9px;
-  font-size: 11px;
-}
-.workflow-strip .workflow-current {
-  border-color: #1f6feb;
-  background: #edf5ff;
-  color: #174ea6;
-  font-weight: 650;
 }
 .installation-body {
   display: block;
@@ -1667,9 +1658,11 @@ button:disabled {
   font-size: 11px;
 }
 .installation-plan-content {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  min-height: 100%;
+  padding-bottom: 4px;
 }
 .installation-plan-content > .card {
   min-width: 0;
@@ -1696,34 +1689,56 @@ button:disabled {
   font-size: 11px;
 }
 .installation-plan-content .secret-output-setup {
+  padding: 0;
+}
+.installation-plan-content .secret-output-setup > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+}
+.installation-plan-content .secret-output-setup > summary::-webkit-details-marker,
+.plan-phase-card > summary::-webkit-details-marker {
+  display: none;
+}
+.installation-plan-content .secret-output-setup > summary::after {
+  content: "⌄";
+  margin-left: auto;
+  color: #176fc1;
+  font-size: 16px;
+}
+.installation-plan-content .secret-output-setup[open] > summary::after {
+  content: "⌃";
+}
+.secret-output-details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
   gap: 6px 10px;
+  padding: 0 12px 10px;
+  border-top: 1px solid #e4ebf2;
 }
-.installation-plan-content .secret-output-setup h2,
-.installation-plan-content .secret-output-setup > p {
+.secret-output-details > p {
   grid-column: 1 / -1;
-  margin: 0;
-}
-.installation-plan-content .secret-output-setup h2 {
-  font-size: 14px;
-}
-.installation-plan-content .secret-output-setup > p {
+  margin: 6px 0 0;
   font-size: 11px;
 }
-.installation-plan-content .secret-output-setup label {
+.secret-output-details label {
   display: grid;
   gap: 3px;
   margin: 0;
   font-size: 11px;
 }
-.installation-plan-content .secret-output-setup input {
+.secret-output-details input {
   min-width: 0;
   min-height: 31px;
   padding: 5px 8px;
 }
-.installation-plan-content .secret-output-setup button {
+.secret-output-details button {
   justify-self: end;
   padding: 6px 9px;
   font-size: 11px;
@@ -1731,27 +1746,114 @@ button:disabled {
 .plan-phase {
   padding: 8px 0;
 }
+.installation-plan-phases {
+  display: grid;
+  gap: 7px;
+}
+.plan-phase-card {
+  overflow: hidden;
+  border: 1px solid #d8e2ef;
+  border-radius: 8px;
+  background: #fff;
+}
+.plan-phase-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.plan-phase-card > summary::after {
+  content: "⌄";
+  order: 1;
+  margin-left: 2px;
+  color: #526987;
+  font-size: 17px;
+}
+.plan-phase-card[open] > summary {
+  border-bottom: 1px solid #e2e9f1;
+  background: #f5f9ff;
+}
+.plan-phase-card[open] > summary::after {
+  content: "⌃";
+}
+.plan-phase-number {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8f1ff;
+  color: #176fc1;
+  font-size: 12px;
+  font-weight: 700;
+}
+.plan-phase-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.plan-phase-title > small {
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+.plan-phase-state {
+  order: 0;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eaf8ef;
+  color: #17633d;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.plan-phase-actions {
+  padding: 0 10px 5px;
+}
+.plan-action-number {
+  color: #526987;
+  font-variant-numeric: tabular-nums;
+}
+.plan-action-description {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.plan-action-description > b,
+.plan-action-description > small {
+  overflow-wrap: anywhere;
+}
+.plan-action-targets {
+  overflow-wrap: anywhere;
+}
+.plan-action-impact {
+  justify-self: start;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eaf2fc;
+  color: #174e83;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.plan-show-more {
+  margin: 5px 0 3px 24px;
+  padding: 2px 0;
+  font-size: 11px;
+}
 .plan-phase h3 {
   margin-bottom: 5px;
   font-size: 12px;
 }
 .plan-action-row {
-  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1.4fr) minmax(120px, 0.9fr) auto;
+  align-items: center;
   gap: 3px 12px;
   padding: 7px 0;
   font-size: 11px;
-}
-.plan-action-row > b {
-  font-size: 11px;
-}
-.plan-action-row > span,
-.plan-action-row > small {
-  font-size: 10px;
-}
-.plan-action-row > span:nth-of-type(2),
-.plan-action-row > small {
-  grid-column: 1 / -1;
 }
 .acknowledgement {
   gap: 7px;
@@ -1765,6 +1867,33 @@ button:disabled {
 }
 .installation-plan-content > .card > p {
   margin: 6px 0 0;
+}
+.installation-plan-actions {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: auto -4px -4px;
+  padding: 9px 10px;
+  border-top: 1px solid #d8e2ef;
+  background: #f4f7fb;
+}
+.installation-plan-actions > .muted {
+  margin: 0;
+  font-size: 11px;
+}
+.installation-plan-actions > button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid #1f6feb;
+  border-radius: 6px;
+  background: #1f6feb;
+  color: #fff;
 }
 .installation-stage-content {
   display: grid;
@@ -1887,15 +2016,27 @@ button:disabled {
   .installation-plan-content > .card > dl {
     grid-template-columns: max-content minmax(0, 1fr);
   }
-  .installation-plan-content .secret-output-setup {
+  .secret-output-details {
     grid-template-columns: minmax(0, 1fr);
   }
-  .installation-plan-content .secret-output-setup h2,
-  .installation-plan-content .secret-output-setup > p {
+  .secret-output-details > p {
     grid-column: 1;
   }
-  .installation-plan-content .secret-output-setup button {
+  .secret-output-details button {
     justify-self: start;
+  }
+  .plan-action-row {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .plan-action-targets,
+  .plan-action-impact {
+    grid-column: 2;
+  }
+  .installation-plan-actions {
+    align-items: flex-end;
+  }
+  .installation-plan-actions > .muted {
+    max-width: 55%;
   }
   .installation-page > .title > .readonly {
     max-width: 45%;

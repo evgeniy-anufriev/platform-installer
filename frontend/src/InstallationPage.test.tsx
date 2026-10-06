@@ -58,7 +58,10 @@ describe("InstallationPage", () => {
       />,
     );
 
-    expect(screen.getByRole("status").textContent).toBe("План не готов");
+    expect(screen.getByRole("status").textContent).toContain(
+      "Текущий этап: План · План не готов",
+    );
+    expect(screen.queryByLabelText("Стадии установки")).toBeNull();
     expect(screen.queryByText("PREREQUISITES_REQUIRED")).toBeNull();
     expect(screen.getByText("EXECUTION_NODE_READY_REQUIRED")).toBeTruthy();
     expect(screen.getByText("node1 · 192.0.2.10")).toBeTruthy();
@@ -251,6 +254,57 @@ describe("InstallationPage", () => {
     expect(onStart).toHaveBeenCalledWith("plan-1");
   });
 
+  it("keeps the start action visible but disabled while this installation is running", () => {
+    const onStart = vi.fn();
+    const plan = {
+      status: "PLAN_APPROVED" as const,
+      plan: {
+        id: "plan-running",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: true,
+        acknowledgements: [],
+        phases: [],
+      },
+    };
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-running", "sha256:old", true)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        onStart={onStart}
+        plan={plan}
+        run={
+          new main.InstallationRunOperation({
+            status: "RUNNING",
+            run: { runId: "run-1", state: "RUNNING", sequence: 3 },
+          })
+        }
+      />,
+    );
+    const actions = screen.getByRole("contentinfo", {
+      name: "Действия с планом",
+    });
+    const start = screen.getByRole("button", { name: "Начать выполнение" });
+    expect(actions.contains(start)).toBe(true);
+    expect(start).toHaveProperty("disabled", true);
+    expect(actions.textContent).toContain("уже запущено");
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
   it("shows the safe Start failure instead of saying that nothing happened", () => {
     render(
       <InstallationPage
@@ -344,9 +398,7 @@ describe("InstallationPage", () => {
     ).toBeNull();
     const eventTimes = container.querySelectorAll("time");
     expect(eventTimes).toHaveLength(2);
-    expect(eventTimes[0].getAttribute("datetime")).toBe(
-      "2026-10-05T07:22:44Z",
-    );
+    expect(eventTimes[0].getAttribute("datetime")).toBe("2026-10-05T07:22:44Z");
   });
 
   it("explains phases without deployment actions instead of presenting them as service work", () => {
@@ -390,8 +442,10 @@ describe("InstallationPage", () => {
         "В плане нет действий по развёртыванию сервисов. Проверьте состав и размещение сервисов в проекте.",
       ),
     ).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "1. Применение" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "2. Проверка" })).toBeTruthy();
+    expect(screen.getByText("Применение").closest("summary")).toBeTruthy();
+    expect(
+      screen.getByText("Проверка и завершение").closest("summary"),
+    ).toBeTruthy();
     expect(screen.queryByText(/Развёртывание:/)).toBeNull();
   });
 
@@ -538,10 +592,8 @@ describe("InstallationPage", () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
-  it("shows PKI password status and links to Certificates without collecting it", async () => {
-    const user = userEvent.setup();
+  it("does not expose certificate navigation or PKI details and keeps start gated", () => {
     const onStart = vi.fn();
-    const onOpenCertificates = vi.fn();
     const plan = {
       status: "PLAN_APPROVED" as const,
       plan: {
@@ -569,7 +621,6 @@ describe("InstallationPage", () => {
         tab="plan"
         onTabChange={vi.fn()}
         onOpenServers={vi.fn()}
-        onOpenCertificates={onOpenCertificates}
         busy={false}
         onCreatePlan={vi.fn()}
         onApprovePlan={vi.fn()}
@@ -585,14 +636,13 @@ describe("InstallationPage", () => {
     expect(
       screen.getByRole("button", { name: "Начать выполнение" }),
     ).toHaveProperty("disabled", true);
+    expect(screen.queryByText(/Java|PKCS#12/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Сертификаты/ })).toBeNull();
     expect(
-      screen.getByText(/Пароль Java-хранилищ PKCS#12: не задан/),
+      screen.getByText(
+        "Запуск пока недоступен: не выполнены обязательные условия плана.",
+      ),
     ).toBeTruthy();
-    expect(screen.queryByLabelText(/Пароль/)).toBeNull();
-    await user.click(
-      screen.getByRole("button", { name: "Открыть «Сертификаты»" }),
-    );
-    expect(onOpenCertificates).toHaveBeenCalledOnce();
     expect(onStart).not.toHaveBeenCalled();
   });
 

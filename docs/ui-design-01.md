@@ -119,13 +119,26 @@ The page has six compact regions in this order:
    preparation card on Installation.
 3. Saved-project state with a separate optional **Verify project** action and
    `UNVERIFIED/VERIFIED/INVALID/STALE/UNAVAILABLE` indication.
-4. A persistent execution stage strip: Plan → Execute → Result. It remains
-   visible on every Installation local page and highlights the current stage;
-   Project Verify is not an execution authorization stage.
+4. Compact current-stage status beside the Installation title, such as
+   “Текущий этап: План · ожидает одобрения”. It remains visible on every
+   Installation local page and reflects the authoritative plan/run lifecycle.
+   The Summary/Plan/Execution/Result tabs are navigation only; there is no
+   second stage strip. Project Verify is not an execution authorization stage.
 5. Readiness and actionable findings. Each finding contains plain-language
    impact, technical code in Advanced view, and an explicit destination.
 6. A plan preview grouped by Servers, Services and Certificates, with one
    page-level **Generate plan** action on Summary.
+
+The Plan tab shows the approved plan and its ordered actions. Once approved, a
+sticky bottom action bar exposes **Start execution**; it remains disabled while
+the run is active or any existing plan/runtime prerequisite is unmet. Do not
+add a Certificate-page link or Java/PKCS#12 password details here. Certificate
+secrets remain configured on Certificates; the Plan tab reports only a concise
+generic reason when execution prerequisites are not satisfied.
+The phase list uses collapsible summaries with action counts and target nodes;
+long phases initially show a few actions with an explicit control to reveal the
+rest. The protected-output password form is collapsed after the password is
+set and open only while it still needs to be provided.
 
 The Summary action requires READY Execution Node, a saved canonical project and
 no unsaved edit-session changes. It always invokes fresh

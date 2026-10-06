@@ -1887,7 +1887,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               tab={installationTab}
               onTabChange={setInstallationTab}
               onOpenServers={() => setPage("servers")}
-              onOpenCertificates={() => setPage("certificates")}
               plan={installationPlan}
               busy={installationBusy}
               onCreatePlan={createInstallationPlan}

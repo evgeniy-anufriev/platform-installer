@@ -133,7 +133,6 @@ export function InstallationPage({
   tab,
   onTabChange,
   onOpenServers,
-  onOpenCertificates = () => {},
   plan,
   busy,
   onCreatePlan,
@@ -158,7 +157,6 @@ export function InstallationPage({
   tab: InstallationTab;
   onTabChange: (tab: InstallationTab) => void;
   onOpenServers: () => void;
-  onOpenCertificates?: () => void;
   plan?: InstallationPlanOperation;
   busy: boolean;
   onCreatePlan: () => void;
@@ -193,7 +191,15 @@ export function InstallationPage({
           className={`readonly installation-status-pill ${presentation.tone}`}
           role="status"
         >
-          {presentation.label}
+          <span>Текущий этап: </span>
+          <strong>
+            {presentation.stage === "plan"
+              ? "План"
+              : presentation.stage === "execution"
+                ? "Выполнение"
+                : "Результат"}
+          </strong>
+          {` · ${presentation.label}`}
           {presentation.percent !== undefined
             ? ` · ${presentation.percent}%`
             : ""}
@@ -241,25 +247,6 @@ export function InstallationPage({
           </button>
         ))}
       </nav>
-      <div className="workflow-strip" aria-label="Стадии установки">
-        <div
-          className={presentation.stage === "plan" ? "workflow-current" : ""}
-        >
-          1. План
-        </div>
-        <div
-          className={
-            presentation.stage === "execution" ? "workflow-current" : ""
-          }
-        >
-          2. Выполнение
-        </div>
-        <div
-          className={presentation.stage === "result" ? "workflow-current" : ""}
-        >
-          3. Результат
-        </div>
-      </div>
       <div
         className="installation-body"
         role="tabpanel"
@@ -384,8 +371,8 @@ export function InstallationPage({
             onCreatePlan={onCreatePlan}
             onApprovePlan={onApprovePlan}
             onStart={onStart}
+            run={run}
             credentialStatus={credentialStatus}
-            onOpenCertificates={onOpenCertificates}
             onSetOutputEncryptionPassword={onSetOutputEncryptionPassword}
           />
         )}
@@ -424,8 +411,8 @@ function PlanStage({
   onCreatePlan,
   onApprovePlan,
   onStart,
+  run,
   credentialStatus,
-  onOpenCertificates,
   onSetOutputEncryptionPassword,
 }: {
   state?: InstallationState;
@@ -435,14 +422,17 @@ function PlanStage({
   onCreatePlan: () => void;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
   onStart: (planId: string) => void;
+  run?: InstallationRunOperation;
   credentialStatus: SessionCredentialStatus | null;
-  onOpenCertificates: () => void;
   onSetOutputEncryptionPassword: (
     password: string,
     confirm: string,
   ) => Promise<void>;
 }) {
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
+  const [expandedActions, setExpandedActions] = useState<
+    Record<string, boolean>
+  >({});
   const [outputPasswordAcknowledgement, setOutputPasswordAcknowledgement] =
     useState<InstallationPlanOperation>();
   const outputPasswordPresent =
@@ -482,6 +472,7 @@ function PlanStage({
     outputReady;
   const canStart =
     currentPlan &&
+    !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
     state?.status === "PLAN_APPROVED" &&
     state.plan.status === "PLAN_APPROVED" &&
     plan.status === "EXECUTABLE" &&
@@ -545,60 +536,64 @@ function PlanStage({
         </article>
       )}
       {outputRequired && (
-        <article className="card secret-output-setup">
-          <h2>Защищённые выходные файлы</h2>
-          <p>
-            Чувствительные результаты после выполнения будут зашифрованы на этом
-            компьютере. Пароль не отправляется на узел выполнения и хранится
-            только в памяти сеанса.
-          </p>
-          {outputPasswordPresent ? (
-            <p className="success">
-              Пароль шифрования задан для текущего сеанса.
+        <details
+          className="card secret-output-setup"
+          open={!outputPasswordPresent}
+        >
+          <summary>
+            Защищённые выходные файлы
+            {outputPasswordPresent ? " · пароль задан" : " · требуется пароль"}
+          </summary>
+          <div className="secret-output-details">
+            <p>
+              Чувствительные результаты будут зашифрованы на этом компьютере.
+              Пароль не отправляется на узел выполнения и хранится только в
+              памяти сеанса.
             </p>
-          ) : (
-            <>
-              <label>
-                Пароль шифрования
-                <input
-                  type="password"
-                  value={outputPassword}
-                  onChange={(event) => setOutputPassword(event.target.value)}
-                  disabled={busy}
-                  autoComplete="new-password"
-                />
-              </label>
-              <label>
-                Повторите пароль
-                <input
-                  type="password"
-                  value={outputConfirm}
-                  onChange={(event) => setOutputConfirm(event.target.value)}
-                  disabled={busy}
-                  autoComplete="new-password"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={saveOutputPassword}
-                disabled={busy || !outputPassword || !outputConfirm}
-              >
-                Сохранить пароль в сеансе
-              </button>
-            </>
-          )}
-          <p>
-            Файлы сохраняются в каталоге secrets/&lt;ID развёртывания&gt;/
-            текущего проекта.
-          </p>
-          {outputError && (
-            <p className="field-error" role="alert">
-              {outputError}
+            {!outputPasswordPresent && (
+              <>
+                <label>
+                  Пароль шифрования
+                  <input
+                    type="password"
+                    value={outputPassword}
+                    onChange={(event) => setOutputPassword(event.target.value)}
+                    disabled={busy}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <label>
+                  Повторите пароль
+                  <input
+                    type="password"
+                    value={outputConfirm}
+                    onChange={(event) => setOutputConfirm(event.target.value)}
+                    disabled={busy}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={saveOutputPassword}
+                  disabled={busy || !outputPassword || !outputConfirm}
+                >
+                  Сохранить пароль в сеансе
+                </button>
+              </>
+            )}
+            <p>
+              Файлы сохраняются в каталоге secrets/&lt;ID развёртывания&gt;/
+              текущего проекта.
             </p>
-          )}
-        </article>
+            {outputError && (
+              <p className="field-error" role="alert">
+                {outputError}
+              </p>
+            )}
+          </div>
+        </details>
       )}
-      <article className="card">
+      <article className="card installation-plan-phases">
         <h2>Этапы плана</h2>
         {!hasActions && (
           <p role="status">
@@ -607,35 +602,82 @@ function PlanStage({
           </p>
         )}
         {plan.phases.map((phase) => (
-          <section className="plan-phase" key={phase.id}>
-            <h3>
-              {phase.order + 1}.{" "}
-              {phase.id === "pki"
-                ? "Сертификаты"
-                : phase.id === "apply"
-                  ? "Применение"
-                  : phase.id === "verify"
-                    ? "Проверка"
-                    : phase.id}
-            </h3>
-            {phase.actions.map((action) => (
-              <div className="plan-action-row" key={action.id}>
-                <b>{action.summary}</b>
-                {action.serviceDeployment && (
-                  <span>Развёртывание: {action.serviceDeployment}</span>
-                )}
-                <span>
-                  {action.targets.join(", ") || "без целевых серверов"}
-                </span>
+          <details
+            className="plan-phase-card"
+            key={phase.id}
+            open={phase.order < 2}
+          >
+            <summary>
+              <span className="plan-phase-number">{phase.order + 1}</span>
+              <span className="plan-phase-title">
+                <b>
+                  {phase.id === "pki"
+                    ? "Сертификаты"
+                    : phase.id === "apply"
+                      ? "Применение"
+                      : phase.id === "verify"
+                        ? "Проверка и завершение"
+                        : phase.id}
+                </b>
                 <small>
-                  {action.mutating ? "изменяет инфраструктуру" : "проверка"}
-                  {action.dependsOn.length
-                    ? ` · после ${action.dependsOn.join(", ")}`
-                    : ""}
+                  {phase.actions.length}{" "}
+                  {phase.actions.length === 1 ? "действие" : "действий"}
+                  {phase.actions.length > 0 &&
+                    ` · ${[...new Set(phase.actions.flatMap((action) => action.targets))].join(", ") || "без целевых узлов"}`}
                 </small>
-              </div>
-            ))}
-          </section>
+              </span>
+              <span className="plan-phase-state">
+                {plan.status !== "EXECUTABLE"
+                  ? "Есть замечания"
+                  : plan.approved
+                    ? "Готово к выполнению"
+                    : "Ожидает одобрения"}
+              </span>
+            </summary>
+            <div className="plan-phase-actions">
+              {phase.actions
+                .slice(
+                  0,
+                  expandedActions[phase.id]
+                    ? phase.actions.length
+                    : Math.min(3, phase.actions.length),
+                )
+                .map((action, index) => (
+                  <div className="plan-action-row" key={action.id}>
+                    <span className="plan-action-number">{index + 1}</span>
+                    <span className="plan-action-description">
+                      <b>{action.summary}</b>
+                      {action.serviceDeployment && (
+                        <small>Развёртывание: {action.serviceDeployment}</small>
+                      )}
+                    </span>
+                    <span className="plan-action-targets">
+                      {action.targets.join(", ") || "без целевых серверов"}
+                    </span>
+                    <span className="plan-action-impact">
+                      {action.mutating ? "Инфраструктура" : "Проверка"}
+                    </span>
+                  </div>
+                ))}
+              {phase.actions.length > 3 && (
+                <button
+                  type="button"
+                  className="link plan-show-more"
+                  aria-expanded={!!expandedActions[phase.id]}
+                  onClick={() =>
+                    setExpandedActions((current) => ({
+                      ...current,
+                      [phase.id]: !current[phase.id],
+                    }))
+                  }
+                >
+                  {expandedActions[phase.id]
+                    ? "Скрыть дополнительные действия"
+                    : `Показать ещё ${phase.actions.length - 3} действий`}
+                </button>
+              )}
+            </div>
+          </details>
         ))}
       </article>
       {plan.status === "EXECUTABLE" && !plan.approved && (
@@ -678,8 +720,10 @@ function PlanStage({
           canStart={canStart}
           onStart={onStart}
           credentialStatus={credentialStatus}
-          onOpenCertificates={onOpenCertificates}
           outputReady={outputReady}
+          runActive={["STARTING", "RUNNING", "CANCELLING"].includes(
+            run?.run?.state || "",
+          )}
         />
       )}
     </section>
@@ -692,45 +736,46 @@ function StartApproval({
   canStart,
   onStart,
   credentialStatus,
-  onOpenCertificates,
   outputReady,
+  runActive,
 }: {
   plan: NonNullable<InstallationPlanOperation["plan"]>;
   busy: boolean;
   canStart: boolean;
   onStart: (planId: string) => void;
   credentialStatus: SessionCredentialStatus | null;
-  onOpenCertificates: () => void;
   outputReady: boolean;
+  runActive: boolean;
 }) {
   const required = plan.pkiStorePasswordRequired;
   const present = credentialStatus?.pkiStorePasswordStatus === "PRESENT";
   return (
-    <article className="card">
-      <h2>План одобрен</h2>
-      <p>Запуск создаёт один идентификатор выполнения на выбранном узле.</p>
-      {required && (
-        <>
-          <p role="status" className="muted">
-            Пароль Java-хранилищ PKCS#12:{" "}
-            {present ? "задан в текущем сеансе" : "не задан"}.
-          </p>
-          <button
-            type="button"
-            className="outline"
-            onClick={onOpenCertificates}
-          >
-            Открыть «Сертификаты»
-          </button>
-        </>
-      )}
+    <footer
+      className="installation-plan-actions"
+      aria-label="Действия с планом"
+    >
+      <span className="muted" role="status">
+        {runActive
+          ? "Выполнение этого плана уже запущено."
+          : canStart && (!required || present) && outputReady
+            ? "Одобренный план готов к запуску."
+            : "Запуск пока недоступен: не выполнены обязательные условия плана."}
+      </span>
       <button
+        type="button"
+        className="primary"
         onClick={() => onStart(plan.id)}
-        disabled={busy || !canStart || (required && !present) || !outputReady}
+        disabled={
+          busy ||
+          !canStart ||
+          (required && !present) ||
+          !outputReady ||
+          runActive
+        }
       >
         Начать выполнение
       </button>
-    </article>
+    </footer>
   );
 }
 
