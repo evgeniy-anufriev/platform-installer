@@ -6,8 +6,7 @@ Implementation is underway in the existing uncommitted worktree. The
 application-config priority list, ordered BuildDeploymentPlan request and
 Core per-deployment Apply/Verify projection are implemented. Core contract
 tests on the configured RED OS QA node passed (130 tests), and `go test ./...`
-passed. Frontend typecheck and lint passed; the full frontend suite retains one
-known unrelated failure in `App.test.tsx` (`EXECUTION_NODE_BINDING_REQUIRED`).
+passed. Frontend typecheck, lint and the full frontend suite passed (128 tests).
 The DNS resolver supports base-only and selected-source projections, and
 HAProxy has a targeted candidate entrypoint that preserves other proven
 backend files. The generic source hook now resolves one selected deployment

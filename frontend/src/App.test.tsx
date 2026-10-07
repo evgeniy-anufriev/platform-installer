@@ -404,7 +404,7 @@ it("shows the read-only Installation state without requesting a deployment plan"
     await screen.findByRole("button", { name: "Установка" }),
   );
 
-  expect(screen.getByText("EXECUTION_NODE_BINDING_REQUIRED")).toBeTruthy();
+  expect(screen.getByText(/План не сформирован/)).toBeTruthy();
   expect(screen.getByRole("tab", { name: "План" })).toBeTruthy();
   expect(getInstallationState).toHaveBeenCalled();
 });
