@@ -51,7 +51,7 @@
       zone: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"
       owner: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.fqdn }}."
       addresses: ["{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.address }}"]
-      ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl }}"
+      ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl | int }}"
   when: _platform_bind_zone_recovery_stat.stat.exists
 
 - name: Clear interrupted full-reconcile marker only after verified recovery

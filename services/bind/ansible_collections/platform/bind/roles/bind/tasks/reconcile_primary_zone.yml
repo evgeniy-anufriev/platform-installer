@@ -88,7 +88,7 @@
       zone: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"
       owner: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.fqdn }}."
       addresses: ["{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.address }}"]
-      ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl }}"
+      ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl | int }}"
 
 - name: Clear primary-zone marker after authority and update verification
   ansible.builtin.file:

@@ -109,6 +109,18 @@ type lease struct {
 	generation          uint64
 }
 
+// runExecutionIdentityHold retains only the already-approved SSH identity
+// metadata during one Start reservation or its authoritative installation run.
+// The private-key bytes are never copied here; the transport continues to
+// verify the original file identity/digest.
+type runExecutionIdentityHold struct {
+	state    string
+	planID   string
+	runID    string
+	binding  Binding
+	identity ExecutionIdentity
+}
+
 // pendingRuntimeSecrets holds service-password values entered before a target
 // credential is available.  It is project-bound, short-lived and deliberately
 // separate from a transport credential: it cannot be used for SSH or exposed
@@ -452,8 +464,9 @@ func (b *Broker) ClearAttachedRuntimeSecretValues(binding Binding) {
 }
 
 type expiredMarker struct {
-	binding   Binding
-	expiresAt time.Time
+	binding    Binding
+	expiresAt  time.Time
+	generation uint64
 }
 
 type Broker struct {
@@ -461,6 +474,7 @@ type Broker struct {
 	ttl             time.Duration
 	now             func() time.Time
 	lease           *lease
+	runHold         *runExecutionIdentityHold
 	pending         *pendingRuntimeSecrets
 	outputPassword  []byte
 	outputBinding   Binding
@@ -561,6 +575,14 @@ func (b *Broker) Set(binding Binding, input Input) (Status, error) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.runHold != nil {
+		zero(candidate.sshSecret)
+		zero(candidate.sudoSecret)
+		zero(candidate.pkiStorePassword)
+		zeroSecretMap(candidate.runtimeSecretValues)
+		zeroTypedSecretSlice(candidate.runtimeSecretInputs)
+		return Status{}, errors.New("INSTALLATION_RUN_ACTIVE")
+	}
 	if b.outputBinding != binding {
 		zero(b.outputPassword)
 		b.outputPassword = nil
@@ -601,6 +623,7 @@ func (b *Broker) Clear() {
 	defer b.mu.Unlock()
 	b.clearLeaseLocked(true)
 	b.clearPendingLocked()
+	b.clearRunHoldsLocked()
 	zero(b.outputPassword)
 	b.outputPassword = nil
 	b.outputBinding = Binding{}
@@ -713,16 +736,154 @@ type ExecutionIdentity struct {
 func (b *Broker) CurrentExecutionIdentity(binding Binding) (ExecutionIdentity, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
-		if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
+	if b.lease != nil && b.lease.binding == binding && b.now().Before(b.lease.expiresAt) {
+		return executionIdentityFromLease(b.lease)
+	}
+	if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
+		b.expireLocked(b.lease.generation)
+	}
+	if identity, ok := b.heldExecutionIdentityLocked(binding); ok {
+		return identity, nil
+	}
+	return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
+}
+
+// ReserveExecutionIdentityForStart retains only approved identity metadata
+// before dispatch. The reservation is idempotent for a retry of the same plan.
+func (b *Broker) ReserveExecutionIdentityForStart(binding Binding, planID string, identity ExecutionIdentity) error {
+	if binding.Root == "" || binding.ID == "" || planID == "" || len(planID) > 128 ||
+		identity.Path == "" || identity.Username == "" || identity.Generation == 0 ||
+		identity.FileInfo == nil || identity.Digest == [sha256.Size]byte{} {
+		return errors.New("EXECUTION_RUN_IDENTITY_INVALID")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if hold := b.runHold; hold != nil {
+		if hold.state == "STARTING" && hold.binding == binding && hold.planID == planID && sameExecutionIdentity(hold.identity, identity) {
+			return nil
+		}
+		return errors.New("INSTALLATION_RUN_ACTIVE")
+	}
+	if b.lease != nil && b.lease.binding == binding && b.lease.generation == identity.Generation {
+		if !b.now().Before(b.lease.expiresAt) {
 			b.expireLocked(b.lease.generation)
 		}
+	}
+	if b.lease != nil && b.lease.binding == binding && b.now().Before(b.lease.expiresAt) {
+		current, err := executionIdentityFromLease(b.lease)
+		if err != nil || !sameExecutionIdentity(current, identity) {
+			return errors.New("EXECUTION_RUN_IDENTITY_STALE")
+		}
+	} else if b.expired == nil || b.expired.binding != binding || b.expired.generation != identity.Generation {
+		return errors.New("EXECUTION_RUN_IDENTITY_STALE")
+	}
+	b.runHold = &runExecutionIdentityHold{state: "STARTING", planID: planID, binding: binding, identity: identity}
+	return nil
+}
+
+// ConfirmExecutionIdentityRun binds the reserved slot to the authoritative
+// run ID returned by Start. It remains usable after ordinary lease expiry.
+func (b *Broker) ConfirmExecutionIdentityRun(binding Binding, planID, runID string) error {
+	if runID == "" || len(runID) > 128 {
+		return errors.New("EXECUTION_RUN_IDENTITY_INVALID")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	hold := b.runHold
+	if hold == nil || hold.state != "STARTING" || hold.binding != binding || hold.planID != planID {
+		return errors.New("EXECUTION_RUN_IDENTITY_STALE")
+	}
+	hold.state, hold.runID = "RUNNING", runID
+	return nil
+}
+
+// ReleaseStartingExecutionIdentity releases only a reservation whose Start
+// was authoritatively not dispatched.
+func (b *Broker) ReleaseStartingExecutionIdentity(binding Binding, planID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if hold := b.runHold; hold != nil && hold.state == "STARTING" && hold.binding == binding && hold.planID == planID {
+		clearExecutionIdentity(&hold.identity)
+		b.runHold = nil
+	}
+}
+
+// ReleaseExecutionIdentityForRun releases one run's retained metadata after
+// its authoritative terminal state has been observed.
+func (b *Broker) ReleaseExecutionIdentityForRun(runID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if hold := b.runHold; hold != nil && hold.state == "RUNNING" && hold.runID == runID {
+		clearExecutionIdentity(&hold.identity)
+		b.runHold = nil
+	}
+}
+
+// ClearRunExecutionIdentityHolds is used when the owning project or trusted
+// Execution Node context is replaced. It does not alter any ordinary lease.
+func (b *Broker) ClearRunExecutionIdentityHolds() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.clearRunHoldsLocked()
+}
+
+func (b *Broker) HasRunExecutionIdentityHold(binding Binding) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.hasRunHoldLocked(binding)
+}
+
+func (b *Broker) HasAnyRunExecutionIdentityHold() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.runHold != nil
+}
+
+func (b *Broker) HasStartingExecutionIdentity(binding Binding, planID string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.runHold != nil && b.runHold.state == "STARTING" && b.runHold.binding == binding && b.runHold.planID == planID
+}
+
+func executionIdentityFromLease(value *lease) (ExecutionIdentity, error) {
+	if value == nil || value.sshMode != SSHPrivateKey || value.privateKeyPath == "" {
 		return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
 	}
-	if b.lease.sshMode != SSHPrivateKey || b.lease.privateKeyPath == "" {
-		return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
+	return ExecutionIdentity{Path: value.privateKeyPath, Username: value.username, Digest: sha256.Sum256(value.sshSecret), Generation: value.generation, FileInfo: value.privateKeyInfo}, nil
+}
+
+func sameExecutionIdentity(left, right ExecutionIdentity) bool {
+	return left.Path == right.Path && left.Username == right.Username && left.Digest == right.Digest && left.Generation == right.Generation && left.FileInfo != nil && right.FileInfo != nil && os.SameFile(left.FileInfo, right.FileInfo)
+}
+
+func (b *Broker) heldExecutionIdentityLocked(binding Binding) (ExecutionIdentity, bool) {
+	hold := b.runHold
+	if hold == nil || hold.binding != binding || hold.identity.Path == "" || hold.identity.Username == "" || hold.identity.FileInfo == nil || hold.identity.Generation == 0 {
+		return ExecutionIdentity{}, false
 	}
-	return ExecutionIdentity{Path: b.lease.privateKeyPath, Username: b.lease.username, Digest: sha256.Sum256(b.lease.sshSecret), Generation: b.lease.generation, FileInfo: b.lease.privateKeyInfo}, nil
+	return hold.identity, true
+}
+
+func (b *Broker) hasRunHoldLocked(binding Binding) bool {
+	return b.runHold != nil && b.runHold.binding == binding
+}
+
+func (b *Broker) clearRunHoldsLocked() {
+	if b.runHold != nil {
+		clearExecutionIdentity(&b.runHold.identity)
+		b.runHold = nil
+	}
+}
+
+func clearExecutionIdentity(identity *ExecutionIdentity) {
+	if identity == nil {
+		return
+	}
+	identity.Path = ""
+	identity.Username = ""
+	identity.Digest = [sha256.Size]byte{}
+	identity.Generation = 0
+	identity.FileInfo = nil
 }
 
 func readPrivateKey(path string) ([]byte, error) {
@@ -822,7 +983,7 @@ func (b *Broker) expireLocked(generation uint64) {
 	}
 	binding, expiresAt := b.lease.binding, b.lease.expiresAt
 	b.clearLeaseLocked(false)
-	b.expired = &expiredMarker{binding: binding, expiresAt: expiresAt}
+	b.expired = &expiredMarker{binding: binding, expiresAt: expiresAt, generation: generation}
 }
 
 func (b *Broker) clearLeaseLocked(clearExpired bool) {

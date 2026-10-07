@@ -369,7 +369,7 @@ func (a *App) shutdown(context.Context) {
 	a.secrets.Close()
 	a.pendingHostKey = nil
 	a.invalidateDynamicBindingLocked()
-	a.installationRuns.clear()
+	a.clearInstallationRunsLocked()
 	a.execution.clear()
 	a.continuation = nil
 	a.clearProjectExportLocked()
@@ -431,7 +431,7 @@ func (a *App) CreateProject(request projectlifecycle.CreateProjectRequest) Proje
 	a.pendingHostKey = nil
 	a.invalidateDynamicBindingLocked()
 	a.secrets.Clear()
-	a.installationRuns.clear()
+	a.clearInstallationRunsLocked()
 	a.current = ProjectOpenResult{Status: "OPEN", Root: result.Root, Classification: result.Classification, Project: result.Project, Counts: result.Counts, Catalog: result.Catalog, Verification: notVerified()}
 	a.bindExecutionLocked(result.Root, result.Project, nil)
 	return a.current
@@ -535,7 +535,7 @@ func (a *App) CloseProject() ProjectOpenResult {
 	a.continuation = nil
 	a.installationGeneration++
 	a.installationPlanID = ""
-	a.installationRuns.clear()
+	a.clearInstallationRunsLocked()
 	a.current = ProjectOpenResult{Status: "NO_PROJECT"}
 	return a.current
 }
@@ -718,6 +718,9 @@ func boundedFindingString(raw any, limit int) string {
 func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Status, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	if a.startInFlight || a.installationRuns.hasActiveRun() || a.secrets.HasAnyRunExecutionIdentityHold() {
+		return runtimesecret.Status{}, errors.New("INSTALLATION_RUN_ACTIVE")
+	}
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
 		return runtimesecret.Status{}, err
@@ -1227,7 +1230,11 @@ func validRuntimeSecretDescriptor(item executionnode.RuntimeSecretDescriptor) bo
 func (a *App) ClearSessionCredential() (runtimesecret.Status, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	if _, err := a.credentialBindingLocked(); err != nil {
+	if a.startInFlight || a.installationRuns.hasActiveRun() || a.secrets.HasAnyRunExecutionIdentityHold() {
+		return runtimesecret.Status{}, errors.New("INSTALLATION_RUN_ACTIVE")
+	}
+	_, err := a.credentialBindingLocked()
+	if err != nil {
 		return runtimesecret.Status{}, err
 	}
 	a.secrets.Clear()
@@ -1283,7 +1290,7 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 		a.current.Verification = notVerified()
 		a.installationPlanID = ""
 		a.installationGeneration++
-		a.installationRuns.clear()
+		a.clearInstallationRunsLocked()
 	}
 	a.continuation = nil
 	return a.execution.context, nil
@@ -1648,7 +1655,7 @@ func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project
 	a.installationGeneration++
 	a.continuation = nil
 	a.installationPlanID = ""
-	a.installationRuns.clear()
+	a.clearInstallationRunsLocked()
 	if project == nil || project.ID == "" {
 		a.execution.clear()
 		return
@@ -1782,6 +1789,22 @@ func projectErrorCode(err error) string {
 
 func projectErrorMessage(code string) string {
 	switch code {
+	case "INSTALLATION_RUN_ACTIVE":
+		return "Новый набор пока нельзя проверить: прежний запуск не подтверждён как завершённый. Нажмите «Проверить прежний запуск»; не запускайте план повторно."
+	case "RUNTIME_BUNDLE_UPDATE_UNAVAILABLE":
+		return "Проверка нового набора сейчас недоступна. Убедитесь, что управляемый проект открыт, изменения сохранены и другая операция не выполняется."
+	case "RUNTIME_BUNDLE_PREVIEW_STALE":
+		return "Предварительная проверка набора устарела. Нажмите «Проверить новый набор» ещё раз."
+	case "LOCAL_RUN_RECORD_INVALID":
+		return "Локальная запись прежнего запуска повреждена. Блокировка сохранена; не удаляйте запись вручную."
+	case "LOCAL_RUN_RECORD_UNAVAILABLE":
+		return "Не удалось сохранить подтверждённый статус прежнего запуска. Повторите проверку; блокировка пока сохранена."
+	case "ORPHAN_RUN_IDENTITY_UNVERIFIED":
+		return "Execution Node не подтвердил принадлежность прежнего запуска этому проекту. Блокировка сохранена."
+	case "ORPHAN_RUN_STATE_UNKNOWN":
+		return "Не удалось подтвердить итог прежнего запуска. Блокировка сохранена; проверьте доступность узла и повторите проверку."
+	case "ORPHAN_RUN_CANCEL_UNCONFIRMED":
+		return "Отмена прежнего запуска не подтверждена. Проверьте его фактическое состояние; блокировка сохранена."
 	case "EXECUTION_NODE_NOT_CONFIGURED":
 		return "Не настроен READY Execution Node для read-only открытия проекта."
 	case "EXECUTION_NODE_UNAVAILABLE":

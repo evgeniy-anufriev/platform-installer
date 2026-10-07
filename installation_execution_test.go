@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"platform-installer/internal/executionnode"
+	"platform-installer/internal/runtimesecret"
 )
 
 func TestInstallationEventViewIsClosedAndRedacted(t *testing.T) {
@@ -78,6 +79,59 @@ func TestInstallationRunRegistryIsBoundedAndCleanupDoesNotCancelExecution(t *tes
 	if registry.knowsRun("installer-123") {
 		t.Fatal("project/session cleanup retained a run identity")
 	}
+}
+
+func TestInstallationRunMonitorOutlivesPresentationSubscriptionAndStopsOnContextCleanup(t *testing.T) {
+	registry := newInstallationRunRegistry()
+	registry.rememberRun("installer-active")
+	monitorCtx, ok := registry.startMonitor("installer-active")
+	if !ok || !registry.hasActiveRun() {
+		t.Fatal("active run monitor did not start")
+	}
+	registry.add("page-subscription", installationRunSubscription{cancel: func() {}})
+	registry.remove("page-subscription")
+	select {
+	case <-monitorCtx.Done():
+		t.Fatal("navigation subscription cleanup stopped the app-owned run monitor")
+	default:
+	}
+	registry.clear()
+	select {
+	case <-monitorCtx.Done():
+	default:
+		t.Fatal("project/context cleanup did not stop the run monitor")
+	}
+	if registry.hasActiveRun() {
+		t.Fatal("context cleanup retained active monitor state")
+	}
+}
+
+func TestInstallationRunRegistryCachesOnlyTerminalView(t *testing.T) {
+	registry := newInstallationRunRegistry()
+	registry.rememberRun("installer-terminal")
+	run := executionnode.ExecutionRun{RunID: "installer-terminal", ProjectIdentity: "project-one", State: "SUCCEEDED", Sequence: 12}
+	registry.finishMonitor(run.RunID, &run)
+	got, ok := registry.terminalRun(run.RunID)
+	if !ok || got != run || registry.hasActiveRun() {
+		t.Fatalf("terminal cache=%#v found=%t active=%t", got, ok, registry.hasActiveRun())
+	}
+}
+
+func TestSessionCredentialCannotBeReplacedOrClearedDuringActiveRun(t *testing.T) {
+	registry := newInstallationRunRegistry()
+	registry.rememberRun("installer-active")
+	_, ok := registry.startMonitor("installer-active")
+	if !ok {
+		t.Fatal("active run monitor did not start")
+	}
+	app := &App{installationRuns: registry, secrets: runtimesecret.NewBroker()}
+	if _, err := app.SetSessionCredential(runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "new-value"}); err == nil || err.Error() != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("credential replacement during active run returned %v", err)
+	}
+	if _, err := app.ClearSessionCredential(); err == nil || err.Error() != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("credential clear during active run returned %v", err)
+	}
+	registry.clear()
 }
 
 func TestInstallationRunPublicationCannotRebindAfterGenerationSwitch(t *testing.T) {

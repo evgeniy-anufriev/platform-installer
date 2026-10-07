@@ -170,7 +170,7 @@ func (a *App) switchPublishedBundleLocked(root string) {
 	a.continuation = nil
 	a.installationPlanID = ""
 	a.installationGeneration++
-	a.installationRuns.clear()
+	a.clearInstallationRunsLocked()
 	a.current.Verification = notVerified()
 	a.clearRuntimeSecretDescriptorEvidenceLocked()
 }
@@ -203,11 +203,16 @@ func (a *App) knownRunsTerminalLocked() bool {
 	ctx, cancel := a.operationContext(30 * time.Second)
 	defer cancel()
 	run, err := client.GetExecution(ctx, binding.node, record.RunID)
-	if err != nil || run.ProjectIdentity != record.ProjectID || !rebindTerminalRun(run.State) {
+	if err != nil || run.RunID != record.RunID || run.ProjectIdentity != record.ProjectID || !rebindTerminalRun(run.State) {
 		return false
 	}
 	record.State, record.TerminalState = "TERMINAL", run.State
-	return writeLocalRunRecord(a.localRunRecordRoot, *record) == nil
+	if writeLocalRunRecord(a.localRunRecordRoot, *record) != nil {
+		return false
+	}
+	a.installationRuns.finishMonitor(record.RunID, &run)
+	a.secrets.ReleaseExecutionIdentityForRun(record.RunID)
+	return true
 }
 
 func sameLocalRunNode(record localRunRecord, node executionnode.Node) bool {

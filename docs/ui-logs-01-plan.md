@@ -47,10 +47,10 @@ terminal state until the next run or project-context reset.
 3. Add clear no-run/no-events states and distinguish an active run, a
    completed run, and an observer/history-gap diagnostic using existing safe
    lifecycle/event state. Do not display old runs as available after reopening.
-4. Paginate the complete in-memory current-run stream at 512 rows per page;
-   do not evict older UI events at a page boundary. Preserve the separate
-   upstream Core/Go observer limit and report a genuine history gap if one
-   is observed.
+4. Make the current 512-event UI bound explicit. When old events are evicted,
+   retain the earliest available sequence and show a visible notice that only
+   the latest in-session events remain; never present the retained suffix as a
+   complete log. Keep the list bounded and do not add an unbounded React buffer.
 5. Keep Logs read-only. Do not add filesystem access, history persistence,
    execution protocol changes, or Go project-operation events. Project
    open/save/verify are not currently durable run-bound events; do not
@@ -59,7 +59,7 @@ terminal state until the next run or project-context reset.
 ## Scope and non-goals
 
 - In scope: enable Logs navigation; current-run table, filters/search, selected
-  details, lifecycle/empty/gap states; focused React tests and
+  details, lifecycle/empty/gap/truncation states; focused React tests and
   design/roadmap updates.
 - Out of scope: historical run list, reopening past runs, cross-process
   retention, remote journal listing, new protocol/Go/Wails APIs, export/delete,
@@ -75,7 +75,7 @@ terminal state until the next run or project-context reset.
   naturally begins with no Logs UI event state.
 - Unit tests cover active/terminal/empty states, filter/search, selection/detail
   panel, safe-field rendering, run mismatch/deduplication, reset behavior, and
-  512-row pagination and a genuine upstream history-gap indication.
+  explicit 512-event truncation/history-gap indication.
 - Run focused frontend tests, typecheck, lint and formatting checks; preserve
   unrelated worktree changes. Real React/Wails bridge acceptance remains
  distinct from mocked UI tests and must not be claimed unless performed.

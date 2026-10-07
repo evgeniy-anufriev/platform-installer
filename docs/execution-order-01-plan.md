@@ -100,26 +100,40 @@ production change is currently in effect.
   remove the `haproxy.deploymentRef` source-before-provider Apply edge. Do not
   drop other capability dependencies or relax fail-closed plan validation.
 
-The current BIND `apply.yml` resolves the complete DNS zone and persists its
-serial before activating the service. It must be split so the base path does
-not publish future service records, while the source path uses the same Core
-DNS projection and generated-state ownership to update one record safely.
-The existing `services/integrations/playbooks/reconcile.yml` currently calls
-full BIND/HAProxy reconcile and is imported only by PostgreSQL Apply; it does
-not yet satisfy this per-source path for Vault/ClickHouse or sequential plans.
+The BIND playbooks now separate ordinary base Apply from explicit full
+reconcile. Ordinary Apply uses the base-only Core projection, does not replace
+an existing primary zone, and updates only base-owned A records through local
+dynamic updates. Explicit full reconcile resolves the complete zone, reads
+the live SOA serial, and uses a machine-runtime marker around freeze/replace/
+thaw. The selected-source hook invokes the generic HAProxy and BIND integration
+playbooks for endpoint-capable Vault, Redis and ClickHouse deployments, then
+probes the actual endpoint. A defect where an existing zone did not get a
+candidate during explicit full reconcile has been corrected locally. The RED
+OS role-level prepare test proves ordinary Apply preserves an existing zone
+byte-for-byte and explicit full reconcile renders a fresh candidate that
+passes `named-checkzone`, without changing the active zone. The
+candidate-selection correction received targeted independent review with no
+blocking findings. Repeat `changed=0`, candidate activation, stale-record
+removal and interruption-recovery acceptance are still required before
+changing Core's provider dependency.
+The separate `services/integrations/playbooks/reconcile.yml` remains a
+whole-model operation and is not the per-source path. PostgreSQL Apply no
+longer imports it; PostgreSQL remains endpoint-free by owner decision.
 The separate `EXEC-PLAN-SCOPE-01` milestone is still NOT STARTED. This
 prerequisite must be reviewed as a material change in provider/source lifecycle
 before the ordering implementation can claim completion.
 
 Implementation checkpoint (2026-10-07): the ordered request/configuration,
-Core sequence projection, DNS projection selection and HAProxy single-source
-candidate entrypoint are in progress. Core still retains the existing
-source-before-HAProxy dependency until the end-to-end source path is implemented;
-do not treat a priority-derived plan with endpoint relations as executable yet.
-The BIND dynamic-update lifecycle and automatic invocation of both provider
-integrations from the source Apply path are not implemented. No service plan
-was run and no target host was modified. Required independent FULL DIFF review
-and real React/Wails acceptance remain pending.
+Core sequence projection, base/source DNS projections, HAProxy single-source
+candidate, BIND dynamic update and endpoint probe paths are implemented. The
+existing Core dependency remains in place. RED OS BIND tests passed 16/16,
+including role-level proof that ordinary Apply preserves an existing zone and
+full reconcile produces a valid fresh candidate; apply/reconcile/integrate
+syntax checks passed. Endpoint probe tests passed 4/4. Candidate activation,
+strict repeat `changed=0`, stale-record removal, freeze/thaw fault injection
+and real React/Wails acceptance have not been accepted end-to-end. No service
+plan was run and no service target was modified. Do not treat the order as
+ready to execute.
 
 ### Per-source publication and failure boundary
 

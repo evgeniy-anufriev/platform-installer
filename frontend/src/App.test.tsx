@@ -253,6 +253,75 @@ it("shows a verified incoming bundle but binds only after explicit confirmation"
   await waitFor(() => expect(confirmRuntimeBundleUpdate).toHaveBeenCalledWith("one-use-token"));
 });
 
+it("shows the previous-run failure and retries bundle detection after confirming terminal state", async () => {
+  const preview = {
+    status: "PREVIEW",
+    previewId: "one-use-token",
+    currentArtifactDigest: "sha256:old",
+    newArtifactDigest: "sha256:new",
+    newCatalogDigest: "sha256:catalog",
+    bundleVersion: "2",
+    coreVersion: "2",
+  };
+  const chooseRuntimeBundleUpdate = vi
+    .fn()
+    .mockResolvedValueOnce({
+      status: "BLOCKED",
+      error: {
+        code: "INSTALLATION_RUN_ACTIVE",
+        message:
+          "Новый набор пока нельзя проверить: прежний запуск не подтверждён как завершённый.",
+      },
+    })
+    .mockResolvedValueOnce(preview);
+  const inspectOrphanRun = vi.fn().mockResolvedValue({
+    status: "RESOLVED",
+    runId: "installer-prior-run",
+    runState: "FAILED",
+  });
+  const value = api({ chooseRuntimeBundleUpdate, inspectOrphanRun });
+  value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
+  render(<App api={value} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  expect(
+    await screen.findByText(/прежний запуск не подтверждён как завершённый/i),
+  ).toBeTruthy();
+  expect(screen.getByText(/Код: INSTALLATION_RUN_ACTIVE/)).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Проверить прежний запуск" }));
+
+  expect(await screen.findByText(/Прежний запуск завершился с ошибкой/)).toBeTruthy();
+  expect(screen.getByText(/Run ID: installer-prior-run/)).toBeTruthy();
+  expect(await screen.findByText("sha256:new")).toBeTruthy();
+  expect(chooseRuntimeBundleUpdate).toHaveBeenCalledTimes(2);
+  expect(inspectOrphanRun).toHaveBeenCalledTimes(1);
+});
+
+it("explains when the previous run cannot be checked and keeps the safety block visible", async () => {
+  const chooseRuntimeBundleUpdate = vi.fn().mockResolvedValue({
+    status: "BLOCKED",
+    error: {
+      code: "INSTALLATION_RUN_ACTIVE",
+      message:
+        "Новый набор пока нельзя проверить: прежний запуск не подтверждён как завершённый.",
+    },
+  });
+  const inspectOrphanRun = vi.fn().mockResolvedValue({ status: "UNAVAILABLE" });
+  const value = api({ chooseRuntimeBundleUpdate, inspectOrphanRun });
+  value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
+  render(<App api={value} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Проверить прежний запуск" }));
+
+  expect(
+    await screen.findByText(/Не удалось проверить прежний запуск на исходном узле/),
+  ).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Проверить новый набор" })).toBeTruthy();
+  expect(chooseRuntimeBundleUpdate).toHaveBeenCalledTimes(1);
+});
+
 function api(overrides: Record<string, unknown> = {}): MockApi {
   return {
     getApplicationConfig: vi.fn().mockResolvedValue({
@@ -2787,7 +2856,8 @@ describe("UI-01E3 session credentials", () => {
     expect(
       (screen.getByLabelText("Пароль sudo") as HTMLInputElement).value,
     ).toBe("");
-    expect(screen.getByText("Доступны до 2026-09-14T14:00:00Z")).toBeTruthy();
+    expect(screen.getByText("Доступны")).toBeTruthy();
+    expect(screen.getByText(/2026-09-14T14:00:00Z/)).toBeTruthy();
     expect(screen.queryByText("not-visible-after-submit")).toBeNull();
   });
 });

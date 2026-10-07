@@ -93,7 +93,9 @@
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   when:
     - platform_deployments[item.key].roles | first == 'primary'
-    - not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool)
+    - >-
+      not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool) or
+      (platform_bind_full_reconcile | default(false) | bool)
   register: _platform_bind_primary_zone_candidate
 
 - name: Inspect active and previous candidate BIND main configurations
@@ -219,4 +221,6 @@
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   when:
     - platform_deployments[item.key].roles | first == 'primary'
-    - not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool)
+    - >-
+      not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool) or
+      (platform_bind_full_reconcile | default(false) | bool)

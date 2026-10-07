@@ -5,8 +5,8 @@
     platform_bind_a_record:
       zone: "{{ platform_bind_base_zone.value.zone }}"
       owner: "{{ item.owner }}"
-      addresses: "{{ item.values }}"
-      ttl: "{{ platform_bind_base_zone.value.defaultTtl }}"
+      addresses: "{{ item['values'] }}"
+      ttl: "{{ platform_bind_base_zone.value.defaultTtl | int }}"
   loop: "{{ platform_bind_base_zone.value.records | selectattr('type', 'equalto', 'A') | list }}"
   loop_control:
     label: "{{ item.owner }}"

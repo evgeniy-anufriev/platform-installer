@@ -1,23 +1,60 @@
 # Current state
 
+## Active-run SSH credential retention (2026-10-07)
+
+`SESSION-RUN-CREDENTIAL-01` implements one Broker slot (`STARTING` →
+`RUNNING(runId)`) for the already-approved SSH identity metadata. The slot is
+reserved before Start, survives ordinary lease expiry, and is released only
+after authoritative terminal state or a proven not-dispatched first attempt.
+An uncertain retry is restricted to the same pending plan and relies on the
+existing `ExecutionService.pendingStarts` attempt ID. If remote Start was
+accepted but local persistence failed, the observer retries and repairs the
+PENDING record. Credential replacement/clear and host-key trust changes are
+blocked while the slot is occupied. Go tests and vet are passing; real
+nonvisual React/Wails expiry-boundary acceptance remains pending. No S11
+service plan or target host was changed for this work. The owner approved this
+simplified implementation and explicitly declined another review. See
+[`docs/session-active-run-credential-plan.md`](docs/session-active-run-credential-plan.md).
+
 ## Execution Order 01 implementation checkpoint (2026-10-07)
 
-Implementation is underway in the existing uncommitted worktree. The
-application-config priority list, ordered BuildDeploymentPlan request and
-Core per-deployment Apply/Verify projection are implemented. Core contract
-tests on the configured RED OS QA node passed (130 tests), and `go test ./...`
-passed. Frontend typecheck, lint and the full frontend suite passed (128 tests).
-The DNS resolver supports base-only and selected-source projections, and
-HAProxy has a targeted candidate entrypoint that preserves other proven
-backend files. The generic source hook now resolves one selected deployment
-and invokes targeted provider updates, but this is not yet a safe complete
-DNS+HAProxy lifecycle. Full BIND base-vs-reconcile separation, live-SOA serial
-continuity, freeze/thaw recovery, and final endpoint probe remain unimplemented,
-so the existing source-before-HAProxy Core dependency remains a fail-closed
-barrier. Do not run a service plan under the new ordering yet.
-No target hosts were changed and no commit was created. Focused Core contract
-tests and HAProxy integration-playbook syntax check passed; the independent
-FULL DIFF review and real React/Wails acceptance are pending.
+Implementation is on `master`; the BIND candidate-selection correction below
+is currently uncommitted. The application-config priority list, ordered
+BuildDeploymentPlan request and Core per-deployment Apply/Verify projection
+are implemented. Core regression on the configured RED OS QA node passed
+(487 tests, 19 skipped); `go test ./...` and `go vet ./...` passed. Frontend
+typecheck, lint, build and the full suite passed (128 tests).
+
+The DNS resolver supports base-only and selected-source projections. Ordinary
+BIND Apply now preserves an existing primary zone and updates only base-owned
+A records; explicit full reconcile renders the complete desired zone using the
+live SOA serial and a machine-runtime freeze/thaw recovery marker. The source
+hook resolves one selected deployment, updates its HAProxy fragment and exact
+BIND A record, then probes the endpoint. A defect was found where an existing
+zone skipped candidate generation even in explicit full reconcile; that
+condition is corrected locally. RED OS BIND tests passed (16/16), including
+the isolated `named` dynamic-update/freeze/thaw test and a role-level
+`prepare.yml` test: ordinary Apply preserved an existing zone byte-for-byte;
+explicit full reconcile rendered a fresh candidate that passed
+`named-checkzone`, while the active zone remained unchanged. Follow-up
+standalone acceptance found and fixed four runtime defects in exact DNS
+A-record updates: Jinja's `item.values` method collision, Ansible stringifying
+numeric TTLs, nested loop-variable shadowing, and parsing tab-separated `dig`
+output with a whitespace regex. The role now validates and compares DNS answer
+fields directly. RED OS BIND tests passed (17/17), and apply/reconcile syntax
+checks passed. On node1 and node2, standalone Apply completed, Verify passed,
+explicit full reconcile completed, Verify passed again, and final ordinary
+Apply returned `changed=0`; both nodes ended with active `named`, valid
+`named.conf`, SOA serial 2 and the expected endpoint answer. Node3 was not
+touched. Injected interruption/recovery and deletion of a deliberately stale
+record remain untested.
+
+No S11 service plan has been run under the new ordering. The source/provider
+Core dependency remains fail-closed. Focused node1/node2 standalone
+Apply/Verify/reconcile acceptance passed, but injected interruption/recovery,
+stale-record deletion and real React/Wails acceptance remain pending; do not
+run a service plan under the new ordering yet. The targeted independent
+recheck approved the candidate-selection correction with no blocking findings.
 
 Owner-approved BIND behavior for this prerequisite is recorded in ADR-030:
 point updates do not delete endpoint records; explicit full reconcile is the
@@ -33,16 +70,19 @@ manifests declare client endpoint support. The hook reads the selected
 deployment's saved endpoint assignment; it does not create one. Kafka and
 Docker do not declare endpoint support and have no hook. PostgreSQL remains
 excluded by owner decision. No endpoint assignments were added to any project.
-BIND tests passed 13/13 and BIND plus affected source playbook syntax checks
-passed on RED OS. No target hosts were changed.
+Earlier focused endpoint-hook tests passed 13/13; the follow-up BIND suite
+passed 17/17 as recorded above. The targeted lifecycle QA changed only node1
+and node2; node3 was not touched.
 
-The BIND lifecycle is still incomplete and the plan must not run: ordinary base
-Apply still renders/activates the complete canonical zone; it has not yet been
-converted to preserve source records and publish only base-owned hosts and
-configured wildcards. Full reconcile still lacks live-SOA serial selection,
-freeze/thaw recovery marker and interruption recovery. The source Apply path
-also lacks the final actual-endpoint probe. Keep the Core source/provider
-dependency fail-closed until these pieces pass focused and end-to-end tests.
+The remaining BIND acceptance gaps are to verify stale desired-state records
+are removed by full reconcile and prove injected interruptions recover before
+later operations. Apply/Verify, full-reconcile activation, post-reconcile
+Verify and ordinary repeat Apply (`changed=0`) have now passed on node1/node2.
+The source integration's
+endpoint probe and serial/freeze/thaw mechanisms exist and have focused tests,
+but their complete role-level sequence and failure boundaries are not yet
+proven. Keep the Core source/provider dependency fail-closed until focused and
+end-to-end tests pass.
 
 ## SI11 Redis static-config comparison correction (2026-10-06)
 

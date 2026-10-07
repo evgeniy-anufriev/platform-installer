@@ -44,7 +44,7 @@ export function CommitStructuralEditPlan(arg1:string,arg2:string):Promise<main.S
 
 export function ConfirmRuntimeBundleUpdate(arg1:string):Promise<main.RuntimeBundleUpdateResult>;
 
-export function CreateInstallationPlan(arg1:string[]):Promise<main.InstallationPlanOperation>;
+export function CreateInstallationPlan(arg1:Array<string>):Promise<main.InstallationPlanOperation>;
 
 export function CreateProject(arg1:projectlifecycle.CreateProjectRequest):Promise<main.ProjectOpenResult>;
 

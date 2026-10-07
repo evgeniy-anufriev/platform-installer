@@ -6,6 +6,16 @@
   --ui-font-body: 12px;
   --ui-font-secondary: 11px;
   --ui-font-caption: 10px;
+  --status-success-ink: #176443;
+  --status-success-fill: #e5f6ee;
+  --status-warning-ink: #805500;
+  --status-warning-fill: #fff3d6;
+  --status-danger-ink: #9f3028;
+  --status-danger-fill: #fde9e7;
+  --status-info-ink: #245b91;
+  --status-info-fill: #e8f2ff;
+  --status-neutral-ink: #52647a;
+  --status-neutral-fill: #edf1f6;
   font:
     14px / 1.4 Inter,
     "Segoe UI",
@@ -311,6 +321,64 @@ body {
   padding: 6px 9px;
   line-height: 1.4;
 }
+.server-line-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: #58708e;
+}
+.server-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.status-chip-symbol {
+  display: inline-grid;
+  width: 12px;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.status-chip--success {
+  background: var(--status-success-fill);
+  color: var(--status-success-ink);
+}
+.status-chip--warning {
+  background: var(--status-warning-fill);
+  color: var(--status-warning-ink);
+}
+.status-chip--danger {
+  background: var(--status-danger-fill);
+  color: var(--status-danger-ink);
+}
+.status-chip--info {
+  background: var(--status-info-fill);
+  color: var(--status-info-ink);
+}
+.status-chip--neutral {
+  background: var(--status-neutral-fill);
+  color: var(--status-neutral-ink);
+}
+.execution-node-host-key-approved {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .workspace-content:has(> .servers-layout) > .servers-title {
   margin: 4px 0 5px;
 }
@@ -582,6 +650,72 @@ body {
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
+.workspace-content:has(> .topology-title) .entry-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.workspace-content:has(> .topology-title) .entry-panel-title {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2eaf3;
+  background: #f3f7fc;
+  font-size: 14px;
+  line-height: 1.25;
+}
+.entry-panel-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: #507092;
+}
+.workspace-content:has(> .topology-title) .entry-panel > .entry-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 3px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.workspace-content:has(> .topology-title) .entry-panel > .muted {
+  margin: 10px 12px;
+}
+.entry-state-chip {
+  width: fit-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.entry-state-chip--success { background: var(--status-success-fill); color: var(--status-success-ink); }
+.entry-state-chip--warning { background: var(--status-warning-fill); color: var(--status-warning-ink); }
+.entry-state-chip--danger { background: var(--status-danger-fill); color: var(--status-danger-ink); }
+.entry-state-chip--info { background: var(--status-info-fill); color: var(--status-info-ink); }
+.entry-state-chip--neutral { background: var(--status-neutral-fill); color: var(--status-neutral-ink); }
+.entry-findings,
+.entry-draft-notice {
+  flex: 0 0 auto;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #f0d08a;
+  border-radius: 6px;
+  background: #fff8e8;
+  color: #614c1a;
+  font-size: 11px;
+}
+.entry-findings p { margin: 4px 0 0; }
 .workspace-content:has(> .topology-title) .entry-consumers {
   display: flex;
   flex-direction: column;

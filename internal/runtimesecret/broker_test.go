@@ -323,3 +323,139 @@ func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 		t.Fatal("password mode authorized execution identity")
 	}
 }
+
+func TestBrokerRunIdentityHoldSurvivesOrdinaryExpiryWithoutRetainingOtherSecrets(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "run-key.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	broker := NewBroker(WithTTL(time.Hour), WithClock(func() time.Time { return now }))
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: path, ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.SetPKIStorePassword(binding, "pki-only-until-expiry"); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := broker.CurrentExecutionIdentity(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.ReserveExecutionIdentityForStart(binding, "plan-1", identity); err != nil {
+		t.Fatalf("reserve active identity: %v", err)
+	}
+	if err := broker.ConfirmExecutionIdentityRun(binding, "plan-1", "installer-run-1"); err != nil {
+		t.Fatalf("confirm active identity: %v", err)
+	}
+
+	now = now.Add(2 * time.Hour)
+	broker.mu.Lock()
+	broker.expireLocked(identity.Generation)
+	broker.mu.Unlock()
+	got, err := broker.CurrentExecutionIdentity(binding)
+	if err != nil || !sameExecutionIdentity(got, identity) {
+		t.Fatalf("held execution identity=%#v err=%v", got, err)
+	}
+	if status := broker.Status(binding); status.Status != StatusExpired || status.SudoPasswordStatus != SudoNotProvided || status.PKIStorePasswordStatus != PKIStorePasswordMissing {
+		t.Fatalf("ordinary lease did not expire independently: %#v", status)
+	}
+	if err := broker.WithTargetCredential(binding, func(TargetCredential) error { return nil }); err == nil || err.Error() != "SESSION_CREDENTIAL_UNAVAILABLE" {
+		t.Fatalf("expired general credentials remained available: %v", err)
+	}
+	if _, err := broker.Set(binding, Input{Username: "new-user", SSHMode: SSHPassword, SSHPassword: "new-session"}); err == nil || err.Error() != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("credential replacement during run returned %v", err)
+	}
+	if _, err := broker.CurrentExecutionIdentity(Binding{Root: `C:\projects\two`, ID: "other-project"}); err == nil {
+		t.Fatal("run identity hold crossed project binding")
+	}
+
+	broker.ReleaseExecutionIdentityForRun("installer-run-1")
+	if _, err := broker.CurrentExecutionIdentity(binding); err == nil {
+		t.Fatal("released run identity remained available")
+	}
+	if broker.runHold != nil {
+		t.Fatalf("run hold metadata was not removed: %#v", broker.runHold)
+	}
+}
+
+func TestBrokerRunIdentityHoldRejectsReplacedCredentialGeneration(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "run-key.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	broker := NewBroker()
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: path, ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := broker.CurrentExecutionIdentity(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.Set(binding, Input{Username: "replacement", SSHMode: SSHPrivateKey, PrivateKeyPath: path, ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.ReserveExecutionIdentityForStart(binding, "plan-stale", identity); err == nil || err.Error() != "EXECUTION_RUN_IDENTITY_STALE" {
+		t.Fatalf("stale credential generation was accepted: %v", err)
+	}
+}
+
+func TestBrokerStartingIdentityReservationCanRetrySamePlanAndRejectsOtherPlan(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "run-key.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	broker := NewBroker()
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: path, ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := broker.CurrentExecutionIdentity(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.ReserveExecutionIdentityForStart(binding, "plan-1", identity); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.Set(Binding{Root: `C:\projects\other`, ID: "project-other"}, Input{Username: "replacement", SSHMode: SSHPassword, SSHPassword: "session"}); err == nil || err.Error() != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("credential replacement during STARTING returned %v", err)
+	}
+	if err := broker.ReserveExecutionIdentityForStart(binding, "plan-1", identity); err != nil {
+		t.Fatalf("same-plan retry did not reuse STARTING slot: %v", err)
+	}
+	if err := broker.ReserveExecutionIdentityForStart(binding, "plan-2", identity); err == nil || err.Error() != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("different plan entered occupied slot: %v", err)
+	}
+	if err := broker.ConfirmExecutionIdentityRun(binding, "plan-1", "run-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.ReserveExecutionIdentityForStart(binding, "plan-1", identity); err == nil || err.Error() != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("RUNNING slot was reused for Start: %v", err)
+	}
+	broker.ReleaseExecutionIdentityForRun("run-1")
+}

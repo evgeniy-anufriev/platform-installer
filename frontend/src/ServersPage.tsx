@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   ExecutionNodeContext,
   ExecutionNodePreparation,
@@ -42,7 +42,93 @@ const sessionCredentialErrors: Record<string, string> = {
     "Нужен поддерживаемый незашифрованный приватный ключ PEM.",
   SESSION_CREDENTIAL_UNAVAILABLE:
     "Не удалось сохранить учётные данные в текущем сеансе.",
+  INSTALLATION_RUN_ACTIVE:
+    "Нельзя изменить или очистить учётные данные, пока выполняется план установки.",
 };
+
+type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
+
+function StatusChip({
+  tone,
+  children,
+}: {
+  tone: StatusTone;
+  children: ReactNode;
+}) {
+  const symbol =
+    tone === "success"
+      ? "✓"
+      : tone === "warning"
+        ? "!"
+        : tone === "danger"
+          ? "×"
+          : tone === "info"
+            ? "·"
+            : "?";
+  return (
+    <span className={`status-chip status-chip--${tone}`}>
+      <span className="status-chip-symbol" aria-hidden="true">
+        {symbol}
+      </span>
+      {children}
+    </span>
+  );
+}
+
+function ServerLineIcon({ kind }: { kind: "server" | "key" | "execution" }) {
+  return (
+    <svg
+      className="server-line-icon"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {kind === "key" ? (
+        <>
+          <circle cx="7" cy="8" r="3.5" />
+          <path d="m9.5 10.5 6.5 6.5m-2-2 2-2m-4 0 2-2" />
+        </>
+      ) : kind === "execution" ? (
+        <>
+          <rect x="2.5" y="3" width="15" height="11" rx="2" />
+          <path d="M7 17h6m-3-3v3m-1-9 3 2-3 2z" />
+        </>
+      ) : (
+        <>
+          <rect x="3" y="3" width="14" height="6" rx="1.5" />
+          <rect x="3" y="11" width="14" height="6" rx="1.5" />
+          <path d="M6 6h.01M6 14h.01M9 6h5m-5 8h5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function executionNodeTone(status?: string): StatusTone {
+  switch (status) {
+    case "READY":
+    case "PREPARED":
+      return "success";
+    case "UNREACHABLE":
+    case "INCOMPATIBLE":
+    case "BROKEN":
+      return "danger";
+    case "NOT_CONFIGURED":
+    case "NOT_PREPARED":
+    case "UNPREPARED":
+    case "PREPARATION_REQUIRED":
+    case "UPDATE_REQUIRED":
+    case "CONFIRMATION_REQUIRED":
+    case "BLOCKED":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
 
 function sessionCredentialErrorText(reason: unknown): string {
   const raw =
@@ -55,7 +141,9 @@ function sessionCredentialErrorText(reason: unknown): string {
         ? reason.message
         : "";
   const code =
-    raw.match(/\b(?:SESSION_CREDENTIAL|SESSION_PRIVATE_KEY)_[A-Z_]+\b/)?.[0] ||
+    raw.match(
+      /\b(?:SESSION_CREDENTIAL|SESSION_PRIVATE_KEY)_[A-Z_]+\b|\bINSTALLATION_RUN_ACTIVE\b/,
+    )?.[0] ||
     "";
   return (
     sessionCredentialErrors[code] ||
@@ -274,20 +362,25 @@ export function ServersPage({
                       className={row.state ? `draft-${row.state}` : ""}
                     >
                       <td>
-                        <b>{row.hostId}</b>
+                        <span className="server-name-cell">
+                          <ServerLineIcon kind="server" />
+                          <b>{row.hostId}</b>
+                        </span>
                       </td>
                       <td>{labelType(row.type, serverTypes)}</td>
                       <td>{row.desiredHostname || <em>Не задано</em>}</td>
                       <td>{row.address}</td>
                       <td>{row.port}</td>
                       <td>
-                        {row.state === "new"
-                          ? "Новый"
-                          : row.state === "changed"
-                            ? "Изменён"
-                            : row.state === "deleting"
-                              ? "Будет удалён"
-                              : "Сохранён"}
+                        {row.state === "new" ? (
+                          <StatusChip tone="info">Новый</StatusChip>
+                        ) : row.state === "changed" ? (
+                          <StatusChip tone="warning">Изменён</StatusChip>
+                        ) : row.state === "deleting" ? (
+                          <StatusChip tone="danger">Будет удалён</StatusChip>
+                        ) : (
+                          <StatusChip tone="success">Сохранён</StatusChip>
+                        )}
                       </td>
                       <td>
                         {firstSave && created ? (
@@ -611,10 +704,13 @@ function ExecutionNodePanel({
       aria-labelledby="execution-node-heading"
     >
       <div className="execution-node-heading">
-        <h2 id="execution-node-heading">Узел выполнения</h2>
-        <span className="readonly">
+        <h2 id="execution-node-heading">
+          <ServerLineIcon kind="execution" />
+          Узел выполнения
+        </h2>
+        <StatusChip tone={executionNodeTone(effective.status)}>
           {executionNodeStatusLabel(effective.status)}
-        </span>
+        </StatusChip>
       </div>
       <div className="execution-node-detail">
         <span>Выбранный узел</span>
@@ -697,7 +793,9 @@ function ExecutionNodePanel({
           )}
           {hostKeyProbe?.status === "APPROVED" && (
             <span className="execution-node-trust-status" role="status">
-              SSH-отпечаток подтверждён
+              <StatusChip tone="success">
+                SSH-отпечаток подтверждён
+              </StatusChip>
             </span>
           )}
           {hostKeyProbe?.error && (
@@ -712,7 +810,14 @@ function ExecutionNodePanel({
           className={readiness.error ? "field-error" : "muted"}
           role={readiness.error ? "alert" : undefined}
         >
-          Проверка: <b>{executionNodeStatusLabel(readiness.status)}</b>
+          Проверка:{" "}
+          <StatusChip
+            tone={
+              readiness.error ? "danger" : executionNodeTone(readiness.status)
+            }
+          >
+            {executionNodeStatusLabel(readiness.status)}
+          </StatusChip>
           {readiness.error ? ` · ${readiness.error.message}` : ""}
         </p>
       )}
@@ -721,7 +826,16 @@ function ExecutionNodePanel({
           className={preparation.error ? "field-error" : "muted"}
           role={preparation.error ? "alert" : undefined}
         >
-          Подготовка: <b>{executionNodePreparationLabel(preparation.status)}</b>
+          Подготовка:{" "}
+          <StatusChip
+            tone={
+              preparation.error
+                ? "danger"
+                : executionNodeTone(preparation.status)
+            }
+          >
+            {executionNodePreparationLabel(preparation.status)}
+          </StatusChip>
           {preparation.verification
             ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
             : ""}
@@ -1037,16 +1151,34 @@ function SessionCredentialsPanel({
       aria-labelledby="session-credentials-heading"
     >
       <div className="session-credentials-heading">
-        <h2 id="session-credentials-heading">Учётные данные сеанса</h2>
+        <h2 id="session-credentials-heading">
+          <ServerLineIcon kind="key" />
+          Учётные данные сеанса
+        </h2>
         <p className="muted">
           Для всех серверов текущего сеанса; в проект не записываются.
         </p>
         <p className="muted session-credentials-status" aria-live="polite">
-          {effectiveStatus === "PRESENT"
-            ? `Доступны до ${status?.expiresAt || ""}`
+          <StatusChip
+            tone={
+              effectiveStatus === "PRESENT"
+                ? "success"
+                : effectiveStatus === "EXPIRED"
+                  ? "warning"
+                  : "neutral"
+            }
+          >
+            {effectiveStatus === "PRESENT"
+              ? "Доступны"
+              : effectiveStatus === "EXPIRED"
+                ? "Истекли"
+                : "Не заданы"}
+          </StatusChip>
+          {effectiveStatus === "PRESENT" && status?.expiresAt
+            ? ` до ${status.expiresAt}`
             : effectiveStatus === "EXPIRED"
-              ? "Срок хранения учётных данных истёк"
-              : "Учётные данные не заданы"}
+              ? "Добавьте учётные данные повторно"
+              : "Введите данные для подключения"}
         </p>
       </div>
       <form onSubmit={submit}>

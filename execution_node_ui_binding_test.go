@@ -13,6 +13,7 @@ import (
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
+	"platform-installer/internal/runtimesecret"
 )
 
 func TestLateUIBindingConfiguresCredentialLeaseProvider(t *testing.T) {
@@ -99,4 +100,37 @@ func TestUIBindingUsesOnlySavedServerAndBlocksDraft(t *testing.T) {
 	if _, _, _, err := app.selectedSavedExecutionServerLocked(); err == nil {
 		t.Fatal("SSH option address admitted")
 	}
+}
+
+func TestHostKeyTrustActionsAreBlockedDuringActiveInstallation(t *testing.T) {
+	registry := newInstallationRunRegistry()
+	registry.rememberRun("installer-active")
+	if _, ok := registry.startMonitor("installer-active"); !ok {
+		t.Fatal("active run monitor did not start")
+	}
+	app := &App{installationRuns: registry, secrets: runtimesecret.NewBroker()}
+	app.pendingHostKey = &pendingExecutionHostKey{id: "pending-probe"}
+
+	probe := app.ProbeExecutionNodeHostKey()
+	if probe.Status != "BLOCKED" || probe.Error == nil || probe.Error.Code != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("probe result=%#v, want active-run block", probe)
+	}
+	if app.pendingHostKey == nil || app.pendingHostKey.id != "pending-probe" {
+		t.Fatal("blocked host-key probe mutated pending trust state")
+	}
+	decline := app.DeclineExecutionNodeHostKey()
+	if decline.Status != "BLOCKED" || decline.Error == nil || decline.Error.Code != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("decline result=%#v, want active-run block", decline)
+	}
+	if app.pendingHostKey == nil || app.pendingHostKey.id != "pending-probe" {
+		t.Fatal("blocked decline mutated pending trust state")
+	}
+	approve := app.ApproveExecutionNodeHostKey("pending-probe")
+	if approve.Status != "BLOCKED" || approve.Error == nil || approve.Error.Code != "INSTALLATION_RUN_ACTIVE" {
+		t.Fatalf("approve result=%#v, want active-run block", approve)
+	}
+	if app.pendingHostKey == nil || app.pendingHostKey.id != "pending-probe" {
+		t.Fatal("blocked approval consumed pending trust state")
+	}
+	registry.clear()
 }

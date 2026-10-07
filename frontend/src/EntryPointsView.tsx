@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { EndpointPreview, OpenResult } from "./backend";
+import type { EndpointPreview, OpenResult, VerificationStatus } from "./backend";
 import type { DeploymentIntent } from "./TopologyPage";
 
 export type EndpointIntent =
@@ -175,7 +175,7 @@ export function EntryPointsView({
   providerIntents: ProviderIntent[];
   deploymentIntents: DeploymentIntent[];
   preview?: EndpointPreview;
-  verificationStatus: NonNullable<OpenResult["verification"]>["status"];
+  verificationStatus: VerificationStatus["status"];
   busy: boolean;
   disabled: boolean;
   commandCount: number;
@@ -225,14 +225,35 @@ export function EntryPointsView({
           item.providerEditState === "INCOMPLETE" ||
           item.providerEditState === "UNSUPPORTED",
   );
-  const previewStatus = preview?.status || "NOT_VERIFIED";
   return (
     <>
+      {preview?.status === "INVALID" && (
+        <section className="entry-findings" role="alert">
+          <strong>Адреса и provider/VIP не показаны: проверка Core выявила ошибки.</strong>
+          {preview.findings?.map((finding) => (
+            <p key={`${finding.code}-${finding.subjectId || ""}`}>
+              {finding.code}: {finding.summary}
+            </p>
+          ))}
+        </section>
+      )}
+      {providerIntents.length > 0 && (
+        <p className="entry-draft-notice" role="status">
+          Конфигурация provider изменена в черновике; влияние на PKI/SAN определяет только Core.
+        </p>
+      )}
+      {!preview && verificationStatus !== "VERIFIED" && (
+        <p className="entry-draft-notice" role="status">
+          {verificationStatus === "UNAVAILABLE"
+            ? "Core сейчас недоступен; проект не изменён."
+            : "Актуальные данные Core пока не получены; сохраните проект и выполните проверку."}
+        </p>
+      )}
       <section className="title topology-title">
         <div>
           <h1>Точки входа</h1>
           <p>
-            Группы адресов, назначения потребителей и read-only результат Core.
+            Группы адресов, назначения потребителей и параметры provider/VIP.
           </p>
           {commandCount > 0 && (
             <p className="muted">
@@ -248,8 +269,11 @@ export function EntryPointsView({
         </button>
       </section>
       <div className="entry-grid">
-        <section className="card">
-          <h2>Группы endpoint</h2>
+        <section className="card entry-panel">
+          <h2 className="entry-panel-title">
+            <EntryPointIcon kind="groups" />
+            <span>Группы endpoint</span>
+          </h2>
           {groups.length === 0 ? (
             <p className="muted">Групп пока нет.</p>
           ) : (
@@ -263,7 +287,12 @@ export function EntryPointsView({
                       {group.wildcard ? " · wildcard" : ""}
                     </span>
                     {group.state && (
-                      <small>
+                      <small
+                        className={`entry-state-chip ${group.state === "new" ? "entry-state-chip--info" : "entry-state-chip--warning"}`}
+                      >
+                        <span aria-hidden="true">
+                          {group.state === "new" ? "+" : "!"}
+                        </span>
                         {group.state === "new" ? "Новая" : "Будет удалена"}
                       </small>
                     )}
@@ -306,8 +335,11 @@ export function EntryPointsView({
             </div>
           )}
         </section>
-        <section className="card entry-consumers">
-          <h2>Назначения consumers</h2>
+        <section className="card entry-panel entry-consumers">
+          <h2 className="entry-panel-title">
+            <EntryPointIcon kind="consumers" />
+            <span>Назначения consumers</span>
+          </h2>
           {deployments.length === 0 ? (
             <p className="muted">Нет deployments.</p>
           ) : (
@@ -318,21 +350,36 @@ export function EntryPointsView({
                   const canSet =
                     catalogReady && eligible(deployment.serviceType);
                   const choices = groups.filter((group) => !group.state);
+                  const assignmentStatus = !canSet
+                    ? {
+                        tone: "neutral",
+                        symbol: "·",
+                        label: catalogReady
+                          ? "Не поддерживает consumer"
+                          : "Каталог недоступен",
+                      }
+                    : deployment.endpointGroup
+                      ? {
+                          tone: "success",
+                          symbol: "✓",
+                          label: `Назначена: ${deployment.endpointGroup}`,
+                        }
+                      : {
+                          tone: "warning",
+                          symbol: "!",
+                          label: "Не назначена",
+                        };
                   return (
                     <div key={deployment.id} className="entry-row">
                       <div>
                         <b>{deployment.id}</b>
-                        <span>
-                          {deployment.serviceType} ·{" "}
-                          {deployment.endpointGroup || "не назначена"}
-                        </span>
-                        {!canSet && (
-                          <small>
-                            {catalogReady
-                              ? "Сервис не поддерживает endpoint consumer"
-                              : "Каталог недоступен"}
-                          </small>
-                        )}
+                        <span>{deployment.serviceType}</span>
+                        <small
+                          className={`entry-state-chip entry-state-chip--${assignmentStatus.tone}`}
+                        >
+                          <span aria-hidden="true">{assignmentStatus.symbol}</span>
+                          {assignmentStatus.label}
+                        </small>
                       </div>
                       <div className="actions">
                         <select
@@ -387,8 +434,11 @@ export function EntryPointsView({
             </div>
           )}
         </section>
-        <section className="card">
-          <h2>Provider / VIP</h2>
+        <section className="card entry-panel">
+          <h2 className="entry-panel-title">
+            <EntryPointIcon kind="provider" />
+            <span>Provider / VIP</span>
+          </h2>
           {providerDeployments.length === 0 ? (
             <p className="muted">Нет доступных provider deployments.</p>
           ) : (
@@ -399,6 +449,30 @@ export function EntryPointsView({
                 const canClear =
                   !!deployment.endpointGroupRef &&
                   !providerLocked(deployment.id);
+                const providerStatus =
+                  deployment.providerEditState === "INCOMPLETE"
+                    ? {
+                        tone: "danger",
+                        symbol: "!",
+                        label: "Неполная конфигурация",
+                      }
+                    : deployment.providerEditState === "UNSUPPORTED"
+                      ? {
+                          tone: "neutral",
+                          symbol: "·",
+                          label: "Только просмотр",
+                        }
+                      : deployment.endpointGroupRef
+                        ? {
+                            tone: "success",
+                            symbol: "✓",
+                            label: "Настроен",
+                          }
+                        : {
+                            tone: "warning",
+                            symbol: "!",
+                            label: "Не настроен",
+                          };
                 return (
                   <div key={deployment.id} className="entry-row">
                     <div>
@@ -408,6 +482,12 @@ export function EntryPointsView({
                           ? `${deployment.endpointGroupRef} · VRID ${deployment.virtualRouterId || "—"}`
                           : "Provider не настроен"}
                       </span>
+                      <small
+                        className={`entry-state-chip entry-state-chip--${providerStatus.tone}`}
+                      >
+                        <span aria-hidden="true">{providerStatus.symbol}</span>
+                        {providerStatus.label}
+                      </small>
                       {deployment.virtualAddresses?.map((address) => (
                         <small key={`${address.address}-${address.interface}`}>
                           {address.address} · {address.interface}
@@ -468,12 +548,6 @@ export function EntryPointsView({
             </div>
           )}
         </section>
-        <PreviewCard
-          preview={preview}
-          status={previewStatus}
-          verificationStatus={verificationStatus}
-          providerChangePending={providerIntents.length !== 0}
-        />
       </div>
       {dialog && (
         <EndpointGroupDialog
@@ -505,89 +579,44 @@ export function EntryPointsView({
   );
 }
 
-function PreviewCard({
-  preview,
-  status,
-  verificationStatus,
-  providerChangePending,
+function EntryPointIcon({
+  kind,
 }: {
-  preview?: EndpointPreview;
-  status: string;
-  verificationStatus: NonNullable<OpenResult["verification"]>["status"];
-  providerChangePending: boolean;
+  kind: "groups" | "consumers" | "provider";
 }) {
-  if (status !== "CURRENT")
-    return (
-      <section className="card">
-        <h2>Результат Core</h2>
-        <p className="muted">
-          {status === "INVALID"
-            ? "Проверка выявила ошибки. Адреса и provider/VIP не показаны."
-            : status === "STALE"
-              ? providerChangePending
-                ? "Конфигурация provider изменена в черновике. Проверка устарела; влияние на PKI/SAN определяет только Core после сохранения и проверки."
-                : "Проверка устарела из-за черновика или смены Execution Node."
-              : verificationStatus === "VERIFYING"
-                ? "Core проверяет сохранённую ревизию проекта."
-                : status === "UNAVAILABLE"
-                  ? preview?.error?.message || "Read-only preview недоступен."
-                  : "Сохраните проект и выполните Проверить."}
-        </p>
-        {status === "INVALID" &&
-          preview?.findings?.map((finding) => (
-            <p
-              className="field-error"
-              key={`${finding.code}-${finding.subjectId || ""}`}
-            >
-              {finding.code}: {finding.summary}
-            </p>
-          ))}
-      </section>
-    );
   return (
-    <section className="card">
-      <h2>Результат Core</h2>
-      <p className="muted">
-        Актуальные FQDN и provider/VIP получены из последней проверки Core.
-        Редактор не выводит влияние на PKI/SAN самостоятельно.
-      </p>
-      {preview?.endpoints?.length ? (
+    <svg
+      className="entry-panel-icon"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {kind === "groups" ? (
         <>
-          <h3>FQDN</h3>
-          {preview.endpoints.map((item) => (
-            <p key={item.deploymentId}>
-              <b>{item.deploymentId}</b> · {item.fqdn}
-            </p>
-          ))}
+          <circle cx="4" cy="10" r="2" />
+          <circle cx="15.5" cy="4.5" r="2" />
+          <circle cx="15.5" cy="15.5" r="2" />
+          <path d="m6 9 7.5-3.5M6 11l7.5 3.5" />
+        </>
+      ) : kind === "consumers" ? (
+        <>
+          <path d="M10 3v5m0 0-5 5m5-5 5 5" />
+          <path d="M10 8v8m-2-2 2 2 2-2" />
+          <path d="m3 11 2 2 2-2m6 0 2 2 2-2" />
         </>
       ) : (
-        <p className="muted">Core не вернул FQDN.</p>
+        <>
+          <rect x="5" y="2.5" width="10" height="5" rx="1" />
+          <rect x="1.5" y="13" width="6" height="4.5" rx="1" />
+          <rect x="12.5" y="13" width="6" height="4.5" rx="1" />
+          <path d="M10 7.5v3M4.5 10.5h11m-11 0v2.5m11-2.5v2.5" />
+        </>
       )}
-      <h3>Providers / VIP</h3>
-      {preview?.providers?.length ? (
-        preview.providers.map((item) => (
-          <div
-            className="entry-preview"
-            key={`${item.endpointGroupId}-${item.providerDeploymentId}`}
-          >
-            <b>{item.providerDeploymentId}</b>
-            <span>
-              {item.endpointGroupRef} · VRID {item.virtualRouterId}
-            </span>
-            {item.virtualAddresses.map((address) => (
-              <small key={`${address.address}-${address.interface}`}>
-                {address.address} · {address.interface}
-              </small>
-            ))}
-          </div>
-        ))
-      ) : (
-        <p className="muted">Core не вернул provider/VIP.</p>
-      )}
-      {preview?.truncated && (
-        <p className="muted">Показана ограниченная часть результата.</p>
-      )}
-    </section>
+    </svg>
   );
 }
 

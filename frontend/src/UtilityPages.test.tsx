@@ -196,4 +196,45 @@ describe("UtilityPages help", () => {
     ).toBeTruthy();
     expect(screen.getByText(/Не запускайте операцию повторно/)).toBeTruthy();
   });
+
+  it("explains safe recovery when bundle detection is blocked by a prior run", () => {
+    const onNavigate = vi.fn();
+    render(
+      <UtilityPages
+        page="help"
+        events={[]}
+        serverTypes={[]}
+        configError={null}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Ошибки/ }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Кнопка «Проверить новый набор» не срабатывает после прерывания",
+      }),
+    );
+
+    expect(
+      screen.getByText(/предыдущий запуск не подтверждён как завершённый/),
+    ).toBeTruthy();
+    expect(screen.getByText(/SSH-учётные данные/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Откройте «Установка» и нажмите «Проверить прежний запуск», чтобы получить его фактический статус.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/полный проверенный набор находится в папке bundle/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Не удаляйте записи или журналы запуска/),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Открыть страницу «Установка»" }),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("installation");
+  });
 });

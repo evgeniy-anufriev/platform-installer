@@ -56,6 +56,12 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("Always attempt to thaw a marked primary zone", reconcile_zone)
         self.assertIn("Verify replaced primary zone accepts local dynamic updates", reconcile_zone)
         self.assertIn("Clear primary-zone marker after authority and update verification", reconcile_zone)
+        self.assertEqual(
+            2,
+            prepare.count("platform_bind_full_reconcile | default(false) | bool"),
+            "existing primary zone must get a candidate only for explicit full reconcile",
+        )
+        self.assertIn("not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool) or", prepare)
         self.assertIn("Add or update only the base-owned authoritative A records", start)
         self.assertNotIn("platform_bind_runtime_serial_drift", start)
 
@@ -77,11 +83,30 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("update add ", tasks)
         self.assertIn("BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID", tasks)
         self.assertIn("BIND_DNS_A_RECORD_UPDATE_ADDRESS_INVALID", tasks)
+        self.assertIn("platform_bind_a_record.ttl | int >= 1", tasks)
+        self.assertIn("platform_bind_a_record.ttl | int <= 2147483647", tasks)
+        self.assertIn("loop_var: platform_bind_a_record_address", tasks)
+        self.assertIn("platform_bind_a_record_address]", tasks)
+        self.assertIn("platform_bind_a_record_address is string", tasks)
+        self.assertNotIn("      - item is string", tasks)
+        self.assertIn("register: _platform_bind_a_record_after", tasks)
+        self.assertIn("_platform_bind_a_record_after.stdout_lines", tasks)
+        self.assertIn("select('search', 'IN') | list", tasks)
+        self.assertIn("platform_bind_a_record_answer.split()[4]", tasks)
+        self.assertIn("platform_bind_a_record_answer.split()[3] | upper == 'A'", tasks)
         self.assertIn("_platform_bind_a_record_after_addresses == _platform_bind_a_record_desired_addresses", tasks)
         self.assertIn("Build exact desired A record set including TTL", tasks)
         self.assertIn("stdin: |-", tasks)
         self.assertNotIn("rndc freeze", tasks)
         self.assertNotIn("zone.j2", tasks)
+
+    def test_base_record_projection_uses_mapping_key_for_values(self):
+        tasks = (ROLE / "tasks" / "update_base_zone_records.yml").read_text(encoding="utf-8")
+        self.assertIn('addresses: "{{ item[\'values\'] }}"', tasks)
+        self.assertNotIn("addresses: \"{{ item.values }}\"", tasks)
+        for task_name in ("update_base_zone_records.yml", "recover_primary_zone.yml", "reconcile_primary_zone.yml"):
+            content = (ROLE / "tasks" / task_name).read_text(encoding="utf-8")
+            self.assertRegex(content, r'ttl: "\{\{ .*defaultTtl \| int \}\}"')
 
     def test_generic_source_hook_uses_core_selection_and_never_full_reconciles(self):
         integration = ROOT.parent / "integrations" / "playbooks" / "apply-endpoint.yml"

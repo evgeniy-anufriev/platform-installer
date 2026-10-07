@@ -12,19 +12,22 @@
       - platform_bind_a_record.addresses is not string
       - platform_bind_a_record.addresses | length > 0
       - platform_bind_a_record.addresses | unique | length == platform_bind_a_record.addresses | length
-      - platform_bind_a_record.ttl is integer
-      - platform_bind_a_record.ttl >= 1
-      - platform_bind_a_record.ttl <= 2147483647
+      - >-
+        platform_bind_a_record.ttl is integer or
+        (platform_bind_a_record.ttl is string and platform_bind_a_record.ttl is match('^[0-9]+$'))
+      - platform_bind_a_record.ttl | int >= 1
+      - platform_bind_a_record.ttl | int <= 2147483647
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
 - name: Validate each resolved DNS A-record IPv4 address
   ansible.builtin.assert:
     that:
-      - item is string
-      - item is match('^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')
+      - platform_bind_a_record_address is string
+      - platform_bind_a_record_address is match('^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')
     fail_msg: BIND_DNS_A_RECORD_UPDATE_ADDRESS_INVALID
   loop: "{{ platform_bind_a_record.addresses | default([]) }}"
   loop_control:
+    loop_var: platform_bind_a_record_address
     label: Validate DNS A-record IPv4 address
 
 - name: Read current authoritative A record from local primary
@@ -50,36 +53,45 @@
   ansible.builtin.set_fact:
     _platform_bind_a_record_current_answer_lines: >-
       {{ _platform_bind_a_record_current.stdout_lines |
-         select('search', '\\sIN\\s') | map('lower') | list }}
+         select('search', 'IN') | list }}
 
 - name: Reject CNAME or foreign-owner answer before changing the A record
   ansible.builtin.assert:
     that:
-      - >-
-        (_platform_bind_a_record_current_answer_lines |
-         select('search', '\\sIN\\s+A\\s') | list | length) ==
-        (_platform_bind_a_record_current_answer_lines | length)
-      - >-
-        (_platform_bind_a_record_current_answer_lines |
-         select('match', '^' ~ (platform_bind_a_record.owner | lower | regex_escape) ~ '\\s') |
-         list | length) == (_platform_bind_a_record_current_answer_lines | length)
+      - platform_bind_a_record_answer.split() | length == 5
+      - platform_bind_a_record_answer.split()[0] | lower == platform_bind_a_record.owner | lower
+      - platform_bind_a_record_answer.split()[2] | upper == 'IN'
+      - platform_bind_a_record_answer.split()[3] | upper == 'A'
     fail_msg: BIND_DNS_A_RECORD_EXISTING_RECORD_CONFLICT
+  loop: "{{ _platform_bind_a_record_current_answer_lines }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Validate existing authoritative A-record answer
 
 - name: Normalize current and desired A record sets
   ansible.builtin.set_fact:
-    _platform_bind_a_record_current_addresses: >-
-      {{ _platform_bind_a_record_current.stdout_lines |
-         select('search', '\\sIN\\s+A\\s') |
-         map('regex_replace', '^\\S+\\s+', '') | sort | list }}
+    _platform_bind_a_record_current_addresses: []
     _platform_bind_a_record_desired_addresses: []
+
+- name: Add current DNS answer fields to the exact comparison set
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_current_addresses: >-
+      {{ _platform_bind_a_record_current_addresses +
+         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
+          platform_bind_a_record_answer.split()[4]] }}
+  loop: "{{ _platform_bind_a_record_current_answer_lines }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Normalize current DNS A-record answer
 
 - name: Build exact desired A record set including TTL
   ansible.builtin.set_fact:
     _platform_bind_a_record_desired_addresses: >-
       {{ _platform_bind_a_record_desired_addresses +
-         [(platform_bind_a_record.ttl | string) ~ ' IN A ' ~ item] }}
+         [(platform_bind_a_record.ttl | string) ~ ' IN A ' ~ platform_bind_a_record_address] }}
   loop: "{{ platform_bind_a_record.addresses | sort }}"
   loop_control:
+    loop_var: platform_bind_a_record_address
     label: Add desired A-record IPv4 to comparison set
 
 - name: Apply exact A record through BIND local dynamic update
@@ -109,16 +121,28 @@
       - +noall
       - +answer
       - +comments
-  register: _platform_bind_source_after
+  register: _platform_bind_a_record_after
   changed_when: false
   when: _platform_bind_a_record_update is not skipped
 
 - name: Normalize A record set after dynamic update
   ansible.builtin.set_fact:
+    _platform_bind_a_record_after_answer_lines: >-
+      {{ _platform_bind_a_record_after.stdout_lines |
+         select('search', 'IN') | list }}
+    _platform_bind_a_record_after_addresses: []
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Normalize each DNS A-record answer after dynamic update
+  ansible.builtin.set_fact:
     _platform_bind_a_record_after_addresses: >-
-      {{ _platform_bind_source_after.stdout_lines |
-         select('search', '\\sIN\\s+A\\s') |
-         map('regex_replace', '^\\S+\\s+', '') | sort | list }}
+      {{ _platform_bind_a_record_after_addresses +
+         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
+          platform_bind_a_record_answer.split()[4]] }}
+  loop: "{{ _platform_bind_a_record_after_answer_lines | default([]) }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Normalize updated DNS A-record answer
   when: _platform_bind_a_record_update is not skipped
 
 - name: Verify exact authoritative A record set after update

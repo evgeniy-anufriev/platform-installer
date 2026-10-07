@@ -26,6 +26,29 @@ const props = {
 };
 
 describe("target host trust on the Servers page", () => {
+  it("explains why credentials cannot be changed during an active run", async () => {
+    render(
+      <ServersPage
+        {...props}
+        onSetCredential={vi
+          .fn()
+          .mockRejectedValue(new Error("INSTALLATION_RUN_ACTIVE"))}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Технический пользователь"), {
+      target: { value: "installer" },
+    });
+    fireEvent.change(screen.getByLabelText("SSH-пароль"), {
+      target: { value: "placeholder" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить в сеансе" }));
+    expect(
+      await screen.findByText(
+        "Нельзя изменить или очистить учётные данные, пока выполняется план установки.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("requires explicit approval of the bounded fingerprint", async () => {
     const onProbe = vi.fn().mockResolvedValue({ status: "APPROVAL_REQUIRED", probeId: "nonce", keyType: "ssh-ed25519", fingerprint: "SHA256:target" });
     const onApprove = vi.fn().mockResolvedValue({ status: "APPROVED", fingerprint: "SHA256:target" });

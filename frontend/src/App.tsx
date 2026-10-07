@@ -682,7 +682,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const inspectOrphanRun = async () => {
     if (!api.inspectOrphanRun) return;
     setBundleBusy(true);
-    try { setOrphanRun(await api.inspectOrphanRun()); }
+    try {
+      const inspected = await api.inspectOrphanRun();
+      setOrphanRun(inspected);
+      if (
+        ["RESOLVED", "NONE"].includes(inspected.status) &&
+        api.chooseRuntimeBundleUpdate
+      ) {
+        setBundleUpdate(await api.chooseRuntimeBundleUpdate());
+      }
+    }
     finally { setBundleBusy(false); }
   };
   const cancelOrphanRun = async () => {
@@ -2098,10 +2107,32 @@ function ProjectPage({
       </>}
       {bundleUpdate?.status === "UPDATED" && <p>Новый набор привязан. Подготовьте узел выполнения и создайте свежий план.</p>}
       {bundleUpdate?.status === "BLOCKED" && <p role="alert">Привязка сейчас недоступна: {bundleUpdate.error?.message || bundleUpdate.error?.code || "проверьте набор и состояние выполнения"}.</p>}
+      {bundleUpdate?.status === "BLOCKED" && bundleUpdate.error?.code && <p className="muted">Код: {bundleUpdate.error.code}</p>}
       {bundleUpdate?.status === "PUBLISHED_NOT_BOUND" && <p role="alert">Набор опубликован, но проект не перепривязан. Проверьте проект и повторите операцию.</p>}
       {bundleUpdate?.status === "BOUND_REFRESH_REQUIRED" && <p role="alert">Привязка записана, но проект нужно открыть заново.</p>}
       {bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" && <button className="outline" onClick={onInspectOrphan} disabled={bundleBusy}>Проверить прежний запуск</button>}
-      {orphanRun?.status === "FOUND" && <div role="alert"><p>Найден прежний активный запуск {orphanRun.runId}. Его отмена сохранит журнал и результат.</p><button onClick={onCancelOrphan} disabled={bundleBusy}>Снять блокировку запуска</button></div>}
+      {orphanRun && orphanRun.status !== "NONE" && <div className="orphan-run-status" role={orphanRun.status === "RESOLVED" ? "status" : "alert"}>
+        {orphanRun.status === "RESOLVED" ? <p>
+          {orphanRun.runState === "FAILED"
+            ? "Прежний запуск завершился с ошибкой. Его статус подтверждён; повторное выполнение не запускалось."
+            : `Прежний запуск подтверждён как завершённый (${orphanRun.runState || "terminal"}). Повторное выполнение не запускалось.`}
+          {orphanRun.runId ? ` Run ID: ${orphanRun.runId}.` : ""}
+        </p> : orphanRun.status === "FOUND" ? <p>
+          Найден прежний активный запуск {orphanRun.runId} ({orphanRun.runState}). Новый запуск заблокирован. Аварийная отмена сохранит журнал и результат.
+        </p> : orphanRun.status === "UNAVAILABLE" ? <p>
+          Не удалось проверить прежний запуск на исходном узле. Убедитесь, что узел доступен, SSH-сеанс действителен и ключ узла подтверждён. Блокировка сохранена.
+        </p> : orphanRun.status === "UNKNOWN" ? <p>
+          Состояние прежнего запуска неизвестно. Блокировка сохранена; не удаляйте локальную запись и не запускайте план повторно.
+        </p> : orphanRun.status === "CURRENT" ? <p>
+          Запуск принадлежит текущему сеансу. Следите за ним на странице «Установка»; повторный запуск недоступен.
+        </p> : orphanRun.status === "CANCELLING" ? <p>
+          Отмена прежнего запуска ещё не подтверждена. Блокировка сохраняется.
+        </p> : <p>
+          {orphanRun.error?.message || "Не удалось безопасно проверить прежний запуск."}
+          {orphanRun.error?.code ? ` Код: ${orphanRun.error.code}.` : ""}
+        </p>}
+        {orphanRun.status === "FOUND" && <button onClick={onCancelOrphan} disabled={bundleBusy}>Снять блокировку запуска</button>}
+      </div>}
     </section>
   );
   if (empty && local)

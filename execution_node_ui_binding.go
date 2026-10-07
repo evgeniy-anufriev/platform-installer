@@ -58,6 +58,15 @@ func hostKeyProbeFailure(code string) HostKeyProbeResult {
 	return HostKeyProbeResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 }
 
+// Host-key trust changes replace the transport binding and its pinned
+// known_hosts file. Never allow that while a run still relies on its captured
+// binding, even if run-monitor bookkeeping is temporarily unavailable.
+func (a *App) activeInstallationTrustLocked() bool {
+	return a.startInFlight ||
+		(a.installationRuns != nil && a.installationRuns.hasActiveRun()) ||
+		(a.secrets != nil && a.secrets.HasAnyRunExecutionIdentityHold())
+}
+
 func validExecutionAddress(value string) bool {
 	if net.ParseIP(value) != nil {
 		return true
@@ -87,6 +96,9 @@ func (a *App) selectedSavedExecutionServerLocked() (string, string, uint16, erro
 func (a *App) ProbeExecutionNodeHostKey() HostKeyProbeResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	if a.activeInstallationTrustLocked() {
+		return hostKeyProbeFailure("INSTALLATION_RUN_ACTIVE")
+	}
 	a.pendingHostKey = nil
 	a.invalidateDynamicBindingLocked()
 	id, address, port, err := a.selectedSavedExecutionServerLocked()
@@ -122,6 +134,9 @@ func (a *App) ProbeExecutionNodeHostKey() HostKeyProbeResult {
 func (a *App) DeclineExecutionNodeHostKey() HostKeyProbeResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	if a.activeInstallationTrustLocked() {
+		return hostKeyProbeFailure("INSTALLATION_RUN_ACTIVE")
+	}
 	a.pendingHostKey = nil
 	a.invalidateDynamicBindingLocked()
 	return HostKeyProbeResult{Status: "DECLINED"}
@@ -130,6 +145,9 @@ func (a *App) DeclineExecutionNodeHostKey() HostKeyProbeResult {
 func (a *App) ApproveExecutionNodeHostKey(probeID string) HostKeyProbeResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	if a.activeInstallationTrustLocked() {
+		return hostKeyProbeFailure("INSTALLATION_RUN_ACTIVE")
+	}
 	pending := a.pendingHostKey
 	a.pendingHostKey = nil
 	if pending == nil || pending.id != probeID || !time.Now().Before(pending.expires) {

@@ -129,6 +129,19 @@ execution failure. If the backend cannot provide a trustworthy action count,
 show the stage and current task without inventing a percentage. The mockup's
 state selector changes demonstration data only and never starts execution.
 
+### Shared visual language
+
+The Servers screen is the primary reference for restrained monoline icons and
+semantic status chips. Reuse that visual language without changing each
+screen's approved layout: consistent outline icons for page and section
+identity, the shared Certificates-derived typography scale, and compact status
+chips with a soft fill. A status chip always includes a text label and a
+mnemonic symbol; color alone never carries meaning. Use green for ready or
+confirmed, amber for pending or attention-required, red for errors and
+destructive actions, blue for selected or informational state, and gray for
+unknown or neutral state. Do not tint whole table rows to indicate status.
+These rules are presentation only; backend/Core status remains authoritative.
+
 For the Execution tab, the owner selected layout B: a compact full-width
 status/progress summary, followed by a wide event table and a right-hand details
 panel for the selected event. The live table keeps the latest 512 events only
@@ -274,6 +287,10 @@ action and **Save topology** action. It has three local tabs:
   UI-NET-01, which precedes UI-01G because provider VIPs may affect certificate
   SAN. UI-01G remains the Certificates editor. This page does not edit endpoint bindings, aliases, listener names,
   ports or Kafka endpoints. Transport/routing UI is deferred with NET-03.
+  The screen uses three side-by-side panels for endpoint groups, consumer
+  assignments, and Provider/VIP. Invalid Core findings and unverified provider
+  draft changes remain visible as compact notices; the UI does not calculate
+  endpoint addresses or PKI/SAN effects.
 
 It supports zero to many deployments of every manifest service. A host can own
 multiple members, including several members of one Kafka deployment or members
@@ -306,6 +323,17 @@ Logs is historical and immutable. It filters run ID, time, status, service and
 host, and renders sanitized operation, playbook, duration, findings, task
 events, recap and output references. Installation → Execution is only the
 current selected run. Neither page displays runtime secret values.
+
+### Help
+
+Help is an offline knowledge entry point with categories for Project and bundle,
+Servers, Services and topology, Certificates, Verify and install, Logs, and
+Errors. The landing view contains search and category cards. Selecting a
+category opens an article list beside the selected article; search results use
+the same reading layout. Articles explain the current UI contract with concise
+steps, cautions where needed, and a link to the related application page.
+Troubleshooting articles belong to Errors. Help content does not run Core or
+change a project.
 
 ## 5. Installation local pages
 
