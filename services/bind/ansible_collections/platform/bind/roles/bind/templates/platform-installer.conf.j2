@@ -6,7 +6,7 @@ zone "{{ platform_bind_zone_projection.zone }}" IN {
   allow-transfer { {% for secondary in platform_bind_zone_projection.secondaries %}{{ secondary.address }}; {% endfor %} };
   also-notify { {% for secondary in platform_bind_zone_projection.secondaries %}{{ secondary.address }}; {% endfor %} };
   notify yes;
-  allow-update { none; };
+  update-policy local;
 {% else %}
   type secondary;
   primaries { {{ platform_bind_zone_projection.primary.address }}; };

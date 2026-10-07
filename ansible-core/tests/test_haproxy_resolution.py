@@ -48,6 +48,22 @@ class HAProxyResolutionTests(unittest.TestCase):
         self.assertNotIn("sslVerify", backend["settings"])
         self.assertNotIn("fall", backend["settings"])
 
+    def test_partial_resolution_returns_only_the_selected_source_backend(self):
+        topology = copy.deepcopy(TOPOLOGY)
+        topology["serviceDeployments"]["postgres-secondary"] = copy.deepcopy(
+            topology["serviceDeployments"]["postgres-main"])
+        placements = copy.deepcopy(PLACEMENT)
+        placements["node3"]["postgres-secondary"] = {}
+        endpoints = ENDPOINTS.resolve_service_endpoints(
+            topology, CATALOG, inventory_deployments=placements,
+            deployment_ids=["postgres-secondary"])
+        result = HAPROXY.resolve_haproxy_backends(
+            topology, CATALOG, HOSTS, placements, endpoints, DEFAULTS,
+            target_deployment_ids=["postgres-secondary"])
+        self.assertEqual("PASS", result["status"], result["findings"])
+        backends = result["backends"]["haproxy"]
+        self.assertEqual(["postgres-secondary"], [item["targetDeploymentId"] for item in backends])
+
     def test_missing_port_is_blocked(self):
         topology = {key: value for key, value in TOPOLOGY.items()}
         topology["serviceDeployments"] = {key: dict(value) for key, value in TOPOLOGY["serviceDeployments"].items()}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha6/schema.json",
+  "title": "Execution capabilities with ordered deployment planning",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "runtimeSecretDescriptors", "targetCredentialLease", "serviceConfigurationPreview", "deploymentPlanRequestVersions"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-capabilities/v1alpha6"},
+    "kind": {"const": "ExecutionCapabilities"},
+    "bootstrapProtocol": {"$ref": "../v1alpha5/schema.json#/properties/bootstrapProtocol"},
+    "coreVersion": {"$ref": "../v1alpha5/schema.json#/properties/coreVersion"},
+    "catalogDigest": {"$ref": "../v1alpha5/schema.json#/properties/catalogDigest"},
+    "schemaDigest": {"$ref": "../v1alpha5/schema.json#/properties/schemaDigest"},
+    "runtime": {"$ref": "../v1alpha5/schema.json#/properties/runtime"},
+    "supportedOperations": {"$ref": "../v1alpha5/schema.json#/properties/supportedOperations"},
+    "projectSnapshotRequestVersions": {"$ref": "../v1alpha5/schema.json#/properties/projectSnapshotRequestVersions"},
+    "executionStart": {"$ref": "../v1alpha5/schema.json#/properties/executionStart"},
+    "targetCredentialLease": {"$ref": "../v1alpha5/schema.json#/properties/targetCredentialLease"},
+    "runtimeSecretDescriptors": {"$ref": "../v1alpha5/schema.json#/properties/runtimeSecretDescriptors"},
+    "serviceConfigurationPreview": {"$ref": "../v1alpha5/schema.json#/properties/serviceConfigurationPreview"},
+    "deploymentPlanRequestVersions": {"type": "array", "uniqueItems": true, "items": {"const": "platform.installer/execution-runtime/v1alpha2"}, "minItems": 1, "maxItems": 1}
+  }
+}

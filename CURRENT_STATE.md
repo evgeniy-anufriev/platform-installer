@@ -1,5 +1,50 @@
 # Current state
 
+## Execution Order 01 implementation checkpoint (2026-10-07)
+
+Implementation is underway in the existing uncommitted worktree. The
+application-config priority list, ordered BuildDeploymentPlan request and
+Core per-deployment Apply/Verify projection are implemented. Core contract
+tests on the configured RED OS QA node passed (130 tests), and `go test ./...`
+passed. Frontend typecheck and lint passed; the full frontend suite retains one
+known unrelated failure in `App.test.tsx` (`EXECUTION_NODE_BINDING_REQUIRED`).
+The DNS resolver supports base-only and selected-source projections, and
+HAProxy has a targeted candidate entrypoint that preserves other proven
+backend files. The generic source hook now resolves one selected deployment
+and invokes targeted provider updates, but this is not yet a safe complete
+DNS+HAProxy lifecycle. Full BIND base-vs-reconcile separation, live-SOA serial
+continuity, freeze/thaw recovery, and final endpoint probe remain unimplemented,
+so the existing source-before-HAProxy Core dependency remains a fail-closed
+barrier. Do not run a service plan under the new ordering yet.
+No target hosts were changed and no commit was created. Focused Core contract
+tests and HAProxy integration-playbook syntax check passed; the independent
+FULL DIFF review and real React/Wails acceptance are pending.
+
+Owner-approved BIND behavior for this prerequisite is recorded in ADR-030:
+point updates do not delete endpoint records; explicit full reconcile is the
+only deletion path. Full reconcile must synchronize/read the live primary SOA
+before choosing a validly newer serial and use a machine-runtime recovery
+marker plus thaw/authority checks after interruption. These decisions do not
+mean the BIND lifecycle is implemented or the order is safe to execute yet.
+The one targeted plan recheck for EO01-BIND-01/02/03 found zero remaining
+plan blockers (APPROVE_WITH_CHANGES). The primary now uses BIND
+`update-policy local`; an exact source A-record task and Core-projected generic
+endpoint hook are wired only into Vault, Redis and ClickHouse Apply, whose
+manifests declare client endpoint support. The hook reads the selected
+deployment's saved endpoint assignment; it does not create one. Kafka and
+Docker do not declare endpoint support and have no hook. PostgreSQL remains
+excluded by owner decision. No endpoint assignments were added to any project.
+BIND tests passed 13/13 and BIND plus affected source playbook syntax checks
+passed on RED OS. No target hosts were changed.
+
+The BIND lifecycle is still incomplete and the plan must not run: ordinary base
+Apply still renders/activates the complete canonical zone; it has not yet been
+converted to preserve source records and publish only base-owned hosts and
+configured wildcards. Full reconcile still lacks live-SOA serial selection,
+freeze/thaw recovery marker and interruption recovery. The source Apply path
+also lacks the final actual-endpoint probe. Keep the Core source/provider
+dependency fail-closed until these pieces pass focused and end-to-end tests.
+
 ## SI11 Redis static-config comparison correction (2026-10-06)
 
 The all-services Wails run `installer-03f22ee35d9881aa3e3e93ae5fd57a8f`

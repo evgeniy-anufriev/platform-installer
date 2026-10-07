@@ -99,7 +99,73 @@
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
         inventory_hosts: "{{ _platform_bind_inventory_hosts }}"
         inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
+        include_service_endpoints: true
+        include_group_wildcards: true
       register: platform_bind_resolution
+
+    - name: Resolve base-only DNS content for ordinary BIND Apply
+      platform.core.resolve_dns_zones:
+        desired_state: "{{ platform_desired_state }}"
+        service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
+        inventory_hosts: "{{ _platform_bind_inventory_hosts }}"
+        inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
+        include_service_endpoints: false
+        include_group_wildcards: true
+      register: _platform_bind_base_resolution
+      when: not (platform_bind_full_reconcile | default(false) | bool)
+
+    - name: Initialize observed live DNS serial projection for explicit full reconcile
+      ansible.builtin.set_fact:
+        _platform_bind_observed_live_serials: {}
+      when: platform_bind_full_reconcile | default(false) | bool
+
+    - name: Synchronize primary BIND journal before full-model replacement
+      ansible.builtin.command:
+        argv: [rndc, sync, "{{ item.value.zone }}"]
+      delegate_to: "{{ item.value.primary.hostId }}"
+      become: true
+      changed_when: false
+      loop: "{{ platform_bind_resolution.resolved_dns_zones.zones | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: _platform_bind_sync_live_zone
+      when: platform_bind_full_reconcile | default(false) | bool
+
+    - name: Read authoritative live primary SOA serial before full-model replacement
+      ansible.builtin.command:
+        argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +short]
+      delegate_to: "{{ item.value.primary.hostId }}"
+      become: true
+      changed_when: false
+      loop: "{{ platform_bind_resolution.resolved_dns_zones.zones | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: _platform_bind_live_zone_serial_query
+      when: platform_bind_full_reconcile | default(false) | bool
+
+    - name: Require valid live SOA serials before replacing full zones
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+          - item.stdout.split() | length >= 3
+          - item.stdout.split()[2] is match('^[0-9]{1,10}$')
+          - item.stdout.split()[2] | int >= 1
+          - item.stdout.split()[2] | int < 4294967295
+        fail_msg: BIND_FULL_RECONCILE_LIVE_SERIAL_INVALID
+      loop: "{{ _platform_bind_live_zone_serial_query.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      when: platform_bind_full_reconcile | default(false) | bool
+
+    - name: Record observed live primary SOA serials
+      ansible.builtin.set_fact:
+        _platform_bind_observed_live_serials: >-
+          {{ _platform_bind_observed_live_serials |
+             combine({item.item.key: (item.stdout.split()[2] | int)}) }}
+      loop: "{{ _platform_bind_live_zone_serial_query.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      when: platform_bind_full_reconcile | default(false) | bool
 
     - name: Recover audited BIND DNS lifecycle metadata into the persistent project root
       platform.core.recover_dns_lifecycle:
@@ -145,9 +211,13 @@
                item.key: {'dns': {
                  'contentFingerprint': item.value.contentFingerprint,
                  'currentSerial': (
-                   (_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('currentSerial', 0) | int
-                   if (_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('contentFingerprint', '') == item.value.contentFingerprint
-                   else ((_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('currentSerial', 0) | int + 1)
+                   ((_platform_bind_observed_live_serials[item.key] | int) + 1)
+                   if platform_bind_full_reconcile | default(false) | bool
+                   else (
+                     (_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('currentSerial', 0) | int
+                     if (_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('contentFingerprint', '') == item.value.contentFingerprint
+                     else ((_platform_bind_next_state.serviceDeployments | default({})).get(item.key, {}).get('dns', {}).get('currentSerial', 0) | int + 1)
+                   )
                  )
                }}}
              }, recursive=True) }}
@@ -185,7 +255,10 @@
     - name: Publish BIND runtime projection for this apply
       ansible.builtin.set_fact:
         platform_bind_runtime_projection:
-          zones: "{{ platform_bind_resolution.resolved_dns_zones.zones }}"
+          zones: >-
+            {{ platform_bind_resolution.resolved_dns_zones.zones
+               if (platform_bind_full_reconcile | default(false) | bool)
+               else _platform_bind_base_resolution.resolved_dns_zones.zones }}
           generatedState: >-
             {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
                else _platform_bind_next_state }}

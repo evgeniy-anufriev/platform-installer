@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { InstallationPage } from "./InstallationPage";
+import {
+  InstallationPage,
+  deploymentOrderFromPriorities,
+} from "./InstallationPage";
 import { main } from "../wailsjs/go/models";
 
 const state = {
@@ -43,6 +46,36 @@ const currentPlanState = (
 });
 
 describe("InstallationPage", () => {
+  it("orders services by priority, preserves YAML order for ties, then orders deployments by ID", () => {
+    expect(
+      deploymentOrderFromPriorities(
+        [
+          { deploymentId: "vault-z", serviceType: "vault" },
+          { deploymentId: "haproxy-main", serviceType: "haproxy" },
+          { deploymentId: "vault-a", serviceType: "vault" },
+          { deploymentId: "bind-main", serviceType: "bind" },
+        ],
+        [
+          { serviceType: "bind", priority: 0 },
+          { serviceType: "haproxy", priority: 3 },
+          { serviceType: "vault", priority: 4 },
+        ],
+      ),
+    ).toEqual({
+      order: ["bind-main", "haproxy-main", "vault-a", "vault-z"],
+      missingTypes: [],
+    });
+  });
+
+  it("does not invent an order when a selected service has no configured priority", () => {
+    expect(
+      deploymentOrderFromPriorities(
+        [{ deploymentId: "postgres-main", serviceType: "postgresql" }],
+        [{ serviceType: "bind", priority: 0 }],
+      ),
+    ).toEqual({ order: [], missingTypes: ["postgresql"] });
+  });
+
   it("renders only safe prerequisite state and routes preparation to Servers", async () => {
     const user = userEvent.setup();
     const onOpenServers = vi.fn();

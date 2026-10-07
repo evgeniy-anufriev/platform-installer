@@ -178,14 +178,24 @@ def _service_dependencies(deployment_id, deployment, definitions, deployments):
             if capability in (candidate_definition.get("capabilities", []) if isinstance(candidate_definition, dict) else []):
                 providers.append("apply:%s" % candidate_id)
         result.extend(providers)
-    # A provider must not activate a backend before its explicitly related
-    # source has completed apply. This is generic relation ordering, not a
-    # service-type rule or a second endpoint model.
+    # Keep the established source-before-HAProxy barrier until the generic
+    # source-owned backend/DNS integration path is implemented and accepted.
+    # Removing this edge before that path exists would let HAProxy activate a
+    # plan-wide backend projection before its sources are healthy.
     for source_id, source in sorted(deployments.items()):
         relation = source.get("haproxy") if isinstance(source, dict) else None
         if source_id != deployment_id and isinstance(relation, dict) and relation.get("deploymentRef") == deployment_id:
             result.append("apply:%s" % source_id)
     return sorted(set(result))
+
+
+def _validated_deployment_order(deployments, deployment_order):
+    if (not isinstance(deployment_order, list) or len(deployment_order) > 256 or
+            any(not isinstance(item, str) or not item or len(item) > 128 for item in deployment_order) or
+            len(deployment_order) != len(set(deployment_order)) or
+            set(deployment_order) != set(deployments)):
+        raise ValueError("DEPLOYMENT_ORDER_INVALID")
+    return list(deployment_order)
 
 
 def _ordered_apply_actions(actions):
@@ -585,7 +595,7 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
     return result
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
@@ -595,6 +605,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     identity = project.get("id")
     explicit_identity = project.get("identitySource") == "PROJECT_MANIFEST"
     deployments = snapshot.get("serviceDeployments", {}) if isinstance(snapshot.get("serviceDeployments"), dict) else {}
+    deployment_order = _validated_deployment_order(deployments, deployment_order)
     findings = _safe_findings(snapshot.get("findings"))
     if not explicit_identity or not isinstance(identity, str) or not identity:
         findings.append(_finding("PROJECT_IDENTITY_REQUIRED", "project.metadata.id", "Installer-managed execution requires project.yml metadata.id"))
@@ -681,19 +692,29 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         if reissue:
             actions.append({"id": "pki:reissue", "type": "PKI_REISSUE", "targets": reissue_targets, "dependsOn": [], "mutating": True, "reboot": "NONE", "summary": reissue_summary})
         actions.append({"id": "pki:apply", "type": "PKI_APPLY", "targets": targets, "dependsOn": ["pki:reissue"] if reissue else [], "mutating": True, "reboot": "NONE", "summary": "Materialize approved PKI inputs"})
-    apply_actions = []
-    for deployment_id, deployment in sorted(deployments.items()):
+    service_actions = []
+    deployment_positions = {deployment_id: index for index, deployment_id in enumerate(deployment_order)}
+    for deployment_id in deployment_order:
+        deployment = deployments[deployment_id]
         dependencies = _service_dependencies(deployment_id, deployment, definitions, deployments)
+        prior_dependencies = []
+        for dependency in dependencies:
+            provider_id = dependency[len("apply:"):] if dependency.startswith("apply:") else dependency
+            if provider_id not in deployment_positions or deployment_positions[provider_id] >= deployment_positions[deployment_id]:
+                findings.append(_finding(
+                    "EXECUTION_ORDER_DEPENDENCY_CONFLICT", "deploymentOrder",
+                    "Порядок установки конфликтует с обязательной зависимостью %s → %s." % (deployment_id, provider_id)))
+            prior_dependencies.append("verify:%s" % provider_id)
         if deployment_id in pki_consumers:
-            dependencies.append("pki:apply")
-        apply_actions.append({"id": "apply:%s" % deployment_id, "type": "SERVICE_APPLY", "serviceDeployment": deployment_id, "targets": deployment_targets.get(deployment_id, []), "dependsOn": sorted(set(dependencies)), "mutating": True, "reboot": "NONE", "summary": "Apply service deployment %s" % deployment_id})
-    apply_actions = _ordered_apply_actions(apply_actions)
-    verify_actions = [{"id": "verify:%s" % deployment_id, "type": "SERVICE_VERIFY", "serviceDeployment": deployment_id, "targets": deployment_targets.get(deployment_id, []), "dependsOn": ["apply:%s" % deployment_id], "mutating": False, "reboot": "NONE", "summary": "Verify service deployment %s" % deployment_id} for deployment_id in sorted(deployments)]
+            prior_dependencies.append("pki:apply")
+        service_actions.append({"id": "apply:%s" % deployment_id, "type": "SERVICE_APPLY", "serviceDeployment": deployment_id, "targets": deployment_targets.get(deployment_id, []), "dependsOn": sorted(set(prior_dependencies)), "mutating": True, "reboot": "NONE", "summary": "Apply service deployment %s" % deployment_id})
+        service_actions.append({"id": "verify:%s" % deployment_id, "type": "SERVICE_VERIFY", "serviceDeployment": deployment_id, "targets": deployment_targets.get(deployment_id, []), "dependsOn": ["apply:%s" % deployment_id], "mutating": False, "reboot": "NONE", "summary": "Verify service deployment %s" % deployment_id})
+    findings = _safe_findings(findings)
+    executable = not findings
     phases = []
     if actions:
         phases.append({"id": "pki", "order": len(phases), "actions": actions})
-    phases.append({"id": "apply", "order": len(phases), "actions": apply_actions})
-    phases.append({"id": "verify", "order": len(phases), "actions": verify_actions})
+    phases.append({"id": "services", "order": len(phases), "actions": service_actions})
     semantic = {
         "apiVersion": API_VERSION,
         "planningProtocol": release["planningProtocol"],

@@ -16,7 +16,3 @@
   roles:
     - role: platform.postgresql.postgresql
       platform_postgresql_verify_only: false
-
-- import_playbook: ../../integrations/playbooks/reconcile.yml
-  vars:
-    platform_integration_source_service_types: [postgresql]

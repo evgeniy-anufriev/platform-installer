@@ -67,6 +67,50 @@ class DnsResolutionTests(unittest.TestCase):
         self.assertEqual(["192.0.2.111", "192.0.2.112"], records[("postgres-main.asutp.scada.local.", "A")])
         self.assertEqual(["192.0.2.111", "192.0.2.112"], records[("*.asutp.scada.local.", "A")])
 
+    def test_base_provider_projection_has_group_wildcard_but_no_service_records(self):
+        result = DNS.resolve_dns_zones(
+            desired(), catalog(), hosts(), placement(), include_service_endpoints=False)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        records = {(item["owner"], item["type"]): item["values"]
+                   for item in result["zones"]["dns-main"]["records"]}
+        self.assertNotIn(("postgres-main.asutp.scada.local.", "A"), records)
+        self.assertEqual(["192.0.2.111", "192.0.2.112"], records[("*.asutp.scada.local.", "A")])
+        self.assertIn(("node1.scada.local.", "A"), records)
+
+    def test_source_projection_selects_only_its_exact_endpoint(self):
+        result = DNS.resolve_dns_zones(
+            desired(), catalog(), hosts(), placement(), source_deployment_ids=["postgres-main"],
+            include_group_wildcards=False)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        records = {(item["owner"], item["type"]): item["values"]
+                   for item in result["zones"]["dns-main"]["records"]}
+        self.assertIn(("postgres-main.asutp.scada.local.", "A"), records)
+        self.assertNotIn(("postgres-b.asutp.scada.local.", "A"), records)
+        self.assertNotIn(("*.asutp.scada.local.", "A"), records)
+
+    def test_base_projection_only_publishes_configured_group_wildcards(self):
+        enabled = DNS.resolve_dns_zones(
+            desired(wildcard=True), catalog(), hosts(), placement(),
+            include_service_endpoints=False, include_group_wildcards=True)
+        disabled = DNS.resolve_dns_zones(
+            desired(wildcard=False), catalog(), hosts(), placement(),
+            include_service_endpoints=False, include_group_wildcards=True)
+        self.assertEqual("PASS", enabled["status"], enabled["findings"])
+        self.assertEqual("PASS", disabled["status"], disabled["findings"])
+        enabled_owners = [item["owner"] for item in enabled["zones"]["dns-main"]["records"]]
+        disabled_owners = [item["owner"] for item in disabled["zones"]["dns-main"]["records"]]
+        self.assertIn("*.asutp.scada.local.", enabled_owners)
+        self.assertNotIn("*.asutp.scada.local.", disabled_owners)
+
+    def test_source_projection_never_publishes_group_wildcard_even_when_enabled(self):
+        result = DNS.resolve_dns_zones(
+            desired(wildcard=True), catalog(), hosts(), placement(),
+            source_deployment_ids=["postgres-main"], include_group_wildcards=False)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        owners = [item["owner"] for item in result["zones"]["dns-main"]["records"]]
+        self.assertIn("postgres-main.asutp.scada.local.", owners)
+        self.assertNotIn("*.asutp.scada.local.", owners)
+
     def test_primary_cardinality_and_role_are_closed(self):
         inventory = placement()
         inventory["node1"]["dns-main"]["roles"] = ["primary", "secondary"]

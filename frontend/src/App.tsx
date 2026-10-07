@@ -249,6 +249,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [serverTypes, setServerTypes] = useState<
     Array<{ id: string; displayName: string }>
   >([]);
+  const [serviceExecutionPriorities, setServiceExecutionPriorities] = useState<
+    Array<{ serviceType: string; priority: number | null }>
+  >([]);
   const [applicationConfigVersion, setApplicationConfigVersion] = useState<
     number | undefined
   >();
@@ -377,6 +380,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         if (!live) return;
         if (value.status === "READY" && value.config) {
           setServerTypes(value.config.serverTypes || []);
+          setServiceExecutionPriorities(
+            (value.config.serviceExecutionPriorities || []).map((item) => ({
+              serviceType: item.serviceType,
+              priority: item.priority ?? null,
+            })),
+          );
           setApplicationConfigVersion(value.config.schemaVersion);
           setConfigError(null);
         } else {
@@ -689,11 +698,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     const next = await api.getInstallationState();
     setInstallationState(next);
   };
-  const createInstallationPlan = async () => {
+  const createInstallationPlan = async (deploymentOrder: string[]) => {
     if (!api.createInstallationPlan) return;
     setInstallationBusy(true);
     try {
-      const operation = await api.createInstallationPlan();
+      const operation = await api.createInstallationPlan(deploymentOrder);
       setInstallationPlan(operation);
       await refreshInstallationState();
       setInstallationTab("plan");
@@ -1890,6 +1899,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               plan={installationPlan}
               busy={installationBusy}
               onCreatePlan={createInstallationPlan}
+              serviceDeployments={Object.values(
+                result.managed?.deployments || {},
+              ).map((item) => ({
+                deploymentId: item.deploymentId,
+                serviceType: item.serviceType,
+              }))}
+              serviceExecutionPriorities={serviceExecutionPriorities}
               onApprovePlan={approveInstallationPlan}
               run={installationRun}
               runPlan={runPlan}
@@ -1915,6 +1931,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               configVersion={applicationConfigVersion}
               serverTypes={serverTypes}
               configError={configError}
+              onNavigate={setPage}
             />
           )}
           {projectDialog && (

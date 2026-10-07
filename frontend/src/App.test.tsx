@@ -349,8 +349,14 @@ it("restores Logs, Help, About and Settings navigation without requiring an open
 
   await userEvent.click(screen.getByRole("button", { name: "Справка" }));
   expect(screen.getByRole("heading", { name: "Справка" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: /Ошибки/ }));
+  await userEvent.click(
+    screen.getByRole("button", {
+      name: "Как обновить привязку существующего проекта?",
+    }),
+  );
   expect(screen.getByText(/На странице «Проект» нажмите «Проверить новый набор»/)).toBeTruthy();
-  expect(screen.getByText(/Не меняйте digest вручную/)).toBeTruthy();
+  expect(screen.getByText(/Не редактируйте digest вручную/)).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "О программе" }));
   expect(screen.getByRole("heading", { name: "О программе" })).toBeTruthy();

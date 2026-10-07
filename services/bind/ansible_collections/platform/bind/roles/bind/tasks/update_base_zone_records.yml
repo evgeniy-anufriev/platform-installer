@@ -1,0 +1,12 @@
+---
+- name: Apply each desired base A record without deleting other owners
+  ansible.builtin.include_tasks: update_a_record.yml
+  vars:
+    platform_bind_a_record:
+      zone: "{{ platform_bind_base_zone.value.zone }}"
+      owner: "{{ item.owner }}"
+      addresses: "{{ item.values }}"
+      ttl: "{{ platform_bind_base_zone.value.defaultTtl }}"
+  loop: "{{ platform_bind_base_zone.value.records | selectattr('type', 'equalto', 'A') | list }}"
+  loop_control:
+    label: "{{ item.owner }}"

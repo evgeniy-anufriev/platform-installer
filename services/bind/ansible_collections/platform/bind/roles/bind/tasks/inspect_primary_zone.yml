@@ -1,0 +1,22 @@
+---
+- name: Inspect active primary zone file
+  ansible.builtin.stat:
+    path: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}.zone"
+  register: _platform_bind_existing_zone_file
+
+- name: Inspect primary dynamic-update journal
+  ansible.builtin.stat:
+    path: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}.zone.jnl"
+  register: _platform_bind_existing_zone_journal
+
+- name: Reject orphaned BIND dynamic-update journal
+  ansible.builtin.assert:
+    that:
+      - _platform_bind_existing_zone_file.stat.exists or not _platform_bind_existing_zone_journal.stat.exists
+    fail_msg: BIND_ZONE_JOURNAL_WITHOUT_MASTER_FILE
+
+- name: Record whether this primary zone already has persistent state
+  ansible.builtin.set_fact:
+    _platform_bind_existing_primary_zone_by_deployment: >-
+      {{ _platform_bind_existing_primary_zone_by_deployment |
+         combine({platform_bind_inspected_deployment.key: _platform_bind_existing_zone_file.stat.exists | bool}) }}

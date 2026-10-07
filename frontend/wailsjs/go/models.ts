@@ -16,6 +16,7 @@ export namespace appconfig {
   export class Config {
     schemaVersion: number;
     serverTypes: ServerType[];
+    serviceExecutionPriorities: ServiceExecutionPriority[];
 
     static createFrom(source: any = {}) {
       return new Config(source);
@@ -25,6 +26,7 @@ export namespace appconfig {
       if ("string" === typeof source) source = JSON.parse(source);
       this.schemaVersion = source["schemaVersion"];
       this.serverTypes = this.convertValues(source["serverTypes"], ServerType);
+      this.serviceExecutionPriorities = this.convertValues(source["serviceExecutionPriorities"], ServiceExecutionPriority);
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -43,6 +45,20 @@ export namespace appconfig {
         return new classs(a);
       }
       return a;
+    }
+  }
+  export class ServiceExecutionPriority {
+    serviceType: string;
+    priority: number | null;
+
+    static createFrom(source: any = {}) {
+      return new ServiceExecutionPriority(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.serviceType = source["serviceType"];
+      this.priority = source["priority"];
     }
   }
 }

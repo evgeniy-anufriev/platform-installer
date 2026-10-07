@@ -512,7 +512,7 @@ export interface ProjectBackend {
   approveTargetHostKey?(probeId: string): Promise<HostKeyProbeResult>;
   declineTargetHostKey?(): Promise<HostKeyProbeResult>;
   getInstallationState?(): Promise<InstallationState>;
-  createInstallationPlan?(): Promise<InstallationPlanOperation>;
+  createInstallationPlan?(deploymentOrder: string[]): Promise<InstallationPlanOperation>;
   getInstallationPlan?(planId: string): Promise<InstallationPlanOperation>;
   approveInstallationPlan?(
     planId: string,
@@ -624,8 +624,8 @@ export const backend: ProjectBackend = {
     DeclineTargetHostKey() as unknown as Promise<HostKeyProbeResult>,
   getInstallationState: () =>
     GetInstallationState() as unknown as Promise<InstallationState>,
-  createInstallationPlan: () =>
-    CreateInstallationPlan() as unknown as Promise<InstallationPlanOperation>,
+  createInstallationPlan: (deploymentOrder) =>
+    CreateInstallationPlan(deploymentOrder) as unknown as Promise<InstallationPlanOperation>,
   getInstallationPlan: (planId) =>
     GetInstallationPlan(
       planId,

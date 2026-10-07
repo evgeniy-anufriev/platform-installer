@@ -143,15 +143,18 @@ def normalize_backend_settings(defaults, override, field):
 
 def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments,
                              resolved_endpoints, backend_defaults=None, resolved_configuration=None,
-                             pki_requests=None):
+                             pki_requests=None, target_deployment_ids=None):
     topology = topology if isinstance(topology, dict) else {}
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology.get("serviceDeployments"), dict) else {}
     definitions = _definitions(service_catalog)
     inventory_hosts = inventory_hosts if isinstance(inventory_hosts, dict) else {}
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
     endpoint_map = resolved_endpoints.get("endpoints", {}) if isinstance(resolved_endpoints, dict) else {}
+    selected_ids = set(target_deployment_ids) if isinstance(target_deployment_ids, list) else None
     findings, resolved = [], {}
     for target_id, target in sorted(deployments.items()):
+        if selected_ids is not None and target_id not in selected_ids:
+            continue
         relation = target.get("haproxy") if isinstance(target, dict) else None
         if relation is None:
             continue

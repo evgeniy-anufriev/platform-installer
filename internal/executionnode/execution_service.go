@@ -127,16 +127,17 @@ type TargetHostTrustStager interface {
 type TargetHostTrustProvider func(DeploymentPlan) ([]TargetHostKeyApproval, error)
 
 type PlanRecord struct {
-	ID        string
-	Plan      DeploymentPlan
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	Approved  bool
-	Consumed  bool
+	ID              string
+	Plan            DeploymentPlan
+	DeploymentOrder []string
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	Approved        bool
+	Consumed        bool
 }
 
 type PlanBuilder interface {
-	BuildDeploymentPlan(context.Context, Node, string, map[string]any) (DeploymentPlan, error)
+	BuildDeploymentPlan(context.Context, Node, string, map[string]any, []string) (DeploymentPlan, error)
 }
 
 type ExecutionClient interface {
@@ -176,6 +177,7 @@ type pendingStart struct {
 type ServicePlanRequest struct {
 	Service          string
 	Operation        string
+	DeploymentOrder  []string
 	Target           Node
 	ArtifactTargets  []Node
 	BundleCandidates []artifactsource.Candidate
@@ -255,7 +257,7 @@ func (s *ExecutionService) CreateServicePlan(ctx context.Context, node Node, req
 	if request.Service == "" || request.Target.ID == "" || len(request.ArtifactTargets) == 0 {
 		return PlanRecord{}, errors.New("SERVICE_PLAN_INPUT_INVALID")
 	}
-	record, err := s.CreatePlan(ctx, node, projectRoot, runtimeRelease)
+	record, err := s.CreatePlanWithOrder(ctx, node, projectRoot, runtimeRelease, request.DeploymentOrder)
 	if err != nil {
 		return PlanRecord{}, err
 	}
@@ -266,10 +268,14 @@ func (s *ExecutionService) CreateServicePlan(ctx context.Context, node Node, req
 }
 
 func (s *ExecutionService) CreatePlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (PlanRecord, error) {
+	return s.CreatePlanWithOrder(ctx, node, projectRoot, runtimeRelease, nil)
+}
+
+func (s *ExecutionService) CreatePlanWithOrder(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string) (PlanRecord, error) {
 	if s == nil || s.builder == nil || projectRoot == "" {
 		return PlanRecord{}, errors.New("EXECUTION_PLAN_INPUT_INVALID")
 	}
-	plan, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, runtimeRelease)
+	plan, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, runtimeRelease, slices.Clone(deploymentOrder))
 	if err != nil {
 		return PlanRecord{}, err
 	}
@@ -277,7 +283,7 @@ func (s *ExecutionService) CreatePlan(ctx context.Context, node Node, projectRoo
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INVALID")
 	}
 	now := s.now().UTC()
-	record := PlanRecord{ID: plan.ID, Plan: cloneDeploymentPlan(plan), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
+	record := PlanRecord{ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	s.mu.Lock()
 	s.plans[record.ID] = record
 	s.projectRoots[record.ID] = projectRoot
@@ -422,7 +428,7 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if len(record.Plan.RuntimeRelease) == 0 {
 		return ExecutionRun{}, errors.New("EXECUTION_PLAN_RUNTIME_RELEASE_MISSING")
 	}
-	fresh, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease)
+	fresh, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease, slices.Clone(record.DeploymentOrder))
 	if err != nil {
 		return ExecutionRun{}, err
 	}
@@ -842,7 +848,11 @@ func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
 	}
 	return r
 }
-func clonePlanRecord(p PlanRecord) PlanRecord { p.Plan = cloneDeploymentPlan(p.Plan); return p }
+func clonePlanRecord(p PlanRecord) PlanRecord {
+	p.Plan = cloneDeploymentPlan(p.Plan)
+	p.DeploymentOrder = slices.Clone(p.DeploymentOrder)
+	return p
+}
 func newRunID() (string, error) {
 	value := make([]byte, 16)
 	if _, err := rand.Read(value); err != nil {

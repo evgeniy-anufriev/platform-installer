@@ -1,3 +1,5 @@
 ---
 # Provider-owned full-model entrypoint for service-driven reconciliation.
 - import_playbook: apply.yml
+  vars:
+    platform_bind_full_reconcile: true

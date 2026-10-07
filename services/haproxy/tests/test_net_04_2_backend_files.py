@@ -1,11 +1,51 @@
 from pathlib import Path
 import unittest
 
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
 
 ROLE = Path(__file__).resolve().parents[1] / "ansible_collections" / "platform" / "haproxy" / "roles" / "haproxy"
 
 
 class BackendFileContractTests(unittest.TestCase):
+    def test_base_public_routes_use_configured_groups_without_source_endpoints(self):
+        template = Environment(
+            loader=FileSystemLoader(ROLE / "templates"),
+            undefined=StrictUndefined,
+        ).get_template("10-public.cfg.j2")
+        rendered = template.render(
+            platform_haproxy_public_port=443,
+            platform_haproxy_pki_directory="/etc/haproxy/pki",
+            platform_desired_state={"endpointGroups": {
+                "asutp": {"address": {"domain": "asutp.scada.local"}},
+                "prod": {"address": {"domain": "prod.scada.local"}},
+            }},
+        )
+        self.assertIn("acl asutp var(txn.route_host) -m end -i .asutp.scada.local", rendered)
+        self.assertIn("acl prod var(txn.route_host) -m end -i .prod.scada.local", rendered)
+        self.assertIn("use_backend %[var(txn.route_host),field(1,'.')]-asutp if asutp", rendered)
+        self.assertNotIn("vault", rendered)
+
+    def test_base_skips_backend_resolution_and_preserves_proven_fragments(self):
+        resolve = (ROLE / "tasks" / "resolve.yml").read_text(encoding="utf-8")
+        prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
+        reconcile = (ROLE.parents[4] / "playbooks" / "reconcile.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined", resolve)
+        self.assertIn("else {'endpoints': {}, 'hostEndpoints': {}, 'findings': [], 'status': 'PASS'}", resolve)
+        self.assertIn("else {'backends': {}, 'findings': [], 'status': 'PASS'}", resolve)
+        self.assertNotIn("when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined", resolve.split("- name: Publish HAProxy runtime projection", 1)[1])
+        self.assertIn("_platform_haproxy_prior_backend_capture.previousInventory", prepare)
+        self.assertIn("when: not (platform_haproxy_full_reconcile | bool)", prepare)
+        self.assertIn("platform_haproxy_full_reconcile: true", reconcile)
+
+    def test_source_integration_rebuilds_only_its_backend_and_preserves_others(self):
+        prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
+        integrate = (ROLE.parents[4] / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
+        self.assertIn("Select only this source deployment backend for partial integration", prepare)
+        self.assertIn("reject('match'", prepare)
+        self.assertIn("platform_haproxy_partial_deployment_id", integrate)
+        self.assertEqual(3, integrate.count("platform_haproxy_phase:"))
+
     def test_application_backends_have_a_dedicated_template(self):
         template = (ROLE / "templates" / "30-application-backend.cfg.j2").read_text(encoding="utf-8")
         self.assertIn("platform_haproxy_application_backend.backendName", template)

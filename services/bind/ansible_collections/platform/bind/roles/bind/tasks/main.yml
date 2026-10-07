@@ -63,6 +63,8 @@
     service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
     inventory_hosts: "{{ _platform_bind_inventory_hosts }}"
     inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
+    include_service_endpoints: "{{ platform_bind_full_reconcile | default(false) | bool }}"
+    include_group_wildcards: true
   register: _platform_bind_resolution
   run_once: true
 

@@ -26,8 +26,12 @@ func errorCode(t *testing.T, err error) string {
 	return typed.Code
 }
 
+const priorityConfig = "serviceExecutionPriorities:\n  - {serviceType: bind, priority: 0}\n"
+
+func priority(value int) *int { return &value }
+
 func TestLoadValidApplicationConfig(t *testing.T) {
-	config, err := Load(writeConfig(t, "schemaVersion: 1\nserverTypes:\n  - id: infra\n    displayName: Инфраструктура\n"))
+	config, err := Load(writeConfig(t, "schemaVersion: 2\nserverTypes:\n  - id: infra\n    displayName: Инфраструктура\n"+priorityConfig))
 	if err != nil || !config.HasServerType("infra") || config.HasServerType("missing") {
 		t.Fatalf("config=%#v err=%v", config, err)
 	}
@@ -35,7 +39,7 @@ func TestLoadValidApplicationConfig(t *testing.T) {
 
 func TestRepositoryApplicationConfigLoads(t *testing.T) {
 	config, err := Load(filepath.Join("..", "..", "config", "application.yml"))
-	if err != nil || len(config.ServerTypes) != 3 || !config.HasServerType("infra") || !config.HasServerType("app") || !config.HasServerType("db") {
+	if err != nil || config.SchemaVersion != 2 || len(config.ServerTypes) != 3 || len(config.ServiceExecutionPriorities) != 10 || !config.HasServerType("infra") || !config.HasServerType("app") || !config.HasServerType("db") {
 		t.Fatalf("config=%#v err=%v", config, err)
 	}
 }
@@ -49,7 +53,7 @@ func TestResolveDevelopmentPath(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("schemaVersion: 1\nserverTypes: [{id: infra, displayName: Infra}]\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("schemaVersion: 2\nserverTypes: [{id: infra, displayName: Infra}]\n"+priorityConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := ResolveDevelopmentPath(root, "")
@@ -67,7 +71,7 @@ func TestResolveDevelopmentPathPrefersExecutableRelativeConfig(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "config", "application.yml"), []byte("schemaVersion: 1\nserverTypes: [{id: infra, displayName: Infra}]\n"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "config", "application.yml"), []byte("schemaVersion: 2\nserverTypes: [{id: infra, displayName: Infra}]\n"+priorityConfig), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if root != cwd {
@@ -86,7 +90,7 @@ func TestLoadRejectsNonRegularAndSymlinkConfig(t *testing.T) {
 		t.Fatalf("directory err=%v", err)
 	}
 	t.Run("file symlink", func(t *testing.T) {
-		target := writeConfig(t, "schemaVersion: 1\nserverTypes: [{id: infra, displayName: Infra}]\n")
+		target := writeConfig(t, "schemaVersion: 2\nserverTypes: [{id: infra, displayName: Infra}]\n"+priorityConfig)
 		link := filepath.Join(root, "application.yml")
 		if err := os.Symlink(target, link); err != nil {
 			t.Skipf("symlink creation is unavailable: %v", err)
@@ -98,7 +102,7 @@ func TestLoadRejectsNonRegularAndSymlinkConfig(t *testing.T) {
 	t.Run("directory symlink", func(t *testing.T) {
 		targetRoot := t.TempDir()
 		target := filepath.Join(targetRoot, "application.yml")
-		if err := os.WriteFile(target, []byte("schemaVersion: 1\nserverTypes: [{id: infra, displayName: Infra}]\n"), 0o600); err != nil {
+		if err := os.WriteFile(target, []byte("schemaVersion: 2\nserverTypes: [{id: infra, displayName: Infra}]\n"+priorityConfig), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		linkRoot := filepath.Join(root, "linked-config")
@@ -116,11 +120,12 @@ func TestLoadRejectsMalformedUnsupportedDuplicateAndInvalid(t *testing.T) {
 		"malformed":     {"schemaVersion: [\n", "APPLICATION_CONFIG_INVALID"},
 		"multiple docs": {"schemaVersion: 1\nserverTypes: [{id: infra, displayName: Infra}]\n---\nschemaVersion: 1\n", "APPLICATION_CONFIG_INVALID"},
 		"unknown field": {"schemaVersion: 1\nserverTypes: []\nother: true\n", "APPLICATION_CONFIG_INVALID"},
-		"version":       {"schemaVersion: 2\nserverTypes:\n  - {id: infra, displayName: Infra}\n", "APPLICATION_CONFIG_VERSION_UNSUPPORTED"},
-		"empty":         {"schemaVersion: 1\nserverTypes: []\n", "APPLICATION_CONFIG_SERVER_TYPES_INVALID"},
-		"duplicate":     {"schemaVersion: 1\nserverTypes:\n  - {id: infra, displayName: A}\n  - {id: infra, displayName: B}\n", "APPLICATION_CONFIG_SERVER_TYPE_DUPLICATE"},
-		"grammar":       {"schemaVersion: 1\nserverTypes:\n  - {id: 'Infra type', displayName: Infra}\n", "APPLICATION_CONFIG_SERVER_TYPE_ID_INVALID"},
-		"empty name":    {"schemaVersion: 1\nserverTypes:\n  - {id: infra, displayName: '   '}\n", "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID"},
+		"upgrade":       {"schemaVersion: 1\nserverTypes:\n  - {id: infra, displayName: Infra}\n", "APPLICATION_CONFIG_UPGRADE_REQUIRED"},
+		"version":       {"schemaVersion: 3\nserverTypes:\n  - {id: infra, displayName: Infra}\n", "APPLICATION_CONFIG_VERSION_UNSUPPORTED"},
+		"empty":         {"schemaVersion: 2\nserverTypes: []\n" + priorityConfig, "APPLICATION_CONFIG_SERVER_TYPES_INVALID"},
+		"duplicate":     {"schemaVersion: 2\nserverTypes:\n  - {id: infra, displayName: A}\n  - {id: infra, displayName: B}\n" + priorityConfig, "APPLICATION_CONFIG_SERVER_TYPE_DUPLICATE"},
+		"grammar":       {"schemaVersion: 2\nserverTypes:\n  - {id: 'Infra type', displayName: Infra}\n" + priorityConfig, "APPLICATION_CONFIG_SERVER_TYPE_ID_INVALID"},
+		"empty name":    {"schemaVersion: 2\nserverTypes:\n  - {id: infra, displayName: '   '}\n" + priorityConfig, "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID"},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -133,15 +138,38 @@ func TestLoadRejectsMalformedUnsupportedDuplicateAndInvalid(t *testing.T) {
 }
 
 func TestValidateBounds(t *testing.T) {
-	config := Config{SchemaVersion: 1}
+	config := Config{SchemaVersion: 2, ServiceExecutionPriorities: []ServiceExecutionPriority{{ServiceType: "bind", Priority: priority(0)}}}
 	for index := 0; index < maxServerTypes+1; index++ {
 		config.ServerTypes = append(config.ServerTypes, ServerType{ID: "t" + strings.Repeat("0", index%62), DisplayName: "Type"})
 	}
 	if code := errorCode(t, Validate(config)); code != "APPLICATION_CONFIG_SERVER_TYPES_INVALID" {
 		t.Fatal(code)
 	}
-	if code := errorCode(t, Validate(Config{SchemaVersion: 1, ServerTypes: []ServerType{{ID: "infra", DisplayName: strings.Repeat("x", maxDisplayNameLength+1)}}})); code != "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID" {
+	if code := errorCode(t, Validate(Config{SchemaVersion: 2, ServerTypes: []ServerType{{ID: "infra", DisplayName: strings.Repeat("x", maxDisplayNameLength+1)}}, ServiceExecutionPriorities: config.ServiceExecutionPriorities})); code != "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID" {
 		t.Fatal(code)
+	}
+}
+
+func TestServiceExecutionPrioritiesValidation(t *testing.T) {
+	base := Config{SchemaVersion: 2, ServerTypes: []ServerType{{ID: "infra", DisplayName: "Infra"}}}
+	for name, entries := range map[string][]ServiceExecutionPriority{
+		"missing":         nil,
+		"duplicate":       {{ServiceType: "bind", Priority: priority(0)}, {ServiceType: "bind", Priority: priority(1)}},
+		"negative":        {{ServiceType: "bind", Priority: priority(-1)}},
+		"priority absent": {{ServiceType: "bind"}},
+		"id invalid":      {{ServiceType: "Bad Type", Priority: priority(0)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := base
+			value.ServiceExecutionPriorities = entries
+			if err := Validate(value); err == nil {
+				t.Fatal("invalid priorities accepted")
+			}
+		})
+	}
+	base.ServiceExecutionPriorities = []ServiceExecutionPriority{{ServiceType: "bind", Priority: priority(0)}, {ServiceType: "vault", Priority: priority(4)}}
+	if err := Validate(base); err != nil {
+		t.Fatal(err)
 	}
 }
 

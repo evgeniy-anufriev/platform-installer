@@ -42,6 +42,36 @@ def runtime_evidence():
 
 
 class ExecutionLifecycleTests(unittest.TestCase):
+    def test_deployment_plan_order_request_is_versioned_and_closed(self):
+        base = {
+            "apiVersion": "platform.installer/execution-runtime/v1alpha2",
+            "operation": "BuildDeploymentPlan",
+            "runId": "run-1",
+            "project": "/var/lib/platform-installer/project",
+            "runtimeRelease": {"bundleDigest": "sha256:" + "a" * 64},
+            "deploymentOrder": ["bind-main", "vault-ha"],
+        }
+
+        def parse(value):
+            with mock.patch.object(execution_protocol.sys, "stdin", io.StringIO(json.dumps(value))):
+                return execution_protocol.request()
+
+        self.assertEqual(base, parse(base))
+        empty = dict(base, deploymentOrder=[])
+        self.assertEqual([], parse(empty)["deploymentOrder"])
+        cases = [
+            (dict(base, apiVersion="platform.installer/execution-runtime/v1alpha1"), "DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED"),
+            ({key: value for key, value in base.items() if key != "deploymentOrder"}, "DEPLOYMENT_ORDER_REQUEST_INVALID"),
+            (dict(base, deploymentOrder=None), "DEPLOYMENT_ORDER_REQUEST_INVALID"),
+            (dict(base, deploymentOrder=["bind-main", "bind-main"]), "DEPLOYMENT_ORDER_REQUEST_INVALID"),
+            (dict(base, deploymentOrder=["bind-main", 1]), "DEPLOYMENT_ORDER_REQUEST_INVALID"),
+            (dict(base, extra=True), "DEPLOYMENT_ORDER_REQUEST_INVALID"),
+        ]
+        for value, code in cases:
+            with self.subTest(code=code, value=value), self.assertRaises(execution_protocol.LifecycleError) as caught:
+                parse(value)
+            self.assertEqual(code, str(caught.exception))
+
     def test_staged_host_trust_survives_authoritative_hex_run_id(self):
         with tempfile.TemporaryDirectory() as root:
             runs = Path(root, "runs")
@@ -433,7 +463,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
 
             with mock.patch.object(execution_protocol.subprocess, "run", side_effect=completed):
                 result = execution_protocol.core_operation(
-                    {"runId": "run-1", "runtimeRelease": {}}, root, release, "BuildDeploymentPlan"
+                    {"runId": "run-1", "runtimeRelease": {}, "deploymentOrder": []}, root, release, "BuildDeploymentPlan"
                 )
             self.assertEqual(plan, result["deploymentPlan"])
             self.assertIsNone(result["executionManifestDigest"])
@@ -454,7 +484,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
             with mock.patch.object(execution_protocol.subprocess, "run", side_effect=failed):
                 with self.assertRaises(execution_protocol.CoreOperationError) as caught:
                     execution_protocol.core_operation(
-                        {"runId": "run-1", "runtimeRelease": {}}, root, release, "BuildDeploymentPlan"
+                        {"runId": "run-1", "runtimeRelease": {}, "deploymentOrder": []}, root, release, "BuildDeploymentPlan"
                     )
             self.assertEqual("PROJECT_SNAPSHOT_INPUT_INVALID", caught.exception.code)
             self.assertEqual(diagnostic, caught.exception.diagnostic)

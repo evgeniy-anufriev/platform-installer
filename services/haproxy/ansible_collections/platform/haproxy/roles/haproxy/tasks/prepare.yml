@@ -76,6 +76,22 @@
   loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
   changed_when: false
 
+- name: Stage proven existing application backends for base provider update
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
+  when:
+    - not (platform_haproxy_full_reconcile | bool)
+    - >-
+      platform_haproxy_partial_deployment_id is not defined or
+      not item.name.startswith('30-backend-' ~ platform_haproxy_partial_deployment_id ~ '-')
+  changed_when: false
+
 - name: Build HAProxy PEM bundle atomically without logging key data
   ansible.builtin.assemble:
     src: "{{ platform_haproxy_pki_directory }}"
@@ -106,6 +122,32 @@
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
          flatten | map(attribute='configFileName') | sort | list }}
+  when: platform_haproxy_full_reconcile | bool
+
+- name: Retain exact proven backend inventory in base mode
+  ansible.builtin.set_fact:
+    platform_haproxy_application_backends: []
+    platform_haproxy_managed_application_backend_files: >-
+      {{ _platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') | list }}
+  when: not (platform_haproxy_full_reconcile | bool)
+
+- name: Select only this source deployment backend for partial integration
+  ansible.builtin.set_fact:
+    platform_haproxy_application_backends: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+         flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+         sort(attribute='configFileName') }}
+    platform_haproxy_managed_application_backend_files: >-
+      {{ ((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
+           reject('match', '^30-backend-' ~ (platform_haproxy_partial_deployment_id | regex_escape) ~ '-')) | list) +
+         (platform_haproxy_runtime_projection.backends.backends | dict2items |
+          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+          flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+          map(attribute='configFileName') | list) | unique | sort }}
+  when:
+    - not (platform_haproxy_full_reconcile | bool)
+    - platform_haproxy_partial_deployment_id is defined
 
 - name: Probe actual backend TLS identities before HAProxy candidate activation
   ansible.builtin.command:

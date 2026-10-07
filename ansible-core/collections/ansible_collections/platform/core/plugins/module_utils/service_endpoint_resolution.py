@@ -36,7 +36,7 @@ def _definitions(catalog):
     return values if isinstance(values, dict) else {}
 
 
-def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None, inventory_deployments=None):
+def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None, inventory_deployments=None, deployment_ids=None):
     """Derive generic client endpoint identity from desired topology.
 
     Transport ports and routing are deliberately deferred to NET-03. This function
@@ -48,8 +48,11 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
     definitions = _definitions(service_catalog)
     findings, endpoints, host_endpoints = [], {}, {}
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
+    selected_ids = set(deployment_ids) if isinstance(deployment_ids, list) else None
 
     for deployment_id, deployment in sorted(deployments.items()):
+        if selected_ids is not None and deployment_id not in selected_ids:
+            continue
         if not isinstance(deployment, dict) or "endpointGroup" not in deployment:
             continue
         prefix = "serviceDeployments.%s" % deployment_id

@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	SchemaVersion        = 1
+	SchemaVersion        = 2
 	maxConfigBytes       = 64 * 1024
 	maxServerTypes       = 64
+	maxServicePriorities = 64
 	maxDisplayNameLength = 128
 )
 
@@ -26,9 +27,15 @@ type ServerType struct {
 	DisplayName string `json:"displayName" yaml:"displayName"`
 }
 
+type ServiceExecutionPriority struct {
+	ServiceType string `json:"serviceType" yaml:"serviceType"`
+	Priority    *int   `json:"priority" yaml:"priority"`
+}
+
 type Config struct {
-	SchemaVersion int          `json:"schemaVersion" yaml:"schemaVersion"`
-	ServerTypes   []ServerType `json:"serverTypes" yaml:"serverTypes"`
+	SchemaVersion              int                        `json:"schemaVersion" yaml:"schemaVersion"`
+	ServerTypes                []ServerType               `json:"serverTypes" yaml:"serverTypes"`
+	ServiceExecutionPriorities []ServiceExecutionPriority `json:"serviceExecutionPriorities" yaml:"serviceExecutionPriorities"`
 }
 
 type Error struct {
@@ -109,11 +116,27 @@ func openRegularFile(path string) (*os.File, error) {
 }
 
 func Validate(config Config) error {
+	if config.SchemaVersion == 1 {
+		return &Error{Code: "APPLICATION_CONFIG_UPGRADE_REQUIRED"}
+	}
 	if config.SchemaVersion != SchemaVersion {
 		return &Error{Code: "APPLICATION_CONFIG_VERSION_UNSUPPORTED"}
 	}
 	if len(config.ServerTypes) == 0 || len(config.ServerTypes) > maxServerTypes {
 		return &Error{Code: "APPLICATION_CONFIG_SERVER_TYPES_INVALID"}
+	}
+	if len(config.ServiceExecutionPriorities) == 0 || len(config.ServiceExecutionPriorities) > maxServicePriorities {
+		return &Error{Code: "APPLICATION_CONFIG_SERVICE_PRIORITIES_INVALID"}
+	}
+	prioritySeen := make(map[string]bool, len(config.ServiceExecutionPriorities))
+	for _, entry := range config.ServiceExecutionPriorities {
+		if !ServerTypeIDPattern.MatchString(entry.ServiceType) || entry.Priority == nil || *entry.Priority < 0 {
+			return &Error{Code: "APPLICATION_CONFIG_SERVICE_PRIORITY_INVALID"}
+		}
+		if prioritySeen[entry.ServiceType] {
+			return &Error{Code: "APPLICATION_CONFIG_SERVICE_PRIORITY_DUPLICATE"}
+		}
+		prioritySeen[entry.ServiceType] = true
 	}
 	seen := make(map[string]bool, len(config.ServerTypes))
 	for _, serverType := range config.ServerTypes {

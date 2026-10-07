@@ -11,6 +11,7 @@ def main():
             "desired_state": {"type": "dict", "required": True},
             "service_catalog": {"type": "dict", "required": True},
             "inventory_deployments": {"type": "dict", "required": False, "default": {}},
+            "deployment_ids": {"type": "list", "elements": "str", "required": False},
         },
         supports_check_mode=True,
     )
@@ -18,6 +19,7 @@ def main():
         module.params["desired_state"],
         module.params["service_catalog"],
         inventory_deployments=module.params["inventory_deployments"],
+        deployment_ids=module.params.get("deployment_ids"),
     )
     if result["status"] != "PASS":
         module.fail_json(

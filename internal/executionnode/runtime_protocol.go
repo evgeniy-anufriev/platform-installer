@@ -239,9 +239,13 @@ var executionEventStatuses = map[string]bool{"PENDING": true, "RUNNING": true, "
 var errExecutionEventsResponseInvalid = errors.New("EXECUTION_EVENTS_RESPONSE_INVALID")
 var errExecutionEventResponseInvalid = errors.New("EXECUTION_EVENT_RESPONSE_INVALID")
 
-func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any) (DeploymentPlan, error) {
-	if projectRoot == "" || len(runtimeRelease) == 0 {
+func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string) (DeploymentPlan, error) {
+	if projectRoot == "" || len(runtimeRelease) == 0 || deploymentOrder == nil {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
+	}
+	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
+	if err != nil || !orderedDeploymentPlanRequestSupported(capabilities) {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED")
 	}
 	runID, err := newRunID()
 	if err != nil {
@@ -250,7 +254,7 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "plan"); err != nil {
 		return DeploymentPlan{}, err
 	}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildDeploymentPlan", "runId": runID, "project": "/var/lib/platform-installer/execution/runs/" + runID + "/project", "runtimeRelease": runtimeRelease})
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "operation": "BuildDeploymentPlan", "runId": runID, "project": "/var/lib/platform-installer/execution/runs/" + runID + "/project", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder})
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
@@ -266,6 +270,14 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 		return DeploymentPlan{}, err
 	}
 	return plan, nil
+}
+
+func orderedDeploymentPlanRequestSupported(response map[string]any) bool {
+	if response["apiVersion"] != "platform.installer/execution-capabilities/v1alpha6" || response["kind"] != "ExecutionCapabilities" {
+		return false
+	}
+	allowed := []string{"apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "targetCredentialLease", "runtimeSecretDescriptors", "serviceConfigurationPreview", "deploymentPlanRequestVersions", "projectSnapshotRequestVersions"}
+	return closedKeys(response, allowed...) && contains(response["supportedOperations"], "BuildDeploymentPlan") && exactArrayOfStrings(response["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha2")
 }
 
 // A blocked plan has no execution manifest by design: it cannot enter Start.
@@ -323,7 +335,7 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_INPUT_INVALID")
 	}
 	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
-	if err != nil || capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha5" || !validServiceConfigurationPreviewCapability(capabilities["serviceConfigurationPreview"], capabilities["supportedOperations"]) {
+	if err != nil || (capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha5" && capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha6") || !validServiceConfigurationPreviewCapability(capabilities["serviceConfigurationPreview"], capabilities["supportedOperations"]) {
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED")
 	}
 	runID, err := newRunID()
@@ -542,7 +554,7 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
 	}
 	capability, err := t.CredentialStartCapability(ctx, node)
-	if err != nil || (capability.APIVersion != "platform.installer/execution-capabilities/v1alpha4" && capability.APIVersion != "platform.installer/execution-capabilities/v1alpha5") || !capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) {
+	if err != nil || (capability.APIVersion != "platform.installer/execution-capabilities/v1alpha4" && capability.APIVersion != "platform.installer/execution-capabilities/v1alpha5" && capability.APIVersion != "platform.installer/execution-capabilities/v1alpha6") || !capability.TypedRuntimeInputs || !capability.supportsPayloadVersion(credentialPayloadVersionV4) {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED")
 	}
 	runID, err := newRunID()

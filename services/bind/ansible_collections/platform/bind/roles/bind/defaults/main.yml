@@ -10,6 +10,8 @@ platform_bind_options_include_file: /etc/named/platform-installer-options.conf
 platform_bind_candidate_main_config: /etc/named.conf.platform-candidate
 platform_bind_primary_zone_directory: /var/named/platform-installer
 platform_bind_secondary_zone_directory: /var/named/slaves/platform-installer
+platform_bind_recovery_directory: /var/lib/platform-installer/bind-recovery
+platform_bind_rndc_binary: /usr/sbin/rndc
 platform_bind_phase: prepare
 # Empty by default. A recovery must be explicitly audited and supplied for one
 # controlled lifecycle migration; ordinary reconciliation never inspects it.

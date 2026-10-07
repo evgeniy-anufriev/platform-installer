@@ -1,4 +1,4 @@
-schemaVersion: 1
+schemaVersion: 2
 serverTypes:
   - id: infra
     displayName: Инфраструктура
@@ -6,3 +6,14 @@ serverTypes:
     displayName: Приложения
   - id: db
     displayName: Базы данных
+serviceExecutionPriorities:
+  - {serviceType: bind, priority: 0}
+  - {serviceType: dns-client, priority: 1}
+  - {serviceType: keepalived, priority: 2}
+  - {serviceType: haproxy, priority: 3}
+  - {serviceType: clickhouse, priority: 4}
+  - {serviceType: docker, priority: 4}
+  - {serviceType: kafka, priority: 4}
+  - {serviceType: postgresql, priority: 4}
+  - {serviceType: redis, priority: 4}
+  - {serviceType: vault, priority: 4}

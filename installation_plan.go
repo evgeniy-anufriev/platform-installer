@@ -71,7 +71,7 @@ type InstallationPlanFinding struct {
 	SafeMessage string `json:"safeMessage"`
 }
 
-func (a *App) CreateInstallationPlan() InstallationPlanOperation {
+func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanOperation {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.reconcileEditSessionLocked()
@@ -97,7 +97,7 @@ func (a *App) CreateInstallationPlan() InstallationPlanOperation {
 	}
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
-	record, err := binding.plans.CreatePlan(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease)
+	record, err := binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, deploymentOrder)
 	if err != nil {
 		if binding.dynamic {
 			a.invalidateDynamicBindingLocked()

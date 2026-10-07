@@ -1,0 +1,61 @@
+---
+- name: Resolve machine-runtime marker for the primary zone
+  ansible.builtin.set_fact:
+    _platform_bind_zone_recovery_marker: >-
+      {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml
+
+- name: Inspect interrupted full-reconcile marker
+  ansible.builtin.stat:
+    path: "{{ _platform_bind_zone_recovery_marker }}"
+  register: _platform_bind_zone_recovery_stat
+
+- name: Load interrupted full-reconcile marker
+  ansible.builtin.slurp:
+    src: "{{ _platform_bind_zone_recovery_marker }}"
+  register: _platform_bind_zone_recovery_file
+  when: _platform_bind_zone_recovery_stat.stat.exists
+
+- name: Validate interrupted full-reconcile marker identity
+  ansible.builtin.assert:
+    that:
+      - (_platform_bind_zone_recovery_file.content | b64decode | from_yaml).projectId == platform_bind_runtime_projection.generatedState.metadata.projectId
+      - (_platform_bind_zone_recovery_file.content | b64decode | from_yaml).deploymentId == platform_bind_inspected_deployment.key
+      - (_platform_bind_zone_recovery_file.content | b64decode | from_yaml).zone == platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone
+    fail_msg: BIND_ZONE_RECOVERY_MARKER_INVALID
+  when: _platform_bind_zone_recovery_stat.stat.exists
+
+- name: Attempt recovery thaw for an interrupted primary zone
+  ansible.builtin.command:
+    argv: ["{{ platform_bind_rndc_binary }}", thaw, "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"]
+  changed_when: false
+  failed_when: false
+  register: _platform_bind_zone_recovery_thaw
+  when: _platform_bind_zone_recovery_stat.stat.exists
+
+- name: Verify recovered primary zone is authoritative
+  ansible.builtin.command:
+    argv: [dig, "@127.0.0.1", "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}", SOA, +norecurse, +noall, +answer, +comments]
+  changed_when: false
+  register: _platform_bind_zone_recovery_authority
+  failed_when: >-
+    _platform_bind_zone_recovery_authority.rc != 0 or
+    'status: NOERROR' not in _platform_bind_zone_recovery_authority.stdout or
+    'flags: qr aa' not in _platform_bind_zone_recovery_authority.stdout
+  when: _platform_bind_zone_recovery_stat.stat.exists
+
+- name: Verify recovered primary zone accepts a local dynamic update
+  ansible.builtin.include_tasks: update_a_record.yml
+  vars:
+    platform_bind_force_dynamic_update_probe: true
+    platform_bind_a_record:
+      zone: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"
+      owner: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.fqdn }}."
+      addresses: ["{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.address }}"]
+      ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl }}"
+  when: _platform_bind_zone_recovery_stat.stat.exists
+
+- name: Clear interrupted full-reconcile marker only after verified recovery
+  ansible.builtin.file:
+    path: "{{ _platform_bind_zone_recovery_marker }}"
+    state: absent
+  when: _platform_bind_zone_recovery_stat.stat.exists

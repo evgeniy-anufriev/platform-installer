@@ -1,0 +1,48 @@
+---
+- name: Resolve every source endpoint before probing the provider route
+  ansible.builtin.command:
+    argv: [getent, ahostsv4, "{{ item }}"]
+  loop: "{{ _platform_integration_source_fqdns }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _platform_integration_endpoint_dns
+  changed_when: false
+  failed_when: false
+
+- name: Require every source endpoint hostname to resolve
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout | length > 0
+    fail_msg: SERVICE_ENDPOINT_DNS_UNRESOLVED
+  loop: "{{ _platform_integration_endpoint_dns.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Probe each source endpoint through the public HAProxy HTTPS listener
+  ansible.builtin.uri:
+    url: >-
+      https://{{ item }}{{ ':' ~ _platform_integration_probe_port_override
+        if _platform_integration_probe_port_override is defined else '' }}/
+    method: GET
+    validate_certs: false
+    follow_redirects: none
+    return_content: false
+  loop: "{{ _platform_integration_source_fqdns }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _platform_integration_endpoint_http
+  changed_when: false
+  failed_when: false
+
+- name: Require a routed HTTP response other than HAProxy unavailable statuses
+  ansible.builtin.assert:
+    that:
+      - item.status is defined
+      - item.status | int >= 100
+      - item.status | int <= 599
+      - item.status | int not in [502, 503]
+    fail_msg: SERVICE_ENDPOINT_UNAVAILABLE
+  loop: "{{ _platform_integration_endpoint_http.results }}"
+  loop_control:
+    label: "{{ item.item }}"

@@ -24,6 +24,10 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("Validate BIND generated state against the published project contract", apply)
         self.assertIn("hostvars['localhost'].platform_bind_runtime_projection", role)
         self.assertNotIn("platform_generated_state.serviceDeployments[item.key].dns.currentSerial", role)
+        self.assertIn("include_service_endpoints: true", apply)
+        self.assertIn("Resolve base-only DNS content for ordinary BIND Apply", apply)
+        self.assertIn("include_service_endpoints: false", apply)
+        self.assertIn("include_group_wildcards: true", apply)
 
     def test_candidate_failure_cannot_cross_the_cluster_activation_barrier(self):
         apply = (ROOT / "playbooks" / "apply.yml").read_text(encoding="utf-8")
@@ -34,11 +38,68 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("platform_bind_phase: activate", apply)
         self.assertIn("platform_bind_phase: start", apply)
 
-    def test_primary_only_owns_allow_update_policy(self):
+    def test_base_apply_and_full_reconcile_have_separate_dns_ownership(self):
+        apply = (ROOT / "playbooks" / "apply.yml").read_text(encoding="utf-8")
+        full_reconcile = (ROOT / "playbooks" / "reconcile.yml").read_text(encoding="utf-8")
+        prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
+        activate = (ROLE / "tasks" / "activate.yml").read_text(encoding="utf-8")
+        start = (ROLE / "tasks" / "start.yml").read_text(encoding="utf-8")
+        reconcile_zone = (ROLE / "tasks" / "reconcile_primary_zone.yml").read_text(encoding="utf-8")
+        self.assertIn("rndc, sync", apply)
+        self.assertIn("_platform_bind_observed_live_serials[item.key]", apply)
+        self.assertIn("platform_bind_full_reconcile | default(false) | bool", apply)
+        self.assertIn("platform_bind_full_reconcile: true", full_reconcile)
+        self.assertIn("Recover interrupted full zone replacement before any new BIND changes", prepare)
+        self.assertIn("Replace existing primary zones only during explicit full reconcile", activate)
+        self.assertIn("Install complete canonical full-reconcile zone candidate", reconcile_zone)
+        self.assertIn("BIND_FULL_RECONCILE_SERIAL_RACE", reconcile_zone)
+        self.assertIn("Always attempt to thaw a marked primary zone", reconcile_zone)
+        self.assertIn("Verify replaced primary zone accepts local dynamic updates", reconcile_zone)
+        self.assertIn("Clear primary-zone marker after authority and update verification", reconcile_zone)
+        self.assertIn("Add or update only the base-owned authoritative A records", start)
+        self.assertNotIn("platform_bind_runtime_serial_drift", start)
+
+    def test_primary_only_uses_local_dynamic_update_policy(self):
         template = (ROLE / "templates" / "platform-installer.conf.j2").read_text(encoding="utf-8")
         primary, secondary = template.split("{% else %}", 1)
-        self.assertIn("allow-update { none; };", primary)
-        self.assertNotIn("allow-update { none; };", secondary)
+        self.assertIn("update-policy local;", primary)
+        self.assertNotIn("allow-update", primary)
+        self.assertNotIn("update-policy", secondary)
+
+    def test_a_record_update_is_exact_idempotent_and_primary_scoped(self):
+        playbook = (ROOT / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
+        tasks = (ROLE / "tasks" / "update_a_record.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_deployments[item.bindDeploymentId].roles | default([]) == ['primary']", playbook)
+        self.assertIn("tasks_from: update_a_record.yml", playbook)
+        self.assertIn("argv: [nsupdate, -l]", tasks)
+        self.assertIn("_platform_bind_a_record_current_addresses != _platform_bind_a_record_desired_addresses", tasks)
+        self.assertIn("update delete ", tasks)
+        self.assertIn("update add ", tasks)
+        self.assertIn("BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID", tasks)
+        self.assertIn("BIND_DNS_A_RECORD_UPDATE_ADDRESS_INVALID", tasks)
+        self.assertIn("_platform_bind_a_record_after_addresses == _platform_bind_a_record_desired_addresses", tasks)
+        self.assertIn("Build exact desired A record set including TTL", tasks)
+        self.assertIn("stdin: |-", tasks)
+        self.assertNotIn("rndc freeze", tasks)
+        self.assertNotIn("zone.j2", tasks)
+
+    def test_generic_source_hook_uses_core_selection_and_never_full_reconciles(self):
+        integration = ROOT.parent / "integrations" / "playbooks" / "apply-endpoint.yml"
+        content = integration.read_text(encoding="utf-8")
+        self.assertIn("platform.core.resolve_service_integrations", content)
+        self.assertIn("platform.core.resolve_service_endpoints", content)
+        self.assertIn("platform.core.resolve_dns_zones", content)
+        self.assertIn("include_group_wildcards: false", content)
+        self.assertIn("platform_execution_service_deployment", content)
+        self.assertIn("../../haproxy/playbooks/integrate.yml", content)
+        self.assertIn("../../bind/playbooks/integrate.yml", content)
+        self.assertNotIn("reconcile.yml", content)
+        for service in ("vault", "redis", "clickhouse"):
+            apply = (ROOT.parent / service / "playbooks" / "apply.yml").read_text(encoding="utf-8")
+            self.assertIn("../../integrations/playbooks/apply-endpoint.yml", apply)
+        for service in ("bind", "dns-client", "keepalived", "haproxy", "postgresql", "kafka", "docker"):
+            apply = (ROOT.parent / service / "playbooks" / "apply.yml").read_text(encoding="utf-8")
+            self.assertNotIn("apply-endpoint.yml", apply)
 
     def test_zone_record_fields_use_unambiguous_mapping_access(self):
         template = (ROLE / "templates" / "zone.j2").read_text(encoding="utf-8")
@@ -123,6 +184,15 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("Determine whether BIND candidate assembly is required", prepare)
         self.assertIn("platform_bind_candidate_rebuild_required", prepare)
         self.assertIn("checksum_algorithm: sha256", prepare)
+        self.assertIn("Inspect existing primary zone state before candidate rendering", prepare)
+        self.assertIn("not (_platform_bind_existing_primary_zone_by_deployment[item.key]", prepare)
+        inspect = (ROLE / "tasks" / "inspect_primary_zone.yml").read_text(encoding="utf-8")
+        self.assertIn("BIND_ZONE_JOURNAL_WITHOUT_MASTER_FILE", inspect)
+        activate = (ROLE / "tasks" / "activate.yml").read_text(encoding="utf-8")
+        self.assertIn("not (_platform_bind_existing_primary_zone_by_deployment[item.key]", activate)
+        start = (ROLE / "tasks" / "start.yml").read_text(encoding="utf-8")
+        self.assertIn("Add or update only the base-owned authoritative A records", start)
+        self.assertNotIn("platform_bind_runtime_serial_drift", start)
 
     def test_changed_active_artifacts_reload_running_named(self):
         activate = (ROLE / "tasks" / "activate.yml").read_text(encoding="utf-8")
@@ -130,7 +200,8 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("Record whether active BIND artifacts changed", activate)
         self.assertIn("Reload active BIND after changed active artifacts", start)
         self.assertIn("Enable and start inactive BIND", start)
-        self.assertIn("Detect BIND served serial drift from active generated state", start)
+        self.assertIn("Add or update only the base-owned authoritative A records", start)
+        self.assertNotIn("serial drift", start)
 
 
 if __name__ == "__main__":

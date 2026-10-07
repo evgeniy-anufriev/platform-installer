@@ -1,0 +1,133 @@
+---
+# Generic source-owned endpoint integration. The selected deployment ID comes
+# from Core's per-deployment Apply context or an explicit standalone variable.
+- name: Resolve the current source endpoint and its providers without mutation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Initialize an empty endpoint integration projection
+      ansible.builtin.set_fact:
+        _platform_integration_source_id: "{{ platform_execution_service_deployment | default(platform_integration_source_deployment_id | default('')) }}"
+        platform_service_integration_projection:
+          dnsDeployments: []
+          haproxyDeployments: []
+        platform_bind_source_dns_records: []
+
+    - name: Require an explicit source identity when the project has endpoints
+      ansible.builtin.assert:
+        that:
+          - _platform_integration_source_id | length > 0
+        fail_msg: SERVICE_INTEGRATION_SOURCE_ID_REQUIRED
+      when: platform_desired_state.serviceDeployments | default({}) | dict2items | selectattr('value.endpointGroup', 'defined') | list | length > 0 and _platform_integration_source_id | length == 0
+
+    - name: Resolve providers for the selected source deployment
+      platform.core.resolve_service_integrations:
+        desired_state: "{{ platform_desired_state }}"
+        source_service_types: []
+        source_deployment_id: "{{ _platform_integration_source_id }}"
+      register: _platform_integration_resolution
+      when: _platform_integration_source_id | length > 0
+
+    - name: Publish selected source provider projection
+      ansible.builtin.set_fact:
+        platform_service_integration_projection: "{{ _platform_integration_resolution.resolved_service_integrations.integrations }}"
+      when: _platform_integration_resolution is not skipped
+
+    - name: Load service catalog for endpoint projection
+      ansible.builtin.include_vars:
+        file: "{{ platform_service_catalog_path }}"
+        name: _platform_integration_catalog_file
+      when:
+        - _platform_integration_source_id | length > 0
+        - platform_service_integration_projection.dnsDeployments | length > 0
+
+    - name: Collect project inventory projections for Core endpoint resolution
+      ansible.builtin.set_fact:
+        _platform_integration_inventory_hosts: >-
+          {{ _platform_integration_inventory_hosts | default({}) |
+             combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
+        _platform_integration_inventory_deployments: >-
+          {{ _platform_integration_inventory_deployments | default({}) |
+             combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      no_log: true
+      when:
+        - _platform_integration_source_id | length > 0
+        - platform_service_integration_projection.dnsDeployments | length > 0
+
+    - name: Resolve only the selected source endpoint
+      platform.core.resolve_service_endpoints:
+        desired_state: "{{ platform_desired_state }}"
+        service_catalog: "{{ _platform_integration_catalog_file.platform_service_catalog | default(_platform_integration_catalog_file, true) }}"
+        inventory_deployments: "{{ _platform_integration_inventory_deployments }}"
+        deployment_ids: ["{{ _platform_integration_source_id }}"]
+      register: _platform_integration_endpoint_resolution
+      when:
+        - _platform_integration_source_id | length > 0
+        - platform_service_integration_projection.dnsDeployments | length > 0
+
+    - name: Resolve source-only DNS records without group wildcard changes
+      platform.core.resolve_dns_zones:
+        desired_state: "{{ platform_desired_state }}"
+        service_catalog: "{{ _platform_integration_catalog_file.platform_service_catalog | default(_platform_integration_catalog_file, true) }}"
+        inventory_hosts: "{{ _platform_integration_inventory_hosts }}"
+        inventory_deployments: "{{ _platform_integration_inventory_deployments }}"
+        source_deployment_ids: ["{{ _platform_integration_source_id }}"]
+        include_service_endpoints: true
+        include_group_wildcards: false
+      register: _platform_integration_dns_resolution
+      when:
+        - _platform_integration_source_id | length > 0
+        - platform_service_integration_projection.dnsDeployments | length > 0
+
+    - name: Collect only this source's deployment and opted-in host endpoint names
+      ansible.builtin.set_fact:
+        _platform_integration_source_fqdns: >-
+          {{ ([ _platform_integration_endpoint_resolution.resolved_service_endpoints.endpoints[_platform_integration_source_id].fqdn ]
+              if _platform_integration_source_id in _platform_integration_endpoint_resolution.resolved_service_endpoints.endpoints else []) +
+             (_platform_integration_endpoint_resolution.resolved_service_endpoints.hostEndpoints.values() |
+              selectattr('serviceDeploymentId', 'equalto', _platform_integration_source_id) |
+              map(attribute='fqdn') | list) }}
+      when:
+        - _platform_integration_dns_resolution is not skipped
+
+    - name: Build exact source DNS updates for resolved BIND deployments
+      ansible.builtin.set_fact:
+        platform_bind_source_dns_records: >-
+          {{ platform_bind_source_dns_records + [{
+             'bindDeploymentId': item.0,
+             'zone': _platform_integration_dns_resolution.resolved_dns_zones.zones[item.0].zone,
+             'owner': item.1 ~ '.',
+             'addresses': (record_matches | first).values,
+             'ttl': _platform_integration_dns_resolution.resolved_dns_zones.zones[item.0].defaultTtl
+          }] }}
+      vars:
+        record_matches: >-
+          {{ _platform_integration_dns_resolution.resolved_dns_zones.zones[item.0].records |
+             selectattr('owner', 'equalto', item.1 ~ '.') | list }}
+      loop: "{{ platform_service_integration_projection.dnsDeployments | product(_platform_integration_source_fqdns | default([])) | list }}"
+      loop_control:
+        label: "{{ item.1 }}"
+      when:
+        - _platform_integration_dns_resolution is not skipped
+        - record_matches | length == 1
+
+- import_playbook: ../../haproxy/playbooks/integrate.yml
+  when: hostvars['localhost'].platform_service_integration_projection.haproxyDeployments | length > 0
+
+- import_playbook: ../../bind/playbooks/integrate.yml
+  when: hostvars['localhost'].platform_bind_source_dns_records | length > 0
+  vars:
+    platform_bind_source_dns_records: "{{ hostvars['localhost'].platform_bind_source_dns_records }}"
+
+- name: Verify the externally routed source endpoint after provider updates
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Probe source endpoint DNS and HTTP availability
+      ansible.builtin.include_tasks: ../tasks/probe-endpoint.yml
+      when:
+        - platform_service_integration_projection.haproxyDeployments | length > 0
+        - _platform_integration_source_fqdns | default([]) | length > 0

@@ -10,10 +10,10 @@ class Net042PlaybookContractTests(unittest.TestCase):
         with open(os.path.join(ROOT, relative_path), encoding="utf-8") as handle:
             return handle.read()
 
-    def test_postgresql_apply_runs_the_shared_integration_stage_after_service_apply(self):
+    def test_postgresql_apply_does_not_assume_an_endpoint_or_reconcile_providers(self):
         playbook = self.read("services/postgresql/playbooks/apply.yml")
-        self.assertIn("../../integrations/playbooks/reconcile.yml", playbook)
-        self.assertLess(playbook.index("platform.postgresql.postgresql"), playbook.index("../../integrations/playbooks/reconcile.yml"))
+        self.assertIn("platform.postgresql.postgresql", playbook)
+        self.assertNotIn("../../integrations/playbooks/reconcile.yml", playbook)
 
     def test_shared_stage_orders_provider_owned_entrypoints(self):
         playbook = self.read("services/integrations/playbooks/reconcile.yml")

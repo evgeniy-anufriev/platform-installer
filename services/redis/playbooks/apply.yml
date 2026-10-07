@@ -15,3 +15,5 @@
   roles:
     - role: platform.redis.redis_tls
       platform_redis_verify_only: false
+
+- import_playbook: ../../integrations/playbooks/apply-endpoint.yml

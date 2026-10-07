@@ -1,0 +1,30 @@
+---
+- name: Prepare and validate HAProxy candidate for one endpoint source
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.haproxy.haproxy
+      platform_haproxy_phase: prepare
+      platform_haproxy_partial_deployment_id: "{{ platform_execution_service_deployment }}"
+
+- name: Activate one source backend after cluster-wide candidate validation
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.haproxy.haproxy
+      platform_haproxy_phase: activate
+      platform_haproxy_partial_deployment_id: "{{ platform_execution_service_deployment }}"
+
+- name: Reload HAProxy after source backend activation
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - role: platform.haproxy.haproxy
+      platform_haproxy_phase: start
+      platform_haproxy_partial_deployment_id: "{{ platform_execution_service_deployment }}"

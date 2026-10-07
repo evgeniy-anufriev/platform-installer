@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   InstallationEventView,
   InstallationPlanOperation,
@@ -26,6 +26,55 @@ const tabLabels: Array<{ id: InstallationTab; label: string }> = [
   { id: "result", label: "Результат" },
 ];
 const executionEventWindowSize = 512;
+
+export type ServicePriorityInput = {
+  serviceType: string;
+  priority: number | null;
+};
+
+export type ServiceDeploymentInput = {
+  deploymentId: string;
+  serviceType: string;
+};
+
+export function deploymentOrderFromPriorities(
+  deployments: ServiceDeploymentInput[],
+  priorities: ServicePriorityInput[],
+): { order: string[]; missingTypes: string[] } {
+  const byType = new Map(
+    priorities.map((item, index) => [item.serviceType, { ...item, index }]),
+  );
+  const missingTypes = [
+    ...new Set(
+      deployments
+        .filter(
+          (item) =>
+            !byType.has(item.serviceType) ||
+            byType.get(item.serviceType)?.priority == null,
+        )
+        .map((item) => item.serviceType),
+    ),
+  ].sort();
+  if (missingTypes.length) return { order: [], missingTypes };
+  return {
+    order: [...deployments]
+      .sort((left, right) => {
+        const leftPriority = byType.get(left.serviceType)!;
+        const rightPriority = byType.get(right.serviceType)!;
+        return (
+          leftPriority.priority! - rightPriority.priority! ||
+          leftPriority.index - rightPriority.index ||
+          (left.deploymentId < right.deploymentId
+            ? -1
+            : left.deploymentId > right.deploymentId
+              ? 1
+              : 0)
+        );
+      })
+      .map((item) => item.deploymentId),
+    missingTypes: [],
+  };
+}
 
 const verificationLabel = (status: string) => {
   switch (status) {
@@ -138,6 +187,8 @@ export function InstallationPage({
   plan,
   busy,
   onCreatePlan,
+  serviceDeployments = [],
+  serviceExecutionPriorities = [],
   onApprovePlan,
   run,
   runPlan,
@@ -161,7 +212,9 @@ export function InstallationPage({
   onOpenServers: () => void;
   plan?: InstallationPlanOperation;
   busy: boolean;
-  onCreatePlan: () => void;
+  onCreatePlan: (deploymentOrder: string[]) => void;
+  serviceDeployments?: ServiceDeploymentInput[];
+  serviceExecutionPriorities?: ServicePriorityInput[];
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
   run?: InstallationRunOperation;
   runPlan?: InstallationPlanView;
@@ -179,6 +232,23 @@ export function InstallationPage({
   onRefreshSecretOutputs?: () => void;
   onDeliverSecretOutput?: (packageId: string) => void;
 }) {
+  const [orderError, setOrderError] = useState("");
+  const deploymentOrder = useMemo(
+    () => deploymentOrderFromPriorities(serviceDeployments, serviceExecutionPriorities),
+    [serviceDeployments, serviceExecutionPriorities],
+  );
+  const createPlan = () => {
+    if (deploymentOrder.missingTypes.length) {
+      setOrderError(
+        "Для типов сервисов " +
+          deploymentOrder.missingTypes.join(", ") +
+          " не задан приоритет в application.yml.",
+      );
+      return;
+    }
+    setOrderError("");
+    onCreatePlan(deploymentOrder.order);
+  };
   const node = state?.executionNode;
   const presentation = installationDisplay(state, run, runProgress);
   return (
@@ -370,7 +440,8 @@ export function InstallationPage({
             draftActive={draftActive}
             operation={plan}
             busy={busy}
-            onCreatePlan={onCreatePlan}
+            onCreatePlan={createPlan}
+            orderError={orderError}
             onApprovePlan={onApprovePlan}
             onStart={onStart}
             run={run}
@@ -411,6 +482,7 @@ function PlanStage({
   operation,
   busy,
   onCreatePlan,
+  orderError,
   onApprovePlan,
   onStart,
   run,
@@ -422,6 +494,7 @@ function PlanStage({
   operation?: InstallationPlanOperation;
   busy: boolean;
   onCreatePlan: () => void;
+  orderError: string;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
   onStart: (planId: string) => void;
   run?: InstallationRunOperation;
@@ -449,6 +522,7 @@ function PlanStage({
       <article className="card installation-empty">
         <h2>План</h2>
         <p>{operation?.error?.message || "Свежий план ещё не создан."}</p>
+        {orderError && <p className="error" role="alert">{orderError}</p>}
         <button onClick={onCreatePlan} disabled={busy}>
           Сформировать свежий план
         </button>
@@ -520,9 +594,12 @@ function PlanStage({
               Сохраните или отмените черновик и сформируйте свежий план.
             </p>
             {state?.status === "READY_TO_PLAN" && (
+              <>
+              {orderError && <p className="error" role="alert">{orderError}</p>}
               <button onClick={onCreatePlan} disabled={busy}>
                 Сформировать свежий план
               </button>
+              </>
             )}
           </article>
         )}

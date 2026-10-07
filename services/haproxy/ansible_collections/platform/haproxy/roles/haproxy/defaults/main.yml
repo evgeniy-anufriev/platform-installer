@@ -17,3 +17,4 @@ platform_haproxy_global:
 platform_haproxy_defaults: {mode: http, timeout_connect: 5s, timeout_client: 30s, timeout_server: 30s}
 platform_haproxy_stats_backend_defaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 platform_haproxy_phase: prepare
+platform_haproxy_full_reconcile: false

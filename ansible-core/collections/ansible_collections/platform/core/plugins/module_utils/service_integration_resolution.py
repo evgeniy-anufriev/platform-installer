@@ -8,7 +8,7 @@ except ImportError:
     from project_validation import canonical_digest
 
 
-def service_integration_relations(desired_state, source_service_types=None):
+def service_integration_relations(desired_state, source_service_types=None, source_deployment_id=None):
     """Return deterministic source-to-provider relations from canonical state."""
     desired_state = desired_state if isinstance(desired_state, dict) else {}
     deployments = desired_state.get("serviceDeployments", {})
@@ -19,8 +19,11 @@ def service_integration_relations(desired_state, source_service_types=None):
     relations = []
 
     for source_id, source in sorted(deployments.items()):
-        if not isinstance(source, dict) or source.get("serviceType") not in source_service_types:
+        if source_deployment_id is not None and source_id != source_deployment_id:
             continue
+        if not isinstance(source, dict) or source.get("serviceType") not in source_service_types:
+            if source_deployment_id is None or not isinstance(source, dict):
+                continue
         dns_deployments = set()
         endpoint_group_id = source.get("endpointGroup")
         endpoint_group = groups.get(endpoint_group_id)
@@ -48,13 +51,24 @@ def service_integration_relations(desired_state, source_service_types=None):
     return relations
 
 
-def resolve_service_integrations(desired_state, source_service_types=None):
+def resolve_service_integrations(desired_state, source_service_types=None, source_deployment_id=None):
     """Resolve provider deployments implied by successful source lifecycles.
 
     This intentionally returns only provider deployment identifiers. Providers
     rebuild their complete models from canonical desired state themselves.
     """
-    relations = service_integration_relations(desired_state, source_service_types)
+    desired_state = desired_state if isinstance(desired_state, dict) else {}
+    deployments = desired_state.get("serviceDeployments", {})
+    deployments = deployments if isinstance(deployments, dict) else {}
+    findings = []
+    if source_deployment_id is not None and source_deployment_id not in deployments:
+        findings.append({
+            "apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
+            "code": "SERVICE_INTEGRATION_SOURCE_NOT_FOUND", "status": "BLOCKED",
+            "category": "service-integration", "field": "serviceDeployments.%s" % source_deployment_id,
+            "safeMessage": "Selected source service deployment does not exist",
+        })
+    relations = service_integration_relations(desired_state, source_service_types, source_deployment_id)
     dns_deployments = set()
     haproxy_deployments = set()
     for relation in relations:
@@ -63,13 +77,15 @@ def resolve_service_integrations(desired_state, source_service_types=None):
             haproxy_deployments.add(relation["haproxyDeploymentId"])
 
     result = {
+        "sources": relations,
         "dnsDeployments": sorted(dns_deployments),
         "haproxyDeployments": sorted(haproxy_deployments),
     }
     result["fingerprint"] = canonical_digest(result)
     return {
-        "apiVersion": "platform.installer/resolved-service-integrations/v1alpha1",
+        "apiVersion": "platform.installer/resolved-service-integrations/v1alpha2",
         "kind": "ResolvedServiceIntegrations",
-        "status": "PASS",
+        "status": "BLOCKED" if findings else "PASS",
         "integrations": result,
+        "findings": findings,
     }

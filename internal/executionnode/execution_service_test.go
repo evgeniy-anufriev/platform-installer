@@ -15,13 +15,15 @@ type lifecycleBuilder struct {
 	calls         int
 	stale         bool
 	targets       []string
+	orders        [][]string
 	requiresPKI   bool
 	typedInputs   bool
 	runtimeValues bool
 }
 
-func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any) (DeploymentPlan, error) {
+func (b *lifecycleBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any, order []string) (DeploymentPlan, error) {
 	b.calls++
+	b.orders = append(b.orders, append([]string(nil), order...))
 	fp := "sha256:plan"
 	if b.stale && b.calls > 1 {
 		fp = "sha256:changed"
@@ -177,6 +179,30 @@ func TestExecutionServiceApprovalFreshPlanAndOneShotStart(t *testing.T) {
 	}
 	if len(c.requests) != 1 || c.requests[0].StartAttemptID == "" || c.requests[0].LeaseID != "" {
 		t.Fatalf("UI-02 Start did not use the closed v2 request: %#v", c.requests)
+	}
+}
+
+func TestExecutionPlanOrderIsBoundAndReusedForFreshStartValidation(t *testing.T) {
+	builder := &lifecycleBuilder{}
+	service := NewExecutionService(builder, &lifecycleClient{})
+	want := []string{"bind-main", "haproxy-main", "vault-ha"}
+	plan, err := service.CreatePlanWithOrder(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"}, want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want[0] = "mutated-after-plan"
+	stored, err := service.GetPlan(plan.ID)
+	if err != nil || stored.DeploymentOrder[0] != "bind-main" {
+		t.Fatalf("stored order=%v err=%v", stored.DeploymentOrder, err)
+	}
+	if err := service.ApprovePlan(plan.ID, stored.Plan.Acknowledgements); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Start(context.Background(), Node{}, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(builder.orders) != 2 || strings.Join(builder.orders[0], ",") != "bind-main,haproxy-main,vault-ha" || strings.Join(builder.orders[1], ",") != "bind-main,haproxy-main,vault-ha" {
+		t.Fatalf("plan order was not reused on start: %#v", builder.orders)
 	}
 }
 
@@ -580,7 +606,7 @@ type servicePlanBuilder struct {
 	calls        int
 }
 
-func (b *servicePlanBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any) (DeploymentPlan, error) {
+func (b *servicePlanBuilder) BuildDeploymentPlan(_ context.Context, _ Node, _ string, release map[string]any, _ []string) (DeploymentPlan, error) {
 	b.calls++
 	return DeploymentPlan{ID: "service-plan", Status: "EXECUTABLE", ProjectIdentity: "service-project", ProjectRevision: "revision", PlanFingerprint: "plan-fingerprint", RuntimeRelease: release, ArtifactRequirements: b.requirements, stagingID: "staging-1", executionManifestDigest: "sha256:test"}, nil
 }

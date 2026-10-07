@@ -106,6 +106,18 @@ control receives focus again on close. The HTML mockup demonstrates these
 layout and interaction goals; it is not proof that the production Wails UI
 already meets them.
 
+### Shared typography and dialog rhythm
+
+Use the current Certificates screen as the production typography reference:
+page title 22 px, section heading 14 px, subsection heading 13 px, primary
+text and form controls 12 px, secondary text 11 px, and helper/caption text
+10 px. Dense event/data tables may use 10 px to preserve information density;
+branding may remain larger. Apply the same hierarchy on every application
+screen and modal instead of page-specific heading scales. Modal forms use a
+compact 10 px vertical gap, 16 px inner padding, and approximately 1.3 line
+height; labels and their controls are separated by 4 px. Long forms keep
+bounded internal scrolling and visible action footers.
+
 The global installation label has distinct **plan not ready**, **not started**,
 **running**, **failed** and **completed** states. It reflects the authoritative
 run/plan lifecycle, not the currently selected tab or the number of callback

@@ -74,7 +74,9 @@ def _provider_addresses(deployments, definitions, endpoint_group, findings):
     return providers[0][1], providers
 
 
-def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory_deployments):
+def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory_deployments,
+                      include_service_endpoints=True, source_deployment_ids=None,
+                      include_group_wildcards=True):
     """Return deterministic BIND zones for all declared BIND deployments."""
     desired_state = desired_state if isinstance(desired_state, dict) else {}
     deployments = desired_state.get("serviceDeployments", {})
@@ -86,12 +88,28 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
     findings, zones = [], {}
 
-    endpoint_projection = resolve_service_endpoints(
-        desired_state, service_catalog, inventory_deployments=inventory_deployments
-    )
-    findings.extend(endpoint_projection.get("findings", []))
-    endpoints = endpoint_projection.get("endpoints", {}) if endpoint_projection.get("status") == "PASS" else {}
-    host_endpoints = endpoint_projection.get("hostEndpoints", {}) if endpoint_projection.get("status") == "PASS" else {}
+    if not isinstance(include_service_endpoints, bool):
+        findings.append(_finding("DNS_ENDPOINT_MODE_INVALID", "includeServiceEndpoints", "DNS service endpoint selection must be a boolean"))
+        include_service_endpoints = False
+    if not isinstance(include_group_wildcards, bool):
+        findings.append(_finding("DNS_WILDCARD_MODE_INVALID", "includeGroupWildcards", "DNS endpoint-group wildcard selection must be a boolean"))
+        include_group_wildcards = False
+    if source_deployment_ids is not None and (
+            not isinstance(source_deployment_ids, list) or
+            any(not isinstance(item, str) or not item for item in source_deployment_ids) or
+            len(source_deployment_ids) != len(set(source_deployment_ids))):
+        findings.append(_finding("DNS_SOURCE_DEPLOYMENT_SELECTION_INVALID", "sourceDeploymentIds", "DNS source deployment selection must contain unique deployment IDs"))
+        source_deployment_ids = []
+    endpoints, host_endpoints = {}, {}
+    if include_service_endpoints:
+        endpoint_projection = resolve_service_endpoints(
+            desired_state, service_catalog, inventory_deployments=inventory_deployments,
+            deployment_ids=source_deployment_ids,
+        )
+        findings.extend(endpoint_projection.get("findings", []))
+        if endpoint_projection.get("status") == "PASS":
+            endpoints = endpoint_projection.get("endpoints", {})
+            host_endpoints = endpoint_projection.get("hostEndpoints", {})
 
     # Host records are mandatory for every canonical project host, even when a
     # malformed DNS participant would otherwise short-circuit a zone.
@@ -149,7 +167,14 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
 
         endpoint_records = dict(endpoints)
         endpoint_records.update(host_endpoints)
-        endpoint_groups = sorted(set(item.get("endpointGroupId") for item in endpoint_records.values() if isinstance(item, dict)))
+        endpoint_groups = set(item.get("endpointGroupId") for item in endpoint_records.values() if isinstance(item, dict))
+        if not include_service_endpoints:
+            endpoint_groups.update(
+                group_id for group_id, group in groups.items()
+                if isinstance(group, dict) and isinstance(group.get("address"), dict)
+                and group["address"].get("wildcard") is True
+            )
+        endpoint_groups = sorted(endpoint_groups)
         provider_values = {}
         for group_id in endpoint_groups:
             group = groups.get(group_id, {})
@@ -177,8 +202,25 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
                 continue
             owners[owner] = set(addresses)
             group = groups[group_id]
-            if (group.get("address") or {}).get("wildcard") is True:
+            if (include_service_endpoints and include_group_wildcards and
+                    (group.get("address") or {}).get("wildcard") is True):
                 wildcard = "*.%s" % (group["address"]["domain"])
+                if wildcard in owners and owners[wildcard] != set(addresses):
+                    findings.append(_finding("DNS_RECORD_COLLISION", "endpointGroups.%s.address.wildcard" % group_id, "Wildcard DNS name has incompatible address ownership", {"fqdn": wildcard}))
+                else:
+                    owners[wildcard] = set(addresses)
+
+        if not include_service_endpoints and include_group_wildcards:
+            for group_id in endpoint_groups:
+                group = groups.get(group_id, {})
+                address = group.get("address", {}) if isinstance(group, dict) else {}
+                domain = address.get("domain") if isinstance(address, dict) else None
+                if address.get("wildcard") is not True or not isinstance(domain, str) or not _inside(domain, zone):
+                    continue
+                addresses = provider_values.get(group_id)
+                if not addresses:
+                    continue
+                wildcard = "*.%s" % domain
                 if wildcard in owners and owners[wildcard] != set(addresses):
                     findings.append(_finding("DNS_RECORD_COLLISION", "endpointGroups.%s.address.wildcard" % group_id, "Wildcard DNS name has incompatible address ownership", {"fqdn": wildcard}))
                 else:

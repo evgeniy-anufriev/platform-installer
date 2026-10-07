@@ -1,3 +1,5 @@
 ---
-# Provider-owned full-model entrypoint for service-driven reconciliation.
+# Provider-owned explicit complete-model reconciliation.
 - import_playbook: apply.yml
+  vars:
+    platform_haproxy_full_reconcile: true

@@ -404,3 +404,31 @@ in development with explicit `-browser-allow-insecure-dev-http` opt-in; it is
 not accepted for production systems or data. HTTPS, explicit external HTTPS
 origin handling, and negative origin/transport tests are scheduled for v1.0.
 Local Windows Browser mode and Wails mode are unaffected.
+
+## ADR-030: BIND point updates retain removed endpoints until explicit reconcile
+
+Status: Accepted by the owner for Execution Order 01, 2026-10-07.
+
+Base BIND Apply owns project hosts, SOA and only endpoint-group wildcard
+records whose existing `address.wildcard` setting is `true`. A source service
+with an endpoint may idempotently publish only its exact DNS record; this path
+does not delete a record when the endpoint is later removed or unlinked. Such
+records remain until an operator explicitly runs the existing full BIND
+`reconcile.yml`, which retains its complete-model deletion behavior and stays
+opt-in.
+
+The managed primary uses BIND `update-policy local;` instead of
+`allow-update { none; };` for the managed zone. The generated host-local key is
+root-readable only. The update task sends only the resolved zone and exact
+source owner, but the local key itself is zone-wide authority, not a per-source
+ACL; this is an explicitly accepted host-local privileged boundary. Key bytes
+must not appear in events or task output.
+
+Before full reconciliation replaces a dynamically updated zone, it synchronizes
+the BIND journal and uses the SOA serial actually served by the primary as the
+lower bound for a validly newer candidate serial. A machine-runtime per-zone
+recovery marker remains until the role proves the zone authoritative and
+writable after thaw/recovery. Ansible cleanup attempts thaw on post-freeze
+failure, and the next BIND operation recovers any marked zone before normal
+work. The marker is runtime recovery data, not project desired state or a
+second persistence database. Standalone Ansible retains the same behavior.

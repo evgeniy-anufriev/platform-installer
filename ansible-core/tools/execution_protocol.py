@@ -26,6 +26,8 @@ import execution_target_trust
 
 
 OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildServiceConfigurationPreview", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
+DEPLOYMENT_PLAN_REQUEST_VERSION = "platform.installer/execution-runtime/v1alpha2"
+MAX_DEPLOYMENT_ORDER = 256
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
 MAX_CANDIDATE_ARCHIVE_BYTES = 32 * 1024 * 1024
@@ -116,10 +118,19 @@ def request():
         return value
     if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
-    if not isinstance(value, dict) or value.get("apiVersion") != "platform.installer/execution-runtime/v1alpha1":
+    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION):
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
+    if value.get("operation") == "BuildDeploymentPlan":
+        if value.get("apiVersion") != DEPLOYMENT_PLAN_REQUEST_VERSION:
+            raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
+        expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
+        order = value.get("deploymentOrder")
+        if (set(value) != expected or not isinstance(order, list) or len(order) > MAX_DEPLOYMENT_ORDER or
+                any(not isinstance(item, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", item) is None for item in order) or
+                len(order) != len(set(order))):
+            raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_INVALID")
     return value
 
 
@@ -132,7 +143,7 @@ def _capabilities_v4(args):
     required = ("bundleVersion", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest")
     if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
-    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha5", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha2", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "serviceConfigurationPreview": {"protocol": "BuildServiceConfigurationPreview/v1alpha1", "maxResponseBytes": 1048576}, "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+    return {"apiVersion": "platform.installer/execution-capabilities/v1alpha6", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha2", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "serviceConfigurationPreview": {"protocol": "BuildServiceConfigurationPreview/v1alpha1", "maxResponseBytes": 1048576}, "deploymentPlanRequestVersions": [DEPLOYMENT_PLAN_REQUEST_VERSION], "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
 
 
 def _v2_start_request(value):
@@ -661,6 +672,8 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         if not isinstance(sources, list):
             raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources, "platform_execution_state_root": state_root}
+        if operation == "BuildDeploymentPlan":
+            extra["platform_execution_deployment_order"] = value["deploymentOrder"]
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
     else:

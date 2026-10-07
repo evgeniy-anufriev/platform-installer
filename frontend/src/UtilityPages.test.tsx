@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstallationEventView } from "./backend";
 import { eventTimestampLabel } from "./event-format";
 import { UtilityPages } from "./UtilityPages";
@@ -39,6 +39,10 @@ function renderLogs(events: InstallationEventView[]) {
 }
 
 describe("UtilityPages logs", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
   it("renders every event field through hideable columns and details", () => {
     renderLogs([event(1)]);
     expect(screen.getByRole("columnheader", { name: "Время" })).toBeTruthy();
@@ -110,5 +114,86 @@ describe("UtilityPages logs", () => {
     expect(within(table).getAllByRole("row")[1].textContent).toContain(
       "Задача 3 завершена",
     );
+  });
+
+  it("retains selected columns when the logs page is reopened in the session", () => {
+    const firstView = renderLogs([event(1)]);
+    fireEvent.click(screen.getByText("Колонки (6 из 17)"));
+    fireEvent.click(screen.getByLabelText("Роль задачи"));
+    firstView.unmount();
+
+    renderLogs([event(1)]);
+
+    expect(screen.getByText("Колонки (7 из 17)")).toBeTruthy();
+    expect(
+      screen.getByRole("columnheader", { name: "Роль задачи" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("UtilityPages help", () => {
+  it("shows six topics, opens an article, and navigates to its page", () => {
+    const onNavigate = vi.fn();
+    render(
+      <UtilityPages
+        page="help"
+        events={[]}
+        serverTypes={[]}
+        configError={null}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    const topics = [
+      "Проект и набор",
+      "Серверы",
+      "Сервисы и топология",
+      "Проверка и установка",
+      "Журналы",
+      "Ошибки",
+    ];
+    for (const topic of topics) {
+      expect(
+        screen.getByRole("button", { name: new RegExp(topic) }),
+      ).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Серверы/ }));
+    expect(
+      screen.getByRole("heading", { name: "Добавление сервера" }),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Открыть страницу «Серверы»" }),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("servers");
+  });
+
+  it("explains how to check the real run state and latest safe events on Execution Node", () => {
+    render(
+      <UtilityPages
+        page="help"
+        events={[]}
+        serverTypes={[]}
+        configError={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Ошибки/ }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Если страница «Выполнение» перестала обновляться",
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Если страница «Выполнение» перестала обновляться",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Потеря связи с Execution Node не означает, что выполнение завершилось/,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/Не запускайте операцию повторно/)).toBeTruthy();
   });
 });

@@ -7,8 +7,14 @@ def main():
         "desired_state": {"type": "dict", "required": True}, "service_catalog": {"type": "dict", "required": True},
         "inventory_hosts": {"type": "dict", "required": True}, "inventory_deployments": {"type": "dict", "required": True},
         "resolved_service_endpoints": {"type": "dict", "required": True}, "backend_defaults": {"type": "dict", "default": {}},
+        "target_deployment_ids": {"type": "list", "elements": "str", "required": False},
     }, supports_check_mode=True)
-    result = resolve_haproxy_backends(module.params["desired_state"], module.params["service_catalog"], module.params["inventory_hosts"], module.params["inventory_deployments"], module.params["resolved_service_endpoints"], module.params["backend_defaults"])
+    result = resolve_haproxy_backends(
+        module.params["desired_state"], module.params["service_catalog"],
+        module.params["inventory_hosts"], module.params["inventory_deployments"],
+        module.params["resolved_service_endpoints"], module.params["backend_defaults"],
+        target_deployment_ids=module.params.get("target_deployment_ids"),
+    )
     if result["status"] != "PASS":
         module.fail_json(msg="HAProxy backend resolution is blocked", error_code="HAPROXY_BACKEND_RESOLUTION_BLOCKED", findings=result["findings"])
     module.exit_json(changed=False, resolved_haproxy_backends=result)

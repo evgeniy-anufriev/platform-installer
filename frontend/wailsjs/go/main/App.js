@@ -78,8 +78,8 @@ export function ConfirmRuntimeBundleUpdate(arg1) {
   return window['go']['main']['App']['ConfirmRuntimeBundleUpdate'](arg1);
 }
 
-export function CreateInstallationPlan() {
-  return window['go']['main']['App']['CreateInstallationPlan']();
+export function CreateInstallationPlan(arg1) {
+  return window['go']['main']['App']['CreateInstallationPlan'](arg1);
 }
 
 export function CreateProject(arg1) {

@@ -18,9 +18,10 @@ class ExecutionCapabilitiesTests(unittest.TestCase):
             "bundleDigest": "sha256:" + "c" * 64,
         }, "0.1.0")
         self.assertEqual("ExecutionCapabilities", result["kind"])
-        self.assertEqual("platform.installer/execution-capabilities/v1alpha4", result["apiVersion"])
+        self.assertEqual("platform.installer/execution-capabilities/v1alpha6", result["apiVersion"])
         self.assertEqual(["GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease"], result["supportedOperations"])
         self.assertEqual(["platform.installer/project-snapshot-request/v1alpha1"], result["projectSnapshotRequestVersions"])
+        self.assertEqual(["platform.installer/execution-runtime/v1alpha2"], result["deploymentPlanRequestVersions"])
         self.assertEqual("StartExecution/v1alpha2", result["executionStart"]["protocol"])
         self.assertEqual("PutRuntimeSecretLease/v1alpha2", result["targetCredentialLease"]["protocol"])
         self.assertEqual(["TargetCredentialLeasePayload/v1alpha4"], result["targetCredentialLease"]["payloadVersions"])

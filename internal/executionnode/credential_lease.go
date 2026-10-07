@@ -72,13 +72,16 @@ func (t OpenSSHTransport) CredentialStartCapability(ctx context.Context, node No
 	}
 	version, _ := response["apiVersion"].(string)
 	allowed := []string{"apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "targetCredentialLease", "projectSnapshotRequestVersions"}
-	if version == "platform.installer/execution-capabilities/v1alpha3" || version == "platform.installer/execution-capabilities/v1alpha4" || version == "platform.installer/execution-capabilities/v1alpha5" {
+	if version == "platform.installer/execution-capabilities/v1alpha3" || version == "platform.installer/execution-capabilities/v1alpha4" || version == "platform.installer/execution-capabilities/v1alpha5" || version == "platform.installer/execution-capabilities/v1alpha6" {
 		allowed = append(allowed, "runtimeSecretDescriptors")
 	}
-	if version == "platform.installer/execution-capabilities/v1alpha5" {
+	if version == "platform.installer/execution-capabilities/v1alpha5" || version == "platform.installer/execution-capabilities/v1alpha6" {
 		allowed = append(allowed, "serviceConfigurationPreview")
 	}
-	if (version != "platform.installer/execution-capabilities/v1alpha2" && version != "platform.installer/execution-capabilities/v1alpha3" && version != "platform.installer/execution-capabilities/v1alpha4" && version != "platform.installer/execution-capabilities/v1alpha5") || response["kind"] != "ExecutionCapabilities" || !closedKeys(response, allowed...) {
+	if version == "platform.installer/execution-capabilities/v1alpha6" {
+		allowed = append(allowed, "deploymentPlanRequestVersions")
+	}
+	if (version != "platform.installer/execution-capabilities/v1alpha2" && version != "platform.installer/execution-capabilities/v1alpha3" && version != "platform.installer/execution-capabilities/v1alpha4" && version != "platform.installer/execution-capabilities/v1alpha5" && version != "platform.installer/execution-capabilities/v1alpha6") || response["kind"] != "ExecutionCapabilities" || !closedKeys(response, allowed...) {
 		return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
 	}
 	start, startOK := response["executionStart"].(map[string]any)
@@ -86,8 +89,11 @@ func (t OpenSSHTransport) CredentialStartCapability(ctx context.Context, node No
 	if !startOK || !leaseOK || !closedKeys(start, "protocol") || start["protocol"] != startProtocolV2 || !closedKeys(lease, "protocol", "payloadVersions", "maxPayloadBytes", "requiredStartProtocol") || lease["requiredStartProtocol"] != startProtocolV2 {
 		return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
 	}
-	if version == "platform.installer/execution-capabilities/v1alpha4" || version == "platform.installer/execution-capabilities/v1alpha5" {
+	if version == "platform.installer/execution-capabilities/v1alpha4" || version == "platform.installer/execution-capabilities/v1alpha5" || version == "platform.installer/execution-capabilities/v1alpha6" {
 		if version == "platform.installer/execution-capabilities/v1alpha5" && !validServiceConfigurationPreviewCapability(response["serviceConfigurationPreview"], response["supportedOperations"]) {
+			return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
+		}
+		if version == "platform.installer/execution-capabilities/v1alpha6" && (!validServiceConfigurationPreviewCapability(response["serviceConfigurationPreview"], response["supportedOperations"]) || !exactArrayOfStrings(response["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha2")) {
 			return CredentialStartCapability{}, errors.New("TARGET_CREDENTIAL_LEASE_UNSUPPORTED")
 		}
 		if lease["protocol"] != credentialLeaseProtocolV2 || !exactArrayOfStrings(lease["payloadVersions"], credentialPayloadVersionV4) || !contains(response["supportedOperations"], "PutRuntimeSecretLease") || !validRuntimeSecretDescriptorCapabilityV2(response["runtimeSecretDescriptors"], response["supportedOperations"]) {

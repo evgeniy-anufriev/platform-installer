@@ -166,7 +166,7 @@ func (reader *exportReaderStub) BuildSnapshot(context.Context, string) (*coreada
 }
 
 func testApplicationConfig() AppOption {
-	return WithApplicationConfig(appconfig.Config{SchemaVersion: 1, ServerTypes: []appconfig.ServerType{{ID: "infra", DisplayName: "Инфраструктура"}}}, nil)
+	return WithApplicationConfig(appconfig.Config{SchemaVersion: 2, ServerTypes: []appconfig.ServerType{{ID: "infra", DisplayName: "Инфраструктура"}}, ServiceExecutionPriorities: []appconfig.ServiceExecutionPriority{{ServiceType: "bind", Priority: new(int)}}}, nil)
 }
 
 func (s snapshotReaderStub) BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error) {

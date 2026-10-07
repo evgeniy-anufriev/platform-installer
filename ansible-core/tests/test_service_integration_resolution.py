@@ -42,6 +42,21 @@ class ServiceIntegrationResolutionTests(unittest.TestCase):
         self.assertEqual(["bind-main"], result["integrations"]["dnsDeployments"])
         self.assertEqual([], result["integrations"]["haproxyDeployments"])
 
+    def test_source_deployment_selector_returns_only_its_provider_relations(self):
+        result = INTEGRATIONS.resolve_service_integrations(
+            self.state(), [], source_deployment_id="postgres-b")
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual(["postgres-b"], [item["sourceDeploymentId"]
+                                           for item in result["integrations"]["sources"]])
+        self.assertEqual(["bind-main"], result["integrations"]["dnsDeployments"])
+        self.assertEqual(["haproxy-main"], result["integrations"]["haproxyDeployments"])
+
+    def test_unknown_source_deployment_fails_closed(self):
+        result = INTEGRATIONS.resolve_service_integrations(
+            self.state(), [], source_deployment_id="missing")
+        self.assertEqual("BLOCKED", result["status"])
+        self.assertEqual("SERVICE_INTEGRATION_SOURCE_NOT_FOUND", result["findings"][0]["code"])
+
 
 if __name__ == "__main__":
     unittest.main()

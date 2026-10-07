@@ -321,7 +321,8 @@ export const browserBackend: ProjectBackend = {
   approveTargetHostKey: (probeId) => invoke("approveTargetHostKey", [probeId]),
   declineTargetHostKey: () => invoke("declineTargetHostKey"),
   getInstallationState: () => invoke("getInstallationState"),
-  createInstallationPlan: () => invoke("createInstallationPlan"),
+  createInstallationPlan: (deploymentOrder) =>
+    invoke("createInstallationPlan", [deploymentOrder]),
   getInstallationPlan: (planId) => invoke("getInstallationPlan", [planId]),
   approveInstallationPlan: (planId, acknowledgements) =>
     invoke("approveInstallationPlan", [planId, acknowledgements]),

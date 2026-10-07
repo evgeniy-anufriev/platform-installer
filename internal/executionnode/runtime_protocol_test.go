@@ -315,6 +315,44 @@ func TestCandidateCommitPreflightRequiresOperationAndRequestVersion(t *testing.T
 	}
 }
 
+func TestOrderedDeploymentPlanCapabilityRequiresExactVersionAndRequest(t *testing.T) {
+	base := map[string]any{
+		"apiVersion":        "platform.installer/execution-capabilities/v1alpha6",
+		"kind":              "ExecutionCapabilities",
+		"bootstrapProtocol": "v1alpha1", "coreVersion": "core",
+		"catalogDigest":                  "sha256:" + strings.Repeat("a", 64),
+		"schemaDigest":                   "sha256:" + strings.Repeat("b", 64),
+		"runtime":                        map[string]any{"bundleVersion": "bundle", "bundleDigest": "sha256:" + strings.Repeat("c", 64)},
+		"supportedOperations":            []any{"GetCapabilities", "BuildDeploymentPlan"},
+		"executionStart":                 map[string]any{"protocol": "StartExecution/v1alpha2"},
+		"targetCredentialLease":          map[string]any{},
+		"runtimeSecretDescriptors":       map[string]any{},
+		"serviceConfigurationPreview":    map[string]any{},
+		"deploymentPlanRequestVersions":  []any{"platform.installer/execution-runtime/v1alpha2"},
+		"projectSnapshotRequestVersions": []any{},
+	}
+	if !orderedDeploymentPlanRequestSupported(base) {
+		t.Fatal("compatible ordered-plan capability rejected")
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"old capability version":  func(value map[string]any) { value["apiVersion"] = "platform.installer/execution-capabilities/v1alpha5" },
+		"missing operation":       func(value map[string]any) { value["supportedOperations"] = []any{"GetCapabilities"} },
+		"missing request version": func(value map[string]any) { value["deploymentPlanRequestVersions"] = []any{} },
+		"unknown field":           func(value map[string]any) { value["fallback"] = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := make(map[string]any, len(base))
+			for key, item := range base {
+				value[key] = item
+			}
+			mutate(value)
+			if orderedDeploymentPlanRequestSupported(value) {
+				t.Fatal("invalid capability accepted")
+			}
+		})
+	}
+}
+
 func TestCandidateCommitPreflightRejectsChangedRuntimeRelease(t *testing.T) {
 	runner := &protocolRunner{}
 	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}

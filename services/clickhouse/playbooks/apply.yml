@@ -15,3 +15,5 @@
   roles:
     - role: platform.clickhouse.clickhouse_tls
       platform_clickhouse_verify_only: false
+
+- import_playbook: ../../integrations/playbooks/apply-endpoint.yml

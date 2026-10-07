@@ -1,5 +1,11 @@
 /* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
 :root {
+  --ui-font-page-title: 22px;
+  --ui-font-section-title: 14px;
+  --ui-font-subsection-title: 13px;
+  --ui-font-body: 12px;
+  --ui-font-secondary: 11px;
+  --ui-font-caption: 10px;
   font:
     14px / 1.4 Inter,
     "Segoe UI",
@@ -1162,6 +1168,109 @@ button:disabled {
   }
 }
 
+/* Shared typography scale, based on the Certificates screen. */
+#root .app-main {
+  font-size: var(--ui-font-body);
+  line-height: 1.35;
+}
+#root .app-main h1 {
+  font-size: var(--ui-font-page-title);
+  line-height: 1.15;
+}
+#root .app-main h2 {
+  font-size: var(--ui-font-section-title);
+  line-height: 1.25;
+}
+#root .app-main h3 {
+  font-size: var(--ui-font-subsection-title);
+  line-height: 1.25;
+}
+#root .app-main p {
+  font-size: var(--ui-font-body);
+  line-height: 1.35;
+}
+#root .app-main
+  :is(
+    label,
+    input:not([type="checkbox"]),
+    select,
+    textarea,
+    button:not(.execution-event-select)
+  ) {
+  font-size: var(--ui-font-body);
+}
+#root .app-main .muted {
+  font-size: var(--ui-font-secondary);
+}
+#root .app-main small {
+  font-size: var(--ui-font-caption);
+}
+#root .app-main .services-list .topology-row small,
+#root .app-main
+  .topology-grid:not(.topology-servers-grid)
+  > .topology-list
+  .topology-row
+  small {
+  font-size: var(--ui-font-secondary);
+}
+#root
+  .app-main
+  :is(.execution-event-table td small, .event-log-table td small) {
+  font-size: var(--ui-font-caption);
+}
+#root .app-main .certificate-section .section-head small,
+#root .app-main .certificate-verification .section-head small {
+  font-size: var(--ui-font-caption);
+}
+#root .app-main .modal .dialog {
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  font-size: var(--ui-font-body);
+  line-height: 1.3;
+}
+#root .app-main .modal .dialog > :is(h1, h2, h3, p) {
+  margin-block: 0;
+}
+#root .app-main .modal .dialog label {
+  gap: 4px;
+  font-size: var(--ui-font-body);
+  line-height: 1.25;
+}
+#root
+  .app-main
+  .modal
+  .dialog
+  :is(input:not([type="checkbox"]), select, textarea) {
+  min-height: 32px;
+  padding: 6px 8px;
+  font: inherit;
+}
+#root .app-main .modal .dialog button {
+  font-size: var(--ui-font-body);
+}
+#root .app-main .modal .dialog .actions,
+#root .app-main .modal .dialog .dialog-actions {
+  gap: 8px;
+  padding-top: 6px;
+}
+#root .app-main .runtime-secret-dialog form {
+  gap: 10px;
+  padding: 16px;
+  font-size: var(--ui-font-body);
+  line-height: 1.3;
+}
+#root .app-main .runtime-secret-dialog h2 {
+  margin: 0;
+}
+#root .app-main .runtime-secret-dialog label {
+  gap: 4px;
+}
+#root .app-main .runtime-secret-dialog input {
+  min-height: 36px;
+  padding: 6px 8px;
+}
+
 /* Certificates: ordered PKI navigation, selected section and Core evidence. */
 .workspace-content:has(> .certificates-page) {
   display: flex;
@@ -1651,19 +1760,35 @@ button:disabled {
   margin: 0;
   overflow: auto;
 }
-.services-list .topology-row {
+.services-list .topology-row,
+.workspace-content:has(> .topology-title)
+  .topology-grid:not(.topology-servers-grid)
+  > .topology-list
+  .topology-row {
   min-height: 78px;
   align-content: center;
   gap: 3px;
   padding: 10px 12px;
   border-radius: 7px;
 }
-.services-list .topology-row strong {
+.services-list .topology-row strong,
+.workspace-content:has(> .topology-title)
+  .topology-grid:not(.topology-servers-grid)
+  > .topology-list
+  .topology-row b {
   overflow-wrap: anywhere;
   font-size: 13px;
 }
 .services-list .topology-row span,
-.services-list .topology-row small {
+.services-list .topology-row small,
+.workspace-content:has(> .topology-title)
+  .topology-grid:not(.topology-servers-grid)
+  > .topology-list
+  .topology-row span,
+.workspace-content:has(> .topology-title)
+  .topology-grid:not(.topology-servers-grid)
+  > .topology-list
+  .topology-row small {
   font-size: 11px;
 }
 .services-list .topology-list-scroll > div {

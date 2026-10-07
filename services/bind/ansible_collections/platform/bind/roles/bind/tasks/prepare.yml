@@ -31,6 +31,28 @@
          selectattr('value.serviceType', 'equalto', 'bind') |
          selectattr('key', 'in', platform_deployments) | first }}
 
+- name: Initialize existing primary zone ownership map
+  ansible.builtin.set_fact:
+    _platform_bind_existing_primary_zone_by_deployment: {}
+
+- name: Recover interrupted full zone replacement before any new BIND changes
+  ansible.builtin.include_tasks: recover_primary_zone.yml
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    platform_bind_inspected_deployment: "{{ item }}"
+  when: platform_deployments[item.key].roles | first == 'primary'
+
+- name: Inspect existing primary zone state before candidate rendering
+  ansible.builtin.include_tasks: inspect_primary_zone.yml
+  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    platform_bind_inspected_deployment: "{{ item }}"
+  when: platform_deployments[item.key].roles | first == 'primary'
+
 - name: Render Platform BIND options candidate
   ansible.builtin.template:
     src: platform-installer-options.conf.j2
@@ -51,7 +73,7 @@
     platform_bind_deployment: "{{ item }}"
     platform_bind_zone_projection: "{{ platform_bind_resolved_zones[item.key] }}"
     platform_bind_zone_file: >-
-      {{ platform_bind_primary_zone_directory ~ '/' ~ platform_bind_resolved_zones[item.key].zone ~ '.zone.candidate'
+      {{ platform_bind_primary_zone_directory ~ '/' ~ platform_bind_resolved_zones[item.key].zone ~ '.zone'
          if platform_deployments[item.key].roles | first == 'primary'
          else platform_bind_secondary_zone_directory ~ '/' ~ platform_bind_resolved_zones[item.key].zone ~ '.zone' }}
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
@@ -69,7 +91,9 @@
     platform_bind_zone_projection: "{{ platform_bind_resolved_zones[item.key] }}"
     platform_bind_zone_serial: "{{ platform_bind_runtime_projection.generatedState.serviceDeployments[item.key].dns.currentSerial }}"
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
-  when: platform_deployments[item.key].roles | first == 'primary'
+  when:
+    - platform_deployments[item.key].roles | first == 'primary'
+    - not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool)
   register: _platform_bind_primary_zone_candidate
 
 - name: Inspect active and previous candidate BIND main configurations
@@ -193,4 +217,6 @@
     argv: ["{{ platform_bind_checkzone_binary }}", "{{ platform_bind_resolved_zones[item.key].zone }}", "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"]
   changed_when: false
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
-  when: platform_deployments[item.key].roles | first == 'primary'
+  when:
+    - platform_deployments[item.key].roles | first == 'primary'
+    - not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool)

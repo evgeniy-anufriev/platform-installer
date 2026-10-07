@@ -16,6 +16,41 @@ load("project_validation")
 PLAN = load("deployment_plan")
 SCHEMA = load("schema_validation")
 DIGEST = "sha256:" + "a" * 64
+_build_deployment_plan = PLAN.build_deployment_plan
+
+
+def _test_build_deployment_plan(*args, **kwargs):
+    if "deployment_order" not in kwargs:
+        projects = args[0].get("serviceDeployments", {}) if args and isinstance(args[0], dict) else {}
+        catalog_value = args[1] if len(args) > 1 and isinstance(args[1], dict) else {}
+        definitions = catalog_value.get("definitions", catalog_value)
+        pending = set(projects)
+        ordered = []
+        while pending:
+            ready = []
+            for deployment_id in sorted(pending):
+                deployment = projects.get(deployment_id, {})
+                definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) else {}
+                required = set()
+                for dependency in definition.get("dependencies", []) if isinstance(definition, dict) else []:
+                    capability = dependency.get("capability") if isinstance(dependency, dict) else None
+                    required.update(
+                        candidate_id for candidate_id, candidate in projects.items()
+                        if candidate_id != deployment_id and isinstance(candidate, dict)
+                        and capability in definitions.get(candidate.get("serviceType"), {}).get("capabilities", [])
+                    )
+                if required.issubset(set(ordered)):
+                    ready.append(deployment_id)
+            if not ready:
+                ordered.extend(sorted(pending))
+                break
+            ordered.extend(ready)
+            pending.difference_update(ready)
+        kwargs["deployment_order"] = ordered
+    return _build_deployment_plan(*args, **kwargs)
+
+
+PLAN.build_deployment_plan = _test_build_deployment_plan
 
 def catalog():
     return {"digest": DIGEST, "definitions": {
@@ -386,16 +421,35 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertEqual({"platform_vault_mode": "raft-ha", "platform_vault_deployment": 3,
                           "platform_vault_document": 4, "platform_vault_member": 6}, values["node1"])
 
-    def test_haproxy_provider_apply_follows_explicitly_related_source(self):
+    def test_haproxy_source_dependency_remains_until_partial_integration_is_accepted(self):
         deployments = {"haproxy": {"serviceType": "haproxy"},
                        "vault-ha": {"serviceType": "vault", "haproxy": {"deploymentRef": "haproxy"}}}
         provider_dependencies = PLAN._service_dependencies("haproxy", deployments["haproxy"], {}, deployments)
         self.assertEqual(["apply:vault-ha"], provider_dependencies)
-        actions = PLAN._ordered_apply_actions([
-            {"id": "apply:haproxy", "dependsOn": provider_dependencies},
-            {"id": "apply:vault-ha", "dependsOn": []},
-        ])
-        self.assertEqual(["apply:vault-ha", "apply:haproxy"], [item["id"] for item in actions])
+
+    def test_requested_order_interleaves_apply_and_verify_and_checks_dependencies(self):
+        state, definitions = snapshot(), catalog()
+        result = PLAN.build_deployment_plan(
+            state, definitions, runtime(), bundle_artifact_sources=sources(),
+            deployment_order=["provider", "consumer"])
+        services = result["deploymentPlan"]["phases"][-1]["actions"]
+        self.assertEqual(["apply:provider", "verify:provider", "apply:consumer", "verify:consumer"],
+                         [item["id"] for item in services])
+        self.assertEqual(["pki:apply", "verify:provider"], services[2]["dependsOn"])
+        self.assertEqual([], result["deploymentPlan"]["findings"])
+
+        reversed_result = PLAN.build_deployment_plan(
+            state, definitions, runtime(), bundle_artifact_sources=sources(),
+            deployment_order=["consumer", "provider"])
+        self.assertIn("EXECUTION_ORDER_DEPENDENCY_CONFLICT",
+                      [item["code"] for item in reversed_result["deploymentPlan"]["findings"]])
+
+    def test_deployment_order_must_match_exact_membership(self):
+        expected = {"one": {}, "two": {}}
+        for value in (None, [], ["one"], ["one", "one"], ["one", "three"]):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "DEPLOYMENT_ORDER_INVALID"):
+                PLAN._validated_deployment_order(expected, value)
+        self.assertEqual([], PLAN._validated_deployment_order({}, []))
 
     def test_secret_output_declaration_is_private_and_bound_to_apply_deployment(self):
         value, state = catalog(), snapshot()
@@ -498,9 +552,10 @@ class DeploymentPlanTests(unittest.TestCase):
         changed = copy.deepcopy(snapshot()); changed["serviceDeployments"]["consumer"]["serviceType"] = "provider"
         second = PLAN.build_deployment_plan(changed, catalog(), runtime(), bundle_artifact_sources=sources())["deploymentPlan"]
         self.assertNotEqual(first["fingerprints"]["plan"], second["fingerprints"]["plan"])
-        apply_phase = next(item for item in first["phases"] if item["id"] == "apply")
+        apply_phase = next(item for item in first["phases"] if item["id"] == "services")
         consumer = next(item for item in apply_phase["actions"] if item["id"] == "apply:consumer")
-        self.assertIn("apply:provider", consumer["dependsOn"])
+        self.assertIn("verify:provider", consumer["dependsOn"])
+        self.assertNotIn("apply:provider", consumer["dependsOn"])
         self.assertIn("pki:apply", consumer["dependsOn"])
 
     def test_blocked_identity_has_no_manifest(self):

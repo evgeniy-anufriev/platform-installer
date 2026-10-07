@@ -20,7 +20,7 @@ type installationPlanTransport struct{}
 
 func TestInstallationPlanActionEmptyListsMarshalAsArrays(t *testing.T) {
 	app, _, _ := installationPlanApp(t, false)
-	created := app.CreateInstallationPlan()
+	created := app.CreateInstallationPlan([]string{})
 	if created.Plan == nil {
 		t.Fatal("plan unavailable")
 	}
@@ -62,7 +62,7 @@ func TestOutputCapabilityGateBlocksBeforeStart(t *testing.T) {
 	for _, mode := range []string{"unsupported", "unavailable", "malformed"} {
 		t.Run(mode, func(t *testing.T) {
 			app, _, client := installationPlanApp(t, false)
-			created := app.CreateInstallationPlan()
+			created := app.CreateInstallationPlan([]string{})
 			app.current.Managed = &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{"vault-ha": {ServiceType: "vault"}}}
 			app.current.Catalog = &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{ID: "vault", SecretOutputEntries: []string{"admin-token", "unseal-shares"}}}}
 			if err := app.secrets.SetOutputEncryptionPassword(runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}, []byte("synthetic-session-password")); err != nil {
@@ -97,7 +97,7 @@ type installationPlanBuilder struct {
 	onBuild func()
 }
 
-func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ executionnode.Node, root string, release map[string]any) (executionnode.DeploymentPlan, error) {
+func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ executionnode.Node, root string, release map[string]any, _ []string) (executionnode.DeploymentPlan, error) {
 	b.calls++
 	if b.onBuild != nil {
 		b.onBuild()
@@ -126,7 +126,7 @@ type installationPlanClient struct{ starts int }
 func TestPreDispatchStartFailureDoesNotLeaveActiveRunReservation(t *testing.T) {
 	app, _, client := installationPlanApp(t, false)
 	app.localRunRecordRoot = t.TempDir()
-	created := app.CreateInstallationPlan()
+	created := app.CreateInstallationPlan([]string{})
 	if created.Plan == nil {
 		t.Fatal("plan unavailable")
 	}
@@ -168,7 +168,7 @@ func (*installationPlanClient) CancelExecution(context.Context, executionnode.No
 
 func TestInstallationPlanCreatesProjectsAndApprovesOnlyTheCurrentBoundPlan(t *testing.T) {
 	app, builder, client := installationPlanApp(t, false)
-	created := app.CreateInstallationPlan()
+	created := app.CreateInstallationPlan([]string{})
 	if created.Status != "PLAN_REVIEW" || created.Plan == nil || created.Plan.ID != "plan-1" || len(created.Plan.Phases) != 1 || created.Plan.Phases[0].Actions[0].Targets[0] != "node1" {
 		t.Fatalf("created=%#v error=%#v", created, created.Error)
 	}
@@ -191,7 +191,7 @@ func TestInstallationPlanCreatesProjectsAndApprovesOnlyTheCurrentBoundPlan(t *te
 
 func TestInstallationPlanKeepsBlockedPlanReadableButNeverApprovable(t *testing.T) {
 	app, _, client := installationPlanApp(t, true)
-	created := app.CreateInstallationPlan()
+	created := app.CreateInstallationPlan([]string{})
 	if created.Status != "PLAN_BLOCKED" || created.Plan == nil || len(created.Plan.Findings) != 1 {
 		t.Fatalf("created=%#v error=%#v", created, created.Error)
 	}
@@ -212,7 +212,7 @@ func TestInstallationPlanRejectsUnknownPlanIDWithoutNodeCall(t *testing.T) {
 func TestV02PlanDoesNotPublishAfterInFlightBindingInvalidation(t *testing.T) {
 	app, builder, _ := installationPlanApp(t, false)
 	builder.onBuild = func() { app.binding.dynamic = true }
-	result := app.CreateInstallationPlan()
+	result := app.CreateInstallationPlan([]string{})
 	if result.Plan != nil || result.Error == nil || app.installationPlanID != "" || app.execution.context.Status == "READY" || app.binding != nil {
 		t.Fatalf("in-flight invalidation published plan: %#v", result)
 	}
@@ -220,7 +220,7 @@ func TestV02PlanDoesNotPublishAfterInFlightBindingInvalidation(t *testing.T) {
 
 func TestInstallationPlanRejectsApprovalAfterCanonicalRevisionChanges(t *testing.T) {
 	app, _, client := installationPlanApp(t, false)
-	created := app.CreateInstallationPlan()
+	created := app.CreateInstallationPlan([]string{})
 	if created.Plan == nil {
 		t.Fatalf("created=%#v", created)
 	}

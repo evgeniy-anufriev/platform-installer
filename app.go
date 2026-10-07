@@ -1876,6 +1876,16 @@ func projectErrorMessage(code string) string {
 		return "Экспорт не был опубликован. Исходный проект не изменён."
 	case "EXPORT_STAGING_RETAINED":
 		return "Экспорт не завершён. Временная папка сохранена, потому что безопасное автоматическое удаление не удалось доказать."
+	case "APPLICATION_CONFIG_UPGRADE_REQUIRED":
+		return "Обновите config/application.yml: добавьте приоритеты сервисов и установите schemaVersion: 2."
+	case "APPLICATION_CONFIG_SERVICE_PRIORITIES_INVALID", "APPLICATION_CONFIG_SERVICE_PRIORITY_INVALID", "APPLICATION_CONFIG_SERVICE_PRIORITY_DUPLICATE":
+		return "В config/application.yml проверьте список serviceExecutionPriorities: каждому типу сервиса нужен один уникальный неотрицательный приоритет."
+	case "DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED":
+		return "Узел выполнения использует runtime без поддержки упорядоченного плана. Опубликуйте и привяжите актуальный runtime bundle, затем подготовьте узел заново."
+	case "DEPLOYMENT_ORDER_REQUEST_INVALID", "DEPLOYMENT_ORDER_INVALID":
+		return "Список сервисов для плана некорректен. Обновите приложение и повторите построение плана."
+	case "DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED":
+		return "Runtime узла не поддерживает обязательный формат порядка сервисов. Обновите bundle и подготовьте узел заново."
 	case "APPLICATION_CONFIG_NOT_FOUND", "APPLICATION_CONFIG_UNREADABLE", "APPLICATION_CONFIG_UNSAFE_PATH", "APPLICATION_CONFIG_INVALID", "APPLICATION_CONFIG_TOO_LARGE", "APPLICATION_CONFIG_VERSION_UNSUPPORTED", "APPLICATION_CONFIG_SERVER_TYPES_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_ID_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_NAME_INVALID", "APPLICATION_CONFIG_SERVER_TYPE_DUPLICATE", "APPLICATION_CONFIG_UNAVAILABLE":
 		return "Конфигурация приложения недоступна или некорректна. Создание нового сервера заблокировано."
 	case "PROJECT_NOT_OPEN":
