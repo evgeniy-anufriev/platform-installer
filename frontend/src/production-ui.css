@@ -1082,8 +1082,16 @@ button:disabled {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.workspace-content:has(> .topology-title)
+  .topology-servers-grid
+  > .topology-list
+  .topology-list-scroll {
+  align-content: start;
+}
 .topology-servers-grid .topology-row {
-  padding: 9px 10px;
+  min-height: 68px;
+  align-content: center;
+  padding: 8px 10px;
   border-radius: 7px;
 }
 .topology-servers-grid .topology-detail > .topology-list-scroll {
@@ -1770,6 +1778,13 @@ button:disabled {
   gap: 3px;
   padding: 10px 12px;
   border-radius: 7px;
+}
+.workspace-content:has(> .topology-title)
+  .topology-grid:not(.topology-servers-grid)
+  > .topology-list
+  .topology-row {
+  min-height: 64px;
+  padding: 8px 10px;
 }
 .services-list .topology-row strong,
 .workspace-content:has(> .topology-title)
