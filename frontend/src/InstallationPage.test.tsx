@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -759,7 +759,7 @@ describe("InstallationPage", () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
-  it("does not expose certificate navigation or PKI details and keeps start gated", () => {
+  it("shows all known reasons when the approved plan cannot start", () => {
     const onStart = vi.fn();
     const plan = {
       status: "PLAN_APPROVED" as const,
@@ -780,6 +780,12 @@ describe("InstallationPage", () => {
         pkiStorePasswordRequired: true,
         acknowledgements: [],
         phases: [],
+        findings: [
+          {
+            code: "PROJECT_VALIDATION_BLOCKED",
+            safeMessage: "Authoritative project validation is blocked",
+          },
+        ],
       },
     };
     render(
@@ -803,14 +809,103 @@ describe("InstallationPage", () => {
     expect(
       screen.getByRole("button", { name: "Начать выполнение" }),
     ).toHaveProperty("disabled", true);
-    expect(screen.queryByText(/Java|PKCS#12/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /Сертификаты/ })).toBeNull();
-    expect(
-      screen.getByText(
-        "Запуск пока недоступен: не выполнены обязательные условия плана.",
-      ),
-    ).toBeTruthy();
+    const blockers = screen.getByRole("list", { name: "Причины недоступности запуска" });
+    expect(within(blockers).getByText("В сеансе не задан пароль хранилищ PKCS#12, необходимый плану.")).toBeTruthy();
+    expect(within(blockers).getByText("Проверка проекта выявила ошибки; план установки заблокирован.")).toBeTruthy();
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("shows approval error code in a card before protected output settings", () => {
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-1", "sha256:old", false)}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        plan={{
+          status: "PLAN_REVIEW",
+          error: {
+            code: "INSTALLATION_SECRETS_MISSING",
+            message: "Задайте пароль сервиса postgres-main.",
+          },
+          plan: {
+            id: "plan-1",
+            status: "EXECUTABLE",
+            projectRevision: "sha256:old",
+            planFingerprint: "sha256:plan",
+            executionNodeId: "node1",
+            runtime: {
+              bundleDigest: "sha256:bundle",
+              coreVersion: "core",
+              catalogDigest: "sha256:catalog",
+              protocol: "protocol",
+            },
+            expiresAt: "2026-09-22T10:00:00Z",
+            approved: false,
+            acknowledgements: [],
+            phases: [],
+            secretOutputEncryptionRequired: true,
+            secretOutputEncryptionPasswordPresent: true,
+          },
+        }}
+      />,
+    );
+    const heading = screen.getByRole("heading", { name: "Новый план установки" });
+    const alert = screen.getByRole("alert");
+    const output = screen.getByText(/Защищённые выходные файлы/);
+    expect(within(alert).getByText("INSTALLATION_SECRETS_MISSING")).toBeTruthy();
+    expect(alert.textContent).toContain("Задайте пароль сервиса postgres-main.");
+    expect(heading.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(alert.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("focuses the error card after each failed approval, including the same error twice", () => {
+    const operation = {
+      status: "PLAN_REVIEW" as const,
+      error: {
+        code: "INSTALLATION_SECRETS_MISSING",
+        message: "Задайте пароль сервиса.",
+      },
+      plan: {
+        id: "plan-1",
+        status: "EXECUTABLE" as const,
+        projectRevision: "sha256:old",
+        planFingerprint: "sha256:plan",
+        executionNodeId: "node1",
+        runtime: {
+          bundleDigest: "sha256:bundle",
+          coreVersion: "core",
+          catalogDigest: "sha256:catalog",
+          protocol: "protocol",
+        },
+        expiresAt: "2026-09-22T10:00:00Z",
+        approved: false,
+        acknowledgements: [],
+        phases: [],
+      },
+    };
+    const common = {
+      state: currentPlanState("plan-1", "sha256:old", false),
+      tab: "plan" as const,
+      onTabChange: vi.fn(),
+      onOpenServers: vi.fn(),
+      busy: false,
+      onCreatePlan: vi.fn(),
+      onApprovePlan: vi.fn(),
+      plan: operation,
+    };
+    const view = render(<InstallationPage {...common} approvalErrorAttempt={0} />);
+    const alert = screen.getByRole("alert");
+    expect(document.activeElement).not.toBe(alert);
+    view.rerender(<InstallationPage {...common} approvalErrorAttempt={1} />);
+    expect(document.activeElement).toBe(alert);
+    screen.getByRole("button", { name: "Одобрить план" }).focus();
+    view.rerender(<InstallationPage {...common} approvalErrorAttempt={2} />);
+    expect(document.activeElement).toBe(alert);
   });
 
   it("requires the common output password and uses the default secrets folder before plan approval", async () => {

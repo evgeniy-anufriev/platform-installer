@@ -46,6 +46,9 @@ func TestProjectExportCopiesOnlyPortableDocuments(t *testing.T) {
 	for _, logical := range []string{"project.yml", "ansible.cfg", "inventory/hosts.yml", "inventory/group_vars/all/platform-installer.yml", "inventory/host_vars/node1/extra.yaml"} {
 		original, originalErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(logical)))
 		copied, copiedErr := os.ReadFile(filepath.Join(copyRoot, filepath.FromSlash(logical)))
+		if logical == "project.yml" && originalErr == nil {
+			original, originalErr = exportManifestName(original, "portable-copy")
+		}
 		if originalErr != nil || copiedErr != nil || string(original) != string(copied) {
 			t.Fatalf("portable document %q was not copied exactly", logical)
 		}
@@ -53,6 +56,34 @@ func TestProjectExportCopiesOnlyPortableDocuments(t *testing.T) {
 	for _, logical := range []string{generatedDocument, ".runtime/secret.txt"} {
 		if _, err := os.Stat(filepath.Join(copyRoot, filepath.FromSlash(logical))); !os.IsNotExist(err) {
 			t.Fatalf("excluded document %q exists or has unexpected error %v", logical, err)
+		}
+	}
+}
+
+func TestProjectExportAllowsSiblingUnderSourceParent(t *testing.T) {
+	parent := t.TempDir()
+	source := filepath.Join(parent, "source-project")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeExportFixture(t, source, "project.yml", "apiVersion: platform.installer/v2alpha1\n")
+	export, plan, err := PlanProjectExport(source, parent, "full-service-install")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer export.Close()
+	if result := export.Commit(plan.PlanDigest); result.Status != "EXPORTED" {
+		t.Fatalf("sibling export: %+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "full-service-install", "project.yml")); err != nil {
+		t.Fatal(err)
+	}
+	for _, destination := range []struct{ parent, name string }{
+		{parent, "source-project"},
+		{source, "nested-export"},
+	} {
+		if _, _, err := PlanProjectExport(source, destination.parent, destination.name); err == nil || err.Error() != "EXPORT_DESTINATION_INVALID" {
+			t.Fatalf("overlapping destination accepted: %v", err)
 		}
 	}
 }

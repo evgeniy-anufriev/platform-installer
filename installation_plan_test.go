@@ -18,6 +18,24 @@ import (
 
 type installationPlanTransport struct{}
 
+type countingSecretDescriptorTransport struct {
+	installationPlanTransport
+	calls int
+}
+
+func (transport *countingSecretDescriptorTransport) BuildRuntimeSecretDescriptors(_ context.Context, _ executionnode.Node, _ string, _ map[string]any, request executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error) {
+	transport.calls++
+	return executionnode.RuntimeSecretDescriptorResult{
+		ProjectIdentity: request.ProjectIdentity, ProjectRevision: request.ProjectRevision,
+		DescriptorSetFingerprint: "synthetic-fingerprint",
+		Runtime:                  executionnode.RuntimeEvidence{BundleDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", CoreVersion: "test-core", CatalogDigest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", Protocol: "platform.installer/execution-runtime/v1alpha1"},
+		Descriptors: []executionnode.RuntimeSecretDescriptor{
+			{RequirementRef: "service-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "service-main", DisplayLabel: "Пароль сервиса", RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
+			{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "service-main", DisplayLabel: "Токен", RequiredWhen: "INITIALIZED", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
+		},
+	}, nil
+}
+
 func TestInstallationPlanActionEmptyListsMarshalAsArrays(t *testing.T) {
 	app, _, _ := installationPlanApp(t, false)
 	created := app.CreateInstallationPlan([]string{})
@@ -92,9 +110,10 @@ func (installationPlanTransport) BuildProjectSnapshot(context.Context, execution
 }
 
 type installationPlanBuilder struct {
-	blocked bool
-	calls   int
-	onBuild func()
+	blocked             bool
+	calls               int
+	onBuild             func()
+	requiredCredentials []executionnode.RequiredCredential
 }
 
 func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ executionnode.Node, root string, release map[string]any, _ []string) (executionnode.DeploymentPlan, error) {
@@ -117,8 +136,111 @@ func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ execu
 		ID: "plan-1", Status: status, ProjectIdentity: identity, ProjectRevision: revision,
 		PlanFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RuntimeRelease: release,
 		Acknowledgements: []string{"ACK_RISK"}, AcknowledgementDetails: []executionnode.PlanAcknowledgement{{Code: "ACK_RISK", Summary: "Review the planned change"}},
-		Phases: []executionnode.DeploymentPlanPhase{{ID: "apply", Order: 0, Actions: []executionnode.DeploymentPlanAction{{ID: "apply:kafka-main", Type: "SERVICE_APPLY", ServiceDeployment: "kafka-main", Targets: []string{"node1"}, DependsOn: []string{}, Mutating: true, Reboot: "NONE", Summary: "Apply Kafka"}}}}, Findings: findings,
+		Phases: []executionnode.DeploymentPlanPhase{{ID: "apply", Order: 0, Actions: []executionnode.DeploymentPlanAction{{ID: "apply:kafka-main", Type: "SERVICE_APPLY", ServiceDeployment: "kafka-main", Targets: []string{"node1"}, DependsOn: []string{}, Mutating: true, Reboot: "NONE", Summary: "Apply Kafka"}}}}, Findings: findings, RequiredCredentials: b.requiredCredentials,
 	}, nil
+}
+
+func TestRequiredPKISecretBlocksApprovalAndIsRecheckedBeforeStart(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "pki-store-password", Purpose: "PKI_STORE_PASSWORD"}}
+	binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh-password"}); err != nil {
+		t.Fatal(err)
+	}
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	missing := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if missing.Error == nil || missing.Error.Code != "INSTALLATION_SECRETS_MISSING" || missing.Plan == nil || missing.Plan.Approved {
+		t.Fatalf("missing secret approval=%+v", missing)
+	}
+	if _, err := app.secrets.SetPKIStorePassword(binding, "synthetic-test-password"); err != nil {
+		t.Fatal(err)
+	}
+	approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if approved.Error != nil || approved.Plan == nil || !approved.Plan.Approved {
+		t.Fatalf("approval after secret=%+v", approved)
+	}
+	app.secrets.Clear()
+	start := app.StartApprovedInstallation(created.Plan.ID)
+	if start.Error == nil || start.Error.Code != "INSTALLATION_SECRETS_MISSING" || client.starts != 0 {
+		t.Fatalf("start after secret loss=%+v starts=%d", start, client.starts)
+	}
+}
+
+func TestRequiredServicePasswordBlocksApprovalUntilPresent(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "postgresql-admin-password", Purpose: "SERVICE_PASSWORD"}}
+	binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh-password"}); err != nil {
+		t.Fatal(err)
+	}
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	missing := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if missing.Error == nil || missing.Error.Code != "INSTALLATION_SECRETS_MISSING" || !strings.Contains(missing.Error.Message, "postgresql-admin-password") || missing.Plan == nil || missing.Plan.Approved {
+		t.Fatalf("missing service password approval=%+v", missing)
+	}
+	if err := app.secrets.SetRuntimeSecretValuesForRequirements(binding, []string{"postgresql-admin-password"}, map[string]string{"postgresql-admin-password": "synthetic-service-password"}); err != nil {
+		t.Fatal(err)
+	}
+	approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if approved.Error != nil || approved.Plan == nil || !approved.Plan.Approved {
+		t.Fatalf("approval after service password=%+v", approved)
+	}
+	app.secrets.ClearRuntimeSecretValues(binding)
+	start := app.StartApprovedInstallation(created.Plan.ID)
+	if start.Error == nil || start.Error.Code != "INSTALLATION_SECRETS_MISSING" || client.starts != 0 {
+		t.Fatalf("start after service password loss=%+v starts=%d", start, client.starts)
+	}
+}
+
+func TestTypedDescriptorFailureKeepsItsActualStartError(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN"}}
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if approved.Error != nil || approved.Plan == nil || !approved.Plan.Approved {
+		t.Fatalf("approval=%+v", approved)
+	}
+	start := app.StartApprovedInstallation(created.Plan.ID)
+	if start.Error == nil || start.Error.Code != "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED" || client.starts != 0 {
+		t.Fatalf("descriptor failure was masked: start=%+v starts=%d", start, client.starts)
+	}
+}
+
+func TestStartReadsMixedServiceDescriptorsOnce(t *testing.T) {
+	app, builder, _ := installationPlanApp(t, false)
+	transport := &countingSecretDescriptorTransport{}
+	app.binding.reader.transport = transport
+	builder.requiredCredentials = []executionnode.RequiredCredential{
+		{RequirementRef: "service-password", Purpose: "SERVICE_PASSWORD"},
+		{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN"},
+	}
+	binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.SetRuntimeSecretValuesForRequirements(binding, []string{"service-password"}, map[string]string{"service-password": "synthetic-service-password"}); err != nil {
+		t.Fatal(err)
+	}
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	if approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"}); approved.Error != nil {
+		t.Fatalf("approval=%+v", approved)
+	}
+	start := app.StartApprovedInstallation(created.Plan.ID)
+	if transport.calls != 1 || start.Error == nil || start.Error.Code == "RUNTIME_SECRET_DESCRIPTORS_STALE" || start.Error.Code == "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE" {
+		t.Fatalf("mixed descriptor check: calls=%d start=%+v", transport.calls, start)
+	}
 }
 
 type installationPlanClient struct{ starts int }

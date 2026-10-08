@@ -65,10 +65,16 @@ not authoritative facts.
 2. React never reads YAML, reconstructs configuration or receives raw file
    contents. It receives only bounded paths, sizes, digests, revision and safe
    status metadata.
-3. Export preserves source bytes for included files. This naturally preserves
-   comments, formatting, unknown supported variables and `x-*` extensions,
-   but byte-for-byte stability is an implementation property of this copy,
-   not a new general writer contract.
+3. Export preserves source bytes for included files except `project.yml`:
+   the owner-approved export name also becomes the copied manifest's
+   `metadata.name`. The source and project ID remain unchanged. Only this
+   manifest may have normalized YAML formatting; supported unknown fields
+   and extensions retain their values. Anchors, aliases, merge keys,
+   duplicate/ambiguous mapping keys and multiple YAML documents are rejected
+   before renaming. An absent optional manifest is not fabricated. Preview
+   sizes/digests describe output bytes; source revision and stability guards
+   still refer to the original saved source. See
+   [display-name plan](project-export-display-name-plan.md).
 4. Core remains authoritative for project semantics and compatibility.
    Export may copy a saved `UNVERIFIED`, `STALE` or `INVALID` project and must
    show that status without claiming validity. Export never creates fresh

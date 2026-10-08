@@ -167,33 +167,9 @@ export function CertificatesPage({
     null,
   );
   const [selectedKind, setSelectedKind] = useState<PKIKind>("authority");
-  const [storePassword, setStorePassword] = useState("");
-  const [storePasswordError, setStorePasswordError] = useState("");
-  const [storePasswordSaving, setStorePasswordSaving] = useState(false);
   const blocked = busy || structuralDisabled || commandCount >= 16;
   const pkiPasswordPresent =
     credentialStatus?.pkiStorePasswordStatus === "PRESENT";
-  const sshSessionPresent = credentialStatus?.status === "PRESENT";
-  const savePKIStorePassword = async () => {
-    if (!onSetPKIStorePassword) return;
-    setStorePasswordError("");
-    setStorePasswordSaving(true);
-    try {
-      await onSetPKIStorePassword(storePassword);
-      setStorePassword("");
-    } catch (reason) {
-      const code = typeof reason === "string" ? reason : "";
-      setStorePasswordError(
-        code === "PKI_STORE_PASSWORD_INPUT_INVALID"
-          ? "Пароль не соответствует допустимым ограничениям."
-          : code === "PKI_STORE_PASSWORD_UNAVAILABLE"
-            ? "Сначала сохраните учётные данные для выбранного Execution Node."
-            : "Не удалось сохранить пароль в текущем сеансе.",
-      );
-    } finally {
-      setStorePasswordSaving(false);
-    }
-  };
   const allRows = useMemo(
     () => ({
       authority: rowsFor("authority", managed, intents),
@@ -235,58 +211,6 @@ export function CertificatesPage({
           onDiscard={onDiscard}
         />
       </div>
-      <article className="card pki-store-password">
-        <div className="pki-store-password-copy">
-          <h2>Пароль Java-хранилищ PKCS#12 (keystore / truststore)</h2>
-          <p className="muted">
-            Пароль хранится только в активном сеансе Installer. Если пароль
-            существующего хранилища неизвестен, Core пересоздаст его из текущих
-            PEM-сертификатов и ключа при применении.
-          </p>
-        </div>
-        <div className="pki-store-password-controls">
-          <label>
-            Новый пароль хранилищ
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={storePassword}
-              onChange={(event) => setStorePassword(event.target.value)}
-              disabled={busy || storePasswordSaving || !sshSessionPresent}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void savePKIStorePassword()}
-            disabled={
-              busy ||
-              storePasswordSaving ||
-              !sshSessionPresent ||
-              storePassword.length === 0 ||
-              !onSetPKIStorePassword
-            }
-          >
-            {pkiPasswordPresent
-              ? "Заменить пароль в сеансе"
-              : "Сохранить пароль в сеансе"}
-          </button>
-          <p role="status">
-            {pkiPasswordPresent
-              ? "Пароль задан в текущем сеансе. Его можно заменить до запуска."
-              : "Пароль не задан в текущем сеансе."}
-          </p>
-          {!sshSessionPresent && (
-            <p className="muted">
-              Сначала сохраните учётные данные для выбранного Execution Node.
-            </p>
-          )}
-          {storePasswordError && (
-            <p className="field-error" role="alert">
-              {storePasswordError}
-            </p>
-          )}
-        </div>
-      </article>
       <section
         className="certificate-dependency-guide"
         aria-labelledby="certificate-dependency-heading"
@@ -370,6 +294,11 @@ export function CertificatesPage({
             onEdit={(id) => setEditor({ kind: selectedKind, id })}
             onDelete={remove}
           />
+          {selectedKind === "tls" && pkiPasswordPresent && (
+            <p className="muted" role="status">
+              Пароль PKCS#12 сохранён в текущем сеансе. В проект он не записывается.
+            </p>
+          )}
         </article>
       </div>
       <CoreVerification
@@ -393,6 +322,8 @@ export function CertificatesPage({
           profileIds={Object.keys(allRows.profile).sort()}
           sourceOptions={sourceOptions}
           disabled={blocked}
+          pkiPasswordPresent={pkiPasswordPresent}
+          onSetPKIStorePassword={onSetPKIStorePassword}
           onClose={() => setEditor(null)}
           onSubmit={async (entityId, entity) => {
             const operation = editor.id
@@ -623,6 +554,8 @@ function CertificateDialog({
   profileIds,
   sourceOptions,
   disabled,
+  pkiPasswordPresent,
+  onSetPKIStorePassword,
   onClose,
   onSubmit,
 }: {
@@ -633,6 +566,8 @@ function CertificateDialog({
   profileIds: string[];
   sourceOptions: CertificateSourceOptions;
   disabled: boolean;
+  pkiPasswordPresent: boolean;
+  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
   onClose: () => void;
   onSubmit: (id: string, entity: PKIEntity) => Promise<void>;
 }) {
@@ -653,9 +588,6 @@ function CertificateDialog({
     ),
   );
   const [scope, setScope] = useState(String(existing.scope || ""));
-  const [secretRef, setSecretRef] = useState(
-    String(existing.storePasswordSecretRef || ""),
-  );
   const [secretInput, setSecretInput] = useState("");
   const [keyAlgorithm, setKeyAlgorithm] = useState(
     String(existing.keyAlgorithm || ""),
@@ -692,16 +624,45 @@ function CertificateDialog({
     listText(sources.explicitIpAddresses),
   );
   const [error, setError] = useState("");
+  const tlsSettingsUnchanged =
+    kind === "tls" &&
+    !!entityId &&
+    Object.keys(existing).every((key) =>
+      ["certificateProfileRef", "storePasswordSecretRef", "scope"].includes(key),
+    ) &&
+    String(existing.certificateProfileRef || "") === profileRef &&
+    String(existing.storePasswordSecretRef || "") ===
+      "runtime:pki-store-password" &&
+    String(existing.scope || "") === scope;
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!id.trim()) return setError("Укажите ID записи.");
+    if (kind === "tls" && secretInput.length > 0) {
+      if (!onSetPKIStorePassword) {
+        setError("Не удалось сохранить пароль в текущем сеансе.");
+        return;
+      }
+      try {
+        await onSetPKIStorePassword(secretInput);
+        setSecretInput("");
+      } catch (reason) {
+        const code = reason instanceof Error ? reason.message : String(reason);
+        setError(
+          code === "PKI_STORE_PASSWORD_INPUT_INVALID"
+            ? "Пароль не соответствует допустимым ограничениям."
+            : code === "PKI_STORE_PASSWORD_UNAVAILABLE"
+              ? "Сначала сохраните учётные данные для выбранного узла выполнения."
+              : "Не удалось сохранить пароль в текущем сеансе.",
+        );
+        return;
+      }
+    }
     const result = entityFor(kind, {
       displayName,
       commonName,
       authorityRef,
       profileRef,
       scope,
-      secretRef: secretInput.trim() || secretRef,
       keyAlgorithm,
       keySize,
       validityDays,
@@ -718,6 +679,10 @@ function CertificateDialog({
     if (!result)
       return setError("Проверьте поля области применения сертификатов.");
     setError("");
+    if (tlsSettingsUnchanged) {
+      onClose();
+      return;
+    }
     await onSubmit(id.trim(), result);
   };
   return (
@@ -802,24 +767,24 @@ function CertificateDialog({
               </select>
             </label>
             <label>
-              Ссылка на runtime-секрет
+              Пароль хранилищ PKCS#12
               <input
+                type="password"
+                autoComplete="new-password"
                 value={secretInput}
-                onChange={(event) => {
-                  setSecretInput(event.target.value);
-                  setSecretRef(event.target.value);
-                }}
+                onChange={(event) => setSecretInput(event.target.value)}
                 placeholder={
-                  secretRef
-                    ? "Ссылка сохранена; введите новую для замены"
-                    : "runtime:tls-store"
+                  pkiPasswordPresent
+                    ? "Сохранён в текущем сеансе; введите новый для замены"
+                    : "Введите пароль для хранилищ PKCS#12"
                 }
-                required={!secretRef}
+                disabled={disabled}
               />
             </label>
-            <p className="muted">
-              Пароль не вводится, не отображается и не проверяется. Сохраняется
-              только ссылка на runtime-секрет.
+            <p className="muted" role="status">
+              {pkiPasswordPresent
+                ? "Пароль хранится только в текущем сеансе. Для замены введите новый; проект содержит только фиксированную ссылку на секрет."
+                : "Пароль сохранится только в текущем сеансе. Проект содержит только фиксированную ссылку на секрет."}
             </p>
           </>
         )}
@@ -848,8 +813,10 @@ function CertificateDialog({
           <button type="button" className="outline" onClick={onClose}>
             Отмена
           </button>
-          <button disabled={disabled} type="submit">
-            Добавить в черновик
+          <button disabled={disabled || (tlsSettingsUnchanged && !secretInput)} type="submit">
+            {tlsSettingsUnchanged && secretInput
+              ? "Сохранить пароль в сеансе"
+              : "Добавить в черновик"}
           </button>
         </div>
       </form>
@@ -1202,7 +1169,6 @@ function entityFor(
     authorityRef: string;
     profileRef: string;
     scope: string;
-    secretRef: string;
     keyAlgorithm: string;
     keySize: string;
     validityDays: string;
@@ -1256,7 +1222,7 @@ function entityFor(
   if (kind === "tls")
     return {
       certificateProfileRef: input.profileRef,
-      storePasswordSecretRef: input.secretRef.trim(),
+      storePasswordSecretRef: "runtime:pki-store-password",
       ...(optional(input.scope) && { scope: optional(input.scope) }),
     };
   const sources: PKIEntity = {};

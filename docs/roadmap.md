@@ -679,6 +679,11 @@ zero blocking findings; see `docs/ui-01i.md`. UI-01J is DONE: final native,
 RED OS, Core-contract and safety acceptance passed; see `docs/ui-01j.md`.
 UI-01 overall is DONE. UI-02 remains separately authorized work.
 
+Owner-authorized export display-name refinement uses the export directory name
+for the copied optional manifest's `metadata.name`, retaining source and ID.
+Output digests and original source revision remain separate; see
+[plan](project-export-display-name-plan.md) and CURRENT_STATE for its acceptance.
+
 Accepted design input: [metadata-only project creation and progressive
 editing](ui-project-creation-design.md). The HTML remains a prototype; frozen
 backend requirements must be implemented and proven in their owning milestones.

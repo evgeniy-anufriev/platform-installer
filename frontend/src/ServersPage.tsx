@@ -912,6 +912,8 @@ function ExecutionNodePanel({
                   return;
                 setBusy(true);
                 setError("");
+                const currentPreparation = preparation;
+                setPreparation({ ...preparation, status: "PREPARING" });
                 try {
                   const result = await onPrepare(planId);
                   setPreparation(result);
@@ -924,6 +926,7 @@ function ExecutionNodePanel({
                     });
                   }
                 } catch {
+                  setPreparation(currentPreparation);
                   setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
                 } finally {
                   setBusy(false);

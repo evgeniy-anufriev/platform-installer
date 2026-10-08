@@ -99,24 +99,42 @@ describe("UI-01G2 CertificatesPage", () => {
 
   it("sets and replaces the Java-store password in the active session", async () => {
     const user = userEvent.setup();
+    const onAppend = vi.fn().mockResolvedValue(true);
     const onSetPKIStorePassword = vi.fn().mockResolvedValue({
       status: "PRESENT",
       sudoPasswordStatus: "NOT_PROVIDED",
       pkiStorePasswordStatus: "PRESENT",
     });
+    const canonicalManaged = {
+      ...managed!,
+      pki: {
+        ...managed!.pki,
+        tlsProfiles: {
+          "infrastructure.tls": {
+            certificateProfileRef: "server.profile",
+            storePasswordSecretRef: "runtime:pki-store-password",
+          },
+        },
+      },
+    } as unknown as OpenResult["managed"];
+    const base = props({
+      managed: canonicalManaged,
+      onAppend,
+      onSetPKIStorePassword,
+    });
     const view = render(
       <CertificatesPage
-        {...props({
-          credentialStatus: {
-            status: "PRESENT",
-            sudoPasswordStatus: "NOT_PROVIDED",
-            pkiStorePasswordStatus: "MISSING",
-          },
-          onSetPKIStorePassword,
-        })}
+        {...base}
+        credentialStatus={{
+          status: "PRESENT",
+          sudoPasswordStatus: "NOT_PROVIDED",
+          pkiStorePasswordStatus: "MISSING",
+        }}
       />,
     );
-    const input = screen.getByLabelText("Новый пароль хранилищ");
+    await user.click(screen.getByRole("button", { name: "Профили TLS" }));
+    await user.click(screen.getByRole("button", { name: "Изменить" }));
+    let input = screen.getByLabelText("Пароль хранилищ PKCS#12");
     await user.type(input, "first-test-password");
     await user.click(
       screen.getByRole("button", { name: "Сохранить пароль в сеансе" }),
@@ -125,29 +143,57 @@ describe("UI-01G2 CertificatesPage", () => {
       1,
       "first-test-password",
     );
-    expect((input as HTMLInputElement).value).toBe("");
+    expect(onAppend).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Пароль хранилищ PKCS#12")).toBeNull();
 
     view.rerender(
       <CertificatesPage
-        {...props({
-          credentialStatus: {
-            status: "PRESENT",
-            sudoPasswordStatus: "NOT_PROVIDED",
-            pkiStorePasswordStatus: "PRESENT",
-          },
-          onSetPKIStorePassword,
-        })}
+        {...base}
+        credentialStatus={{
+          status: "PRESENT",
+          sudoPasswordStatus: "NOT_PROVIDED",
+          pkiStorePasswordStatus: "PRESENT",
+        }}
       />,
     );
+    expect(screen.getByText(/Пароль PKCS#12 сохранён в текущем сеансе/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Изменить" }));
+    input = screen.getByLabelText("Пароль хранилищ PKCS#12");
     await user.type(input, "replacement-test-password");
     await user.click(
-      screen.getByRole("button", { name: "Заменить пароль в сеансе" }),
+      screen.getByRole("button", { name: "Сохранить пароль в сеансе" }),
     );
     expect(onSetPKIStorePassword).toHaveBeenNthCalledWith(
       2,
       "replacement-test-password",
     );
-    expect((input as HTMLInputElement).value).toBe("");
+    expect(onAppend).not.toHaveBeenCalled();
+  });
+
+  it("adds a TLS profile draft when its settings change along with the password", async () => {
+    const user = userEvent.setup();
+    const onAppend = vi.fn().mockResolvedValue(true);
+    const onSetPKIStorePassword = vi.fn().mockResolvedValue({
+      status: "PRESENT",
+      sudoPasswordStatus: "NOT_PROVIDED",
+      pkiStorePasswordStatus: "PRESENT",
+    });
+    render(<CertificatesPage {...props({ onAppend, onSetPKIStorePassword })} />);
+    await user.click(screen.getByRole("button", { name: "Профили TLS" }));
+    await user.click(screen.getByRole("button", { name: "Изменить" }));
+    await user.selectOptions(screen.getByLabelText("Область применения"), "HOST");
+    await user.type(screen.getByLabelText("Пароль хранилищ PKCS#12"), "test-password");
+    await user.click(screen.getByRole("button", { name: "Добавить в черновик" }));
+    expect(onSetPKIStorePassword).toHaveBeenCalledWith("test-password");
+    expect(onAppend).toHaveBeenCalledWith({
+      operation: "UpdateTLSProfile",
+      entityId: "infrastructure.tls",
+      entity: {
+        certificateProfileRef: "server.profile",
+        storePasswordSecretRef: "runtime:pki-store-password",
+        scope: "HOST",
+      },
+    });
   });
 
   it("uses typed scope intent for direct source inputs without calculating SAN", async () => {

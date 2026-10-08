@@ -1915,7 +1915,11 @@ func projectErrorMessage(code string) string {
 	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
-		return "Нельзя безопасно определить требования к секретам для текущего сохранённого проекта."
+		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."
+	case "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED":
+		return "Активный runtime узла выполнения не поддерживает проверку секретов сервисов. Обновите набор установки и подготовьте узел заново."
+	case "RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID":
+		return "Узел выполнения вернул некорректный ответ о требованиях к секретам. Запуск не начат; проверьте активный runtime узла."
 	case "RUNTIME_SECRET_DESCRIPTORS_STALE", "RUNTIME_SECRET_INPUT_EXPIRED":
 		return "Введённые секреты больше не соответствуют свежему плану или истекли. Введите их заново."
 	case "RUNTIME_SECRET_INPUT_INVALID":

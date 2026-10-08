@@ -85,7 +85,7 @@ func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*Pr
 	if err != nil {
 		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
 	}
-	if rootsOverlap(sourceDisplay, destDisplay) {
+	if rootsOverlap(sourceDisplay, filepath.Join(destDisplay, name)) {
 		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
 	}
 	source, err := openExportSourceDirectory(sourceDisplay)
@@ -110,7 +110,12 @@ func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*Pr
 		}
 		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_EXISTS")
 	}
-	plan := projectExportPlan(sourceDisplay, destDisplay, name, capability.sourceIdentity, capability.destIdentity, observation)
+	output, err := namedExportObservation(observation, name)
+	if err != nil {
+		capability.Close()
+		return nil, ProjectExportPlan{}, err
+	}
+	plan := projectExportPlan(sourceDisplay, destDisplay, name, capability.sourceIdentity, capability.destIdentity, output, observation.revision)
 	// The capability retains only integrity metadata between preview and
 	// commit. Exact bytes are re-read through the held source authority during
 	// Commit, after the source has been proven unchanged.
@@ -152,6 +157,11 @@ func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResu
 		result.ErrorCode = "EXPORT_PLAN_STALE"
 		return result
 	}
+	output, err := namedExportObservation(observation, export.directoryName)
+	if err != nil {
+		result.ErrorCode = exportErrorCode(err, "EXPORT_SOURCE_UNSAFE")
+		return result
+	}
 	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
 		if existErr != nil {
 			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
@@ -178,11 +188,11 @@ func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResu
 	if export.writeObservation != nil {
 		write = export.writeObservation
 	}
-	if err := write(staging, observation); err != nil {
+	if err := write(staging, output); err != nil {
 		result.ErrorCode = exportErrorCode(err, "EXPORT_WRITE_FAILED")
 		return result
 	}
-	if err := verifyExportObservation(staging, observation); err != nil {
+	if err := verifyExportObservation(staging, output); err != nil {
 		result.ErrorCode = "EXPORT_WRITE_FAILED"
 		return result
 	}
@@ -204,7 +214,7 @@ func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResu
 		return result
 	}
 	published = true
-	return ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "EXPORTED", DestinationRoot: filepath.Join(export.destDisplay, export.directoryName), SourceProjectRevision: observation.revision, DocumentCount: len(observation.documents), AggregateSize: observation.total}
+	return ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "EXPORTED", DestinationRoot: filepath.Join(export.destDisplay, export.directoryName), SourceProjectRevision: observation.revision, DocumentCount: len(output.documents), AggregateSize: output.total}
 }
 
 type exportRecord struct {
@@ -281,8 +291,13 @@ func observeExportProject(root *exportDirectory) (exportObservation, error) {
 	sort.Slice(result.documents, func(left, right int) bool {
 		return result.documents[left].LogicalPath < result.documents[right].LogicalPath
 	})
+	result.revision = exportContentRevision(result.documents)
+	return result, nil
+}
+
+func exportContentRevision(documents []exportRecord) string {
 	var revisionInput []byte
-	for _, document := range result.documents {
+	for _, document := range documents {
 		if document.LogicalPath == generatedDocument {
 			continue
 		}
@@ -291,8 +306,7 @@ func observeExportProject(root *exportDirectory) (exportObservation, error) {
 		revisionInput = append(revisionInput, []byte(document.Digest)...)
 		revisionInput = append(revisionInput, 0)
 	}
-	result.revision = digestBytes(revisionInput)
-	return result, nil
+	return digestBytes(revisionInput)
 }
 
 func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
@@ -397,12 +411,12 @@ func sameExportContentObservation(left, right exportObservation) bool {
 	return true
 }
 
-func projectExportPlan(sourceRoot, destinationParent, name string, sourceIdentity, destinationIdentity exportIdentity, observation exportObservation) ProjectExportPlan {
+func projectExportPlan(sourceRoot, destinationParent, name string, sourceIdentity, destinationIdentity exportIdentity, observation exportObservation, sourceRevision string) ProjectExportPlan {
 	documents := make([]ProjectExportDocument, len(observation.documents))
 	for index, document := range observation.documents {
 		documents[index] = document.ProjectExportDocument
 	}
-	plan := ProjectExportPlan{APIVersion: projectExportAPIVersion, Kind: "ProjectExportPlan", SourceProjectRoot: sourceRoot, SourceProjectRevision: observation.revision, DestinationParent: destinationParent, DirectoryName: name, DestinationRoot: filepath.Join(destinationParent, name), Documents: documents, AggregateSize: observation.total, ExcludedCategories: []string{"DRAFT", "RUNTIME_CREDENTIALS", "GENERATED_STATE", "RUNTIME_STATE", "PLANS", "FACTS", "LOGS", "RESULTS", "VERIFICATION_EVIDENCE"}}
+	plan := ProjectExportPlan{APIVersion: projectExportAPIVersion, Kind: "ProjectExportPlan", SourceProjectRoot: sourceRoot, SourceProjectRevision: sourceRevision, DestinationParent: destinationParent, DirectoryName: name, DestinationRoot: filepath.Join(destinationParent, name), Documents: documents, AggregateSize: observation.total, ExcludedCategories: []string{"DRAFT", "RUNTIME_CREDENTIALS", "GENERATED_STATE", "RUNTIME_STATE", "PLANS", "FACTS", "LOGS", "RESULTS", "VERIFICATION_EVIDENCE"}}
 	input := []byte(plan.APIVersion + "\x00" + sourceIdentity.String() + "\x00" + destinationIdentity.String() + "\x00" + plan.SourceProjectRevision + "\x00" + plan.DestinationRoot + "\x00")
 	for _, document := range documents {
 		input = append(input, []byte(document.LogicalPath)...)

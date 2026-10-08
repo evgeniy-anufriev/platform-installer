@@ -126,7 +126,7 @@ A profile defines issuance, key and SAN policy. A scope explicitly defines one a
 
 Status: Accepted.
 
-Project import/export preserves semantics and declared unknown extensions. Byte-identical formatting and comments are not guaranteed, and V2 will not introduce a complex YAML AST editor without demonstrated need.
+Project import/export preserves semantics and declared unknown extensions. Owner-approved export naming updates only the copied optional `project.yml` metadata.name to the export directory name, retaining the project ID and untouched source; preview describes the renamed output while source revision guards stay original. Byte-identical formatting and comments are not guaranteed, and V2 will not introduce a complex YAML AST editor without demonstrated need.
 
 ## ADR-019: One boundary-enforced monorepo
 

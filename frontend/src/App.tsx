@@ -291,6 +291,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [installationPlan, setInstallationPlan] = useState<
     InstallationPlanOperation | undefined
   >(undefined);
+  const [approvalErrorAttempt, setApprovalErrorAttempt] = useState(0);
   const [installationBusy, setInstallationBusy] = useState(false);
   const [installationRun, setInstallationRun] = useState<
     InstallationRunOperation | undefined
@@ -560,7 +561,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     return () => {
       live = false;
     };
-  }, [api, projectOpen, result.root, commandCount, executionNode?.status]);
+  }, [
+    api,
+    projectOpen,
+    result.root,
+    result.managed?.projectRevision,
+    commandCount,
+    executionNode?.status,
+    verification.status,
+    verification.error?.code,
+  ]);
 
   useEffect(() => {
     let live = true;
@@ -810,6 +820,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         acknowledgements,
       );
       setInstallationPlan(operation);
+      if (operation.error) setApprovalErrorAttempt((attempt) => attempt + 1);
       await refreshInstallationState();
     } finally {
       setInstallationBusy(false);
@@ -1336,13 +1347,26 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const review = async () => {
-    if (!sessionId || commandCount === 0) return;
+    if (!sessionId || commandCount === 0) {
+      setReviewOpen(true);
+      setEditError({
+        code: "EDIT_SESSION_EMPTY",
+        message: "В черновике нет изменений для проверки.",
+      });
+      return;
+    }
     setEditBusy(true);
     setReviewOpen(true);
+    setEditError(null);
     try {
       const next = await api.reviewEditSession(sessionId);
       setEdit(next);
       setEditError(next.error || null);
+    } catch {
+      setEditError({
+        code: "EDIT_REVIEW_UNAVAILABLE",
+        message: "Не удалось повторно проверить черновик. Попробуйте ещё раз.",
+      });
     } finally {
       setEditBusy(false);
     }
@@ -2200,6 +2224,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               }))}
               serviceExecutionPriorities={serviceExecutionPriorities}
               onApprovePlan={approveInstallationPlan}
+              approvalErrorAttempt={approvalErrorAttempt}
               run={installationRun}
               runPlan={runPlan}
               runProgress={runProgress}
@@ -2641,7 +2666,7 @@ function ProjectExportDialog({
               </div>
             </label>
             <label>
-              Имя новой папки
+              Имя проекта и новой папки
               <input
                 value={name}
                 onChange={(event) => onNameChange(event.target.value)}
@@ -2769,10 +2794,18 @@ function ReviewDialog({
                 )}
               </p>
             )}
-            <p>
-              Локальная структурная проверка завершена. Документов:{" "}
-              {plan.affectedDocuments?.length ?? 0}.
-            </p>
+            {plan.status === "NO_CHANGE" ? (
+              <p role="status">
+                Изменения не затрагивают файлы проекта — сохранять нечего.
+                Пароль PKCS#12 хранится только в текущем сеансе и не
+                записывается в проект.
+              </p>
+            ) : (
+              <p>
+                Локальная структурная проверка завершена. Документов:{" "}
+                {plan.affectedDocuments?.length ?? 0}.
+              </p>
+            )}
             <ul>
               {plan.semanticChanges?.map((change, index) => (
                 <li key={index}>{change.safeSummary}</li>
@@ -2806,9 +2839,9 @@ function ReviewDialog({
             <button onClick={onSave} disabled={busy}>
               Сохранить проект
             </button>
-          ) : !conflict ? (
+          ) : !conflict && plan?.status !== "NO_CHANGE" ? (
             <button onClick={onReview} disabled={busy}>
-              Повторить проверку
+              {busy ? "Проверка…" : "Повторить проверку"}
             </button>
           ) : null}
         </div>

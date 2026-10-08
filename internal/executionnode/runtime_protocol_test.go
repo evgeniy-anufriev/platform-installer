@@ -165,6 +165,30 @@ func TestPlanStagingClaimsPrivateDirectoryUnderStickyVarTmp(t *testing.T) {
 		t.Fatal("private claim guards missing")
 	}
 }
+
+func TestCandidateStagingCreatesOwnedPrivateBase(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "inventory"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	runner := &protocolRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	archive, err := createProjectArchive(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(archive)
+	if _, err := transport.stageProjectArchive(context.Background(), testNode(), archive, "installer-123", "candidate", strings.Repeat("a", 32)); err != nil {
+		t.Fatal(err)
+	}
+	claim := runner.calls[0].input
+	for _, guard := range []string{"stat -c %a /var/tmp", `mkdir -m 0700 -- "$base"`, `stat -c %u "$base"`, `[ ! -L "$base" ]`} {
+		if !strings.Contains(claim, guard) {
+			t.Fatalf("candidate staging guard %q missing", guard)
+		}
+	}
+}
+
 func TestRuntimeProtocolIsTypedAndNeverCarriesClientCommandMaterial(t *testing.T) {
 	runner := &protocolRunner{}
 	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}

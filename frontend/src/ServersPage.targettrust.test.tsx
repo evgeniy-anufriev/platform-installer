@@ -117,6 +117,37 @@ describe("target host trust on the Servers page", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows preparation in progress until the operation returns", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let finishPreparation!: (result: { status: string }) => void;
+    const onPrepareExecutionNode = vi.fn(
+      () =>
+        new Promise<{ status: string }>((resolve) => {
+          finishPreparation = resolve;
+        }),
+    );
+    render(
+      <ServersPage
+        {...props}
+        onPlanExecutionNodePreparation={vi.fn().mockResolvedValue({
+          status: "CONFIRMATION_REQUIRED",
+          planId: "prepare-2",
+          steps: [{ id: "activate", action: "ACTIVATE", mutates: true }],
+        })}
+        onPrepareExecutionNode={onPrepareExecutionNode}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Подтвердить подготовку" }));
+
+    expect(await screen.findByText("Выполняется подготовка")).toBeTruthy();
+    expect(onPrepareExecutionNode).toHaveBeenCalledWith("prepare-2");
+    finishPreparation({ status: "PREPARED" });
+    expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
+    vi.restoreAllMocks();
+  });
+
   it("does not offer approval while edits are unsaved", () => {
     render(<ServersPage {...props} commandCount={1} onProbeTargetHostKey={vi.fn()} onApproveTargetHostKey={vi.fn()} onDeclineTargetHostKey={vi.fn()} />);
     expect((screen.getByRole("button", { name: "Проверить SSH-ключ" }) as HTMLButtonElement).disabled).toBe(true);

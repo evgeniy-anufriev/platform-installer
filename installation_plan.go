@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"platform-installer/internal/executionnode"
@@ -151,16 +152,110 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 		a.installationPlanID = ""
 		return installationPlanFailure(errors.New("PLAN_STALE"))
 	}
+	view, viewErr := installationPlanView(record, binding)
+	if viewErr != nil {
+		return installationPlanFailure(viewErr)
+	}
+	view.SecretOutputEncryptionRequired = a.secretOutputEncryptionRequiredLocked()
+	view.SecretOutputEncryptionPasswordPresent = a.secretOutputEncryptionPasswordPresentLocked()
+	approvalFailure := func(err *ProjectOpenError) InstallationPlanOperation {
+		return InstallationPlanOperation{Status: installationPlanStateFor(record), Plan: &view, Error: err}
+	}
 	if a.secretOutputEncryptionRequiredLocked() {
 		credentialBinding, bindingErr := a.credentialBindingLocked()
 		if bindingErr != nil || !a.secrets.HasOutputEncryptionPassword(credentialBinding) {
-			return installationPlanFailure(errors.New("SECRET_OUTPUT_ENCRYPTION_PASSWORD_REQUIRED"))
+			code := "SECRET_OUTPUT_ENCRYPTION_PASSWORD_REQUIRED"
+			return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
 		}
 	}
+	missing, secretErr := a.missingInstallationSecretsLocked(record.Plan, false)
+	if secretErr != nil {
+		code := projectErrorCode(secretErr)
+		return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
+	}
+	if len(missing) > 0 {
+		return approvalFailure(missingInstallationSecretsError(missing))
+	}
 	if err := binding.plans.ApprovePlan(planID, append([]string(nil), acknowledgements...)); err != nil {
-		return installationPlanFailure(err)
+		code := projectErrorCode(err)
+		return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
 	}
 	return a.getInstallationPlanLocked(planID)
+}
+
+// missingInstallationSecretsLocked uses only the current Core plan and the
+// Core-attested descriptor set. Values remain private inside the broker.
+func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan, attest bool) ([]string, error) {
+	passwords, err := installationPlanRuntimeSecretRequirements(plan)
+	if err != nil {
+		return nil, err
+	}
+	labels := map[string]string{"pki-store-password": "Сертификаты: пароль PKCS#12"}
+	for _, descriptor := range a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision) {
+		label := descriptor.DisplayLabel
+		if descriptor.ServiceDeployment != "" {
+			label = descriptor.ServiceDeployment + ": " + label
+		}
+		labels[descriptor.RequirementRef] = label
+	}
+	binding, err := a.credentialBindingLocked()
+	if err != nil {
+		return nil, err
+	}
+	missing := a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), !attest)
+	if len(missing) > 0 || !attest || len(passwords) == 0 {
+		for i, reference := range missing {
+			if label := labels[reference]; label != "" {
+				missing[i] = label
+			}
+		}
+		return missing, nil
+	}
+	if len(passwords) > 0 {
+		currentDescriptors := a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision)
+		if currentDescriptors == nil {
+			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
+			if descriptors.Status != "READY" {
+				if descriptors.Error != nil && descriptors.Error.Code != "" {
+					return nil, errors.New(descriptors.Error.Code)
+				}
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+			}
+			currentDescriptors = descriptors.Descriptors
+		}
+		known := map[string]bool{}
+		for _, descriptor := range currentDescriptors {
+			known[descriptor.RequirementRef+"\x00"+descriptor.Purpose] = true
+			label := descriptor.DisplayLabel
+			if descriptor.ServiceDeployment != "" {
+				label = descriptor.ServiceDeployment + ": " + label
+			}
+			labels[descriptor.RequirementRef] = label
+		}
+		for _, reference := range passwords {
+			if !known[reference+"\x00SERVICE_PASSWORD"] {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+		}
+	}
+	missing = a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), false)
+	for i, reference := range missing {
+		if label := labels[reference]; label != "" {
+			missing[i] = label
+		}
+	}
+	return missing, nil
+}
+
+func (a *App) runtimeSecretEvidenceDescriptorsLocked(revision string) []RuntimeSecretDescriptorView {
+	if a.runtimeSecretEvidence == nil || a.runtimeSecretEvidence.projectRevision != revision || a.current.Project == nil || a.runtimeSecretEvidence.projectID != a.current.Project.ID || a.binding == nil || a.runtimeSecretEvidence.nodeID != a.binding.node.ID || !runtimeEvidenceMatchesExpected(a.runtimeSecretEvidence.runtime, a.binding.reader.runtimeRelease) {
+		return nil
+	}
+	return a.runtimeSecretEvidence.descriptors
+}
+
+func missingInstallationSecretsError(missing []string) *ProjectOpenError {
+	return &ProjectOpenError{Code: "INSTALLATION_SECRETS_MISSING", Message: "Задайте обязательные секреты перед одобрением и запуском плана: " + strings.Join(missing, "; ") + "."}
 }
 
 func (a *App) getInstallationPlanLocked(planID string) InstallationPlanOperation {

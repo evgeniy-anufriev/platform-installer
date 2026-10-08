@@ -190,6 +190,7 @@ export function InstallationPage({
   serviceDeployments = [],
   serviceExecutionPriorities = [],
   onApprovePlan,
+  approvalErrorAttempt = 0,
   run,
   runPlan,
   runProgress,
@@ -216,6 +217,7 @@ export function InstallationPage({
   serviceDeployments?: ServiceDeploymentInput[];
   serviceExecutionPriorities?: ServicePriorityInput[];
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
+  approvalErrorAttempt?: number;
   run?: InstallationRunOperation;
   runPlan?: InstallationPlanView;
   runProgress?: RunProgress;
@@ -443,6 +445,7 @@ export function InstallationPage({
             onCreatePlan={createPlan}
             orderError={orderError}
             onApprovePlan={onApprovePlan}
+            approvalErrorAttempt={approvalErrorAttempt}
             onStart={onStart}
             run={run}
             credentialStatus={credentialStatus}
@@ -489,6 +492,7 @@ function PlanStage({
   onCreatePlan,
   orderError,
   onApprovePlan,
+  approvalErrorAttempt,
   onStart,
   run,
   credentialStatus,
@@ -501,6 +505,7 @@ function PlanStage({
   onCreatePlan: () => void;
   orderError: string;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
+  approvalErrorAttempt: number;
   onStart: (planId: string) => void;
   run?: InstallationRunOperation;
   credentialStatus: SessionCredentialStatus | null;
@@ -521,6 +526,17 @@ function PlanStage({
   const [outputPassword, setOutputPassword] = useState("");
   const [outputConfirm, setOutputConfirm] = useState("");
   const [outputError, setOutputError] = useState("");
+  const errorsRef = useRef<HTMLElement>(null);
+  const handledApprovalErrorAttempt = useRef(approvalErrorAttempt);
+  useEffect(() => {
+    if (
+      approvalErrorAttempt > handledApprovalErrorAttempt.current &&
+      operation?.error
+    ) {
+      handledApprovalErrorAttempt.current = approvalErrorAttempt;
+      errorsRef.current?.focus();
+    }
+  }, [approvalErrorAttempt, operation?.error]);
   const plan = operation?.plan;
   if (!plan) {
     return (
@@ -535,6 +551,8 @@ function PlanStage({
     );
   }
   const requiredCodes = plan.acknowledgements.map((item) => item.code);
+  const required = !!plan.pkiStorePasswordRequired;
+  const present = credentialStatus?.pkiStorePasswordStatus === "PRESENT";
   const outputRequired = !!plan.secretOutputEncryptionRequired;
   const outputReady = !outputRequired || outputPasswordPresent;
   const currentPlan =
@@ -558,6 +576,78 @@ function PlanStage({
     state.plan.status === "PLAN_APPROVED" &&
     plan.status === "EXECUTABLE" &&
     plan.approved;
+  const startBlockers: Array<{ code: string; message: string }> = [];
+  const addStartBlocker = (code: string, message: string) => {
+    if (!startBlockers.some((item) => item.code === code && item.message === message))
+      startBlockers.push({ code, message });
+  };
+  for (const prerequisite of state?.prerequisites || []) {
+    const message =
+      prerequisite.code === "EXECUTION_NODE_READY_REQUIRED"
+        ? "Узел выполнения не готов. Откройте «Серверы» и проверьте его состояние."
+        : planFindingMessage(prerequisite.safeMessage);
+    addStartBlocker(prerequisite.code, message);
+  }
+  for (const finding of plan.findings || []) {
+    addStartBlocker(finding.code, planFindingMessage(finding.safeMessage));
+  }
+  if (draftActive || state?.project?.hasUnsavedChanges) {
+    addStartBlocker(
+      "PROJECT_HAS_UNSAVED_CHANGES",
+      "Есть несохранённые изменения проекта. Сохраните или отмените их и сформируйте новый план.",
+    );
+  }
+  if (state?.executionNode.status !== "READY") {
+    addStartBlocker(
+      "EXECUTION_NODE_READY_REQUIRED",
+      "Узел выполнения не готов. Откройте «Серверы» и проверьте его состояние.",
+    );
+  }
+  if (state?.project?.revision !== plan.projectRevision) {
+    addStartBlocker(
+      "PLAN_PROJECT_REVISION_MISMATCH",
+      "План создан для другой ревизии проекта. Сформируйте свежий план.",
+    );
+  }
+  if (state?.plan.planId !== plan.id) {
+    addStartBlocker(
+      "PLAN_NOT_CURRENT",
+      "Этот план больше не является текущим. Сформируйте свежий план.",
+    );
+  }
+  if (
+    state?.status !== "PLAN_APPROVED" ||
+    state?.plan.status !== "PLAN_APPROVED"
+  ) {
+    addStartBlocker(
+      "PLAN_APPROVAL_REQUIRED",
+      "Текущий план не находится в состоянии «Одобрен». Одобрите свежий план.",
+    );
+  }
+  if (plan.status !== "EXECUTABLE") {
+    addStartBlocker(
+      "PLAN_NOT_EXECUTABLE",
+      "План заблокирован. Исправьте перечисленные замечания и сформируйте его заново.",
+    );
+  }
+  if (required && !present) {
+    addStartBlocker(
+      "PKI_STORE_PASSWORD_REQUIRED",
+      "В сеансе не задан пароль хранилищ PKCS#12, необходимый плану.",
+    );
+  }
+  if (!outputReady) {
+    addStartBlocker(
+      "SECRET_OUTPUT_ENCRYPTION_PASSWORD_REQUIRED",
+      "Для защищённых выходных файлов задайте пароль шифрования в настройках плана.",
+    );
+  }
+  if (!canStart && startBlockers.length === 0) {
+    addStartBlocker(
+      "START_PREREQUISITES_UNAVAILABLE",
+      "Проверьте актуальность плана и готовность узла выполнения.",
+    );
+  }
   const hasActions = plan.phases.some((phase) => phase.actions.length > 0);
   const saveOutputPassword = async () => {
     setOutputError("");
@@ -592,6 +682,31 @@ function PlanStage({
             <dd>{plan.expiresAt}</dd>
           </dl>
         </article>
+        {(operation.error || run?.error) && (
+          <article
+            className="card installation-plan-errors"
+            role="alert"
+            tabIndex={-1}
+            ref={errorsRef}
+          >
+            <h2>Ошибки плана</h2>
+            <ul>
+              {operation.error && (
+                <li>
+                  <code>{operation.error.code}</code> — {operation.error.message}
+                </li>
+              )}
+              {run?.error && (
+                <li>
+                  <code>{run.error.code}</code> — {run.error.message}
+                  {!!run.error.diagnosticCodes?.length && (
+                    <span> Диагностика Core: {run.error.diagnosticCodes.join(", ")}</span>
+                  )}
+                </li>
+              )}
+            </ul>
+          </article>
+        )}
         {!currentPlan && (
           <article className="card">
             <p role="status">
@@ -825,6 +940,7 @@ function PlanStage({
           onStart={onStart}
           credentialStatus={credentialStatus}
           outputReady={outputReady}
+          startBlockers={startBlockers}
           runActive={["STARTING", "RUNNING", "CANCELLING"].includes(
             run?.run?.state || "",
           )}
@@ -841,6 +957,7 @@ function StartApproval({
   onStart,
   credentialStatus,
   outputReady,
+  startBlockers,
   runActive,
 }: {
   plan: NonNullable<InstallationPlanOperation["plan"]>;
@@ -849,6 +966,7 @@ function StartApproval({
   onStart: (planId: string) => void;
   credentialStatus: SessionCredentialStatus | null;
   outputReady: boolean;
+  startBlockers: Array<{ code: string; message: string }>;
   runActive: boolean;
 }) {
   const required = plan.pkiStorePasswordRequired;
@@ -858,13 +976,24 @@ function StartApproval({
       className="installation-plan-actions"
       aria-label="Действия с планом"
     >
-      <span className="muted" role="status">
-        {runActive
-          ? "Выполнение этого плана уже запущено."
-          : canStart && (!required || present) && outputReady
-            ? "Одобренный план готов к запуску."
-            : "Запуск пока недоступен: не выполнены обязательные условия плана."}
-      </span>
+      <div className="installation-start-gate">
+        <span className="muted" role="status">
+          {runActive
+            ? "Выполнение этого плана уже запущено."
+            : canStart && (!required || present) && outputReady
+              ? "Одобренный план готов к запуску."
+              : "Запуск пока недоступен. Устраните причины ниже:"}
+        </span>
+        {!runActive && startBlockers.length > 0 && (
+          <ul className="safe-findings" aria-label="Причины недоступности запуска">
+            {startBlockers.map((item, index) => (
+              <li key={`${item.code}:${index}`}>
+                <code>{item.code}</code> {item.message}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <button
         type="button"
         className="primary"
@@ -926,6 +1055,9 @@ function ExecutionStage({
         {run?.error ? (
           <p className="field-error" role="alert">
             Запуск не начался: <code>{run.error.code}</code> {run.error.message}
+            {!!run.error.diagnosticCodes?.length && (
+              <> Диагностика Core: {run.error.diagnosticCodes.join(", ")}</>
+            )}
           </p>
         ) : (
           <p>В этом сеансе запуск ещё не начат.</p>

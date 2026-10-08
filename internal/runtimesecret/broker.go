@@ -636,6 +636,25 @@ func (b *Broker) Close() { b.Clear() }
 // WithTargetCredential exposes one in-memory credential to a synchronous
 // caller while the broker lease remains valid. The callback must not retain
 // the slices; they are zeroed immediately after it returns.
+// MissingRequiredSecrets reports only public requirement IDs. It never copies
+// secret values out of the broker and does not extend their lifetime.
+func (b *Broker) MissingRequiredSecrets(binding Binding, passwords []string, requirePKI, includePending bool) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	result := make([]string, 0, len(passwords)+1)
+	valid := b.lease != nil && b.lease.binding == binding && b.now().Before(b.lease.expiresAt)
+	pendingValid := includePending && b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt)
+	if requirePKI && (!valid || len(b.lease.pkiStorePassword) == 0) {
+		result = append(result, "pki-store-password")
+	}
+	for _, reference := range passwords {
+		if (!valid || len(b.lease.runtimeSecretValues[reference]) == 0) && (!pendingValid || len(b.pending.values[reference]) == 0) {
+			result = append(result, reference)
+		}
+	}
+	return result
+}
+
 func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential) error) error {
 	if use == nil {
 		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")

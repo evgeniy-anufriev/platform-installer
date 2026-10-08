@@ -415,24 +415,35 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_ENCRYPTION_PASSWORD_REQUIRED", Message: "Set and confirm the password for locally encrypted service output files before approval and Start."}}
 		}
 	}
-	typedInputs := typedRuntimeSecretRequirements(planRecord.Plan)
-	if len(typedInputs) > 0 {
-		descriptors := a.getRuntimeSecretDescriptorsLocked(false)
-		if descriptors.Status != "READY" || !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs) {
-			a.editMu.Unlock()
-			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_STALE", Message: "Core did not confirm the exact service input requirements for this saved plan."}}
+	if !a.startOutcomeUnknown {
+		typedInputs := typedRuntimeSecretRequirements(planRecord.Plan)
+		if len(typedInputs) > 0 {
+			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
+			if descriptors.Status != "READY" {
+				a.editMu.Unlock()
+				if descriptors.Error != nil {
+					return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: descriptors.Error.Code, Message: projectErrorMessage(descriptors.Error.Code), DiagnosticCodes: descriptors.Error.DiagnosticCodes}}
+				}
+				code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
+				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+			}
+			if !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs) {
+				a.editMu.Unlock()
+				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_STALE", Message: "Типизированные входы сервисов не совпадают с требованиями одобренного плана. Сформируйте свежий план и повторите ввод секретов."}}
+			}
 		}
-	}
-	requirements, requirementsErr := installationPlanRuntimeSecretRequirements(planRecord.Plan)
-	if requirementsErr != nil {
-		a.editMu.Unlock()
-		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(requirementsErr), Message: projectErrorMessage(projectErrorCode(requirementsErr))}}
+		missing, secretErr := a.missingInstallationSecretsLocked(planRecord.Plan, true)
+		if secretErr != nil {
+			a.editMu.Unlock()
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(secretErr), Message: projectErrorMessage(projectErrorCode(secretErr))}}
+		}
+		if len(missing) > 0 {
+			a.editMu.Unlock()
+			return InstallationRunOperation{Status: "BLOCKED", Error: missingInstallationSecretsError(missing)}
+		}
 	}
 	credentialBinding, credentialErr := a.credentialBindingLocked()
 	retryingUnknown := a.startOutcomeUnknown
-	if credentialErr == nil && !retryingUnknown {
-		credentialErr = a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements)
-	}
 	if credentialErr != nil {
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(credentialErr), Message: projectErrorMessage(projectErrorCode(credentialErr))}}

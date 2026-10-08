@@ -15,6 +15,8 @@ new destructive operation still requires explicit owner authorization.
 | EXECUTION-NODE-PASSWORD-AUTH-01 | Implemented; targeted review APPROVE, sudo UI checks owner-confirmed | [Plan](docs/execution-node-password-auth-plan.md). Real React/Wails password checks passed for target node2 and Exec node1. Password hold survives lease expiry only for the exact active Start/run. Real Windows/RED OS password SCP passed; staging/cleanup and scoped sudo corrections reviewed. Owner confirmed the sudo correction works. Owner-confirmed correct/wrong/empty sudo cases accepted by independent EP-S04 recheck; zero remaining blockers. Full installation/Start with password remains separate. |
 | PROJECT-VERIFY-PASSWORD-FIX-01 | Implemented; owner confirms Verify completes, FULL DIFF APPROVE | [Plan](docs/project-verification-password-fix-plan.md). Password archive transfer no longer requires PEM; ordinary Verify uses a private temporary directory. Transfer failures show unavailable with their own reason. Go checks and 64 App tests/build/lint pass; exact owner terminal status/revision not supplied. |
 | PROJECT-SAVE-NODE-READINESS-FIX-01 | Implemented; FULL DIFF APPROVE_WITH_CHANGES, owner UI repeat pending | [Journal](docs/service-install-11-test-journal.md). Saving placement retains prepared node only for unchanged project/selected SSH endpoint/runtime bundle/catalog. Verification and installation approval still become stale. Go tests/vet pass; credential/pin guards unchanged. No blocking findings; actual Commit/Verify and expired-credential acceptance remain open. |
+| PROJECT-EXPORT-SIBLING-FIX-01 | Implemented; FULL DIFF APPROVE, UI repeat pending | [Journal](docs/service-install-11-test-journal.md). Export overlap guard checks final destination rather than its parent; sibling export passes, same-root/nested destinations remain blocked. Go tests/vet and packaged export-fix build pass; zero review findings. |
+| PROJECT-EXPORT-DISPLAY-NAME-01 | Implemented; FULL DIFF APPROVE, real UI repeat pending | [Plan](docs/project-export-display-name-plan.md). Export name updates only copied project.yml metadata.name; source and project ID remain unchanged. Original source revision and output digests/sizes are separate. Go checks and 65 App tests/build/lint pass; packaged export-name EXE rebuilt. No blocking findings. |
 | SERVICE-UNIT-NAMING-01 | Implementation and focused QA complete; real naming acceptance pending | [Plan](docs/service-unit-naming-plan.md). Requires separately approved S11-00 baseline and real full-service UI naming checks. Prior I05 success does not prove new names. |
 | SESSION-RUN-CREDENTIAL-01 | Implemented; real expiry-boundary acceptance pending | [Plan](docs/session-active-run-credential-plan.md). Go tests/vet passed; exercise the real React/Wails flow at the lease-expiry boundary. Owner declined another review. |
 | EXECUTION-ORDER-01 | Implemented with focused standalone evidence; remaining acceptance pending | [Plan](docs/execution-order-01-plan.md), ADR-030. Keep source/provider dependency fail-closed; close interruption/recovery, stale-record deletion and real UI gaps. |
@@ -47,8 +49,11 @@ The current journal records:
 The [UI test cases](docs/service-install-11-ui-test-cases.md) and
 [test journal](docs/service-install-11-test-journal.md) define detailed coverage.
 The journal is evidence, not permission to perform a new run or reset.
-S11-00 (2026-10-01) proved an Installer-free QA baseline, not a pristine OS;
-a new cleanup for naming acceptance is separately pending.
+S11-00 was repeated on 2026-10-08 by explicit owner request on node1/node2/node3;
+the Installer-free QA baseline is restored, not a pristine OS. See
+[cleanup record](docs/service-install-11-cleanup.md). Windows projects/cache and
+uncommitted source changes were retained. New preparation/installation and
+naming acceptance remain separate; cleanup does not authorize Start.
 
 ## SI11 source corrections and recorded runtime checkpoint
 

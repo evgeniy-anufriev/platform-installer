@@ -538,6 +538,33 @@ it("shows the read-only Installation state without requesting a deployment plan"
   expect(getInstallationState).toHaveBeenCalled();
 });
 
+it("refreshes Installation verification after header Verify without checking the node again", async () => {
+  let verificationStatus = "UNVERIFIED";
+  const getInstallationState = vi.fn().mockImplementation(async () => ({
+    status: "PREREQUISITES_REQUIRED",
+    project: {
+      revision: "sha256:old",
+      verificationStatus,
+      hasUnsavedChanges: false,
+    },
+    executionNode: { status: "READY", safeLabel: "node1" },
+    plan: { status: "NOT_CREATED" },
+    prerequisites: [],
+  }));
+  const value = api({
+    getInstallationState,
+    verifyProject: vi.fn().mockImplementation(async () => {
+      verificationStatus = "VERIFIED";
+      return { status: "VERIFIED", projectRevision: "sha256:old" };
+    }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+  await waitFor(() => expect(getInstallationState).toHaveBeenCalled());
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  await waitFor(() => expect(screen.getAllByText("Проверено")).toHaveLength(2));
+});
+
 it("refreshes a running installation without navigation or a SUCCEEDED event", async () => {
   let onRunEvent:
     | Parameters<
@@ -2778,7 +2805,7 @@ describe("UI-01I2 project export", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Выбрать" }));
     await userEvent.type(
-      screen.getByLabelText("Имя новой папки"),
+      screen.getByLabelText("Имя проекта и новой папки"),
       "portable-project",
     );
     await userEvent.click(
@@ -2864,6 +2891,74 @@ it("shows a Russian explanation for INVALID_VALUE in Review", async () => {
       "Configuration value does not match the catalog descriptor",
     ),
   ).toBeNull();
+});
+
+it("explains NO_CHANGE and does not offer a redundant review retry", async () => {
+  const value = api({
+    reviewEditSession: vi.fn().mockResolvedValue({
+      status: "NO_CHANGE",
+      plan: {
+        status: "NO_CHANGE",
+        saveAllowed: false,
+        semanticChanges: [],
+        affectedDocuments: [],
+      },
+    }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Просмотреть изменения" }),
+  );
+
+  expect(
+    await screen.findByText(
+      /Изменения не затрагивают файлы проекта — сохранять нечего\./,
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(/Пароль PKCS#12 хранится только в текущем сеансе/),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "Повторить проверку" }),
+  ).toBeNull();
+});
+
+it("shows an error when repeating structural review fails", async () => {
+  const reviewEditSession = vi
+    .fn()
+    .mockResolvedValueOnce({
+      status: "BLOCKED",
+      plan: {
+        status: "BLOCKED",
+        saveAllowed: false,
+        semanticChanges: [],
+        affectedDocuments: [],
+      },
+    })
+    .mockRejectedValueOnce(new Error("transport detail"));
+  const value = api({ reviewEditSession });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Просмотреть изменения" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Повторить проверку" }),
+  );
+
+  expect(
+    await screen.findByText(
+      "Не удалось повторно проверить черновик. Попробуйте ещё раз.",
+    ),
+  ).toBeTruthy();
+  expect(reviewEditSession).toHaveBeenCalledTimes(2);
 });
 
 it("keeps a failed global verification visible and opens its transfer reason", async () => {

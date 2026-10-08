@@ -199,10 +199,22 @@ The page has six compact regions in this order:
 
 The Plan tab shows the approved plan and its ordered actions. Once approved, a
 sticky bottom action bar exposes **Start execution**; it remains disabled while
-the run is active or any existing plan/runtime prerequisite is unmet. Do not
-add a Certificate-page link or Java/PKCS#12 password details here. Certificate
-secrets remain configured on Certificates; the Plan tab reports only a concise
-generic reason when execution prerequisites are not satisfied.
+the run is active or any existing plan/runtime prerequisite is unmet. When
+blocked, the action area lists every known plan finding and unmet prerequisite,
+including any missing session-only credential, with a safe explanation and
+code. It does not add a Certificate-page link; certificate secrets remain
+configured on Certificates.
+Approval checks that every password required by the fresh Core plan is present
+in the current session. Missing entries are listed by service deployment and
+field; the plan remains available for retry after entering them on Services.
+Approval and Start errors appear in a dedicated card directly below the plan
+summary, before protected output settings, with the safe machine code followed
+by its Russian explanation.
+After an approval attempt fails, keyboard focus moves to that error card,
+including when a repeated attempt returns the same error.
+Immediately before Start, Go checks the same requirements again because a
+session secret may have expired or been cleared after approval. Conditional
+service inputs follow their existing operation-specific runtime rules.
 The phase list uses collapsible summaries with action counts and target nodes;
 long phases initially show a few actions with an explicit control to reveal the
 rest. The protected-output password form is collapsed after the password is
@@ -285,7 +297,9 @@ error states. An existing but older active runtime is **Проверен: Тре
 обновление**, not **Подготовлен**. The check compares the observed active
 bundle digest with the verified project bundle and explains a mismatch before
 plan creation or execution. A newer preparation result replaces the older
-check state; a later check supersedes the prior preparation display.
+check state; a later check supersedes the prior preparation display. After the
+operator confirms preparation, the status reads **Выполняется подготовка**
+until the operation returns its final result.
 
 The page may accept a password or private-key path only as a current-session
 runtime credential input. A server record stores transport metadata and, at
@@ -464,9 +478,13 @@ are shown as inherited role defaults and are not written merely because they
 are displayed.
 
 Advanced mode may show issuer, SAN, EKU, validity, fingerprints and store
-format. The page has a write-only input for the runtime password protecting
-generated PKCS#12 Java keystore/truststore files; the value is held in the
-active Installer session and never redisplayed or saved in project state.
+format. TLS profile settings provide a write-only password input for generated
+PKCS#12 Java keystore/truststore files; the value is held in the active
+Installer session and never redisplayed or saved in project state. The project
+stores only the fixed opaque reference `runtime:pki-store-password`.
+Replacing only this password updates the current session directly and does not
+create a project draft command. Changing TLS profile settings still creates a
+draft command; the password remains session-only in either case.
 Private keys, password files, raw OpenSSL/keytool commands and PKI runtime
 paths remain hidden. A password change can rebuild derived stores from the
 existing validated PEM identity without issuing a new certificate. Imported/
@@ -478,7 +496,7 @@ trigger a separate issuance path.
 
 The owner-approved Certificates layout uses a left-side ordered PKI type
 navigator and a right-side editor/list for the selected type. The PKCS#12
-session password sits directly below the page heading; the dependency guide is
+session password is entered in TLS profile settings; the dependency guide is
 a compact strip. Its graph is a CA → certificate profile chain that branches
 to independent TLS profile and certificate scope objects. The bottom Core
 section remains read-only evidence and verification, not certificate issuance.
@@ -548,6 +566,10 @@ revisions/digests → stage and atomically replace approved documents → local
 source-view refresh. Core infrastructure validation is a separate optional
 Project Verify; execution still requires fresh `BuildDeploymentPlan`. External
 change mismatch opens conflict review; it never overwrites silently.
+When structural review returns `NO_CHANGE` with no affected documents, explain
+that there is nothing to save and do not offer a redundant retry. Session-only
+secrets such as the PKCS#12 password remain available for execution but are not
+written to project files.
 
 ## 11. YAML and Jinja preservation
 

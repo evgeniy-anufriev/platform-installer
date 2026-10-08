@@ -33,6 +33,33 @@ func TestBrokerSetReplaceClearAndBinding(t *testing.T) {
 	}
 }
 
+func TestMissingRequiredSecretsDistinguishesPendingApprovalFromAttachedStart(t *testing.T) {
+	broker := NewBroker()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "synthetic-ssh-password"}); err != nil {
+		t.Fatal(err)
+	}
+	requirements := []string{"service-password"}
+	if got := broker.MissingRequiredSecrets(binding, requirements, false, true); len(got) != 1 || got[0] != "service-password" {
+		t.Fatalf("initial missing requirements=%v", got)
+	}
+	if err := broker.SetPendingRuntimeSecretValuesForRequirements(binding, requirements, map[string]string{"service-password": "synthetic-service-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := broker.MissingRequiredSecrets(binding, requirements, false, true); len(got) != 0 {
+		t.Fatalf("pending requirement not available for approval: %v", got)
+	}
+	if got := broker.MissingRequiredSecrets(binding, requirements, false, false); len(got) != 1 {
+		t.Fatalf("pending requirement incorrectly available for Start: %v", got)
+	}
+	if err := broker.PromotePendingRuntimeSecretValues(binding, requirements); err != nil {
+		t.Fatal(err)
+	}
+	if got := broker.MissingRequiredSecrets(binding, requirements, false, false); len(got) != 0 {
+		t.Fatalf("attested requirement missing for Start: %v", got)
+	}
+}
+
 func TestBrokerFailedReplacementPreservesLease(t *testing.T) {
 	broker := NewBroker()
 	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}

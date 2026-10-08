@@ -455,7 +455,7 @@ func TestAppKeepsEmptyProjectLocalWithoutSnapshotCall(t *testing.T) {
 
 func TestAppProjectExportIsLocalAndBoundToPreview(t *testing.T) {
 	root := t.TempDir()
-	projectBytes := []byte("apiVersion: platform.installer/project/v1alpha1\nkind: Project\nid: project-0123456789abcdef\n")
+	projectBytes := []byte("apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-0123456789abcdef\n  name: Empty\n")
 	if err := os.WriteFile(filepath.Join(root, "project.yml"), projectBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -483,8 +483,12 @@ func TestAppProjectExportIsLocalAndBoundToPreview(t *testing.T) {
 		t.Fatalf("commit=%#v", committed)
 	}
 	actual, err := os.ReadFile(filepath.Join(destination, "portable-project", "project.yml"))
-	if err != nil || string(actual) != string(projectBytes) {
+	if err != nil || !strings.Contains(string(actual), "name: portable-project") || !strings.Contains(string(actual), "id: project-0123456789abcdef") {
 		t.Fatalf("exported bytes=%q err=%v", actual, err)
+	}
+	unchanged, err := os.ReadFile(filepath.Join(root, "project.yml"))
+	if err != nil || string(unchanged) != string(projectBytes) {
+		t.Fatal("export renamed source project")
 	}
 	if reader.calls != 0 {
 		t.Fatalf("export contacted Core %d times", reader.calls)

@@ -50,6 +50,9 @@ export function executionNodeCombinedStatus(
   readiness?: ExecutionNodeStatusInput | null,
   preparation?: ExecutionNodeStatusInput | null,
 ): ExecutionNodeCombinedStatus {
+  if (preparation?.status === "PREPARING") {
+    return { label: "Выполняется подготовка", tone: "warning" };
+  }
   if (preparation?.status === "PREPARED") {
     return { label: "Проверен: Подготовлен", tone: "success" };
   }

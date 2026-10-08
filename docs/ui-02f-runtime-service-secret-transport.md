@@ -242,8 +242,11 @@ requires a new descriptor read and entry.  Only then are the in-memory values
 rebound to the plan fingerprint and staged.  React receives
 only safe status per requirement (`REQUIRED`, `PRESENT`, `MISSING`, `EXPIRED`)
 and the approved prompt label; it never receives a value, SecretRef, lease ID,
-or path.  Start is blocked before PUT if every required entry is not PRESENT;
-it directs the user to the owning Services or Certificates dialog.
+or path. Approval checks availability against public requirements already in
+the fresh Core plan; it does not issue another descriptor request. Start repeats
+the check against the current Core descriptor set before PUT because session values can
+expire or be cleared after approval; the error directs the user to the owning
+Services or Certificates dialog.
 
 ## 4. Execution Node and controller
 

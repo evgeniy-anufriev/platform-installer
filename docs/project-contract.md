@@ -220,7 +220,7 @@ Execution Node selection, package or artifact-source selection.
 - Plans pin project, catalog, artifact and Core fingerprints.
 - Readers reject unknown major versions safely.
 - Migrations are explicit, deterministic and preserve an original backup.
-- Import/export round trips preserve supported fields and unknown extension fields according to a documented policy.
+- Import/export round trips preserve supported fields and unknown extension fields according to a documented policy. Export names the copied project's `metadata.name` after the export directory name; source files and project ID remain unchanged. Only the copied optional `project.yml` may have normalized formatting, with unsupported YAML references/ambiguous documents rejected as described in [UI-01I](ui-01i-architecture.md).
 - No silent semantic migration occurs during apply.
 
 ## Required invariants
