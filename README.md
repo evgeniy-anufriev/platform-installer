@@ -1,67 +1,41 @@
 # Platform Installer V2
 
-Platform Installer V2 is a clean architecture track built beside V1. V1 remains the working reference implementation and the source of verified requirements, edge cases and integration scenarios.
+Standalone Ansible Core -> portable project contract -> Go adapter/orchestrator -> UI editor.
+The standard Ansible project is canonical desired state. Core owns infrastructure
+semantics on the selected Execution Node; Go owns Installer lifecycle and guarded
+filesystem transactions. React uses the shared backend interface for Wails and
+Browser transports.
 
-V2 starts with a standalone, offline-capable Ansible distribution. The desktop Installer is added only after the Ansible project contract and the first production service are stable.
+## Start here
 
-```text
-Portable Project
-      |
-      v
-Standalone Ansible Core
-validate -> plan -> apply -> verify
-      ^                 |
-      |                 v
-Go adapter         structured result
-      ^
-      |
-Visual UI editor
-```
-
-## Current status
-
-`ARCH-01` and `CORE-01` are complete: published contracts, the
-`platform.core` collection, a controller-only validation playbook, project
-fixtures and the Kafka service-package/role skeleton now exist. No production
-role, target mutation, backend or frontend has been implemented.
+- [Agent instructions](AGENTS.md): mandatory boundaries and procedure routing.
+- [Current state](CURRENT_STATE.md): current status, blockers and authorized steps.
+- [Task index](docs/agent-index.md): recurring-task contracts, code and checks.
+- [Administrator guide](docs/installer-engineer-guide.md): operator workflows.
+- [Architecture](docs/architecture.md), [project contract](docs/project-contract.md),
+  [Core](docs/ansible-core.md), [ADRs](docs/architecture-decisions.md) and
+  [roadmap](docs/roadmap.md): read the sections relevant to the task.
 
 ## Repository layout
 
-```text
-ansible-core/                    standalone Core collection and playbooks
-  collections/.../platform/core/
-    plugins/
-    roles/                       generic Core roles are added here
-contracts/                       published versioned schemas
-services/
-  kafka/
-    ansible_collections/platform/kafka/
-      roles/kafka_kraft/         independently usable service role
-examples/                        portable valid/invalid Ansible projects
-backend/                         deferred until the Core contract is stable
-frontend/                        deferred until the backend contract is stable
-```
+| Path | Purpose |
+| --- | --- |
+| `ansible-core/` | Standalone Core collection, fixed execution protocol, tools and playbooks |
+| `services/` | Versioned manifests, schemas, standalone roles/playbooks and service tests |
+| `contracts/` | Published versioned schemas and contract tests |
+| `examples/` | Representative portable Ansible projects and generated catalog fixture |
+| `internal/` | Go adapter, project lifecycle, guarded writer, execution and runtime secrets |
+| Root `app*.go`, `installation_*.go`, `browser*.go` | Application and transport bindings |
+| `frontend/src/` | React pages and shared `ProjectBackend`; Wails/Browser transports |
+| `config/` | Versioned application configuration |
+| `scripts/` | Bounded QA, source transfer and export helpers |
+| `docs/` | Contracts, plans, evidence, conditional agent procedures and historical snapshots |
 
-Validate the self-contained Core fixture on a Linux Ansible controller:
+Core/Python acceptance runs on the configured RED OS environment from current
+sources; see [QA procedure](docs/agent-procedures/qa.md). Windows orchestrates
+the runtime and supports Go/frontend/document checks. Local runtime/secrets,
+projects and bundles are not source inputs to ordinary repository searches.
 
-```bash
-cd ansible-core
-ansible-playbook -i examples/valid/inventory/hosts.yml playbooks/validate.yml
-```
-
-The current decisions, contract outline and milestone gates are documented in:
-
-- [Architecture](docs/architecture.md)
-- [Ansible Core](docs/ansible-core.md)
-- [Portable project contract](docs/project-contract.md)
-- [Backend and UI boundaries](docs/backend-and-ui.md)
-- [Architecture decisions](docs/architecture-decisions.md)
-- [V1 reference audit](docs/v1-reference-audit.md)
-- [Open questions](docs/open-questions.md)
-- [Roadmap](docs/roadmap.md)
-- [CORE-01 implementation](docs/core-01.md)
-- [Current state](CURRENT_STATE.md)
-
-## Relationship to V1
-
-V2 will selectively reuse verified behavior, tests and algorithms. It will not inherit V1 persistence schemas, Wails DTOs, page state or execution-specific domain models as architectural constraints.
+V1 at `../platform-installer` remains a reference and is unchanged unless
+explicitly requested. Historical milestone prose is evidence; current status
+is maintained only in `CURRENT_STATE.md`.

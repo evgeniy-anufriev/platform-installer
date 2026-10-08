@@ -1,22 +1,8 @@
 # Platform Installer V2 — Agent Instructions
 
-Platform Installer V2 is designed from the outside in:
-
-`Standalone Ansible Core -> stable portable project contract -> Go adapter/orchestrator -> UI editor`.
-
-The V1 repository at `../platform-installer` is a reference and requirements source. Do not copy V1 packages or models wholesale.
-
-## Current phase
-
-`CURRENT_STATE.md` is the authoritative dynamic source for milestone and
-project status. Read it before beginning milestone work and require an explicit
-owner request for the next gated milestone. This file contains durable
-engineering and process instructions, not a second copied milestone ledger.
-
-Preserve the established standalone Ansible Core contracts, Ansible-native
-desired-state ownership, managed Kafka/PKI projections and execution-node
-boundaries. Treat resolved topology, configuration, runtime projections,
-plans, facts and results as derived state.
+Build outside in: Standalone Ansible Core -> portable project contract -> Go adapter/orchestrator -> UI editor.
+V1 at `../platform-installer` is a reference only; do not copy its packages/models wholesale or change it without an explicit request.
+`CURRENT_STATE.md` is the sole current milestone/status source. A next gated milestone requires an explicit owner request.
 
 ## Boundaries
 
@@ -68,294 +54,50 @@ Always distinguish:
 
 Never persist plaintext secrets in project files, inventory, logs, events, audit or diagnostics.
 
-## Change discipline
+## Change discipline and mandatory procedures
 
-- Read the relevant canonical document before editing.
-- Before each UI milestone (including its backend sub-milestones), review
-  `docs/ui-design-01-mockups.html`, `docs/ui-design-01.md` and the milestone plan.
-  Record the relevant screens/flows and any contract discrepancies before coding;
-  resolve material discrepancies with the owner instead of silently diverging.
-  Repeat the mockup check at acceptance. Demo values/statuses are not Core rules.
-- Prefer one contract over parallel DTOs.
-- Avoid overengineering: prefer built-in Ansible tasks, filters and a small
-  explicit task sequence over custom Python modules/plugins. Introduce a new
-  abstraction only when the built-ins cannot express the required behavior
-  safely and the added contract is justified by reuse or complexity.
-- Roles and tasks may contain hardcoded product invariants, but must not
-  hardcode effective configuration. Dynamic endpoints, listener names,
-  protocols, paths, identities and security policy must come from the resolved
-  runtime projection shared by apply, verify and diagnostics.
-- Update decisions and roadmap when a boundary changes.
-- `architecture-reviewer` (`.codex/agents/architecture-reviewer.toml`) is an
-  independent read-only advisor to the owner, not an autonomous approval or
-  convergence authority. For an architecture-sensitive plan, run one FULL
-  PLAN review before presenting the plan to the owner. APPROVE goes to owner
-  approval; APPROVE_WITH_CHANGES may receive obvious bounded nonblocking
-  corrections and then goes to the owner without an automatic full re-review;
-  BLOCK stops automatic work and returns the finding IDs, evidence, impact,
-  smallest corrections and implementer recommendation to the owner. Never
-  redesign and repeatedly review until APPROVE. A further full PLAN review
-  requires an explicit owner request, except that one new review may follow a
-  materially changed owner-approved architecture revision.
-- Architecture DIFF review is risk-based. HIGH-RISK changes require one FULL
-  DIFF review: canonical-state ownership, filesystem transactions/first save,
-  migration, secret or credential persistence/security boundaries, Execution
-  Node or process lifecycle/cancel/recovery, artifact/bundle trust or source
-  authority, Vault/container-runtime architecture, a new persistence layer, or
-  public/versioned contract architecture. MEDIUM-RISK changes normally rely on
-  the PLAN review and need DIFF review only when the approved plan requires it,
-  implementation changes architecture materially, or the owner requests it;
-  examples include typed CRUD on the existing lifecycle, server model
-  extensions, service editor integration and topology UI on existing
-  contracts. LOW-RISK layout/labels/display fields, application-config value
-  additions, CLI formatting, documentation, straightforward tests and bounded
-  fixes within an approved contract normally require no architecture review.
-- Per architecture review gate, the maximum automatic budget is one initial
-  FULL review plus at most one TARGETED_RECHECK of owner-approved corrected
-  blocker IDs. The recheck inspects only those findings and the immediately
-  affected boundary. If it still BLOCKS, stop and return to the owner; there is
-  no third automatic cycle. Nonblocking findings never trigger an automatic
-  rerun. Any review beyond this budget requires explicit owner authorization.
-- A material architecture change is narrowly limited to a change in canonical
-  state ownership, persistence, public/versioned contract semantics,
-  Core/Go/UI ownership, execution or resolver/source-selection authority,
-  secret/security boundary, transaction/rollback model, daemon/lifecycle
-  subsystem, or owner-approved architectural scope. Tests, names, error text,
-  missing bounds/cleanup, negative tests, finding corrections that preserve the
-  approved architecture, documentation synchronization and behavior-preserving
-  local refactors do not automatically invalidate the whole review. If
-  uncertain, report that uncertainty to the owner instead of starting another
-  full review.
-- Mandatory overengineering review remains. It is blocking only with evidence
-  of a concrete unnecessary mechanism, a viable simpler existing/standard
-  alternative satisfying the current requirement, and material maintenance,
-  contract or safety cost. A merely aesthetic preference is nonblocking.
-  Architecture review never replaces owner authorization or applicable
-  Core-contract, safety and QA gates. Supply a facts-only envelope with mode,
-  FULL/TARGETED_RECHECK context, exact revision identity, scope/non-goals,
-  owner decisions, contracts and available evidence; never supply an expected
-  verdict or self-review conclusion. If the custom role cannot be loaded, give
-  the same full instructions to an independent read-only subagent and disclose
-  the fallback. Self-review never counts. If no independent reviewer is
-  available, report the review as unavailable/pending.
-- Use focused subagents for independent architecture review, implementation or QA when requested.
-- Keep V1 unchanged unless the user explicitly requests a V1 change.
+- Read the relevant canonical contract before editing; prefer one contract over parallel DTOs.
+- Before a UI milestone, including backend sub-milestones, check the relevant screens/flows in [mockups](docs/ui-design-01-mockups.html), [UI design](docs/ui-design-01.md), and its milestone plan. Read shared interaction/ownership rules plus affected screens; expand for cross-screen impact. Record discrepancies before coding, resolve material discrepancies with the owner, and repeat the relevant check at acceptance. Demo values/statuses are not Core rules.
+- Prefer built-in Ansible tasks/filters and a small explicit sequence. Add abstractions only where built-ins cannot safely meet the requirement and reuse/complexity justifies the contract.
+- Roles may hardcode product invariants, never effective configuration. Endpoints, listeners, protocols, paths, identities and security policy come from the resolved runtime projection shared by apply, verify and diagnostics.
+- PostgreSQL must consume explicit runtime PKI materialization plans; do not infer its behavior from PKI-01 completion.
+- Update architecture decisions and roadmap when a boundary changes.
+- Before architecture-sensitive planning or risk classification/review, read [review procedure](docs/agent-procedures/review.md). HIGH-RISK DIFF requires independent FULL review; LOW-RISK documentation/layout normally does not. Preserve the one FULL plus at most one owner-approved TARGETED_RECHECK budget, BLOCK stop, and owner approval. Self-review never counts.
+- Before Core/service QA or real WebView testing, read [QA procedure](docs/agent-procedures/qa.md), including its environment, PEM/session, trust, transfer and cleanup prerequisites.
+- Before SI11 UI preparation or acceptance, also read [SI11 procedure](docs/agent-procedures/si11.md), its linked test cases and current journal. Preparation does not authorize Approve/Start or prove installation acceptance.
+- Before artifact acquisition, bundle build/validation/publication/rebind/activation, or bundle-dependent UI QA, read [runtime bundle procedure](docs/agent-procedures/runtime-bundle.md).
+- Before stopping a process for a blocked Wails rebuild, read the exact-image restriction in the QA procedure; never stop an uncertain or unrelated process.
+- Use focused subagents for independent review, implementation or QA when requested. Main agent runs affected tests; milestone regression/offline/OS QA follows the applicable QA delegation rules without implying permission for unrelated agents.
+
+## Secrets, execution and acceptance gates
+
+- Runtime credentials/private keys belong only under `.runtime/secrets/` or the established runtime identity mechanism; never commit them, copy values to docs/skills/fixtures/source, or print them. Load only at runtime and redact command/error output. Missing credentials are a clear prerequisite failure.
+- Acceptance for every service and affected application flow MUST exercise actual React handlers/bindings against real Wails Go methods and, where relevant, supported Execution Node Core/Ansible. Use the existing bounded automation seam; never add a production bypass, arbitrary command bridge or test-only save/start path.
+- Direct Go harnesses and mocked frontend tests are supplementary. Record flow, saved revision, run IDs, terminal results and safe event/output evidence. An unavailable real bridge is blocking, never replaced by mocks. Visual inspection is separate; report PASS only if performed.
+- SI11's full user-flow acceptance follows its stricter visible-UI test cases; the separately bounded preparation seam is not acceptance evidence.
+- Run Python/Ansible Core tests on the configured RED OS VM from the current working tree. Do not install Python/Ansible on Windows for QA without an explicit request, use stale remote sources, or modify targets during read-only tests. ALT QA is required only for ALT-specific behavior or an explicit request.
+- For established EXEC-01 QA use `platform-automation`, its persistent SSH identity, `IdentitiesOnly=yes` and `sudo -n`; no admin/password sudo fallback. See QA procedure for the exact connection and bootstrap-only policy recovery.
+- Fresh install targets must not build their own bootstrap runtime. Use the trusted existing-runtime acquisition environment; SI11 bundle builds use node2, independently of node1 installation selection.
+- Publish updated verified bundles with the standard publisher into active `cache/` before dependent UI flows; locked/published digests must match. Preserve needed prior bundles before replacement; never manually copy into cache or delete the legacy fallback as a rename.
+- Do not search Downloads/Desktop or automatically download missing artifacts during QA/production. Report the expected missing path. Only separately authorized DEV acquisition may download/verify official artifacts; production never downloads from the Internet or mutates the distributed bundle.
+
+## Context efficiency and navigation
+
+- Start with these instructions and compact `CURRENT_STATE.md`. Reuse already loaded identical current instructions; reread if the file changed, the checkout changed, or completeness is uncertain. Confirm status freshness before gated work.
+- Use [task index](docs/agent-index.md) for recurring tasks; read only relevant contracts/procedures and scoped `internal/AGENTS.md` or `ansible-core/AGENTS.md` when working in those layers. Root-launched sessions must not assume nested instructions were automatically loaded.
+- Search known modules/symbols first, then expand as needed. Read bounded function/section excerpts, not whole large source files. Limit output at the command source; avoid truncation that forces repeated reads.
+- `vendor/**` is third-party/generated: never recursively enumerate/search/review/edit it in ordinary passes. Repository-wide searches MUST explicitly exclude it (`rg <pattern> -g '!vendor/**'`), including architecture/security/TODO/secret scans. Only an explicit dependency-source request or a concrete failure permits one known file; build/test tools may consume vendor normally.
+- Skip `ansible-core/**/_vendor/**`, generated/runtime output and V1 by default. Vendored tests/benchmarks require dependency validation/maintenance scope; V1 reading requires relevant reference behavior.
+- Use representative fixtures. Inspect generated source manifests/generators first; `examples/catalog/service-catalog.yml` is intentionally tracked and generated by `ansible-core/tools/build_fixture_catalog.py` from service manifests.
+- Never dump the repository or complete successful logs. Report concise evidence and relevant failures; broaden/repeat checks only for new changes, failures, unresolved risk or required gates.
+- Historical snapshots under `docs/history/` are loaded only for a specific evidence question. They are not current statuses, authorizations or another desired-state store.
+- Update existing state entries rather than prepending run narratives. Put detailed evidence in the relevant journal and link it; preserve exact IDs/revisions there. Indexes/procedures must not acquire DONE/NEXT ledgers.
 
 ## Canonical documents
 
-- `docs/architecture.md`
-- `docs/ansible-core.md`
-- `docs/project-contract.md`
-- `docs/architecture-decisions.md`
-- `docs/roadmap.md`
-- `CURRENT_STATE.md`
-
-## Context Efficiency
-
-- Always start with `AGENTS.md` and `CURRENT_STATE.md`.
-- Read only architecture and contract documentation relevant to the task.
-- Prefer targeted searches and symbols before opening full files.
-- `vendor/**` is third-party/generated dependency content. Do not recursively
-  enumerate, grep/search, review, summarize, inspect or edit `vendor/**` in
-  ordinary repository passes. Repository-wide searches MUST explicitly exclude
-  it, for example: `rg <pattern> -g '!vendor/**'`. Do not run recursive
-  `Get-ChildItem` or `find` through `vendor/**` without a narrow reason.
-  Build and test tools may use `vendor/**` automatically. A single known file
-  under `vendor/**` MAY be read only when the user explicitly requests
-  dependency-source research or a concrete build/runtime failure requires that
-  narrow inspection; even then, never perform a full recursive vendor scan.
-  Exclude `vendor/**` from architecture, security, TODO, secret and
-  code-quality scans.
-- Do not inspect `ansible-core/**/_vendor/**` by default; inspect vendored tests
-  or benchmarks only for dependency validation or vendor maintenance.
-- Do not read all fixtures when one representative fixture and targeted search
-  are sufficient. Do not inspect V1 unless its reference behavior is required.
-- For generated artifacts, inspect source manifests and generators first.
-- Do not perform repository-wide source dumps or paste complete successful logs;
-  surface only relevant failure excerpts.
-- Main Agent runs affected tests and uses representative fixtures. Delegate
-  milestone-level regression, clean/offline and OS-specific checks to QA/Test.
-
-`examples/catalog/service-catalog.yml` is generated, intentionally tracked and
-reproducible. Its source of truth is the catalog manifests plus
-`ansible-core/tools/build_fixture_catalog.py`.
-
-`CURRENT_STATE.md` is the dynamic milestone source of truth; this instruction
-file must not copy its current DONE/NEXT ledger. PostgreSQL behavior must not
-be inferred from the completed PKI-01 foundation; its role must consume
-explicit PKI materialization plans at runtime.
-
-## Test Credentials
-
-Local integration-test credentials may exist under `.runtime/secrets/`.
-
-- Never commit them.
-- Never copy secret values into docs, Skills, fixtures or source.
-- Never print secret values in logs or reports.
-- Load them only at runtime.
-- Redact them from command and error output.
-- Missing credentials must produce a clear test prerequisite failure.
-
-## Test Execution Environment
-
-For every service and affected application flow, acceptance MUST include
-nonvisual React/Wails integration: invoke the actual React handlers/bindings
-against real Wails Go methods and, where relevant, the supported Execution Node
-Core/Ansible path. Use the existing bounded automation seam; do not add a
-production bypass, arbitrary command bridge or test-only save/start path.
-Direct Go harnesses and frontend tests with mocked bindings are supplementary,
-not substitutes for this gate. Record the invoked flow, saved revision, run IDs,
-terminal results and safe event/output evidence. Visual/manual UI inspection is
-separate and is not required by this nonvisual gate; never report it as PASS
-without performing it. If the real bridge cannot be exercised, report the gate
-as unavailable/blocking rather than substituting mocks or marking it passed.
-
-Before every real WebView test session that uses SSH credentials, prepare a
-private key in an unencrypted PEM encoding accepted by the current
-`internal/runtimesecret` validator. If no compatible key is available, create
-one before starting the WebView test and ensure its public key is already
-authorized on the intended QA hosts. OpenSSH `BEGIN OPENSSH PRIVATE KEY`
-format is not accepted by this credential field; the current validator accepts
-RSA/EC keys parsed as PKCS#8, RSA PKCS#1 or EC SEC1 PEM, and rejects encrypted
-keys. Keep private keys only in `.runtime/secrets/`; never display, print or
-copy their contents into project data, logs or documentation. Before testing,
-confirm the credential session has not expired. After expiry, renew credentials
-through the UI and repeat the host-key probe, independent fingerprint
-comparison and explicit UI approval before checking or preparing the node. Do
-not bypass host-key trust. If a compatible authorized PEM key or valid session
-is unavailable, stop before launching the WebView acceptance flow and record
-the prerequisite as blocked.
-
-### SI11 full-service plan preparation in the visible UI
-
-The local QA project for the current full-service cycle is
-`.runtime/qa/si11-recovered-20261002`. The optional, untracked automation is
-`.runtime/qa/si11-full-ui-prepare.cjs`; run it from the repository root with
-`node .runtime/qa/si11-full-ui-prepare.cjs` only after checking that its project
-path, local UI address, PEM path, expected host fingerprints and secret-file
-references match the current QA environment. Do not commit the script or any
-secret files. Use one visible Edge window and the agreed gentle audible warning
-several seconds before interacting with it. Do not use Computer Use.
-
-The preparation sequence is:
-
-1. Open the specified project through the real React "Open project" handler.
-   For this QA automation, pass the known path directly to Go `OpenProject` by
-   substituting only the chooser binding for that click; wait for both the Go
-   `OPEN` result and the visible project page. Do not leave React showing a
-   stale project or wait on a fixed one-second delay.
-2. Check the project's verified bundle binding. If a replacement is required,
-   use the supported preview/confirm rebind and check the resulting digest
-   against the bundle published in the active `cache/`.
-3. On "Servers", select `node1` as Execution Node, load the valid session PEM
-   credential, independently compare its probed SSH fingerprint and approve it.
-   Check the node, plan its preparation and accept only the exact expected UI
-   confirmation. Wait for the completed preparation result and confirm
-   `GetExecutionNodeContext()` is `READY` with the expected runtime digest;
-   do not depend on a particular translated status label.
-4. Probe and compare SSH fingerprints for the servers targeted by the project;
-   approve only matching keys. Load the service secrets from protected local
-   QA files into the runtime session. The currently authorized QA bridge may
-   call the existing Go secret setters, but must not persist or print values.
-5. Set the PKCS#12 store password on "Certificates" and the protected-output
-   encryption password for this session. Verify both are present, then use the
-   real "Installation" UI handler to create a fresh plan. Check that its
-   project revision, bundle, targets, findings, secret requirements and expiry
-   are current, and leave the visible UI at plan review for the operator.
-
-Plan preparation alone is not SI11 installation acceptance. Approve and Start
-only as part of the separately requested full-service run; capture its run ID,
-events and terminal result in the SI11 test journal. If the QA automation
-stalls, identify the exact UI/backend state before retrying. Opening a project
-again resets session preparation, so repeat the sequence after a reopen.
-
-The Windows development workstation is not the canonical runtime for Python/Ansible Core tests.
-
-- Prefer the configured RED OS test VM when Python or Ansible is unavailable locally.
-- A fresh install target must not build the bundle that bootstraps its own Python/Core. DEV acquisition/build runs on a trusted acquisition environment with an existing Python/Core runtime; the selected install Execution Node only receives and activates the verified result.
-- Missing `python`, `py`, `pytest` or `ansible-playbook` on Windows is not by itself a reason to mark tests `NOT TESTED` when the RED OS QA environment is available.
-- Execute Python/Ansible tests on the RED OS VM through the existing test connection.
-- Use local Windows execution only for checks supported there, such as Git, diff and static-file checks.
-- Do not install Python/Ansible on Windows merely to run Core QA unless explicitly requested.
-- Test commands must use the current working-tree version, not a stale remote copy.
-- Transfer only required repository content to a temporary remote test workspace.
-- Clean temporary remote test workspaces after QA unless preservation is explicitly required for debugging.
-- Use `scripts/qa-sync.ps1` for Windows to RED OS source transfer. It uses
-  `scp -r` to copy only `ansible-core`, `services`, `examples`, `contracts` and
-  the repository application `config`
-  into a unique `/var/tmp/platform-installer-qa-*` workspace, verifies the
-  source tree, and must be cleaned with the same helper after QA. Do not use
-  tar streaming, `tar | ssh tar`, or ad-hoc archive pipelines. Transfer
-  failures are QA infrastructure failures, not product failures.
-- Never modify target hosts during read-only Core tests.
-- RED OS is the primary current Core QA environment.
-- ALT Linux validation is required only for ALT-specific milestone behavior or when explicitly requested.
-
-### Established RED OS EXEC-01 connection
-
-For the configured RED OS QA target at `192.168.56.101`, always connect as
-`platform-automation` using the persistent execution identity
-`.runtime/platform-exec-key-20260901` with `IdentitiesOnly=yes`. SSH key login
-is the established transport. The target policy grants
-`platform-automation ALL=(ALL) NOPASSWD: ALL`; use `sudo -n`/Ansible
-`become: true` and do not use password-based sudo or the `admin` login for
-EXEC-01 QA. Do not add or persist any credential values here. If the policy
-is absent, diagnose or restore it only through the existing EXEC-01 bootstrap
-mechanism.
-
-### S11 runtime-bundle acquisition host
-
-For SI11 bundle acquisition/builds, use the trusted RED OS acquisition host
-`node2` at `192.168.56.102`, not the selected installation Execution Node
-`node1` at `192.168.56.101`. Before each use, confirm strict SSH host-key
-validation against the existing trusted `known_hosts` entry and confirm that
-the host already has the required Python/Core build runtime. Do not disable
-host-key checking or bootstrap Python/Core on the acquisition host as part of
-this workflow. Sync only the current required source tree into a unique
-temporary QA workspace, build there from the current worktree and approved
-runtime inputs, then validate and publish the exact resulting bundle through
-the standard publisher. This is a bundle-build location rule only; it does not
-change the configured EXEC-01 connection or authorize service installation on
-node2.
-
-## Local Test Artifacts
-
-The local cache retains only the current immutable offline bundle under
-`cache/<digest>/`; publishing a replacement prunes the prior local digest.
-Its service payloads live inside the verified
-bundle at `runtime/artifacts/<service>/`. A DEV import source is runtime-only
-input under `.runtime/artifacts/<service>/`, never a second subtree of
-`cache/`.
-
-They are local test inputs and must not be committed.
-
-For any Wails/UI test that depends on a newly acquired, built or otherwise
-updated bundle, a QA cache is staging only. After bundle validation succeeds,
-publish that exact verified bundle with the standard `publish-bundle` command
-into the active repository-root `cache/` before launching/restarting Wails
-or running Verify, Execution Node preparation, Plan or Start. Confirm the
-publisher's returned digest equals the bundle digest locked by the project;
-do not proceed on a mismatch. Publishing replaces the active cache and prunes
-its previous digest, so preserve any still-needed prior bundle in an approved
-QA cache before publication. Never substitute a manual copy into `cache/`.
-The customer-supplied `<project>/bundle/` is an import source, not this cache.
-For existing local installations, the old repository-root `bundle/` cache is
-read-only fallback when `cache/` has no verified bundle; do not delete it as
-part of a rename.
-
-## Desktop build process cleanup
-
-When a required Wails rebuild is blocked because the repository's own
-`build/bin/platform-installer-ui.exe` is still running, first identify the
-exact process image path. If it is that exact build output, Codex MAY stop only
-that process to release the binary lock and continue the requested rebuild.
-Never use this rule to stop another application, a differently located binary,
-or an uncertain process.
-
-Do not search Downloads/Desktop or download artifacts automatically during QA
-or production execution when the expected artifact is missing. Report the
-missing expected path instead. A separately authorized DEV acquisition may
-download and verify an official artifact into `.runtime/artifacts/`, then
-publish it into a new immutable bundle; production roles and production
-execution must use only approved local artifacts, repositories or payloads and
-must never download from the Internet.
+- [Architecture](docs/architecture.md): layer/security boundaries.
+- [Ansible Core](docs/ansible-core.md): standalone runtime and role contracts.
+- [Project contract](docs/project-contract.md): portable desired state and ownership.
+- [Architecture decisions](docs/architecture-decisions.md): relevant ADRs.
+- [Roadmap](docs/roadmap.md): milestone requirements/sequence; historical status prose does not override current state.
+- [Current state](CURRENT_STATE.md): active status, blockers, owner decisions and next authorized steps.

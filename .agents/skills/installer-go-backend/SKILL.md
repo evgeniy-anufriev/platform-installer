@@ -9,7 +9,10 @@ Use for Go application/backend changes under `internal/`, including future
 sessions, process coordination, history and Wails-facing services. Do not use
 for Core/service semantics or frontend-only work.
 
-1. Read root and `internal/AGENTS.md`, then the relevant UI/backend document.
+1. Load current root and `internal/AGENTS.md` (reuse identical loaded rules),
+   then use [task index](../../../docs/agent-index.md) for relevant UI/backend
+   contracts. Read [review procedure](../../../docs/agent-procedures/review.md)
+   when architecture-sensitive planning or risk classification is required.
 2. Classify ownership. If the request needs Ansible precedence, catalog/schema,
    topology, endpoint/provider or PKI semantics, stop Go implementation and
    define a `coreadapter.Adapter` capability instead.
