@@ -128,6 +128,11 @@ successful run reaches 100%. An observer disconnect is shown separately from
 execution failure. If the backend cannot provide a trustworthy action count,
 show the stage and current task without inventing a percentage. The mockup's
 state selector changes demonstration data only and never starts execution.
+Protected service outputs have a separate delivery status. After a run ends,
+Installer attempts delivery only for packages produced by that run; a failed
+delivery does not change the run result or block another Start. Pending packages
+from older runs remain available for explicit retrieval. Show source run ID and
+generation for each package; local delivery does not delete the remote copy.
 
 ### Shared visual language
 
@@ -340,7 +345,7 @@ change a project.
 For plans declaring protected service outputs, Installation → Plan collects
 and confirms the shared session-only encryption password. The password stays
 on the workstation. Output files are saved automatically under the current
-project's `secrets/<deploymentId>/`; there is no output-folder selector.
+project's `secrets/<deploymentId>/<packageId>/`; there is no output-folder selector.
 Installation → Result shows safe delivery status and the completed location.
 Service credential inputs remain in the selected service's Secrets dialog.
 

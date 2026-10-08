@@ -29,12 +29,11 @@ type secretOutputDeliveryClient interface {
 	GetSecretOutputCapabilities(context.Context, executionnode.Node, string, string) (executionnode.SecretOutputCapabilities, error)
 	ListPendingSecretOutputs(context.Context, executionnode.Node, string, string, int, *string) (executionnode.SecretOutputList, error)
 	FetchSecretOutput(context.Context, executionnode.Node, string, string, string, int) ([]byte, error)
-	AcknowledgeSecretOutput(context.Context, executionnode.Node, string, executionnode.SecretOutputRequest) (executionnode.SecretOutputAck, error)
 }
 
 // DeliverPendingSecretOutput fetches one freshly listed package, validates the
 // confidential frame against that trusted listing, publishes encrypted files
-// and a complete local receipt, then sends the idempotent remote ACK.
+// and a complete local receipt. Remote custody is independent of delivery.
 func (a *App) DeliverPendingSecretOutput(input SecretOutputDeliveryInput) SecretOutputDeliveryOperation {
 	a.editMu.Lock()
 	if a.current.Status != "OPEN" || a.current.Project == nil || a.execution.context.Status != "READY" {
@@ -58,12 +57,6 @@ func (a *App) DeliverPendingSecretOutput(input SecretOutputDeliveryInput) Secret
 		return secretOutputDeliveryFailure("SECRET_OUTPUT_PASSWORD_REQUIRED", "Введите пароль шифрования выходных файлов.")
 	}
 	root, projectID, node := a.current.Root, a.current.Project.ID, binding.node
-	deployments := []string{}
-	if a.current.Managed != nil {
-		for id := range a.current.Managed.Deployments {
-			deployments = append(deployments, id)
-		}
-	}
 	generation, projectRoot := a.installationGeneration, a.current.Root
 	ctx, cancel := a.operationContext(3 * time.Minute)
 	a.editMu.Unlock()
@@ -74,48 +67,6 @@ func (a *App) DeliverPendingSecretOutput(input SecretOutputDeliveryInput) Secret
 	}
 	var selected *executionnode.SecretOutputPackage
 	var receipt installer.SecretOutputFileReceipt
-	for _, deployment := range deployments {
-		local, encrypted, localErr := installer.ReadSecretOutputReceipt(root, projectID, deployment, runtime.BundleDigest)
-		if localErr != nil {
-			continue
-		}
-		if local.PackageID != input.PackageID {
-			for _, data := range encrypted {
-				clear(data)
-			}
-			continue
-		}
-		localErr = a.secrets.WithOutputEncryptionPassword(credentialBinding, func(password []byte) error {
-			for _, entry := range []struct {
-				id, purpose string
-				bound       int
-			}{{"admin-token", secretfiles.PurposeAdminToken, 4096}, {"unseal-shares", secretfiles.PurposeUnsealShares, 32768}} {
-				plain, err := secretfiles.Decrypt(password, encrypted[entry.id], entry.bound)
-				if err != nil {
-					return err
-				}
-				parsed, err := secretfiles.ReadVaultInput(entry.purpose, plain, nil)
-				clear(plain)
-				clear(parsed.Token)
-				for _, share := range parsed.Shares {
-					clear(share)
-				}
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		for _, data := range encrypted {
-			clear(data)
-		}
-		if localErr != nil {
-			return secretOutputDeliveryFailure("SECRET_OUTPUT_LOCAL_RECEIPT_INVALID", "Локальный пакет не подтверждён; удалённая копия сохранена.")
-		}
-		receipt = local
-		selected = &executionnode.SecretOutputPackage{Protocol: "SecretOutputDelivery/v1alpha1", ProjectID: local.ProjectID, DeploymentID: local.DeploymentID, PackageID: local.PackageID, SourceRunID: local.SourceRunID, Generation: local.Generation, RuntimeDigest: local.RuntimeDigest, State: "ACKED_CLEANUP_PENDING", Entries: []string{"admin-token", "unseal-shares"}}
-		break
-	}
 	var cursor *string
 	seenCursors := map[string]struct{}{}
 	for page := 0; selected == nil && page < 128; page++ {
@@ -145,6 +96,37 @@ func (a *App) DeliverPendingSecretOutput(input SecretOutputDeliveryInput) Secret
 	}
 	if selected == nil {
 		return secretOutputDeliveryFailure("SECRET_OUTPUT_NOT_FOUND", "Выходной пакет больше не доступен для доставки.")
+	}
+	if local, encrypted, localErr := installer.ReadSecretOutputFiles(root, projectID, selected.DeploymentID, selected.PackageID, selected.SourceRunID, selected.Generation, selected.RuntimeDigest); localErr == nil {
+		defer func() {
+			for _, data := range encrypted {
+				clear(data)
+			}
+		}()
+		if err := a.secrets.WithOutputEncryptionPassword(credentialBinding, func(password []byte) error {
+			for _, entry := range []struct {
+				id, purpose string
+				bound       int
+			}{{"admin-token", secretfiles.PurposeAdminToken, 4096}, {"unseal-shares", secretfiles.PurposeUnsealShares, 32768}} {
+				plain, err := secretfiles.Decrypt(password, encrypted[entry.id], entry.bound)
+				if err != nil {
+					return err
+				}
+				parsed, err := secretfiles.ReadVaultInput(entry.purpose, plain, nil)
+				clear(plain)
+				clear(parsed.Token)
+				for _, share := range parsed.Shares {
+					clear(share)
+				}
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return secretOutputDeliveryFailure("SECRET_OUTPUT_LOCAL_RECEIPT_INVALID", "Локальный пакет не подтверждён; удалённая копия сохранена.")
+		}
+		return SecretOutputDeliveryOperation{Status: "DELIVERED", Package: selected, Directory: local.Directory}
 	}
 	if receipt.ReceiptID == "" {
 		frame, err := client.FetchSecretOutput(ctx, node, runtime.BundleDigest, projectID, selected.PackageID, selected.Generation)
@@ -238,13 +220,6 @@ func (a *App) DeliverPendingSecretOutput(input SecretOutputDeliveryInput) Secret
 	a.editMu.Unlock()
 	if !current {
 		return secretOutputDeliveryFailure("PROJECT_CHANGED", "Проект или Execution Node изменился; удалённый пакет не подтверждён.")
-	}
-	ack, err := client.AcknowledgeSecretOutput(ctx, node, runtime.BundleDigest, executionnode.SecretOutputRequest{Operation: "Acknowledge", ProjectID: projectID, PackageID: receipt.PackageID, Generation: receipt.Generation, ReceiptID: receipt.ReceiptID, CiphertextDigests: receipt.Digests})
-	if err != nil {
-		return SecretOutputDeliveryOperation{Status: "ACK_PENDING", Package: selected, Directory: receipt.Directory, Error: &ProjectOpenError{Code: "SECRET_OUTPUT_ACK_PENDING", Message: "Файлы сохранены, но подтверждение Execution Node не получено. Повторите доставку того же пакета."}}
-	}
-	if ack.State == "ACKED_CLEANUP_PENDING" {
-		return SecretOutputDeliveryOperation{Status: "ACK_PENDING", Package: selected, Directory: receipt.Directory, Error: &ProjectOpenError{Code: ack.State, Message: "Файлы сохранены; Execution Node ещё не завершил очистку временной копии."}}
 	}
 	return SecretOutputDeliveryOperation{Status: "DELIVERED", Package: selected, Directory: receipt.Directory}
 }

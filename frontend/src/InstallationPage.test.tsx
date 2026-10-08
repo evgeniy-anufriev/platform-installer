@@ -972,4 +972,33 @@ describe("InstallationPage", () => {
     expect(refresh).toHaveBeenCalledOnce();
     expect(deliver).toHaveBeenCalledWith("pkg-safe");
   });
+
+  it("shows a safe delivery failure without exposing transport details", () => {
+    render(
+      <InstallationPage
+        state={state}
+        tab="result"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        outputDelivery={{
+          status: "UNAVAILABLE",
+          error: {
+            code: "SECRET_OUTPUT_DELIVERY_FAILED",
+            message:
+              "Не удалось получить защищённые выходные файлы. Проверьте подключение и повторите попытку.",
+          },
+        }}
+        onRefreshSecretOutputs={vi.fn()}
+        onDeliverSecretOutput={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Не удалось получить защищённые выходные файлы",
+    );
+    expect(screen.queryByText("SECRET_OUTPUT_DELIVERY_FAILED")).toBeNull();
+  });
 });

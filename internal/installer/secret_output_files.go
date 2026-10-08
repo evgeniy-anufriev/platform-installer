@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 )
@@ -78,7 +79,7 @@ func publishSecretOutputFiles(parent, projectID, deploymentID, packageID, source
 	}
 	receiptID := hex.EncodeToString(random[:])
 	digests := map[string]string{"admin-token": ciphertextDigest(adminTokenAge), "unseal-shares": ciphertextDigest(unsealSharesAge)}
-	name := deploymentID
+	name := packageID
 	receipt := secretOutputLocalReceipt{SchemaVersion: 1, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest, ReceiptID: receiptID, Entries: []string{"admin-token", "unseal-shares"}, Digests: digests}
 	encodedReceipt, err := json.Marshal(receipt)
 	if err != nil {
@@ -101,8 +102,19 @@ func publishSecretOutputFiles(parent, projectID, deploymentID, packageID, source
 	if check("project-flush") != nil || syncSecretOutputDirectory(projectRoot) != nil {
 		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
 	}
-	root = secrets
-	parent = filepath.Join(parent, "secrets")
+	deployment, err := secrets.createDirectory(deploymentID)
+	if err != nil {
+		deployment, err = openSecretOutputDirectory(secrets, []string{deploymentID})
+	}
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer deployment.close()
+	if syncSecretOutputDirectory(secrets) != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	root = deployment
+	parent = filepath.Join(parent, "secrets", deploymentID)
 	staging, stagingName, err := root.createStaging(name)
 	if err != nil {
 		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
@@ -167,7 +179,7 @@ func publishSecretOutputFiles(parent, projectID, deploymentID, packageID, source
 	if check("binding-readback") != nil {
 		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
 	}
-	currentRoot, err := openExportDestinationDirectory(filepath.Dir(parent))
+	currentRoot, err := openExportDestinationDirectory(filepath.Dir(filepath.Dir(parent)))
 	if err != nil {
 		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
 	}
@@ -177,7 +189,12 @@ func publishSecretOutputFiles(parent, projectID, deploymentID, packageID, source
 		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
 	}
 	defer currentSecrets.close()
-	if currentRoot.identity() != projectRoot.identity() || currentSecrets.identity() != root.identity() {
+	currentDeployment, err := currentSecrets.openDirectory([]string{deploymentID})
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer currentDeployment.close()
+	if currentRoot.identity() != projectRoot.identity() || currentSecrets.identity() != secrets.identity() || currentDeployment.identity() != root.identity() {
 		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
 	}
 	return SecretOutputFileReceipt{ReceiptID: receiptID, Directory: filepath.Join(parent, name), Digests: digests, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest}, nil
@@ -195,7 +212,7 @@ func ReadSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRun
 		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
 	}
 	defer root.close()
-	name := deploymentID
+	name := packageID
 	projectRoot := root
 	secrets, err := openSecretOutputDirectory(root, []string{"secrets"})
 	if err != nil {
@@ -204,11 +221,23 @@ func ReadSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRun
 	defer secrets.close()
 	root = secrets
 	parent = filepath.Join(parent, "secrets")
-	directory, err := openSecretOutputDirectory(root, []string{name})
+	deployment, err := openSecretOutputDirectory(root, []string{deploymentID})
 	if err != nil {
 		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
 	}
-	defer directory.close()
+	defer deployment.close()
+	directory, err := openSecretOutputDirectory(deployment, []string{name})
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+		}
+		// Files published before package-specific directories remain readable
+		// only when their complete receipt matches the requested package.
+		directory = deployment
+		name = ""
+	} else {
+		defer directory.close()
+	}
 	encoded, _, err := directory.readFile([]string{"complete"}, 8192)
 	var receipt secretOutputLocalReceipt
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
@@ -232,13 +261,13 @@ func ReadSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRun
 		}
 		ciphertexts[entry.id] = data
 	}
-	if syncSecretOutputDirectory(directory) != nil || syncSecretOutputDirectory(root) != nil || syncSecretOutputDirectory(projectRoot) != nil {
+	if syncSecretOutputDirectory(directory) != nil || syncSecretOutputDirectory(deployment) != nil || syncSecretOutputDirectory(root) != nil || syncSecretOutputDirectory(projectRoot) != nil {
 		for _, data := range ciphertexts {
 			clear(data)
 		}
 		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
 	}
-	return SecretOutputFileReceipt{ReceiptID: receipt.ReceiptID, Directory: filepath.Join(parent, name), Digests: receipt.Digests, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest}, ciphertexts, nil
+	return SecretOutputFileReceipt{ReceiptID: receipt.ReceiptID, Directory: filepath.Join(parent, deploymentID, name), Digests: receipt.Digests, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest}, ciphertexts, nil
 }
 
 func ciphertextDigest(data []byte) string {

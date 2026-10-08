@@ -1163,9 +1163,15 @@ function ResultStage({
         )}
         {outputDelivery && (
           <p
-            role="status"
+            role={
+              outputDelivery.status === "UNAVAILABLE" ? "alert" : "status"
+            }
             className={
-              outputDelivery.status === "DELIVERED" ? "success" : "muted"
+              outputDelivery.status === "DELIVERED"
+                ? "success"
+                : outputDelivery.status === "UNAVAILABLE"
+                  ? "field-error"
+                  : "muted"
             }
           >
             {outputDelivery.status === "DELIVERED"
@@ -1184,7 +1190,7 @@ function ResultStage({
               Состояние: {outputPackageStateLabel(item.state)}; файлов:{" "}
               {item.entries.length}
             </span>
-            <small>Запуск: {item.sourceRunId}</small>
+            <small>Запуск: {item.sourceRunId} · Поколение: {item.generation}</small>
             <button onClick={() => onDeliverSecretOutput(item.packageId)}>
               Получить и сохранить зашифрованно
             </button>

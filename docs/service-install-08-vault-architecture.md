@@ -338,9 +338,13 @@ Workstation шифрует и сохраняет оба файла атомар�
 ExecutionResult; успешный apply/verify даёт SUCCEEDED независимо от связи с UI.
 Go ведёт отдельную derived delivery projection: PENDING, SAVING,
 ACK_PENDING, DELIVERED, UNAVAILABLE. SAVING — локальная transient стадия.
-Полный пользовательский сценарий завершён при SUCCEEDED и DELIVERED для всех
-объявленных output packages. FAILED/CANCELLED остаётся таким после успешного
-сохранения ключей. Ни ACK, ни receipt не переписывают terminal journal.
+Установка завершается по собственному terminal result. Автоматическая попытка
+локальной доставки выполняется отдельно после завершения run и не меняет его
+итог или допуск следующего запуска. Успех локального сохранения и ошибка
+доставки показываются как отдельные состояния; старые пакеты доступны для
+явного повторного получения. Ни локальная квитанция, ни ACK не переписывают
+terminal journal. Обычная автоматическая доставка не посылает ACK; удалённые
+пакеты сохраняются до отдельной явной очистки.
 В общем журнале/результате UI показывает execution outcome и output delivery
 рядом, в том числе «Установка завершена; выходные файлы ещё не сохранены».
 Это общий механизм для trusted service output descriptor, без ветвления по
@@ -353,8 +357,9 @@ Package ID — случайный 128-bit lowercase hex; пути из request �
 Несекретная metadata содержит schemaVersion, packageId, projectId,
 deploymentId, sourceRunId, runtime digest, owner execution identity,
 generation, состояние READY/ACKED_CLEANUP_PENDING/DELIVERED и descriptors двух
-фиксированных entries. На один project/deployment bootstrap имеет одну
-generation: retry не создаёт второй пакет и не перезаписывает чужой deployment.
+фиксированных entries. Каждый новый run получает собственный packageId и
+следующее generation; retry того же run сохраняет прежнюю идентичность.
+Ожидающий доставки пакет предыдущего run не блокирует новый run.
 Сравнение stable identity обязательно; rename displayName ничего не меняет.
 Installer связывает пакет с парой projectId + deploymentId. Go не угадывает и
 не генерирует вместо Vault его внутренний clusterId; packageId и generation
@@ -370,7 +375,10 @@ token читается отдельным verify процессом из это�
 Чтение и cleanup координируются per-package lock. ACK допустим после terminal
 run и освобождения producer/verify use; пока они активны — безопасный BUSY.
 При crash controller сначала использует существующее recovery определение
-terminal состояния; package не удаляется по таймеру или самому PID.
+terminal состояния; package не удаляется по таймеру или самому PID. Локальные
+зашифрованные результаты новых run сохраняются по
+`secrets/<deploymentId>/<packageId>/`; прежний плоский каталог остаётся на
+месте и читается только при точном совпадении его квитанции.
 
 **Durable terminal evidence и retention guard (owner-authorized SI08-PLAN-02).**
 Metadata пакета дополнительно содержит `producerCompletion`, отсутствующее до
@@ -468,20 +476,24 @@ directory metadata. Файлы читаются обратно через verifi
 проверяется в памяти с тем же password, с exact content/identity comparison.
 Затем атомарно публикуется небольшой local receipt `complete` с packageId,
 generation, project/deployment/cluster binding, двумя filenames и ciphertext
-digests. Только такой комплект является готовым к ACK. Отдельного atomic
+digests. Только такой комплект считается локально сохранённым. Отдельного atomic
 replace пары файлов не обещать: commit point комплекта — complete receipt.
 Платформенные durable-write гарантии проверяются отдельно Windows/RED OS.
 
-Crash после первого файла или disk-full не публикует complete receipt и не
-отправляет ACK. При retry incomplete directory не считается готовой; создать
+Crash после первого файла или disk-full не публикует complete receipt. При
+retry incomplete directory не считается готовой; создать
 новую exclusive попытку, не перезаписывая предыдущую. Удалять только доказанно
 owned staging; если безопасное удаление не доказано, оставить и сообщить
 safe retained-staging diagnostic, согласно существующей filesystem policy.
-Если complete receipt уже есть, повторно проверить файлы/identity/digests,
-после перезапуска запросить password для decrypt proof и повторить тот же ACK.
+Если complete receipt уже есть, повторно проверить файлы/identity/digests;
+после перезапуска запросить password для decrypt proof. Это не требует ACK.
 Абсолютный local path не отправляется Execution Node.
 
-**Remote ACK commit/recovery.** Server проверяет binding, generation, terminal
+**Совместимость прежнего ACK.** Нормальная автоматическая доставка не вызывает
+`Acknowledge`: удалённая копия остаётся для последующего получения и не влияет
+на запуск. Существующий протокол ACK сохраняет прежнюю семантику только для
+ранее начатых операций; отдельная явная очистка определяется позднее.
+Server проверяет binding, generation, terminal
 run, released readers и структуру receipt. Под lock durable receipt записывается
 ПЕРЕД удалением plaintext: это ACK commit point. Receipt содержит только
 идентичности, receiptId, ciphertext digests и cleanup state, без материала ключей.
@@ -509,8 +521,8 @@ remote package без receipt — recovery failure, никогда implicit succ
 **Acceptance для этой границы.** Обязательны fault tests: disconnect после
 verify до Fetch; mid-frame failure с secret-bearing bytes и безопасной error;
 oversize/truncated payload; disk-full; crash после первого/второго файла до
-complete; crash после complete до ACK; duplicate/stale/cross-project ACK;
-потеря ACK response; crash после remote receipt до cleanup; symlink/reparse
+complete; crash после complete до ответа UI; compatibility tests для
+duplicate/stale/cross-project ACK, потери ACK response и cleanup; symlink/reparse
 swap; CANCEL/FAILED с уже созданным material; restart Installer и очищенная
 run history; отдельный apply/verify process; отсутствие secrets в diagnostics,
 project archives и fingerprints. Проверить, что standalone проходит без

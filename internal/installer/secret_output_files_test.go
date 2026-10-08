@@ -33,8 +33,8 @@ func TestPublishSecretOutputFilesAtomicallyPublishesOnlyEncryptedFixedEntries(t 
 	if receipt.ReceiptID == "" || len(receipt.Digests) != 2 {
 		t.Fatalf("receipt=%#v", receipt)
 	}
-	if receipt.Directory != filepath.Join(parent, "secrets", "vault-ha") {
-		t.Fatalf("output is not in the deployment's default secrets directory: %s", receipt.Directory)
+	if receipt.Directory != filepath.Join(parent, "secrets", "vault-ha", receipt.PackageID) {
+		t.Fatalf("output is not in the package's secrets directory: %s", receipt.Directory)
 	}
 	if got, err := os.ReadFile(filepath.Join(receipt.Directory, "admin-token.age")); err != nil || string(got) != "age-admin-ciphertext" {
 		t.Fatalf("admin file=%q err=%v", got, err)
@@ -59,6 +59,99 @@ func TestPublishSecretOutputFilesAtomicallyPublishesOnlyEncryptedFixedEntries(t 
 	}
 	if got, _ := os.ReadFile(filepath.Join(receipt.Directory, "admin-token.age")); string(got) != "age-admin-ciphertext" {
 		t.Fatal("existing output changed after conflict")
+	}
+}
+
+func TestSecretOutputFilesPreserveEarlierGeneration(t *testing.T) {
+	root := t.TempDir()
+	digest := "sha256:" + repeatHex('b', 64)
+	first, err := PublishSecretOutputFiles(root, "project-test", "vault-ha", repeatHex('a', 32), "installer-first", 1, digest, []byte("first-token"), []byte("first-shares"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := PublishSecretOutputFiles(root, "project-test", "vault-ha", repeatHex('c', 32), "installer-second", 2, digest, []byte("second-token"), []byte("second-shares"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Directory == second.Directory {
+		t.Fatal("generations share a destination")
+	}
+	for _, item := range []struct {
+		receipt SecretOutputFileReceipt
+		token   string
+	}{{first, "first-token"}, {second, "second-token"}} {
+		_, encrypted, err := ReadSecretOutputFiles(root, item.receipt.ProjectID, item.receipt.DeploymentID, item.receipt.PackageID, item.receipt.SourceRunID, item.receipt.Generation, item.receipt.RuntimeDigest)
+		if err != nil || string(encrypted["admin-token"]) != item.token {
+			t.Fatalf("read %s: %v", item.receipt.PackageID, err)
+		}
+		for _, value := range encrypted {
+			clear(value)
+		}
+	}
+}
+
+func TestSecretOutputFilesReadLegacyFlatPackageWithoutReplacingIt(t *testing.T) {
+	root := t.TempDir()
+	digest := "sha256:" + repeatHex('b', 64)
+	old, err := PublishSecretOutputFiles(root, "project-test", "vault-ha", repeatHex('a', 32), "installer-first", 1, digest, []byte("first-token"), []byte("first-shares"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	flat := filepath.Join(root, "secrets", "vault-ha")
+	for _, name := range []string{"admin-token.age", "unseal-shares.age", "complete"} {
+		if err := os.Rename(filepath.Join(old.Directory, name), filepath.Join(flat, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Remove(old.Directory); err != nil {
+		t.Fatal(err)
+	}
+	newer, err := PublishSecretOutputFiles(root, "project-test", "vault-ha", repeatHex('c', 32), "installer-second", 2, digest, []byte("second-token"), []byte("second-shares"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newer.Directory == flat {
+		t.Fatal("new package replaced the flat legacy package")
+	}
+	for _, item := range []struct {
+		receipt SecretOutputFileReceipt
+		token   string
+	}{{old, "first-token"}, {newer, "second-token"}} {
+		loaded, encrypted, err := ReadSecretOutputFiles(root, item.receipt.ProjectID, item.receipt.DeploymentID, item.receipt.PackageID, item.receipt.SourceRunID, item.receipt.Generation, item.receipt.RuntimeDigest)
+		if err != nil || string(encrypted["admin-token"]) != item.token {
+			t.Fatalf("read %s: %v", item.receipt.PackageID, err)
+		}
+		if item.receipt.PackageID == old.PackageID && loaded.Directory != flat {
+			t.Fatalf("legacy path: %s", loaded.Directory)
+		}
+		for _, value := range encrypted {
+			clear(value)
+		}
+	}
+}
+
+func TestSecretOutputPackageDirectoryRejectsSubstitution(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	deployment := filepath.Join(root, "secrets", "vault-ha")
+	if err := os.MkdirAll(deployment, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	packageID := repeatHex('a', 32)
+	if err := os.Symlink(outside, filepath.Join(deployment, packageID)); err != nil {
+		t.Skipf("symlink prerequisite: %v", err)
+	}
+	_, err := PublishSecretOutputFiles(root, "project-test", "vault-ha", packageID, "installer-first", 1,
+		"sha256:"+repeatHex('b', 64), []byte("cipher"), []byte("cipher"))
+	if err == nil {
+		t.Fatal("substituted package directory accepted for publication")
+	}
+	if _, _, err := ReadSecretOutputFiles(root, "project-test", "vault-ha", packageID, "installer-first", 1,
+		"sha256:"+repeatHex('b', 64)); err == nil {
+		t.Fatal("substituted package directory accepted for read")
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("outside modified: entries=%v err=%v", entries, err)
 	}
 }
 

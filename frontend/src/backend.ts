@@ -431,6 +431,18 @@ export type SecretOutputPackagesOperation = {
   nextCursor?: string | null;
   error?: { code: string; message: string };
 };
+
+export function secretOutputListingUnavailable(): SecretOutputPackagesOperation {
+  return {
+    status: "UNAVAILABLE",
+    error: {
+      code: "SECRET_OUTPUT_LIST_FAILED",
+      message:
+        "Не удалось проверить ожидающие защищённые файлы. Повторите проверку позже.",
+    },
+  };
+}
+
 export type SecretOutputDeliveryOperation = {
   status: "UNAVAILABLE" | "STAGING_RETAINED" | "ACK_PENDING" | "DELIVERED";
   package?: SecretOutputPackage;
@@ -438,6 +450,17 @@ export type SecretOutputDeliveryOperation = {
   stagingPath?: string;
   error?: { code: string; message: string };
 };
+
+export function secretOutputDeliveryUnavailable(): SecretOutputDeliveryOperation {
+  return {
+    status: "UNAVAILABLE",
+    error: {
+      code: "SECRET_OUTPUT_DELIVERY_FAILED",
+      message:
+        "Не удалось получить защищённые выходные файлы. Проверьте подключение и повторите попытку.",
+    },
+  };
+}
 export interface ProjectBackend {
   exitApplication?(): Promise<{ status: "EXITING" | "EXIT_AFTER_RUN" }>;
   subscribeInstallationRunEvents?(handler: (value: {

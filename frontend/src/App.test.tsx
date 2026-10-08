@@ -2,7 +2,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import type { OpenResult, ProjectBackend } from "./backend";
+import type {
+  InstallationEventView,
+  OpenResult,
+  ProjectBackend,
+} from "./backend";
 
 const sessionID = "0123456789abcdef0123456789abcdef";
 const project = {
@@ -476,6 +480,57 @@ it("shows the read-only Installation state without requesting a deployment plan"
   expect(screen.getByText(/План не сформирован/)).toBeTruthy();
   expect(screen.getByRole("tab", { name: "План" })).toBeTruthy();
   expect(getInstallationState).toHaveBeenCalled();
+});
+
+it("shows a safe listing error when automatic output collection rejects", async () => {
+  let onRunEvent:
+    | Parameters<
+        NonNullable<ProjectBackend["subscribeInstallationRunEvents"]>
+      >[0]
+    | undefined;
+  const value = api({
+    subscribeInstallationRunEvents: vi.fn((handler) => {
+      onRunEvent = handler;
+      return vi.fn();
+    }),
+    listPendingSecretOutputs: vi
+      .fn()
+      .mockRejectedValue(new Error("raw transport detail with secret")),
+    getInstallationRun: vi.fn().mockResolvedValue({
+      status: "READY",
+      run: { runId: "run-output", state: "SUCCEEDED", sequence: 4 },
+    }),
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(await screen.findByRole("button", { name: "Установка" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Результат" }));
+
+  onRunEvent?.({
+    subscriptionId: "",
+    event: {
+      runId: "run-output",
+      sequence: 4,
+      timestamp: "2026-10-08T10:00:00Z",
+      eventType: "RUN_COMPLETED",
+      status: "SUCCEEDED",
+      safeMessage: "Run completed",
+      redacted: true,
+    } as InstallationEventView,
+  });
+
+  expect(
+    await screen.findByText(
+      "Не удалось проверить ожидающие защищённые файлы. Повторите проверку позже.",
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText("raw transport detail with secret"),
+  ).toBeNull();
 });
 
 it("adds a certificate authority through the shared structural draft", async () => {

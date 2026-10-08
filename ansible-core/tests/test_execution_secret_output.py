@@ -1,4 +1,5 @@
 import os
+import fcntl
 import json
 from pathlib import Path
 import stat
@@ -315,6 +316,31 @@ class SecretOutputStorageTests(unittest.TestCase):
             with self.assertRaises(OutputWireError):
                 storage.acknowledge(str(self.root),"qa",directory.name,1,"e"*32,
                     {"admin-token":"sha256:"+"c"*64,"unseal-shares":"sha256:"+"d"*64})
+
+    def test_old_ready_and_locked_package_do_not_block_new_run(self):
+        first, directory = self.reserve("installer-first")
+        self.write_reserved_entry(directory, "admin-token", b"first-token")
+        self.write_reserved_entry(directory, "unseal-shares", b'{"keys":["first-share"]}')
+        self.finish_reserved(first, state="FAILED")
+        lock = os.open(directory / ".lock", os.O_RDWR)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            second, second_directory = self.reserve("installer-second")
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            os.close(lock)
+        self.assertNotEqual(directory, second_directory)
+        self.assertEqual(2, storage.load_package_identity(
+            str(second), "qa", "vault-ha", second.name)[1])
+        self.assertEqual(second_directory, Path(storage.prepare_retained_output_directory(
+            str(self.root), str(second), "qa", "vault-ha", second.name, self.meta["runtimeDigest"])))
+        self.write_reserved_entry(second_directory, "admin-token", b"second-token")
+        self.write_reserved_entry(second_directory, "unseal-shares", b'{"keys":["second-share"]}')
+        self.finish_reserved(second, state="SUCCEEDED")
+        listed = storage.list_pending(str(self.root), "qa", 32, None,
+            self.validator, self.schemas / "response.schema.json")["packages"]
+        self.assertEqual({(directory.name, 1), (second_directory.name, 2)},
+                         {(item["packageId"], item["generation"]) for item in listed})
 
     def test_partial_and_init_only_retained_with_explicit_recovery_status(self):
         for index, name in enumerate(("admin-token", "unseal-shares", "init-response.json")):

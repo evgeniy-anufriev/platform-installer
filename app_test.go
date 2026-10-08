@@ -858,10 +858,10 @@ func TestDeliverPendingSecretOutputEncryptsBeforeIdempotentAck(t *testing.T) {
 		t.Fatal(err)
 	}
 	operation := app.DeliverPendingSecretOutput(SecretOutputDeliveryInput{PackageID: packageID})
-	if operation.Status != "DELIVERED" || operation.Directory == "" || transport.fetchCalls != 1 || transport.ackCalls != 1 {
+	if operation.Status != "DELIVERED" || operation.Directory == "" || transport.fetchCalls != 1 || transport.ackCalls != 0 {
 		t.Fatalf("delivery=%#v calls=%d/%d", operation, transport.fetchCalls, transport.ackCalls)
 	}
-	if operation.Directory != filepath.Join(root, "secrets", deploymentID) {
+	if operation.Directory != filepath.Join(root, "secrets", deploymentID, packageID) {
 		t.Fatalf("unexpected default output directory: %s", operation.Directory)
 	}
 	loaded, encrypted, err := installer.ReadSecretOutputFiles(root, projectID, deploymentID, packageID, runID, 1, runtimeDigest)
@@ -881,9 +881,8 @@ func TestDeliverPendingSecretOutputEncryptsBeforeIdempotentAck(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(operation.Directory, "admin-token")); !os.IsNotExist(err) {
 		t.Fatal("plaintext output file was created")
 	}
-	// A fresh application has no remembered pending listing/frame. Its only
-	// recovery authority is the bound receipt at a known managed deployment.
-	transport.packages, transport.frame = nil, nil
+	// A fresh application sees the still-retained remote package and verifies
+	// the exact local receipt without fetching or acknowledging it again.
 	reopened := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: &executionLifecycleStub{}, bundleRoot: "bundle"}))
 	reopened.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: projectID}, Managed: &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{deploymentID: {}}}, Verification: notVerified()}
 	reopened.bindExecutionLocked(root, reopened.current.Project, nil)
@@ -893,14 +892,11 @@ func TestDeliverPendingSecretOutputEncryptsBeforeIdempotentAck(t *testing.T) {
 	}
 	listed := reopened.ListPendingSecretOutputs(nil)
 	if len(listed.Packages) != 1 || listed.Packages[0].PackageID != packageID {
-		t.Fatal("lost ACK identity did not survive reopen")
+		t.Fatal("pending package did not survive reopen")
 	}
-	for _, ackState := range []string{"ACKED_CLEANUP_PENDING", "DELIVERED"} {
-		transport.ack.State = ackState
-		retry := reopened.DeliverPendingSecretOutput(SecretOutputDeliveryInput{PackageID: packageID})
-		if (ackState == "DELIVERED" && retry.Status != "DELIVERED") || (ackState != "DELIVERED" && retry.Status != "ACK_PENDING") || transport.fetchCalls != 1 || transport.ackRequest.ReceiptID != loaded.ReceiptID {
-			t.Fatalf("retry=%#v fetch=%d", retry, transport.fetchCalls)
-		}
+	retry := reopened.DeliverPendingSecretOutput(SecretOutputDeliveryInput{PackageID: packageID})
+	if retry.Status != "DELIVERED" || transport.fetchCalls != 1 || transport.ackCalls != 0 || retry.Directory != loaded.Directory {
+		t.Fatalf("retry=%#v fetch=%d ack=%d", retry, transport.fetchCalls, transport.ackCalls)
 	}
 }
 

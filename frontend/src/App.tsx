@@ -22,7 +22,11 @@ import type {
   SecretOutputDeliveryOperation,
   ServiceConfigurationPreview,
 } from "./backend";
-import { backend } from "./backend";
+import {
+  backend,
+  secretOutputDeliveryUnavailable,
+  secretOutputListingUnavailable,
+} from "./backend";
 import { type ServerIntent, ServersPage } from "./ServersPage";
 import {
   type CertificateIntent,
@@ -798,21 +802,41 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const refreshSecretOutputs = useCallback(async () => {
-    if (api.listPendingSecretOutputs)
+    if (!api.listPendingSecretOutputs) return;
+    try {
       setSecretOutputPackages(await api.listPendingSecretOutputs());
+    } catch {
+      setSecretOutputPackages(secretOutputListingUnavailable());
+    }
   }, [api]);
   const deliverSecretOutput = useCallback(
     async (packageId: string) => {
       if (!api.deliverPendingSecretOutput) return;
-      setOutputDelivery(await api.deliverPendingSecretOutput(packageId));
-      if (api.listPendingSecretOutputs)
-        setSecretOutputPackages(await api.listPendingSecretOutputs());
+      try {
+        setOutputDelivery(await api.deliverPendingSecretOutput(packageId));
+      } catch {
+        setOutputDelivery(secretOutputDeliveryUnavailable());
+        return;
+      }
+      if (api.listPendingSecretOutputs) {
+        try {
+          setSecretOutputPackages(await api.listPendingSecretOutputs());
+        } catch {
+          setSecretOutputPackages(secretOutputListingUnavailable());
+        }
+      }
     },
     [api],
   );
-  const collectAndDeliverSecretOutputs = useCallback(async () => {
+  const collectAndDeliverSecretOutputs = useCallback(async (runId: string) => {
     if (!api.listPendingSecretOutputs) return;
-    const pending = await api.listPendingSecretOutputs();
+    let pending: SecretOutputPackagesOperation;
+    try {
+      pending = await api.listPendingSecretOutputs();
+    } catch {
+      setSecretOutputPackages(secretOutputListingUnavailable());
+      return;
+    }
     setSecretOutputPackages(pending);
     const plan = installationPlan?.plan;
     if (
@@ -821,13 +845,39 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       !plan.secretOutputEncryptionPasswordPresent
     )
       return;
-    for (const item of pending.packages || []) {
-      if (!api.deliverPendingSecretOutput) break;
-      const delivery = await api.deliverPendingSecretOutput(item.packageId);
-      setOutputDelivery(delivery);
-      if (delivery.status !== "DELIVERED") break;
+    const candidates = [...(pending.packages || [])];
+    let cursor = pending.nextCursor;
+    const seen = new Set<string>();
+    for (let page = 1; cursor && page < 128; page++) {
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      let next: SecretOutputPackagesOperation;
+      try {
+        next = await api.listPendingSecretOutputs(cursor);
+      } catch {
+        setSecretOutputPackages(secretOutputListingUnavailable());
+        return;
+      }
+      if (next.status !== "READY") break;
+      candidates.push(...(next.packages || []));
+      cursor = next.nextCursor;
     }
-    setSecretOutputPackages(await api.listPendingSecretOutputs());
+    for (const item of candidates) {
+      if (item.sourceRunId !== runId) continue;
+      if (!api.deliverPendingSecretOutput) break;
+      try {
+        const delivery = await api.deliverPendingSecretOutput(item.packageId);
+        setOutputDelivery(delivery);
+      } catch {
+        setOutputDelivery(secretOutputDeliveryUnavailable());
+        return;
+      }
+    }
+    try {
+      setSecretOutputPackages(await api.listPendingSecretOutputs());
+    } catch {
+      setSecretOutputPackages(secretOutputListingUnavailable());
+    }
   }, [api, installationPlan?.plan]);
   useEffect(() => {
     if (!api.subscribeInstallationRunEvents) return undefined;
@@ -879,7 +929,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             .getInstallationRun(value.event.runId)
             .then(setInstallationRun)
             .catch(() => {});
-          void collectAndDeliverSecretOutputs().catch(() => {});
+          void collectAndDeliverSecretOutputs(value.event.runId).catch(() =>
+            setOutputDelivery(secretOutputDeliveryUnavailable()),
+          );
         }
       },
     );

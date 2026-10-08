@@ -275,25 +275,46 @@ def prepare_package_identity(state_root, journal_directory, project_id, deployme
                 return existing["packageId"], existing["generation"]
             names = _package_names(output_root)
             generation = 0
+            generations = set()
             for name in names:
                 try:
-                    with _package(state_root, name, nonblocking=True) as package:
+                    reserved = _reservation(output_root, name) if _entry_exists(
+                        output_root, ".reservation-" + name + ".json") else None
+                    # Older packages have their own immutable identity. Fetch
+                    # and delivery may hold their package lock while this run
+                    # reserves a different package; admission must not wait for
+                    # those unrelated readers or cleanup operations.
+                    with _directory(name, output_root) as package:
                         metadata = _record(output_root, name, package)
                         empty_completed = metadata.get("state") == "RESERVED" and _empty_completed(package, metadata)
+                        completed = metadata.get("state") != "RESERVED" and _completion_matches(package, metadata)
                 except FileNotFoundError:
                     metadata = _reservation(output_root, name)
                     empty_completed = False
+                    completed = False
                 except OutputWireError as error:
-                    if str(error) == "OUTPUT_BUSY":
-                        raise
                     raise OutputWireError("OUTPUT_RECOVERY_REQUIRED") from None
+                if (not isinstance(metadata, dict) or metadata.get("packageId") != name or
+                        type(metadata.get("generation")) is not int or
+                        not 1 <= metadata["generation"] <= 2147483647 or
+                        not isinstance(metadata.get("projectId"), str) or
+                        not isinstance(metadata.get("deploymentId"), str)):
+                    raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
+                if reserved is not None and any(metadata.get(key) != reserved[key] for key in (
+                        "projectId", "deploymentId", "sourceRunId", "packageId", "generation", "runtimeDigest")):
+                    raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
                 if metadata.get("projectId") != project_id or metadata.get("deploymentId") != deployment_id:
                     continue
+                if metadata["generation"] in generations:
+                    raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
+                generations.add(metadata["generation"])
                 generation = max(generation, metadata.get("generation", 0))
                 if metadata.get("state") == "RESERVED" and not empty_completed:
                     raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
-                if metadata.get("state") in ("READY", "ACKED_CLEANUP_PENDING"):
-                    raise OutputWireError("OUTPUT_BUSY")
+                if metadata.get("state") not in ("RESERVED", "READY", "ACKED_CLEANUP_PENDING", "DELIVERED"):
+                    raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
+                if metadata["state"] != "RESERVED" and not completed:
+                    raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
             if generation >= 2147483647:
                 raise OutputWireError("OUTPUT_RECOVERY_REQUIRED")
             identity = {"projectId": project_id, "deploymentId": deployment_id,
