@@ -9,12 +9,16 @@ import (
 	"io/fs"
 	"os"
 	"os/signal"
+	"platform-installer/internal/sshpassword"
 )
 
 //go:embed all:frontend/dist
 var browserAssets embed.FS
 
 func main() {
+	if sshpassword.Dispatch() {
+		return
+	}
 	address := flag.String("execution-node-address", "", "READY Execution Node address")
 	user := flag.String("execution-node-user", "", "Execution Node SSH user")
 	identity := flag.String("execution-node-identity", "", "runtime-only SSH identity path")

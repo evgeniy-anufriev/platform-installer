@@ -6,6 +6,7 @@ import (
 	"embed"
 	"flag"
 	"os"
+	"platform-installer/internal/sshpassword"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,6 +17,9 @@ import (
 var assets embed.FS
 
 func main() {
+	if sshpassword.Dispatch() {
+		return
+	}
 	address := flag.String("execution-node-address", "", "READY Execution Node address")
 	user := flag.String("execution-node-user", "", "Execution Node SSH user")
 	identity := flag.String("execution-node-identity", "", "runtime-only SSH identity path")

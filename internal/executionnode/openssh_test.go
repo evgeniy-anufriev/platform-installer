@@ -11,7 +11,7 @@ import (
 func TestActivationPreparesPrivateExecutionStorageBeforePublication(t *testing.T) {
 	runner := &recordingRunner{}
 	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
-	_, err := transport.ActivateStagedRuntime(context.Background(), testNode(), "/var/tmp/platform-installer/bootstrap/qa", executionbundle.Verified{Digest: "sha256:" + strings.Repeat("a", 64)})
+	_, err := transport.ActivateStagedRuntime(context.Background(), testNode(), "/var/tmp/platform-installer-bootstrap-"+strings.Repeat("a", 32), executionbundle.Verified{Digest: "sha256:" + strings.Repeat("a", 64)})
 	if err != nil {
 		t.Fatal(err)
 	}

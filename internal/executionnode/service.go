@@ -210,7 +210,12 @@ func (s *Service) InspectExecutionNode(ctx context.Context, node Node) (Inspecti
 	if node.HostKey.State != "TRUSTED" {
 		return Inspection{State: Broken, Findings: []Finding{{"EXECUTION_NODE_HOST_KEY_UNTRUSTED", "Execution Node host key must be explicitly trusted"}}}, nil
 	}
-	return s.transport.InspectExecutionNode(ctx, node)
+	inspection, err := s.transport.InspectExecutionNode(ctx, node)
+	if err == nil && inspection.OS != "" && !inspection.Elevation && inspection.State != Unreachable {
+		inspection.State = Broken
+		inspection.Findings = append(inspection.Findings, Finding{"EXECUTION_NODE_ELEVATION_REQUIRED", "Execution Node preparation requires non-interactive sudo access"})
+	}
+	return inspection, err
 }
 
 func (s *Service) PlanExecutionNodePreparation(ctx context.Context, node Node, bundleRoot string) (Plan, error) {
@@ -297,7 +302,10 @@ func requiredState(i Inspection, bundle executionbundle.Verified) State {
 	if i.State == Unreachable || i.State == Incompatible || i.State == Broken {
 		return i.State
 	}
-	if i.OS == "" || i.OSVersion == "" || i.Architecture == "" || !i.Elevation || i.FreeBytes <= 0 {
+	if !i.Elevation {
+		return Broken
+	}
+	if i.OS == "" || i.OSVersion == "" || i.Architecture == "" || i.FreeBytes <= 0 {
 		return PreparationRequired
 	}
 	compatible := false

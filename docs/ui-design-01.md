@@ -298,6 +298,12 @@ single horizontal desktop row. Its status is shown inline with the explanation;
 at narrow widths the fields wrap into a responsive grid. Only long server lists
 scroll independently, while the page header and Execution Node remain visible.
 
+Previous-run inspection belongs to a single outline button inside the Execution
+Node panel on Servers, without a separate card or explanatory text. When bundle detection on Project is blocked by an
+unconfirmed run, show a Russian explanation and a link to Servers: restore SSH
+credentials and host-key trust there, then choose **Проверить прежний запуск**.
+Do not show `INSTALLATION_RUN_ACTIVE` as the operator-facing explanation.
+
 ### Topology
 
 Topology owns a header-level **Add service instance**
@@ -622,3 +628,7 @@ and Topology (including Entry points) views, catalog-driven managed-setting disp
 findings navigation, draft/preview/save for a small supported literal subset,
 and optimistic external-change detection. Execution, secret entry and rich PKI
 editing follow only with their backend contracts.
+
+### Owner refinement: server information (2026-10-08)
+
+Servers and Execution Node use one «Проверить сервер» action. Its modal obtains the SSH fingerprint and requires explicit confirmation; the same exact key supplies installation trust. Read-only Go observations appear in one compact, non-wrapping line below the server: hostname, OS/version/architecture, CPU/RAM, server time and last successful check in Russian Moscow time. «Проверен» is independent of «Сохранён» and runtime readiness. A failed/stale session cannot publish successful observations. This supersedes separate key/check controls in the earlier mockup; see [plan](server-information-check-plan.md).

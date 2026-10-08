@@ -4,10 +4,12 @@ import type {
   ExecutionNodePreparation,
   ExecutionNodeReadiness,
   HostKeyProbeResult,
+  ServerInformationResult,
   OpenResult,
   SessionCredentialInput,
   SessionCredentialStatus,
 } from "./backend";
+import { ServerInformationDialog, ServerInformationText } from "./ServerInformationDialog";
 import {
   executionNodeCombinedStatus,
   executionNodeSelectionLabel,
@@ -257,6 +259,11 @@ export function ServersPage({
   onDeclineTargetHostKey,
   onPlanExecutionNodePreparation,
   onPrepareExecutionNode,
+  runRecoveryPanel,
+  cachedNodeReadiness,
+  serverInformation = {},
+  onProbeServerInformation,
+  onCheckServerInformation,
 }: {
   snapshot: OpenResult["snapshot"];
   managed: OpenResult["managed"];
@@ -288,8 +295,14 @@ export function ServersPage({
   onDeclineTargetHostKey?: () => Promise<HostKeyProbeResult>;
   onPlanExecutionNodePreparation: () => Promise<ExecutionNodePreparation>;
   onPrepareExecutionNode: (planId: string) => Promise<ExecutionNodePreparation>;
+  runRecoveryPanel?: ReactNode;
+  cachedNodeReadiness?: ExecutionNodeReadiness | null;
+  serverInformation?: Record<string, ServerInformationResult>;
+  onProbeServerInformation?: (hostId: string) => Promise<HostKeyProbeResult>;
+  onCheckServerInformation?: (probeId: string) => Promise<ServerInformationResult>;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [informationHost, setInformationHost] = useState<string | null>(null);
   const [approvedTargets, setApprovedTargets] = useState<string[]>([]);
   useEffect(() => setApprovedTargets([]), [managed?.projectRevision]);
   const visible = rows(snapshot, managed, intents);
@@ -359,13 +372,14 @@ export function ServersPage({
                   return (
                     <tr
                       key={row.hostId}
-                      className={row.state ? `draft-${row.state}` : ""}
+                      className={[row.state ? `draft-${row.state}` : "", serverInformation[row.hostId] ? "server-information-attached" : ""].join(" ")}
                     >
                       <td>
                         <span className="server-name-cell">
                           <ServerLineIcon kind="server" />
                           <b>{row.hostId}</b>
                         </span>
+                        {serverInformation[row.hostId] && <ServerInformationText value={serverInformation[row.hostId]} />}
                       </td>
                       <td>{labelType(row.type, serverTypes)}</td>
                       <td>{row.desiredHostname || <em>Не задано</em>}</td>
@@ -379,7 +393,7 @@ export function ServersPage({
                         ) : row.state === "deleting" ? (
                           <StatusChip tone="danger">Будет удалён</StatusChip>
                         ) : (
-                          <StatusChip tone="success">Сохранён</StatusChip>
+                          <StatusChip tone="success">{serverInformation[row.hostId]?.status === "CHECKED" ? "Проверен" : "Сохранён"}</StatusChip>
                         )}
                       </td>
                       <td>
@@ -398,16 +412,16 @@ export function ServersPage({
                             <button
                               className="link"
                               onClick={() =>
-                                setDialog({ mode: "target-key", row })
+                                onProbeServerInformation ? setInformationHost(row.hostId) : setDialog({ mode: "target-key", row })
                               }
                               disabled={
                                 disableCrud ||
                                 commandCount > 0 ||
                                 !managed?.servers?.[row.hostId] ||
-                                !onProbeTargetHostKey
+                                (!onProbeServerInformation && !onProbeTargetHostKey)
                               }
                             >
-                              {approvedTargets.includes(row.hostId)
+                              {onProbeServerInformation ? "Проверить сервер" : approvedTargets.includes(row.hostId)
                                 ? "SSH-ключ подтверждён"
                                 : "Проверить SSH-ключ"}
                             </button>
@@ -441,6 +455,10 @@ export function ServersPage({
           onDecline={onDeclineExecutionNodeHostKey}
           onPlan={onPlanExecutionNodePreparation}
           onPrepare={onPrepareExecutionNode}
+          recoveryAction={runRecoveryPanel}
+          cachedReadiness={cachedNodeReadiness}
+          onInformationCheck={onProbeServerInformation ? () => setInformationHost(executionNode?.selectedHostId || "") : undefined}
+          information={serverInformation[executionNode?.selectedHostId || ""]}
         />
       </div>
       {commandCount > 0 && (
@@ -515,6 +533,9 @@ export function ServersPage({
             onClose={() => setDialog(null)}
           />
         )}
+      {informationHost && onProbeServerInformation && onCheckServerInformation && <ServerInformationDialog
+        hostId={informationHost} onProbe={onProbeServerInformation} onCheck={onCheckServerInformation}
+        onResult={() => {}} onClose={() => setInformationHost(null)} />}
     </>
   );
 }
@@ -637,6 +658,10 @@ function ExecutionNodePanel({
   onDecline,
   onPlan,
   onPrepare,
+  recoveryAction,
+  cachedReadiness,
+  onInformationCheck,
+  information,
 }: {
   context: ExecutionNodeContext | null;
   rows: Row[];
@@ -649,6 +674,10 @@ function ExecutionNodePanel({
   onDecline?: () => Promise<HostKeyProbeResult>;
   onPlan: () => Promise<ExecutionNodePreparation>;
   onPrepare: (planId: string) => Promise<ExecutionNodePreparation>;
+  recoveryAction?: ReactNode;
+  cachedReadiness?: ExecutionNodeReadiness | null;
+  onInformationCheck?: () => void;
+  information?: ServerInformationResult;
 }) {
   const [changing, setChanging] = useState(false);
   const [selected, setSelected] = useState("");
@@ -670,8 +699,10 @@ function ExecutionNodePanel({
     setPreparation(null);
   }, [
     context?.selectedHostId,
+    context?.runtimeDigest,
     credentialStatus?.expiresAt,
     credentialStatus?.sshMode,
+    credentialStatus?.status,
   ]);
   const effective: Partial<ExecutionNodeContext> & {
     status: string;
@@ -680,7 +711,7 @@ function ExecutionNodePanel({
     status: "NOT_CONFIGURED",
     selectionSource: "NONE",
   };
-  const combinedStatus = executionNodeCombinedStatus(readiness, preparation);
+  const combinedStatus = executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
   const choose = async () => {
     if (!selected) return;
     setBusy(true);
@@ -723,10 +754,10 @@ function ExecutionNodePanel({
         Выбор узла хранится только в приложении и не меняет проект. Подготовка —
         только после подтверждения.
       </p>
-      {onProbe && context?.selectionKind === "PROJECT_SERVER" && (
+      {!onInformationCheck && onProbe && context?.selectionKind === "PROJECT_SERVER" && (
         <div className="execution-node-host-key">
           <p className="muted">
-            Нужен PEM-ключ сеанса; перед подключением сверьте SSH-отпечаток вне
+            Нужен действующий SSH-сеанс; перед подключением сверьте SSH-отпечаток вне
             приложения.
           </p>
           <button
@@ -734,8 +765,7 @@ function ExecutionNodePanel({
             disabled={
               disabled ||
               busy ||
-              credentialStatus?.status !== "PRESENT" ||
-              credentialStatus?.sshMode !== "SSH_PRIVATE_KEY"
+              credentialStatus?.status !== "PRESENT"
             }
             onClick={() => {
               setHostKeyProbe(null);
@@ -829,6 +859,9 @@ function ExecutionNodePanel({
         ),
       )}
       <div className="actions">
+        {recoveryAction}
+        {onInformationCheck && <button className="outline" onClick={onInformationCheck} disabled={disabled || busy || credentialStatus?.status !== "PRESENT"}>Проверить сервер</button>}
+        {!onInformationCheck &&
         <button
           className="outline"
           onClick={async () => {
@@ -847,6 +880,7 @@ function ExecutionNodePanel({
         >
           Проверить узел
         </button>
+        }
         <button
           className="outline"
           onClick={async () => {
@@ -949,6 +983,7 @@ function ExecutionNodePanel({
           </div>
         </div>
       )}
+      {information && <div className="execution-node-information"><ServerInformationText value={information} /></div>}
     </section>
     {hostKeyDialogOpen && onProbe && (
       <ExecutionNodeHostKeyDialog
@@ -1141,6 +1176,15 @@ function SessionCredentialsPanel({
     }
   };
   const effectiveStatus = status?.status || "MISSING";
+  const expiryDate = status?.expiresAt ? new Date(status.expiresAt) : null;
+  const expiryLabel = expiryDate && !Number.isNaN(expiryDate.getTime())
+    ? `${new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hourCycle: "h23",
+      }).format(expiryDate)} МСК`
+    : null;
   return (
     <section
       className="card session-credentials"
@@ -1170,8 +1214,8 @@ function SessionCredentialsPanel({
                 ? "Истекли"
                 : "Не заданы"}
           </StatusChip>
-          {effectiveStatus === "PRESENT" && status?.expiresAt
-            ? ` до ${status.expiresAt}`
+          {effectiveStatus === "PRESENT" && expiryLabel
+            ? ` до ${expiryLabel}`
             : effectiveStatus === "EXPIRED"
               ? "Добавьте учётные данные повторно"
               : "Введите данные для подключения"}

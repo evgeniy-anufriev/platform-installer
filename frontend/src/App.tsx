@@ -5,6 +5,7 @@ import type {
   ExecutionNodePreparation,
   ExecutionNodeReadiness,
   HostKeyProbeResult,
+  ServerInformationResult,
   EndpointPreview,
   InstallationState,
   InstallationPlanOperation,
@@ -203,6 +204,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   } as OpenResult);
   const [bundleUpdate, setBundleUpdate] = useState<RuntimeBundleUpdate | null>(null);
   const [orphanRun, setOrphanRun] = useState<OrphanRunRecovery | null>(null);
+  const [serverInformation, setServerInformation] = useState<Record<string, ServerInformationResult>>({});
   const [bundleBusy, setBundleBusy] = useState(false);
   const [page, setPage] = useState<Page>("project");
   const [loading, setLoading] = useState(false);
@@ -685,6 +687,34 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       if (next.status === "UPDATED" && result.root) setResult(await api.openProject(result.root));
     } finally { setBundleBusy(false); }
   };
+  const [lastNodeCheck, setLastNodeCheck] = useState<{
+    binding: string;
+    readiness: ExecutionNodeReadiness;
+  } | null>(null);
+  const nodeCheckBinding = (context: ExecutionNodeContext | null) =>
+    JSON.stringify([result.root, context?.selectedHostId, context?.runtimeDigest,
+      credentialStatus?.expiresAt, credentialStatus?.sshMode, credentialStatus?.status]);
+  useEffect(() => setServerInformation({}), [result.root, result.managed?.projectRevision, credentialStatus?.expiresAt, credentialStatus?.status, credentialStatus?.sshMode]);
+  const informationBinding = JSON.stringify([result.root, result.managed?.projectRevision,
+    credentialStatus?.expiresAt, credentialStatus?.status, credentialStatus?.sshMode, executionNode?.selectedHostId]);
+  const informationBindingRef = useRef(informationBinding);
+  informationBindingRef.current = informationBinding;
+  const probeServerInformation = useCallback((hostId: string) => {
+    if (!api.probeServerInformation) throw new Error("SERVER_INFORMATION_UNAVAILABLE");
+    return api.probeServerInformation(hostId);
+  }, [api]);
+  const checkServerInformation = async (probeId: string) => {
+    if (!api.checkServerInformation) throw new Error("SERVER_INFORMATION_UNAVAILABLE");
+    const binding = informationBindingRef.current;
+    const info = await api.checkServerInformation(probeId);
+    if (binding !== informationBindingRef.current) throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+    if (info.hostId) setServerInformation((current) => ({ ...current, [info.hostId!]: info }));
+    if (info.status === "CHECKED" && info.hostId === executionNode?.selectedHostId) {
+      // Runtime readiness is independent and may take longer than SSH facts.
+      void checkExecutionNode().catch(() => {});
+    }
+    return info;
+  };
   const inspectOrphanRun = async () => {
     if (!api.inspectOrphanRun) return;
     setBundleBusy(true);
@@ -699,14 +729,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       }
     }
     finally { setBundleBusy(false); }
-  };
-  const cancelOrphanRun = async () => {
-    if (!api.cancelOrphanRun || !orphanRun?.recoveryId) return;
-    setBundleBusy(true);
-    try {
-      setOrphanRun(await api.cancelOrphanRun(orphanRun.recoveryId));
-      if (api.chooseRuntimeBundleUpdate) setBundleUpdate(await api.chooseRuntimeBundleUpdate());
-    } finally { setBundleBusy(false); }
   };
   const refreshInstallationState = async () => {
     if (!api.getInstallationState) return;
@@ -1460,10 +1482,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const checkExecutionNode = async (): Promise<ExecutionNodeReadiness> => {
     if (!api.checkExecutionNode)
       throw new Error("EXECUTION_NODE_CHECK_UNAVAILABLE");
+    const binding = informationBindingRef.current;
     const readiness = await api.checkExecutionNode();
     const refreshed = await api
       .getExecutionNodeContext?.()
       .catch(() => undefined);
+    if (binding !== informationBindingRef.current) throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
     setExecutionNode((current) =>
       current
         ? {
@@ -1473,6 +1497,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           }
         : current,
     );
+    setLastNodeCheck({
+      binding: nodeCheckBinding(refreshed || executionNode),
+      readiness,
+    });
     return readiness;
   };
   const probeExecutionNodeHostKey = async (): Promise<HostKeyProbeResult> => {
@@ -1827,12 +1855,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               }
               onExport={openExport}
               bundleUpdate={bundleUpdate}
-              orphanRun={orphanRun}
               bundleBusy={bundleBusy}
               onRefreshBundle={refreshBundleUpdate}
               onConfirmBundle={confirmBundleUpdate}
-              onInspectOrphan={inspectOrphanRun}
-              onCancelOrphan={cancelOrphanRun}
             />
           )}
           {!loading && !creating && projectOpen && page === "servers" && (
@@ -1857,6 +1882,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               credentialStatus={credentialStatus}
               onSetCredential={setSessionCredential}
               onClearCredential={clearSessionCredential}
+              serverInformation={serverInformation}
+              onProbeServerInformation={api.probeServerInformation ? probeServerInformation : undefined}
+              onCheckServerInformation={api.checkServerInformation ? checkServerInformation : undefined}
+              cachedNodeReadiness={lastNodeCheck?.binding === nodeCheckBinding(executionNode) ? lastNodeCheck.readiness : null}
               executionNode={executionNode}
               onSelectExecutionNode={selectExecutionNode}
               onCheckExecutionNode={checkExecutionNode}
@@ -1867,6 +1896,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onApproveTargetHostKey={approveTargetHostKey}
               onDeclineTargetHostKey={declineTargetHostKey}
               onPlanExecutionNodePreparation={planExecutionNodePreparation}
+              runRecoveryPanel={
+                (bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" || (orphanRun && orphanRun.status !== "NONE")) && (
+                  <button className="outline" onClick={inspectOrphanRun} disabled={bundleBusy}>Проверить прежний запуск</button>
+                )
+              }
               onPrepareExecutionNode={prepareExecutionNode}
             />
           )}
@@ -2214,12 +2248,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 function ProjectPage({
   catalogStatus,
   bundleUpdate,
-  orphanRun,
   bundleBusy,
   onRefreshBundle,
   onConfirmBundle,
-  onInspectOrphan,
-  onCancelOrphan,
   empty,
   snapshot,
   managed,
@@ -2233,12 +2264,9 @@ function ProjectPage({
 }: {
   catalogStatus?: string;
   bundleUpdate: RuntimeBundleUpdate | null;
-  orphanRun: OrphanRunRecovery | null;
   bundleBusy: boolean;
   onRefreshBundle: () => void;
   onConfirmBundle: () => void;
-  onInspectOrphan: () => void;
-  onCancelOrphan: () => void;
   empty: boolean;
   snapshot: OpenResult["snapshot"];
   managed: OpenResult["managed"];
@@ -2269,33 +2297,15 @@ function ProjectPage({
         <button onClick={onConfirmBundle} disabled={bundleBusy}>Привязать</button>
       </>}
       {bundleUpdate?.status === "UPDATED" && <p>Новый набор привязан. Подготовьте узел выполнения и создайте свежий план.</p>}
-      {bundleUpdate?.status === "BLOCKED" && <p role="alert">Привязка сейчас недоступна: {bundleUpdate.error?.message || bundleUpdate.error?.code || "проверьте набор и состояние выполнения"}.</p>}
-      {bundleUpdate?.status === "BLOCKED" && bundleUpdate.error?.code && <p className="muted">Код: {bundleUpdate.error.code}</p>}
+      {bundleUpdate?.status === "BLOCKED" && bundleUpdate.error?.code !== "INSTALLATION_RUN_ACTIVE" && <p role="alert">Привязка сейчас недоступна: {bundleUpdate.error?.message || bundleUpdate.error?.code || "проверьте набор и состояние выполнения"}.</p>}
+      {bundleUpdate?.status === "BLOCKED" && bundleUpdate.error?.code && bundleUpdate.error.code !== "INSTALLATION_RUN_ACTIVE" && <p className="muted">Код: {bundleUpdate.error.code}</p>}
+      {bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" && <div role="alert">
+        <p>Прежний запуск установки не подтверждён как завершённый. Проверка нового набора пока недоступна.</p>
+        <p>Перейдите на страницу «Серверы», восстановите доступ к узлу выполнения и нажмите «Проверить прежний запуск».</p>
+        <button className="outline" onClick={onServers}>Перейти к серверам</button>
+      </div>}
       {bundleUpdate?.status === "PUBLISHED_NOT_BOUND" && <p role="alert">Набор опубликован, но проект не перепривязан. Проверьте проект и повторите операцию.</p>}
       {bundleUpdate?.status === "BOUND_REFRESH_REQUIRED" && <p role="alert">Привязка записана, но проект нужно открыть заново.</p>}
-      {bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" && <button className="outline" onClick={onInspectOrphan} disabled={bundleBusy}>Проверить прежний запуск</button>}
-      {orphanRun && orphanRun.status !== "NONE" && <div className="orphan-run-status" role={orphanRun.status === "RESOLVED" ? "status" : "alert"}>
-        {orphanRun.status === "RESOLVED" ? <p>
-          {orphanRun.runState === "FAILED"
-            ? "Прежний запуск завершился с ошибкой. Его статус подтверждён; повторное выполнение не запускалось."
-            : `Прежний запуск подтверждён как завершённый (${orphanRun.runState || "terminal"}). Повторное выполнение не запускалось.`}
-          {orphanRun.runId ? ` Run ID: ${orphanRun.runId}.` : ""}
-        </p> : orphanRun.status === "FOUND" ? <p>
-          Найден прежний активный запуск {orphanRun.runId} ({orphanRun.runState}). Новый запуск заблокирован. Аварийная отмена сохранит журнал и результат.
-        </p> : orphanRun.status === "UNAVAILABLE" ? <p>
-          Не удалось проверить прежний запуск на исходном узле. Убедитесь, что узел доступен, SSH-сеанс действителен и ключ узла подтверждён. Блокировка сохранена.
-        </p> : orphanRun.status === "UNKNOWN" ? <p>
-          Состояние прежнего запуска неизвестно. Блокировка сохранена; не удаляйте локальную запись и не запускайте план повторно.
-        </p> : orphanRun.status === "CURRENT" ? <p>
-          Запуск принадлежит текущему сеансу. Следите за ним на странице «Установка»; повторный запуск недоступен.
-        </p> : orphanRun.status === "CANCELLING" ? <p>
-          Отмена прежнего запуска ещё не подтверждена. Блокировка сохраняется.
-        </p> : <p>
-          {orphanRun.error?.message || "Не удалось безопасно проверить прежний запуск."}
-          {orphanRun.error?.code ? ` Код: ${orphanRun.error.code}.` : ""}
-        </p>}
-        {orphanRun.status === "FOUND" && <button onClick={onCancelOrphan} disabled={bundleBusy}>Снять блокировку запуска</button>}
-      </div>}
     </section>
   );
   if (empty && local)

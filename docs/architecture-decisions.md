@@ -432,3 +432,11 @@ writable after thaw/recovery. Ansible cleanup attempts thaw on post-freeze
 failure, and the next BIND operation recovers any marked zone before normal
 work. The marker is runtime recovery data, not project desired state or a
 second persistence database. Standalone Ansible retains the same behavior.
+
+## ADR-031: Go performs bounded informational server checks
+
+Accepted by owner 2026-10-08. A single Servers action confirms the current SSH host key and reads hostname, OS/version, architecture, CPU count, RAM and server time directly from the saved host using Go. The same information is available on the Execution Node before Core preparation. Current SSH password or PEM session, isolated pinned OpenSSH, bounded output/time and revision/identity revalidation are required. One explicit fingerprint confirmation supplies the same pinned key for informational SSH and existing installation target trust; a second confirmation is unnecessary. Changed keys or effective endpoints block installation. Trust and facts do not approve execution plans or change desired inventory. Existing Execution Node readiness runs separately after an informational check and cannot erase successfully collected facts. No generic command bridge or fact persistence is introduced. See [implementation plan](server-information-check-plan.md).
+
+## ADR-032: Execution Node supports session SSH passwords
+
+Owner-approved 2026-10-08. Password and PEM use the existing OpenSSH SSH/SCP transport and exact confirmed host-key pin. Password is broker-owned memory, supplied through standard ASKPASS using early helper dispatch in the current executable and a command-owned one-use loopback capability. No password argv/environment/file, new credential DTO or desired-state store is introduced. Only a matching STARTING plan/RUNNING run may use a retained password after ordinary lease expiry; new operations require a live lease. Copies are wiped on callback return and hold release. PEM file/digest guards remain. See [plan](execution-node-password-auth-plan.md); broader preparation/Start acceptance remains separately gated.

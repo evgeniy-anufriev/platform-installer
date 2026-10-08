@@ -150,6 +150,8 @@ func browserOperations() map[string]browserOperation {
 		"approveExecutionNodeHostKey": oneBrowserArg((*App).ApproveExecutionNodeHostKey),
 		"declineExecutionNodeHostKey": noBrowserArgs((*App).DeclineExecutionNodeHostKey),
 		"probeTargetHostKey":          oneBrowserArg((*App).ProbeTargetHostKey),
+		"probeServerInformation":      oneBrowserArg((*App).ProbeServerInformation),
+		"checkServerInformation":      oneBrowserArg((*App).CheckServerInformation),
 		"approveTargetHostKey":        oneBrowserArg((*App).ApproveTargetHostKey),
 		"declineTargetHostKey":        noBrowserArgs((*App).DeclineTargetHostKey),
 		"getInstallationState":        noBrowserArgs((*App).GetInstallationState),

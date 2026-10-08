@@ -41,9 +41,9 @@ describe("Execution Node SSH key approval", () => {
     expect(await screen.findByText("SSH-отпечаток подтверждён")).toBeTruthy();
   });
 
-  it("does not offer probing with password-only session credentials", () => {
+  it("offers probing with password session credentials", () => {
     render(<ServersPage {...base} credentialStatus={{status:"PRESENT", sshMode:"SSH_PASSWORD", expiresAt:"future", sudoPasswordStatus:"NOT_PROVIDED", pkiStorePasswordStatus:"MISSING"}} onProbeExecutionNodeHostKey={vi.fn()} />);
-    expect((screen.getByRole("button",{name:"Получить отпечаток SSH"}) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button",{name:"Получить отпечаток SSH"}) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("revokes an unapproved probe when the dialog is closed", async () => {

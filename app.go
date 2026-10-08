@@ -230,36 +230,37 @@ type App struct {
 	reader           interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	projectRevision        func(string) (string, error)
-	lifecycle              projectLifecycle
-	current                ProjectOpenResult
-	sessions               *installer.EditSessionStore
-	editor                 *installer.Backend
-	activeSession          string
-	editMu                 sync.Mutex
-	config                 appconfig.Config
-	configErr              error
-	secrets                *runtimesecret.Broker
-	execution              *executionNodeContextStore
-	binding                *executionNodeBinding
-	availableBundleRoot    string
-	bundleCacheRoot        string
-	bundlePublisher        func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
-	localRunRecordRoot     string
-	bundlePreview          *runtimeBundlePreview
-	orphanRecovery         *orphanRunRecovery
-	pendingHostKey         *pendingExecutionHostKey
-	pendingTargetHostKey   *pendingTargetHostKey
-	approvedTargetHostKeys map[string]approvedTargetHostKey
-	continuation           *verificationContinuation
-	export                 *installer.ProjectExport
-	installationPlanID     string
-	installationRuns       *installationRunRegistry
-	installationGeneration uint64
-	startInFlight          bool
-	startOutcomeUnknown    bool
-	runtimeUpdateInFlight  bool
-	runtimeSecretEvidence  *runtimeSecretDescriptorEvidence
+	projectRevision          func(string) (string, error)
+	lifecycle                projectLifecycle
+	current                  ProjectOpenResult
+	sessions                 *installer.EditSessionStore
+	editor                   *installer.Backend
+	activeSession            string
+	editMu                   sync.Mutex
+	config                   appconfig.Config
+	configErr                error
+	secrets                  *runtimesecret.Broker
+	execution                *executionNodeContextStore
+	binding                  *executionNodeBinding
+	availableBundleRoot      string
+	bundleCacheRoot          string
+	bundlePublisher          func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
+	localRunRecordRoot       string
+	bundlePreview            *runtimeBundlePreview
+	orphanRecovery           *orphanRunRecovery
+	pendingServerInformation *serverInformationProbe
+	pendingHostKey           *pendingExecutionHostKey
+	pendingTargetHostKey     *pendingTargetHostKey
+	approvedTargetHostKeys   map[string]approvedTargetHostKey
+	continuation             *verificationContinuation
+	export                   *installer.ProjectExport
+	installationPlanID       string
+	installationRuns         *installationRunRegistry
+	installationGeneration   uint64
+	startInFlight            bool
+	startOutcomeUnknown      bool
+	runtimeUpdateInFlight    bool
+	runtimeSecretEvidence    *runtimeSecretDescriptorEvidence
 }
 
 type AppOption func(*App)
@@ -1823,6 +1824,10 @@ func projectErrorCode(err error) string {
 
 func projectErrorMessage(code string) string {
 	switch code {
+	case "SESSION_CREDENTIAL_UNAVAILABLE":
+		return "Учётные данные SSH-сеанса недоступны или срок их действия истёк. Укажите пароль или приватный ключ PEM на странице «Серверы»."
+	case "SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED":
+		return "Пароль SSH или sudo не должен содержать перенос строки или нулевой символ. Введите пароль заново."
 	case "INSTALLATION_RUN_ACTIVE":
 		return "Новый набор пока нельзя проверить: прежний запуск не подтверждён как завершённый. Нажмите «Проверить прежний запуск»; не запускайте план повторно."
 	case "RUNTIME_BUNDLE_UPDATE_UNAVAILABLE":
@@ -1854,7 +1859,7 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_BINDING_REQUIRED":
 		return "Выбранный Execution Node не имеет доверенного runtime binding. Откройте страницу Серверы."
 	case "EXECUTION_NODE_PEM_REQUIRED":
-		return "Для узла выполнения нужен приватный ключ PEM текущего сеанса. SSH-пароль можно использовать для целевых серверов."
+		return "Для подключения нужны действующие учётные данные SSH-сеанса: пароль или приватный ключ PEM."
 	case "EXECUTION_NODE_USER_INVALID":
 		return "Имя технического пользователя не подходит для подключения к узлу выполнения."
 	case "EXECUTION_NODE_HOST_KEY_PROBE_FAILED":

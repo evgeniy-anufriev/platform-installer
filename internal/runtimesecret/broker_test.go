@@ -344,8 +344,8 @@ func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "runtime-only"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := broker.CurrentExecutionIdentity(binding); err == nil {
-		t.Fatal("password mode authorized execution identity")
+	if identity, err := broker.CurrentExecutionIdentity(binding); err != nil || identity.Mode != SSHPassword || identity.Path != "" || identity.FileInfo != nil {
+		t.Fatal("password identity unavailable or retained key metadata")
 	}
 }
 

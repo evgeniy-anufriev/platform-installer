@@ -18,7 +18,14 @@ separate and is not required by this nonvisual gate; never report it as PASS
 without performing it. If the real bridge cannot be exercised, report the gate
 as unavailable/blocking rather than substituting mocks or marking it passed.
 
-Before every real WebView test session that uses SSH credentials, prepare a
+For owner-authorized EXECUTION-NODE-PASSWORD-AUTH-01 password QA, use a valid
+password session entered through the UI; do not require or silently substitute
+a PEM key. Do not ask for the password in chat or log/read the form value.
+Record account metadata and exact packaged SSH/SCP/helper versions. This does
+not authorize account/password changes, sudo policy changes or a new install.
+The established EXEC-01 automation identity and sudo policy below stay intact.
+
+Before every real WebView test session that uses PEM SSH credentials, prepare a
 private key in an unencrypted PEM encoding accepted by the current
 `internal/runtimesecret` validator. If no compatible key is available, create
 one before starting the WebView test and ensure its public key is already
@@ -76,4 +83,3 @@ exact process image path. If it is that exact build output, Codex MAY stop only
 that process to release the binary lock and continue the requested rebuild.
 Never use this rule to stop another application, a differently located binary,
 or an uncertain process.
-

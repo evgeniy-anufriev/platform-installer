@@ -75,3 +75,43 @@ Focused QA: App + installationPresentation — 66 тестов PASS; frontend ty
 По запросу владельца default TTL брокера workstation увеличен с одного до двух часов: SSH/elevation credentials, связанные PKI/service runtime secrets, pending service secrets и отдельный пароль шифрования выходных файлов. Чтение не продлевает срок; deadline связанных секретов определяется credential lease, deadline output password — его подтверждением. Active-run hold сохранён; сроки installation/preparation plan и node-side staged lease не изменялись. Уже истёкшие данные не восстанавливаются.
 
 QA: focused broker tests, `go test ./...`, `go vet ./...`, Wails production build PASS. Тестовые часы подтвердили доступ к credentials/PKI/service secrets и output password на 119-й минуте и отказ на 120-й минуте. Реальная React/Wails acceptance на новой границе и доставка пакета успешного full-service run пока не выполнены; обязательный gate остаётся открытым. Новый full-service run не запускался.
+
+## I05: прежний запуск — восстановление доступа на «Серверах» (2026-10-08)
+
+По замечанию владельца кнопка «Проверить прежний запуск» перенесена с «Проекта» внутрь блока «Узел выполнения» на «Серверах». По последующему уточнению владельца отдельная карточка, пояснения и recovery-action удалены; осталась одна outline-кнопка. Первоначальная отдельная карточка обрезала панель Execution Node на небольшой высоте окна и заменена этой компоновкой. На «Проекте» INSTALLATION_RUN_ACTIVE заменён русским объяснением: прежний запуск не подтверждён как завершённый; нужно перейти на «Серверы», восстановить SSH-доступ и подтвердить ключ узла, затем проверить запуск. Добавлена outline-кнопка перехода. Технический код этой блокировки не выводится. Backend recovery/trust/run semantics не изменены.
+
+QA: 62 App-теста PASS, включая навигацию Project → Servers → проверка и сохранение блокировки при недоступном узле; typecheck/lint/frontend build/Wails build PASS. Новая сборка сохранена отдельно как `build/bin/platform-installer-ui-layout.exe`, действующее окно не закрывалось. Реальная React/Wails recovery acceptance и визуальная проверка NOT TESTED, gate остаётся открытым. Установка/отмена запуска не выполнялись.
+
+## I05: сохранение последней проверки узла при recovery (2026-10-08)
+
+По owner-observation успешная проверка прежнего запуска приводила к потере отображённого результата проверки Execution Node. Последний readiness-ответ теперь удерживается в памяти App и проецируется в панель после её обновления/повторного открытия. Привязка включает project root, selected host, runtime digest и состояние/срок/mode session credentials. Смена привязки исключает повторное использование результата; локальный panel state также сбрасывается при смене runtime или credential status. Это UI observation, не разрешение на Plan/Start и не persistent desired state.
+
+Focused QA: 65 App/host-key tests PASS, включая check → inspect previous run → Project → Servers с одним вызовом check; lint/typecheck/frontend/Wails build PASS. Реальная React/Wails и визуальная acceptance нового исправления не выполнена, gate остаётся открытым. Сборка: `build/bin/platform-installer-ui-layout.exe`.
+
+## I05: unified information check (2026-10-08)
+
+Owner-approved Go informational SSH: one «Проверить сервер» modal explicitly confirms a pinned key, reads agreed facts and supplies that exact pin to existing installation target trust. Execution Node uses the same confirmation before Core readiness. No installation was started. Observations and trust remain session-only, revision/endpoint/credential-bound. Facts occupy one small-text line beneath each server and the Execution Node.
+
+Real React/Wails flow on project-b46aa3f5f57a495f, saved revision sha256:cfcbb9da69e6f910cc2a9a30279e3e26526298e81316114ebad9ae9858a3da51: target node2 and selected Execution Node node1 CHECKED; cancel and credential replacement rejection PASS. Actual results: redos-node1/redos-node2, RED OS 8.0.3, x86_64, 1 logical CPU, 4.9 GiB RAM; timestamps displayed in MSK. Screenshot visually inspected: one line within the same server row, no separate divider; owner-requested 50 px height, with one-line observations and compact non-wrapping actions. Owner confirmed all content fits. Subsequent layout refinement centers primary text/actions vertically within the 50 px row and anchors the information to its bottom line; frontend build/lint passed. Saved checked servers display «Проверен»; draft statuses remain independent. Evidence under .runtime/qa/server-information-ui-evidence.txt and server-information-ui.png (not committed).
+
+UI reproduction found competing automatic key probes under React StrictMode: an older response replaced the pending confirmation token. Fixed by reusing one probe promise per dialog and rejecting superseded backend probes. Explicit confirmation precedes the information connection. Focused StrictMode regression test added. Independent TARGETED_RECHECK APPROVE: SC-D01/SC-D02/SC-D03 resolved, no remaining blockers. Final Go test/vet, frontend build/lint and 74 focused tests PASS; Wails production build platform-installer-ui-information.exe PASS. Subsequent owner-requested layout changes validated separately; overall SI11 acceptance unchanged.
+
+## Execution Node password preparation failure (2026-10-08)
+
+Owner reported EXECUTION_NODE_PREPARE_STAGE_FAILED after confirming preparation. Read-only diagnosis on node1: bootstrap parent /var/tmp/platform-installer/bootstrap is owned by platform-automation, mode 0755; admin cannot write there. admin sudo -n also requires a password. Available space 10,322,344 KiB excludes current disk exhaustion as the immediate diagnosis. No sudo policy/account change or runtime activation performed.
+
+Added prerequisite block for missing non-interactive sudo and Russian safe explanation; existing SSH password is distinct from sudo elevation. Proposed fresh private staging/upload-inside-stage correction is NOT accepted: independent FULL DIFF preliminary BLOCK EP-D01 found privileged path TOCTOU under a foreign-writable parent. Automatic implementation and mutating staging QA stopped pending final findings/owner decision. No privileged claim script executed. Supplementary Go test ./... and go vet ./... PASS; Wails build PASS does not override the security blocker or prove preparation acceptance. Temporary remote helper QA files cleaned. New binary must not be treated as preparation-ready.
+## Targeted recheck outcome (2026-10-08)
+
+Owner authorized EP-D01/EP-D02 corrections and the sudo-password extension, then confirmed the correction works and explicitly requested the recheck. Independent TARGETED_RECHECK BLOCK: EP-D01, EP-D02, EP-D03, EP-S01, EP-S02, EP-S03 resolved; only EP-S04 remains. See [review](execution-node-password-auth-review.md). Actual Windows/RED OS SCP upload/download and negative password/pin checks passed. RED OS sudo evidence used NOPASSWD, so password-required sudo positive/negative acceptance remains open. No further automatic review cycle; owner decision needed for remaining evidence.
+## Owner-authorized EP-S04 evidence recheck — APPROVE
+
+2026-10-08. Owner explicitly requested the reviewer again. Independent read-only evidence-only TARGETED_RECHECK: APPROVE; EP-S04 RESOLVED; zero unresolved blocking findings. Supplemental manifest SHA256 30E48D0EDC8AA308023FD02D417C3ABAECFEFCF72B8C119BCC22279163B6BD3E. Relevant production code unchanged from the preceding review.
+
+Owner-observed real UI results:
+
+- Wrong sudo password: «Проверен: Ошибка узла».
+- Correct sudo password: «Проверен: Подготовлен».
+- Selected sudo-password requirement and empty value: «Сохранить в сеансе» is blocked.
+
+Reviewer independently checked the snapshot, credential form and immediate implementation, and accepted these precise owner observations as the missing password-required sudo evidence. Reviewer did not operate the UI. Exact timestamps/session IDs were not provided. Previously resolved staging/SCP/cleanup/hold findings remain RESOLVED. No new mechanisms or overengineering findings; this update changes evidence only. Full installation/Start/activation acceptance is not asserted. No further review required for the unchanged scope.

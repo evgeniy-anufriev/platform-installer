@@ -14,6 +14,7 @@ import (
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/runtimesecret"
+	"platform-installer/internal/sshpassword"
 )
 
 const installationEventName = "installation-run-event"
@@ -379,7 +380,11 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_PLAN_NOT_FOUND", Message: projectErrorMessage("INSTALLATION_PLAN_NOT_FOUND")}}
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	scope := sshpassword.Scope{}
+	if a.startOutcomeUnknown {
+		scope.PlanID = planID
+	}
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked(scope)
 	if err != nil || binding.plans == nil {
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
@@ -435,7 +440,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	var runIdentity runtimesecret.ExecutionIdentity
 	holdRunIdentity := binding.dynamic
 	if holdRunIdentity {
-		runIdentity, credentialErr = a.secrets.CurrentExecutionIdentity(credentialBinding)
+		runIdentity, credentialErr = a.secrets.CurrentExecutionIdentityForOperation(credentialBinding, scope.PlanID, scope.RunID)
 		if credentialErr != nil || runIdentity.Generation != binding.credentialGeneration {
 			a.editMu.Unlock()
 			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
@@ -505,7 +510,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	}
 	a.startOutcomeUnknown = true // a transport failure can conceal a committed run
 	a.editMu.Unlock()
-	run, err := binding.plans.Start(ctx, binding.node, planID)
+	run, err := binding.plans.Start(sshpassword.WithScope(ctx, sshpassword.Scope{PlanID: planID}), binding.node, planID)
 	if err != nil {
 		var dispatchStatus interface{ StartWasNotDispatched() bool }
 		if errors.As(err, &dispatchStatus) && dispatchStatus.StartWasNotDispatched() {
@@ -548,7 +553,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	localRecordErr := writeLocalRunRecord(a.localRunRecordRoot, record)
 	a.startOutcomeUnknown = false
 	currentRevision, currentRevisionErr := installer.ProjectRevision(a.current.Root)
-	currentBinding, currentBindingErr := a.resolveSelectedExecutionNodeBindingLocked()
+	currentBinding, currentBindingErr := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: run.RunID})
 	currentRuntime, currentRuntimeOK := InstallationRuntimeBinding{}, false
 	if currentBindingErr == nil {
 		currentRuntime, currentRuntimeOK = installationRuntimeBinding(currentBinding.reader.runtimeRelease)
@@ -586,7 +591,7 @@ func (a *App) GetInstallationRun(runID string) InstallationRunOperation {
 	if run, ok := a.installationRuns.terminalRun(runID); ok {
 		return InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: runID})
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
 	}
@@ -711,7 +716,7 @@ func (a *App) SubscribeInstallationRun(runID string, afterSequence int) Installa
 		return InstallationSubscriptionResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_RUN_NOT_FOUND", Message: "Выполнение не известно текущему сеансу"}}
 	}
 	a.editMu.Lock()
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: runID})
 	root := a.current.Root
 	ctx := a.ctx
 	generation := a.installationGeneration
@@ -809,7 +814,7 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 	if run, ok := a.installationRuns.terminalRun(runID); ok {
 		return InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: runID})
 	if err != nil || binding.plans == nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
 	}

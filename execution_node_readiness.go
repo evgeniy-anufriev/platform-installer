@@ -7,6 +7,7 @@ import (
 
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
+	"platform-installer/internal/sshpassword"
 )
 
 // executionNodeLifecycle is the existing narrow execution-node lifecycle. The
@@ -72,6 +73,9 @@ func safeNodeFindings(findings []executionnode.Finding) []ExecutionNodeSafeFindi
 	}
 	result := make([]ExecutionNodeSafeFinding, 0, len(findings))
 	for _, finding := range findings {
+		if finding.Code == "EXECUTION_NODE_ELEVATION_REQUIRED" {
+			finding.SafeMessage = "Подключение по SSH выполнено, но права sudo не подтверждены. На странице «Серверы» включите «Требуется пароль sudo», введите пароль и сохраните данные в сеансе. Затем повторите проверку сервера."
+		}
 		if finding.Code == "" || finding.SafeMessage == "" || len(finding.Code) > 128 || len(finding.SafeMessage) > 512 {
 			continue
 		}
@@ -100,8 +104,8 @@ type verificationContinuation struct {
 	expiresAt                                                time.Time
 }
 
-func (a *App) resolveSelectedExecutionNodeBindingLocked() (*executionNodeBinding, error) {
-	binding, err := a.resolveTrustedExecutionConnectionLocked()
+func (a *App) resolveSelectedExecutionNodeBindingLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
+	binding, err := a.resolveTrustedExecutionConnectionLocked(scope...)
 	if err != nil || binding.bundleRoot == "" {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
@@ -117,7 +121,7 @@ func (a *App) resolveSelectedExecutionNodeBindingLocked() (*executionNodeBinding
 // Trusted connection is transport authority only. It can inspect a node or
 // resolve an already-known run, but cannot authorize Core/plan/Start without
 // resolveSelectedExecutionNodeBindingLocked's runtime release check.
-func (a *App) resolveTrustedExecutionConnectionLocked() (*executionNodeBinding, error) {
+func (a *App) resolveTrustedExecutionConnectionLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
 	if a.binding == nil || a.binding.service == nil || a.binding.reader.transport == nil || a.binding.node.ID == "" {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
@@ -133,8 +137,13 @@ func (a *App) resolveTrustedExecutionConnectionLocked() (*executionNodeBinding, 
 			return nil, errors.New("BINDING_REQUIRED")
 		}
 		identity, err := a.secrets.CurrentExecutionIdentity(credentialBinding)
+		if len(scope) == 1 {
+			identity, err = a.secrets.CurrentExecutionIdentityForOperation(credentialBinding, scope[0].PlanID, scope[0].RunID)
+		}
 		if err != nil || identity.Generation != a.binding.credentialGeneration || identity.Username != a.binding.node.User {
-			a.invalidateDynamicBindingLocked()
+			if !a.secrets.HasRunExecutionIdentityHold(credentialBinding) {
+				a.invalidateDynamicBindingLocked()
+			}
 			return nil, errors.New("BINDING_REQUIRED")
 		}
 		if a.binding.hostKeyPin == nil {
@@ -145,7 +154,13 @@ func (a *App) resolveTrustedExecutionConnectionLocked() (*executionNodeBinding, 
 			a.invalidateDynamicBindingLocked()
 			return nil, errors.New("BINDING_REQUIRED")
 		}
-		release, guardErr := a.binding.commandGuard()
+		var release func()
+		var guardErr error
+		if transport, ok := a.binding.reader.transport.(executionnode.OpenSSHTransport); ok && transport.ContextCommandGuard != nil && len(scope) == 1 {
+			release, guardErr = transport.ContextCommandGuard(sshpassword.WithScope(context.Background(), scope[0]))
+		} else {
+			release, guardErr = a.binding.commandGuard()
+		}
 		if guardErr != nil {
 			a.invalidateDynamicBindingLocked()
 			return nil, errors.New("BINDING_REQUIRED")
@@ -167,7 +182,10 @@ func (a *App) revalidateBindingBeforePublicationLocked(binding *executionNodeBin
 	}
 	current, err := a.resolveSelectedExecutionNodeBindingLocked()
 	if err != nil || current != binding {
-		a.invalidateDynamicBindingLocked()
+		credentialBinding, credentialErr := a.credentialBindingLocked()
+		if a.binding != binding || credentialErr != nil || !a.secrets.HasRunExecutionIdentityHold(credentialBinding) {
+			a.invalidateDynamicBindingLocked()
+		}
 		return errors.New("BINDING_REQUIRED")
 	}
 	return nil

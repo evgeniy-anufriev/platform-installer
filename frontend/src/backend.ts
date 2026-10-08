@@ -1,4 +1,6 @@
 import {
+  ProbeServerInformation,
+  CheckServerInformation,
   AmendServiceConfigurationDraft,
   AppendEditCommand,
   ChooseProject,
@@ -321,6 +323,15 @@ export type HostKeyProbeResult = {
   fingerprint?: string;
   error?: { code: string; message: string };
 };
+export type ServerInformationResult = {
+  status: string;
+  hostId?: string;
+  information?: {
+    hostname: string; os: string; osVersion: string; architecture: string;
+    cpuCount: number; memoryBytes: number; serverTime: string; checkedAt: string;
+  };
+  error?: { code: string; message: string };
+};
 export type ExecutionNodePreparation = {
   status: string;
   planId?: string;
@@ -532,6 +543,8 @@ export interface ProjectBackend {
   approveExecutionNodeHostKey?(probeId: string): Promise<HostKeyProbeResult>;
   declineExecutionNodeHostKey?(): Promise<HostKeyProbeResult>;
   probeTargetHostKey?(hostId: string): Promise<HostKeyProbeResult>;
+  probeServerInformation?(hostId: string): Promise<HostKeyProbeResult>;
+  checkServerInformation?(probeId: string): Promise<ServerInformationResult>;
   approveTargetHostKey?(probeId: string): Promise<HostKeyProbeResult>;
   declineTargetHostKey?(): Promise<HostKeyProbeResult>;
   getInstallationState?(): Promise<InstallationState>;
@@ -641,6 +654,8 @@ export const backend: ProjectBackend = {
     DeclineExecutionNodeHostKey() as unknown as Promise<HostKeyProbeResult>,
   probeTargetHostKey: (hostId) =>
     ProbeTargetHostKey(hostId) as unknown as Promise<HostKeyProbeResult>,
+  probeServerInformation: (hostId) => ProbeServerInformation(hostId) as unknown as Promise<HostKeyProbeResult>,
+  checkServerInformation: (probeId) => CheckServerInformation(probeId) as unknown as Promise<ServerInformationResult>,
   approveTargetHostKey: (probeId) =>
     ApproveTargetHostKey(probeId) as unknown as Promise<HostKeyProbeResult>,
   declineTargetHostKey: () =>

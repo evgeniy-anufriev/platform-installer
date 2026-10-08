@@ -111,7 +111,7 @@ func (a *App) ProbeExecutionNodeHostKey() HostKeyProbeResult {
 	}
 	identity, err := a.secrets.CurrentExecutionIdentity(binding)
 	if err != nil {
-		return hostKeyProbeFailure("EXECUTION_NODE_PEM_REQUIRED")
+		return hostKeyProbeFailure("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
 	if !executionUsername.MatchString(identity.Username) {
 		return hostKeyProbeFailure("EXECUTION_NODE_USER_INVALID")
@@ -159,11 +159,11 @@ func (a *App) ApproveExecutionNodeHostKey(probeID string) HostKeyProbeResult {
 	}
 	credentialBinding, err := a.credentialBindingLocked()
 	if err != nil {
-		return hostKeyProbeFailure("EXECUTION_NODE_PEM_REQUIRED")
+		return hostKeyProbeFailure("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
 	identity, err := a.secrets.CurrentExecutionIdentity(credentialBinding)
 	if err != nil || identity.Generation != pending.credentialGeneration {
-		return hostKeyProbeFailure("EXECUTION_NODE_PEM_REQUIRED")
+		return hostKeyProbeFailure("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
 	if !executionUsername.MatchString(identity.Username) {
 		return hostKeyProbeFailure("EXECUTION_NODE_USER_INVALID")
@@ -179,23 +179,8 @@ func (a *App) ApproveExecutionNodeHostKey(probeID string) HostKeyProbeResult {
 	}
 	a.invalidateDynamicBindingLocked()
 	pin := approvedExecutionHostKey{knownHosts: knownHosts, fileInfo: fileInfo, directory: directory, directoryInfo: directoryInfo, digest: digest, credentialGeneration: identity.Generation}
-	guard := func() (func(), error) {
-		current, err := a.secrets.CurrentExecutionIdentity(credentialBinding)
-		if err != nil || current.Generation != identity.Generation || current.Path != identity.Path || current.Username != identity.Username || current.Digest != identity.Digest {
-			return nil, errors.New("EXECUTION_NODE_BINDING_INVALID")
-		}
-		releaseKey, err := holdVerifiedBindingFile(identity.Path, identity.FileInfo, identity.Digest, 1<<20)
-		if err != nil {
-			return nil, err
-		}
-		releaseHost, err := holdVerifiedBindingFile(pin.knownHosts, pin.fileInfo, pin.digest, maxSessionKnownHostsBytes)
-		if err != nil {
-			releaseKey()
-			return nil, err
-		}
-		return func() { releaseHost(); releaseKey() }, nil
-	}
-	transport := executionnode.OpenSSHTransport{Identity: desktopIdentity{identity.Path}, CommandGuard: guard, IsolatedHostKeyTrust: true}
+	transport := a.executionTransport(identity, credentialBinding, knownHosts, pin.fileInfo, pin.digest)
+	guard := transport.CommandGuard
 	node := executionnode.Node{ID: id, Address: address, Port: port, User: identity.Username, CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: knownHosts, Fingerprint: pending.fingerprint}}
 	reader := projectReader{transport: transport, node: node}
 	binding := &executionNodeBinding{node: node, reader: reader, service: executionnode.NewService(transport), dynamic: true, credentialGeneration: identity.Generation, hostKeyPin: &pin, commandGuard: guard}

@@ -283,23 +283,40 @@ it("shows the previous-run failure and retries bundle detection after confirming
     runId: "installer-prior-run",
     runState: "FAILED",
   });
-  const value = api({ chooseRuntimeBundleUpdate, inspectOrphanRun });
+  const checkExecutionNode = vi.fn().mockResolvedValue({ status: "READY" });
+  const value = api({
+    chooseRuntimeBundleUpdate, inspectOrphanRun, checkExecutionNode,
+    getExecutionNodeContext: vi.fn().mockResolvedValue({
+      status: "READY", selectionKind: "PROJECT_SERVER", selectionSource: "EXPLICIT",
+      selectedHostId: "node1", safeLabel: "node1", runtimeDigest: "sha256:runtime",
+    }),
+  });
   value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
   render(<App api={value} />);
 
   await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
   expect(
-    await screen.findByText(/прежний запуск не подтверждён как завершённый/i),
+    await screen.findByText(/Прежний запуск установки не подтверждён как завершённый/i),
   ).toBeTruthy();
-  expect(screen.getByText(/Код: INSTALLATION_RUN_ACTIVE/)).toBeTruthy();
+  expect(screen.queryByText(/Код: INSTALLATION_RUN_ACTIVE/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Проверить прежний запуск" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Перейти к серверам" }));
+
+  await userEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+  expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "Проверить прежний запуск" }));
 
-  expect(await screen.findByText(/Прежний запуск завершился с ошибкой/)).toBeTruthy();
-  expect(screen.getByText(/Run ID: installer-prior-run/)).toBeTruthy();
+  await waitFor(() => expect(inspectOrphanRun).toHaveBeenCalledTimes(1));
+  expect(screen.getByText("Проверен: Подготовлен")).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Проект" }));
   expect(await screen.findByText("sha256:new")).toBeTruthy();
   expect(chooseRuntimeBundleUpdate).toHaveBeenCalledTimes(2);
   expect(inspectOrphanRun).toHaveBeenCalledTimes(1);
+  await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+  expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
+  expect(checkExecutionNode).toHaveBeenCalledTimes(1);
 });
 
 it("explains when the previous run cannot be checked and keeps the safety block visible", async () => {
@@ -317,12 +334,11 @@ it("explains when the previous run cannot be checked and keeps the safety block 
   render(<App api={value} />);
 
   await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Перейти к серверам" }));
   await userEvent.click(await screen.findByRole("button", { name: "Проверить прежний запуск" }));
 
-  expect(
-    await screen.findByText(/Не удалось проверить прежний запуск на исходном узле/),
-  ).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Проверить новый набор" })).toBeTruthy();
+  await waitFor(() => expect(inspectOrphanRun).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole("heading", { name: "Серверы" })).toBeTruthy();
   expect(chooseRuntimeBundleUpdate).toHaveBeenCalledTimes(1);
 });
 
@@ -2964,7 +2980,7 @@ describe("UI-01E3 session credentials", () => {
       (screen.getByLabelText("Пароль sudo") as HTMLInputElement).value,
     ).toBe("");
     expect(screen.getByText("Доступны")).toBeTruthy();
-    expect(screen.getByText(/2026-09-14T14:00:00Z/)).toBeTruthy();
+    expect(screen.getByText(/14.09.2026, 17:00:00 МСК/)).toBeTruthy();
     expect(screen.queryByText("not-visible-after-submit")).toBeNull();
   });
 });

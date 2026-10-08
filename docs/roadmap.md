@@ -1038,3 +1038,11 @@ Ready when:
 - generic validation/plan/apply/result paths are reused;
 - only genuinely specialized UI uses an optional extension component;
 - standalone and Installer executions are equivalent.
+
+## SERVER-INFORMATION-CHECK-01
+
+Owner-requested unified read-only server check: confirm SSH key, direct Go informational connection, agreed host fields in the lower card region and independent Проверен status. Execution Node information works before Core; installation readiness remains separate. See [plan](server-information-check-plan.md) and ADR-031. This does not authorize a new full-service installation or target mutation.
+
+## EXECUTION-NODE-PASSWORD-AUTH-01
+
+Owner-authorized password authentication for the common Execution Node SSH/SCP transport, alongside PEM, with unchanged explicit host-key trust and plan approval. Active-run authorization survives ordinary session expiry only for the exact run. See [plan](execution-node-password-auth-plan.md), ADR-032 and current acceptance status in CURRENT_STATE.

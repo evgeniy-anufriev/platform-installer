@@ -318,6 +318,8 @@ export const browserBackend: ProjectBackend = {
     invoke("approveExecutionNodeHostKey", [probeId]),
   declineExecutionNodeHostKey: () => invoke("declineExecutionNodeHostKey"),
   probeTargetHostKey: (hostId) => invoke("probeTargetHostKey", [hostId]),
+  probeServerInformation: (hostId) => invoke("probeServerInformation", [hostId]),
+  checkServerInformation: (probeId) => invoke("checkServerInformation", [probeId]),
   approveTargetHostKey: (probeId) => invoke("approveTargetHostKey", [probeId]),
   declineTargetHostKey: () => invoke("declineTargetHostKey"),
   getInstallationState: () => invoke("getInstallationState"),

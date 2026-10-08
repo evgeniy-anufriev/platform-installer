@@ -34,6 +34,10 @@ export function CheckExecutionNode() {
   return window['go']['main']['App']['CheckExecutionNode']();
 }
 
+export function CheckServerInformation(arg1) {
+  return window['go']['main']['App']['CheckServerInformation'](arg1);
+}
+
 export function ChoosePendingDeploymentRuntimeSecretFile(arg1) {
   return window['go']['main']['App']['ChoosePendingDeploymentRuntimeSecretFile'](arg1);
 }
@@ -176,6 +180,10 @@ export function PrepareExecutionNode(arg1) {
 
 export function ProbeExecutionNodeHostKey() {
   return window['go']['main']['App']['ProbeExecutionNodeHostKey']();
+}
+
+export function ProbeServerInformation(arg1) {
+  return window['go']['main']['App']['ProbeServerInformation'](arg1);
 }
 
 export function ProbeTargetHostKey(arg1) {

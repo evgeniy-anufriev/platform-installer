@@ -109,16 +109,17 @@ type lease struct {
 	generation          uint64
 }
 
-// runExecutionIdentityHold retains only the already-approved SSH identity
-// metadata during one Start reservation or its authoritative installation run.
-// The private-key bytes are never copied here; the transport continues to
-// verify the original file identity/digest.
+// runExecutionIdentityHold retains the approved identity during one Start/run.
+// PEM bytes are never copied; the original file stays verified. Password mode
+// retains a private, wiped-on-release copy for that exact operation only.
 type runExecutionIdentityHold struct {
-	state    string
-	planID   string
-	runID    string
-	binding  Binding
-	identity ExecutionIdentity
+	state        string
+	planID       string
+	runID        string
+	binding      Binding
+	identity     ExecutionIdentity
+	password     []byte
+	sudoPassword []byte
 }
 
 // pendingRuntimeSecrets holds service-password values entered before a target
@@ -672,6 +673,9 @@ func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 		if len(input.SSHPassword) > maxPasswordBytes {
 			return nil, errors.New("SESSION_CREDENTIAL_TOO_LARGE")
 		}
+		if strings.ContainsAny(input.SSHPassword, "\r\n\x00") {
+			return nil, errors.New("SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED")
+		}
 		if input.PrivateKeyPath != "" || input.SSHPassword == "" {
 			return nil, errors.New("SESSION_CREDENTIAL_MODE_INVALID")
 		}
@@ -697,6 +701,10 @@ func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 			return nil, errors.New("SESSION_CREDENTIAL_MODE_INVALID")
 		}
 	case ElevationSudo:
+		if strings.ContainsAny(input.ElevationPassword, "\r\n\x00") {
+			zero(sshSecret)
+			return nil, errors.New("SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED")
+		}
 		if len(input.ElevationPassword) > maxPasswordBytes {
 			zero(sshSecret)
 			return nil, errors.New("SESSION_CREDENTIAL_TOO_LARGE")
@@ -726,6 +734,7 @@ func (b *Broker) buildLease(binding Binding, input Input) (*lease, error) {
 // ExecutionIdentity is private application transport metadata. It must never
 // cross Wails, logs or the portable project boundary.
 type ExecutionIdentity struct {
+	Mode       string
 	Path       string
 	Username   string
 	Digest     [sha256.Size]byte
@@ -742,7 +751,7 @@ func (b *Broker) CurrentExecutionIdentity(binding Binding) (ExecutionIdentity, e
 	if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
 		b.expireLocked(b.lease.generation)
 	}
-	if identity, ok := b.heldExecutionIdentityLocked(binding); ok {
+	if identity, ok := b.heldExecutionIdentityLocked(binding); ok && identity.Mode != SSHPassword {
 		return identity, nil
 	}
 	return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
@@ -752,8 +761,8 @@ func (b *Broker) CurrentExecutionIdentity(binding Binding) (ExecutionIdentity, e
 // before dispatch. The reservation is idempotent for a retry of the same plan.
 func (b *Broker) ReserveExecutionIdentityForStart(binding Binding, planID string, identity ExecutionIdentity) error {
 	if binding.Root == "" || binding.ID == "" || planID == "" || len(planID) > 128 ||
-		identity.Path == "" || identity.Username == "" || identity.Generation == 0 ||
-		identity.FileInfo == nil || identity.Digest == [sha256.Size]byte{} {
+		identity.Username == "" || identity.Generation == 0 ||
+		(identity.Mode != SSHPassword && (identity.Path == "" || identity.FileInfo == nil || identity.Digest == [sha256.Size]byte{})) {
 		return errors.New("EXECUTION_RUN_IDENTITY_INVALID")
 	}
 	b.mu.Lock()
@@ -777,7 +786,16 @@ func (b *Broker) ReserveExecutionIdentityForStart(binding Binding, planID string
 	} else if b.expired == nil || b.expired.binding != binding || b.expired.generation != identity.Generation {
 		return errors.New("EXECUTION_RUN_IDENTITY_STALE")
 	}
+	if identity.Mode == SSHPassword && (b.lease == nil || !b.now().Before(b.lease.expiresAt)) {
+		return errors.New("EXECUTION_RUN_IDENTITY_STALE")
+	}
 	b.runHold = &runExecutionIdentityHold{state: "STARTING", planID: planID, binding: binding, identity: identity}
+	if identity.Mode == SSHPassword {
+		b.runHold.password = append([]byte(nil), b.lease.sshSecret...)
+	}
+	if b.lease != nil && b.now().Before(b.lease.expiresAt) {
+		b.runHold.sudoPassword = append([]byte(nil), b.lease.sudoSecret...)
+	}
 	return nil
 }
 
@@ -803,6 +821,8 @@ func (b *Broker) ReleaseStartingExecutionIdentity(binding Binding, planID string
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if hold := b.runHold; hold != nil && hold.state == "STARTING" && hold.binding == binding && hold.planID == planID {
+		zero(hold.password)
+		zero(hold.sudoPassword)
 		clearExecutionIdentity(&hold.identity)
 		b.runHold = nil
 	}
@@ -814,6 +834,8 @@ func (b *Broker) ReleaseExecutionIdentityForRun(runID string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if hold := b.runHold; hold != nil && hold.state == "RUNNING" && hold.runID == runID {
+		zero(hold.password)
+		zero(hold.sudoPassword)
 		clearExecutionIdentity(&hold.identity)
 		b.runHold = nil
 	}
@@ -846,19 +868,25 @@ func (b *Broker) HasStartingExecutionIdentity(binding Binding, planID string) bo
 }
 
 func executionIdentityFromLease(value *lease) (ExecutionIdentity, error) {
+	if value != nil && value.sshMode == SSHPassword && len(value.sshSecret) > 0 {
+		return ExecutionIdentity{Mode: SSHPassword, Username: value.username, Generation: value.generation}, nil
+	}
 	if value == nil || value.sshMode != SSHPrivateKey || value.privateKeyPath == "" {
 		return ExecutionIdentity{}, errors.New("EXECUTION_NODE_PEM_REQUIRED")
 	}
-	return ExecutionIdentity{Path: value.privateKeyPath, Username: value.username, Digest: sha256.Sum256(value.sshSecret), Generation: value.generation, FileInfo: value.privateKeyInfo}, nil
+	return ExecutionIdentity{Mode: SSHPrivateKey, Path: value.privateKeyPath, Username: value.username, Digest: sha256.Sum256(value.sshSecret), Generation: value.generation, FileInfo: value.privateKeyInfo}, nil
 }
 
 func sameExecutionIdentity(left, right ExecutionIdentity) bool {
+	if left.Mode == SSHPassword || right.Mode == SSHPassword {
+		return left.Mode == right.Mode && left.Username == right.Username && left.Generation == right.Generation && left.Generation != 0
+	}
 	return left.Path == right.Path && left.Username == right.Username && left.Digest == right.Digest && left.Generation == right.Generation && left.FileInfo != nil && right.FileInfo != nil && os.SameFile(left.FileInfo, right.FileInfo)
 }
 
 func (b *Broker) heldExecutionIdentityLocked(binding Binding) (ExecutionIdentity, bool) {
 	hold := b.runHold
-	if hold == nil || hold.binding != binding || hold.identity.Path == "" || hold.identity.Username == "" || hold.identity.FileInfo == nil || hold.identity.Generation == 0 {
+	if hold == nil || hold.binding != binding || hold.identity.Username == "" || hold.identity.Generation == 0 || (hold.identity.Mode != SSHPassword && (hold.identity.Path == "" || hold.identity.FileInfo == nil)) {
 		return ExecutionIdentity{}, false
 	}
 	return hold.identity, true
@@ -870,6 +898,8 @@ func (b *Broker) hasRunHoldLocked(binding Binding) bool {
 
 func (b *Broker) clearRunHoldsLocked() {
 	if b.runHold != nil {
+		zero(b.runHold.password)
+		zero(b.runHold.sudoPassword)
 		clearExecutionIdentity(&b.runHold.identity)
 		b.runHold = nil
 	}
@@ -880,6 +910,7 @@ func clearExecutionIdentity(identity *ExecutionIdentity) {
 		return
 	}
 	identity.Path = ""
+	identity.Mode = ""
 	identity.Username = ""
 	identity.Digest = [sha256.Size]byte{}
 	identity.Generation = 0

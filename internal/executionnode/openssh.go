@@ -7,6 +7,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -22,11 +23,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"platform-installer/internal/artifactsource"
 	"platform-installer/internal/commandwindow"
 	"platform-installer/internal/executionbundle"
+	"platform-installer/internal/sshpassword"
 )
 
 type IdentityResolver interface {
@@ -45,37 +48,47 @@ type separatedCommandRunner interface {
 	RunSeparatedBounded(context.Context, string, []string, []byte, int, int) ([]byte, []byte, error)
 }
 
-type osRunner struct{}
+type osRunner struct{ password sshpassword.Provider }
 
-func (osRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
+func (r osRunner) execute(ctx context.Context, command *exec.Cmd) error {
+	if r.password != nil {
+		return sshpassword.Run(ctx, command, r.password)
+	}
+	return command.Run()
+}
+
+func (r osRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
 	commandwindow.Configure(command)
 	command.Stdin = bytes.NewReader(input)
-	return command.CombinedOutput()
+	var output bytes.Buffer
+	command.Stdout, command.Stderr = &output, &output
+	err := r.execute(ctx, command)
+	return output.Bytes(), err
 }
 
-func (osRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
+func (r osRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
 	commandwindow.Configure(command)
 	command.Stdin = bytes.NewReader(input)
 	output := &boundedOutput{limit: limit}
 	command.Stdout = output
 	command.Stderr = output
-	err := command.Run()
+	err := r.execute(ctx, command)
 	if output.overflow {
 		return output.Bytes(), errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
 	}
 	return output.Bytes(), err
 }
 
-func (osRunner) RunSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, []byte, error) {
+func (r osRunner) RunSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, []byte, error) {
 	command := exec.CommandContext(ctx, name, args...)
 	commandwindow.Configure(command)
 	command.Stdin = bytes.NewReader(input)
 	stdout := &boundedOutput{limit: stdoutLimit}
 	stderr := &boundedOutput{limit: stderrLimit}
 	command.Stdout, command.Stderr = stdout, stderr
-	err := command.Run()
+	err := r.execute(ctx, command)
 	if stdout.overflow || stderr.overflow {
 		return stdout.Bytes(), nil, errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
 	}
@@ -112,6 +125,9 @@ type OpenSSHTransport struct {
 	// CommandGuard holds the UI-approved identity and host-key files stable
 	// across each SSH/SCP child process. Nil preserves the legacy flag path.
 	CommandGuard         func() (func(), error)
+	ContextCommandGuard  func(context.Context) (func(), error)
+	Password             sshpassword.Provider
+	SudoPassword         sshpassword.Provider
 	IsolatedHostKeyTrust bool
 	RepositoryRoot       string
 	RuntimeRoot          string
@@ -169,7 +185,7 @@ func (t OpenSSHTransport) AcquireRuntimeClosure(ctx context.Context, node Node, 
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte(script)); err != nil {
 		return errors.New("EXECUTION_RUNTIME_CLOSURE_FAILED")
 	}
-	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return err
 	}
@@ -197,38 +213,63 @@ func (t OpenSSHTransport) AcquireRuntimeClosure(ctx context.Context, node Node, 
 }
 
 func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bundle executionbundle.Verified) (string, error) {
-	id := strings.TrimPrefix(bundle.Digest, "sha256:")
-	stage := path.Join(t.stageRoot(), id)
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/bootstrap/*) ;; *) exit 64;; esac\nrm -rf -- \"$1\"\nmkdir -p -- \"$1\"\n")); err != nil {
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
 		return "", err
 	}
-	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	stage := t.stageRoot() + "-" + hex.EncodeToString(nonce[:])
+	if !validBundleStage(stage) {
+		return "", errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
+	}
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(prepareBundleStageScript)); err != nil {
+		return "", err
+	}
+	complete := false
+	defer func() {
+		if !complete {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			_ = t.DiscardStagedRuntime(cleanupCtx, node, stage)
+		}
+	}()
+	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return "", err
 	}
 	archivePath, err := createBundleArchive(bundle)
 	if err != nil {
-		_ = t.DiscardStagedRuntime(context.Background(), node, stage)
 		return "", err
 	}
 	defer os.Remove(archivePath)
-	archiveRemote := stage + ".tar"
+	archiveRemote := path.Join(stage, "bundle.tar")
 	args := append(t.scpBase(node, identity), "-O", "--", archivePath, t.destination(node, archiveRemote))
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
-		_ = t.DiscardStagedRuntime(context.Background(), node, stage)
 		return "", err
 	}
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage:$archive\" in /var/tmp/platform-installer/bootstrap/*:/var/tmp/platform-installer/bootstrap/*.tar) ;; *) exit 64;; esac\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\n")); err != nil {
-		_ = t.DiscardStagedRuntime(context.Background(), node, stage)
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage\" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac\n[ \"$archive\" = \"$stage/bundle.tar\" ] || exit 64\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\n")); err != nil {
 		return "", err
 	}
 	script := remoteChecks(bundle)
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(script)); err != nil {
-		_ = t.DiscardStagedRuntime(context.Background(), node, stage)
 		return "", err
 	}
+	complete = true
 	return stage, nil
 }
+
+// Root-owned sticky /var/tmp protects the private stage from other SSH users.
+// Exclusive unprivileged mkdir claims only this attempt, without chown or repair.
+const prepareBundleStageScript = `set -eu
+stage=$1
+case "$stage" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac
+suffix=${stage#/var/tmp/platform-installer-bootstrap-}
+case "$suffix" in ''|*[!0-9a-f]*) exit 64;; esac
+[ "${#suffix}" = 32 ] || exit 64
+[ -d /var/tmp ] && [ ! -L /var/tmp ] || exit 64
+[ "$(stat -c %u /var/tmp)" = 0 ] && [ "$(stat -c %a /var/tmp)" = 1777 ] || exit 64
+umask 077
+mkdir -m 0700 -- "$stage"
+`
 
 func createBundleArchive(bundle executionbundle.Verified) (string, error) {
 	file, err := os.CreateTemp("", "platform-execution-bundle-*.tar")
@@ -301,25 +342,44 @@ func (t OpenSSHTransport) transferBundle(ctx context.Context, node Node, identit
 }
 
 func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, stage string, bundle executionbundle.Verified) (Runtime, error) {
+	if !validBundleStage(stage) {
+		return Runtime{}, errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
+	}
 	id := strings.TrimPrefix(bundle.Digest, "sha256:")
 	root := t.runtimeRoot()
 	release := path.Join(root, "releases", id)
 	candidate := stage
 	// Storage and detached controllers share the sudo effective UID. Existing
 	// foreign-owned storage fails closed; preparation never repairs it by chown.
-	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer/bootstrap/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
+	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, root}, []byte(storageScript)); err != nil {
 		return Runtime{}, err
 	}
-	script := "set -eu\nstage=$1; release=$2; root=$3; bundle_digest=$4; bundle_version=$5; core_version=$6; protocol=$7\ncase \"$stage:$release:$root\" in /var/tmp/platform-installer/bootstrap/*:/var/lib/platform-installer/runtime/releases/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\ncase \"$bundle_digest\" in sha256:*) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$root/releases\" \"$root/state\"\nsudo -n rm -rf -- \"$release\"\nsudo -n cp -a -- \"$stage\" \"$release\"\nsudo -n test -f \"$release/manifest.yaml\"\nsudo -n test -f \"$release/ansible-core/playbooks/execution-capabilities.yml\"\nsudo -n env ANSIBLE_CONFIG=\"$release/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$release/ansible-core/collections\" ansible-playbook -i localhost, \"$release/ansible-core/playbooks/execution-capabilities.yml\" -e \"platform_execution_runtime_root=$release\" -e \"platform_execution_bundle_digest=$bundle_digest\" >/dev/null\nsudo -n sh -c 'umask 077; printf \"BUNDLE_VERSION=%s\\nBUNDLE_DIGEST=%s\\nCORE_VERSION=%s\\nPROTOCOL=%s\\nANSIBLE=yes\\nCAPABILITIES=yes\\n\" \"$1\" \"$2\" \"$3\" \"$4\" > \"$5.new\"; mv -f -- \"$5.new\" \"$5\"' -- \"$bundle_version\" \"$bundle_digest\" \"$core_version\" \"$protocol\" \"$root/state/active\"\nsudo -n ln -sfn -- \"$release\" \"$root/current.new\"\nsudo -n mv -Tf -- \"$root/current.new\" \"$root/current\"\n"
+	script := "set -eu\nstage=$1; release=$2; root=$3; bundle_digest=$4; bundle_version=$5; core_version=$6; protocol=$7\ncase \"$stage:$release:$root\" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime/releases/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\ncase \"$bundle_digest\" in sha256:*) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$root/releases\" \"$root/state\"\nsudo -n rm -rf -- \"$release\"\nsudo -n cp -a -- \"$stage\" \"$release\"\nsudo -n test -f \"$release/manifest.yaml\"\nsudo -n test -f \"$release/ansible-core/playbooks/execution-capabilities.yml\"\nsudo -n env ANSIBLE_CONFIG=\"$release/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$release/ansible-core/collections\" ansible-playbook -i localhost, \"$release/ansible-core/playbooks/execution-capabilities.yml\" -e \"platform_execution_runtime_root=$release\" -e \"platform_execution_bundle_digest=$bundle_digest\" >/dev/null\nsudo -n sh -c 'umask 077; printf \"BUNDLE_VERSION=%s\\nBUNDLE_DIGEST=%s\\nCORE_VERSION=%s\\nPROTOCOL=%s\\nANSIBLE=yes\\nCAPABILITIES=yes\\n\" \"$1\" \"$2\" \"$3\" \"$4\" > \"$5.new\"; mv -f -- \"$5.new\" \"$5\"' -- \"$bundle_version\" \"$bundle_digest\" \"$core_version\" \"$protocol\" \"$root/state/active\"\nsudo -n ln -sfn -- \"$release\" \"$root/current.new\"\nsudo -n mv -Tf -- \"$root/current.new\" \"$root/current\"\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, release, root, bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol}, []byte(script)); err != nil {
 		return Runtime{}, err
 	}
 	return Runtime{BundleVersion: bundle.Manifest.BundleVersion, BundleDigest: bundle.Digest, CoreVersion: bundle.Manifest.CoreVersion, Protocol: bundle.Manifest.BootstrapProtocol, Ansible: true, Capabilities: true}, nil
 }
 func (t OpenSSHTransport) DiscardStagedRuntime(ctx context.Context, node Node, stage string) error {
-	_, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte("case \"$1\" in /var/tmp/platform-installer/bootstrap/*) rm -rf -- \"$1\";; *) exit 64;; esac\n"))
+	if !validBundleStage(stage) {
+		return errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
+	}
+	_, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte("case \"$1\" in /var/tmp/platform-installer-bootstrap-*) rm -rf -- \"$1\";; *) exit 64;; esac\n"))
 	return err
+}
+
+func validBundleStage(stage string) bool {
+	const prefix = "/var/tmp/platform-installer-bootstrap-"
+	if !strings.HasPrefix(stage, prefix) || len(stage) != len(prefix)+32 {
+		return false
+	}
+	suffix := strings.TrimPrefix(stage, prefix)
+	if strings.ToLower(suffix) != suffix {
+		return false
+	}
+	_, err := hex.DecodeString(suffix)
+	return err == nil
 }
 
 // ExecuteService is the production service entrypoint. The source projection
@@ -739,7 +799,7 @@ func (t OpenSSHTransport) stageRoot() string {
 	if t.StageRoot != "" {
 		return t.StageRoot
 	}
-	return "/var/tmp/platform-installer/bootstrap"
+	return "/var/tmp/platform-installer-bootstrap"
 }
 func (t OpenSSHTransport) runtimeRoot() string {
 	if t.RuntimeRoot != "" {
@@ -748,33 +808,39 @@ func (t OpenSSHTransport) runtimeRoot() string {
 	return "/var/lib/platform-installer/runtime"
 }
 func (t OpenSSHTransport) ssh(ctx context.Context, node Node, program string, args []string, input []byte) ([]byte, error) {
-	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return nil, err
 	}
-	full := append(t.base(node, identity), node.User+"@"+node.Address, program)
-	full = append(full, args...)
-	return t.run(ctx, "ssh", full, input)
+	return t.withSudoInput(ctx, program, args, input, func(program string, args []string, input []byte) ([]byte, error) {
+		full := append(t.base(node, identity), node.User+"@"+node.Address, program)
+		full = append(full, args...)
+		return t.run(ctx, "ssh", full, input)
+	})
 }
 
 func (t OpenSSHTransport) sshBounded(ctx context.Context, node Node, program string, args []string, input []byte, limit int) ([]byte, error) {
-	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return nil, err
 	}
-	full := append(t.base(node, identity), node.User+"@"+node.Address, program)
-	full = append(full, args...)
-	return t.runBounded(ctx, "ssh", full, input, limit)
+	return t.withSudoInput(ctx, program, args, input, func(program string, args []string, input []byte) ([]byte, error) {
+		full := append(t.base(node, identity), node.User+"@"+node.Address, program)
+		full = append(full, args...)
+		return t.runBounded(ctx, "ssh", full, input, limit)
+	})
 }
 
 func (t OpenSSHTransport) sshSeparatedBounded(ctx context.Context, node Node, program string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, error) {
-	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return nil, errors.New("EXECUTION_NODE_TRANSPORT_FAILED")
 	}
-	full := append(t.base(node, identity), node.User+"@"+node.Address, program)
-	full = append(full, args...)
-	return t.runSeparatedBounded(ctx, "ssh", full, input, stdoutLimit, stderrLimit)
+	return t.withSudoInput(ctx, program, args, input, func(program string, args []string, input []byte) ([]byte, error) {
+		full := append(t.base(node, identity), node.User+"@"+node.Address, program)
+		full = append(full, args...)
+		return t.runSeparatedBounded(ctx, "ssh", full, input, stdoutLimit, stderrLimit)
+	})
 }
 
 // ProbeTargetHostKey is read-only target host-key discovery from the trusted
@@ -785,12 +851,27 @@ func (t OpenSSHTransport) ProbeTargetHostKey(ctx context.Context, node Node, add
 	}
 	return t.sshSeparatedBounded(ctx, node, "ssh-keyscan", []string{"-T", "5", "-p", strconv.Itoa(int(port)), "-t", "ed25519,ecdsa,rsa", address}, nil, 16384, 1024)
 }
+func (t OpenSSHTransport) identityFile(reference string) (string, error) {
+	if t.Password != nil {
+		return "", nil
+	}
+	if t.Identity == nil {
+		return "", errors.New("EXECUTION_NODE_NOT_CONFIGURED")
+	}
+	return t.Identity.IdentityFile(reference)
+}
 func (t OpenSSHTransport) base(node Node, identity string) []string {
 	args := []string{}
 	if t.IsolatedHostKeyTrust {
 		args = append(args, "-F", "none", "-o", "GlobalKnownHostsFile=none", "-o", "KnownHostsCommand=none", "-o", "UpdateHostKeys=no")
 	}
-	return append(args, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile="+node.HostKey.KnownHosts, "-i", identity, "-p", fmt.Sprint(node.Port))
+	args = append(args, "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile="+node.HostKey.KnownHosts)
+	if t.Password != nil {
+		args = append(args, "-o", "BatchMode=no", "-o", "PreferredAuthentications=password", "-o", "PubkeyAuthentication=no", "-o", "KbdInteractiveAuthentication=no", "-o", "NumberOfPasswordPrompts=1")
+	} else {
+		args = append(args, "-o", "BatchMode=yes", "-i", identity)
+	}
+	return append(args, "-p", fmt.Sprint(node.Port))
 }
 func (t OpenSSHTransport) scpBase(node Node, identity string) []string {
 	args := t.base(node, identity)
@@ -805,14 +886,14 @@ func (t OpenSSHTransport) destination(node Node, value string) string {
 	return node.User + "@" + node.Address + ":" + value
 }
 func (t OpenSSHTransport) run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
-	release, err := t.acquireCommandGuard()
+	release, err := t.acquireCommandGuard(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 	runner := t.Runner
 	if runner == nil {
-		runner = osRunner{}
+		runner = osRunner{password: t.Password}
 	}
 	out, err := runner.Run(ctx, name, args, input)
 	if err != nil {
@@ -820,7 +901,7 @@ func (t OpenSSHTransport) run(ctx context.Context, name string, args []string, i
 		if len(detail) > 512 {
 			detail = detail[:512]
 		}
-		if detail != "" {
+		if detail != "" && t.Password == nil && t.SudoPassword == nil {
 			return nil, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s:%s", name, detail)
 		}
 		return nil, fmt.Errorf("EXECUTION_NODE_TRANSPORT_FAILED:%s", name)
@@ -829,14 +910,14 @@ func (t OpenSSHTransport) run(ctx context.Context, name string, args []string, i
 }
 
 func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
-	release, guardErr := t.acquireCommandGuard()
+	release, guardErr := t.acquireCommandGuard(ctx)
 	if guardErr != nil {
 		return nil, guardErr
 	}
 	defer release()
 	runner := t.Runner
 	if runner == nil {
-		runner = osRunner{}
+		runner = osRunner{password: t.Password}
 	}
 	var out []byte
 	var err error
@@ -856,14 +937,14 @@ func (t OpenSSHTransport) runBounded(ctx context.Context, name string, args []st
 }
 
 func (t OpenSSHTransport) runSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, error) {
-	release, guardErr := t.acquireCommandGuard()
+	release, guardErr := t.acquireCommandGuard(ctx)
 	if guardErr != nil {
 		return nil, guardErr
 	}
 	defer release()
 	runner := t.Runner
 	if runner == nil {
-		runner = osRunner{}
+		runner = osRunner{password: t.Password}
 	}
 	separated, ok := runner.(separatedCommandRunner)
 	if !ok {
@@ -878,7 +959,14 @@ func (t OpenSSHTransport) runSeparatedBounded(ctx context.Context, name string, 
 	return stdout, nil
 }
 
-func (t OpenSSHTransport) acquireCommandGuard() (func(), error) {
+func (t OpenSSHTransport) acquireCommandGuard(ctx context.Context) (func(), error) {
+	if t.ContextCommandGuard != nil {
+		release, err := t.ContextCommandGuard(ctx)
+		if err != nil || release == nil {
+			return nil, errors.New("EXECUTION_NODE_BINDING_INVALID")
+		}
+		return release, nil
+	}
 	if t.CommandGuard == nil {
 		return func() {}, nil
 	}

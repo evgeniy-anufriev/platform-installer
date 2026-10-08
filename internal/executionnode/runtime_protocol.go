@@ -22,6 +22,7 @@ import (
 
 	"platform-installer/internal/artifactsource"
 	"platform-installer/internal/coreadapter"
+	"platform-installer/internal/sshpassword"
 )
 
 func (t OpenSSHTransport) StageRuntimeProjection(ctx context.Context, node Node, runID, projectIdentity, planFingerprint, requirementsFingerprint string, projections map[string]map[string]artifactsource.Result, pkiSecretFiles map[string]string) error {
@@ -726,6 +727,7 @@ func (t OpenSSHTransport) StartExecution(ctx context.Context, node Node, request
 }
 
 func (t OpenSSHTransport) GetExecution(ctx context.Context, node Node, runID string) (ExecutionRun, error) {
+	ctx = sshpassword.WithScope(ctx, sshpassword.Scope{RunID: runID})
 	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetExecution", "runId": runID})
 	if err != nil {
 		return ExecutionRun{}, err
@@ -738,6 +740,7 @@ func (t OpenSSHTransport) GetExecution(ctx context.Context, node Node, runID str
 }
 
 func (t OpenSSHTransport) GetEvents(ctx context.Context, node Node, runID string, afterSequence, limit int) (ExecutionEventPage, error) {
+	ctx = sshpassword.WithScope(ctx, sshpassword.Scope{RunID: runID})
 	if afterSequence < 0 || limit < 1 || limit > 512 {
 		return ExecutionEventPage{}, errors.New("EXECUTION_EVENTS_INPUT_INVALID")
 	}
@@ -749,6 +752,7 @@ func (t OpenSSHTransport) GetEvents(ctx context.Context, node Node, runID string
 }
 
 func (t OpenSSHTransport) CancelExecution(ctx context.Context, node Node, runID string) (ExecutionRun, error) {
+	ctx = sshpassword.WithScope(ctx, sshpassword.Scope{RunID: runID})
 	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "CancelExecution", "runId": runID})
 	if err != nil {
 		return ExecutionRun{}, err

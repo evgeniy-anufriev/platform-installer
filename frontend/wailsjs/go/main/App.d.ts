@@ -22,6 +22,8 @@ export function CancelOrphanRun(arg1:string):Promise<main.OrphanRunRecoveryResul
 
 export function CheckExecutionNode():Promise<main.ExecutionNodeReadiness>;
 
+export function CheckServerInformation(arg1:string):Promise<main.ServerInformationResult>;
+
 export function ChoosePendingDeploymentRuntimeSecretFile(arg1:main.PendingRuntimeSecretFileInput):Promise<string>;
 
 export function ChooseProject():Promise<main.ProjectOpenResult>;
@@ -93,6 +95,8 @@ export function PlanProjectExport(arg1:string,arg2:string):Promise<main.ProjectE
 export function PrepareExecutionNode(arg1:string):Promise<main.ExecutionNodePreparation>;
 
 export function ProbeExecutionNodeHostKey():Promise<main.HostKeyProbeResult>;
+
+export function ProbeServerInformation(arg1:string):Promise<main.HostKeyProbeResult>;
 
 export function ProbeTargetHostKey(arg1:string):Promise<main.HostKeyProbeResult>;
 
