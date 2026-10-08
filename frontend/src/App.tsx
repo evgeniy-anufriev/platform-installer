@@ -1756,7 +1756,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               {executionNodeStatusLabel(
                 executionNode?.status || "NOT_CONFIGURED",
               )}
-              {executionNode?.safeLabel ? ` · ${executionNode.safeLabel}` : ""}
+              {executionNode?.safeLabel
+                ? ` · ${executionNode.safeLabel.split(" · ")[0]}`
+                : ""}
             </button>
           )}
           {projectOpen && (

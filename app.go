@@ -1606,7 +1606,7 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 			managed := result.Managed
 			a.current.Counts.Servers = len(managed.Servers)
 			a.current.Diagnostics = a.managedServerTypeDiagnostics(managed)
-			a.bindExecutionLocked(a.current.Root, a.current.Project, managedSnapshotHosts(managed))
+			a.refreshExecutionAfterSaveLocked(a.current.Root, a.current.Project, managedSnapshotHosts(managed))
 		} else {
 			a.pendingHostKey = nil
 			a.invalidateDynamicBindingLocked()
@@ -1679,6 +1679,32 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 		}
 	}
 	return hosts
+}
+
+// Saving desired state invalidates plans, not an unchanged prepared transport.
+// Connection authority is still checked by the normal credential/pin guards.
+func (a *App) refreshExecutionAfterSaveLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
+	if project != nil && a.binding != nil && a.binding.dynamic &&
+		a.execution.root == root && a.execution.projectID == project.ID &&
+		a.execution.context.SelectionKind == "PROJECT_SERVER" {
+		id, address, port, err := a.selectedSavedExecutionServerLocked()
+		runtime, valid := installationRuntimeBinding(a.binding.reader.runtimeRelease)
+		if err == nil && id == a.binding.node.ID && address == a.binding.node.Address && port == a.binding.node.Port &&
+			valid && runtime.BundleDigest == project.Source.BundleDigest && runtime.CatalogDigest == project.Source.CatalogDigest {
+			a.pendingHostKey = nil
+			a.execution.replaceSnapshotHosts(hosts)
+			if candidate, ok := a.execution.candidates[id]; ok {
+				a.execution.context.SafeLabel = candidate.label
+			}
+			a.clearRuntimeSecretDescriptorEvidenceLocked()
+			a.installationGeneration++
+			a.continuation = nil
+			a.installationPlanID = ""
+			a.clearInstallationRunsLocked()
+			return
+		}
+	}
+	a.bindExecutionLocked(root, project, hosts)
 }
 
 func (a *App) bindExecutionLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
