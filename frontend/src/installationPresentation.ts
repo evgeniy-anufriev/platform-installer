@@ -7,11 +7,16 @@ import type {
 
 export type RunProgress = {
   runId: string;
+  // Highest sequence observed, which can advance ahead of delivery order.
   lastSequence: number;
+  // Highest sequence for which every preceding event has been observed.
+  lastContiguousSequence: number;
+  pendingSequences: number[];
   complete: boolean;
   actionIds: string[];
   completedActionIds: string[];
   actionOutcomes: Record<string, string>;
+  actionOutcomeSequences: Record<string, number>;
   activeActionId?: string;
 };
 
@@ -22,6 +27,8 @@ export function beginRunProgress(
   return {
     runId,
     lastSequence: 0,
+    lastContiguousSequence: 0,
+    pendingSequences: [],
     complete: true,
     actionIds: [
       ...new Set(
@@ -32,6 +39,7 @@ export function beginRunProgress(
     ],
     completedActionIds: [],
     actionOutcomes: {},
+    actionOutcomeSequences: {},
   };
 }
 
@@ -39,16 +47,15 @@ export function observeRunEvent(
   current: RunProgress,
   event: InstallationEventView,
 ): RunProgress {
-  if (event.runId !== current.runId || event.sequence <= current.lastSequence)
-    return current;
-  const complete =
-    current.complete && event.sequence === current.lastSequence + 1;
+  if (event.runId !== current.runId || event.sequence < 1) return current;
+  const pending = new Set(current.pendingSequences);
+  let contiguous = current.lastContiguousSequence;
+  if (event.sequence > contiguous) pending.add(event.sequence);
+  while (pending.delete(contiguous + 1)) contiguous += 1;
+  const complete = pending.size === 0;
+  const isNewest = event.sequence >= current.lastSequence;
   const knownAction =
     !!event.actionId && current.actionIds.includes(event.actionId);
-  const completed =
-    knownAction &&
-    event.eventType === "ACTION_COMPLETED" &&
-    ["SUCCESS", "CHANGED", "SKIPPED"].includes(event.status);
   const outcomeRecorded =
     knownAction &&
     event.eventType === "ACTION_COMPLETED" &&
@@ -60,19 +67,30 @@ export function observeRunEvent(
       "CANCELLED",
       "INTERRUPTED",
     ].includes(event.status);
+  const shouldRecordOutcome =
+    outcomeRecorded &&
+    event.sequence > (current.actionOutcomeSequences[event.actionId!] || 0);
+  const actionOutcomes = shouldRecordOutcome
+    ? { ...current.actionOutcomes, [event.actionId!]: event.status }
+    : current.actionOutcomes;
+  const actionOutcomeSequences = shouldRecordOutcome
+    ? { ...current.actionOutcomeSequences, [event.actionId!]: event.sequence }
+    : current.actionOutcomeSequences;
+  const completedActionIds = current.actionIds.filter((actionId) =>
+    ["SUCCESS", "CHANGED", "SKIPPED"].includes(actionOutcomes[actionId]),
+  );
   return {
     ...current,
-    lastSequence: event.sequence,
+    lastSequence: Math.max(current.lastSequence, event.sequence),
+    lastContiguousSequence: contiguous,
+    pendingSequences: [...pending],
     complete,
-    completedActionIds:
-      completed && !current.completedActionIds.includes(event.actionId!)
-        ? [...current.completedActionIds, event.actionId!]
-        : current.completedActionIds,
-    actionOutcomes: outcomeRecorded
-      ? { ...current.actionOutcomes, [event.actionId!]: event.status }
-      : current.actionOutcomes,
-    activeActionId:
-      knownAction && event.eventType === "ACTION_STARTED"
+    completedActionIds,
+    actionOutcomes,
+    actionOutcomeSequences,
+    activeActionId: !isNewest
+      ? current.activeActionId
+      : knownAction && event.eventType === "ACTION_STARTED"
         ? event.actionId
         : event.eventType === "ACTION_COMPLETED" &&
             event.actionId === current.activeActionId
@@ -176,7 +194,7 @@ export function installationDisplay(
 }
 
 function confirmedPercent(progress?: RunProgress): number | undefined {
-  if (!progress?.complete || progress.actionIds.length === 0) return undefined;
+  if (!progress || progress.actionIds.length === 0) return undefined;
   return Math.min(
     99,
     Math.floor(

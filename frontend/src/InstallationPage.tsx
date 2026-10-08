@@ -457,6 +457,10 @@ export function InstallationPage({
             events={events}
             busy={busy}
             onCancel={onCancel}
+            onOpenPendingOutputs={() => {
+              onTabChange("result");
+              onRefreshSecretOutputs();
+            }}
           />
         )}
         {tab === "result" && (
@@ -468,6 +472,7 @@ export function InstallationPage({
             secretOutputPackages={secretOutputPackages}
             outputDelivery={outputDelivery}
             onRefreshSecretOutputs={onRefreshSecretOutputs}
+            onOpenPendingOutputs={onRefreshSecretOutputs}
             onDeliverSecretOutput={onDeliverSecretOutput}
           />
         )}
@@ -885,6 +890,7 @@ function ExecutionStage({
   events,
   busy,
   onCancel,
+  onOpenPendingOutputs,
 }: {
   run?: InstallationRunOperation;
   plan?: InstallationPlanView;
@@ -892,6 +898,7 @@ function ExecutionStage({
   events: InstallationEventView[];
   busy: boolean;
   onCancel: (runId: string) => void;
+  onOpenPendingOutputs: () => void;
 }) {
   const [selectedSequence, setSelectedSequence] = useState<number>();
   const eventScrollRef = useRef<HTMLDivElement>(null);
@@ -899,6 +906,11 @@ function ExecutionStage({
   const selectedEvent =
     events.find((event) => event.sequence === selectedSequence) ||
     events.at(-1);
+  const outputBusy =
+    run?.error?.code === "OUTPUT_BUSY" ||
+    events.some(
+      (event) => executionDiagnosticCode(event.safeMessage) === "OUTPUT_BUSY",
+    );
   useEffect(() => {
     setSelectedSequence(undefined);
   }, [run?.run?.runId]);
@@ -918,6 +930,9 @@ function ExecutionStage({
         ) : (
           <p>В этом сеансе запуск ещё не начат.</p>
         )}
+        {outputBusy && (
+          <OutputBusyNotice onOpenPendingOutputs={onOpenPendingOutputs} />
+        )}
       </article>
     );
   const display = installationDisplay(undefined, run, progress);
@@ -930,6 +945,9 @@ function ExecutionStage({
   return (
     <section className="execution-stage-content">
       <article className="card execution-overview">
+        {outputBusy && (
+          <OutputBusyNotice onOpenPendingOutputs={onOpenPendingOutputs} />
+        )}
         <div className="installation-stage-heading">
           <div>
             <h2>{display.label}</h2>
@@ -1040,7 +1058,7 @@ function ExecutionStage({
                             onClick={() => setSelectedSequence(event.sequence)}
                           >
                             {taskNameWithoutRole(event) ||
-                              event.safeMessage ||
+                              eventMessageLabel(event.safeMessage) ||
                               event.eventType}
                           </button>
                           <small>{eventMessageLabel(event.safeMessage)}</small>
@@ -1070,6 +1088,7 @@ function ResultStage({
   secretOutputPackages,
   outputDelivery,
   onRefreshSecretOutputs,
+  onOpenPendingOutputs,
   onDeliverSecretOutput,
 }: {
   run?: InstallationRunOperation;
@@ -1079,11 +1098,17 @@ function ResultStage({
   secretOutputPackages?: SecretOutputPackagesOperation;
   outputDelivery?: SecretOutputDeliveryOperation;
   onRefreshSecretOutputs: () => void;
+  onOpenPendingOutputs: () => void;
   onDeliverSecretOutput: (packageId: string) => void;
 }) {
   const terminal =
     !!run?.run &&
     ["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(run.run.state);
+  const outputBusy =
+    run?.error?.code === "OUTPUT_BUSY" ||
+    events.some(
+      (event) => executionDiagnosticCode(event.safeMessage) === "OUTPUT_BUSY",
+    );
   const actions = plan?.phases.flatMap((phase) => phase.actions) || [];
   return (
     <section className="installation-stage-content">
@@ -1148,6 +1173,9 @@ function ResultStage({
             )}
           </>
         )}
+        {outputBusy && (
+          <OutputBusyNotice onOpenPendingOutputs={onOpenPendingOutputs} />
+        )}
         <h3>Защищённые выходные файлы</h3>
         <p>
           Здесь отображается только состояние доставки. Содержимое секретов в
@@ -1202,6 +1230,37 @@ function ResultStage({
   );
 }
 
+function OutputBusyNotice({
+  onOpenPendingOutputs,
+}: {
+  onOpenPendingOutputs: () => void;
+}) {
+  return (
+    <div className="notice execution-output-busy" role="alert">
+      <strong>Запуск остановлен до выполнения задач</strong>
+      <p>
+        Пакет защищённых выходных файлов занят: он может ожидать получения после
+        предыдущего запуска или подтверждения очистки узла. Текущий запуск
+        остановлен до задач Ansible, чтобы не перезаписать файлы; план не
+        применён.
+      </p>
+      <p>
+        В списке проверьте состояние и ID исходного запуска: наличие файлов от
+        другого запуска не снимает блокировку. Не удаляйте файлы на узле
+        вручную.
+      </p>
+      <button className="outline" onClick={onOpenPendingOutputs}>
+        Проверить и получить файлы
+      </button>
+      <small>Код диагностики: OUTPUT_BUSY</small>
+    </div>
+  );
+}
+
+function executionDiagnosticCode(message: string): string | undefined {
+  return message.match(/\bdiagnostic:\s*([A-Z][A-Z0-9_]{2,79})\b/)?.[1];
+}
+
 function eventStatusLabel(status: string): string {
   switch (status) {
     case "PENDING":
@@ -1241,6 +1300,9 @@ function eventTypeLabel(eventType: string): string {
 }
 
 function eventMessageLabel(message: string): string {
+  if (executionDiagnosticCode(message) === "OUTPUT_BUSY") {
+    return "Пакет защищённых выходных файлов занят; план остановлен до задач Ansible";
+  }
   const labels: Record<string, string> = {
     "Detached controller accepted": "Контроллер принят",
     "Fixed Core controller started": "Контроллер Core запущен",

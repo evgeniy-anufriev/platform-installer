@@ -226,6 +226,49 @@ not bypass host-key trust. If a compatible authorized PEM key or valid session
 is unavailable, stop before launching the WebView acceptance flow and record
 the prerequisite as blocked.
 
+### SI11 full-service plan preparation in the visible UI
+
+The local QA project for the current full-service cycle is
+`.runtime/qa/si11-recovered-20261002`. The optional, untracked automation is
+`.runtime/qa/si11-full-ui-prepare.cjs`; run it from the repository root with
+`node .runtime/qa/si11-full-ui-prepare.cjs` only after checking that its project
+path, local UI address, PEM path, expected host fingerprints and secret-file
+references match the current QA environment. Do not commit the script or any
+secret files. Use one visible Edge window and the agreed gentle audible warning
+several seconds before interacting with it. Do not use Computer Use.
+
+The preparation sequence is:
+
+1. Open the specified project through the real React "Open project" handler.
+   For this QA automation, pass the known path directly to Go `OpenProject` by
+   substituting only the chooser binding for that click; wait for both the Go
+   `OPEN` result and the visible project page. Do not leave React showing a
+   stale project or wait on a fixed one-second delay.
+2. Check the project's verified bundle binding. If a replacement is required,
+   use the supported preview/confirm rebind and check the resulting digest
+   against the bundle published in the active `cache/`.
+3. On "Servers", select `node1` as Execution Node, load the valid session PEM
+   credential, independently compare its probed SSH fingerprint and approve it.
+   Check the node, plan its preparation and accept only the exact expected UI
+   confirmation. Wait for the completed preparation result and confirm
+   `GetExecutionNodeContext()` is `READY` with the expected runtime digest;
+   do not depend on a particular translated status label.
+4. Probe and compare SSH fingerprints for the servers targeted by the project;
+   approve only matching keys. Load the service secrets from protected local
+   QA files into the runtime session. The currently authorized QA bridge may
+   call the existing Go secret setters, but must not persist or print values.
+5. Set the PKCS#12 store password on "Certificates" and the protected-output
+   encryption password for this session. Verify both are present, then use the
+   real "Installation" UI handler to create a fresh plan. Check that its
+   project revision, bundle, targets, findings, secret requirements and expiry
+   are current, and leave the visible UI at plan review for the operator.
+
+Plan preparation alone is not SI11 installation acceptance. Approve and Start
+only as part of the separately requested full-service run; capture its run ID,
+events and terminal result in the SI11 test journal. If the QA automation
+stalls, identify the exact UI/backend state before retrying. Opening a project
+again resets session preparation, so repeat the sequence after a reopen.
+
 The Windows development workstation is not the canonical runtime for Python/Ansible Core tests.
 
 - Prefer the configured RED OS test VM when Python or Ansible is unavailable locally.
@@ -259,6 +302,21 @@ is the established transport. The target policy grants
 EXEC-01 QA. Do not add or persist any credential values here. If the policy
 is absent, diagnose or restore it only through the existing EXEC-01 bootstrap
 mechanism.
+
+### S11 runtime-bundle acquisition host
+
+For SI11 bundle acquisition/builds, use the trusted RED OS acquisition host
+`node2` at `192.168.56.102`, not the selected installation Execution Node
+`node1` at `192.168.56.101`. Before each use, confirm strict SSH host-key
+validation against the existing trusted `known_hosts` entry and confirm that
+the host already has the required Python/Core build runtime. Do not disable
+host-key checking or bootstrap Python/Core on the acquisition host as part of
+this workflow. Sync only the current required source tree into a unique
+temporary QA workspace, build there from the current worktree and approved
+runtime inputs, then validate and publish the exact resulting bundle through
+the standard publisher. This is a bundle-build location rule only; it does not
+change the configured EXEC-01 connection or authorize service installation on
+node2.
 
 ## Local Test Artifacts
 

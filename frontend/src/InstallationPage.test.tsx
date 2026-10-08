@@ -376,6 +376,55 @@ describe("InstallationPage", () => {
     expect(screen.queryByText("В этом сеансе запуск ещё не начат.")).toBeNull();
   });
 
+  it("explains OUTPUT_BUSY and opens protected outputs from the failed execution", async () => {
+    const user = userEvent.setup();
+    const onTabChange = vi.fn();
+    const onRefreshSecretOutputs = vi.fn();
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-1", "sha256:old", true)}
+        tab="execution"
+        onTabChange={onTabChange}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        onStart={vi.fn()}
+        onRefreshSecretOutputs={onRefreshSecretOutputs}
+        run={
+          new main.InstallationRunOperation({
+            status: "READY",
+            run: { runId: "run-output-busy", state: "FAILED", sequence: 2 },
+          })
+        }
+        events={[
+          new main.InstallationEventView({
+            runId: "run-output-busy",
+            sequence: 2,
+            eventType: "DIAGNOSTIC",
+            status: "FAILED",
+            timestamp: "2026-10-08T08:36:27Z",
+            safeMessage:
+              "Controller preparation failed before execution (diagnostic: OUTPUT_BUSY)",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "не перезаписать файлы",
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Код диагностики: OUTPUT_BUSY",
+    );
+    expect(screen.queryByText(/Controller preparation failed/)).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Проверить и получить файлы" }),
+    );
+    expect(onTabChange).toHaveBeenCalledWith("result");
+    expect(onRefreshSecretOutputs).toHaveBeenCalledOnce();
+  });
+
   it("localizes a live run state and does not expose the protocol value", () => {
     const run = new main.InstallationRunOperation({
       status: "RUNNING",
@@ -394,10 +443,13 @@ describe("InstallationPage", () => {
         runProgress={{
           runId: "run-safe",
           lastSequence: 4,
+          lastContiguousSequence: 4,
+          pendingSequences: [],
           complete: true,
           actionIds: ["a", "b"],
           completedActionIds: ["a"],
           actionOutcomes: { a: "SUCCESS" },
+          actionOutcomeSequences: { a: 2 },
         }}
         events={[
           new main.InstallationEventView({

@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import argparse
+import errno
 import fcntl
 import hashlib
 import json
@@ -143,6 +144,21 @@ def _pki_materialization_plans(manifest):
         if reference is not None and reference != "runtime:pki-store-password":
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     return values
+
+
+_DIAGNOSTIC_CODE = re.compile(r"^[A-Z][A-Z0-9_]{2,127}$")
+
+
+def _preparation_diagnostic_code(error):
+    """Return a safe machine token without exposing exception text or paths."""
+    if isinstance(error, (LifecycleError, execution_secret_output.OutputWireError)):
+        code = str(error)
+        return code if _DIAGNOSTIC_CODE.fullmatch(code) else "EXECUTION_CONTROLLER_PREPARATION_UNCLASSIFIED"
+    if isinstance(error, OSError):
+        return "EXECUTION_CONTROLLER_PREPARATION_" + errno.errorcode.get(error.errno, "OS_ERROR")
+    if isinstance(error, ValueError):
+        return "EXECUTION_CONTROLLER_PREPARATION_VALUE_ERROR"
+    return "EXECUTION_CONTROLLER_PREPARATION_INTERNAL_ERROR"
 
 
 def _terminal(journal, state, code, summary):
@@ -712,10 +728,11 @@ def main():
             _materialize_runtime_projection(journal, metadata, manifest)
             _validate_runtime_projection(journal, metadata, manifest)
             journal.transition("RUNNING", "Fixed Core controller started")
-        except (LifecycleError, execution_secret_output.OutputWireError, OSError, ValueError):
+        except (LifecycleError, execution_secret_output.OutputWireError, OSError, ValueError) as error:
             # Identity was verified above and Start is already durable.
             _terminal(journal, "FAILED", "EXECUTION_CONTROLLER_PREPARATION_FAILED",
-                      "Controller preparation failed before execution")
+                      "Controller preparation failed before execution (diagnostic: %s)" %
+                      _preparation_diagnostic_code(error))
             return 2
     finally:
         os.close(lock)

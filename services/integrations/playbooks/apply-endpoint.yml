@@ -99,7 +99,7 @@
              'bindDeploymentId': item.0,
              'zone': _platform_integration_dns_resolution.resolved_dns_zones.zones[item.0].zone,
              'owner': item.1 ~ '.',
-             'addresses': (record_matches | first).values,
+             'addresses': (record_matches | first)['values'],
              'ttl': _platform_integration_dns_resolution.resolved_dns_zones.zones[item.0].defaultTtl
           }] }}
       vars:

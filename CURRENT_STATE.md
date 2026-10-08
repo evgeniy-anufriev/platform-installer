@@ -1,5 +1,85 @@
 # Current state
 
+## SI11 Vault endpoint hook correction and reset (2026-10-08)
+
+Full-service run `installer-90f2d8f56b6b4cf447c630d04bc56fd6` reached
+Vault Apply after PKI, BIND, DNS-client, Keepalived and HAProxy Apply/Verify
+completed. Vault bootstrap and unseal succeeded, but source endpoint integration
+failed at `Validate resolved source DNS record list` on node1–node3 (events
+2922–2924); terminal state is `FAILED` at event 2926. The record projection
+used `(record_matches | first).values`, which selected the mapping method and
+caused Ansible 2.18.15 to stringify the projected list. A localhost-only
+reproduction failed the same `is not string` assertion. The source now uses
+`(record_matches | first)['values']`; an executable test of the production
+task proves list and address types. BIND source-record mutation was not reached.
+
+The HAProxy source hook had no matching `values` collision. Its three phases
+now use the already resolved source ID so an explicit standalone source ID
+works without a UI/Core execution variable. On the RED OS QA host, six endpoint
+tests, eight HAProxy backend contract tests, 15 BIND contract tests and the
+endpoint playbook syntax check passed. The current QA project has no
+`haproxy.deploymentRef` on `qa-vault-consumer`; Core therefore selected no
+HAProxy provider for this source, and the run skipped HAProxy hook tasks.
+That project relation must be reviewed before using the next full-service plan
+to claim external Vault routing.
+
+Bundle `si11-full-service-20261008-03` was built on node2 from the current
+worktree and the previously verified runtime input. Standard validation and
+publication returned the same digest
+`sha256:e77842ff140d641ea80c4b131bb87a0b042e1c4c1985d3dd87fa7b3968e4d99f`;
+the four offline artifact declarations are unchanged. The previous active
+bundle `sha256:560eb4fb38ed6f2bd9fb749a936acb4497bb19488d9de3d7b5b628a93d594b9f`
+is retained as a verified QA copy. The S11 project's `bundle/` import now
+contains the new verified digest; its former import is preserved as
+`bundle.previous-source-dns-20261008-01`. A later read of `project.yml` showed
+its artifact lock already at the new digest as well; no explicit rebind call
+was made during this correction, so the actor of that concurrent change was
+not established. Node1 still needs preparation with the new runtime before a
+new plan.
+
+After the run was confirmed terminal, the official Vault `clear.yml` in check
+mode predicted exactly one owned member on each of node1–node3. The actual
+clear finished with `failed=0` and `unreachable=0` on all three nodes. Each
+`vault/vault-1`, `vault/vault-2`, and `vault/vault-3` data directory now contains
+only its ownership marker; the three exact units are inactive and disabled.
+Config, PKI and audit-log directories remain. The old bootstrap shares/token
+are obsolete after this reset and must not be reused for a new bootstrap.
+
+## SI11 full-plan attempt and preflight diagnostics (2026-10-08)
+
+Run `installer-1fd33de06c703280e68d4f01c98df06d` on node1 terminated at
+controller preparation with `EXECUTION_CONTROLLER_PREPARATION_FAILED`, before
+`RUN_STARTED` or any of the plan's 21 actions. No Ansible task or service
+mutation occurred; Vault was not cleared during this attempt. The retained
+result lacks the original safe cause because the controller previously
+discarded it. A narrow source correction now adds a sanitized diagnostic token
+to the existing terminal error summary without recording exception text, paths
+or secrets. The lifecycle suite passes on RED OS (59 tests), and the focused
+independent architecture DIFF review approved this change. The corrected
+controller had not yet been built into a runtime bundle at that checkpoint;
+the later bundle and run are recorded above. See
+[`execution-failure-diagnostics.md`](docs/execution-failure-diagnostics.md).
+
+## SI11 current all-services run update (2026-10-07)
+
+**BIND Apply + Verify: PASS** in the current Wails all-services run, as
+reported by the owner. I04 remains **IN PROGRESS** while the remaining services
+execute. This does not close I05 or the overall SI11 acceptance gate: the run
+has not yet reached terminal success, and its other service actions remain
+under observation. HAProxy Verify failed on node1 in run
+`installer-358795d43c99c96e0a399d6827e3bdbc`: event 1940 is task
+`Check HAProxy service is active read-only` (UUID
+`08002755-24d3-bce5-3620-000000000144`). Read-only systemd evidence shows
+`haproxy.service` failed during startup because it could not bind the configured
+`/run/haproxy/admin.sock`: `/run/haproxy` does not exist. The vendor unit has no
+`RuntimeDirectory=`, and the HAProxy role does not create this volatile parent
+directory. This is a recurring failure: the retained run
+`installer-be7b38d913edef02aee3c753a69a012b` has the same HAProxy Verify task
+failure on node1 on 2026-10-06; its detailed system journal is no longer
+available. No server changes were made during diagnosis. The installation
+progress percentage has reappeared in the UI after temporarily reporting that
+an exact percentage was unavailable. I04/I05 and overall SI11 remain open.
+
 ## Active-run SSH credential retention (2026-10-07)
 
 `SESSION-RUN-CREDENTIAL-01` implements one Broker slot (`STARTING` →

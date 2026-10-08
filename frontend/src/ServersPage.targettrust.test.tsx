@@ -63,6 +63,60 @@ describe("target host trust on the Servers page", () => {
     expect(onProbe).toHaveBeenCalledWith("node2");
   });
 
+  it("shows update required when the active execution runtime differs from the project bundle", async () => {
+    const onCheckExecutionNode = vi.fn().mockResolvedValue({
+      status: "UPDATE_REQUIRED",
+      findings: [{
+        code: "EXECUTION_NODE_RUNTIME_BUNDLE_MISMATCH",
+        safeMessage: "Активный runtime bundle на узле не совпадает с проверенным bundle проекта; требуется обновление узла.",
+      }],
+    });
+    render(<ServersPage {...props} onCheckExecutionNode={onCheckExecutionNode} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+
+    expect(await screen.findByText("Проверен: Требуется обновление")).toBeTruthy();
+    expect(await screen.findByText(/Активный runtime bundle на узле не совпадает/)).toBeTruthy();
+  });
+
+  it("clears the stale update-required check after preparation succeeds", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onCheckExecutionNode = vi.fn().mockResolvedValue({
+      status: "UPDATE_REQUIRED",
+      findings: [{
+        code: "EXECUTION_NODE_RUNTIME_BUNDLE_MISMATCH",
+        safeMessage: "Активный runtime bundle на узле не совпадает с проверенным bundle проекта; требуется обновление узла.",
+      }],
+    });
+    const onPlanExecutionNodePreparation = vi.fn().mockResolvedValue({
+      status: "CONFIRMATION_REQUIRED",
+      planId: "prepare-1",
+      steps: [{ id: "activate", action: "ACTIVATE", mutates: true }],
+    });
+    const onPrepareExecutionNode = vi.fn().mockResolvedValue({ status: "PREPARED" });
+    render(
+      <ServersPage
+        {...props}
+        onCheckExecutionNode={onCheckExecutionNode}
+        onPlanExecutionNodePreparation={onPlanExecutionNodePreparation}
+        onPrepareExecutionNode={onPrepareExecutionNode}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+    expect(await screen.findByText("Проверен: Требуется обновление")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Подтвердить подготовку" }));
+
+    await waitFor(() => expect(onPrepareExecutionNode).toHaveBeenCalledWith("prepare-1"));
+    expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
+    expect(screen.queryByText(/Проверен: Требуется обновление/)).toBeNull();
+    expect(screen.queryByText(/Активный runtime bundle на узле не совпадает/)).toBeNull();
+    expect(screen.queryByText(/Проверка:/)).toBeNull();
+    expect(screen.queryByText(/Подготовка:/)).toBeNull();
+    vi.restoreAllMocks();
+  });
+
   it("does not offer approval while edits are unsaved", () => {
     render(<ServersPage {...props} commandCount={1} onProbeTargetHostKey={vi.fn()} onApproveTargetHostKey={vi.fn()} onDeclineTargetHostKey={vi.fn()} />);
     expect((screen.getByRole("button", { name: "Проверить SSH-ключ" }) as HTMLButtonElement).disabled).toBe(true);

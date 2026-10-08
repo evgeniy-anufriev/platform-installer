@@ -334,6 +334,7 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
       <p class="muted" id="result-reference" hidden>Демонстрационный итог · demo-result-001 · план demo-plan-001</p>
       <article class="card" id="result-demo" hidden><div class="body"><div class="head"><div><b class="warn" id="result-headline">Завершено с ошибкой проверки</b><p id="result-counts">2 действия успешны · 1 с ошибкой · 0 пропущено</p></div><span>Длительность: 9 мин 07 с</span></div>
       <div class="row"><span>Execution Node: node1</span><span>Targets: node1, node2, node3</span></div>
+      <div class="notice" role="alert"><b>Пример диагностики OUTPUT_BUSY</b><p>Пакет защищённых выходных файлов занят: он может ожидать получения или подтверждения очистки узла. Текущий запуск остановлен до задач Ansible, чтобы не перезаписать файлы.</p><button type="button" class="btn">Проверить и получить файлы</button><p class="muted">Сверьте ID исходного запуска в списке пакетов. Удалять файлы на узле вручную нельзя.</p></div>
       <div class="server-table"><table class="task-table"><thead><tr><th>Этап плана</th><th>Результат</th><th>Серверы</th><th>Длительность</th></tr></thead><tbody>
       <tr><td>PKI apply</td><td>Успешно</td><td>node1, node2, node3</td><td>1 мин 12 с</td></tr>
       <tr><td>Kafka apply</td><td>Успешно</td><td>node1, node2, node3</td><td>5 мин 40 с</td></tr>

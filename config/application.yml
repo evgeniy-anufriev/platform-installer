@@ -11,9 +11,9 @@ serviceExecutionPriorities:
   - {serviceType: dns-client, priority: 1}
   - {serviceType: keepalived, priority: 2}
   - {serviceType: haproxy, priority: 3}
-  - {serviceType: clickhouse, priority: 4}
-  - {serviceType: docker, priority: 4}
-  - {serviceType: kafka, priority: 4}
-  - {serviceType: postgresql, priority: 4}
-  - {serviceType: redis, priority: 4}
+  - {serviceType: clickhouse, priority: 5}
+  - {serviceType: docker, priority: 5}
+  - {serviceType: kafka, priority: 5}
+  - {serviceType: postgresql, priority: 5}
+  - {serviceType: redis, priority: 5}
   - {serviceType: vault, priority: 4}

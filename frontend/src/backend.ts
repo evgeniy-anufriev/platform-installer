@@ -78,7 +78,7 @@ export type VerificationStatus = {
   }>;
   findingsTruncated?: boolean;
   checkedAt?: string;
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; diagnosticCodes?: string[] };
 };
 export type ManagedProjectView = {
   projectRevision: string;

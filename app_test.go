@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -278,6 +279,24 @@ func TestAppReturnsSafeFailure(t *testing.T) {
 	result := app.OpenProject(t.TempDir())
 	if result.Status != "ERROR" || result.Error == nil || result.Error.Code != "EXECUTION_NODE_UNAVAILABLE" || result.Error.Message == "EXECUTION_NODE_UNAVAILABLE" {
 		t.Fatalf("result=%+v", result)
+	}
+}
+
+func TestRuntimeSecretDescriptorDiagnosticCodesAreBoundedTokensOnly(t *testing.T) {
+	got := runtimeSecretDescriptorDiagnosticCodes(&executionnode.ExecutionError{
+		Code: "CORE_OPERATION_FAILED",
+		Findings: []executionnode.Finding{
+			{Code: "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", SafeMessage: "safe summary"},
+			{Code: "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN", SafeMessage: "duplicate"},
+			{Code: "password-was-secret", SafeMessage: "must not pass"},
+		},
+	})
+	want := []string{"CORE_OPERATION_FAILED", "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("diagnostic codes=%q, want %q", got, want)
+	}
+	if got := runtimeSecretDescriptorDiagnosticCodes(errors.New("arbitrary transport text")); len(got) != 0 {
+		t.Fatalf("untyped error exposed diagnostic codes: %q", got)
 	}
 }
 
@@ -908,7 +927,7 @@ func TestE5TrustedBindingAndPreparationContinuation(t *testing.T) {
 	}
 	node := executionnode.Node{ID: "desktop-qa", Address: "192.0.2.10", User: "qa", Port: 22, CredentialRef: "runtime:ssh", HostKey: executionnode.HostKeyPolicy{State: "TRUSTED", KnownHosts: "known_hosts", Fingerprint: "SHA256:qa"}}
 	stub := &executionLifecycleStub{
-		inspection: executionnode.Inspection{State: executionnode.Ready},
+		inspection: executionnode.Inspection{State: executionnode.Ready, Runtime: executionnode.Runtime{BundleDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}},
 		plan:       executionnode.Plan{ID: "prepare-plan", Digest: "sha256:plan", State: executionnode.PreparationRequired, ExpiresAt: time.Now().Add(time.Minute)},
 		prepared:   executionnode.Result{State: executionnode.Ready},
 	}
@@ -937,6 +956,29 @@ func TestE5TrustedBindingAndPreparationContinuation(t *testing.T) {
 	completed := app.PrepareExecutionNode(preparation.PlanID)
 	if completed.Status != "PREPARED" || completed.Verification == nil || completed.Verification.Status != "VERIFIED" || stub.prepareCalls != 1 || stub.inspectCalls < 2 {
 		t.Fatalf("completed=%#v prepareCalls=%d inspectCalls=%d", completed, stub.prepareCalls, stub.inspectCalls)
+	}
+}
+
+func TestExecutionNodeReadinessRequiresProjectBundle(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := executionnode.Node{ID: "qa-node", Address: "192.0.2.10", User: "qa", Port: 22}
+	const expectedDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	const activeDigest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	reader := projectReader{transport: verificationTransportStub{}, node: node, runtimeRelease: map[string]any{"bundleDigest": expectedDigest}}
+	stub := &executionLifecycleStub{inspection: executionnode.Inspection{State: executionnode.Ready, Runtime: executionnode.Runtime{BundleDigest: activeDigest}}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+
+	readiness := app.CheckExecutionNode()
+	if readiness.Status != "UPDATE_REQUIRED" || len(readiness.Findings) != 1 || readiness.Findings[0].Code != "EXECUTION_NODE_RUNTIME_BUNDLE_MISMATCH" {
+		t.Fatalf("readiness=%#v", readiness)
+	}
+	if app.execution.context.Status != "UPDATE_REQUIRED" {
+		t.Fatalf("context status=%q", app.execution.context.Status)
 	}
 }
 

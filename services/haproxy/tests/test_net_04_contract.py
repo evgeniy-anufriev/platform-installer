@@ -48,5 +48,24 @@ class HAProxyGlobalLogContractTests(unittest.TestCase):
         self.assertLess(rendered.index("log a-log local0"), rendered.index("log z-log local1"))
 
 
+class HAProxySystemdRuntimeDirectoryTests(unittest.TestCase):
+    def test_dropin_creates_socket_parent_at_each_service_start(self):
+        with open(os.path.join(ROLE, "templates", "haproxy-runtime-directory.conf.j2"), encoding="utf-8") as stream:
+            dropin = stream.read()
+        with open(os.path.join(ROLE, "tasks", "start.yml"), encoding="utf-8") as stream:
+            start_tasks = yaml.safe_load(stream)
+        with open(os.path.join(ROLE, "defaults", "main.yml"), encoding="utf-8") as stream:
+            defaults = yaml.safe_load(stream)
+
+        self.assertIn("RuntimeDirectory=haproxy", dropin)
+        self.assertIn("RuntimeDirectoryMode=0755", dropin)
+        self.assertEqual("/run/haproxy/admin.sock", defaults["platform_haproxy_runtime_socket_path"])
+        self.assertEqual(3, len(start_tasks))
+        self.assertTrue(start_tasks[1]["ansible.builtin.template"]["src"].endswith("runtime-directory.conf.j2"))
+        service_task = start_tasks[2]["ansible.builtin.systemd_service"]
+        self.assertTrue(service_task["daemon_reload"])
+        self.assertIn("_platform_haproxy_runtime_dropin.changed", service_task["state"])
+
+
 if __name__ == "__main__":
     unittest.main()

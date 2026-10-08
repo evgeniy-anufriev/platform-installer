@@ -185,7 +185,19 @@ func (a *App) revalidateTrustedConnectionLocked(binding *executionNodeBinding) e
 }
 
 func readinessFromInspection(binding *executionNodeBinding, label string, inspection executionnode.Inspection) ExecutionNodeReadiness {
-	return ExecutionNodeReadiness{Status: string(inspection.State), NodeID: binding.node.ID, SafeLabel: label, CheckedAt: time.Now().UTC().Format(time.RFC3339), Findings: safeNodeFindings(inspection.Findings)}
+	status := string(inspection.State)
+	findings := append([]executionnode.Finding(nil), inspection.Findings...)
+	if inspection.State == executionnode.Ready {
+		expectedDigest, _ := binding.reader.runtimeRelease["bundleDigest"].(string)
+		if expectedDigest != "" && inspection.Runtime.BundleDigest != expectedDigest {
+			status = string(executionnode.UpdateRequired)
+			findings = append(findings, executionnode.Finding{
+				Code:        "EXECUTION_NODE_RUNTIME_BUNDLE_MISMATCH",
+				SafeMessage: "Активный runtime bundle на узле не совпадает с проверенным bundle проекта; требуется обновление узла.",
+			})
+		}
+	}
+	return ExecutionNodeReadiness{Status: status, NodeID: binding.node.ID, SafeLabel: label, CheckedAt: time.Now().UTC().Format(time.RFC3339), Findings: safeNodeFindings(findings)}
 }
 
 func (a *App) readinessFailureLocked(err error) ExecutionNodeReadiness {

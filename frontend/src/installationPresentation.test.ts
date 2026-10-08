@@ -79,7 +79,7 @@ describe("installation status presentation", () => {
     ).toBe("Установка не начата");
   });
 
-  it("counts completed plan actions and rejects a percentage after a sequence gap", () => {
+  it("keeps a confirmed-action percentage after an event sequence gap", () => {
     let progress = beginRunProgress("run-1", plan);
     progress = observeRunEvent(progress, event(1, "RUN_STARTED"));
     progress = observeRunEvent(
@@ -111,8 +111,48 @@ describe("installation status presentation", () => {
         { run: { runId: "run-1", state: "RUNNING", sequence: 5 } } as never,
         progress,
       ).percent,
-    ).toBeUndefined();
+    ).toBe(99);
+    expect(progress.complete).toBe(false);
+    expect(progress.lastContiguousSequence).toBe(3);
     expect(actionResultLabel("verify:one", "FAILED", progress)).toBe("Успешно");
+    progress = observeRunEvent(progress, event(4, "TASK_COMPLETED"));
+    expect(progress.complete).toBe(true);
+    expect(progress.lastContiguousSequence).toBe(5);
+  });
+
+  it("counts unique action completions delivered out of sequence", () => {
+    let progress = beginRunProgress("run-1", plan);
+    progress = observeRunEvent(progress, event(1, "RUN_STARTED"));
+    progress = observeRunEvent(
+      progress,
+      event(2, "ACTION_STARTED", "apply:one"),
+    );
+    progress = observeRunEvent(
+      progress,
+      event(4, "ACTION_COMPLETED", "verify:one"),
+    );
+    expect(progress.completedActionIds).toEqual(["verify:one"]);
+    expect(progress.lastContiguousSequence).toBe(2);
+    expect(progress.complete).toBe(false);
+
+    progress = observeRunEvent(
+      progress,
+      event(3, "ACTION_COMPLETED", "apply:one"),
+    );
+    progress = observeRunEvent(
+      progress,
+      event(4, "ACTION_COMPLETED", "verify:one"),
+    );
+    expect(progress.completedActionIds).toEqual(["apply:one", "verify:one"]);
+    expect(progress.lastContiguousSequence).toBe(4);
+    expect(progress.complete).toBe(true);
+    expect(
+      installationDisplay(
+        undefined,
+        { run: { runId: "run-1", state: "RUNNING", sequence: 4 } } as never,
+        progress,
+      ).percent,
+    ).toBe(99);
   });
 
   it("reserves 100 percent for the authoritative successful terminal state", () => {

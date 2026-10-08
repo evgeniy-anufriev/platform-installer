@@ -200,6 +200,74 @@ function modeLabel(mode: CatalogMode | undefined, id: string) {
     : `Неизвестный сохранённый режим (${id})`;
 }
 
+function TopologyStateChip({
+  state,
+  compact = false,
+}: {
+  state?: "new" | "deleting";
+  compact?: boolean;
+}) {
+  const tone =
+    state === "new" ? "info" : state === "deleting" ? "danger" : "success";
+  const symbol =
+    state === "new" ? "·" : state === "deleting" ? "×" : "✓";
+  const label =
+    state === "new"
+      ? compact
+        ? "Новый"
+        : "Новый черновик"
+      : state === "deleting"
+        ? "Будет удалён"
+        : "Сохранён";
+  return (
+    <span className={`status-chip status-chip--${tone}`}>
+      <span className="status-chip-symbol" aria-hidden="true">
+        {symbol}
+      </span>
+      {label}
+    </span>
+  );
+}
+
+function TopologyInstanceIcon() {
+  return (
+    <svg
+      className="topology-instance-icon"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
+      <rect x="10.5" y="2.5" width="5" height="5" rx="1" />
+      <rect x="2.5" y="10.5" width="5" height="5" rx="1" />
+      <rect x="10.5" y="10.5" width="5" height="5" rx="1" />
+    </svg>
+  );
+}
+
+function TopologyServerIcon() {
+  return (
+    <svg
+      className="topology-server-icon"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="2.5" width="13" height="5" rx="1.2" />
+      <rect x="2.5" y="10.5" width="13" height="5" rx="1.2" />
+      <path d="M5 5h.01M5 13h.01M8 5h5M8 13h5" />
+    </svg>
+  );
+}
+
 export function TopologyPage({
   managed,
   catalog,
@@ -427,13 +495,16 @@ export function TopologyPage({
                         onSelectedDeploymentChange(row.deploymentId)
                       }
                     >
-                      <b>{row.deploymentId}</b>
-                      <span>{service?.displayName || row.serviceType}</span>
-                      {row.state && (
-                        <small>
-                          {row.state === "new" ? "Новый" : "Будет удалён"}
-                        </small>
-                      )}
+                      <TopologyInstanceIcon />
+                      <span className="topology-instance-copy">
+                        <span className="topology-instance-heading">
+                          <b>{row.deploymentId}</b>
+                          {row.state && (
+                            <TopologyStateChip state={row.state} compact />
+                          )}
+                        </span>
+                        <span>{service?.displayName || row.serviceType}</span>
+                      </span>
                     </button>
                   );
                 })
@@ -471,11 +542,7 @@ export function TopologyPage({
                   </dd>
                   <dt>Состояние</dt>
                   <dd>
-                    {selected.state === "new"
-                      ? "Новый черновик"
-                      : selected.state === "deleting"
-                        ? "Будет удалён"
-                        : "Сохранён"}
+                    <TopologyStateChip state={selected.state} />
                   </dd>
                 </dl>
                 <h3>Размещение на серверах</h3>
@@ -739,16 +806,19 @@ function ByServersView({
           {servers.map((server) => (
             <button
               key={server.hostId}
-              className={`topology-row ${server.hostId === selectedHostId ? "selected" : ""}`}
+              className={`topology-row ${server.hostId === selectedHostId ? "selected" : ""} ${server.state ? `draft-${server.state}` : ""}`}
               onClick={() => onSelectedHostChange(server.hostId)}
             >
-              <b>{server.hostId}</b>
-              <span>{server.label}</span>
-              {server.state && (
-                <small>
-                  {server.state === "new" ? "Новый" : "Будет удалён"}
-                </small>
-              )}
+              <TopologyServerIcon />
+              <span className="topology-instance-copy">
+                <span className="topology-instance-heading">
+                  <b>{server.hostId}</b>
+                  {server.state && (
+                    <TopologyStateChip state={server.state} compact />
+                  )}
+                </span>
+                <span>{server.label}</span>
+              </span>
             </button>
           ))}
         </div>
@@ -778,7 +848,6 @@ function ByServersView({
                     </div>
                     <div className="topology-assignment-actions">
                       <button
-                        className="outline"
                         aria-label={`Изменить размещение ${deployment.deploymentId} на сервере ${selected.hostId}`}
                         onClick={() => {
                           onSelectedDeploymentChange(deployment.deploymentId);

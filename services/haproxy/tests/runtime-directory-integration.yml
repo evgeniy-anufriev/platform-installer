@@ -1,0 +1,54 @@
+---
+- name: Exercise HAProxy role startup with an absent runtime socket directory
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  vars:
+    platform_haproxy_active_artifacts_changed: false
+    platform_haproxy_tls_material_changed: false
+  tasks:
+    - name: Stop HAProxy before simulating a fresh volatile runtime directory
+      ansible.builtin.systemd_service:
+        name: haproxy
+        state: stopped
+
+    - name: Remove only HAProxy's volatile socket directory for the regression test
+      ansible.builtin.file:
+        path: /run/haproxy
+        state: absent
+
+    - name: Run the production HAProxy startup tasks
+      ansible.builtin.include_role:
+        name: platform.haproxy.haproxy
+        tasks_from: start.yml
+
+    - name: Inspect the HAProxy runtime socket directory
+      ansible.builtin.stat:
+        path: /run/haproxy
+      register: _haproxy_runtime_directory
+
+    - name: Require HAProxy runtime directory to be recreated on service start
+      ansible.builtin.assert:
+        that:
+          - _haproxy_runtime_directory.stat.isdir
+          - _haproxy_runtime_directory.stat.mode == '0755'
+
+    - name: Require HAProxy to be active after the runtime-directory recovery
+      ansible.builtin.command:
+        argv: [systemctl, is-active, --quiet, haproxy]
+      changed_when: false
+
+    - name: Inspect the configured HAProxy control socket
+      ansible.builtin.stat:
+        path: /run/haproxy/admin.sock
+      register: _haproxy_runtime_socket
+
+    - name: Require the HAProxy control socket to exist
+      ansible.builtin.assert:
+        that: _haproxy_runtime_socket.stat.issock
+
+    - name: Run the production HAProxy read-only verification tasks
+      ansible.builtin.include_role:
+        name: platform.haproxy.haproxy
+        tasks_from: verify.yml

@@ -39,8 +39,8 @@ Names are bounded and stripped of control/ANSI characters.
 
 ## Durability, capacity and failure policy
 
-The remote journal has an 8,192-event limit. Task detail admission stops when
-the global sequence reaches 7,936, reserving at least 256 slots for critical
+The remote journal has a 16,384-event limit. Task detail admission stops when
+the global sequence reaches 16,128, reserving at least 256 slots for critical
 lifecycle events. Each event is at most 64 KiB. Controller and callback share
 the same cross-process event writer; the controller separately owns its run
 lock throughout execution.
@@ -67,7 +67,7 @@ does not acquire detailed events merely by upgrading the Installer.
 RunObserver drains pages, uses bounded polling/backoff, checks gaps and
 conflicting duplicates, and drains terminal events before stopping. It owns
 one poller per node/run while consumers exist. Bounds are 32 active runs,
-16 subscribers per run, 16,384 aggregate subscriber slots, and 8,192 retained
+16 subscribers per run, 16,384 aggregate subscriber slots, and 16,384 retained
 events per run. Slow consumers are disconnected rather than blocking polling.
 Runtime SSH release/state probes and event responses use bounded output.
 

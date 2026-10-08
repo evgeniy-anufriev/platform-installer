@@ -1,4 +1,5 @@
 import base64
+import errno
 import hashlib
 import io
 import json
@@ -128,8 +129,41 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 self.assertEqual(2, execution_controller.main())
             self.assertEqual("FAILED", journal.status()["state"])
             self.assertEqual(record, journal.metadata())
+            result = json.loads(Path(journal.result_path).read_text(encoding="utf-8"))
+            self.assertEqual("EXECUTION_CONTROLLER_PREPARATION_FAILED", result["error"]["code"])
+            self.assertIn("diagnostic: OUTPUT_ACCESS_DENIED", result["error"]["summary"])
             cleanup.assert_called_once_with(root, "run-1")
             dispatch.assert_not_called()
+
+    def test_controller_preparation_diagnostic_never_persists_raw_exception_text(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            record = metadata()
+            journal.initialize(record)
+            manifest = {"projectIdentity": record["projectIdentity"],
+                        "planFingerprint": record["planFingerprint"],
+                        "runtimeRelease": {"bundleDigest": record["runtimeRelease"]}, "operations": []}
+            Path(journal.directory, "manifest.json").write_text(json.dumps(manifest))
+            args = ["controller", "--state-root", root, "--run-id", "run-1",
+                    "--runtime-release", root, "--bundle-digest", record["runtimeRelease"]]
+            raw = "sensitive-path-and-value-must-not-be-recorded"
+            with mock.patch.object(sys, "argv", args), \
+                    mock.patch.object(execution_controller, "_materialize_runtime_projection",
+                                      side_effect=ValueError(raw)), \
+                    mock.patch.object(execution_controller.execution_secret_lease, "cleanup_run"), \
+                    mock.patch.object(execution_controller, "_dispatch") as dispatch:
+                self.assertEqual(2, execution_controller.main())
+            result_text = Path(journal.result_path).read_text(encoding="utf-8")
+            result = json.loads(result_text)
+            self.assertEqual("EXECUTION_CONTROLLER_PREPARATION_FAILED", result["error"]["code"])
+            self.assertIn("diagnostic: EXECUTION_CONTROLLER_PREPARATION_VALUE_ERROR", result["error"]["summary"])
+            self.assertNotIn(raw, result_text)
+            dispatch.assert_not_called()
+
+    def test_controller_preparation_diagnostic_classifies_os_errors_without_paths(self):
+        error = OSError(errno.EACCES, "private path must not be logged")
+        self.assertEqual("EXECUTION_CONTROLLER_PREPARATION_EACCES",
+                         execution_controller._preparation_diagnostic_code(error))
 
     def test_terminal_status_is_published_before_result_becomes_observable(self):
         with tempfile.TemporaryDirectory() as root:

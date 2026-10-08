@@ -295,6 +295,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const activeRunIdRef = useRef("");
   const [installationSubscription, setInstallationSubscription] = useState("");
   const installationSubscriptionRef = useRef("");
+  const resyncingRunIdRef = useRef("");
+  const lastRecoveryCursorRef = useRef(new Map<string, number>());
   const [secretOutputPackages, setSecretOutputPackages] = useState<
     SecretOutputPackagesOperation | undefined
   >();
@@ -879,6 +881,48 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setSecretOutputPackages(secretOutputListingUnavailable());
     }
   }, [api, installationPlan?.plan]);
+  const recoverInstallationRunEvents = useCallback(
+    async (runId: string, afterSequence: number) => {
+      if (
+        !api.subscribeInstallationRun ||
+        !api.unsubscribeInstallationRun ||
+        resyncingRunIdRef.current === runId
+      )
+        return;
+      const lastAttempt = lastRecoveryCursorRef.current.get(runId);
+      if (lastAttempt !== undefined && afterSequence <= lastAttempt) return;
+      lastRecoveryCursorRef.current.set(runId, afterSequence);
+      resyncingRunIdRef.current = runId;
+      const previous = installationSubscriptionRef.current;
+      installationSubscriptionRef.current = "";
+      setInstallationSubscription("");
+      try {
+        if (previous) await api.unsubscribeInstallationRun(previous);
+        const subscription = await api.subscribeInstallationRun(
+          runId,
+          afterSequence,
+        );
+        if (
+          subscription.status === "SUBSCRIBED" &&
+          subscription.subscriptionId
+        ) {
+          installationSubscriptionRef.current = subscription.subscriptionId;
+          setInstallationSubscription(subscription.subscriptionId);
+        } else if (api.getInstallationRun) {
+          setInstallationRun(await api.getInstallationRun(runId));
+        }
+      } catch {
+        if (api.getInstallationRun)
+          void api
+            .getInstallationRun(runId)
+            .then(setInstallationRun)
+            .catch(() => {});
+      } finally {
+        resyncingRunIdRef.current = "";
+      }
+    },
+    [api],
+  );
   useEffect(() => {
     if (!api.subscribeInstallationRunEvents) return undefined;
     return api.subscribeInstallationRunEvents(
@@ -898,6 +942,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               .then(setInstallationRun)
               .catch(() => {});
           }
+          if (
+            value.errorCode === "OBSERVER_SUBSCRIBER_SLOW" &&
+            activeRunIdRef.current
+          ) {
+            void recoverInstallationRunEvents(
+              activeRunIdRef.current,
+              runProgressRef.current?.lastContiguousSequence || 0,
+            );
+          }
           return;
         }
         const subscriptionMatches =
@@ -907,17 +960,26 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           value.event.runId !== activeRunIdRef.current
         )
           return;
-        setInstallationEvents((current) =>
-          current.some((event) => event.sequence === value.event!.sequence)
-            ? current
-            : [...current, value.event!],
-        );
-        const nextProgress = runProgressRef.current
-          ? observeRunEvent(runProgressRef.current, value.event)
+        setInstallationEvents((current) => {
+          if (current.some((event) => event.sequence === value.event!.sequence))
+            return current;
+          return [...current, value.event!].sort(
+            (left, right) => left.sequence - right.sequence,
+          );
+        });
+        const previousProgress = runProgressRef.current;
+        const nextProgress = previousProgress
+          ? observeRunEvent(previousProgress, value.event)
           : undefined;
         if (nextProgress) {
           runProgressRef.current = nextProgress;
           setRunProgress(nextProgress);
+          if (nextProgress.pendingSequences.length > 0) {
+            void recoverInstallationRunEvents(
+              value.event.runId,
+              nextProgress.lastContiguousSequence,
+            );
+          }
         }
         if (
           ["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(
@@ -935,7 +997,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         }
       },
     );
-  }, [api, installationSubscription, collectAndDeliverSecretOutputs]);
+  }, [
+    api,
+    installationSubscription,
+    collectAndDeliverSecretOutputs,
+    recoverInstallationRunEvents,
+  ]);
   useEffect(
     () => () => {
       if (installationSubscriptionRef.current && api.unsubscribeInstallationRun)

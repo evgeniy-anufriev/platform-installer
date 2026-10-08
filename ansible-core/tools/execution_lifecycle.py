@@ -25,7 +25,7 @@ ACTIVE = frozenset(("PENDING", "STARTING", "RUNNING"))
 # Detailed Ansible task events are intentionally bounded, but a complete
 # cumulative service plan legitimately produces several thousand events.
 # Keep the journal finite without truncating normal multi-service runs.
-MAX_EVENTS = 8192
+MAX_EVENTS = 16384
 MAX_EVENT_PAGE = 512
 MAX_EVENT_PAGE_BYTES = 1024 * 1024
 MAX_EVENT_BYTES = 64 * 1024

@@ -138,8 +138,9 @@ func verificationAfterSave(previous ProjectVerification) ProjectVerification {
 }
 
 type ProjectOpenError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code            string   `json:"code"`
+	Message         string   `json:"message"`
+	DiagnosticCodes []string `json:"diagnosticCodes,omitempty"`
 }
 
 type ApplicationDiagnostic struct {
@@ -1124,8 +1125,14 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
 	result, err := transport.BuildRuntimeSecretDescriptors(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, executionnode.RuntimeSecretDescriptorRequest{RequestID: requestID, ProjectIdentity: a.current.Project.ID, ProjectRevision: revision, ArtifactLockDigest: a.current.Project.Source.BundleDigest, CatalogLockDigest: a.current.Project.Source.CatalogDigest})
-	if err != nil || result.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(result.Runtime, binding.reader.runtimeRelease) {
-		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core could not safely build service secret descriptors."}}
+	if err != nil {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core could not safely build service secret descriptors.", DiagnosticCodes: runtimeSecretDescriptorDiagnosticCodes(err)}}
+	}
+	if result.ProjectRevision != revision {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned descriptors for a different saved project revision.", DiagnosticCodes: []string{"PROJECT_SNAPSHOT_REVISION_MISMATCH"}}}
+	}
+	if !runtimeEvidenceMatchesExpected(result.Runtime, binding.reader.runtimeRelease) {
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned descriptors without matching runtime identity.", DiagnosticCodes: []string{"EXECUTION_RUNTIME_IDENTITY_MISMATCH"}}}
 	}
 	view := RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: result.ProjectRevision, DescriptorSetFingerprint: result.DescriptorSetFingerprint}
 	for _, item := range result.Descriptors {
@@ -1166,6 +1173,33 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		}
 	}
 	return view
+}
+
+// runtimeSecretDescriptorDiagnosticCodes returns only bounded machine tokens
+// from the fixed Execution Node protocol. It deliberately excludes diagnostic
+// messages, command output, paths and all user/project data.
+func runtimeSecretDescriptorDiagnosticCodes(err error) []string {
+	var executionErr *executionnode.ExecutionError
+	if !errors.As(err, &executionErr) || executionErr == nil {
+		return nil
+	}
+	var result []string
+	seen := make(map[string]struct{}, 4)
+	appendCode := func(code string) {
+		if len(result) >= 8 || len(code) > 80 || !verificationErrorCodePattern.MatchString(code) {
+			return
+		}
+		if _, exists := seen[code]; exists {
+			return
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	appendCode(executionErr.Code)
+	for _, finding := range executionErr.Findings {
+		appendCode(finding.Code)
+	}
+	return result
 }
 
 func typedRuntimeSecretRequirements(plan executionnode.DeploymentPlan) []executionnode.RuntimeSecretInputRequirement {

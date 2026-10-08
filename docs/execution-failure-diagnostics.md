@@ -18,6 +18,15 @@ root cause or authority for retries. Censored/no_log records remain opaque.
 The existing redacted operation DIAGNOSTIC carries the code in its safe summary;
 stdout/stderr, result messages, variables and secrets are never persisted.
 
+For failures while the fixed controller prepares the runtime projection, the
+terminal result keeps `EXECUTION_CONTROLLER_PREPARATION_FAILED` and adds a
+bounded diagnostic token to the existing error summary. Internal lifecycle and
+secret-output error codes are admitted only as uppercase machine tokens;
+`OSError` contributes only its standard errno name, while `ValueError` and
+other exceptions map to fixed categories. Exception text, filesystem paths and
+secret values are never included. This diagnostic is emitted before
+`_dispatch`; it does not mean an Ansible action started.
+
 RED OS current-source QA: 6 new tests PASS (0.070s), task observability 21 PASS
 and 4 opt-in SKIP (0.539s), execution lifecycle 39 PASS (1.491s). Coverage includes
 closed classes, final-record selection, explicit-code priority, capture bound,

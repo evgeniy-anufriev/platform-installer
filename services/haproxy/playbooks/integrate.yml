@@ -7,7 +7,7 @@
   roles:
     - role: platform.haproxy.haproxy
       platform_haproxy_phase: prepare
-      platform_haproxy_partial_deployment_id: "{{ platform_execution_service_deployment }}"
+      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Activate one source backend after cluster-wide candidate validation
   hosts: platform_targets
@@ -17,7 +17,7 @@
   roles:
     - role: platform.haproxy.haproxy
       platform_haproxy_phase: activate
-      platform_haproxy_partial_deployment_id: "{{ platform_execution_service_deployment }}"
+      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Reload HAProxy after source backend activation
   hosts: platform_targets
@@ -27,4 +27,4 @@
   roles:
     - role: platform.haproxy.haproxy
       platform_haproxy_phase: start
-      platform_haproxy_partial_deployment_id: "{{ platform_execution_service_deployment }}"
+      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"

@@ -33,6 +33,24 @@ not node settings. Long server and placement lists scroll within their panels.
 This refinement supersedes the older static By servers example below, while
 preserving the existing service-settings and member-settings navigation.
 
+Owner-selected visual refinement (2026-10-07) for Topology → **By services**
+uses design option 1: a dense divided service-instance list without separate
+cards, a visually dominant selected-instance and placement panel, and a concise
+topology summary. Reuse
+the shared Servers icon and soft status-chip language where it helps scanning.
+This is presentation-only: do not add inferred service health/readiness,
+change topology actions, or alter the existing placement and settings routes.
+The current static Topology HTML remains an older interaction illustration;
+the production React screen and the UI-01F contract are authoritative for
+available data and actions.
+
+Owner-selected visual refinement (2026-10-07) for Topology → **By servers**
+uses the same compact picker language: render servers as a divided list with a
+soft blue selected row rather than separate cards. In the placement rows, keep
+the placement-edit action primary and service/member configuration outlined,
+matching the By services action hierarchy. This changes presentation only and
+preserves the existing server selection, placement, and configuration flows.
+
 ADR-027 (2026-09-15) further separates local **Save**, optional **Project
 Verify**, and mandatory fresh **BuildDeploymentPlan**. The current binding
 semantics are in [the owner-change architecture](ui-save-verify-architecture.md).
@@ -133,6 +151,11 @@ Installer attempts delivery only for packages produced by that run; a failed
 delivery does not change the run result or block another Start. Pending packages
 from older runs remain available for explicit retrieval. Show source run ID and
 generation for each package; local delivery does not delete the remote copy.
+If controller preparation reports `OUTPUT_BUSY`, show a plain-language alert
+on the Execution screen: a protected service-output package from an earlier
+run remains on the Execution Node and was preserved to prevent overwrite. Give
+the operator a direct action to inspect and retrieve pending protected outputs;
+never recommend deleting the remote package or expose its contents.
 
 ### Shared visual language
 
@@ -254,6 +277,15 @@ desired host/transport declaration, while its expanded read-only detail shows
 the last discovered hostname, OS, architecture, capacity, relevant runtime
 capabilities and connection observation. It does not own deployment placement
 editing.
+
+Execution Node uses one **Статус** indicator for its latest check and
+preparation: **Не проверен**, **Проверен: Требуется подготовка**,
+**Проверен: Подготовлен**, and explicit unavailable, incompatible, blocked or
+error states. An existing but older active runtime is **Проверен: Требуется
+обновление**, not **Подготовлен**. The check compares the observed active
+bundle digest with the verified project bundle and explains a mismatch before
+plan creation or execution. A newer preparation result replaces the older
+check state; a later check supersedes the prior preparation display.
 
 The page may accept a password or private-key path only as a current-session
 runtime credential input. A server record stores transport metadata and, at

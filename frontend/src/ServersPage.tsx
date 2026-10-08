@@ -9,7 +9,7 @@ import type {
   SessionCredentialStatus,
 } from "./backend";
 import {
-  executionNodePreparationLabel,
+  executionNodeCombinedStatus,
   executionNodeSelectionLabel,
   executionNodeStatusLabel,
 } from "./executionNodeLabels";
@@ -680,6 +680,7 @@ function ExecutionNodePanel({
     status: "NOT_CONFIGURED",
     selectionSource: "NONE",
   };
+  const combinedStatus = executionNodeCombinedStatus(readiness, preparation);
   const choose = async () => {
     if (!selected) return;
     setBusy(true);
@@ -805,42 +806,27 @@ function ExecutionNodePanel({
           )}
         </div>
       )}
-      {readiness && (
-        <p
-          className={readiness.error ? "field-error" : "muted"}
-          role={readiness.error ? "alert" : undefined}
-        >
-          Проверка:{" "}
-          <StatusChip
-            tone={
-              readiness.error ? "danger" : executionNodeTone(readiness.status)
-            }
+      <p
+        className={combinedStatus.tone === "danger" ? "field-error" : "muted"}
+        role={combinedStatus.tone === "danger" ? "alert" : "status"}
+      >
+        Статус:{" "}
+        <StatusChip tone={combinedStatus.tone}>{combinedStatus.label}</StatusChip>
+        {combinedStatus.detail ? ` · ${combinedStatus.detail}` : ""}
+        {preparation?.verification
+          ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
+          : ""}
+      </p>
+      {[...(readiness?.findings || []), ...(preparation?.findings || [])].map(
+        (finding, index) => (
+          <p
+            className="field-error"
+            key={`${index}-${finding.code}`}
+            role="status"
           >
-            {executionNodeStatusLabel(readiness.status)}
-          </StatusChip>
-          {readiness.error ? ` · ${readiness.error.message}` : ""}
-        </p>
-      )}
-      {preparation && (
-        <p
-          className={preparation.error ? "field-error" : "muted"}
-          role={preparation.error ? "alert" : undefined}
-        >
-          Подготовка:{" "}
-          <StatusChip
-            tone={
-              preparation.error
-                ? "danger"
-                : executionNodeTone(preparation.status)
-            }
-          >
-            {executionNodePreparationLabel(preparation.status)}
-          </StatusChip>
-          {preparation.verification
-            ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
-            : ""}
-          {preparation.error ? ` · ${preparation.error.message}` : ""}
-        </p>
+            {finding.safeMessage}
+          </p>
+        ),
       )}
       <div className="actions">
         <button
@@ -848,6 +834,7 @@ function ExecutionNodePanel({
           onClick={async () => {
             setBusy(true);
             setError("");
+            setPreparation(null);
             try {
               setReadiness(await onCheck());
             } catch {
@@ -892,7 +879,16 @@ function ExecutionNodePanel({
                 setBusy(true);
                 setError("");
                 try {
-                  setPreparation(await onPrepare(planId));
+                  const result = await onPrepare(planId);
+                  setPreparation(result);
+                  if (result.status === "PREPARED") {
+                    setReadiness({
+                      status: "READY",
+                      nodeId: context?.selectedHostId,
+                      safeLabel: context?.safeLabel,
+                      checkedAt: new Date().toISOString(),
+                    });
+                  }
                 } catch {
                   setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
                 } finally {

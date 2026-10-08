@@ -223,8 +223,8 @@ func validSHA256(value string) bool {
 const ExecutionEventPageLimit = 256
 
 // Match the bounded Execution Node journal. The remote lifecycle reserves its
-// final 256 slots for critical events, but permits up to 8192 total records.
-const maxObservedExecutionEvents = 8192
+// final 256 slots for critical events, but permits up to 16384 total records.
+const maxObservedExecutionEvents = 16384
 
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
