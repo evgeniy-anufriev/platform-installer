@@ -1037,6 +1037,50 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       .then(setInstallationRun)
       .catch(() => {});
   }, [api, installationRun?.run?.runId, installationTab]);
+  useEffect(() => {
+    const runId = installationRun?.run?.runId;
+    if (
+      !runId ||
+      !api.getInstallationRun ||
+      !["STARTING", "RUNNING", "CANCELLING"].includes(
+        installationRun?.run?.state || "",
+      )
+    )
+      return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const next = await api.getInstallationRun!(runId);
+        if (!disposed && next.status === "READY" && next.run?.runId === runId) {
+          setInstallationRun(next);
+          if (
+            ["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(
+              next.run.state,
+            )
+          ) {
+            void collectAndDeliverSecretOutputs(runId).catch(() =>
+              setOutputDelivery(secretOutputDeliveryUnavailable()),
+            );
+            return;
+          }
+        }
+      } catch {
+        // An observation failure does not change the remote execution state.
+      }
+      if (!disposed) timer = setTimeout(() => void refresh(), 2000);
+    };
+    timer = setTimeout(() => void refresh(), 2000);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+    };
+  }, [
+    api,
+    installationRun?.run?.runId,
+    installationRun?.run?.state,
+    collectAndDeliverSecretOutputs,
+  ]);
   const chooseExportParent = async () => {
     if (!api.chooseProjectExportParent) return;
     const selected = await api.chooseProjectExportParent();

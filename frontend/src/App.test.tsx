@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -480,6 +480,58 @@ it("shows the read-only Installation state without requesting a deployment plan"
   expect(screen.getByText(/План не сформирован/)).toBeTruthy();
   expect(screen.getByRole("tab", { name: "План" })).toBeTruthy();
   expect(getInstallationState).toHaveBeenCalled();
+});
+
+it("refreshes a running installation without navigation or a SUCCEEDED event", async () => {
+  let onRunEvent:
+    | Parameters<
+        NonNullable<ProjectBackend["subscribeInstallationRunEvents"]>
+      >[0]
+    | undefined;
+  const getInstallationRun = vi.fn().mockResolvedValue({
+    status: "READY",
+    run: { runId: "run-refresh", state: "RUNNING", sequence: 4 },
+  });
+  const value = api({
+    getInstallationRun,
+    subscribeInstallationRunEvents: vi.fn((handler) => {
+      onRunEvent = handler;
+      return vi.fn();
+    }),
+  });
+  value.chooseProject.mockResolvedValue(project);
+  const view = render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  const event = (status: string, sequence: number): InstallationEventView => ({
+    runId: "run-refresh",
+    sequence,
+    timestamp: "2026-10-08T10:00:00Z",
+    eventType: "DIAGNOSTIC",
+    status,
+    safeMessage: "Safe event",
+    redacted: true,
+  } as InstallationEventView);
+  // Seed the known active run through the existing refresh handler.
+  await act(async () =>
+    onRunEvent?.({ subscriptionId: "", event: event("SUCCEEDED", 4) }),
+  );
+  expect(screen.getByText("Идёт установка")).toBeTruthy();
+  const calls = getInstallationRun.mock.calls.length;
+  await act(async () =>
+    onRunEvent?.({ subscriptionId: "", event: event("SUCCESS", 5) }),
+  );
+  expect(getInstallationRun).toHaveBeenCalledTimes(calls);
+  expect(screen.getByText("Идёт установка")).toBeTruthy();
+  getInstallationRun.mockResolvedValue({
+    status: "READY",
+    run: { runId: "run-refresh", state: "SUCCEEDED", sequence: 5 },
+  });
+  await waitFor(
+    () => expect(screen.getByText(/Установка выполнена/)).toBeTruthy(),
+    { timeout: 4000 },
+  );
+  expect(screen.getByText(/100%/)).toBeTruthy();
+  view.unmount();
 });
 
 it("shows a safe listing error when automatic output collection rejects", async () => {
