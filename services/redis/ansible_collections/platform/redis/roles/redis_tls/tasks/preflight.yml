@@ -2,6 +2,101 @@
 # A listener may be reused only by the exact already-active instance that this
 # role owns. This makes repeat apply idempotent while refusing an unrelated
 # daemon or stale former member before any config/unit is changed.
+- name: Inspect exact Redis member unit paths before rendering
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/platform-redis@{{ item.instance_name }}.service"
+    follow: false
+  register: _platform_redis_unit_path_stats
+  loop: "{{ _platform_redis_local_instances }}"
+
+- name: Reject unsafe existing Redis member unit paths
+  ansible.builtin.assert:
+    that: >-
+      not item.stat.exists or
+      (item.stat.isreg | default(false) and not (item.stat.islnk | default(false)))
+    fail_msg: REDIS_UNIT_PATH_UNSAFE
+  loop: "{{ _platform_redis_unit_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item.id }}"
+
+- name: Read ownership headers from existing Redis member units
+  ansible.builtin.slurp:
+    src: "/etc/systemd/system/platform-redis@{{ item.item.instance_name }}.service"
+  register: _platform_redis_existing_unit_headers
+  loop: "{{ _platform_redis_unit_path_stats.results }}"
+  when: item.stat.exists
+  loop_control:
+    label: "{{ item.item.id }}"
+
+- name: Refuse replacement of foreign Redis member units
+  ansible.builtin.assert:
+    that: >-
+      (item.content | b64decode | split('\n') | first)
+      == ('# platform-redis-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/redis')
+    fail_msg: REDIS_UNIT_OWNERSHIP_UNKNOWN
+  loop: "{{ _platform_redis_existing_unit_headers.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item.id }}"
+
+- name: Inspect exact Sentinel unit paths before rendering
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/platform-redis-sentinel@{{ item.instance_name }}.service"
+    follow: false
+  register: _platform_sentinel_unit_path_stats
+  loop: "{{ _platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel') | list }}"
+
+- name: Reject unsafe existing Sentinel unit paths
+  ansible.builtin.assert:
+    that: >-
+      not item.stat.exists or
+      (item.stat.isreg | default(false) and not (item.stat.islnk | default(false)))
+    fail_msg: REDIS_UNIT_PATH_UNSAFE
+  loop: "{{ _platform_sentinel_unit_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item.id }}"
+
+- name: Read ownership headers from existing Sentinel units
+  ansible.builtin.slurp:
+    src: "/etc/systemd/system/platform-redis-sentinel@{{ item.item.instance_name }}.service"
+  register: _platform_sentinel_existing_unit_headers
+  loop: "{{ _platform_sentinel_unit_path_stats.results }}"
+  when: item.stat.exists
+  loop_control:
+    label: "{{ item.item.id }}"
+
+- name: Refuse replacement of foreign Sentinel units
+  ansible.builtin.assert:
+    that: >-
+      (item.content | b64decode | split('\n') | first)
+      == ('# platform-redis-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/sentinel')
+    fail_msg: REDIS_UNIT_OWNERSHIP_UNKNOWN
+  loop: "{{ _platform_sentinel_existing_unit_headers.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item.id }}"
+
+- name: Inspect prior member-scoped Redis and Sentinel unit files
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ item }}"
+    follow: false
+  loop: >-
+    {{ (_platform_redis_local_instances
+        | map(attribute='legacy_instance_name')
+        | map('regex_replace', '^', 'platform-redis@')
+        | map('regex_replace', '$', '.service') | list)
+       + (_platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel')
+          | map(attribute='legacy_instance_name')
+          | map('regex_replace', '^', 'platform-redis-sentinel@')
+          | map('regex_replace', '$', '.service') | list) }}
+  register: _platform_redis_legacy_unit_files
+
+- name: Refuse automatic adoption of prior Redis unit names
+  ansible.builtin.assert:
+    that: not item.stat.exists
+    fail_msg: REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP
+  loop: "{{ _platform_redis_legacy_unit_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
 - name: Inspect existing Redis member state marker
   ansible.builtin.stat:
     path: "{{ item.data_directory }}/.platform-redis-mode"

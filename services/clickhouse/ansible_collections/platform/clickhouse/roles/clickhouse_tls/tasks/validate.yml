@@ -3,7 +3,7 @@
   ansible.builtin.assert:
     that:
       - platform_clickhouse_mode in ['standalone', 'raft-ha']
-      - platform_clickhouse_deployment_id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - platform_clickhouse_deployment_id is match('^[a-z0-9][a-z0-9-]*$')
       - platform_clickhouse_deployment_id | length <= 128
       - platform_clickhouse_instances is sequence
       - platform_clickhouse_instances is not string
@@ -23,6 +23,9 @@
       - item is mapping
       - item.id | default('') is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
       - item.id | length <= 128
+      - item.id is match('^.+-[1-9][0-9]*$')
+      - ('platform-clickhouse-server@' ~ platform_clickhouse_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
+      - platform_clickhouse_mode != 'raft-ha' or ('platform-clickhouse-keeper@' ~ platform_clickhouse_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
       - item.host | default('') is string
       - item.host | length > 0
       - item.address | default('') is string

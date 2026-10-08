@@ -117,7 +117,7 @@
 - name: Install exact member-owned ClickHouse server units
   ansible.builtin.template:
     src: server.service.j2
-    dest: "/etc/systemd/system/platform-clickhouse-server-{{ clickhouse_member.unit_id[:16] }}.service"
+    dest: "/etc/systemd/system/{{ clickhouse_member.server_unit_name }}"
     owner: root
     group: root
     mode: '0644'
@@ -130,7 +130,7 @@
 - name: Install exact member-owned Keeper units only for HA
   ansible.builtin.template:
     src: keeper.service.j2
-    dest: "/etc/systemd/system/platform-clickhouse-keeper-{{ clickhouse_member.unit_id[:16] }}.service"
+    dest: "/etc/systemd/system/{{ clickhouse_member.keeper_unit_name }}"
     owner: root
     group: root
     mode: '0644'
@@ -157,7 +157,7 @@
 
 - name: Start or restart isolated Keeper voters before ClickHouse servers
   ansible.builtin.systemd_service:
-    name: "platform-clickhouse-keeper-{{ clickhouse_member.unit_id[:16] }}.service"
+    name: "{{ clickhouse_member.keeper_unit_name }}"
     enabled: true
     state: >-
       {{ 'restarted' if _platform_clickhouse_restart_all or
@@ -172,7 +172,7 @@
 
 - name: Start or restart isolated ClickHouse servers
   ansible.builtin.systemd_service:
-    name: "platform-clickhouse-server-{{ clickhouse_member.unit_id[:16] }}.service"
+    name: "{{ clickhouse_member.server_unit_name }}"
     enabled: true
     state: >-
       {{ 'restarted' if _platform_clickhouse_restart_all or

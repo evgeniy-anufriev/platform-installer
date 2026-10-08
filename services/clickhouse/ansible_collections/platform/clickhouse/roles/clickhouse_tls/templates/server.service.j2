@@ -1,9 +1,9 @@
 # platform-clickhouse-managed: {{ platform_clickhouse_deployment_id }}/{{ clickhouse_member.id }}/server
 [Unit]
 Description=Platform ClickHouse server {{ clickhouse_member.id }}
-After={{ 'network-online.target platform-clickhouse-keeper-' ~ clickhouse_member.unit_id[:16] ~ '.service' if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
+After={{ 'network-online.target ' ~ clickhouse_member.keeper_unit_name if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
 Wants=network-online.target
-Requires={{ 'platform-clickhouse-keeper-' ~ clickhouse_member.unit_id[:16] ~ '.service' if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
+Requires={{ clickhouse_member.keeper_unit_name if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
 
 [Service]
 Type=simple

@@ -228,7 +228,7 @@
   register: platform_kafka_member_environment
   when: not (platform_kafka_verify_only | bool)
 
-- name: Install reusable Kafka systemd template
+- name: Install exact Kafka member systemd unit
   ansible.builtin.template:
     src: kafka.service.j2
     dest: "{{ kafka_member.systemd_unit_destination }}"

@@ -1,7 +1,7 @@
 ---
 - name: Observe the exact ClickHouse server unit
   ansible.builtin.command:
-    argv: [systemctl, is-active, "platform-clickhouse-server-{{ clickhouse_member.unit_id[:16] }}.service"]
+    argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
   register: _platform_clickhouse_server_status
   changed_when: false
   failed_when: false
@@ -15,7 +15,7 @@
 
 - name: Observe the exact Keeper unit only for HA
   ansible.builtin.command:
-    argv: [systemctl, is-active, "platform-clickhouse-keeper-{{ clickhouse_member.unit_id[:16] }}.service"]
+    argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
   register: _platform_clickhouse_keeper_status
   changed_when: false
   failed_when: false

@@ -51,6 +51,7 @@
               - _platform_clickhouse_local_instances | length == 1
               - _platform_clickhouse_local_instances[0].https_port | int == 8443
               - _platform_clickhouse_local_ports | length == 3
+              - _platform_clickhouse_local_instances[0].server_unit_name == 'platform-clickhouse-server@clickhouse-qa-1.service'
 
         - name: Validate three paired members on one host
           ansible.builtin.include_role:
@@ -83,6 +84,8 @@
               - _platform_clickhouse_local_instances | map(attribute='slot') | unique | list | length == 3
               - _platform_clickhouse_local_ports | unique | list | length == 15
               - _platform_clickhouse_local_instances | map(attribute='https_port') | list == [8443, 8444, 8445]
+              - _platform_clickhouse_local_instances | map(attribute='server_unit_name') | list == ['platform-clickhouse-server@clickhouse-qa-1.service', 'platform-clickhouse-server@clickhouse-qa-2.service', 'platform-clickhouse-server@clickhouse-qa-3.service']
+              - _platform_clickhouse_local_instances | map(attribute='keeper_unit_name') | list == ['platform-clickhouse-keeper@clickhouse-qa-1.service', 'platform-clickhouse-keeper@clickhouse-qa-2.service', 'platform-clickhouse-keeper@clickhouse-qa-3.service']
 
         - name: Exercise read-only QA-host ownership preflight when explicitly requested
           ansible.builtin.include_role:

@@ -3,6 +3,8 @@
   ansible.builtin.assert:
     that:
       - platform_postgresql_mode in ['standalone', 'pg_auto_failover']
+      - platform_postgresql_deployment_id is string
+      - platform_postgresql_deployment_id is match('^[a-z0-9][a-z0-9-]*$')
       - platform_postgresql_advanced_config is mapping
       - platform_postgresql_admin_superuser is mapping
       - platform_postgresql_admin_superuser.username is match('^[A-Za-z_][A-Za-z0-9_]{0,62}$')
@@ -18,6 +20,8 @@
       - platform_postgresql_instances is not string
       - item is mapping
       - item.id is defined
+      - item.id | string is match('^.+-[1-9][0-9]*$')
+      - ('platform-postgresql@' ~ platform_postgresql_deployment_id ~ '-' ~ ((item.id | string) | regex_replace('^.*-', '')) ~ '.service') | length <= 255
       - item.host is defined
       - platform_postgresql_mode != 'pg_auto_failover' or item.hostname is defined
       - platform_postgresql_mode != 'pg_auto_failover' or item.address is defined
@@ -67,6 +71,15 @@
   when:
     - platform_postgresql_instances | length > 1
     - item.0.host == item.1.host
+
+- name: Reject duplicate PostgreSQL unit names on one host
+  ansible.builtin.assert:
+    that: >-
+      (platform_postgresql_instances | selectattr('host', 'equalto', item)
+       | map(attribute='id') | map('regex_replace', '^.*-', '') | unique | length)
+      == (platform_postgresql_instances | selectattr('host', 'equalto', item) | list | length)
+    fail_msg: POSTGRES_UNIT_NAME_COLLISION
+  loop: "{{ platform_postgresql_instances | map(attribute='host') | unique | list }}"
 
 - name: Reject duplicate PostgreSQL member paths
   ansible.builtin.assert:

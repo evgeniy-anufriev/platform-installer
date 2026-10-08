@@ -1,3 +1,4 @@
+# platform-redis-managed: {{ platform_redis_deployment_id }}/{{ redis_member.id }}/sentinel
 [Unit]
 Description=Platform Redis Sentinel TLS member {{ redis_member.id }}
 After=platform-redis@{{ redis_member.instance_name }}.service

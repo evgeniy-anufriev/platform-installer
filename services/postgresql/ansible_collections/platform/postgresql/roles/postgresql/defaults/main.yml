@@ -1,6 +1,7 @@
 platform_postgresql_version: "16.14"
 platform_postgresql_pg_auto_failover_version: "2.2"
 platform_postgresql_mode: standalone
+platform_postgresql_deployment_id: "{{ platform_execution_service_deployment | default('postgresql', true) }}"
 platform_postgresql_port: 5432
 platform_postgresql_user: postgres
 platform_postgresql_group: postgres

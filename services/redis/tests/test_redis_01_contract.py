@@ -93,6 +93,19 @@ class RedisContractTests(unittest.TestCase):
         self.assertEqual(value["listeners"]["client"]["scope"], "member")
         self.assertEqual(value["listeners"]["sentinel"]["scope"], "member")
 
+    def test_instance_units_use_numeric_member_suffix_and_preserve_legacy_guard(self):
+        role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
+        normalize = (role / "tasks" / "normalize.yml").read_text(encoding="utf-8")
+        validate = (role / "tasks" / "validate.yml").read_text(encoding="utf-8")
+        preflight = (role / "tasks" / "preflight.yml").read_text(encoding="utf-8")
+        self.assertIn("platform_redis_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', ''))", normalize)
+        self.assertIn("^.+-[1-9][0-9]*$", validate)
+        self.assertIn("REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
+        self.assertIn("REDIS_UNIT_OWNERSHIP_UNKNOWN", preflight)
+        self.assertIn("REDIS_UNIT_PATH_UNSAFE", preflight)
+        self.assertIn("# platform-redis-managed:", (role / "templates/redis.service.j2").read_text(encoding="utf-8"))
+        self.assertIn("# platform-redis-managed:", (role / "templates/sentinel.service.j2").read_text(encoding="utf-8"))
+
     def test_repository_source_version_matches_dnf_repoquery_identity(self):
         value = manifest()
         self.assertEqual(value["runtimeRequirements"][0]["version"], "8.6.4")

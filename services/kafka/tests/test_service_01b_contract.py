@@ -66,6 +66,19 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("listener_ports", resources)
         self.assertIn("managed_paths", resources)
 
+    def test_systemd_unit_uses_deployment_and_numeric_member_identity(self):
+        source = (ROLE / "tasks" / "normalize_member.yml").read_text(encoding="utf-8")
+        self.assertIn("_platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service", source)
+        self.assertIn("_platform_kafka_normalized_runtime_directory ~ '/systemd.env'", source)
+        self.assertIn("legacy_systemd_unit_name", source)
+        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        self.assertIn("KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP", main)
+        self.assertIn("KAFKA_UNIT_NAME_COLLISION", main)
+        self.assertIn("KAFKA_UNIT_OWNERSHIP_UNKNOWN", main)
+        self.assertLess(main.index("Validate common Kafka member inputs"), main.index("Deliver selected Kafka offline artifacts"))
+        self.assertLess(main.index("Reject same-host Kafka unit-name collisions"), main.index("Deliver selected Kafka offline artifacts"))
+        self.assertIn("# platform-kafka-managed:", (ROLE / "templates/kafka.service.j2").read_text(encoding="utf-8"))
+
     def test_member_role_uses_controller_count_and_member_role_for_format_strategy(self):
         source = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("controller.quorum.voters", source)

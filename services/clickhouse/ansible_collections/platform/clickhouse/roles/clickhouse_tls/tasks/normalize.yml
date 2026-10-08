@@ -5,7 +5,7 @@
 
 - name: Assign stable IDs, host-local listener ports and owned paths
   ansible.builtin.set_fact:
-    _platform_clickhouse_instances: "{{ _platform_clickhouse_instances + [item | combine({'slot': clickhouse_slot + 1, 'host_ordinal': clickhouse_host_ordinal | int, 'https_port': (item.port | int if item.port is defined else (platform_clickhouse_port | int) + (clickhouse_host_ordinal | int)), 'native_port': (platform_clickhouse_native_port | int) + (clickhouse_host_ordinal | int), 'interserver_port': (platform_clickhouse_interserver_port | int) + (clickhouse_host_ordinal | int), 'keeper_client_port': (platform_clickhouse_keeper_client_port | int) + (clickhouse_host_ordinal | int), 'keeper_raft_port': (platform_clickhouse_keeper_raft_port | int) + (clickhouse_host_ordinal | int), 'unit_id': (platform_clickhouse_deployment_id ~ '\n' ~ item.id) | hash('sha256'), 'config_directory': platform_clickhouse_config_root ~ '/' ~ platform_clickhouse_deployment_id ~ '/' ~ item.id, 'data_directory': platform_clickhouse_data_root ~ '/' ~ platform_clickhouse_deployment_id ~ '/' ~ item.id, 'log_directory': platform_clickhouse_log_root ~ '/' ~ platform_clickhouse_deployment_id ~ '/' ~ item.id})] }}"
+    _platform_clickhouse_instances: "{{ _platform_clickhouse_instances + [item | combine({'slot': clickhouse_slot + 1, 'host_ordinal': clickhouse_host_ordinal | int, 'https_port': (item.port | int if item.port is defined else (platform_clickhouse_port | int) + (clickhouse_host_ordinal | int)), 'native_port': (platform_clickhouse_native_port | int) + (clickhouse_host_ordinal | int), 'interserver_port': (platform_clickhouse_interserver_port | int) + (clickhouse_host_ordinal | int), 'keeper_client_port': (platform_clickhouse_keeper_client_port | int) + (clickhouse_host_ordinal | int), 'keeper_raft_port': (platform_clickhouse_keeper_raft_port | int) + (clickhouse_host_ordinal | int), 'unit_id': (platform_clickhouse_deployment_id ~ '\n' ~ item.id) | hash('sha256'), 'server_unit_name': 'platform-clickhouse-server@' ~ platform_clickhouse_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service', 'keeper_unit_name': 'platform-clickhouse-keeper@' ~ platform_clickhouse_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service', 'legacy_server_unit_name': 'platform-clickhouse-server-' ~ ((platform_clickhouse_deployment_id ~ '\n' ~ item.id) | hash('sha256'))[:16] ~ '.service', 'legacy_keeper_unit_name': 'platform-clickhouse-keeper-' ~ ((platform_clickhouse_deployment_id ~ '\n' ~ item.id) | hash('sha256'))[:16] ~ '.service', 'config_directory': platform_clickhouse_config_root ~ '/' ~ platform_clickhouse_deployment_id ~ '/' ~ item.id, 'data_directory': platform_clickhouse_data_root ~ '/' ~ platform_clickhouse_deployment_id ~ '/' ~ item.id, 'log_directory': platform_clickhouse_log_root ~ '/' ~ platform_clickhouse_deployment_id ~ '/' ~ item.id})] }}"
   vars:
     clickhouse_host_ordinal: "{{ _platform_clickhouse_instances | selectattr('host', 'equalto', item.host) | list | length }}"
   loop: "{{ platform_clickhouse_instances | sort(attribute='id') }}"
@@ -16,6 +16,20 @@
 - name: Select members on the current host
   ansible.builtin.set_fact:
     _platform_clickhouse_local_instances: "{{ _platform_clickhouse_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+
+- name: Reject ClickHouse unit-name collisions on each target host
+  ansible.builtin.assert:
+    that:
+      - >-
+        ((_platform_clickhouse_instances | selectattr('host', 'equalto', item)
+          | map(attribute='server_unit_name') | list)
+         + ((_platform_clickhouse_instances | selectattr('host', 'equalto', item)
+          | map(attribute='keeper_unit_name') | list) if platform_clickhouse_mode == 'raft-ha' else []))
+        | unique | length ==
+        ((_platform_clickhouse_instances | selectattr('host', 'equalto', item)
+          | list | length) * (2 if platform_clickhouse_mode == 'raft-ha' else 1))
+    fail_msg: CLICKHOUSE_UNIT_NAME_COLLISION
+  loop: "{{ _platform_clickhouse_instances | map(attribute='host') | unique | list }}"
 
 - name: Reject listener overflow for every member
   ansible.builtin.assert:

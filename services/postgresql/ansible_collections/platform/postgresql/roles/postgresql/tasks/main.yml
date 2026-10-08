@@ -36,6 +36,68 @@
 - name: Validate PostgreSQL service inputs
   ansible.builtin.include_tasks: validate.yml
 
+- name: Resolve the one PostgreSQL member placed on this host
+  ansible.builtin.set_fact:
+    _platform_postgresql_local_members: "{{ platform_postgresql_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+
+- name: Require exactly one PostgreSQL service member on this host
+  ansible.builtin.assert:
+    that: _platform_postgresql_local_members | length == 1
+    fail_msg: POSTGRES_LOCAL_MEMBER_REQUIRED
+
+- name: Derive the exact PostgreSQL systemd unit name
+  ansible.builtin.set_fact:
+    _platform_postgresql_unit_name: >-
+      {{ 'platform-postgresql@' ~ platform_postgresql_deployment_id ~ '-'
+         ~ ((_platform_postgresql_local_members | first).id | string | regex_replace('^.*-', '')) ~ '.service' }}
+
+- name: Inspect the legacy PostgreSQL unit path before mutation
+  ansible.builtin.stat:
+    path: /etc/systemd/system/postgresql.service
+    follow: false
+  register: _platform_postgresql_legacy_unit
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Refuse automatic adoption of the legacy PostgreSQL unit
+  ansible.builtin.assert:
+    that: not _platform_postgresql_legacy_unit.stat.exists
+    fail_msg: POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Inspect the exact PostgreSQL unit path before mutation
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
+    follow: false
+  register: _platform_postgresql_unit_path
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Refuse a substituted PostgreSQL unit path
+  ansible.builtin.assert:
+    that: >-
+      not _platform_postgresql_unit_path.stat.exists or
+      (_platform_postgresql_unit_path.stat.isreg and not _platform_postgresql_unit_path.stat.islnk)
+    fail_msg: POSTGRES_UNIT_PATH_UNSAFE
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Read ownership header from an existing PostgreSQL unit
+  ansible.builtin.slurp:
+    src: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
+  register: _platform_postgresql_existing_unit
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - _platform_postgresql_unit_path.stat.exists
+
+- name: Refuse replacement of a foreign PostgreSQL unit
+  ansible.builtin.assert:
+    that: >-
+      (_platform_postgresql_existing_unit.content | b64decode | split('\n') | first)
+      == ('# platform-postgresql-managed: ' ~ platform_postgresql_deployment_id ~ '/'
+          ~ (_platform_postgresql_local_members | first).id)
+    fail_msg: POSTGRES_UNIT_OWNERSHIP_UNKNOWN
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - _platform_postgresql_unit_path.stat.exists
+
 - name: Resolve the effective PostgreSQL member port
   ansible.builtin.set_fact:
     _platform_postgresql_effective_port: >-
@@ -200,7 +262,7 @@
 - name: Install the member-scoped PostgreSQL systemd unit
   ansible.builtin.template:
     src: postgresql.service.j2
-    dest: "/etc/systemd/system/{{ platform_postgresql_service_name }}.service"
+    dest: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
     owner: root
     group: root
     mode: '0644'
@@ -214,7 +276,7 @@
 
 - name: Enable and start member-scoped PostgreSQL
   ansible.builtin.systemd_service:
-    name: "{{ platform_postgresql_service_name }}.service"
+    name: "{{ _platform_postgresql_unit_name }}"
     enabled: true
     state: started
   when: not (platform_postgresql_verify_only | bool)
@@ -469,7 +531,7 @@
 
 - name: Verify PostgreSQL systemd state read-only
   ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ platform_postgresql_service_name }}.service"]
+    argv: [systemctl, is-active, "{{ _platform_postgresql_unit_name }}"]
   register: platform_postgresql_service_state
   changed_when: false
   when: platform_postgresql_verify_only | bool

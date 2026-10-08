@@ -2,7 +2,6 @@
 """Explicit Vault-only Raft clear; never remove the identity-bound member root."""
 import ctypes
 from contextlib import ExitStack
-import hashlib
 import json
 import os
 import pwd
@@ -192,7 +191,11 @@ def clear_member(deployment, member, confirmation, inspect_only=False):
             'VAULT_CLEAR_SAFE_DELETE_UNAVAILABLE')
     private_mount_namespace()
     uid = pwd.getpwnam(SERVICE).pw_uid
-    unit = 'platform-vault-' + hashlib.sha256((deployment + '\n' + member).encode()).hexdigest()
+    require(re.fullmatch(r'[a-z0-9][a-z0-9-]*', deployment) is not None and
+            re.fullmatch(r'.+-[1-9][0-9]*', member) is not None,
+            'VAULT_CLEAR_IDENTITY_INVALID')
+    unit = 'platform-vault@' + deployment + '-' + member.rsplit('-', 1)[1]
+    require(len(unit + '.service') <= 255, 'VAULT_CLEAR_IDENTITY_INVALID')
     data = DATA_ROOT + '/' + deployment + '/' + member
     config = CONFIG_ROOT + '/' + deployment + '/' + member + '/vault.hcl'
     with ExitStack() as stack:

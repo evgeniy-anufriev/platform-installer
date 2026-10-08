@@ -24,6 +24,14 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("Initialize PostgreSQL exactly once", self.main)
         self.assertIn("platform_postgresql_mode == 'standalone'", self.main)
 
+    def test_postgresql_unit_is_member_scoped_and_legacy_unit_is_not_adopted(self):
+        self.assertIn("platform-postgresql@' ~ platform_postgresql_deployment_id", self.main)
+        self.assertIn("dest: \"/etc/systemd/system/{{ _platform_postgresql_unit_name }}\"", self.main)
+        self.assertIn("argv: [systemctl, is-active, \"{{ _platform_postgresql_unit_name }}\"]", self.main)
+        self.assertIn("POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP", self.main)
+        self.assertIn("POSTGRES_UNIT_NAME_COLLISION", (ROLE / "tasks/validate.yml").read_text(encoding="utf-8"))
+        self.assertIn("platform-postgresql-managed:", (ROLE / "templates/postgresql.service.j2").read_text(encoding="utf-8"))
+
     def test_pg_auto_failover_is_not_required_by_standalone(self):
         gate = self.main[: self.main.index("Validate PostgreSQL service inputs")]
         self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", gate)

@@ -21,3 +21,4 @@
         that:
           - (_platform_vault_instances | map(attribute='api_port') | list) == ([8200] if platform_vault_mode == 'standalone' else [8200, 8202, 8204])
           - (_platform_vault_instances | map(attribute='cluster_port') | list) == ([8201] if platform_vault_mode == 'standalone' else [8201, 8203, 8205])
+          - (_platform_vault_instances | map(attribute='instance_name') | list) == ['platform-vault@vault-standalone-1']

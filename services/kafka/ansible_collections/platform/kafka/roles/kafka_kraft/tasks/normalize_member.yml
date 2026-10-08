@@ -4,13 +4,19 @@
     _platform_kafka_normalized_roles: "{{ kafka_input_member.roles | unique | sort }}"
     _platform_kafka_normalized_config_directory: "{{ kafka_input_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_input_member.id) }}"
     _platform_kafka_normalized_compatibility_unit: "{{ kafka_input_member._compatibility_unit | default({}) }}"
+    _platform_kafka_normalized_deployment_id: "{{ kafka_input_member.deployment_id | default(platform_kafka_deployment_id) }}"
+    _platform_kafka_normalized_unit_service: >-
+      {{ 'platform-kafka' if ('broker' in kafka_input_member.roles and 'controller' in kafka_input_member.roles)
+         else ('platform-kafka-broker' if 'broker' in kafka_input_member.roles else 'platform-kafka-controller') }}
+    _platform_kafka_normalized_member_number: "{{ kafka_input_member.id | regex_replace('^.*-', '') }}"
+    _platform_kafka_normalized_legacy_unit_name: "{{ _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
 
 - name: Derive normalized Kafka member runtime resources
   ansible.builtin.set_fact:
     _platform_kafka_normalized_runtime_directory: "{{ _platform_kafka_normalized_compatibility_unit.runtime_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
-    _platform_kafka_normalized_unit_name: "{{ _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
-    _platform_kafka_normalized_unit_destination: "{{ _platform_kafka_normalized_compatibility_unit.destination | default('/etc/systemd/system/' ~ platform_kafka_service_name ~ '@.service') }}"
-    _platform_kafka_normalized_environment_pattern: "{{ _platform_kafka_normalized_compatibility_unit.environment_pattern | default(platform_kafka_config_directory ~ '/%i/systemd.env') }}"
+    _platform_kafka_normalized_unit_name: "{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
+    _platform_kafka_normalized_unit_destination: "/etc/systemd/system/{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
+    _platform_kafka_normalized_environment_pattern: "{{ _platform_kafka_normalized_compatibility_unit.environment_pattern | default(_platform_kafka_normalized_runtime_directory ~ '/systemd.env') }}"
     _platform_kafka_normalized_description: "{{ _platform_kafka_normalized_compatibility_unit.description | default('Apache Kafka 4.3.1 KRaft member %i') }}"
     _platform_kafka_normalized_listeners: "{{ kafka_input_member.listeners | default({}) }}"
     _platform_kafka_normalized_client_listener_port: "{{ kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'client') | map(attribute='value.port') | list | first | default(0, true) }}"
@@ -62,6 +68,8 @@
     _platform_kafka_normalized_member: >-
       {{ (kafka_input_member | combine({
            'id': kafka_input_member.id | string,
+           'deployment_id': _platform_kafka_normalized_deployment_id,
+           'legacy_systemd_unit_name': _platform_kafka_normalized_legacy_unit_name ~ '.service',
            'node_id': kafka_input_member.node_id | int,
            'roles': _platform_kafka_normalized_roles,
            'listeners': _platform_kafka_normalized_listeners,
@@ -74,6 +82,7 @@
            'config_directory': _platform_kafka_normalized_config_directory,
            'runtime_directory': _platform_kafka_normalized_runtime_directory,
            'systemd_unit_name': _platform_kafka_normalized_unit_name,
+           'systemd_unit_ownership_marker': '# platform-kafka-managed: ' ~ _platform_kafka_normalized_unit_name,
            'systemd_unit_destination': _platform_kafka_normalized_unit_destination,
            'systemd_environment_pattern': _platform_kafka_normalized_environment_pattern,
            'systemd_description': _platform_kafka_normalized_description,

@@ -14,7 +14,7 @@
       - "{{ platform_postgresql_pg_autoctl_config_root }}{{ platform_postgresql_data_directory }}"
       - "{{ platform_postgresql_pg_autoctl_state_root }}{{ platform_postgresql_data_directory }}"
       - /var/lib/pgsql/.pgpass
-    _platform_postgresql_clear_unit: "/etc/systemd/system/{{ platform_postgresql_service_name }}.service"
+    _platform_postgresql_clear_unit: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
 
 - name: Validate PostgreSQL clear paths before mutation
   ansible.builtin.assert:
@@ -31,7 +31,7 @@
 
 - name: Stop and disable the selected PostgreSQL unit
   ansible.builtin.systemd_service:
-    name: "{{ platform_postgresql_service_name }}.service"
+    name: "{{ _platform_postgresql_unit_name }}"
     state: stopped
     enabled: false
   failed_when: false
@@ -163,7 +163,7 @@
 
 - name: Clear stale state for the selected PostgreSQL unit
   ansible.builtin.command:
-    argv: [systemctl, reset-failed, "{{ platform_postgresql_service_name }}.service"]
+    argv: [systemctl, reset-failed, "{{ _platform_postgresql_unit_name }}"]
   changed_when: false
   failed_when: false
 

@@ -1,6 +1,6 @@
 ---
 platform_vault_mode: standalone
-platform_vault_deployment_id: vault
+platform_vault_deployment_id: "{{ platform_execution_service_deployment | default('vault', true) }}"
 platform_vault_project_id: ''
 platform_vault_api_port: 8200
 platform_vault_cluster_port: 8201

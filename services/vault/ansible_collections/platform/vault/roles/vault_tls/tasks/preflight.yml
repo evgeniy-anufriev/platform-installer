@@ -159,6 +159,21 @@
   loop_control:
     label: "{{ item.id }}"
 
+- name: Inspect legacy hash-named Vault units without following links
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ item.legacy_instance_name }}.service"
+    follow: false
+  loop: "{{ _platform_vault_local_instances }}"
+  register: _platform_vault_legacy_unit_files
+
+- name: Refuse automatic adoption of legacy Vault unit names
+  ansible.builtin.assert:
+    that: not item.stat.exists
+    fail_msg: VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP
+  loop: "{{ _platform_vault_legacy_unit_files.results }}"
+  loop_control:
+    label: "{{ item.item.id }}"
+
 - name: Inspect exact Vault audit rotation files without following links
   ansible.builtin.stat:
     path: "/etc/logrotate.d/{{ item.instance_name }}"

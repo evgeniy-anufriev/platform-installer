@@ -36,13 +36,31 @@
 
 - name: Inspect exact instance-unit paths before rendering
   ansible.builtin.stat:
-    path: "/etc/systemd/system/platform-clickhouse-{{ item.1 }}-{{ item.0.unit_id[:16] }}.service"
+    path: "/etc/systemd/system/{{ item.0.server_unit_name if item.1 == 'server' else item.0.keeper_unit_name }}"
     follow: false
   loop: >-
     {{ _platform_clickhouse_local_instances |
        product(['server', 'keeper'] if platform_clickhouse_mode == 'raft-ha' else ['server']) | list }}
   register: _platform_clickhouse_unit_path_stats
   no_log: true
+
+- name: Inspect legacy hash-named ClickHouse unit paths
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ item }}"
+    follow: false
+  loop: >-
+    {{ (_platform_clickhouse_local_instances | map(attribute='legacy_server_unit_name') | list)
+       + ((_platform_clickhouse_local_instances | map(attribute='legacy_keeper_unit_name') | list)
+          if platform_clickhouse_mode == 'raft-ha' else []) }}
+  register: _platform_clickhouse_legacy_unit_path_stats
+
+- name: Refuse automatic adoption of legacy ClickHouse unit names
+  ansible.builtin.assert:
+    that: not item.stat.exists
+    fail_msg: CLICKHOUSE_LEGACY_UNIT_REQUIRES_S11_CLEANUP
+  loop: "{{ _platform_clickhouse_legacy_unit_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
 - name: Refuse symlinked instance-unit paths
   ansible.builtin.assert:
@@ -54,7 +72,7 @@
 
 - name: Read existing instance-unit ownership headers
   ansible.builtin.slurp:
-    path: "/etc/systemd/system/platform-clickhouse-{{ item.item.1 }}-{{ item.item.0.unit_id[:16] }}.service"
+    path: "/etc/systemd/system/{{ item.item.0.server_unit_name if item.item.1 == 'server' else item.item.0.keeper_unit_name }}"
   loop: "{{ _platform_clickhouse_unit_path_stats.results }}"
   when: item.stat.isreg | default(false)
   register: _platform_clickhouse_existing_unit_headers
