@@ -640,15 +640,37 @@ func (t OpenSSHTransport) cleanupSnapshotStaging(node Node, runID, requestID, ar
 	_, _ = t.ssh(ctx, node, "sh", []string{"-s", "--", runID, requestID, archiveDigest}, []byte(script))
 }
 
-func (t OpenSSHTransport) cleanupSnapshotUpload(node Node, runID string) {
-	if !validRuntimeToken(runID) {
+func (t OpenSSHTransport) cleanupSnapshotUpload(parent context.Context, node Node, runID, purpose, remote string) {
+	if remote == "" || remote != projectUploadPath(runID, purpose) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 30*time.Second)
 	defer cancel()
-	script := "set -eu\ncase \"$1\" in installer-*) ;; *) exit 64;; esac\ntemporary=/var/tmp/platform-installer/execution-plan/$1\ncase \"$temporary\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nrm -rf -- \"$temporary\"\n"
-	_, _ = t.ssh(ctx, node, "sh", []string{"-s", "--", runID}, []byte(script))
+	script := "set -eu\ntemporary=$1\nrm -rf -- \"$temporary\"\n"
+	_, _ = t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte(script))
 }
+
+func projectUploadPath(runID, purpose string) string {
+	if !validRuntimeToken(runID) {
+		return ""
+	}
+	switch purpose {
+	case "candidate":
+		return "/var/tmp/platform-installer/execution-plan/" + runID
+	case "plan", "snapshot":
+		return "/var/tmp/platform-installer-project-" + runID
+	default:
+		return ""
+	}
+}
+
+const privateProjectStageScript = `set -eu
+case "$1" in /var/tmp/platform-installer-project-installer-*) ;; *) exit 64;; esac
+[ -d /var/tmp ] && [ ! -L /var/tmp ] || exit 64
+[ "$(stat -c %u /var/tmp)" = 0 ] && [ "$(stat -c %a /var/tmp)" = 1777 ] || exit 64
+umask 077
+mkdir -- "$1"
+`
 
 func (t OpenSSHTransport) stagePlanProject(ctx context.Context, node Node, projectRoot, runID, purpose string) error {
 	archive, err := createProjectArchive(projectRoot)
@@ -684,27 +706,34 @@ func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, ar
 		return "", closeErr
 	}
 	archiveDigest := "sha256:" + hex.EncodeToString(digest.Sum(nil))
-	identity, err := t.Identity.IdentityFile(node.CredentialRef)
+	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return "", err
 	}
-	remote := "/var/tmp/platform-installer/execution-plan/" + runID
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte("set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nbase=/var/tmp/platform-installer\nparent=$base/execution-plan\n[ -d \"$base\" ] && [ ! -L \"$base\" ] || exit 64\n[ ! -L \"$parent\" ] || exit 64\numask 077\ninstall -d -m 0700 -- \"$parent\"\n[ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 64\n[ \"$(stat -c %u \"$parent\")\" = \"$(id -u)\" ] || exit 64\nmkdir -- \"$1\"\n")); err != nil {
-		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
+	remote := projectUploadPath(runID, purpose)
+	if remote == "" {
+		return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
+	}
+	claim := privateProjectStageScript
+	if purpose == "candidate" {
+		claim = "set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\nbase=/var/tmp/platform-installer\nparent=$base/execution-plan\n[ -d \"$base\" ] && [ ! -L \"$base\" ] || exit 64\n[ ! -L \"$parent\" ] || exit 64\numask 077\ninstall -d -m 0700 -- \"$parent\"\n[ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 64\n[ \"$(stat -c %u \"$parent\")\" = \"$(id -u)\" ] || exit 64\nmkdir -- \"$1\"\n"
+	}
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte(claim)); err != nil {
+		return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
 	}
 	owned := true
 	defer func() {
 		if owned {
-			t.cleanupSnapshotUpload(node, runID)
+			t.cleanupSnapshotUpload(ctx, node, runID, purpose, remote)
 		}
 	}()
 	args := append(t.scpBase(node, identity), "-O", "--", archive, t.destination(node, remote+"/project.tar"))
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
-		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
+		return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
 	}
-	script := "set -eu\nrun=$1; archive=$2; run_id=$3; expected=$4; purpose=$5; request_id=${6-}\ncase \"$run\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\ncase \"$archive\" in \"$run/project.tar\") ;; *) exit 64;; esac\ncase \"$purpose\" in plan|snapshot|candidate) ;; *) exit 64;; esac\nactual=sha256:$(sha256sum \"$archive\" | awk '{print $1}')\n[ \"$actual\" = \"$expected\" ]\nif [ \"$purpose\" = candidate ]; then\n  runtime=$(sudo -n readlink -f /var/lib/platform-installer/runtime/current)\n  case \"$runtime\" in /var/lib/platform-installer/runtime/releases/*) ;; *) exit 64;; esac\n  sudo -n env PYTHONPATH=\"$runtime/ansible-core/tools\" python3 \"$runtime/ansible-core/tools/execution_protocol.py\" --runtime-release \"$runtime\" --controller \"$runtime/ansible-core/tools/execution_controller.py\" --stage-candidate-archive \"$archive\" --stage-run-id \"$run_id\" --stage-request-id \"$request_id\" --expected-archive-digest \"$expected\" >/dev/null\nelse\n  sudo -n install -d -m 0700 /var/lib/platform-installer/execution/runs/$run_id/project\n  sudo -n sh -c 'umask 077; printf \"%s\\n\" \"$1\" > \"$2\"' -- \"$actual\" /var/lib/platform-installer/execution/runs/$run_id/project-archive.digest\n  sudo -n tar -xf \"$archive\" -C /var/lib/platform-installer/execution/runs/$run_id/project\n  if [ \"$purpose\" = snapshot ]; then\n    sudo -n sh -c 'umask 077; printf \"{\\\"kind\\\":\\\"readonly\\\",\\\"runId\\\":\\\"%s\\\"}\\n\" \"$1\" > \"$2\"' -- \"$run_id\" /var/lib/platform-installer/execution/runs/$run_id/.snapshot-owner.json\n  fi\nfi\nsudo -n rm -f -- \"$archive\"\nrm -rf -- \"$run\"\n"
+	script := "set -eu\nrun=$1; archive=$2; run_id=$3; expected=$4; purpose=$5; request_id=${6-}\ncase \"$purpose:$run\" in candidate:/var/tmp/platform-installer/execution-plan/installer-*|plan:/var/tmp/platform-installer-project-installer-*|snapshot:/var/tmp/platform-installer-project-installer-*) ;; *) exit 64;; esac\ncase \"$archive\" in \"$run/project.tar\") ;; *) exit 64;; esac\ncase \"$purpose\" in plan|snapshot|candidate) ;; *) exit 64;; esac\nactual=sha256:$(sha256sum \"$archive\" | awk '{print $1}')\n[ \"$actual\" = \"$expected\" ]\nif [ \"$purpose\" = candidate ]; then\n  runtime=$(sudo -n readlink -f /var/lib/platform-installer/runtime/current)\n  case \"$runtime\" in /var/lib/platform-installer/runtime/releases/*) ;; *) exit 64;; esac\n  sudo -n env PYTHONPATH=\"$runtime/ansible-core/tools\" python3 \"$runtime/ansible-core/tools/execution_protocol.py\" --runtime-release \"$runtime\" --controller \"$runtime/ansible-core/tools/execution_controller.py\" --stage-candidate-archive \"$archive\" --stage-run-id \"$run_id\" --stage-request-id \"$request_id\" --expected-archive-digest \"$expected\" >/dev/null\nelse\n  sudo -n install -d -m 0700 /var/lib/platform-installer/execution/runs/$run_id/project\n  sudo -n sh -c 'umask 077; printf \"%s\\n\" \"$1\" > \"$2\"' -- \"$actual\" /var/lib/platform-installer/execution/runs/$run_id/project-archive.digest\n  sudo -n tar -xf \"$archive\" -C /var/lib/platform-installer/execution/runs/$run_id/project\n  if [ \"$purpose\" = snapshot ]; then\n    sudo -n sh -c 'umask 077; printf \"{\\\"kind\\\":\\\"readonly\\\",\\\"runId\\\":\\\"%s\\\"}\\n\" \"$1\" > \"$2\"' -- \"$run_id\" /var/lib/platform-installer/execution/runs/$run_id/.snapshot-owner.json\n  fi\nfi\nsudo -n rm -f -- \"$archive\"\nrm -rf -- \"$run\"\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote, remote + "/project.tar", runID, archiveDigest, purpose, requestID}, []byte(script)); err != nil {
-		return "", &ExecutionError{Code: ExecutionNodeUnavailable}
+		return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
 	}
 	owned = false
 	return archiveDigest, nil

@@ -106,7 +106,8 @@ const exportExclusionLabels: Record<string, string> = {
 };
 const exportExclusionLabel = (category: string) =>
   exportExclusionLabels[category] ?? "другие служебные данные";
-const verificationLabel = (status: string) => {
+const verificationLabel = (status: string, failed = false) => {
+  if (status === "UNVERIFIED" && failed) return "Проверка недоступна";
   switch (status) {
     case "VERIFIED":
       return "Проверено";
@@ -124,6 +125,8 @@ const verificationLabel = (status: string) => {
 };
 
 const verificationErrorMessage = (code: string): string => {
+  if (code === "PROJECT_TRANSFER_FAILED")
+    return "Не удалось передать проект на узел выполнения для проверки. Проверьте доступ SSH и права на временный каталог, затем повторите проверку. Сохранённый проект не изменён.";
   if (code === "BINDING_REQUIRED")
     return "Для проверки настройте узел выполнения на странице «Серверы». Сохранённый проект не изменён.";
   if (code === "EXECUTION_NODE_READY_REQUIRED")
@@ -202,9 +205,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [result, setResult] = useState<OpenResult>({
     status: "NO_PROJECT",
   } as OpenResult);
-  const [bundleUpdate, setBundleUpdate] = useState<RuntimeBundleUpdate | null>(null);
+  const [bundleUpdate, setBundleUpdate] = useState<RuntimeBundleUpdate | null>(
+    null,
+  );
   const [orphanRun, setOrphanRun] = useState<OrphanRunRecovery | null>(null);
-  const [serverInformation, setServerInformation] = useState<Record<string, ServerInformationResult>>({});
+  const [serverInformation, setServerInformation] = useState<
+    Record<string, ServerInformationResult>
+  >({});
   const [bundleBusy, setBundleBusy] = useState(false);
   const [page, setPage] = useState<Page>("project");
   const [loading, setLoading] = useState(false);
@@ -330,13 +337,19 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setBundleUpdate(null);
     setOrphanRun(null);
     if (projectOpen && api.chooseRuntimeBundleUpdate) {
-      void api.chooseRuntimeBundleUpdate().then((next) => {
-        if (active) setBundleUpdate(next);
-      }).catch(() => {
-        if (active) setBundleUpdate({status: "BLOCKED"} as RuntimeBundleUpdate);
-      });
+      void api
+        .chooseRuntimeBundleUpdate()
+        .then((next) => {
+          if (active) setBundleUpdate(next);
+        })
+        .catch(() => {
+          if (active)
+            setBundleUpdate({ status: "BLOCKED" } as RuntimeBundleUpdate);
+        });
     }
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [api, projectOpen, result.root, result.managed?.projectRevision]);
   const topologyAvailable =
     projectOpen &&
@@ -675,8 +688,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const refreshBundleUpdate = async () => {
     if (!api.chooseRuntimeBundleUpdate) return;
     setBundleBusy(true);
-    try { setBundleUpdate(await api.chooseRuntimeBundleUpdate()); }
-    finally { setBundleBusy(false); }
+    try {
+      setBundleUpdate(await api.chooseRuntimeBundleUpdate());
+    } finally {
+      setBundleBusy(false);
+    }
   };
   const confirmBundleUpdate = async () => {
     if (!api.confirmRuntimeBundleUpdate || !bundleUpdate?.previewId) return;
@@ -684,32 +700,66 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     try {
       const next = await api.confirmRuntimeBundleUpdate(bundleUpdate.previewId);
       setBundleUpdate(next);
-      if (next.status === "UPDATED" && result.root) setResult(await api.openProject(result.root));
-    } finally { setBundleBusy(false); }
+      if (next.status === "UPDATED" && result.root)
+        setResult(await api.openProject(result.root));
+    } finally {
+      setBundleBusy(false);
+    }
   };
   const [lastNodeCheck, setLastNodeCheck] = useState<{
     binding: string;
     readiness: ExecutionNodeReadiness;
   } | null>(null);
   const nodeCheckBinding = (context: ExecutionNodeContext | null) =>
-    JSON.stringify([result.root, context?.selectedHostId, context?.runtimeDigest,
-      credentialStatus?.expiresAt, credentialStatus?.sshMode, credentialStatus?.status]);
-  useEffect(() => setServerInformation({}), [result.root, result.managed?.projectRevision, credentialStatus?.expiresAt, credentialStatus?.status, credentialStatus?.sshMode]);
-  const informationBinding = JSON.stringify([result.root, result.managed?.projectRevision,
-    credentialStatus?.expiresAt, credentialStatus?.status, credentialStatus?.sshMode, executionNode?.selectedHostId]);
+    JSON.stringify([
+      result.root,
+      context?.selectedHostId,
+      context?.runtimeDigest,
+      credentialStatus?.expiresAt,
+      credentialStatus?.sshMode,
+      credentialStatus?.status,
+    ]);
+  useEffect(
+    () => setServerInformation({}),
+    [
+      result.root,
+      result.managed?.projectRevision,
+      credentialStatus?.expiresAt,
+      credentialStatus?.status,
+      credentialStatus?.sshMode,
+    ],
+  );
+  const informationBinding = JSON.stringify([
+    result.root,
+    result.managed?.projectRevision,
+    credentialStatus?.expiresAt,
+    credentialStatus?.status,
+    credentialStatus?.sshMode,
+    executionNode?.selectedHostId,
+  ]);
   const informationBindingRef = useRef(informationBinding);
   informationBindingRef.current = informationBinding;
-  const probeServerInformation = useCallback((hostId: string) => {
-    if (!api.probeServerInformation) throw new Error("SERVER_INFORMATION_UNAVAILABLE");
-    return api.probeServerInformation(hostId);
-  }, [api]);
+  const probeServerInformation = useCallback(
+    (hostId: string) => {
+      if (!api.probeServerInformation)
+        throw new Error("SERVER_INFORMATION_UNAVAILABLE");
+      return api.probeServerInformation(hostId);
+    },
+    [api],
+  );
   const checkServerInformation = async (probeId: string) => {
-    if (!api.checkServerInformation) throw new Error("SERVER_INFORMATION_UNAVAILABLE");
+    if (!api.checkServerInformation)
+      throw new Error("SERVER_INFORMATION_UNAVAILABLE");
     const binding = informationBindingRef.current;
     const info = await api.checkServerInformation(probeId);
-    if (binding !== informationBindingRef.current) throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
-    if (info.hostId) setServerInformation((current) => ({ ...current, [info.hostId!]: info }));
-    if (info.status === "CHECKED" && info.hostId === executionNode?.selectedHostId) {
+    if (binding !== informationBindingRef.current)
+      throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+    if (info.hostId)
+      setServerInformation((current) => ({ ...current, [info.hostId!]: info }));
+    if (
+      info.status === "CHECKED" &&
+      info.hostId === executionNode?.selectedHostId
+    ) {
       // Runtime readiness is independent and may take longer than SSH facts.
       void checkExecutionNode().catch(() => {});
     }
@@ -727,8 +777,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       ) {
         setBundleUpdate(await api.chooseRuntimeBundleUpdate());
       }
+    } finally {
+      setBundleBusy(false);
     }
-    finally { setBundleBusy(false); }
   };
   const refreshInstallationState = async () => {
     if (!api.getInstallationState) return;
@@ -852,57 +903,60 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     },
     [api],
   );
-  const collectAndDeliverSecretOutputs = useCallback(async (runId: string) => {
-    if (!api.listPendingSecretOutputs) return;
-    let pending: SecretOutputPackagesOperation;
-    try {
-      pending = await api.listPendingSecretOutputs();
-    } catch {
-      setSecretOutputPackages(secretOutputListingUnavailable());
-      return;
-    }
-    setSecretOutputPackages(pending);
-    const plan = installationPlan?.plan;
-    if (
-      pending.status !== "READY" ||
-      !plan?.secretOutputEncryptionRequired ||
-      !plan.secretOutputEncryptionPasswordPresent
-    )
-      return;
-    const candidates = [...(pending.packages || [])];
-    let cursor = pending.nextCursor;
-    const seen = new Set<string>();
-    for (let page = 1; cursor && page < 128; page++) {
-      if (seen.has(cursor)) break;
-      seen.add(cursor);
-      let next: SecretOutputPackagesOperation;
+  const collectAndDeliverSecretOutputs = useCallback(
+    async (runId: string) => {
+      if (!api.listPendingSecretOutputs) return;
+      let pending: SecretOutputPackagesOperation;
       try {
-        next = await api.listPendingSecretOutputs(cursor);
+        pending = await api.listPendingSecretOutputs();
       } catch {
         setSecretOutputPackages(secretOutputListingUnavailable());
         return;
       }
-      if (next.status !== "READY") break;
-      candidates.push(...(next.packages || []));
-      cursor = next.nextCursor;
-    }
-    for (const item of candidates) {
-      if (item.sourceRunId !== runId) continue;
-      if (!api.deliverPendingSecretOutput) break;
-      try {
-        const delivery = await api.deliverPendingSecretOutput(item.packageId);
-        setOutputDelivery(delivery);
-      } catch {
-        setOutputDelivery(secretOutputDeliveryUnavailable());
+      setSecretOutputPackages(pending);
+      const plan = installationPlan?.plan;
+      if (
+        pending.status !== "READY" ||
+        !plan?.secretOutputEncryptionRequired ||
+        !plan.secretOutputEncryptionPasswordPresent
+      )
         return;
+      const candidates = [...(pending.packages || [])];
+      let cursor = pending.nextCursor;
+      const seen = new Set<string>();
+      for (let page = 1; cursor && page < 128; page++) {
+        if (seen.has(cursor)) break;
+        seen.add(cursor);
+        let next: SecretOutputPackagesOperation;
+        try {
+          next = await api.listPendingSecretOutputs(cursor);
+        } catch {
+          setSecretOutputPackages(secretOutputListingUnavailable());
+          return;
+        }
+        if (next.status !== "READY") break;
+        candidates.push(...(next.packages || []));
+        cursor = next.nextCursor;
       }
-    }
-    try {
-      setSecretOutputPackages(await api.listPendingSecretOutputs());
-    } catch {
-      setSecretOutputPackages(secretOutputListingUnavailable());
-    }
-  }, [api, installationPlan?.plan]);
+      for (const item of candidates) {
+        if (item.sourceRunId !== runId) continue;
+        if (!api.deliverPendingSecretOutput) break;
+        try {
+          const delivery = await api.deliverPendingSecretOutput(item.packageId);
+          setOutputDelivery(delivery);
+        } catch {
+          setOutputDelivery(secretOutputDeliveryUnavailable());
+          return;
+        }
+      }
+      try {
+        setSecretOutputPackages(await api.listPendingSecretOutputs());
+      } catch {
+        setSecretOutputPackages(secretOutputListingUnavailable());
+      }
+    },
+    [api, installationPlan?.plan],
+  );
   const recoverInstallationRunEvents = useCallback(
     async (runId: string, afterSequence: number) => {
       if (
@@ -1391,7 +1445,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         ({ ...current, verification: { status: "VERIFYING" } }) as OpenResult,
     );
     try {
-      const next = await api.verifyProject();
+      const next = await api.verifyProject().catch(() => ({
+        status: "UNVERIFIED",
+        error: {
+          code: "PROJECT_VERIFY_FAILED",
+          message: "Не удалось выполнить проверку проекта.",
+        },
+      }));
       if (requestToken !== endpointPreviewRequest.current) return;
       setResult(
         (current) => ({ ...current, verification: next }) as OpenResult,
@@ -1487,7 +1547,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     const refreshed = await api
       .getExecutionNodeContext?.()
       .catch(() => undefined);
-    if (binding !== informationBindingRef.current) throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+    if (binding !== informationBindingRef.current)
+      throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
     setExecutionNode((current) =>
       current
         ? {
@@ -1668,11 +1729,21 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 {sessionId ? "Есть несохранённые изменения" : "Сохранено"}
               </div>
             )}
-            {projectOpen && (
-              <div className="readonly">
-                {verificationLabel(verification.status)}
-              </div>
-            )}
+            {projectOpen &&
+              (verification.error ? (
+                <button
+                  className="readonly outline"
+                  type="button"
+                  onClick={() => setPage("project")}
+                  title={verificationErrorMessage(verification.error.code)}
+                >
+                  {verificationLabel(verification.status, true)}
+                </button>
+              ) : (
+                <div className="readonly">
+                  {verificationLabel(verification.status)}
+                </div>
+              ))}
           </div>
           {projectOpen && (
             <button
@@ -1743,38 +1814,37 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   verification.status === "VERIFYING"
                 }
               >
-              Проверить
-            </button>
-          )}
-          {api.exitApplication && (
-            <button
-              className="outline"
-              type="button"
-              disabled={hostExitStatus !== ""}
-              onClick={() => {
-                void api
-                  .exitApplication!()
-                  .then((exit) => {
-                    setHostExitStatus(
-                      exit.status === "EXIT_AFTER_RUN"
-                        ? "Приложение завершит работу после текущего выполнения."
-                        : "Приложение завершает работу.",
+                Проверить
+              </button>
+            )}
+            {api.exitApplication && (
+              <button
+                className="outline"
+                type="button"
+                disabled={hostExitStatus !== ""}
+                onClick={() => {
+                  void api.exitApplication!()
+                    .then((exit) => {
+                      setHostExitStatus(
+                        exit.status === "EXIT_AFTER_RUN"
+                          ? "Приложение завершит работу после текущего выполнения."
+                          : "Приложение завершает работу.",
+                      );
+                    })
+                    .catch(() =>
+                      setHostExitStatus("Не удалось завершить приложение."),
                     );
-                  })
-                  .catch(() =>
-                    setHostExitStatus("Не удалось завершить приложение."),
-                  );
-              }}
-            >
-              Выйти
-            </button>
-          )}
-          {hostExitStatus && (
-            <span role="status" aria-live="polite">
-              {hostExitStatus}
-            </span>
-          )}
-        </div>
+                }}
+              >
+                Выйти
+              </button>
+            )}
+            {hostExitStatus && (
+              <span role="status" aria-live="polite">
+                {hostExitStatus}
+              </span>
+            )}
+          </div>
         </header>
         <section className="banner app-banner">
           Сохранение выполняется локально. Проверка последней сохранённой
@@ -1883,9 +1953,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onSetCredential={setSessionCredential}
               onClearCredential={clearSessionCredential}
               serverInformation={serverInformation}
-              onProbeServerInformation={api.probeServerInformation ? probeServerInformation : undefined}
-              onCheckServerInformation={api.checkServerInformation ? checkServerInformation : undefined}
-              cachedNodeReadiness={lastNodeCheck?.binding === nodeCheckBinding(executionNode) ? lastNodeCheck.readiness : null}
+              onProbeServerInformation={
+                api.probeServerInformation ? probeServerInformation : undefined
+              }
+              onCheckServerInformation={
+                api.checkServerInformation ? checkServerInformation : undefined
+              }
+              cachedNodeReadiness={
+                lastNodeCheck?.binding === nodeCheckBinding(executionNode)
+                  ? lastNodeCheck.readiness
+                  : null
+              }
               executionNode={executionNode}
               onSelectExecutionNode={selectExecutionNode}
               onCheckExecutionNode={checkExecutionNode}
@@ -1897,8 +1975,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onDeclineTargetHostKey={declineTargetHostKey}
               onPlanExecutionNodePreparation={planExecutionNodePreparation}
               runRecoveryPanel={
-                (bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" || (orphanRun && orphanRun.status !== "NONE")) && (
-                  <button className="outline" onClick={inspectOrphanRun} disabled={bundleBusy}>Проверить прежний запуск</button>
+                (bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" ||
+                  (orphanRun && orphanRun.status !== "NONE")) && (
+                  <button
+                    className="outline"
+                    onClick={inspectOrphanRun}
+                    disabled={bundleBusy}
+                  >
+                    Проверить прежний запуск
+                  </button>
                 )
               }
               onPrepareExecutionNode={prepareExecutionNode}
@@ -2281,31 +2366,97 @@ function ProjectPage({
   const bundleCard = (
     <section className="card" aria-label="Набор установки">
       <h2>Набор установки</h2>
-      {catalogStatus !== "READY" && <p role="status">Нужна перепривязка набора установки: сохранённые данные проекта доступны, но текущий проверенный набор не соответствует проекту или отсутствует. Проверка Core и новый план пока недоступны.</p>}
-      <p>Поместите полученный набор целиком в папку bundle внутри проекта. Обнаружение не меняет привязку.</p>
-      <button className="outline" onClick={onRefreshBundle} disabled={bundleBusy}>Проверить новый набор</button>
+      {catalogStatus !== "READY" && (
+        <p role="status">
+          Нужна перепривязка набора установки: сохранённые данные проекта
+          доступны, но текущий проверенный набор не соответствует проекту или
+          отсутствует. Проверка Core и новый план пока недоступны.
+        </p>
+      )}
+      <p>
+        Поместите полученный набор целиком в папку bundle внутри проекта.
+        Обнаружение не меняет привязку.
+      </p>
+      <button
+        className="outline"
+        onClick={onRefreshBundle}
+        disabled={bundleBusy}
+      >
+        Проверить новый набор
+      </button>
       {bundleUpdate?.status === "NOT_FOUND" && <p>Новый набор не найден.</p>}
-      {bundleUpdate?.status === "UNCHANGED" && <p>Набор уже привязан к проекту.</p>}
-      {bundleUpdate?.status === "PREVIEW" && <>
-        <dl>
-          <dt>Текущий digest</dt><dd>{bundleUpdate.currentArtifactDigest}</dd>
-          <dt>Новый digest</dt><dd>{bundleUpdate.newArtifactDigest}</dd>
-          <dt>Каталог</dt><dd>{bundleUpdate.newCatalogDigest}</dd>
-          <dt>Версия набора / Core</dt><dd>{bundleUpdate.bundleVersion} / {bundleUpdate.coreVersion}</dd>
-        </dl>
-        <p>После привязки прежняя проверка и одобренный план станут недействительными. Перед установкой заново подготовьте узел, проверьте проект и создайте план.</p>
-        <button onClick={onConfirmBundle} disabled={bundleBusy}>Привязать</button>
-      </>}
-      {bundleUpdate?.status === "UPDATED" && <p>Новый набор привязан. Подготовьте узел выполнения и создайте свежий план.</p>}
-      {bundleUpdate?.status === "BLOCKED" && bundleUpdate.error?.code !== "INSTALLATION_RUN_ACTIVE" && <p role="alert">Привязка сейчас недоступна: {bundleUpdate.error?.message || bundleUpdate.error?.code || "проверьте набор и состояние выполнения"}.</p>}
-      {bundleUpdate?.status === "BLOCKED" && bundleUpdate.error?.code && bundleUpdate.error.code !== "INSTALLATION_RUN_ACTIVE" && <p className="muted">Код: {bundleUpdate.error.code}</p>}
-      {bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" && <div role="alert">
-        <p>Прежний запуск установки не подтверждён как завершённый. Проверка нового набора пока недоступна.</p>
-        <p>Перейдите на страницу «Серверы», восстановите доступ к узлу выполнения и нажмите «Проверить прежний запуск».</p>
-        <button className="outline" onClick={onServers}>Перейти к серверам</button>
-      </div>}
-      {bundleUpdate?.status === "PUBLISHED_NOT_BOUND" && <p role="alert">Набор опубликован, но проект не перепривязан. Проверьте проект и повторите операцию.</p>}
-      {bundleUpdate?.status === "BOUND_REFRESH_REQUIRED" && <p role="alert">Привязка записана, но проект нужно открыть заново.</p>}
+      {bundleUpdate?.status === "UNCHANGED" && (
+        <p>Набор уже привязан к проекту.</p>
+      )}
+      {bundleUpdate?.status === "PREVIEW" && (
+        <>
+          <dl>
+            <dt>Текущий digest</dt>
+            <dd>{bundleUpdate.currentArtifactDigest}</dd>
+            <dt>Новый digest</dt>
+            <dd>{bundleUpdate.newArtifactDigest}</dd>
+            <dt>Каталог</dt>
+            <dd>{bundleUpdate.newCatalogDigest}</dd>
+            <dt>Версия набора / Core</dt>
+            <dd>
+              {bundleUpdate.bundleVersion} / {bundleUpdate.coreVersion}
+            </dd>
+          </dl>
+          <p>
+            После привязки прежняя проверка и одобренный план станут
+            недействительными. Перед установкой заново подготовьте узел,
+            проверьте проект и создайте план.
+          </p>
+          <button onClick={onConfirmBundle} disabled={bundleBusy}>
+            Привязать
+          </button>
+        </>
+      )}
+      {bundleUpdate?.status === "UPDATED" && (
+        <p>
+          Новый набор привязан. Подготовьте узел выполнения и создайте свежий
+          план.
+        </p>
+      )}
+      {bundleUpdate?.status === "BLOCKED" &&
+        bundleUpdate.error?.code !== "INSTALLATION_RUN_ACTIVE" && (
+          <p role="alert">
+            Привязка сейчас недоступна:{" "}
+            {bundleUpdate.error?.message ||
+              bundleUpdate.error?.code ||
+              "проверьте набор и состояние выполнения"}
+            .
+          </p>
+        )}
+      {bundleUpdate?.status === "BLOCKED" &&
+        bundleUpdate.error?.code &&
+        bundleUpdate.error.code !== "INSTALLATION_RUN_ACTIVE" && (
+          <p className="muted">Код: {bundleUpdate.error.code}</p>
+        )}
+      {bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" && (
+        <div role="alert">
+          <p>
+            Прежний запуск установки не подтверждён как завершённый. Проверка
+            нового набора пока недоступна.
+          </p>
+          <p>
+            Перейдите на страницу «Серверы», восстановите доступ к узлу
+            выполнения и нажмите «Проверить прежний запуск».
+          </p>
+          <button className="outline" onClick={onServers}>
+            Перейти к серверам
+          </button>
+        </div>
+      )}
+      {bundleUpdate?.status === "PUBLISHED_NOT_BOUND" && (
+        <p role="alert">
+          Набор опубликован, но проект не перепривязан. Проверьте проект и
+          повторите операцию.
+        </p>
+      )}
+      {bundleUpdate?.status === "BOUND_REFRESH_REQUIRED" && (
+        <p role="alert">Привязка записана, но проект нужно открыть заново.</p>
+      )}
     </section>
   );
   if (empty && local)
@@ -2398,7 +2549,9 @@ function ProjectPage({
         <h2>Состояние проекта</h2>
         <dl>
           <dt>Статус</dt>
-          <dd>{verificationLabel(verification.status)}</dd>
+          <dd>
+            {verificationLabel(verification.status, !!verification.error)}
+          </dd>
           <dt>Ревизия</dt>
           <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>
         </dl>

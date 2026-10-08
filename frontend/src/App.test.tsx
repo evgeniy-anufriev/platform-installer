@@ -240,21 +240,31 @@ type MockApi = ProjectBackend & {
 
 it("shows a verified incoming bundle but binds only after explicit confirmation", async () => {
   const preview = {
-    status: "PREVIEW", previewId: "one-use-token",
-    currentArtifactDigest: "sha256:old", newArtifactDigest: "sha256:new",
-    newCatalogDigest: "sha256:catalog", bundleVersion: "2", coreVersion: "2",
+    status: "PREVIEW",
+    previewId: "one-use-token",
+    currentArtifactDigest: "sha256:old",
+    newArtifactDigest: "sha256:new",
+    newCatalogDigest: "sha256:catalog",
+    bundleVersion: "2",
+    coreVersion: "2",
   };
   const chooseRuntimeBundleUpdate = vi.fn().mockResolvedValue(preview);
-  const confirmRuntimeBundleUpdate = vi.fn().mockResolvedValue({ status: "UPDATED" });
+  const confirmRuntimeBundleUpdate = vi
+    .fn()
+    .mockResolvedValue({ status: "UPDATED" });
   const value = api({ chooseRuntimeBundleUpdate, confirmRuntimeBundleUpdate });
   value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
   value.openProject.mockResolvedValue(project as unknown as OpenResult);
   render(<App api={value} />);
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
   expect(await screen.findByText("sha256:new")).toBeTruthy();
   expect(confirmRuntimeBundleUpdate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Привязать" }));
-  await waitFor(() => expect(confirmRuntimeBundleUpdate).toHaveBeenCalledWith("one-use-token"));
+  await waitFor(() =>
+    expect(confirmRuntimeBundleUpdate).toHaveBeenCalledWith("one-use-token"),
+  );
 });
 
 it("shows the previous-run failure and retries bundle detection after confirming terminal state", async () => {
@@ -285,27 +295,43 @@ it("shows the previous-run failure and retries bundle detection after confirming
   });
   const checkExecutionNode = vi.fn().mockResolvedValue({ status: "READY" });
   const value = api({
-    chooseRuntimeBundleUpdate, inspectOrphanRun, checkExecutionNode,
+    chooseRuntimeBundleUpdate,
+    inspectOrphanRun,
+    checkExecutionNode,
     getExecutionNodeContext: vi.fn().mockResolvedValue({
-      status: "READY", selectionKind: "PROJECT_SERVER", selectionSource: "EXPLICIT",
-      selectedHostId: "node1", safeLabel: "node1", runtimeDigest: "sha256:runtime",
+      status: "READY",
+      selectionKind: "PROJECT_SERVER",
+      selectionSource: "EXPLICIT",
+      selectedHostId: "node1",
+      safeLabel: "node1",
+      runtimeDigest: "sha256:runtime",
     }),
   });
   value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
   render(<App api={value} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
   expect(
-    await screen.findByText(/Прежний запуск установки не подтверждён как завершённый/i),
+    await screen.findByText(
+      /Прежний запуск установки не подтверждён как завершённый/i,
+    ),
   ).toBeTruthy();
   expect(screen.queryByText(/Код: INSTALLATION_RUN_ACTIVE/)).toBeNull();
-  expect(screen.queryByRole("button", { name: "Проверить прежний запуск" })).toBeNull();
-  await userEvent.click(screen.getByRole("button", { name: "Перейти к серверам" }));
+  expect(
+    screen.queryByRole("button", { name: "Проверить прежний запуск" }),
+  ).toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Перейти к серверам" }),
+  );
 
   await userEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
   expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
 
-  await userEvent.click(screen.getByRole("button", { name: "Проверить прежний запуск" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Проверить прежний запуск" }),
+  );
 
   await waitFor(() => expect(inspectOrphanRun).toHaveBeenCalledTimes(1));
   expect(screen.getByText("Проверен: Подготовлен")).toBeTruthy();
@@ -333,9 +359,15 @@ it("explains when the previous run cannot be checked and keeps the safety block 
   value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
   render(<App api={value} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Перейти к серверам" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Проверить прежний запуск" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Перейти к серверам" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Проверить прежний запуск" }),
+  );
 
   await waitFor(() => expect(inspectOrphanRun).toHaveBeenCalledTimes(1));
   expect(screen.getByRole("heading", { name: "Серверы" })).toBeTruthy();
@@ -434,7 +466,9 @@ it("restores Logs, Help, About and Settings navigation without requiring an open
 
   await userEvent.click(await screen.findByRole("button", { name: "Журналы" }));
   expect(screen.getByRole("heading", { name: "Журналы" })).toBeTruthy();
-  expect(screen.getByText("События появятся здесь после запуска плана.")).toBeTruthy();
+  expect(
+    screen.getByText("События появятся здесь после запуска плана."),
+  ).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "Справка" }));
   expect(screen.getByRole("heading", { name: "Справка" })).toBeTruthy();
@@ -444,17 +478,23 @@ it("restores Logs, Help, About and Settings navigation without requiring an open
       name: "Как обновить привязку существующего проекта?",
     }),
   );
-  expect(screen.getByText(/На странице «Проект» нажмите «Проверить новый набор»/)).toBeTruthy();
+  expect(
+    screen.getByText(/На странице «Проект» нажмите «Проверить новый набор»/),
+  ).toBeTruthy();
   expect(screen.getByText(/Не редактируйте digest вручную/)).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "О программе" }));
   expect(screen.getByRole("heading", { name: "О программе" })).toBeTruthy();
-  expect(screen.getAllByText("Platform Installer V2").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Platform Installer V2").length).toBeGreaterThan(
+    0,
+  );
   expect(screen.getByText("v1")).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
   expect(screen.getByRole("heading", { name: "Настройки" })).toBeTruthy();
-  expect(screen.getByText(/Учётные данные сеанса и секреты не сохраняются/)).toBeTruthy();
+  expect(
+    screen.getByText(/Учётные данные сеанса и секреты не сохраняются/),
+  ).toBeTruthy();
 });
 
 it("shows the read-only Installation state without requesting a deployment plan", async () => {
@@ -517,16 +557,19 @@ it("refreshes a running installation without navigation or a SUCCEEDED event", a
   });
   value.chooseProject.mockResolvedValue(project);
   const view = render(<App api={value} />);
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
-  const event = (status: string, sequence: number): InstallationEventView => ({
-    runId: "run-refresh",
-    sequence,
-    timestamp: "2026-10-08T10:00:00Z",
-    eventType: "DIAGNOSTIC",
-    status,
-    safeMessage: "Safe event",
-    redacted: true,
-  } as InstallationEventView);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  const event = (status: string, sequence: number): InstallationEventView =>
+    ({
+      runId: "run-refresh",
+      sequence,
+      timestamp: "2026-10-08T10:00:00Z",
+      eventType: "DIAGNOSTIC",
+      status,
+      safeMessage: "Safe event",
+      redacted: true,
+    }) as InstallationEventView;
   // Seed the known active run through the existing refresh handler.
   await act(async () =>
     onRunEvent?.({ subscriptionId: "", event: event("SUCCEEDED", 4) }),
@@ -575,7 +618,9 @@ it("shows a safe listing error when automatic output collection rejects", async 
   await userEvent.click(
     screen.getByRole("button", { name: "Открыть папку проекта" }),
   );
-  await userEvent.click(await screen.findByRole("button", { name: "Установка" }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Установка" }),
+  );
   await userEvent.click(screen.getByRole("tab", { name: "Результат" }));
 
   onRunEvent?.({
@@ -596,9 +641,7 @@ it("shows a safe listing error when automatic output collection rejects", async 
       "Не удалось проверить ожидающие защищённые файлы. Повторите проверку позже.",
     ),
   ).toBeTruthy();
-  expect(
-    screen.queryByText("raw transport detail with secret"),
-  ).toBeNull();
+  expect(screen.queryByText("raw transport detail with secret")).toBeNull();
 });
 
 it("adds a certificate authority through the shared structural draft", async () => {
@@ -1371,9 +1414,9 @@ describe("UI-01F3 deployment editor", () => {
     expect(document.activeElement).toBe(detailHeading);
     expect(screen.getByRole("heading", { name: "Сервисы" })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: /^kafka-main/ }).getAttribute(
-        "aria-current",
-      ),
+      screen
+        .getByRole("button", { name: /^kafka-main/ })
+        .getAttribute("aria-current"),
     ).toBe("page");
     expect(
       screen.getByRole("region", {
@@ -2823,6 +2866,46 @@ it("shows a Russian explanation for INVALID_VALUE in Review", async () => {
   ).toBeNull();
 });
 
+it("keeps a failed global verification visible and opens its transfer reason", async () => {
+  const value = api({
+    verifyProject: vi.fn().mockResolvedValue({
+      status: "UNVERIFIED",
+      error: {
+        code: "PROJECT_TRANSFER_FAILED",
+        message: "raw remote detail",
+      },
+    }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  const status = await screen.findByRole("button", {
+    name: "Проверка недоступна",
+  });
+  await userEvent.click(status);
+  expect(
+    await screen.findByText(
+      "Не удалось передать проект на узел выполнения для проверки. Проверьте доступ SSH и права на временный каталог, затем повторите проверку. Сохранённый проект не изменён.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText("raw remote detail")).toBeNull();
+});
+
+it("shows a safe terminal status when verification binding rejects", async () => {
+  const value = api({
+    verifyProject: vi
+      .fn()
+      .mockRejectedValue(new Error("private transport detail")),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(
+    await screen.findByRole("button", {
+      name: "Проверка недоступна",
+    }),
+  ).toBeTruthy();
+  expect(screen.queryByText("private transport detail")).toBeNull();
+});
+
 it("explains the READY Execution Node prerequisite after Project Verify", async () => {
   const value = api({
     verifyProject: vi.fn().mockResolvedValue({
@@ -2910,7 +2993,9 @@ it("explains missing runtime identity after Project Verify", async () => {
   );
   await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
   expect(
-    await screen.findByText(/Нет подтверждённой привязки к runtime узла выполнения/u),
+    await screen.findByText(
+      /Нет подтверждённой привязки к runtime узла выполнения/u,
+    ),
   ).toBeTruthy();
   expect(screen.queryByText("internal runtime detail")).toBeNull();
 });
