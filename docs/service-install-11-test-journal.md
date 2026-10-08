@@ -69,3 +69,9 @@
 Исправление: React последовательно запрашивает `GetInstallationRun` каждые две секунды для `STARTING/RUNNING/CANCELLING`, независимо от вкладки. Только READY-ответ того же runId обновляет состояние; поздние ответы после смены контекста игнорируются. После terminal state опрос прекращается и запускается существующая обработка защищённых выходов. `SUCCESS` отдельной задачи не считается завершением run.
 
 Focused QA: App + installationPresentation — 66 тестов PASS; frontend typecheck/lint/build PASS. Регрессионный тест подтверждает переход RUNNING → SUCCEEDED/100% без навигации и без события SUCCEEDED. Реальная React/Wails acceptance этого исправления NOT TESTED: действующий QA-сеанс/мост в этой проверке не использовался; этот обязательный gate остаётся открытым. Новая установка не запускалась. I05 сохраняет owner-confirmed PASS; эта запись не закрывает повторную UI-проверку исправления или SI11 в целом.
+
+## I05: owner-requested two-hour session TTL (2026-10-08)
+
+По запросу владельца default TTL брокера workstation увеличен с одного до двух часов: SSH/elevation credentials, связанные PKI/service runtime secrets, pending service secrets и отдельный пароль шифрования выходных файлов. Чтение не продлевает срок; deadline связанных секретов определяется credential lease, deadline output password — его подтверждением. Active-run hold сохранён; сроки installation/preparation plan и node-side staged lease не изменялись. Уже истёкшие данные не восстанавливаются.
+
+QA: focused broker tests, `go test ./...`, `go vet ./...`, Wails production build PASS. Тестовые часы подтвердили доступ к credentials/PKI/service secrets и output password на 119-й минуте и отказ на 120-й минуте. Реальная React/Wails acceptance на новой границе и доставка пакета успешного full-service run пока не выполнены; обязательный gate остаётся открытым. Новый full-service run не запускался.

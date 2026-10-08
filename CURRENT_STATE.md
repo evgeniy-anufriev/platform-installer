@@ -112,6 +112,11 @@ accepted remote Starts whose local persistence failed. Credential replacement,
 clear and host-key trust changes are blocked while the slot is occupied.
 Real React/Wails expiry-boundary acceptance remains pending.
 
+
+Owner-requested session TTL is now two hours for workstation credentials, PKI/service
+secrets and output-encryption passwords. Go tests/vet and Wails build passed;
+real two-hour-boundary UI acceptance remains pending. Plan expiry is unchanged.
+
 ## Other retained decisions and accepted baselines
 
 - Remote Linux Browser HTTP requires `-browser-allow-insecure-dev-http` and

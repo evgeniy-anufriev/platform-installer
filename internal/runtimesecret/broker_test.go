@@ -241,9 +241,9 @@ func TestOutputEncryptionPasswordIsProjectBoundTransientAndClearedAfterUse(t *te
 	if err := broker.WithOutputEncryptionPassword(Binding{Root: binding.Root, ID: "other"}, func([]byte) error { t.Fatal("cross-project password access"); return nil }); err == nil {
 		t.Fatal("cross-project password access accepted")
 	}
-	now = now.Add(59 * time.Minute)
+	now = now.Add(119 * time.Minute)
 	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { return nil }); err != nil {
-		t.Fatalf("output password expired before one-hour TTL: %v", err)
+		t.Fatalf("output password expired before two-hour TTL: %v", err)
 	}
 	now = now.Add(time.Minute)
 	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { t.Fatal("expired password access"); return nil }); err == nil {
@@ -252,9 +252,34 @@ func TestOutputEncryptionPasswordIsProjectBoundTransientAndClearedAfterUse(t *te
 	broker.Clear()
 }
 
-func TestBrokerDefaultCredentialAndSecretTTLIsOneHour(t *testing.T) {
-	if broker := NewBroker(); broker.ttl != time.Hour {
-		t.Fatalf("broker TTL=%s, want 1h", broker.ttl)
+func TestBrokerDefaultCredentialAndSecretTTLIsTwoHours(t *testing.T) {
+	now := time.Now()
+	broker := NewBroker(WithClock(func() time.Time { return now }))
+	if broker.ttl != 2*time.Hour {
+		t.Fatalf("broker TTL=%s, want 2h", broker.ttl)
+	}
+	binding := Binding{Root: t.TempDir(), ID: "project-ttl"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "test-only", ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broker.SetPKIStorePassword(binding, "test-only"); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.SetRuntimeSecretValues(binding, map[string]string{"redis-password": "test-only"}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(119 * time.Minute)
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if len(value.PKIStorePassword) == 0 || len(value.RuntimeSecretValues["redis-password"]) == 0 {
+			t.Fatal("session secrets expired before two hours")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Minute)
+	if err := broker.WithTargetCredential(binding, func(TargetCredential) error { t.Fatal("expired credential access"); return nil }); err == nil {
+		t.Fatal("credential remained accessible at two hours")
 	}
 }
 
