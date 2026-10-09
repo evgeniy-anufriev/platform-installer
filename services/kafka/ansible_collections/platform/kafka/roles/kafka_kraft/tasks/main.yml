@@ -105,6 +105,8 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
   loop: >-
     {{ [platform_kafka_service_name ~ '@.service',
         platform_kafka_service_name ~ '.service',
@@ -147,6 +149,8 @@
   ansible.builtin.stat:
     path: "{{ item.systemd_unit_destination }}"
     follow: false
+    get_mime: false
+    get_attributes: false
   register: _platform_kafka_unit_path_stats
   loop: "{{ _platform_kafka_local_instances }}"
   when: not (platform_kafka_verify_only | bool)
@@ -180,7 +184,9 @@
   loop: "{{ _platform_kafka_existing_unit_headers.results | default([]) }}"
   loop_control:
     label: "{{ item.item.item.id }}"
-  when: not (platform_kafka_verify_only | bool)
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - not (item.skipped | default(false))
 
 - name: Validate role-aware Kafka member inputs
   ansible.builtin.assert:
@@ -267,7 +273,9 @@
     platform_artifact_requirements:
       - {id: kafka-java, name: java-21-openjdk-headless}
       - {id: kafka-binary, name: kafka}
-  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+  when:
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+    - not (platform_kafka_verify_only | bool)
 
 - name: Deliver selected Kafka offline artifacts
   ansible.builtin.include_role:
@@ -306,6 +314,8 @@
   ansible.builtin.stat:
     path: "{{ platform_kafka_artifact_path }}"
     checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
   delegate_to: localhost
   become: false
   register: platform_kafka_artifact_stat

@@ -42,6 +42,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_vault_project_root }}/secrets"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_vault_secrets_parent
   when: _platform_vault_output_uses_project_secrets | bool
 
@@ -63,6 +66,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir | dirname }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_vault_explicit_output_parent
   when: not (_platform_vault_output_uses_project_secrets | bool)
 
@@ -79,6 +85,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_vault_output_directory
 
 - name: Refuse an unsafe existing deployment output directory
@@ -97,6 +106,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir }}/{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [admin-token, unseal-shares, init-response.json]
   register: _platform_vault_output_files
 

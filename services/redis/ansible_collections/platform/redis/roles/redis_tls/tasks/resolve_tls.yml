@@ -9,6 +9,9 @@
 - name: Check materialized Redis TLS inputs
   ansible.builtin.stat:
     path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: _platform_redis_tls_inputs
 

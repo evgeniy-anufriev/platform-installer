@@ -5,7 +5,9 @@
   vars:
     platform_artifact_requirements:
       - {id: redis-runtime, name: redis}
-  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+  when:
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+    - not (platform_redis_verify_only | bool)
 
 - name: Validate Redis inputs and instance topology
   ansible.builtin.include_tasks: validate.yml

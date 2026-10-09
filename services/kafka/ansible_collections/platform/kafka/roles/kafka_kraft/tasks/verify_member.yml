@@ -1,29 +1,28 @@
 ---
-- name: Verify Kafka member systemd state
+- name: Verify Kafka member systemd state and main process
   ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ kafka_member.systemd_unit_name }}"]
+    argv: [systemctl, show, --property=ActiveState, --property=MainPID, "{{ kafka_member.systemd_unit_name }}"]
   changed_when: false
   register: platform_kafka_member_service_state
 
 - name: Assert Kafka member service is active
   ansible.builtin.assert:
-    that: platform_kafka_member_service_state.stdout == 'active'
+    that: "'ActiveState=active' in platform_kafka_member_service_state.stdout_lines"
     fail_msg: Kafka member systemd instance is not active
-
-- name: Read Kafka member main process
-  ansible.builtin.command:
-    argv: [systemctl, show, -p, MainPID, --value, "{{ kafka_member.systemd_unit_name }}"]
-  changed_when: false
-  register: platform_kafka_member_main_pid
 
 - name: Verify Kafka member process
   ansible.builtin.assert:
-    that: platform_kafka_member_main_pid.stdout | int > 0
+    that: >-
+      (platform_kafka_member_service_state.stdout | regex_findall('(?m)^MainPID=([0-9]+)$')
+       | first | default('0') | int) > 0
     fail_msg: Kafka member systemd instance has no running main process
 
 - name: Verify Kafka member configuration path
   ansible.builtin.stat:
     path: "{{ kafka_member.config_directory }}/server.properties"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_kafka_verify_config
 
 - name: Assert Kafka member configuration exists

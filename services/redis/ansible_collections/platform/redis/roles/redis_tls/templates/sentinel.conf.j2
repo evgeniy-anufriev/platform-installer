@@ -6,7 +6,7 @@ tls-key-file {{ redis_member.config_directory }}/pki/private-key.pem
 tls-ca-cert-file {{ redis_member.config_directory }}/pki/ca-chain.pem
 tls-auth-clients yes
 tls-replication yes
-requirepass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}
+aclfile {{ redis_member.config_directory }}/sentinel.users.acl
 dir {{ redis_member.data_directory }}/sentinel
 logfile {{ redis_member.log_directory }}/sentinel.log
 sentinel resolve-hostnames no

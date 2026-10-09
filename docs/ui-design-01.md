@@ -199,9 +199,19 @@ destructive actions, blue for selected or informational state, and gray for
 unknown or neutral state. Do not tint whole table rows to indicate status.
 These rules are presentation only; backend/Core status remains authoritative.
 
-For the Execution tab, the owner selected layout B: a compact full-width
-status/progress summary, followed by a wide event table and a right-hand details
-panel for the selected event. The live table keeps the latest 512 events only
+For the Execution tab, the owner refined the layout on 2026-10-09: the existing
+full-width status/progress summary remains above two panels in a 1.9:1 width
+ratio, with more space for the event table. Fixed table columns keep all five
+event fields visible, allowing long task/deployment text to wrap.
+The left panel shows events, and the right panel shows ordered plan actions,
+their target hosts/deployment and observed status. Each panel scrolls independently.
+No separate event-details block is shown.
+The execution panels have a 4 px vertical gap and no additional card margins,
+so the lower panels fill the remaining height. The global explanatory banner
+about local Save is removed from all screens; workspace content uses its space.
+Action outcomes come from existing run progress; unavailable evidence is not
+presented as success. Narrow windows stack the two panels.
+The live table keeps the latest 512 events only
 and auto-scrolls to the newest event on updates; it has no pagination. This is
 presentation-only and does not change run lifecycle, progress calculation or
 the separate «Журналы» page.

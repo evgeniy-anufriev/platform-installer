@@ -53,21 +53,52 @@
     fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
   no_log: true
 
-- name: Inspect deployed PKI files and fingerprint
-  ansible.builtin.stat:
-    path: "{{ platform_pki_plan.targetDirectory }}/{{ item.name }}"
+- name: Inspect deployed PKI file metadata in one remote traversal
+  ansible.builtin.find:
+    paths: "{{ platform_pki_plan.targetDirectory }}"
+    patterns: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
+    recurse: false
     follow: false
-    checksum_algorithm: sha256
-    get_mime: false
-    get_attributes: false
-  loop:
-    - {name: ca-chain.pem, mode: '0644', source: 0}
-    - {name: certificate.pem, mode: '0644', source: 1}
-    - {name: private-key.pem, mode: '0600', source: 2}
-    - {name: keystore.p12, mode: '0600', source: 3}
-    - {name: truststore.p12, mode: '0600', source: 4}
-    - {name: materialization-fingerprint, mode: '0644', source: 5}
-  register: _platform_pki_integrity_targets
+    file_type: any
+    get_checksum: false
+  register: _platform_pki_integrity_scan
+  no_log: true
+
+- name: Hash the exact regular PKI files without exposing content
+  ansible.builtin.command:
+    argv:
+      - sha256sum
+      - '--'
+      - "{{ platform_pki_plan.targetDirectory }}/ca-chain.pem"
+      - "{{ platform_pki_plan.targetDirectory }}/certificate.pem"
+      - "{{ platform_pki_plan.targetDirectory }}/private-key.pem"
+      - "{{ platform_pki_plan.targetDirectory }}/keystore.p12"
+      - "{{ platform_pki_plan.targetDirectory }}/truststore.p12"
+      - "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"
+  when: (_platform_pki_integrity_scan.files | selectattr('isreg', 'equalto', true) | list | length) == 6
+  register: _platform_pki_integrity_hashes
+  changed_when: false
+  no_log: true
+
+- name: Normalize inspected PKI metadata and SHA256 checksums
+  vars:
+    _platform_pki_normalized_metadata: >-
+      {% set result = [] %}
+      {% for entry in [{'name': 'ca-chain.pem', 'mode': '0644', 'source': 0},
+                       {'name': 'certificate.pem', 'mode': '0644', 'source': 1},
+                       {'name': 'private-key.pem', 'mode': '0600', 'source': 2},
+                       {'name': 'keystore.p12', 'mode': '0600', 'source': 3},
+                       {'name': 'truststore.p12', 'mode': '0600', 'source': 4},
+                       {'name': 'materialization-fingerprint', 'mode': '0644', 'source': 5}] %}
+      {% set found = _platform_pki_integrity_scan.files | selectattr('path', 'equalto', platform_pki_plan.targetDirectory ~ '/' ~ entry.name) | list %}
+      {% set metadata = (found | first) if found else {'exists': false} %}
+      {% set hashes = _platform_pki_integrity_hashes.stdout_lines | default([]) %}
+      {% set checksum = (hashes[entry.source].split()[0]) if hashes | length == 6 else '' %}
+      {% set ignored = result.append({'item': entry, 'stat': metadata | combine({'checksum': checksum})}) %}
+      {% endfor %}
+      {{ {'results': result} | to_json }}
+  ansible.builtin.set_fact:
+    _platform_pki_integrity_targets: '{{ _platform_pki_normalized_metadata | from_json }}'
   no_log: true
 
 - name: Initialize PKI target integrity result
@@ -86,8 +117,8 @@
          (item.stat.isreg | default(false)) and
          not (item.stat.islnk | default(false)) and
          (item.stat.mode | default('') == item.item.mode) and
-         (item.stat.pw_name | default('') == platform_pki_owner) and
-         (item.stat.gr_name | default('') == platform_pki_group) and
+         (item.stat.uid | default(-1) == _platform_pki_integrity_directory.stat.uid | default(-2)) and
+         (item.stat.gid | default(-1) == _platform_pki_integrity_directory.stat.gid | default(-2)) and
          (item.stat.checksum | default('') == _platform_pki_integrity_sources.results[item.item.source].stat.checksum) }}
   loop: "{{ _platform_pki_integrity_targets.results[:5] }}"
   no_log: true
@@ -105,8 +136,8 @@
          (_platform_pki_integrity_targets.results[5].stat.isreg | default(false)),
          not (_platform_pki_integrity_targets.results[5].stat.islnk | default(false)),
          (_platform_pki_integrity_targets.results[5].stat.mode | default('') == '0644'),
-         (_platform_pki_integrity_targets.results[5].stat.pw_name | default('') == platform_pki_owner),
-         (_platform_pki_integrity_targets.results[5].stat.gr_name | default('') == platform_pki_group),
+         (_platform_pki_integrity_targets.results[5].stat.uid | default(-1) == _platform_pki_integrity_directory.stat.uid | default(-2)),
+         (_platform_pki_integrity_targets.results[5].stat.gid | default(-1) == _platform_pki_integrity_directory.stat.gid | default(-2)),
          (_platform_pki_integrity_fingerprint_matches | bool)
          ] }}
   no_log: true

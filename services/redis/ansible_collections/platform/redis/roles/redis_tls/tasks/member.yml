@@ -46,6 +46,25 @@
   register: _platform_redis_config
   when: not _platform_redis_has_persistent_state
 
+- name: Prepare default-user ACL files without replacing existing users
+  ansible.builtin.include_tasks: acl_files.yml
+
+- name: Attach the Redis ACL file without rewriting retained replication state
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/redis.conf"
+    regexp: '^\s*aclfile\s+'
+    line: "aclfile {{ redis_member.config_directory }}/redis.users.acl"
+  register: _platform_redis_acl_config
+  no_log: true
+
+- name: Remove legacy Redis requirepass after attaching the hashed ACL
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/redis.conf"
+    regexp: '^\s*requirepass\s+'
+    state: absent
+  register: _platform_redis_acl_legacy_password
+  no_log: true
+
 - name: Render Redis systemd instance unit
   ansible.builtin.template:
     src: redis.service.j2
@@ -78,6 +97,24 @@
   register: _platform_sentinel_unit
   when: "'sentinel' in redis_member.roles"
 
+- name: Attach the Sentinel ACL file without rewriting its elected master
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/sentinel.conf"
+    regexp: '^\s*aclfile\s+'
+    line: "aclfile {{ redis_member.config_directory }}/sentinel.users.acl"
+  register: _platform_sentinel_acl_config
+  when: "'sentinel' in redis_member.roles"
+  no_log: true
+
+- name: Remove legacy Sentinel requirepass after attaching the hashed ACL
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/sentinel.conf"
+    regexp: '^\s*requirepass\s+'
+    state: absent
+  register: _platform_sentinel_acl_legacy_password
+  when: "'sentinel' in redis_member.roles"
+  no_log: true
+
 - name: Reload systemd for Redis member units
   ansible.builtin.systemd_service:
     daemon_reload: true
@@ -90,14 +127,14 @@
     name: "platform-redis@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
-  when: _platform_redis_config.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
+  when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
 
 - name: Start unchanged Redis member
   ansible.builtin.systemd_service:
     name: "platform-redis@{{ redis_member.instance_name }}.service"
     enabled: true
     state: started
-  when: not (_platform_redis_config.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
+  when: not (_platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
 
 - name: Enable and start Sentinel member
   ansible.builtin.systemd_service:
@@ -106,7 +143,7 @@
     state: restarted
   when:
     - "'sentinel' in redis_member.roles"
-    - _platform_sentinel_config.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
+    - _platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
 
 - name: Start unchanged Sentinel member
   ansible.builtin.systemd_service:
@@ -115,4 +152,4 @@
     state: started
   when:
     - "'sentinel' in redis_member.roles"
-    - not (_platform_sentinel_config.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))
+    - not (_platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))

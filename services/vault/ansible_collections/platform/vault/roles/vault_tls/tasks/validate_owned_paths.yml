@@ -3,6 +3,9 @@
   ansible.builtin.stat:
     path: "{{ item.path }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_vault_path_checks }}"
   register: _platform_vault_owned_path_stats
   loop_control:

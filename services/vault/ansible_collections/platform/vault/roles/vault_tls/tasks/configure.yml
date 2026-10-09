@@ -14,7 +14,7 @@
   changed_when: false
   no_log: true
 
-- name: Refuse incompatible existing audit, KV or userpass configuration before mutation
+- name: Refuse incompatible existing audit, KV or auth configuration before mutation
   ansible.builtin.assert:
     that:
       # Vault stores audit options as strings; "0" is the legacy false form.
@@ -22,6 +22,7 @@
       - "'file/' not in _platform_vault_owned_configuration.results[0].json.data or (_platform_vault_owned_configuration.results[0].json.data['file/'].type == 'file' and (_platform_vault_owned_configuration.results[0].json.data['file/'].local | default(false) | bool) == false and _platform_vault_owned_configuration.results[0].json.data['file/'].options.file_path == '/var/log/platform-vault-audit/audit.log' and (_platform_vault_owned_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) in ['false', '0'])"
       - "'secret/' not in _platform_vault_owned_configuration.results[1].json.data or (_platform_vault_owned_configuration.results[1].json.data['secret/'].type == 'kv' and _platform_vault_owned_configuration.results[1].json.data['secret/'].options.version | string == '2')"
       - "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data or _platform_vault_owned_configuration.results[2].json.data['userpass/'].type == 'userpass'"
+      - "'approle/' not in _platform_vault_owned_configuration.results[2].json.data or _platform_vault_owned_configuration.results[2].json.data['approle/'].type == 'approle'"
     fail_msg: VAULT_EXISTING_CONFIGURATION_INCOMPATIBLE
   no_log: true
 
@@ -74,4 +75,19 @@
     body:
       type: userpass
   when: "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data"
+  no_log: true
+
+- name: Enable AppRole auth only when absent
+  ansible.builtin.uri:
+    url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/auth/approle"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ _platform_vault_admin_token }}"
+    ca_path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/ca-chain.pem"
+    validate_certs: true
+    status_code: [200, 204]
+    body_format: json
+    body:
+      type: approle
+  when: "'approle/' not in _platform_vault_owned_configuration.results[2].json.data"
   no_log: true

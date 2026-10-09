@@ -61,6 +61,77 @@ naming acceptance remain separate; cleanup does not authorize Start.
 
 ## SI11 source corrections and recorded runtime checkpoint
 
+PostgreSQL automatic subnet HBA (2026-10-09), delivered in bundle -14: owner requested
+hostssl all all with SCRAM for the current subnet, then automatic subnet
+selection. Role derives network/prefix from observed interface IPv4 matching
+the configured local PostgreSQL address; missing/ambiguous facts fail before
+mutation. Specific HA rules stay first. RED OS 28 tests and syntax PASS;
+live node2 facts resolve192.168.56.0/24 independently of default-route subnet.
+FULL DIFF review APPROVE, CURRENT; real client acceptance pending.
+
+Redis/Sentinel default-user ACL (2026-10-09), delivered in bundle -14: owner accepted
+native password hashes, no extra encryption. Separate redis.users.acl and
+sentinel.users.acl beside member configs, service owner/0600/UMask0077;
+Apply ACL SAVE, read-only Verify, retained replication/Sentinel state preserved.
+RED OS 14 tests PASS including native Redis/Sentinel8.6.4 repeat/negative fixtures;
+Apply/Verify syntax PASS; FULL DIFF review APPROVE, zero findings. Bundle
+validated/published as -14; real Wails installation acceptance pending; evidence in SI11 journal.
+
+Vault AppRole addition (2026-10-09), delivered in bundle -13: owner requested enabling
+AppRole at approle/. Configure enables only absent mount, rejects a conflicting
+method before writes and preserves existing settings; Verify requires AppRole.
+No roles/policies/IDs created. RED OS 32 tests PASS, six unrelated legacy
+cleanup fixtures skipped (root prerequisite); syntax checks PASS;
+independent FULL DIFF review APPROVE, zero findings. Bundle
+validated/published as -13; real Wails installation acceptance pending. Evidence in SI11 journal.
+
+PostgreSQL repeat-install ownership correction (2026-10-09), delivered in bundle -12:
+run `installer-b1b4a757c8898fcac402b71b5bed6662` FAILED on node1 because the
+guard expected the managed marker on the first line while the existing role
+template places it after `[Unit]`. Exact full-line ownership matching now
+accepts the template without accepting another deployment/member. RED OS
+26 tests PASS, including seven production-task ownership scenarios;
+independent FULL DIFF review APPROVE, zero findings. Bundle
+-11 predates this fix; -12 validated/published, real repeat acceptance pending.
+Evidence: [SI11 journal](docs/service-install-11-test-journal.md).
+
+Service runtime optimization (2026-10-09), delivered in bundle -11: source gates limited to
+mutation preparation, batched BIND packages/ClickHouse RPM/Kafka systemd reads,
+unused stat MIME/attributes/checksums disabled. Redis/Sentinel absent-unit
+ownership bug fixed; exact foreign-file rejection retained. RED OS 20 syntax
+checks, 131 service tests and five optimization tests PASS; final independent
+DIFF review APPROVE (45-file security scope, zero blockers). [Analysis and evidence](docs/service-runtime-optimization.md).
+Observed run `installer-7d4d76d9fa1972a4e74b30e68c2fe38e` FAILED at Redis apply;
+nine prior services completed Apply/Verify. Redis verify was not reached.
+
+PKI inspection optimization (2026-10-09), delivered in bundle -11: batch target metadata
+and SHA256 checks while retaining ownership, modes, fingerprint and repair.
+RED OS focused repeat/repair test PASS (corrupt, missing, mode, fingerprint);
+independent FULL DIFF review APPROVE, zero blockers. Bundle -10 predates this
+optimization; bundle -11 includes it. Real installation timing remains unmeasured. Evidence in SI11 journal.
+
+Terminal subscription channel-drain correction (2026-10-09), source-only:
+observed run `installer-c2fba5c0b70a16540cf1f305fdf915fb` SUCCEEDED,
+Redis verify completed in remote events 10363–10365 while UI stopped at 10362.
+Go forwarding now drains both closed buffered channels before ending;
+context cancellation stays immediate. Focused installation/observer tests PASS;
+independent FULL DIFF review APPROVE, zero findings;
+desktop rebuild and real Wails replay acceptance pending. Evidence in SI11 journal.
+
+Vault/HAProxy hook and terminal-event correction (2026-10-09): partial backend
+integration reuses installed HAProxy without provider package acquisition under
+source-service authority; PKI selects local provider identity. UI drains/replays
+events through terminal sequence before unsubscribe. RED OS 3 regressions and
+App 68 tests/typecheck/lint PASS; independent FULL DIFF review has zero blockers,
+its requested race test added. Delivered in bundle -10 below; real retry
+and Wails replay acceptance pending. Evidence in SI11 journal.
+
+Kafka fresh-install ownership correction (2026-10-09) is source-only: skip
+ownership assertions for slurp results explicitly marked skipped because the
+unit file does not exist. Existing files still require the exact ownership
+header. Production-task RED OS regression passed missing/owned/foreign cases;
+released in bundle -09 below; real installation retry remains pending. See the journal.
+
 Kafka normalization correction (2026-10-09) is source-only: separate fact
 dependencies for runtime directory/environment path and compatibility/legacy
 unit name. Real localhost Ansible normalization of four sequential members
@@ -74,12 +145,22 @@ Ansible regressions and 15 BIND contract tests passed on RED OS node2.
 Bundle `si11-full-service-20261009-07` released below; UI rebind/preparation
 and real Vault retry remain pending; see the journal.
 
-Latest delivered project bundle: `si11-full-service-20261009-08`, built on
+Latest delivered project bundle: `si11-full-service-20261009-14`, built on
 node2 and validated at `.runtime/qa/full-services/bundle`, digest
-`sha256:311ce9b1f40690f12ec59ed5aa9d9d3ec45aa57b0d4030f1bf93996dfafa3462`.
+`sha256:af9a46c7dfd3c668a5c7dec201023b5936309035f93c53a20d17cb4f88b2fbe4`.
 It removes premature DNS client endpoint verification and compacts repeated
 PKI reissue summary scope within the existing limit, and fixes BIND answer
-parsing for NXDOMAIN and Kafka normalization fact ordering. Published with the standard publisher into `cache/`.
+parsing for NXDOMAIN and Kafka normalization fact ordering. Version -09 also
+includes endpoint-derived HAProxy placement/defaults and Kafka skipped ownership
+handling. Version -10 includes partial HAProxy package/PКI-context correction
+and persistent Docker shell environment. Version -11 includes HAProxy/PKI and
+service runtime optimization plus Redis/Sentinel absent-unit ownership fix.
+Version -12 also fixes PostgreSQL existing-unit ownership line matching.
+Version -13 enables and verifies Vault AppRole without changing existing mounts.
+Version -14 adds Redis/Sentinel default-user ACL files and automatic PostgreSQL
+client-subnet TLS/SCRAM access.
+Published with the standard publisher into `cache/`; project import
+digest matches. Project lock unchanged; UI rebind/preparation still required.
 Target-free plan replay
 on the failed staged project returned EXECUTABLE; real UI rebind/plan/Start
 for this bundle is pending. See the journal; no installation was started.

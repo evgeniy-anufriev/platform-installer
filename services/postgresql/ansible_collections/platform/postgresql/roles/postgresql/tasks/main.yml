@@ -9,7 +9,9 @@
   vars:
     platform_artifact_requirements:
       - {id: postgresql-runtime, name: postgresql}
-  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+  when:
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+    - not (platform_postgresql_verify_only | bool)
 
 - name: Validate resolved pg_auto_failover source before mutation
   ansible.builtin.include_role:
@@ -20,6 +22,7 @@
   when:
     - platform_resolved_artifact_sources is defined
     - platform_postgresql_mode == 'pg_auto_failover'
+    - not (platform_postgresql_verify_only | bool)
 
 - name: Deliver selected PostgreSQL offline artifacts
   ansible.builtin.include_role:
@@ -45,6 +48,10 @@
     that: _platform_postgresql_local_members | length == 1
     fail_msg: POSTGRES_LOCAL_MEMBER_REQUIRED
 
+- name: Resolve the client subnet from the PostgreSQL member interface
+  ansible.builtin.include_tasks: client_subnet.yml
+  when: not (platform_postgresql_verify_only | bool)
+
 - name: Derive the exact PostgreSQL systemd unit name
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
@@ -55,6 +62,9 @@
   ansible.builtin.stat:
     path: /etc/systemd/system/postgresql.service
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_postgresql_legacy_unit
   when: not (platform_postgresql_verify_only | bool)
 
@@ -68,6 +78,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_postgresql_unit_path
   when: not (platform_postgresql_verify_only | bool)
 
@@ -90,9 +103,9 @@
 - name: Refuse replacement of a foreign PostgreSQL unit
   ansible.builtin.assert:
     that: >-
-      (_platform_postgresql_existing_unit.content | b64decode | split('\n') | first)
-      == ('# platform-postgresql-managed: ' ~ platform_postgresql_deployment_id ~ '/'
-          ~ (_platform_postgresql_local_members | first).id)
+      ('# platform-postgresql-managed: ' ~ platform_postgresql_deployment_id ~ '/'
+       ~ (_platform_postgresql_local_members | first).id)
+      in (_platform_postgresql_existing_unit.content | b64decode | split('\n'))
     fail_msg: POSTGRES_UNIT_OWNERSHIP_UNKNOWN
   when:
     - not (platform_postgresql_verify_only | bool)
@@ -174,11 +187,17 @@
 - name: Discover PostgreSQL initialization state
   ansible.builtin.stat:
     path: "{{ platform_postgresql_data_directory }}/PG_VERSION"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_postgresql_pg_version_file
 
 - name: Discover PostgreSQL data path type
   ansible.builtin.stat:
     path: "{{ platform_postgresql_data_directory }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_postgresql_data_path
 
 - name: Block partial PostgreSQL data directory

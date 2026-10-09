@@ -4,6 +4,8 @@
     path: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] | default('') }}"
     checksum_algorithm: sha256
     follow: false
+    get_mime: false
+    get_attributes: false
   delegate_to: localhost
   become: false
   register: _platform_clickhouse_direct_rpm
@@ -42,6 +44,8 @@
   ansible.builtin.stat:
     path: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
     checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
   register: _platform_clickhouse_target_rpm
   when: platform_resolved_artifact_sources is not defined
   no_log: true

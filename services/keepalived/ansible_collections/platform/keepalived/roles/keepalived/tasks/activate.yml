@@ -3,6 +3,8 @@
   ansible.builtin.stat:
     path: "{{ platform_keepalived_candidate_file }}"
     checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
   register: platform_keepalived_activation_candidate_stat
 
 - name: Assert activation uses the candidate validated in Phase A
@@ -26,6 +28,8 @@
   ansible.builtin.stat:
     path: "{{ platform_keepalived_config_file }}"
     checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
   register: platform_keepalived_active_stat
 
 - name: Assert active configuration exactly matches the validated candidate

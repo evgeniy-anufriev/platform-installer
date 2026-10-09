@@ -63,6 +63,9 @@
   ansible.builtin.stat:
     path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   delegate_to: localhost
   become: false
   register: _platform_docker_password_file

@@ -21,6 +21,9 @@
   ansible.builtin.stat:
     path: /usr/libexec/lxc/lxc-user-nic
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_docker_lxc_helper
 
 - name: Require trusted executable LXC helper
@@ -36,6 +39,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [/usr/bin/dockerd-rootless.sh, /usr/bin/rootlesskit, /usr/bin/newuidmap, /usr/bin/newgidmap, /usr/libexec/docker/cli-plugins/docker-compose]
   register: _platform_docker_binaries
 
@@ -196,6 +202,9 @@
   ansible.builtin.stat:
     path: /etc/lxc/platform-docker-dnsmasq.conf
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_docker_lxc_dnsmasq_file
 
 - name: Refuse an unsafe existing LXC dnsmasq override before reading it
@@ -248,6 +257,9 @@
   ansible.builtin.stat:
     path: /run/systemd/resolve/resolv.conf
     follow: true
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_docker_upstream_resolver_file
 
 - name: Read target resolver addresses for LXC DHCP
@@ -319,6 +331,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop:
     - "{{ _platform_docker_home }}"
     - "{{ _platform_docker_home }}/.config"
@@ -367,6 +382,9 @@
     _platform_docker_private_tls_dir: "{{ _platform_docker_home }}/.config/docker/pki"
   changed_when: false
 
+- name: Configure persistent rootless Docker shell environment
+  ansible.builtin.include_tasks: shell_environment.yml
+
 - name: Copy exact PKI material into account-private runtime directory
   ansible.builtin.copy:
     src: "{{ _platform_docker_tls_source }}/{{ item }}"
@@ -383,6 +401,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_docker_home }}/.config/systemd/user/docker.service"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_docker_existing_user_unit
 
 - name: Read an existing user Docker unit before replacement

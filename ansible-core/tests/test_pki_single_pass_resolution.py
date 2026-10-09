@@ -275,6 +275,20 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         self.assertIn("Deploy immutable PEM and Java PKI material", third)
         self.assertRegex(third, r"qa-a\s+:.*changed=[1-9][0-9]*.*failed=0")
         self.assertEqual(b"synthetic PKI material for integrity test", target.read_bytes())
+        for drift in ("missing", "mode", "fingerprint"):
+            with self.subTest(drift=drift):
+                if drift == "missing":
+                    target.unlink()
+                elif drift == "mode":
+                    target.chmod(0o600)
+                else:
+                    (target.parent / "materialization-fingerprint").write_text("stale\n")
+                repaired = self.run_play([deploy], skip=True, extra=variables)
+                self.assertRegex(repaired, r"qa-a\s+:.*changed=[1-9][0-9]*.*failed=0")
+                self.assertEqual(b"synthetic PKI material for integrity test", target.read_bytes())
+                self.assertEqual(0o644, target.stat().st_mode & 0o777)
+                clean = self.run_play([deploy], skip=True, extra=variables)
+                self.assertRegex(clean, r"qa-a\s+:.*changed=0.*failed=0")
 
     def test_standalone_without_skip_enters_real_mutation_and_request_include(self):
         output = self.run_play([self.play([self.role(), self.mutation_marker()])], success=False)

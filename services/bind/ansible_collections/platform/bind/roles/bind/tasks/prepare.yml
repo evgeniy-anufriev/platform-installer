@@ -1,17 +1,15 @@
 ---
-- name: Install approved BIND package from configured system repositories
+- name: Install approved BIND packages from configured system repositories
   ansible.builtin.package:
-    name: "{{ platform_bind_package }}"
+    name: "{{ _platform_bind_repository_packages }}"
     state: present
-  when: >-
-    platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources.bind.source == 'REPOSITORY'
-
-- name: Install approved BIND utilities from configured system repositories
-  ansible.builtin.package:
-    name: "{{ platform_bind_utils_package }}"
-    state: present
-  when: >-
-    platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['bind-utils'].source == 'REPOSITORY'
+  vars:
+    _platform_bind_repository_packages: >-
+      {{ ([platform_bind_package] if platform_resolved_artifact_sources is not defined
+          or platform_resolved_artifact_sources.bind.source == 'REPOSITORY' else [])
+         + ([platform_bind_utils_package] if platform_resolved_artifact_sources is not defined
+          or platform_resolved_artifact_sources['bind-utils'].source == 'REPOSITORY' else []) }}
+  when: _platform_bind_repository_packages | length > 0
 
 - name: Create Platform BIND directories for candidate and runtime files
   ansible.builtin.file:
@@ -102,6 +100,8 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
   loop:
     - "{{ platform_bind_distribution_config }}"
     - "{{ platform_bind_candidate_main_config }}"

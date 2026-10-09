@@ -164,7 +164,7 @@ describe("InstallationPage", () => {
       screen.queryByRole("heading", { name: "Следующее действие" }),
     ).toBeNull();
     expect(screen.getByRole("table")).toBeTruthy();
-    expect(screen.getByText("Kafka apply")).toBeTruthy();
+    expect(screen.getByText("Установить сервис kafka-main")).toBeTruthy();
     expect(screen.getByText("node1, node2")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Открыть план" }));
     expect(onTabChange).toHaveBeenCalledWith("plan");
@@ -246,7 +246,7 @@ describe("InstallationPage", () => {
 
     expect(screen.getByText("План готов к рассмотрению")).toBeTruthy();
     expect(screen.queryByText("PLAN_REVIEW")).toBeNull();
-    expect(screen.getByText("Apply Kafka")).toBeTruthy();
+    expect(screen.getByText("Установить сервис kafka-main")).toBeTruthy();
     expect(screen.getByText("Развёртывание: kafka-main")).toBeTruthy();
     const approve = screen.getByRole("button", { name: "Одобрить план" });
     expect(approve).toHaveProperty("disabled", true);
@@ -491,7 +491,9 @@ describe("InstallationPage", () => {
     expect(
       screen.getByText(/Последняя завершённая задача: Проверка swap/),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Проверка swap" })).toBeTruthy();
+    expect(screen.getByText("Проверка swap")).toBeTruthy();
+    expect(screen.queryByText("Детали события")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Действия плана" })).toBeTruthy();
     expect(
       screen.queryByText(/Последняя завершённая задача: Следующая задача/),
     ).toBeNull();

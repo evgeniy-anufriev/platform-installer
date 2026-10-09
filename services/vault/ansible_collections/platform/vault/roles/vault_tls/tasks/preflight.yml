@@ -34,6 +34,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_data_root }}", "{{ platform_vault_log_root }}"]
   register: _platform_vault_roots
 
@@ -78,6 +81,9 @@
   ansible.builtin.stat:
     path: "{{ item.data_directory }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_vault_local_instances }}"
   register: _platform_vault_member_data_dirs
   loop_control:
@@ -109,6 +115,9 @@
   ansible.builtin.stat:
     path: "{{ item.item.data_directory }}/.platform-vault-member.json"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_vault_member_data_dirs.results }}"
   register: _platform_vault_member_markers
   when: item.stat.exists
@@ -154,6 +163,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.instance_name }}.service"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_vault_local_instances }}"
   register: _platform_vault_unit_files
   loop_control:
@@ -163,6 +175,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.legacy_instance_name }}.service"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_vault_local_instances }}"
   register: _platform_vault_legacy_unit_files
 
@@ -178,6 +193,9 @@
   ansible.builtin.stat:
     path: "/etc/logrotate.d/{{ item.instance_name }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_vault_local_instances }}"
   register: _platform_vault_rotation_files
   loop_control:

@@ -2,6 +2,9 @@
 - name: Inspect HAProxy readiness helper attributes read-only
   ansible.builtin.stat:
     path: "{{ platform_keepalived_haproxy_check_path }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_keepalived_haproxy_helper_stat
 
 - name: Assert HAProxy readiness helper ownership and mode

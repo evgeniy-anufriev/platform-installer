@@ -71,7 +71,7 @@
   ansible.builtin.assert:
     that: item not in platform_redis_advanced_config
     fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
-  loop: [port, tls-port, tls-cert-file, tls-key-file, tls-ca-cert-file, requirepass, masterauth, sentinel, dir, pidfile, logfile]
+  loop: [port, tls-port, tls-cert-file, tls-key-file, tls-ca-cert-file, requirepass, masterauth, aclfile, user, sentinel, dir, pidfile, logfile]
 
 - name: Require the Sentinel credential for Sentinel HA
   ansible.builtin.assert:

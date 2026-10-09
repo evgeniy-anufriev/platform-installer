@@ -27,6 +27,28 @@ const tabLabels: Array<{ id: InstallationTab; label: string }> = [
 ];
 const executionEventWindowSize = 512;
 
+function planActionLabel(action: {
+  type: string;
+  summary: string;
+  serviceDeployment?: string;
+}): string {
+  const deployment = action.serviceDeployment
+    ? ` ${action.serviceDeployment}`
+    : "";
+  switch (action.type) {
+    case "PKI_APPLY":
+      return "Подготовить утверждённые сертификаты";
+    case "SERVICE_APPLY":
+      return `Установить сервис${deployment}`;
+    case "SERVICE_VERIFY":
+      return `Проверить сервис${deployment}`;
+    case "SERVICE_CLEAR":
+      return `Очистить установленный сервис${deployment}`;
+    default:
+      return action.summary;
+  }
+}
+
 export type ServicePriorityInput = {
   serviceType: string;
   priority: number | null;
@@ -238,7 +260,11 @@ export function InstallationPage({
 }) {
   const [orderError, setOrderError] = useState("");
   const deploymentOrder = useMemo(
-    () => deploymentOrderFromPriorities(serviceDeployments, serviceExecutionPriorities),
+    () =>
+      deploymentOrderFromPriorities(
+        serviceDeployments,
+        serviceExecutionPriorities,
+      ),
     [serviceDeployments, serviceExecutionPriorities],
   );
   const createPlan = () => {
@@ -254,6 +280,11 @@ export function InstallationPage({
     onCreatePlan(deploymentOrder.order);
   };
   const node = state?.executionNode;
+  const runActive = ["STARTING", "RUNNING", "CANCELLING"].includes(
+    run?.run?.state || "",
+  );
+  const displayedPlan: InstallationPlanOperation | undefined =
+    runActive && runPlan ? { status: "PLAN_APPROVED", plan: runPlan } : plan;
   const presentation = installationDisplay(state, run, runProgress);
   return (
     <section className="installation-page">
@@ -375,8 +406,8 @@ export function InstallationPage({
                   <div className="installation-summary-plan-meta">
                     <span>
                       <b>
-                        {plan?.plan
-                          ? plan.plan.phases.reduce(
+                        {displayedPlan?.plan
+                          ? displayedPlan.plan.phases.reduce(
                               (count, phase) => count + phase.actions.length,
                               0,
                             )
@@ -384,11 +415,15 @@ export function InstallationPage({
                       </b>{" "}
                       действий
                     </span>
-                    <span>Ревизия: {plan?.plan?.projectRevision || "—"}</span>
+                    <span>
+                      Ревизия: {displayedPlan?.plan?.projectRevision || "—"}
+                    </span>
                     <span>
                       Статус:{" "}
-                      {plan
-                        ? planOperationStatusLabel(plan.status)
+                      {displayedPlan
+                        ? runActive
+                          ? "Выполняется"
+                          : planOperationStatusLabel(displayedPlan.status)
                         : "План не сформирован"}
                     </span>
                   </div>
@@ -401,7 +436,7 @@ export function InstallationPage({
                   Открыть план
                 </button>
               </div>
-              {plan?.plan ? (
+              {displayedPlan?.plan ? (
                 <div className="installation-summary-plan-actions">
                   <table>
                     <thead>
@@ -412,12 +447,12 @@ export function InstallationPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {plan.plan.phases
+                      {displayedPlan.plan.phases
                         .flatMap((phase) => phase.actions)
                         .map((action, index) => (
                           <tr key={action.id}>
                             <td>{index + 1}</td>
-                            <td>{action.summary}</td>
+                            <td>{planActionLabel(action)}</td>
                             <td>
                               {action.targets.join(", ") || "без целевых узлов"}
                             </td>
@@ -425,7 +460,7 @@ export function InstallationPage({
                         ))}
                     </tbody>
                   </table>
-                  {plan.plan.phases.every(
+                  {displayedPlan.plan.phases.every(
                     (phase) => phase.actions.length === 0,
                   ) && <p>В плане пока нет действий.</p>}
                 </div>
@@ -443,11 +478,18 @@ export function InstallationPage({
             state={state}
             draftActive={draftActive}
             operation={
-              ["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") && runPlan
+              ["STARTING", "RUNNING", "CANCELLING"].includes(
+                run?.run?.state || "",
+              ) && runPlan
                 ? { status: "PLAN_APPROVED", plan: runPlan }
                 : plan
             }
-            busy={busy || ["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "")}
+            busy={
+              busy ||
+              ["STARTING", "RUNNING", "CANCELLING"].includes(
+                run?.run?.state || "",
+              )
+            }
             onCreatePlan={createPlan}
             orderError={orderError}
             onApprovePlan={onApprovePlan}
@@ -548,13 +590,21 @@ function PlanStage({
       <article className="card installation-empty">
         <h2>План</h2>
         <p>
-          {operation?.error && <><code>{operation.error.code}</code> — </>}
+          {operation?.error && (
+            <>
+              <code>{operation.error.code}</code> —{" "}
+            </>
+          )}
           {operation?.error?.message || "Свежий план ещё не создан."}
           {!!operation?.error?.diagnosticCodes?.length && (
             <> Диагностика Core: {operation.error.diagnosticCodes.join(", ")}</>
           )}
         </p>
-        {orderError && <p className="error" role="alert">{orderError}</p>}
+        {orderError && (
+          <p className="error" role="alert">
+            {orderError}
+          </p>
+        )}
         <button onClick={onCreatePlan} disabled={busy}>
           Сформировать свежий план
         </button>
@@ -590,7 +640,11 @@ function PlanStage({
     plan.approved;
   const startBlockers: Array<{ code: string; message: string }> = [];
   const addStartBlocker = (code: string, message: string) => {
-    if (!startBlockers.some((item) => item.code === code && item.message === message))
+    if (
+      !startBlockers.some(
+        (item) => item.code === code && item.message === message,
+      )
+    )
       startBlockers.push({ code, message });
   };
   for (const prerequisite of state?.prerequisites || []) {
@@ -705,14 +759,18 @@ function PlanStage({
             <ul>
               {operation.error && (
                 <li>
-                  <code>{operation.error.code}</code> — {operation.error.message}
+                  <code>{operation.error.code}</code> —{" "}
+                  {operation.error.message}
                 </li>
               )}
               {run?.error && (
                 <li>
                   <code>{run.error.code}</code> — {run.error.message}
                   {!!run.error.diagnosticCodes?.length && (
-                    <span> Диагностика Core: {run.error.diagnosticCodes.join(", ")}</span>
+                    <span>
+                      {" "}
+                      Диагностика Core: {run.error.diagnosticCodes.join(", ")}
+                    </span>
                   )}
                 </li>
               )}
@@ -727,10 +785,14 @@ function PlanStage({
             </p>
             {state?.status === "READY_TO_PLAN" && (
               <>
-              {orderError && <p className="error" role="alert">{orderError}</p>}
-              <button onClick={onCreatePlan} disabled={busy}>
-                Сформировать свежий план
-              </button>
+                {orderError && (
+                  <p className="error" role="alert">
+                    {orderError}
+                  </p>
+                )}
+                <button onClick={onCreatePlan} disabled={busy}>
+                  Сформировать свежий план
+                </button>
               </>
             )}
           </article>
@@ -863,7 +925,7 @@ function PlanStage({
                     <div className="plan-action-row" key={action.id}>
                       <span className="plan-action-number">{index + 1}</span>
                       <span className="plan-action-description">
-                        <b>{action.summary}</b>
+                        <b>{planActionLabel(action)}</b>
                         {action.serviceDeployment && (
                           <small>
                             Развёртывание: {action.serviceDeployment}
@@ -997,7 +1059,10 @@ function StartApproval({
               : "Запуск пока недоступен. Устраните причины ниже:"}
         </span>
         {!runActive && startBlockers.length > 0 && (
-          <ul className="safe-findings" aria-label="Причины недоступности запуска">
+          <ul
+            className="safe-findings"
+            aria-label="Причины недоступности запуска"
+          >
             {startBlockers.map((item, index) => (
               <li key={`${item.code}:${index}`}>
                 <code>{item.code}</code> {item.message}
@@ -1041,20 +1106,13 @@ function ExecutionStage({
   onCancel: (runId: string) => void;
   onOpenPendingOutputs: () => void;
 }) {
-  const [selectedSequence, setSelectedSequence] = useState<number>();
   const eventScrollRef = useRef<HTMLDivElement>(null);
   const visibleEvents = events.slice(-executionEventWindowSize);
-  const selectedEvent =
-    events.find((event) => event.sequence === selectedSequence) ||
-    events.at(-1);
   const outputBusy =
     run?.error?.code === "OUTPUT_BUSY" ||
     events.some(
       (event) => executionDiagnosticCode(event.safeMessage) === "OUTPUT_BUSY",
     );
-  useEffect(() => {
-    setSelectedSequence(undefined);
-  }, [run?.run?.runId]);
   useEffect(() => {
     const scrollContainer = eventScrollRef.current;
     if (scrollContainer)
@@ -1134,7 +1192,7 @@ function ExecutionStage({
         <p className="installation-current-action">
           {currentAction ? (
             <>
-              Текущее действие: <b>{currentAction.summary}</b> ·{" "}
+              Текущее действие: <b>{planActionLabel(currentAction)}</b> ·{" "}
               {currentAction.targets.join(", ") || "без целевых серверов"}
             </>
           ) : (
@@ -1179,32 +1237,18 @@ function ExecutionStage({
                   </thead>
                   <tbody>
                     {visibleEvents.map((event) => (
-                      <tr
-                        key={`${event.runId}-${event.sequence}`}
-                        className={
-                          selectedEvent?.sequence === event.sequence
-                            ? "is-selected"
-                            : ""
-                        }
-                      >
+                      <tr key={`${event.runId}-${event.sequence}`}>
                         <td>
                           <time dateTime={event.timestamp || undefined}>
                             {eventTimestampLabel(event.timestamp)}
                           </time>
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className="execution-event-select"
-                            aria-pressed={
-                              selectedEvent?.sequence === event.sequence
-                            }
-                            onClick={() => setSelectedSequence(event.sequence)}
-                          >
+                          <span className="execution-event-select">
                             {taskNameWithoutRole(event) ||
                               eventMessageLabel(event.safeMessage) ||
                               event.eventType}
-                          </button>
+                          </span>
                           <small>{eventMessageLabel(event.safeMessage)}</small>
                         </td>
                         <td>{event.serviceDeployment || "—"}</td>
@@ -1218,7 +1262,124 @@ function ExecutionStage({
             </>
           )}
         </article>
-        <EventDetails event={selectedEvent} />
+        <article className="card execution-plan-card">
+          <div className="execution-event-title">
+            <h2>Действия плана</h2>
+            {progress && (
+              <span>
+                {progress.completedActionIds.length} из{" "}
+                {progress.actionIds.length} завершено
+              </span>
+            )}
+          </div>
+          <div className="execution-plan-scroll">
+            {!plan?.phases.some((phase) => phase.actions.length) ? (
+              <p>Действия плана для этого запуска недоступны.</p>
+            ) : (
+              <ol className="execution-plan-actions">
+                {plan.phases
+                  .flatMap((phase) => phase.actions)
+                  .map((action, index) => {
+                    const outcome = progress?.actionOutcomes[action.id];
+                    const completion = events.find(
+                      (event) =>
+                        event.runId === run.run!.runId &&
+                        event.actionId === action.id &&
+                        event.eventType === "ACTION_COMPLETED" &&
+                        event.sequence ===
+                          progress?.actionOutcomeSequences[action.id],
+                    );
+                    const completedDate = new Date(completion?.timestamp || "");
+                    const completedTime = Number.isFinite(
+                      completedDate.getTime(),
+                    )
+                      ? new Intl.DateTimeFormat("ru-RU", {
+                          timeZone: "Europe/Moscow",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        }).format(completedDate)
+                      : "Время неизвестно";
+                    const active =
+                      progress?.activeActionId === action.id &&
+                      ["STARTING", "RUNNING", "CANCELLING"].includes(
+                        run.run!.state,
+                      );
+                    const waiting =
+                      !outcome &&
+                      !active &&
+                      progress?.complete &&
+                      ["STARTING", "RUNNING", "CANCELLING"].includes(
+                        run.run!.state,
+                      );
+                    const label = active
+                      ? "Выполняется"
+                      : waiting
+                        ? "Ожидает"
+                        : actionResultLabel(
+                            action.id,
+                            run.run!.state,
+                            progress,
+                          );
+                    const tone = active
+                      ? "running"
+                      : ["SUCCESS", "CHANGED"].includes(outcome || "")
+                        ? "success"
+                        : outcome === "FAILED"
+                          ? "error"
+                          : "neutral";
+                    const symbol = active
+                      ? "◌"
+                      : tone === "success"
+                        ? "✓"
+                        : tone === "error"
+                          ? "!"
+                          : outcome === "SKIPPED"
+                            ? "↷"
+                            : "◷";
+                    return (
+                      <li
+                        key={action.id}
+                        className={`execution-plan-action is-${tone}`}
+                        aria-current={active ? "step" : undefined}
+                      >
+                        <span
+                          className="execution-plan-number"
+                          aria-hidden="true"
+                        >
+                          {index + 1}
+                        </span>
+                        <span
+                          className="execution-plan-symbol"
+                          aria-hidden="true"
+                        >
+                          {symbol}
+                        </span>
+                        <div className="execution-plan-description">
+                          <strong>{planActionLabel(action)}</strong>
+                          <small>
+                            {action.targets.join(", ") ||
+                              "Без целевых серверов"}
+                            {action.serviceDeployment
+                              ? ` · ${action.serviceDeployment}`
+                              : ""}
+                          </small>
+                        </div>
+                        <span
+                          className="execution-plan-status"
+                          title={
+                            tone === "success" ? `${label} · МСК` : undefined
+                          }
+                        >
+                          {tone === "success" ? completedTime : label}
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ol>
+            )}
+          </div>
+        </article>
       </div>
     </section>
   );
@@ -1292,7 +1453,7 @@ function ResultStage({
                   <tbody>
                     {actions.map((action) => (
                       <tr key={action.id}>
-                        <td>{action.summary}</td>
+                        <td>{planActionLabel(action)}</td>
                         <td>{action.serviceDeployment || "—"}</td>
                         <td>{action.targets.join(", ") || "—"}</td>
                         <td>
@@ -1324,10 +1485,24 @@ function ResultStage({
           Здесь отображается только состояние доставки. Содержимое секретов в
           интерфейс не передаётся.
         </p>
-        {(!secretOutputPackages || secretOutputPackages.status !== "READY" ||
+        {(!secretOutputPackages ||
+          secretOutputPackages.status !== "READY" ||
           secretOutputPackages.nextCursor ||
-          secretOutputPackages.packages?.some((item) => item.state !== "LOCAL_DELIVERED")) && (
-          <button className="outline" disabled={collectingOutputs} onClick={async () => { setCollectingOutputs(true); try { await onCollectSecretOutputs(); } finally { setCollectingOutputs(false); } }}>
+          secretOutputPackages.packages?.some(
+            (item) => item.state !== "LOCAL_DELIVERED",
+          )) && (
+          <button
+            className="outline"
+            disabled={collectingOutputs}
+            onClick={async () => {
+              setCollectingOutputs(true);
+              try {
+                await onCollectSecretOutputs();
+              } finally {
+                setCollectingOutputs(false);
+              }
+            }}
+          >
             Проверить и сохранить зашифрованные файлы
           </button>
         )}
@@ -1338,9 +1513,7 @@ function ResultStage({
         )}
         {outputDelivery && (
           <p
-            role={
-              outputDelivery.status === "UNAVAILABLE" ? "alert" : "status"
-            }
+            role={outputDelivery.status === "UNAVAILABLE" ? "alert" : "status"}
             className={
               outputDelivery.status === "DELIVERED"
                 ? "success"
@@ -1365,7 +1538,9 @@ function ResultStage({
               Состояние: {outputPackageStateLabel(item.state)}; файлов:{" "}
               {item.entries.length}
             </span>
-            <small>Запуск: {item.sourceRunId} · Поколение: {item.generation}</small>
+            <small>
+              Запуск: {item.sourceRunId} · Поколение: {item.generation}
+            </small>
           </div>
         ))}
       </article>
@@ -1461,56 +1636,6 @@ function eventMessageLabel(message: string): string {
       "Подробная запись событий задач неполна",
   };
   return labels[message] || message;
-}
-
-function EventDetails({ event }: { event?: InstallationEventView }) {
-  return (
-    <article className="card execution-event-details">
-      <h2>Детали события</h2>
-      {!event ? (
-        <p>Выберите событие, чтобы посмотреть подробности.</p>
-      ) : (
-        <>
-          <strong>
-            {eventTypeLabel(event.eventType)} · {eventStatusLabel(event.status)}
-          </strong>
-          <p>{eventMessageLabel(event.safeMessage)}</p>
-          <dl>
-            <dt>Время</dt>
-            <dd>{eventTimestampLabel(event.timestamp)}</dd>
-            <dt>Событие</dt>
-            <dd>{eventTypeLabel(event.eventType)}</dd>
-            <dt>Этап</dt>
-            <dd>{event.phaseId || "—"}</dd>
-            <dt>Действие</dt>
-            <dd>{event.actionId || "—"}</dd>
-            <dt>Развёртывание</dt>
-            <dd>{event.serviceDeployment || "—"}</dd>
-            <dt>Узел</dt>
-            <dd>{event.host || "—"}</dd>
-            <dt>Роль задачи</dt>
-            <dd>{event.task?.role || "—"}</dd>
-            <dt>Задача</dt>
-            <dd>{taskNameWithoutRole(event) || "—"}</dd>
-            <dt>ID задачи</dt>
-            <dd>{event.task?.uuid || "—"}</dd>
-            <dt>Длительность</dt>
-            <dd>
-              {event.elapsedMilliseconds === undefined
-                ? "—"
-                : `${event.elapsedMilliseconds} мс`}
-            </dd>
-            <dt>Ошибка</dt>
-            <dd>
-              {[event.errorCode, event.errorSummary]
-                .filter(Boolean)
-                .join(" · ") || "—"}
-            </dd>
-          </dl>
-        </>
-      )}
-    </article>
-  );
 }
 
 function EventList({ events }: { events: InstallationEventView[] }) {

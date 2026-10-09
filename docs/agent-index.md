@@ -7,6 +7,10 @@ the repository root. Paths and symbols below are entrypoints, not a whole-repo m
 
 ## Recurring tasks
 
+User application libraries: start with [the documentation folder](application-libraries/README.md)
+and choose its architecture/configuration/execution/secrets/UI document for the question.
+These are discussion drafts, not implemented contracts or milestone authorization.
+
 | Task | Contract / required reading | Code entrypoints | Verification |
 | --- | --- | --- | --- |
 | UI layout, labels, dialogs | [UI design](ui-design-01.md), [mockup](ui-design-01-mockups.html): shared rules and affected screen; relevant milestone plan | [App.tsx](../frontend/src/App.tsx), affected page (`ServicesPage`, `ServersPage`, `TopologyPage`, `CertificatesPage`, `InstallationPage`, `UtilityPages`), relevant CSS | Affected frontend tests/typecheck/lint/build as applicable; real flow acceptance follows [QA](agent-procedures/qa.md). Visual PASS requires visual inspection. |

@@ -50,7 +50,9 @@
       vars:
         platform_artifact_requirements:
           - {id: vault-runtime, name: vault}
-      when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+      when:
+        - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+        - not (platform_vault_verify_only | bool)
 
     - name: Resolve the selected Vault API certificate materialization plan
       ansible.builtin.include_tasks: resolve_tls.yml
@@ -70,7 +72,7 @@
           run_once: true
       when: not (platform_vault_verify_only | bool)
 
-    - name: Configure audit, KV v2 and userpass without changing existing resources
+    - name: Configure audit, KV v2 and userpass and AppRole without changing existing resources
       ansible.builtin.include_tasks: configure.yml
       # These mounts are Raft cluster state, not per-host resources. Only the
       # canonical seed may reconcile them while the deployment lock is held.

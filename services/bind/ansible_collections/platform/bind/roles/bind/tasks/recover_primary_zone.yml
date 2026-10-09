@@ -7,6 +7,9 @@
 - name: Inspect interrupted full-reconcile marker
   ansible.builtin.stat:
     path: "{{ _platform_bind_zone_recovery_marker }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_bind_zone_recovery_stat
 
 - name: Load interrupted full-reconcile marker

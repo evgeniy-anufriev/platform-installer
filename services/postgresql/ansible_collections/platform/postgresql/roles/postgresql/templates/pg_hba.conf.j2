@@ -20,3 +20,5 @@ hostssl replication {{ platform_postgresql_replication_credential.username }} {{
 hostssl postgres {{ platform_postgresql_replication_credential.username }} {{ member.address }}/32 {{ platform_postgresql_failover_auth }}
 {% endfor %}
 {% endif %}
+# Client access remains TLS-only and requires SCRAM authentication.
+hostssl all all {{ _platform_postgresql_client_subnet }} scram-sha-256

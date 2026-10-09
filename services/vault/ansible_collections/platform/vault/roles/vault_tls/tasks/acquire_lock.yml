@@ -11,6 +11,9 @@
   ansible.builtin.stat:
     path: /run/lock/platform-vault
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_vault_lock_root_stat
 
 - name: Reject a substituted or incorrectly owned Vault lock directory
@@ -36,6 +39,9 @@
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_vault_lock_stat
 
 - name: Refuse an unsafe pre-existing Vault lock object
@@ -86,6 +92,9 @@
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_vault_lock_file_stat
 
 - name: Fail closed if the Vault lock file was substituted

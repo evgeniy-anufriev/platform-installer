@@ -166,6 +166,9 @@
 - name: Inspect member KRaft metadata
   ansible.builtin.stat:
     path: "{{ kafka_member.data_directory }}/meta.properties"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_kafka_member_metadata
 
 - name: Read existing member KRaft metadata

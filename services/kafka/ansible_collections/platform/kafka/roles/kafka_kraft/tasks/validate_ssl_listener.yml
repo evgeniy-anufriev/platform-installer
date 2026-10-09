@@ -7,6 +7,9 @@
 - name: Check PKI-01 stores before Kafka mutation
   ansible.builtin.stat:
     path: "{{ _platform_kafka_tls_runtime.targetDirectory }}/{{ item }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [keystore.p12, truststore.p12, materialization-fingerprint]
   register: platform_kafka_ssl_store_state
 

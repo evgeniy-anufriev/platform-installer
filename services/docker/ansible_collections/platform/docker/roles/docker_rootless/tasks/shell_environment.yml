@@ -1,0 +1,34 @@
+---
+- name: Inspect Docker account Bash profiles
+  ansible.builtin.stat:
+    path: "{{ _platform_docker_home }}/{{ item }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  loop: [.bashrc, .bash_profile]
+  register: _platform_docker_shell_profiles
+
+- name: Reject unsafe Docker account profile paths
+  ansible.builtin.assert:
+    that: >-
+      not item.stat.exists or
+      (item.stat.isreg | default(false) and not (item.stat.islnk | default(false)))
+    fail_msg: DOCKER_SHELL_PROFILE_PATH_UNSAFE
+  loop: "{{ _platform_docker_shell_profiles.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Persist rootless Docker environment for Bash sessions
+  ansible.builtin.blockinfile:
+    path: "{{ _platform_docker_home }}/{{ item }}"
+    create: true
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0644'
+    marker: "# {mark} Platform Installer rootless Docker environment"
+    block: |
+      export XDG_RUNTIME_DIR=/run/user/$(id -u)
+      export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+      export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock
+  loop: [.bashrc, .bash_profile]

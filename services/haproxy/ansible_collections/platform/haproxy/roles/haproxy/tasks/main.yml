@@ -16,6 +16,7 @@
 
 - name: Resolve HAProxy runtime projection from canonical state
   ansible.builtin.include_tasks: resolve.yml
+  when: platform_haproxy_partial_deployment_id is not defined or platform_haproxy_phase == 'prepare'
 
 - name: Select the exact PKI consumer plan before HAProxy mutation
   ansible.builtin.include_role:
@@ -23,7 +24,10 @@
     tasks_from: select_consumer_plan.yml
   vars:
     platform_pki_consumer_tls_profile_id: "{{ platform_haproxy_tls_profile }}"
-  when: platform_haproxy_phase == 'prepare'
+    platform_execution_service_deployment: "{{ _platform_haproxy_local_deployments[0].key }}"
+  when:
+    - platform_haproxy_partial_deployment_id is not defined
+    - platform_haproxy_phase == 'prepare'
 
 - name: Validate resolved HAProxy artifact sources before mutation
   ansible.builtin.include_role:
@@ -31,7 +35,9 @@
   vars:
     platform_artifact_requirements:
       - {id: haproxy, name: haproxy}
-  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+  when:
+    - platform_haproxy_partial_deployment_id is not defined
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
 
 - name: Deliver selected HAProxy offline artifacts
   ansible.builtin.include_role:
@@ -40,6 +46,7 @@
     platform_artifact_delivery_requirements:
       - {id: haproxy, name: haproxy}
   when:
+    - platform_haproxy_partial_deployment_id is not defined
     - platform_resolved_artifact_sources is defined
     - platform_haproxy_phase == 'prepare'
 

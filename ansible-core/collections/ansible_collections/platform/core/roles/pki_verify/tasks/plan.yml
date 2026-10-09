@@ -1,13 +1,17 @@
 ---
 - name: Inspect deployed PKI files read-only
-  ansible.builtin.stat:
-    path: "{{ platform_pki_plan.targetDirectory }}/{{ item }}"
-  loop: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
+  ansible.builtin.find:
+    paths: "{{ platform_pki_plan.targetDirectory }}"
+    patterns: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
+    recurse: false
+    follow: false
+    file_type: file
+    get_checksum: false
   register: platform_pki_deployed_files
 
 - name: Require complete deployed PKI material
   ansible.builtin.assert:
-    that: "{{ platform_pki_deployed_files.results | map(attribute='stat.exists') | list | min }}"
+    that: platform_pki_deployed_files.matched == 6
     fail_msg: PKI_TARGET_MATERIAL_INCOMPLETE
 
 - name: Verify deployed certificate chain read-only

@@ -27,6 +27,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_docker_tls_source }}/{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: _platform_docker_tls_files
   no_log: true

@@ -27,6 +27,9 @@
 - name: Check PostgreSQL-owned TLS files read-only
   ansible.builtin.stat:
     path: "{{ _platform_postgresql_tls_directory }}/{{ item }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: platform_postgresql_owned_tls_files
 

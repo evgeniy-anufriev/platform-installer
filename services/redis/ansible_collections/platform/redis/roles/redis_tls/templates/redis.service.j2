@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=simple
 User={{ platform_redis_user }}
 Group={{ platform_redis_group }}
+UMask=0077
 ExecStart=/usr/bin/redis-server {{ redis_member.config_directory }}/redis.conf
 Restart=on-failure
 RestartSec=2

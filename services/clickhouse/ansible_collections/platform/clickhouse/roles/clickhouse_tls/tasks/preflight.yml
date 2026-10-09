@@ -4,8 +4,7 @@
 
 - name: Inspect existing ClickHouse package identities without mutation
   ansible.builtin.command:
-    argv: [rpm, -q, --qf, '%{VERSION}-%{RELEASE}.%{ARCH}', "{{ item }}"]
-  loop: "{{ ['clickhouse-common-static', 'clickhouse-server', 'clickhouse-client', 'clickhouse-keeper'] }}"
+    argv: [rpm, -q, --qf, '%{NAME}\t%{VERSION}-%{RELEASE}.%{ARCH}\n', clickhouse-common-static, clickhouse-server, clickhouse-client, clickhouse-keeper]
   register: _platform_clickhouse_installed_packages
   changed_when: false
   failed_when: false
@@ -13,31 +12,37 @@
 - name: Refuse an incompatible foreign ClickHouse package generation
   ansible.builtin.assert:
     that:
+      - _platform_clickhouse_package_lines | length <= 1
       - >-
-        (item.rc != 0) if item.item == 'clickhouse-keeper'
-        else (item.rc != 0 or item.stdout == platform_clickhouse_package_version ~ '-1.x86_64')
+        (_platform_clickhouse_package_lines | length == 0) if item == 'clickhouse-keeper'
+        else (_platform_clickhouse_package_lines | length == 0 or
+              _platform_clickhouse_package_lines == [item ~ '\t' ~ platform_clickhouse_package_version ~ '-1.x86_64'])
     fail_msg: CLICKHOUSE_PACKAGE_VERSION_CONFLICT
-  loop: "{{ _platform_clickhouse_installed_packages.results }}"
+  vars:
+    _platform_clickhouse_package_lines: "{{ _platform_clickhouse_installed_packages.stdout_lines | select('match', '^' ~ item ~ '\\t') | list }}"
+  loop: [clickhouse-common-static, clickhouse-server, clickhouse-client, clickhouse-keeper]
   loop_control:
-    label: "{{ item.item }}"
+    label: "{{ item }}"
 
 - name: Check stock ClickHouse server and Keeper unit activity without changing it
   ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ item }}"]
-  loop: [clickhouse-server.service, clickhouse-keeper.service]
+    argv: [systemctl, is-active, clickhouse-server.service, clickhouse-keeper.service]
   register: _platform_clickhouse_stock_units
   changed_when: false
   failed_when: false
 
 - name: Refuse to change a host with active stock ClickHouse units
   ansible.builtin.assert:
-    that: _platform_clickhouse_stock_units.results | selectattr('stdout', 'equalto', 'active') | list | length == 0
+    that: "'active' not in _platform_clickhouse_stock_units.stdout_lines"
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
 
 - name: Inspect exact instance-unit paths before rendering
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.0.server_unit_name if item.1 == 'server' else item.0.keeper_unit_name }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: >-
     {{ _platform_clickhouse_local_instances |
        product(['server', 'keeper'] if platform_clickhouse_mode == 'raft-ha' else ['server']) | list }}
@@ -48,6 +53,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: >-
     {{ (_platform_clickhouse_local_instances | map(attribute='legacy_server_unit_name') | list)
        + ((_platform_clickhouse_local_instances | map(attribute='legacy_keeper_unit_name') | list)
@@ -92,6 +100,9 @@
   ansible.builtin.stat:
     path: "{{ item.0[item.1] }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
   register: _platform_clickhouse_owned_path_stats
 
@@ -99,6 +110,9 @@
   ansible.builtin.stat:
     path: "{{ item.data_directory }}/.platform-clickhouse-member.json"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: "{{ _platform_clickhouse_local_instances }}"
   register: _platform_clickhouse_marker_stats
 

@@ -2,6 +2,14 @@
 
 ## Status
 
+Owner addition (2026-10-09): managed HBA permits all database/user client
+connections from the observed subnet of the local PostgreSQL member address
+using `hostssl all all <network/prefix> scram-sha-256`. Subnet/prefix comes
+from ordinary Ansible network facts, not a fixed /24 or another host's default
+route. Specific HA rules retain priority. Missing or ambiguous interface facts
+block Apply before mutation. This source change awaits bundle delivery and
+real client acceptance; current evidence is in the SI11 test journal.
+
 POSTGRES-01 is accepted. The selected RED OS acceptance set is
 PostgreSQL 16.14 (`postgresql`, `postgresql-server`, `postgresql-contrib`)
 with pg_auto_failover 2.2. The packages are resolved from the approved RED OS

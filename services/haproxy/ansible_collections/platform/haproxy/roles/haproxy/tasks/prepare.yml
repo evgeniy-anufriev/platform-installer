@@ -9,9 +9,11 @@
   ansible.builtin.package:
     name: "{{ platform_haproxy_package }}"
     state: present
-  when: >-
-    platform_resolved_artifact_sources is not defined or
-    platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
+  when:
+    - platform_haproxy_partial_deployment_id is not defined
+    - >-
+      platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
 
 - name: Reset only the temporary HAProxy candidate graph
   ansible.builtin.file:
@@ -27,6 +29,7 @@
     group: root
     mode: '0750'
   loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
+  when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Create temporary HAProxy candidate workspace
   ansible.builtin.file:
@@ -42,6 +45,7 @@
   ansible.builtin.assert:
     that: platform_pki_selected_consumer_plan.targetDirectory is defined
     fail_msg: HAPROXY_PKI_PLAN_REQUIRED
+  when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Deploy HAProxy TLS PEM inputs
   ansible.builtin.copy:
@@ -56,6 +60,7 @@
     - {name: ca-chain.pem, bundle: '02-ca-chain.pem', mode: '0640'}
     - {name: private-key.pem, bundle: '03-private-key.pem', mode: '0640'}
   no_log: true
+  when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Discover unrelated HAProxy conf.d files for complete candidate validation
   ansible.builtin.find:
@@ -102,10 +107,11 @@
     mode: '0640'
   no_log: true
   register: _platform_haproxy_pem_bundle
+  when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Record whether HAProxy TLS material changed
   ansible.builtin.set_fact:
-    platform_haproxy_tls_material_changed: "{{ _platform_haproxy_pem_bundle.changed }}"
+    platform_haproxy_tls_material_changed: "{{ _platform_haproxy_pem_bundle.changed | default(false) }}"
 
 - name: Publish participating HAProxy addresses
   ansible.builtin.set_fact:
@@ -200,6 +206,21 @@
     - {src: 20-local-stats.cfg.j2, dest: conf.d/20-local-stats.cfg}
     - {src: 90-stats-backends.cfg.j2, dest: conf.d/90-stats-backends.cfg}
   changed_when: false
+  when: platform_haproxy_partial_deployment_id is not defined
+
+- name: Stage unchanged provider configuration for partial backend validation
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
+    remote_src: true
+    mode: preserve
+  loop:
+    - {src: "{{ platform_haproxy_main_config }}", dest: haproxy.cfg}
+    - {src: "{{ platform_haproxy_conf_directory }}/10-public.cfg", dest: conf.d/10-public.cfg}
+    - {src: "{{ platform_haproxy_conf_directory }}/20-local-stats.cfg", dest: conf.d/20-local-stats.cfg}
+    - {src: "{{ platform_haproxy_conf_directory }}/90-stats-backends.cfg", dest: conf.d/90-stats-backends.cfg}
+  changed_when: false
+  when: platform_haproxy_partial_deployment_id is defined
 
 - name: Render one managed HAProxy application backend candidate per resolved backend
   ansible.builtin.template:

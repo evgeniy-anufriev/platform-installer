@@ -9,7 +9,10 @@ Modes: one-member standalone and three-member Raft HA, both MEMBER_SCOPED;
 distinct hosts are not required. Defaults implemented by B: API 8200,
 cluster 8201, stable member slot stride 2, shares 3 / threshold 2. API TLS,
 cluster protection, file audit (log_raw=false), KV v2 at secret/ and userpass
-at userpass/ are invariants, not user-disableable settings. SI08-B adds daily,
+at userpass/ and AppRole at approle/ are invariants, not user-disableable settings.
+Existing AppRole mounts are retained; a different method at approle/ blocks
+configuration before writes. AppRole roles, policies and role/secret IDs are
+not created. SI08-B adds daily,
 bounded audit rotation per instance. No users/policies are created. Cross-field
 bounds (threshold<=shares, threshold>=2 for multiple
 shares; port range/collision after slot expansion) belong to Core/role, not Go.

@@ -52,11 +52,17 @@
 - name: Discover pg_auto_failover controller configuration
   ansible.builtin.stat:
     path: "/var/lib/pgsql/.config/pg_autoctl{{ platform_postgresql_data_directory }}/pg_autoctl.cfg"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_postgresql_pg_autoctl_config
 
 - name: Discover pg_auto_failover data initialization state
   ansible.builtin.stat:
     path: "{{ platform_postgresql_data_directory }}/PG_VERSION"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_postgresql_pg_autoctl_pg_version
 
 - name: Read existing pg_autoctl monitor URI

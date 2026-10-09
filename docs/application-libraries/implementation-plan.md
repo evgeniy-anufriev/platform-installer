@@ -1,0 +1,346 @@
+# Пользовательские библиотеки приложений — общий план реализации
+
+Документ для обсуждения последовательности работ. Подготовка этого плана не
+означает начала реализации, запуска QA на targets или разрешения нового milestone.
+Обсуждение завершено; по указанию владельца действует стандартная процедура ревью.
+Результат FULL PLAN: [APPROVE_WITH_CHANGES](plan-review.md), ноль блокирующих замечаний.
+Текущий статус и разрешённый scope
+ведутся только в [CURRENT_STATE](../../CURRENT_STATE.md), результаты будущих проверок —
+в отдельном журнале. Здесь нет параллельного списка DONE/NEXT.
+
+## Цель и последовательность
+
+Дать возможность установить библиотеку СДКУ/ЦСПА с переиспользуемыми контейнерными
+приложениями, общими ресурсами, индивидуальными УЗ, Vault Agent и endpoints:
+
+1. **A — standalone Ansible + Core:** обычные inventory/defaults/group_vars/host_vars,
+   Core schemas/snapshot/validation/планирование и исполнение на Execution Node;
+   запуск без Go, Wails, UI и обязательного project.yml.
+2. **B — Go backend:** подключение готового Ansible/Core пути через существующий
+   адаптер, guarded writer, approval/execution lifecycle и доставку runtime.
+3. **C — UI:** страница «Приложения» и полный пользовательский сценарий.
+
+Вся инфраструктурная семантика Ansible/Python Core реализуется и проверяется
+в A. Этап B добавляет только Go application semantics и оркестрацию готового
+контракта: он не воспроизводит defaults, resolver, DAG или provider rules.
+
+Подробные предметные решения: [архитектура](architecture.md),
+[конфигурация](configuration.md), [установка](execution.md),
+[секреты](secrets.md), [UI](ui.md).
+
+## Правило простоты
+
+Для каждой части сначала найти существующий путь и расширить его минимально.
+Новый механизм допустим только при конкретном пробеле, который нельзя закрыть
+обычной ролью, task sequence, шаблоном, module или небольшим расширением контракта.
+Обоснование должно называть этот пробел и более простую рассмотренную альтернативу.
+
+| Потребность | Использовать | Не создавать |
+| --- | --- | --- |
+| Настройки | Role defaults и обычные Ansible vars; явный combine разных inputs | Второй precedence/Jinja engine |
+| Compose | Исходные шаблоны, base Compose, `.env`, штатные extends и validation | Собственный Compose merger/parser для исполнения |
+| Ресурсы и УЗ | Общие provider-owned tasks/entrypoints и manifest capabilities | SQL/ACL hooks на каждое приложение, универсальный script DSL |
+| Зависимости | Существующий Core DAG; обычная последовательность Ansible tasks | Второй scheduler, daemon, event bus |
+| Vault/PKI | Существующие credentials, identity, trust, runtime-secret boundaries | Второй secret store в проекте, plaintext env с паролями |
+| HAProxy/DNS | Существующие resolver, publication, ownership/reconcile | Второй генератор HAProxy и отдельный DNS registry |
+| Save/Start | Guarded writer, revisions, plans, approval, execution protocol | Applications-only save/start bypass |
+| UI | Формы и interaction patterns страницы «Сервисы», metadata/snapshot | Семантика инфраструктуры в React |
+| Packages/artifacts | Existing locks, transfer/export, bundle/source policy | Собственный package manager или updater |
+
+Не писать общий CRUD/plugin framework ради нескольких текущих полей. Не заводить
+новую БД или durable ledger, если existing runtime evidence решает задачу. Не
+обещать общую транзакцию между providers и Compose. При этом простота не отменяет
+secret safety, ownership, явную проверку refs и безопасное восстановление.
+
+Тестировать контракты и реальные риски, не зеркалировать каждую строку реализации.
+Сначала affected checks; полный набор повторять только по gate или новым причинам.
+
+## A. Standalone Ansible + Core
+
+### A1. Минимальный контракт и сквозные fixtures
+
+- Зафиксировать формы application/library definitions и instances, overrides,
+  placement, bindings, resources, secret bindings и endpoint backend settings.
+- Определить mapping recipe slot → единственный пользовательский instance ID.
+  ID автоматически заполняет нужные env; отдельного повторного ввода нет.
+- Выбрать простейшую Compose layout, доказывающую два экземпляра одного приложения
+  на одном хосте: service keys, `.env` scopes, paths, ports и names без коллизий.
+- Сохранить defaults authority, явный combine и существующий ansible.cfg.
+- Подготовить компактные fixtures СДКУ/ЦСПА с одним application definition и
+  различными instance IDs/bindings. Проверить их current schemas там, где возможно.
+- До A2 определить доверенные пакеты и допустимые файлы/пути. Достаточно явно
+  выбранных владельцем локальных пакетов с зафиксированным содержимым; digest
+  подтверждает идентичность, но не является разрешением исполнения. Изменение
+  содержимого требует проверки области доверия и новой ревизии плана. Новый
+  signing service/package manager не нужен; B2 добавляет безопасный импорт.
+
+**Результат:** небольшой контракт с примерами и точными точками расширения.
+**Выход:** два экземпляра разрешаются независимо; отсутствует второй desired state;
+нельзя начать mutation части до определения ownership и secret boundaries этой части.
+
+### A2. Материализация и запуск простого контейнера
+
+- Общие tasks формируют base Compose и несекретный `.env` библиотеки.
+- Template приложения получает identity и instance overrides, сохраняя extends.
+- Использовать выбранный существующий rootless Docker runtime; Docker installer
+  не переписывать. Проверить paths/ownership, Compose config и доступность image.
+- Реализовать apply/verify через стандартные Ansible средства и имеющиеся
+  зависимости. Если подходящий module уже доступен — переиспользовать; новый
+  dependency вводить только с обоснованной необходимостью и offline closure.
+- Source selection выполняется при execution: approved compatible source,
+  затем immutable offline artifact, иначе BLOCK; без неявного pull/build.
+
+**Результат:** ручной ansible-playbook запускает два изолированных экземпляра.
+**Выход:** defaults/overrides, readiness, repeat changed=0, отсутствие port/path
+коллизий; изменение одного instance не перезапускает другой без причины.
+Это технический baseline, ещё не полный сценарий приложения с УЗ/Vault.
+
+### A3. Ресурсы библиотеки и общий PostgreSQL hook
+
+- Сначала реализовать один provider end-to-end: создание БД/схемы библиотеки,
+  затем УЗ и grants экземпляров через один PostgreSQL entrypoint.
+- Ресурсы имеют явные ссылки, ownership и managed/existing semantics.
+- Барьер подготовки библиотеки блокирует dependent instances при ошибке.
+- Создание таблиц/миграции отделить от создания БД и поставить до соответствующих
+  grants. Не строить отдельный migration engine; использовать существующий путь
+  приложения, если он определён, иначе оставить prerequisite явно незакрытым.
+- Credentials подаются через текущий runtime-механизм. До A4 использовать только
+  безопасный standalone credential input; не писать временную plaintext альтернативу.
+
+**Результат:** два приложения вызывают одинаковые PostgreSQL tasks с разными inputs.
+**Выход:** least privilege, foreign-resource rejection, repeat и interrupted
+create/retry; нет takeover по username и неявного удаления общих ресурсов.
+
+### A4. Vault provisioning, Agent и общие PKI-секреты
+
+- Один provider-owned Vault hook: secrets, минимальная policy, AppRole.
+- Defaults связывает env name с account field, library secret либо явно existing
+  Vault secret. Хук не получает произвольный исполняемый путь от приложения.
+- На библиотечном этапе публиковать общий java_keystore_password из точного PKI
+  credential/material binding. Не дублировать его в каждом instance path.
+- Для экземпляра выдавать read только на объявленные secret paths и генерировать
+  agent.hcl. Template syntax Agent не должен случайно исполняться Ansible/Jinja.
+- Зафиксировать bootstrap, restart/re-auth/expiry, rotation и interrupted retry
+  перед реализацией. Не считать одноразовый wrapped token решением всех restart.
+- Agent внутри подготовленного образа передаёт secrets процессу; обычные `.env`,
+  Compose, snapshot и logs остаются без значений секретов.
+
+**Результат:** PostgreSQL credential и общий PKI-secret доходят до процесса через Agent.
+**Выход:** read isolation, missing credential failure, повтор без смены паролей,
+restart/re-auth и согласованность keystore/password; admin secrets не доступны app.
+
+### A5. Остальные providers по тому же образцу
+
+Выполнять отдельными ограниченными частями:
+
+| Часть | Минимальный результат |
+| --- | --- |
+| A5.1 Redis | Общий ACL user hook, key/command permissions и проверка подключения |
+| A5.2 ClickHouse | Общий account/grants hook и проверка нужной БД/таблиц |
+| A5.3 Kafka | Сначала явная поддержка выбранного SASL mechanism/listener/ACL в пакете, затем общий principal/ACL hook |
+
+Переиспользовать A3/A4 envelope и provider-owned tasks, не делать общий SQL/ACL
+язык. Topic/database provisioning добавлять только для явно заявленных ресурсов.
+Текущий Kafka manifest отмечает SASL unsupported: нельзя закрыть этот пункт
+созданием фиктивной УЗ или переходом на anonymous access. Scope Kafka security
+изменения отдельно детализировать до кода.
+
+**Выход каждой части:** реальное authenticated connection, минимальные права,
+повтор и отсутствие secret leakage. Затем один экземпляр подключается ко всем
+четырём providers через свои credentials, полученные Vault Agent.
+
+### A6. Endpoints через существующие HAProxy/DNS hooks
+
+- Расширить source identity существующей интеграции на application instance.
+- Defaults backend и instance overrides отображать в существующий HAProxy
+  contract. Адрес/порт получать из placement и выбранного listener.
+- Сохранить service IDs/FQDN/ownership и existing provider selection/reconcile.
+- Публиковать после readiness; проверить frontend/backend TLS и protocol-specific
+  probes. Не считать HTTP probe универсальным для всех listener protocols.
+- Сохранить действующее missing-provider поведение и отдельно показать, что
+  endpoint не опубликован; не вводить новый execution terminal state.
+
+**Выход:** правильные DNS/HAProxy targets, реальный внешний endpoint, repeat,
+конфликты/частичный сбой и отсутствие изменений у соседних источников.
+
+### A7. Core snapshot, validation, планирование и execution contract
+
+Расширить существующие schemas/snapshot/findings: libraries, instances, origins,
+resources, secret requirements и endpoint projection. Потреблять те же определения
+и resolver/tasks. Интегрировать фазы библиотеки и экземпляров в существующий Core
+DAG, target-free plan и production execution protocol; не создавать второй путь.
+Подготовить Core package/bundle requirements, fingerprints и offline closure через
+существующие инструменты по [bundle procedure](../agent-procedures/runtime-bundle.md).
+Минимальные части этого контракта вводятся по мере A1–A6; A7 завершает интеграцию.
+
+**Выход:** связь findings с точным полем, стабильный fingerprint, отсутствие target
+контакта при target-free операциях и secret values в output; совпадение standalone
+и structured Core пути. Инфраструктурный план и execution protocol работают без Go.
+Контрактные проверки: старый проект без libraries сохраняет прежнее поведение;
+неизвестная major version и несовместимый package/runtime lock отклоняются;
+Apply не выполняет скрытую миграцию. Использовать existing version/lock mechanisms,
+без отдельного migration framework.
+
+### A8. Интеграция библиотек в общий план выполнения
+
+Общий Core план содержит два последовательных этапа:
+
+1. **Инфраструктура:** Apply/Verify всех инфраструктурных deployments, включённых
+   в план, в их существующем порядке зависимостей.
+2. **Библиотеки приложений:** подготовка ресурсов библиотеки, УЗ/секретов,
+   запуск экземпляров, публикация endpoints и Verify.
+
+Между ними обязательный барьер: библиотеки не начинают mutations, пока успешно
+не завершены установка и проверка всех инфраструктурных сервисов общего плана,
+а не только непосредственных providers первой библиотеки. Ошибка, отмена или
+незавершённость инфраструктурного этапа не допускает переход к библиотекам.
+Target-free validation всех частей может выполняться заранее.
+
+Bindings библиотек остаются явными dependency references: проверять наличие,
+capabilities и порядок providers, не заменять проверки одним барьером. Общий план
+имеет одно approval и execution lifecycle, не цепочку скрытых отдельных запусков.
+Реализовать этапы существующей последовательностью/DAG; не добавлять scheduler.
+
+Создание БД/УЗ и endpoint hooks библиотек выполняются во втором этапе на уже
+подготовленных providers. Это потребительская настройка инфраструктуры, а не
+повторная установка PostgreSQL/Vault/HAProxy/DNS. Такая граница предотвращает
+цикл «инфраструктура ждёт будущие endpoints приложений».
+
+Частичная установка одной библиотеки не подразумевается новым этапом и не
+расширяет отложенный selective-plan scope. В ручном standalone использовании
+ранее установленной инфраструктуры readiness обязательных providers проверяется
+явно; отсутствие infrastructure actions не является доказательством готовности.
+
+**Выход:** один общий план infrastructure + libraries; все infrastructure Verify
+предшествуют первой library mutation. Проверить успешный порядок, ошибку даже
+не связанного напрямую infra deployment, cancel на границе, отсутствие запуска
+библиотеки после сбоя и сохранение прежнего поведения infrastructure-only плана.
+
+### A9. Полная standalone Ansible + Core приёмка
+
+Пройти сценарий: inventory/vars → ресурсы библиотеки → общие secrets → УЗ/apps
+→ Agent → connections → endpoint/verify. СДКУ и ЦСПА используют один пакет приложения
+с разными ID и bindings. При возможности использовать предоставленные реальные
+манифесты/образы; недоступность обязательного образа отмечается prerequisite,
+тестовый контейнер не выдаётся за приёмку реального приложения.
+
+В QA использовать уже собранный
+[тестовый образ подключений](../../tests/application-connection-probe/README.md)
+как проверяемое приложение библиотеки. Его `/status` должен подтвердить
+PostgreSQL, Redis, Sentinel и ClickHouse под УЗ экземпляра, получение секретов
+через Vault Agent с AppRole, PKCS12 truststore/keystore и подключение к клиентскому
+Kafka SSL listener без аутентификации. Для Kafka это проверка TLS и протокола,
+не проверка ACL или прав на топики. На A4 проверять доставку секретов и PKCS12,
+на A5 — соответствующие подключения, на A6 — публикацию `/status` через endpoint,
+на A9 — полный standalone путь. Проверять образ по зафиксированному digest;
+предыдущий [результат на RED OS](../../tests/application-connection-probe/qa-result.md)
+подтверждает только ручной QA-запуск на node1, а не прохождение будущего Ansible/Core
+или UI-сценария.
+
+Проверить также structured Core snapshot/validate/plan/execution из A7 и общий
+двухэтапный план с барьером из A8.
+**Выход A:** ручной и structured Core запуск без Go/Installer, repeat changed=0, targeted failure/retry,
+изоляция библиотеки/экземпляра, safe secrets и внешний endpoint. Проверки идут на
+RED OS из текущих исходников по [QA procedure](../agent-procedures/qa.md).
+Никакого Ansible/Python QA на Windows. Standalone PASS не означает UI PASS.
+
+## B. Go backend
+
+### B1. Подключение готового Core контракта через адаптер
+
+Расширить существующий Go adapter/read model для результатов A7: libraries,
+instances, findings, origins и secret requirements. Сохранить revision/runtime
+binding и обработку структурированных ошибок; не вычислять effective values в Go.
+**Выход:** backend предоставляет проекции Core без потери идентичности и без
+дублирования доменных правил; target-free Verify вызывает проверенный Core путь.
+
+### B2. Существующий guarded writer
+
+Добавить ограниченные typed edits библиотеки/instance и overrides в текущий
+Review/Save путь. Сохранить opaque data, atomic writes и revision checks.
+Определить разрешённые package files и безопасный import/export/trust scope;
+не создавать полноценный package editor ради базового добавления экземпляра.
+**Выход:** Save без Execution Node, reopen/export/import без потери источников;
+конкурирующая ревизия и небезопасные пути отклоняются существующими guards.
+
+### B3. Approval/execution lifecycle и доставка runtime
+
+Подключить готовое Core планирование A к существующим BuildDeploymentPlan/approval/Start,
+credentials, events, cancellation и observations. Go не строит инфраструктурный DAG.
+Go передаёт и исполняет общий двухэтапный план A8, не пересчитывая порядок и не
+запуская библиотеки отдельным скрытым run. Approval покрывает оба этапа.
+План показывает library preparation,
+provider mutations и instance actions. Изменение source/vars/package/runtime
+делает старое approval непригодным. Отмена не обещает rollback providers.
+Подключить подготовленный в A runtime к existing locks/transfer/cache/rebind;
+проверка и публикация — по [bundle procedure](../agent-procedures/runtime-bundle.md).
+**Выход:** approved scope совпадает с dispatch, secret-safe results, partial
+failure/cancel/retry, точные revision/digest; публикация не выполняется вручную.
+
+### B4. Проверка Go backend integration
+
+Проверить A-сценарий через production execution protocol, writer и observation.
+Прямые harness checks вспомогательны и не закрывают реальную UI acceptance.
+**Выход B:** frontend получает все нужные metadata/findings/results без доменных
+вычислений; standalone остаётся работоспособным тем же путём. UI gate остаётся C.
+
+## C. UI
+
+### C1. Макет и соответствие действующим flow
+
+Сопоставить «Сервисы», shared UI rules и новый [UI proposal](ui.md).
+Подготовить конкретный макет «Приложения»: библиотека → экземпляры.
+Отдельно показать ресурсы/общие секреты библиотеки, origin и одно поле instance ID.
+**Выход:** согласованная структура и записанные расхождения с текущими mockups;
+никакой преждевременной реализации альтернативного редактора.
+
+### C2. Редактирование библиотек и экземпляров
+
+Переиспользовать existing form controls, schema-driven settings, validation,
+Review/Save и runtime-secret input. Добавить bindings/resources/accounts,
+secret variable mappings, endpoint/backend settings и reset override.
+Core проекции отображаются read-only; raw YAML не разбирается React.
+**Выход:** реальный Save/reopen через Wails, один ввод ID, верное inheritance,
+секреты не возвращаются в обычные модели UI.
+
+### C3. Установка и наблюдение
+
+Общая страница «Установка» показывает отдельные этапы «Инфраструктура» и
+«Библиотеки приложений» в порядке Core. Второй ожидает успешного завершения
+первого; причина блокировки/отмены видна без нового terminal state.
+Внутри второго этапа показываются фазы библиотеки и экземпляров, review
+provider changes, existing approval/Start, events и cancellation. После выполнения
+отдельно показываются running, connection checks и verified endpoint.
+**Выход:** отсутствует скрытый start path; устаревшие plans отклоняются;
+блокировка library preparation понятна пользователю.
+
+### C4. Сквозная реальная приёмка
+
+На реальных React handlers/Wails bindings и Execution Node пройти создание
+библиотеки/instance, изменение inherited settings, Save, fresh plan, approval,
+Start, terminal/verify и повтор. Покрыть missing credential, provider failure,
+Agent restart, непройденную endpoint проверку, изменение только одного instance.
+**Выход C:** конкретные saved revisions/run IDs и safe evidence в журнале;
+visual acceptance отдельно. Mocked tests/Go harness не заменяют этот gate.
+
+## Как вести следующие подэтапы
+
+- Перед началом выбрать один ограниченный подэтап и критерий выхода; не объединять
+  несколько инфраструктурных переделок, writer и UI в один большой diff.
+- Читать только соответствующие контракты/procedures из task index и scoped AGENTS.
+- Следовать [стандартной процедуре ревью](../agent-procedures/review.md).
+  Текущий FULL PLAN отчёт связан выше; прежние review раннего черновика не закрывают
+  будущую реализацию. Соблюдать budget, BLOCK stop и owner approval;
+  HIGH-RISK DIFF требует независимого FULL DIFF review.
+- В коротком отчёте фиксировать результат, выполненные проверки, открытый gate и
+  отклонение от плана. Не размножать status ledgers по документам.
+- При изменении границы сначала обновить затронутый контракт и этот scope,
+  затем продолжать реализацию только в разрешённых пределах.
+
+## Вне начального объёма
+
+Multi-host scheduling/HA приложений, Swarm/Kubernetes, универсальный Compose importer,
+новый package marketplace, arbitrary hook scripting, автоматические миграции любой
+БД, динамические credentials всех providers и межсервисный rollback engine.
+Обязательные сценарии account provisioning, Vault shared secrets, backend overrides
+и UI не исключаются ради упрощения: упрощается механизм, а не требование.

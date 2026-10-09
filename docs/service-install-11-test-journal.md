@@ -311,3 +311,330 @@ Existing explicit full reconcile can clean fragments while those providers
 remain in inventory; no new former-target store or atomicity guarantee added.
 Real UI/HTTPS/unchanged repeat and move/delete acceptance remain open. No UI
 restart/build, bundle release/rebind, current project modification or new Start.
+# Kafka ownership check on fresh installation — 2026-10-09
+
+### Partial HAProxy optimization and active-run timing — 2026-10-09
+
+Owner approved removing repeated provider/TLS/systemd preparation while keeping
+each service backend operation separate; batching reloads is explicitly excluded.
+Partial prepare now resolves once, reuses installed common config/TLS in the
+candidate, and publishes only source backend fragments. Candidate/active digest
+equivalence, archive ownership, both full haproxy -c checks and backend TLS probes
+remain. Partial lifecycle uses reload only for changed active graph; no systemd
+drop-in preparation or daemon reload. Full provider path retained.
+
+RED OS HAProxy suite: 26 PASS. Production task regression preserves common/other
+source files, publishes source only, proves facts survive between plays, verifies
+changed reload in check mode (no actual reload), repeated publication no-change
+and lifecycle skip. Workspace cleaned. Independent FULL DIFF
+APPROVE_WITH_CHANGES, no blockers/overengineering; reviewed task-content digest
+`4719EFC1080DEEC249B10860760C20A36EA7ACF482B87C1FE75B935C88EF3377`.
+HPO-01 enhanced test added; complete production integration and actual changed
+reload/measurement remain real acceptance gaps. Source-only, not in bundle -10.
+
+Owner identified current timing source as run
+`installer-7d4d76d9fa1972a4e74b30e68c2fe38e`. Read-only timing sample through
+14:16:07 MSK (run still active): ClickHouse apply 1183 s, Vault apply 882 s,
+Kafka apply 775 s, Kafka verify 403 s, HAProxy apply 322 s, PKI apply 280 s.
+HAProxy-role spans inside source apply: ClickHouse 365 s, Vault 265 s. Each has
+97 task-start records, including skipped tasks. These timings precede the new
+partial optimization; no measured speedup claim. Per-task costs use maximum
+host completion duration, not sum of parallel hosts: repeated PKI file/fingerprint
+inspection about 304 s and PKI verify file inspections about 264 s; repository
+queries about 194 s. These are profiling estimates, not independent wall-time
+buckets, and include per-task execution/transport overhead.
+
+### Bundle -10 and desktop build delivery
+
+Owner requested build/delivery after Vault hook and terminal-event fixes.
+`wails build -clean` PASS, `build/bin/platform-installer-ui.exe` rebuilt; no UI
+launch/restart. `si11-full-service-20261009-10` built on trusted node2 from
+current sources/existing offline runtime. Standard validation/publication PASS,
+digest `sha256:df362c251ac0e2de9fa359019cb0c6f6a791a7c8b57d0caaeaf3d52ce799b33c`.
+Active cache and `full-services/bundle` match; previous -09 preserved at
+`.runtime/qa/full-services-bundle-before-haproxy-hook-20261009`.
+Includes partial HAProxy package/PKI correction and Docker profile environment;
+desktop includes terminal replay drain guard, plan labels and refined layout.
+App 68 tests/typecheck/lint PASS. Post-review bounded replay guard prevents
+replacing an active replay on each received event; race regression PASS.
+Temporary build workspace cleaned. Project lock unchanged, UI rebind and node
+preparation pending; no installation Start or real acceptance performed.
+
+### Vault HAProxy hook failure and terminal-event delivery — 2026-10-09
+
+Run `installer-227feb7460c80c1aba7fea415f693e04` ended FAILED at
+12:30:31 MSK, terminal sequence 3469. UI stopped at sequence 3444; server
+events 3445–3455 confirm PKI selection succeeded. Events 3456–3467 show the
+HAProxy hook attempted the haproxy artifact gate under Vault source authority
+(`qa-vault-consumer`, requirement `vault-runtime`), failing on node1–node3.
+This was not a PKI-selection failure.
+
+Source correction: partial backend integration reuses the already-installed
+provider and skips package acquisition/delivery/install; full provider apply
+retains the existing artifact checks. HAProxy PKI selection uses the exact local
+provider deployment identity. RED OS node2 production-task regressions: 3 PASS,
+including partial integration under source authority and rejection of invalid
+authority for full provider apply. No target package/service changes; workspace
+cleaned. Frontend terminal unsubscribe now waits for contiguous events through
+the terminal run sequence and uses existing SubscribeAfter replay on gaps.
+App 68 tests, typecheck/lint PASS, including terminal-before-events regression:
+replay requested, late failure visible, unsubscribe only after final sequence.
+Independent FULL DIFF APPROVE_WITH_CHANGES, zero blockers/overengineering
+findings; TH-01 (missing race regression) resolved by that test. Reviewed diff
+SHA-256 `F646634633EFCC9899CEB7AF7704C29C2B8B25B19C8B16574F0FAC9CC9F7BFBF`,
+base `f992f2ba5e3ae5f673568a9039a3937938215f5b`.
+Real Wails terminal replay and installation
+retry remain pending; correction is not in released bundle -09.
+
+### Docker account shell environment — 2026-10-09
+
+Owner confirmed that the existing user daemon works with explicit runtime
+environment. Read-only node1 check: platform-docker UID 1002, linger enabled,
+user Docker and system bridge active, user unit and socket present; explicit
+socket `docker ps` succeeds. Role now inserts a managed block in `.bashrc` and
+`.bash_profile` defining XDG_RUNTIME_DIR, DBUS_SESSION_BUS_ADDRESS and DOCKER_HOST
+from the session UID. Existing profile content is preserved; unsafe nonregular
+or symlink destinations are rejected. RED OS production-task test PASS: existing
+profile retained, missing profile created, second apply changed=0, both profiles
+produce the expected environment. Temporary workspace cleaned. Source-only;
+not applied to installed accounts, not included in released bundle -09.
+
+### Bundle -09 and desktop build delivery
+
+Owner requested desktop build and bundle delivery after the execution-screen
+layout correction. `wails build -clean` PASS; output
+`build/bin/platform-installer-ui.exe`. UI was not launched/restarted.
+Built `si11-full-service-20261009-09` from current sources on trusted node2
+using existing approved offline runtime inputs; no downloads. Standard
+validate-bundle/publish-bundle PASS, digest
+`sha256:3bcf9d196bc8c9b5b1598ef6003f128370fc52f61ecdad6a8f00f9ac4f2eff2a`.
+Active cache and `.runtime/qa/full-services/bundle` match. Previous import
+preserved at `.runtime/qa/full-services-bundle-before-endpoint-kafka-20261009`.
+Includes endpoint-derived HAProxy placement/package backend defaults and Kafka
+ownership skip correction. Project lock unchanged; UI rebind/preparation and
+real retry pending. Build workspace cleaned; no Start or target installation.
+
+Run `installer-843d79d2ca832b71170b306d267c9f3b` stopped at
+`Refuse replacement of foreign Kafka member units` on node1/node2/node3
+at 11:40:49 MSK. Events 6556–6558 show that the preceding ownership-header
+reads were SKIPPED on all three hosts. The assertion nevertheless evaluated
+the skipped results, whose `content` is absent. This is not evidence of a
+foreign unit file.
+
+Correction: ignore explicitly skipped slurp results in the ownership
+assertion; existing files still require the exact managed header. RED OS node2
+ran `test_unit_ownership_runtime.py` against current sources: one test with
+three production-task scenarios PASS (missing file accepted, owned file
+accepted, foreign file rejected with `KAFKA_UNIT_OWNERSHIP_UNKNOWN`). Tests
+only touch temporary fixtures and leave existing files unchanged. QA workspace
+was cleaned. No bundle release, UI restart or installation retry performed;
+real installation acceptance remains pending.
+
+### PKI repeated target inspection optimization — 2026-10-09
+
+Owner requested optimization of repeated PKI after HAProxy. No service-scope filtering: current full-services uses three shared host plans. Integrity target metadata now uses one nonrecursive no-follow find instead of six stat invocations; one no_log sha256sum command hashes the six exact regular files. Source SHA256 checks, validated directory owner/group, file ownership/modes, fingerprint and existing repair remain. Verify batches six existence checks, retaining OpenSSL chain and fingerprint checks. No cache or skip based on previous success.
+
+RED OS current-source QA: focused real Ansible valid repeat/corrupt/missing/mode/fingerprint repair and clean repeat passed (77.300 s). Initial normalization failed on Ansible 2.18 multiline Jinja string conversion; corrected with explicit JSON serialization and parsing before successful repeat. FULL DIFF reviewer APPROVE, zero blockers; initial ownership finding withdrawn because existing directory owner/group checks were overlooked. Reviewed security expressions unchanged; final runtime correction only explicit serialization. General single-pass suite result recorded below when complete. No live installation mutation, UI restart or bundle publication. Bundle -10 excludes this optimization; speedup is unmeasured.
+PKI general single-pass RED OS suite: 16 tests PASS in 1009.746 s; expanded focused integrity repeat/repair additionally PASS. Temporary QA workspace cleaned with qa-sync helper.
+
+### Service runtime optimization and Redis fresh-install blocker — 2026-10-09
+
+Run installer-7d4d76d9fa1972a4e74b30e68c2fe38e terminal FAILED at 14:50:04 MSK, event9879. Nine services completed Apply/Verify. Events9875–9877: Refuse replacement of foreign Redis member units failed on node1/node2/node3. Read-only inspection confirmed no platform-redis*.service files. Missing-file slurp returns skipped results without content; Redis and Sentinel header assertions lacked skipped guards. Both assertions now skip only explicit skipped results; foreign existing file protection remains. Independent Redis FULL DIFF APPROVE, snapshot CEF4AEA00A6B0CBCD9D88FACE3773FC9B42D3FC8BDB7E90890DBDA6C4DE58EEA, zero blockers. Production-task six missing/owned/foreign fixture cases PASS.
+
+Owner authorized service optimization. Applied source-gate phase restrictions, BIND repository package batching, ClickHouse RPM/stock-systemd batching, Kafka ActiveState/MainPID batching and unused stat inspection removal. Source authority, content proofs, file ownership, TLS, quorum, readiness, secret lifetimes and individual backend reload semantics retained. Details and all baseline operation durations: docs/service-runtime-optimization.md.
+
+QA on RED OS current sources: 20 public Apply/Verify syntax checks PASS; service tests Redis13,ClickHouse1,Docker3,Kafka32,BIND15,Keepalived13,Vault29,PostgreSQL25 (131 total) PASS. Four production-task optimization fixtures PASS plus one real read-only RPM/systemctl fixture PASS. Initial Docker guard test root invocation invalidated its foreign-owner fixture; normal platform-automation invocation PASS. Legacy Vault source-mode assertion updated to phase-specific policy; rerun PASS. Final source DIFF review pending. QA workspace cleaned through qa-sync after restoring automation ownership of root-created test pycache. Temporary profiling helpers removed from Execution Node. No bundle build/rebind or new installation acceptance performed; this run used bundle -10 before optimizations.
+Final service optimization FULL DIFF APPROVE, 45-file security scope SHA256 3B03B95F438663AF387A11EA4EB957F89861EFC5EBA7335E9E9B1B95CE955CBC, zero blockers. Additional Docker shell_environment metadata flags outside reviewed snapshot are low-risk; production profile preservation/repeat test PASS. No high-risk source-gate/checksum boundary excluded.
+
+### Endpoint read-only check after terminal failure — 2026-10-09
+
+Owner requested working Vault/ClickHouse endpoints checked on servers. From node1/node2/node3, normal system resolver returns 192.168.56.111 for qa-vault-consumer.qa-renamed.example.internal and qa-clickhouse.qa-renamed.example.internal. HTTPS requests use the project's trusted CA with certificate/hostname verification enabled, no -k. ClickHouse /ping: HTTP200 on all three originating servers; body Ok. Vault /v1/sys/health: node1 HTTP429,node2 HTTP429,node3 HTTP200. Additional three endpoint health replies: initialized=true,sealed=false; two standby=true/HTTP429 and active standby=false/HTTP200. HAProxy active backend fragments include all three expected server addresses, ClickHouse8443 and Vault8301/8302/8303. No credentials read, SQL queries, target mutations or service restarts performed. Temporary remote diagnostic scripts cleaned.
+
+### Bundle -11 service optimization delivery — 2026-10-09
+
+Owner requested bundle release and placement in project. Trusted node2 strict SSH connection and existing Python3.11.15/Ansible2.18.15 confirmed. Current source tree synced with qa-sync; built si11-full-service-20261009-11 using existing si11-bundle-runtime-20261006 approved runtime inputs, no acquisition/downloads. Includes HAProxy partial optimization, PKI batching, service runtime optimization, Redis/Sentinel absent-unit guard fix.
+
+Standard validate-bundle PASS, publish-bundle into active cache PASS; digest sha256:656a25e8db574a2095414c0483e8f12bd9ca9d6ff9eefd8c38113b87dde29f0d. Verified import now .runtime/qa/full-services/bundle; cache digest matches. Previous -10 import preserved at .runtime/qa/full-services-bundle-before-service-optimization-20261009 before publication. Project lock unchanged; UI bundle rebind/preparation and real retry required separately. UI was not restarted; desktop binary was not rebuilt. Build workspace cleaned with qa-sync.
+
+### PostgreSQL repeat-install ownership correction — 2026-10-09
+
+Run `installer-b1b4a757c8898fcac402b71b5bed6662` failed at 17:11:55 MSK on node1
+in `Refuse replacement of a foreign PostgreSQL unit`. Read-only inspection of
+`/etc/systemd/system/platform-postgresql@qa-postgresql-1.service` found `[Unit]`
+on line 1 and `# platform-postgresql-managed: qa-postgresql/postgresql-1` on
+line 2, exactly as emitted by the role template. The guard incorrectly compared
+only the first line. In previous run
+`installer-7d4d76d9fa1972a4e74b30e68c2fe38e`, the ownership read/check were
+SKIPPED for the absent unit during Apply; Verify also skips mutation guards.
+Thus first installation succeeded but the next Apply rejected its own unit.
+
+Correction matches the exact full ownership line in decoded unit lines.
+Existing path/symlink checks, deployment/member identity, legacy-unit refusal
+and Ansible idempotency remain unchanged. RED OS node2 current-source QA:
+26 PostgreSQL tests PASS, including seven real production-task fixtures for
+missing/current-template/marker-first/foreign/other-member/other-deployment/
+marker-prefix units. Fixtures leave unit content unchanged and never operate
+on installed services. qa-sync workspace cleaned; local diff check PASS.
+Independent FULL DIFF review APPROVE, zero findings, reviewed two-file scope
+SHA256 `276489245FB6C57EC354325F205E94FF23FE4717065E39340BA8324B6AE32586`.
+Review examined source independently; RED OS results above were run by the
+main agent. No bundle build, UI restart or installation retry;
+bundle -11 does not contain this source correction.
+
+### Bundle -12 PostgreSQL ownership fix delivery — 2026-10-09
+
+Owner requested updated bundle. Built `si11-full-service-20261009-12` on
+trusted node2 (strict SSH host-key validation, Python3.11.15/Ansible2.18.15)
+from current qa-sync sources and existing approved runtime inputs, no downloads.
+Includes PostgreSQL exact ownership-line correction. Standard validate-bundle
+and publish-bundle PASS; digest
+`sha256:3726d1c83a9498943b37561d1bf183683c527e66cb1b5d39fab024f02936c1d7`.
+Project import `.runtime/qa/full-services/bundle` independently validated;
+digest equals published cache. Previous -11 retained in
+`.runtime/qa/full-services-bundle-before-postgresql-20261009` and original
+directory at the same name with `-original` suffix. qa-sync build workspace
+cleaned. Project lock unchanged; UI rebind/preparation required before retry.
+No UI restart, binary rebuild, Approve/Start or service mutation performed.
+
+### Terminal Redis verify event delivery correction — 2026-10-09
+
+Owner observed 100%/installation complete, but the last UI task was
+`Require Sentinel master to match the Redis observation` started, with
+`verify:qa-redis` lacking a completion event. Read-only remote inspection of
+run `installer-c2fba5c0b70a16540cf1f305fdf915fb` confirms status SUCCEEDED,
+sequence10365. Event10362 TASK_STARTED is followed by10363 TASK_COMPLETED
+SUCCESS,10364 ACTION_COMPLETED verify:qa-redis SUCCESS and10365 DIAGNOSTIC
+SUCCESS controller completed. Redis verification itself passed.
+
+Go forwarding previously returned when either subscription channel closed.
+Observer closes both buffered Events and Errors: select could receive closed
+Errors before the last buffered Events and discard the remaining UI delivery.
+Forwarding now disables each closed channel and exits only after both drain,
+or immediately on explicit context cancellation. No Core status, credential
+hold or service lifecycle changes. Regression covers100 closed-channel
+iterations, ordered terminal events plus diagnostic, and cancellation with
+open channels. `go test . -run 'TestInstallationSubscription|TestInstallationEventView'`
+and `go test . ./internal/executionnode -run 'TestInstallation|Test.*Observer'`
+PASS; git diff --check PASS. Independent FULL DIFF review APPROVE, zero findings;
+reviewed SHA256 main5272CFB0D7CC483C813E884E2AAC950551C998EC557EE80E776152907C8A05EC,
+testA133DD65413E8556098A6BFADBEF378A70D75635505FBE051A06228A07BF8B0D.
+No desktop rebuild,
+UI restart or installation retry; real Wails terminal replay gate remains open.
+
+### Vault AppRole enabling — 2026-10-09
+
+Owner requested AppRole in the Vault role. Configure reuses its existing
+sys/auth read, rejects a non-AppRole mount at approle/ before any configuration
+writes and enables absent AppRole via POST sys/auth/approle with type approle.
+Existing mount settings are preserved. TLS certificate validation and no_log
+match the existing userpass path. Read-only Verify requires approle/ of the
+correct type. No roles, policies, RoleID or SecretID created.
+API reference: https://developer.hashicorp.com/vault/api-docs/system/auth.
+
+RED OS node2 current-source suite: 32 PASS (29 existing role tests plus three
+AppRole conditional/API contract tests); six unrelated legacy QA cleanup
+fixtures SKIP due to their root prerequisite. Tests exercise absent/existing/
+conflicting mount conditions and missing/wrong-type Verify failure. Validation
+and Verify syntax checks PASS; diff check PASS. qa-sync workspace cleaned.
+Independent FULL DIFF review APPROVE, zero findings; six-file SHA256 manifest
+`c539d95340427832ca4ae890b068b349282331db39a80736cd025a0d70063912`.
+No installed Vault mutation, bundle release,
+desktop build or UI restart. Real Apply/Verify Wails acceptance pending.
+
+### Bundle -13 Vault AppRole delivery — 2026-10-09
+
+Owner requested bundle build and placement in project. Built
+`si11-full-service-20261009-13` on trusted node2 with strict SSH host-key
+validation and existing Python3.11.15/Ansible2.18.15, current qa-sync sources
+and approved runtime inputs; no downloads. Standard validate-bundle and
+publish-bundle PASS, digest
+`sha256:7b5ca55ecc697bec828afa04d79da595a2e73a4e5401c8bb966f033045fdc1a9`.
+Project import `.runtime/qa/full-services/bundle` validated separately and
+matches cache digest. Previous -12 preserved at
+`.runtime/qa/full-services-bundle-before-approle-20261009` and original
+directory with `-original` suffix. Build workspace cleaned through qa-sync.
+Project lock unchanged; UI rebind and node preparation required separately.
+No UI restart, binary rebuild, installation or Vault mutation. Go subscription
+tail fix requires a desktop rebuild and is not delivered by this Core bundle.
+
+### Redis/Sentinel default-user ACL files — 2026-10-09
+
+Owner requested ACL with current default user, ACL SAVE and files beside
+Redis/Sentinel configs; explicitly clarified native password hashes rather
+than whole-file encryption. Per-member config directory contains
+redis.users.acl and sentinel.users.acl (only for Sentinel HA), with respective
+existing runtime passwords hashed SHA256. Owned service files0600; unit
+UMask0077 retains protection during native ACL SAVE atomic file replacement.
+Native fixture exposed default-umask0644 output; corrected before final QA.
+
+Absent files seeded, existing compatible default-user ACL preserved; foreign
+users, wrong hash, plaintext ACL passwords or substituted paths fail without
+overwrite. Config migration adds aclfile/removes requirepass via lineinfile,
+preserving retained replica state and Sentinel elected master. Restart follows
+config/unit changes only. Apply uses authenticated TLS ACL USERS/ACL SAVE;
+Verify omits SAVE, checks onlydefault, active Redis ACL path, static Sentinel
+ACL path, saved hash and ownership/0600. Advanced aclfile/user overrides reserved.
+
+RED OS node2 current-source14tests PASS, 26.427s. Native Redis/Sentinel8.6.4
+fixture uses temporary Unix sockets/processes, executes production tasks with
+transport args adapted to local sockets: hashed ACL startup, AUTH, SAVE,
+onlydefault, repeat prepare/SAVE changed0, retained config checks, read-only
+Verify file timestamps unchanged. Extrauser/wronghash/plaintext/symlink cases
+fail and preserve original files. Temporary processes stopped and qa-sync
+workspace cleaned. Apply/Verify syntax PASS after supplying integration
+collection roots; first incomplete collection path rejected missing HAProxy
+role (QA invocation corrected, no product failure). Diff check PASS.
+Independent FULL DIFF APPROVE, zero findings, 11-file manifest SHA256
+`8B92DE4750D592E5E0BCAA5B5917A297E00C159D5BF9EC57F547BB99C8EBFE38`.
+No installed services changed, bundle build or UI restart. Real TLS/HA
+installation migration through Wails remains a separate acceptance gate.
+
+### PostgreSQL automatic client-subnet TLS access — 2026-10-09
+
+Owner requested hostssl all all192.168.56.0/24 scram-sha-256, then explicitly
+changed to automatic current subnet selection. No fixed project subnet remains.
+Apply derives observed network/prefix from the IPv4 interface address matching
+the local PostgreSQL member in project (default-route address only if no member
+address supplied). Secondary addresses are included; aggregate fact IPv4 lists
+excluded. Missing/ambiguous address or invalid prefix fails before PostgreSQL
+mutation. Ordinary network setup is used only when network facts are absent.
+Subnet is derived runtime state, no project/catalog/UI settings added.
+Template appends hostssl all all <observedCIDR> scram-sha-256 after all specific
+HA rules, retaining trust exception/replication priority. Verify does not gather
+or write through this new task; existing configuration reload mechanism used.
+
+RED OS node2 current-source28tests PASS13.749s; production-task fixtures select
+LAN/24 rather than defaultWAN, WAN/16, secondary/32; missing/ambiguous address
+and injected prefix fail. Ansible Templar confirms standalone/HA output and
+TLS/SCRAM/HA ordering. First template fixture used bareJinja missing contains
+test; changed to actualAnsibleTemplar. Live network-fact execution initially
+found an aggregate ipv4-list fact; mapping filter added with regression.
+Final live node2 actual facts PASS changed0:192.168.56.0/24 selected while
+default route address is10.0.2.15. Apply/Verify syntax PASS, diff check PASS.
+Independent FULL DIFF APPROVE, zero findings; applicability confirmed after
+bounded aggregate-fact filter correction. Final sourceSHA256 client_subnet
+A27EE0C30FAE4BD14B913A68F41F89CD42FBD0B0DD246A52792465BC8F852692,
+test3E565BF37B629E017D001251194F646FEC453FD46AA4F12333142448F02A656B.
+qa-sync workspace cleaned. No installed PostgreSQL changes, bundle build or
+UI restart. Actual client TLS connection and installation acceptance pending.
+
+### Accumulated commit preparation and bundle -14 delivery — 2026-10-09
+
+Owner authorized committing all accumulated worktree changes and delivering
+the bundle. Current Go installation/observer tests PASS; separate application
+connection-probe tests PASS. Frontend typecheck/lint PASS; App/InstallationPage
+92 tests PASS. Earlier scoped RED OS/security reviews remain recorded above.
+Generated models EOF whitespace corrected; diff check PASS.
+
+Built `si11-full-service-20261009-14` on trusted node2, strict SSH host key
+validation, existing Python3.11.15/Ansible2.18.15 and approved runtime inputs;
+no downloads. Standard validate-bundle/publish-bundle PASS; digest
+`sha256:af9a46c7dfd3c668a5c7dec201023b5936309035f93c53a20d17cb4f88b2fbe4`.
+Includes Redis/Sentinel hashed ACL files/ACL SAVE, automatic PostgreSQL client
+subnet HBA, preceding PostgreSQL ownership/Vault AppRole/service optimizations.
+Project `.runtime/qa/full-services/bundle` revalidated, matches cache digest.
+Previous -13 retained at `.runtime/qa/full-services-bundle-before-acl-hba-20261009`
+and original directory with `-original` suffix. qa-sync workspace cleaned.
+Project lock unchanged; UI rebind/preparation and real acceptance remain open.
+No UI restart, desktop binary rebuild or installation performed. Go terminal
+event forwarding fix is source-only until a desktop binary rebuild.

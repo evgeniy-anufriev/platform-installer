@@ -82,6 +82,7 @@
     follow: false
     get_checksum: false
     get_mime: false
+    get_attributes: false
   register: _platform_vault_recovery_stat
   delegate_to: localhost
   become: false
@@ -200,6 +201,7 @@
     follow: false
     get_checksum: false
     get_mime: false
+    get_attributes: false
   loop: [admin-token, unseal-shares]
   register: _platform_vault_published_custody_stats
   delegate_to: localhost

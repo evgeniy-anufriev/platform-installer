@@ -26,6 +26,9 @@
   ansible.builtin.stat:
     path: "{{ _platform_clickhouse_tls_directory }}/{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: _platform_clickhouse_tls_files
   no_log: true

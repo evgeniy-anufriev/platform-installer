@@ -1,0 +1,7 @@
+# PKI target-inspection optimization
+
+Owner request 2026-10-09: optimize repeated PKI work after partial HAProxy optimization. Current full-services has three shared plans, one per host; service-scoped filtering gives no current benefit and is superseded, not implemented.
+
+Use built-in find for one nonrecursive no-follow metadata scan of the six expected target files. Normalize results into existing expected stat entries; missing files remain absent. Integrity compares uid/gid with already validated directory owner/group, preserves modes, regular-file checks and SHA256 byte/fingerprint checks. Supported Ansible 2.18 find only supports SHA1: do not use it for checksums. Instead run one no_log sha256sum command over the exact six files only if all expected files are regular nonlinks; map output checksums in fixed argument order. Invalid/missing files trigger existing repair without reading substituted paths. Verify needs existence metadata only and retains certificate-chain/fingerprint validation. No evidence cache, scope/filter, schema/controller/lease changes or custom module. Full apply and standalone retain all plans. Existing source checks unchanged.
+
+RED OS production-task QA: valid changed=0, missing/corrupt/permissions/fingerprint repair, nonregular/link safety, Verify missing/valid chain. Independent security FULL DIFF required; prior service-scope PLAN review does not validate this inspection optimization. Real installation/performance and bundle release separate.

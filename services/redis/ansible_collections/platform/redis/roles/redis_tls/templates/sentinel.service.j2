@@ -8,6 +8,7 @@ Requires=platform-redis@{{ redis_member.instance_name }}.service
 Type=simple
 User={{ platform_redis_user }}
 Group={{ platform_redis_group }}
+UMask=0077
 ExecStart=/usr/bin/redis-sentinel {{ redis_member.config_directory }}/sentinel.conf
 Restart=on-failure
 RestartSec=2

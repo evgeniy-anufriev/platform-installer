@@ -42,6 +42,8 @@
   ansible.builtin.stat:
     path: "{{ platform_keepalived_candidate_file }}"
     checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
   register: platform_keepalived_candidate_stat
 
 - name: Record Keepalived candidate validation evidence

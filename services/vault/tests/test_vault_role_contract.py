@@ -184,7 +184,7 @@ class VaultRoleContractTests(unittest.TestCase):
 
     def test_verify_failure_message_belongs_to_assert_module(self):
         tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        task = next(task for task in tasks if task["name"] == "Require the approved audit device, KV v2 and userpass mount")
+        task = next(task for task in tasks if task["name"] == "Require the approved audit device, KV v2 and auth mounts")
         self.assertNotIn("fail_msg", task)
         self.assertEqual(task["ansible.builtin.assert"]["fail_msg"], "VAULT_CONFIGURATION_VERIFY_FAILED")
 
@@ -331,7 +331,7 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_audit_configuration_blocks_incompatible_owned_paths_before_writes(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in tasks]
-        self.assertLess(names.index("Refuse incompatible existing audit, KV or userpass configuration before mutation"),
+        self.assertLess(names.index("Refuse incompatible existing audit, KV or auth configuration before mutation"),
                         names.index("Enable the cluster-wide file audit device only when absent"))
         for task in tasks:
             if "ansible.builtin.uri" in task and task["ansible.builtin.uri"].get("method") != "GET":
@@ -438,7 +438,7 @@ class VaultRoleContractTests(unittest.TestCase):
         vault_gate = next(task for task in vault_gate["block"]
                           if task["name"].startswith("Require approved Vault artifact source"))
         expected = "platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))"
-        self.assertEqual(vault_gate["when"], expected)
+        self.assertEqual(vault_gate["when"], [expected, "not (platform_vault_verify_only | bool)"])
 
         peers = [
             ROOT / "services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/main.yml",
@@ -449,7 +449,11 @@ class VaultRoleContractTests(unittest.TestCase):
         for path in peers:
             tasks = yaml.safe_load(path.read_text(encoding="utf-8"))
             peer_gate = next(task for task in tasks if task.get("ansible.builtin.include_role", {}).get("name") == "platform.core.artifact_source_gate")
-            self.assertEqual(peer_gate["when"], vault_gate["when"], path.as_posix())
+            service = path.relative_to(ROOT).parts[1]
+            self.assertIn(expected, peer_gate["when"], path.as_posix())
+            self.assertIn(f"not (platform_{service}_verify_only | bool)", peer_gate["when"], path.as_posix())
+            if service == "keepalived":
+                self.assertIn("platform_keepalived_lifecycle_phase == 'prepare'", peer_gate["when"])
 
         provision = yaml.safe_load((ROLE / "tasks/provision.yml").read_text(encoding="utf-8"))
         package = next(task for task in provision if task["name"].startswith("Install pinned Vault"))

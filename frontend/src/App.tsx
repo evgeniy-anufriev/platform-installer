@@ -799,7 +799,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationState(next);
   };
   const createInstallationPlan = async (deploymentOrder: string[]) => {
-    if (["STARTING", "RUNNING", "CANCELLING"].includes(installationRun?.run?.state || "")) return;
+    if (
+      ["STARTING", "RUNNING", "CANCELLING"].includes(
+        installationRun?.run?.state || "",
+      )
+    )
+      return;
     if (!api.createInstallationPlan) return;
     setInstallationBusy(true);
     try {
@@ -815,7 +820,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     planId: string,
     acknowledgements: string[],
   ) => {
-    if (["STARTING", "RUNNING", "CANCELLING"].includes(installationRun?.run?.state || "")) return;
+    if (
+      ["STARTING", "RUNNING", "CANCELLING"].includes(
+        installationRun?.run?.state || "",
+      )
+    )
+      return;
     if (!api.approveInstallationPlan) return;
     setInstallationBusy(true);
     try {
@@ -831,7 +841,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const startApprovedInstallation = async (planId: string) => {
-    if (["STARTING", "RUNNING", "CANCELLING"].includes(installationRun?.run?.state || "")) return;
+    if (
+      ["STARTING", "RUNNING", "CANCELLING"].includes(
+        installationRun?.run?.state || "",
+      )
+    )
+      return;
     if (!api.startApprovedInstallation) return;
     setInstallationBusy(true);
     try {
@@ -919,8 +934,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       const plan = installationPlan?.plan;
       if (
         pending.status !== "READY" ||
-        (!manual && (!plan?.secretOutputEncryptionRequired ||
-        !plan.secretOutputEncryptionPasswordPresent))
+        (!manual &&
+          (!plan?.secretOutputEncryptionRequired ||
+            !plan.secretOutputEncryptionPasswordPresent))
       )
         return;
       const candidates = [...(pending.packages || [])];
@@ -941,7 +957,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         cursor = next.nextCursor;
       }
       for (const item of candidates) {
-        if ((!manual && runId && item.sourceRunId !== runId) || item.state === "LOCAL_DELIVERED") continue;
+        if (
+          (!manual && runId && item.sourceRunId !== runId) ||
+          item.state === "LOCAL_DELIVERED"
+        )
+          continue;
         if (!api.deliverPendingSecretOutput) break;
         try {
           const delivery = await api.deliverPendingSecretOutput(item.packageId);
@@ -1093,17 +1113,40 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   );
   useEffect(() => {
     if (
-      !installationSubscription ||
       !api.unsubscribeInstallationRun ||
       !["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(
         installationRun?.run?.state || "",
       )
     )
       return;
+    const terminalRun = installationRun!.run!;
+    if (
+      runProgress?.runId === terminalRun.runId &&
+      runProgress.lastContiguousSequence < terminalRun.sequence
+    ) {
+      // Let the current replay drain instead of replacing it for each event.
+      if (
+        installationSubscription &&
+        lastRecoveryCursorRef.current.has(terminalRun.runId)
+      )
+        return;
+      void recoverInstallationRunEvents(
+        terminalRun.runId,
+        runProgress.lastContiguousSequence,
+      );
+      return;
+    }
+    if (!installationSubscription) return;
     void api.unsubscribeInstallationRun(installationSubscription);
     installationSubscriptionRef.current = "";
     setInstallationSubscription("");
-  }, [api, installationSubscription, installationRun?.run?.state]);
+  }, [
+    api,
+    installationSubscription,
+    installationRun,
+    runProgress,
+    recoverInstallationRunEvents,
+  ]);
   useEffect(() => {
     if (
       !["execution", "result"].includes(installationTab) ||
@@ -1653,11 +1696,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       const refreshed = await api
         .getExecutionNodeContext?.()
         .catch(() => undefined);
-      setExecutionNode((current) => current ? {
-        ...(refreshed || current),
-        status: preparation.status,
-        runtimeDigest: refreshed?.runtimeDigest,
-      } : current);
+      setExecutionNode((current) =>
+        current
+          ? {
+              ...(refreshed || current),
+              status: preparation.status,
+              runtimeDigest: refreshed?.runtimeDigest,
+            }
+          : current,
+      );
     }
     return preparation;
   };
@@ -1863,10 +1910,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             )}
           </div>
         </header>
-        <section className="banner app-banner">
-          Сохранение выполняется локально. Проверка последней сохранённой
-          ревизии через Core запускается отдельно.
-        </section>
         <div className="workspace-content">
           {refreshRequired && (
             <section className="card refresh-required" role="alert">
@@ -2226,7 +2269,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               outputDelivery={outputDelivery}
               onRefreshSecretOutputs={() => void refreshSecretOutputs()}
               onCollectSecretOutputs={() =>
-                collectAndDeliverSecretOutputs(installationRun?.run?.runId || "", true)
+                collectAndDeliverSecretOutputs(
+                  installationRun?.run?.runId || "",
+                  true,
+                )
               }
               onStart={startApprovedInstallation}
               onCancel={cancelInstallationRun}

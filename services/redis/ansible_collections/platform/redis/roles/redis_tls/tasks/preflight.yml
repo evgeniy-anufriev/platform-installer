@@ -6,6 +6,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/platform-redis@{{ item.instance_name }}.service"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_redis_unit_path_stats
   loop: "{{ _platform_redis_local_instances }}"
 
@@ -35,6 +38,7 @@
       == ('# platform-redis-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/redis')
     fail_msg: REDIS_UNIT_OWNERSHIP_UNKNOWN
   loop: "{{ _platform_redis_existing_unit_headers.results | default([]) }}"
+  when: not (item.skipped | default(false))
   loop_control:
     label: "{{ item.item.item.id }}"
 
@@ -42,6 +46,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/platform-redis-sentinel@{{ item.instance_name }}.service"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_sentinel_unit_path_stats
   loop: "{{ _platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel') | list }}"
 
@@ -71,6 +78,7 @@
       == ('# platform-redis-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/sentinel')
     fail_msg: REDIS_UNIT_OWNERSHIP_UNKNOWN
   loop: "{{ _platform_sentinel_existing_unit_headers.results | default([]) }}"
+  when: not (item.skipped | default(false))
   loop_control:
     label: "{{ item.item.item.id }}"
 
@@ -78,6 +86,9 @@
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop: >-
     {{ (_platform_redis_local_instances
         | map(attribute='legacy_instance_name')
@@ -100,6 +111,9 @@
 - name: Inspect existing Redis member state marker
   ansible.builtin.stat:
     path: "{{ item.data_directory }}/.platform-redis-mode"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   changed_when: false
   register: _platform_redis_mode_marker
   loop: "{{ _platform_redis_local_instances }}"
@@ -109,6 +123,9 @@
 - name: Inspect existing Redis data directories
   ansible.builtin.stat:
     path: "{{ item.data_directory }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   changed_when: false
   register: _platform_redis_data_directory
   loop: "{{ _platform_redis_local_instances }}"
@@ -149,6 +166,9 @@
 - name: Inspect existing Redis configuration files
   ansible.builtin.stat:
     path: "{{ item.config_directory }}/redis.conf"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   changed_when: false
   register: _platform_redis_config_file
   loop: "{{ _platform_redis_local_instances }}"
@@ -267,6 +287,9 @@
 - name: Inspect existing Sentinel-owned configurations
   ansible.builtin.stat:
     path: "{{ item.config_directory }}/sentinel.conf"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   changed_when: false
   register: _platform_sentinel_config_stat
   loop: "{{ _platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel') | list }}"
@@ -318,6 +341,7 @@
       - >-
         not _platform_sentinel_config_stat.results[sentinel_config_index].stat.exists
         or (_platform_sentinel_existing_config.results[sentinel_config_index].content | b64decode is search('(?m)^requirepass .+$'))
+        or (_platform_sentinel_existing_config.results[sentinel_config_index].content | b64decode is search('(?m)^aclfile (?:"' ~ (item.config_directory | regex_escape) ~ '/sentinel\\.users\\.acl"|' ~ (item.config_directory | regex_escape) ~ '/sentinel\\.users\\.acl)$'))
       - >-
         not _platform_sentinel_config_stat.results[sentinel_config_index].stat.exists
         or (_platform_sentinel_existing_config.results[sentinel_config_index].content | b64decode is search('(?m)^sentinel auth-pass ' ~ (_platform_redis_instances | first).id ~ ' .+$'))

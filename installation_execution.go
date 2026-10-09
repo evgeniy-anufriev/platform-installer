@@ -795,18 +795,21 @@ func installationRuntimeRoot() (string, error) {
 }
 func (a *App) forwardInstallationSubscription(ctx context.Context, id string, item installationRunSubscription) {
 	defer a.installationRuns.remove(id)
-	for {
+	events, errors := item.sub.Events, item.sub.Errors
+	for events != nil || errors != nil {
 		select {
 		case <-ctx.Done():
 			return
-		case event, ok := <-item.sub.Events:
+		case event, ok := <-events:
 			if !ok {
-				return
+				events = nil
+				continue
 			}
 			a.events.Publish(a.ctx, installationEventName, InstallationSubscriptionEvent{SubscriptionID: id, Event: ptrInstallationEvent(installationEventView(event))})
-		case err, ok := <-item.sub.Errors:
+		case err, ok := <-errors:
 			if !ok {
-				return
+				errors = nil
+				continue
 			}
 			if err != nil {
 				a.events.Publish(a.ctx, installationEventName, InstallationSubscriptionEvent{SubscriptionID: id, ErrorCode: installationObserverDiagnostic(err)})

@@ -60,6 +60,9 @@
     - name: Inspect whether primary-zone recovery marker remains
       ansible.builtin.stat:
         path: "{{ _platform_bind_zone_recovery_marker }}"
+        get_mime: false
+        get_attributes: false
+        get_checksum: false
       register: _platform_bind_zone_recovery_after_attempt
 
     - name: Always attempt to thaw a marked primary zone

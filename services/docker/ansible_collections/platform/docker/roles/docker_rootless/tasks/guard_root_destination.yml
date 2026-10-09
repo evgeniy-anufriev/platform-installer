@@ -3,6 +3,9 @@
   ansible.builtin.stat:
     path: "{{ platform_docker_guard_path }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: _platform_docker_guard_file
 
 - name: Refuse a symlink, non-file or foreign-owned destination

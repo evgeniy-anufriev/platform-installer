@@ -1,0 +1,45 @@
+# Example only. Generate real paths from the library/instance bindings.
+# VAULT_ADDR and trusted Vault CA are supplied by the runtime environment.
+auto_auth {
+  method "approle" {
+    config = {
+      role_id_file_path   = "/run/identity/role-id"
+      secret_id_file_path = "/run/identity/secret-id"
+      remove_secret_id_file_after_reading = false
+    }
+  }
+}
+
+template_config {
+  exit_on_retry_failure = true
+}
+
+env_template "PGPASSWORD" {
+  contents = "{{ with secret \"applications/data/PROJECT/LIBRARY/INSTANCE/postgresql\" }}{{ .Data.data.password }}{{ end }}"
+  error_on_missing_key = true
+}
+env_template "REDIS_PASSWORD" {
+  contents = "{{ with secret \"applications/data/PROJECT/LIBRARY/INSTANCE/redis\" }}{{ .Data.data.password }}{{ end }}"
+  error_on_missing_key = true
+}
+env_template "SENTINEL_PASSWORD" {
+  contents = "{{ with secret \"applications/data/PROJECT/LIBRARY/INSTANCE/sentinel\" }}{{ .Data.data.password }}{{ end }}"
+  error_on_missing_key = true
+}
+env_template "CLICKHOUSE_PASSWORD" {
+  contents = "{{ with secret \"applications/data/PROJECT/LIBRARY/INSTANCE/clickhouse\" }}{{ .Data.data.password }}{{ end }}"
+  error_on_missing_key = true
+}
+env_template "PROBE_KEYSTORE_PASSWORD" {
+  contents = "{{ with secret \"applications/data/PROJECT/LIBRARY/shared/java-keystore\" }}{{ .Data.data.password }}{{ end }}"
+  error_on_missing_key = true
+}
+env_template "PROBE_VAULT_MARKER" {
+  contents = "{{ with secret \"applications/data/PROJECT/LIBRARY/INSTANCE/probe-marker\" }}{{ .Data.data.value }}{{ end }}"
+  error_on_missing_key = true
+}
+
+exec {
+  command = ["/usr/bin/connection-probe"]
+  restart_on_secret_changes = "always"
+}

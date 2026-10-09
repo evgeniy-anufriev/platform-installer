@@ -13,6 +13,45 @@ ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/hapro
 
 
 class BackendHostScopeRuntimeTests(unittest.TestCase):
+    def test_partial_backend_does_not_reinstall_provider_under_source_authority(self):
+        executable = shutil.which("ansible-playbook")
+        if not executable:
+            self.skipTest("ansible-playbook is required")
+        main = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+        prepare = yaml.safe_load((ROLE / "tasks/prepare.yml").read_text())
+        selected = [task for task in main if task.get("name") in {
+            "Validate resolved HAProxy artifact sources before mutation",
+            "Deliver selected HAProxy offline artifacts"}]
+        selected += [task for task in prepare if task.get("name") ==
+                     "Install HAProxy from configured system repositories"]
+        repository = Path(__file__).resolve().parents[3]
+        env = dict(os.environ)
+        env["ANSIBLE_COLLECTIONS_PATH"] = str(repository / "ansible-core/collections")
+        with tempfile.TemporaryDirectory(prefix="platform-haproxy-artifact-") as temporary:
+            path = Path(temporary, "test.yml")
+            variables = {"platform_haproxy_partial_deployment_id": "qa-vault-consumer",
+                         "platform_execution_service_deployment": "qa-vault-consumer",
+                         "platform_artifact_source_authority_active": True,
+                         "platform_artifact_source_authorities_by_deployment": {
+                             "qa-vault-consumer": {"vault-runtime": {}}},
+                         "platform_resolved_artifact_sources": {},
+                         "platform_haproxy_phase": "prepare"}
+            play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
+                     "vars": variables, "tasks": selected}]
+            path.write_text(yaml.safe_dump(play), encoding="utf-8")
+            result = subprocess.run([executable, "-i", "localhost,", str(path)],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("changed=0", result.stdout)
+            # The identical invalid authority still fails for a full provider apply.
+            variables.pop("platform_haproxy_partial_deployment_id")
+            play[0]["tasks"] = selected[:1]
+            path.write_text(yaml.safe_dump(play), encoding="utf-8")
+            result = subprocess.run([executable, "-i", "localhost,", str(path)],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Require Core-authorized artifact sources", result.stdout)
+
     def test_full_and_partial_models_filter_hosts_and_preserve_other_sources(self):
         executable = shutil.which("ansible-playbook")
         if not executable:

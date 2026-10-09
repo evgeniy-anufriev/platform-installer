@@ -41,6 +41,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop:
     - "{{ _platform_vault_bootstrap_output_dir }}"
     - "{{ _platform_vault_bootstrap_output_dir }}/admin-token"

@@ -229,6 +229,11 @@ Core повторно связывает требования со свежим 
 Installer. Userpass password в этом milestone не запрашивается: создаётся
 только auth mount.
 
+Дополнение владельца от 2026-10-09: также обязательно включается AppRole
+на `approle/`. Существующий mount типа `approle` сохраняется; другой тип
+на этом пути блокирует настройку до изменений. Verify требует AppRole.
+Роли AppRole, политики, RoleID и SecretID автоматически не создаются.
+
 В «Секретах» Vault два file inputs: «Административный token» и «Unseal keys».
 Принимаются plaintext token, документированный JSON shares (включая стандартный
 JSON output `vault operator init`) и один versioned encrypted file format

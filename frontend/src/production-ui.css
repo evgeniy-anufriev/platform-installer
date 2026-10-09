@@ -699,11 +699,26 @@ body {
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
-.entry-state-chip--success { background: var(--status-success-fill); color: var(--status-success-ink); }
-.entry-state-chip--warning { background: var(--status-warning-fill); color: var(--status-warning-ink); }
-.entry-state-chip--danger { background: var(--status-danger-fill); color: var(--status-danger-ink); }
-.entry-state-chip--info { background: var(--status-info-fill); color: var(--status-info-ink); }
-.entry-state-chip--neutral { background: var(--status-neutral-fill); color: var(--status-neutral-ink); }
+.entry-state-chip--success {
+  background: var(--status-success-fill);
+  color: var(--status-success-ink);
+}
+.entry-state-chip--warning {
+  background: var(--status-warning-fill);
+  color: var(--status-warning-ink);
+}
+.entry-state-chip--danger {
+  background: var(--status-danger-fill);
+  color: var(--status-danger-ink);
+}
+.entry-state-chip--info {
+  background: var(--status-info-fill);
+  color: var(--status-info-ink);
+}
+.entry-state-chip--neutral {
+  background: var(--status-neutral-fill);
+  color: var(--status-neutral-ink);
+}
 .entry-findings,
 .entry-draft-notice {
   flex: 0 0 auto;
@@ -715,7 +730,9 @@ body {
   color: #614c1a;
   font-size: 11px;
 }
-.entry-findings p { margin: 4px 0 0; }
+.entry-findings p {
+  margin: 4px 0 0;
+}
 .workspace-content:has(> .topology-title) .entry-consumers {
   display: flex;
   flex-direction: column;
@@ -1083,7 +1100,10 @@ button:disabled {
 
 /* Selected production layout for Topology / By services. */
 .workspace-content:has(> .topology-title) .topology-grid {
-  grid-template-columns: minmax(185px, 0.78fr) minmax(0, 1.6fr) minmax(205px, 0.9fr);
+  grid-template-columns: minmax(185px, 0.78fr) minmax(0, 1.6fr) minmax(
+      205px,
+      0.9fr
+    );
   gap: 8px;
 }
 .workspace-content:has(> .topology-title) .topology-detail {
@@ -1289,7 +1309,10 @@ button:disabled {
 .topology-servers-grid .topology-row.draft-deleting.selected {
   background: #fff0ed;
 }
-.topology-servers-grid .topology-row.draft-deleting .topology-instance-heading b {
+.topology-servers-grid
+  .topology-row.draft-deleting
+  .topology-instance-heading
+  b {
   color: #7a2e26;
 }
 .topology-servers-grid .topology-detail > .topology-list-scroll {
@@ -1395,7 +1418,8 @@ button:disabled {
   font-size: var(--ui-font-body);
   line-height: 1.35;
 }
-#root .app-main
+#root
+  .app-main
   :is(
     label,
     input:not([type="checkbox"]),
@@ -1412,7 +1436,8 @@ button:disabled {
   font-size: var(--ui-font-caption);
 }
 #root .app-main .services-list .topology-row small,
-#root .app-main
+#root
+  .app-main
   .topology-grid:not(.topology-servers-grid)
   > .topology-list
   .topology-row
@@ -2041,7 +2066,8 @@ button:disabled {
 .workspace-content:has(> .topology-title)
   .topology-grid:not(.topology-servers-grid)
   > .topology-list
-  .topology-row b {
+  .topology-row
+  b {
   overflow-wrap: anywhere;
   font-size: 13px;
 }
@@ -2050,11 +2076,13 @@ button:disabled {
 .workspace-content:has(> .topology-title)
   .topology-grid:not(.topology-servers-grid)
   > .topology-list
-  .topology-row span,
+  .topology-row
+  span,
 .workspace-content:has(> .topology-title)
   .topology-grid:not(.topology-servers-grid)
   > .topology-list
-  .topology-row small {
+  .topology-row
+  small {
   font-size: 11px;
 }
 .services-list .topology-list-scroll > div {
@@ -2842,9 +2870,12 @@ button:disabled {
 .execution-stage-content {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
+  gap: 4px;
   height: 100%;
   min-height: 0;
+}
+.workspace-content .execution-stage-content .card {
+  margin: 0;
 }
 .execution-overview {
   display: grid;
@@ -2908,11 +2939,12 @@ button:disabled {
 }
 .execution-event-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(255px, 0.9fr);
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
 }
 .execution-event-table-card,
+.execution-plan-card,
 .execution-event-details {
   display: flex;
   flex-direction: column;
@@ -2948,6 +2980,7 @@ button:disabled {
 }
 .execution-event-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 10px;
   text-align: left;
@@ -2957,6 +2990,7 @@ button:disabled {
   padding: 5px 7px;
   border-bottom: 1px solid #e2e8f0;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 .execution-event-table th {
   position: sticky;
@@ -2966,17 +3000,21 @@ button:disabled {
   color: #526987;
   white-space: nowrap;
 }
+.execution-event-table th:first-child {
+  width: 105px;
+}
 .execution-event-table td:first-child {
-  min-width: 98px;
   color: #526987;
   white-space: nowrap;
 }
-.execution-event-table td:nth-child(2) {
-  min-width: 180px;
+.execution-event-table th:nth-child(3) {
+  width: 105px;
 }
-.execution-event-table td:nth-child(3) {
-  min-width: 110px;
-  overflow-wrap: anywhere;
+.execution-event-table th:nth-child(4) {
+  width: 55px;
+}
+.execution-event-table th:nth-child(5) {
+  width: 70px;
 }
 .execution-event-table tbody tr.is-selected {
   background: #e8f2ff;
@@ -2992,7 +3030,7 @@ button:disabled {
   font-weight: 600;
   text-align: left;
   overflow-wrap: anywhere;
-  cursor: pointer;
+  cursor: default;
 }
 .execution-event-table td small {
   display: block;
@@ -3124,12 +3162,114 @@ button:disabled {
     font-size: 10px;
   }
 }
+.execution-plan-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.execution-plan-actions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.execution-plan-action {
+  display: grid;
+  grid-template-columns: 26px 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 5px 7px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 11px;
+}
+.execution-plan-number {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: #edf1f7;
+  color: #526987;
+}
+.execution-plan-description {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.execution-plan-description strong {
+  font-weight: 500;
+}
+.execution-plan-description small {
+  display: block;
+  margin-top: 2px;
+  color: #63728a;
+  font-size: 10px;
+}
+.execution-plan-symbol {
+  font-size: 18px;
+  text-align: center;
+}
+.execution-plan-status {
+  max-width: 110px;
+  text-align: right;
+  font-size: 10px;
+}
+.execution-plan-action.is-success .execution-plan-symbol,
+.execution-plan-action.is-success .execution-plan-status {
+  color: #15803d;
+}
+.execution-plan-action.is-error .execution-plan-symbol,
+.execution-plan-action.is-error .execution-plan-status {
+  color: #b91c1c;
+}
+.execution-plan-action.is-running {
+  border-left: 3px solid #1672f3;
+}
+.execution-plan-action.is-running .execution-plan-number {
+  background: #1672f3;
+  color: white;
+}
+.execution-plan-action.is-running .execution-plan-symbol,
+.execution-plan-action.is-running .execution-plan-status {
+  color: #1672f3;
+}
 
-.server-information { display: flex; flex-wrap: nowrap; gap: 8px; white-space: nowrap; font-size: 10px; line-height: 1.35; color: var(--muted, #64748b); }
-.server-information-attached { position: relative; }
-.workspace-content .server-table tbody tr { height: 50px; }
-.workspace-content .server-table tbody td { padding: 0 6px; vertical-align: middle; }
-.workspace-content .server-table tbody td:last-child { white-space: nowrap; }
-.workspace-content:has(> .servers-layout) .server-table td button { min-height: 26px; height: 26px; padding: 3px 6px; font-size: 11px; }
-.server-information-attached .server-information { position: absolute; left: 6px; right: 6px; bottom: 1px; line-height: 1; }
-.execution-node-information { grid-column: 1 / -1; }
+.server-information {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted, #64748b);
+}
+.server-information-attached {
+  position: relative;
+}
+.workspace-content .server-table tbody tr {
+  height: 50px;
+}
+.workspace-content .server-table tbody td {
+  padding: 0 6px;
+  vertical-align: middle;
+}
+.workspace-content .server-table tbody td:last-child {
+  white-space: nowrap;
+}
+.workspace-content:has(> .servers-layout) .server-table td button {
+  min-height: 26px;
+  height: 26px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+.server-information-attached .server-information {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 1px;
+  line-height: 1;
+}
+.execution-node-information {
+  grid-column: 1 / -1;
+}

@@ -12,6 +12,8 @@
     path: "{{ item }}"
     follow: false
     get_checksum: false
+    get_mime: false
+    get_attributes: false
   loop:
     - "{{ platform_clickhouse_config_root }}"
     - "{{ platform_clickhouse_data_root }}"
@@ -39,6 +41,8 @@
     path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else item.0[item.1] }}"
     follow: false
     get_checksum: false
+    get_mime: false
+    get_attributes: false
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory', 'config_pki']) | list }}"
   register: _platform_clickhouse_private_path_stats
 

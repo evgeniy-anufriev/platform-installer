@@ -52,7 +52,7 @@
   changed_when: false
   no_log: true
 
-- name: Require the approved audit device, KV v2 and userpass mount
+- name: Require the approved audit device, KV v2 and auth mounts
   ansible.builtin.assert:
     that:
       - _platform_vault_configuration.results[0].json.data['file/'] is defined
@@ -63,6 +63,8 @@
       - _platform_vault_configuration.results[1].json.data['secret/'].type == 'kv'
       - _platform_vault_configuration.results[1].json.data['secret/'].options.version | string == '2'
       - _platform_vault_configuration.results[2].json.data['userpass/'].type == 'userpass'
+      - _platform_vault_configuration.results[2].json.data['approle/'] is defined
+      - _platform_vault_configuration.results[2].json.data['approle/'].type == 'approle'
     fail_msg: VAULT_CONFIGURATION_VERIFY_FAILED
   no_log: true
 

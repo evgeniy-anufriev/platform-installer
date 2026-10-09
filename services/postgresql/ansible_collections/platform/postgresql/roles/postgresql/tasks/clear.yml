@@ -133,6 +133,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_postgresql_clear_path_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
@@ -170,6 +173,9 @@
 - name: Verify PostgreSQL deployment-owned paths are absent
   ansible.builtin.stat:
     path: "{{ item }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   register: platform_postgresql_clear_final_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 

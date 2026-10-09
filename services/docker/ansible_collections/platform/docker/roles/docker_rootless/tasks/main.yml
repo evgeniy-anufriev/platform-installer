@@ -13,7 +13,9 @@
       - {id: docker-compose, name: docker-compose}
       - {id: docker-lxc, name: lxc}
       - {id: docker-fuse-overlayfs, name: fuse-overlayfs}
-  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+  when:
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+    - not (platform_docker_verify_only | bool)
 
 - name: Select exact Docker PKI material
   ansible.builtin.include_tasks: resolve_tls.yml

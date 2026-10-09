@@ -27,6 +27,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
   loop:
     - "/etc/systemd/system/platform-docker-rootless-{{ platform_docker_account_name }}.service"
     - "{{ _platform_docker_clear_home }}/.config/systemd/user/docker.service"

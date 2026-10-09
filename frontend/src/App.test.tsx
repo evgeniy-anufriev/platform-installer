@@ -620,6 +620,119 @@ it("refreshes a running installation without navigation or a SUCCEEDED event", a
   view.unmount();
 });
 
+it("replays late failure events before closing a terminal subscription", async () => {
+  let handler:
+    | Parameters<
+        NonNullable<ProjectBackend["subscribeInstallationRunEvents"]>
+      >[0]
+    | undefined;
+  const unsubscribe = vi.fn().mockResolvedValue(undefined);
+  const subscribe = vi
+    .fn()
+    .mockResolvedValue({ status: "SUBSCRIBED", subscriptionId: "original" });
+  const state = {
+    status: "PLAN_APPROVED",
+    project: { revision: "sha256:old", hasUnsavedChanges: false },
+    executionNode: { status: "READY" },
+    plan: { status: "PLAN_APPROVED", planId: "plan-tail" },
+    prerequisites: [],
+  };
+  const plan = {
+    id: "plan-tail",
+    status: "EXECUTABLE",
+    approved: true,
+    projectRevision: "sha256:old",
+    phases: [],
+    acknowledgements: [],
+    runtime: {},
+    expiresAt: "2099-01-01T00:00:00Z",
+  };
+  const getRun = vi
+    .fn()
+    .mockResolvedValue({
+      status: "READY",
+      run: { runId: "run-tail", state: "RUNNING", sequence: 1 },
+    });
+  const value = api({
+    getInstallationState: vi.fn().mockResolvedValue(state),
+    createInstallationPlan: vi
+      .fn()
+      .mockResolvedValue({ status: "PLAN_APPROVED", plan }),
+    startApprovedInstallation: vi
+      .fn()
+      .mockResolvedValue({
+        status: "READY",
+        run: { runId: "run-tail", state: "RUNNING", sequence: 0 },
+      }),
+    subscribeInstallationRun: subscribe,
+    unsubscribeInstallationRun: unsubscribe,
+    getInstallationRun: getRun,
+    subscribeInstallationRunEvents: vi.fn((callback) => {
+      handler = callback;
+      return vi.fn();
+    }),
+  });
+  value.chooseProject.mockResolvedValue({
+    ...project,
+    managed: { ...project.managed, deployments: {} },
+  });
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Установка" }),
+  );
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Начать выполнение" }),
+  );
+  await waitFor(() => expect(subscribe).toHaveBeenCalledWith("run-tail", 0));
+  const event = (sequence: number, status: string, message: string) =>
+    ({
+      runId: "run-tail",
+      sequence,
+      eventType: "DIAGNOSTIC",
+      status,
+      safeMessage: message,
+      timestamp: "2026-10-09T09:30:31Z",
+    }) as InstallationEventView;
+  getRun.mockResolvedValue({
+    status: "READY",
+    run: { runId: "run-tail", state: "FAILED", sequence: 3 },
+  });
+  subscribe.mockResolvedValue({
+    status: "SUBSCRIBED",
+    subscriptionId: "replay",
+  });
+  await act(async () =>
+    handler?.({
+      subscriptionId: "original",
+      event: event(1, "FAILED", "Первая ошибка"),
+    }),
+  );
+  await waitFor(() => expect(subscribe).toHaveBeenCalledWith("run-tail", 1));
+  expect(unsubscribe).not.toHaveBeenCalledWith("replay");
+  await act(async () =>
+    handler?.({
+      subscriptionId: "replay",
+      event: event(2, "FAILED", "Поздняя ошибка"),
+    }),
+  );
+  expect(screen.getAllByText("Поздняя ошибка").length).toBeGreaterThan(0);
+  expect(unsubscribe).not.toHaveBeenCalledWith("replay");
+  await act(async () =>
+    handler?.({
+      subscriptionId: "replay",
+      event: event(3, "FAILED", "Запуск остановлен"),
+    }),
+  );
+  await waitFor(() => expect(unsubscribe).toHaveBeenCalledWith("replay"));
+});
+
 it("shows a safe listing error when automatic output collection rejects", async () => {
   let onRunEvent:
     | Parameters<
@@ -955,7 +1068,8 @@ describe("UI-01E2 server editor", () => {
   it("keeps Installation visible before readiness while preparation stays on Servers", async () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockResolvedValue({
-        status: "UPDATE_REQUIRED", runtimeDigest: "sha256:old",
+        status: "UPDATE_REQUIRED",
+        runtimeDigest: "sha256:old",
         selectionKind: "EXPLICIT_EXTERNAL",
         selectionSource: "EXPLICIT",
         safeLabel: "desktop-qa · 192.0.2.10",
@@ -996,7 +1110,14 @@ describe("UI-01E2 server editor", () => {
     expect(
       await screen.findByRole("button", { name: "Подтвердить подготовку" }),
     ).toBeTruthy();
-    vi.mocked(value.getExecutionNodeContext!).mockResolvedValue({ status: "READY", runtimeDigest: "sha256:new", selectionKind: "EXPLICIT_EXTERNAL", selectionSource: "EXPLICIT", safeLabel: "desktop-qa · 192.0.2.10", locked: true });
+    vi.mocked(value.getExecutionNodeContext!).mockResolvedValue({
+      status: "READY",
+      runtimeDigest: "sha256:new",
+      selectionKind: "EXPLICIT_EXTERNAL",
+      selectionSource: "EXPLICIT",
+      safeLabel: "desktop-qa · 192.0.2.10",
+      locked: true,
+    });
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(
       screen.getByRole("button", { name: "Подтвердить подготовку" }),
@@ -2016,7 +2137,15 @@ describe("UI-01H2 services navigation and safe settings", () => {
                 guidance: { minParticipants: 1, distinctHosts: false },
               },
             ],
-            configurationSettings: [{ id: "redisCredential", kind: "MANAGED", scopes: ["deployment"], editorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", runtimeSecretRequirementRef: "redis-password" }],
+            configurationSettings: [
+              {
+                id: "redisCredential",
+                kind: "MANAGED",
+                scopes: ["deployment"],
+                editorShape: "RUNTIME_SECRET_REFERENCE_OBJECT",
+                runtimeSecretRequirementRef: "redis-password",
+              },
+            ],
           },
         ],
       },
@@ -2191,7 +2320,24 @@ describe("UI-01H2 services navigation and safe settings", () => {
         .fn()
         .mockResolvedValue("STORED"),
     });
-    value.chooseProject.mockResolvedValue({ ...project, catalog: { ...project.catalog, services: project.catalog.services.map((service) => ({ ...service, secretInputs: [{ requirementRef: "vault-admin-token", purpose: "SERVICE_ADMIN_TOKEN", displayLabel: "Administrative token", requiredWhen: "INITIALIZED", operations: ["SERVICE_APPLY", "SERVICE_VERIFY"] }] })) } });
+    value.chooseProject.mockResolvedValue({
+      ...project,
+      catalog: {
+        ...project.catalog,
+        services: project.catalog.services.map((service) => ({
+          ...service,
+          secretInputs: [
+            {
+              requirementRef: "vault-admin-token",
+              purpose: "SERVICE_ADMIN_TOKEN",
+              displayLabel: "Administrative token",
+              requiredWhen: "INITIALIZED",
+              operations: ["SERVICE_APPLY", "SERVICE_VERIFY"],
+            },
+          ],
+        })),
+      },
+    });
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),

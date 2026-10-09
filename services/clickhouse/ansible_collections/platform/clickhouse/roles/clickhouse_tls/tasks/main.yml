@@ -13,7 +13,9 @@
       - {id: clickhouse-common-static, name: clickhouse-common-static}
       - {id: clickhouse-server, name: clickhouse-server}
       - {id: clickhouse-client, name: clickhouse-client}
-  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+  when:
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+    - not (platform_clickhouse_verify_only | bool)
 
 - name: Resolve the exact ClickHouse TLS material
   ansible.builtin.include_tasks: resolve_tls.yml
