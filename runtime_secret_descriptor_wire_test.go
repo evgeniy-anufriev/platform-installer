@@ -64,3 +64,17 @@ func TestRuntimeSecretDescriptorUnavailableWireHasSafeLowerCamelError(t *testing
 		t.Fatal("absent descriptors should remain absent")
 	}
 }
+
+func TestRuntimeSecretDescriptorWireIncludesConfirmedServiceSecretStatus(t *testing.T) {
+	encoded, err := json.Marshal(RuntimeSecretDescriptorOperation{Status: "READY", SecretsInstalled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire["status"] != "READY" || wire["secretsInstalled"] != true || len(wire) != 2 {
+		t.Fatalf("confirmed service status lost or unexpected metadata: %s", encoded)
+	}
+}

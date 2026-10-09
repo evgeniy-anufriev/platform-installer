@@ -25,6 +25,30 @@ deployment editor remains on the right. Topology links select the exact
 deployment/member in that editor. Long parameter lists scroll inside the
 right-hand parameter column rather than moving the service list.
 
+Owner refinement (2026-10-09): runtime-secret reference fields are omitted
+from the service and member parameter lists; they are configured through
+the existing Secrets dialog. Show its action card only when the service
+catalog declares runtime-secret settings or secret inputs.
+The card reports presence for that deployment only: green «Установлены»
+when all declared inputs exist in the current session, amber «Не установлены»
+otherwise. Project references alone do not establish presence; this status
+does not authorize execution or replace Core checks.
+
+Execution Node preparation refinement (2026-10-09): after successful
+preparation, invoke the normal node check automatically and publish the new
+runtime context together with its readiness evidence. Runtime replacement
+must not leave the screen at «Не проверено» awaiting another manual click.
+
+After cancellation, discard the current plan projection and refresh the
+authoritative installation state. Consumed plans are stale, never approved
+or runnable; preserve the cancelled run as history. A new execution requires
+a fresh plan and approval, including current secret checks. When state has no
+current plan ID, clear the old plan card rather than retaining its approval.
+While execution is STARTING/RUNNING/CANCELLING, the Plan tab retains the
+immutable run-plan snapshot for viewing. Creating, approving or starting
+another plan is disabled; cancellation remains available. A consumed plan
+is unavailable for reuse, but that must not erase the active run's snapshot.
+
 Owner-approved refinement (2026-10-06) for Topology → **By servers** selects a
 compact three-panel layout: a server picker, a scrollable placement list and a
 concise selected-server summary. Placement and service/member configuration
@@ -151,6 +175,11 @@ Installer attempts delivery only for packages produced by that run; a failed
 delivery does not change the run result or block another Start. Pending packages
 from older runs remain available for explicit retrieval. Show source run ID and
 generation for each package; local delivery does not delete the remote copy.
+Owner refinement (2026-10-09): Result uses one action to check the Execution
+Node and save undelivered packages encrypted locally. Verified local files
+are labelled «Сохранён на инсталлере» and have no receive action. Hide the
+combined action when the complete listed set is already delivered; local
+receipts and file validation remain authoritative after reopening a project.
 If controller preparation reports `OUTPUT_BUSY`, show a plain-language alert
 on the Execution screen: a protected service-output package from an earlier
 run remains on the Execution Node and was preserved to prevent overwrite. Give

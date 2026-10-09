@@ -917,14 +917,6 @@ function ExecutionNodePanel({
                 try {
                   const result = await onPrepare(planId);
                   setPreparation(result);
-                  if (result.status === "PREPARED") {
-                    setReadiness({
-                      status: "READY",
-                      nodeId: context?.selectedHostId,
-                      safeLabel: context?.safeLabel,
-                      checkedAt: new Date().toISOString(),
-                    });
-                  }
                 } catch {
                   setPreparation(currentPreparation);
                   setError("EXECUTION_NODE_PREPARATION_UNAVAILABLE");

@@ -4,10 +4,19 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Collect inventory placements for provider selection
+      ansible.builtin.set_fact:
+        _platform_integration_inventory_deployments: >-
+          {{ _platform_integration_inventory_deployments | default({}) |
+             combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      no_log: true
+
     - name: Resolve service-driven provider integrations read-only
       platform.core.resolve_service_integrations:
         desired_state: "{{ platform_desired_state }}"
         source_service_types: "{{ platform_integration_source_service_types | default([]) }}"
+        inventory_deployments: "{{ _platform_integration_inventory_deployments | default({}) }}"
       register: _platform_service_integration_resolution
 
     - name: Publish execution-local provider integration projection

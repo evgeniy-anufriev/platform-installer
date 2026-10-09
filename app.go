@@ -169,6 +169,7 @@ type RuntimeSecretDescriptorView struct {
 }
 
 type RuntimeSecretDescriptorOperation struct {
+	SecretsInstalled         bool                          `json:"secretsInstalled,omitempty"`
 	Status                   string                        `json:"status"`
 	ProjectRevision          string                        `json:"projectRevision,omitempty"`
 	DescriptorSetFingerprint string                        `json:"descriptorSetFingerprint,omitempty"`
@@ -792,7 +793,15 @@ func (a *App) GetPendingRuntimeSecretDescriptors(serviceDeployment string) Runti
 	if err != nil {
 		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 	}
-	return RuntimeSecretDescriptorOperation{Status: "READY", Descriptors: descriptors}
+	installed := false
+	if binding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
+		requirements := make([]runtimesecret.RuntimeSecretInput, 0, len(descriptors))
+		for _, descriptor := range descriptors {
+			requirements = append(requirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment})
+		}
+		installed = a.secrets.ServiceSecretsPresent(binding, requirements)
+	}
+	return RuntimeSecretDescriptorOperation{Status: "READY", Descriptors: descriptors, SecretsInstalled: installed}
 }
 
 // SetPendingDeploymentRuntimeSecretValues keeps locally catalog-authorized
@@ -1078,6 +1087,16 @@ func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOpera
 		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "PROJECT_CHANGED", Message: projectErrorMessage("PROJECT_CHANGED")}}
 	}
 	// A delivered/cleanup-pending remote package may no longer be listable.
+	for index := range listed.Packages {
+		item := &listed.Packages[index]
+		_, encrypted, readErr := installer.ReadSecretOutputFiles(root, projectID, item.DeploymentID, item.PackageID, item.SourceRunID, item.Generation, item.RuntimeDigest)
+		for _, data := range encrypted {
+			clear(data)
+		}
+		if readErr == nil {
+			item.State = "LOCAL_DELIVERED"
+		}
+	}
 	// Recover its identity from the bound local receipt at known managed paths.
 	if cursor == nil && a.current.Managed != nil {
 		seen := map[string]bool{}
@@ -1092,7 +1111,7 @@ func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOpera
 			if readErr != nil || seen[receipt.PackageID] {
 				continue
 			}
-			listed.Packages = append(listed.Packages, executionnode.SecretOutputPackage{Protocol: "SecretOutputDelivery/v1alpha1", PackageID: receipt.PackageID, ProjectID: receipt.ProjectID, DeploymentID: receipt.DeploymentID, SourceRunID: receipt.SourceRunID, RuntimeDigest: receipt.RuntimeDigest, Generation: receipt.Generation, State: "ACKED_CLEANUP_PENDING", Entries: []string{"admin-token", "unseal-shares"}})
+			listed.Packages = append(listed.Packages, executionnode.SecretOutputPackage{Protocol: "SecretOutputDelivery/v1alpha1", PackageID: receipt.PackageID, ProjectID: receipt.ProjectID, DeploymentID: receipt.DeploymentID, SourceRunID: receipt.SourceRunID, RuntimeDigest: receipt.RuntimeDigest, Generation: receipt.Generation, State: "LOCAL_DELIVERED", Entries: []string{"admin-token", "unseal-shares"}})
 			if len(listed.Packages) >= 96 {
 				break
 			}
@@ -2006,6 +2025,8 @@ func projectErrorMessage(code string) string {
 		return "Проект занят другой операцией. Повторите сохранение позже."
 	case "STAGING_FAILED", "CORE_SNAPSHOT_FAILED", "VALIDATION_BLOCKED":
 		return "Core не смог безопасно проверить полный candidate проекта. Проект на диске не изменён."
+	case "CORE_OPERATION_FAILED":
+		return "Core на узле выполнения не смог завершить операцию. Проверьте код ошибки и диагностику runtime; проект на диске не изменён."
 	case "WRITE_FAILED", "RECOVERY_FAILED", "ROLLBACK_FAILED", "PATH_UNSAFE":
 		return "Сохранение проекта не выполнено безопасно. Проверьте состояние проекта перед повтором."
 	case "PROJECT_SNAPSHOT_CANDIDATE_UNSUPPORTED":

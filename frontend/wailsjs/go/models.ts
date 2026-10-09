@@ -1,13 +1,13 @@
 export namespace appconfig {
-
+	
 	export class ServiceExecutionPriority {
 	    serviceType: string;
 	    priority?: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServiceExecutionPriority(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serviceType = source["serviceType"];
@@ -17,11 +17,11 @@ export namespace appconfig {
 	export class ServerType {
 	    id: string;
 	    displayName: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerType(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -32,18 +32,18 @@ export namespace appconfig {
 	    schemaVersion: number;
 	    serverTypes: ServerType[];
 	    serviceExecutionPriorities: ServiceExecutionPriority[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.schemaVersion = source["schemaVersion"];
 	        this.serverTypes = this.convertValues(source["serverTypes"], ServerType);
 	        this.serviceExecutionPriorities = this.convertValues(source["serviceExecutionPriorities"], ServiceExecutionPriority);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -62,22 +62,22 @@ export namespace appconfig {
 		    return a;
 		}
 	}
-
+	
 
 }
 
 export namespace coreadapter {
-
+	
 	export class Document {
 	    logicalPath: string;
 	    digest: string;
 	    ownership: string;
 	    revisionIncluded: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Document(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.logicalPath = source["logicalPath"];
@@ -106,11 +106,11 @@ export namespace coreadapter {
 	    validation: Record<string, any>;
 	    readiness: Record<string, any>;
 	    findings: any[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Snapshot(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -133,7 +133,7 @@ export namespace coreadapter {
 	        this.readiness = source["readiness"];
 	        this.findings = source["findings"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -156,17 +156,17 @@ export namespace coreadapter {
 }
 
 export namespace executionnode {
-
+	
 	export class RuntimeEvidence {
 	    bundleDigest: string;
 	    coreVersion: string;
 	    catalogDigest: string;
 	    protocol: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RuntimeEvidence(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.bundleDigest = source["bundleDigest"];
@@ -185,11 +185,11 @@ export namespace executionnode {
 	    generation: number;
 	    state: string;
 	    entries: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SecretOutputPackage(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.protocol = source["protocol"];
@@ -212,11 +212,11 @@ export namespace executionnode {
 	    memoryBytes: number;
 	    serverTime: string;
 	    checkedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerInformation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hostname = source["hostname"];
@@ -233,11 +233,11 @@ export namespace executionnode {
 	    state: string;
 	    source: string;
 	    value?: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServiceConfigurationValue(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.state = source["state"];
@@ -248,17 +248,17 @@ export namespace executionnode {
 	export class ServiceConfigurationScope {
 	    configuration: Record<string, ServiceConfigurationValue>;
 	    members: Record<string, any>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServiceConfigurationScope(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.configuration = this.convertValues(source["configuration"], ServiceConfigurationValue, true);
 	        this.members = source["members"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -283,11 +283,11 @@ export namespace executionnode {
 	    projectRevision: string;
 	    services: Record<string, ServiceConfigurationScope>;
 	    runtimeDigest?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServiceConfigurationPreview(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -296,7 +296,7 @@ export namespace executionnode {
 	        this.services = this.convertValues(source["services"], ServiceConfigurationScope, true);
 	        this.runtimeDigest = source["runtimeDigest"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -315,20 +315,20 @@ export namespace executionnode {
 		    return a;
 		}
 	}
-
+	
 
 }
 
 export namespace installer {
-
+	
 	export class CommitTiming {
 	    transaction: number;
 	    snapshot: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CommitTiming(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.transaction = source["transaction"];
@@ -338,11 +338,11 @@ export namespace installer {
 	export class DocumentState {
 	    state: string;
 	    digest?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new DocumentState(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.state = source["state"];
@@ -355,11 +355,11 @@ export namespace installer {
 	    afterDigest?: string;
 	    before?: DocumentState;
 	    after?: DocumentState;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new DocumentChange(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.logicalPath = source["logicalPath"];
@@ -368,7 +368,7 @@ export namespace installer {
 	        this.before = this.convertValues(source["before"], DocumentState);
 	        this.after = this.convertValues(source["after"], DocumentState);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -387,15 +387,15 @@ export namespace installer {
 		    return a;
 		}
 	}
-
+	
 	export class VirtualAddress {
 	    address: string;
 	    interface: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VirtualAddress(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.address = source["address"];
@@ -406,11 +406,11 @@ export namespace installer {
 	    hostId: string;
 	    roles?: string[];
 	    priority?: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PlacementHost(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hostId = source["hostId"];
@@ -423,11 +423,11 @@ export namespace installer {
 	    hostId: string;
 	    roles?: string[];
 	    configuration?: Record<string, any>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PlacementMember(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.memberId = source["memberId"];
@@ -468,11 +468,11 @@ export namespace installer {
 	    placement?: Record<string, any>;
 	    backend?: Record<string, any>;
 	    commands?: EditCommand[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EditCommand(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -507,7 +507,7 @@ export namespace installer {
 	        this.backend = source["backend"];
 	        this.commands = this.convertValues(source["commands"], EditCommand);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -531,11 +531,11 @@ export namespace installer {
 	    profiles: Record<string, any>;
 	    tlsProfiles: Record<string, any>;
 	    scopes: Record<string, any>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedPKI(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.authorities = source["authorities"];
@@ -549,11 +549,11 @@ export namespace installer {
 	    hostId: string;
 	    roles: string[];
 	    priority?: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedHostPlacement(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deploymentId = source["deploymentId"];
@@ -568,11 +568,11 @@ export namespace installer {
 	    hostId: string;
 	    roles: string[];
 	    configuration: ManagedConfigurationOverride[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedMemberPlacement(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deploymentId = source["deploymentId"];
@@ -581,7 +581,7 @@ export namespace installer {
 	        this.roles = source["roles"];
 	        this.configuration = this.convertValues(source["configuration"], ManagedConfigurationOverride);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -604,11 +604,11 @@ export namespace installer {
 	    endpointGroupId: string;
 	    domain: string;
 	    wildcard: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedEndpointGroup(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.endpointGroupId = source["endpointGroupId"];
@@ -621,11 +621,11 @@ export namespace installer {
 	    overridePresent: boolean;
 	    state: string;
 	    value?: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedConfigurationOverride(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.setting = source["setting"];
@@ -644,11 +644,11 @@ export namespace installer {
 	    virtualAddresses?: VirtualAddress[];
 	    providerEditState: string;
 	    configuration: ManagedConfigurationOverride[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedDeployment(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deploymentId = source["deploymentId"];
@@ -661,7 +661,7 @@ export namespace installer {
 	        this.providerEditState = source["providerEditState"];
 	        this.configuration = this.convertValues(source["configuration"], ManagedConfigurationOverride);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -686,11 +686,11 @@ export namespace installer {
 	    desiredHostname?: string;
 	    address?: string;
 	    sshPort?: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedServer(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hostId = source["hostId"];
@@ -708,11 +708,11 @@ export namespace installer {
 	    memberPlacements: ManagedMemberPlacement[];
 	    hostPlacements: ManagedHostPlacement[];
 	    pki: ManagedPKI;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ManagedProjectView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.projectRevision = source["projectRevision"];
@@ -723,7 +723,7 @@ export namespace installer {
 	        this.hostPlacements = this.convertValues(source["hostPlacements"], ManagedHostPlacement);
 	        this.pki = this.convertValues(source["pki"], ManagedPKI);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -750,11 +750,11 @@ export namespace installer {
 	    category: string;
 	    field: string;
 	    safeMessage: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Finding(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -780,11 +780,11 @@ export namespace installer {
 	    applyRequired: boolean;
 	    discarded?: boolean;
 	    timing: CommitTiming;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EditCommitResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -801,7 +801,7 @@ export namespace installer {
 	        this.discarded = source["discarded"];
 	        this.timing = this.convertValues(source["timing"], CommitTiming);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -824,11 +824,11 @@ export namespace installer {
 	    application: number;
 	    initialSnapshot: number;
 	    stagedSnapshot: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PlanTiming(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.application = source["application"];
@@ -839,17 +839,17 @@ export namespace installer {
 	export class Validation {
 	    status: string;
 	    findings: Finding[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Validation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
 	        this.findings = this.convertValues(source["findings"], Finding);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -873,11 +873,11 @@ export namespace installer {
 	    entityId?: string;
 	    property?: string;
 	    safeSummary: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SemanticChange(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.operation = source["operation"];
@@ -906,11 +906,11 @@ export namespace installer {
 	    // Go type: time
 	    expiresAt?: any;
 	    timing: PlanTiming;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EditPlan(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -932,7 +932,7 @@ export namespace installer {
 	        this.expiresAt = this.convertValues(source["expiresAt"], null);
 	        this.timing = this.convertValues(source["timing"], PlanTiming);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -963,11 +963,11 @@ export namespace installer {
 	    // Go type: time
 	    expiresAt: any;
 	    reviewedPlanId?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EditSession(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -981,7 +981,7 @@ export namespace installer {
 	        this.expiresAt = this.convertValues(source["expiresAt"], null);
 	        this.reviewedPlanId = source["reviewedPlanId"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1000,27 +1000,27 @@ export namespace installer {
 		    return a;
 		}
 	}
-
-
-
-
-
-
-
-
-
-
-
-
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	export class ProjectExportDocument {
 	    logicalPath: string;
 	    size: number;
 	    digest: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectExportDocument(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.logicalPath = source["logicalPath"];
@@ -1040,11 +1040,11 @@ export namespace installer {
 	    aggregateSize: number;
 	    excludedCategories: string[];
 	    planDigest: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectExportPlan(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -1059,7 +1059,7 @@ export namespace installer {
 	        this.excludedCategories = source["excludedCategories"];
 	        this.planDigest = source["planDigest"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1087,11 +1087,11 @@ export namespace installer {
 	    documentCount: number;
 	    aggregateSize: number;
 	    errorCode?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectExportResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -1104,7 +1104,7 @@ export namespace installer {
 	        this.errorCode = source["errorCode"];
 	    }
 	}
-
+	
 	export class StructuralEditPlan {
 	    apiVersion: string;
 	    kind: string;
@@ -1119,11 +1119,11 @@ export namespace installer {
 	    saveAllowed: boolean;
 	    // Go type: time
 	    expiresAt?: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new StructuralEditPlan(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -1139,7 +1139,7 @@ export namespace installer {
 	        this.saveAllowed = source["saveAllowed"];
 	        this.expiresAt = this.convertValues(source["expiresAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1169,11 +1169,11 @@ export namespace installer {
 	    affectedDocuments?: DocumentChange[];
 	    timing: CommitTiming;
 	    managed?: ManagedProjectView;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new StructuralSaveResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -1187,7 +1187,7 @@ export namespace installer {
 	        this.timing = this.convertValues(source["timing"], CommitTiming);
 	        this.managed = this.convertValues(source["managed"], ManagedProjectView);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1206,21 +1206,21 @@ export namespace installer {
 		    return a;
 		}
 	}
-
+	
 
 }
 
 export namespace main {
-
+	
 	export class ProjectOpenError {
 	    code: string;
 	    message: string;
 	    diagnosticCodes?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectOpenError(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -1232,18 +1232,18 @@ export namespace main {
 	    status: string;
 	    config?: appconfig.Config;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ApplicationConfigResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
 	        this.config = this.convertValues(source["config"], appconfig.Config);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1267,11 +1267,11 @@ export namespace main {
 	    severity: string;
 	    hostId?: string;
 	    safeMessage: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ApplicationDiagnostic(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -1287,11 +1287,11 @@ export namespace main {
 	    commit?: installer.EditCommitResult;
 	    diagnostics?: ApplicationDiagnostic[];
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EditOperationResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1301,7 +1301,7 @@ export namespace main {
 	        this.diagnostics = this.convertValues(source["diagnostics"], ApplicationDiagnostic);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1327,11 +1327,11 @@ export namespace main {
 	    subjectKind?: string;
 	    subjectId?: string;
 	    helpRef?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VerificationFinding(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -1345,11 +1345,11 @@ export namespace main {
 	export class EndpointPreviewVirtualAddress {
 	    address: string;
 	    interface: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EndpointPreviewVirtualAddress(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.address = source["address"];
@@ -1362,11 +1362,11 @@ export namespace main {
 	    endpointGroupRef: string;
 	    virtualRouterId: number;
 	    virtualAddresses: EndpointPreviewVirtualAddress[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EndpointPreviewProvider(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.endpointGroupId = source["endpointGroupId"];
@@ -1375,7 +1375,7 @@ export namespace main {
 	        this.virtualRouterId = source["virtualRouterId"];
 	        this.virtualAddresses = this.convertValues(source["virtualAddresses"], EndpointPreviewVirtualAddress);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1397,11 +1397,11 @@ export namespace main {
 	export class EndpointPreviewEndpoint {
 	    deploymentId: string;
 	    fqdn: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EndpointPreviewEndpoint(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deploymentId = source["deploymentId"];
@@ -1416,11 +1416,11 @@ export namespace main {
 	    findingsTruncated?: boolean;
 	    truncated?: boolean;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EndpointPreview(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1431,7 +1431,7 @@ export namespace main {
 	        this.truncated = source["truncated"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1450,9 +1450,9 @@ export namespace main {
 		    return a;
 		}
 	}
-
-
-
+	
+	
+	
 	export class ExecutionNodeContext {
 	    status: string;
 	    selectionKind: string;
@@ -1461,11 +1461,11 @@ export namespace main {
 	    runtimeDigest?: string;
 	    safeLabel?: string;
 	    locked: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionNodeContext(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1490,11 +1490,11 @@ export namespace main {
 	    // Go type: time
 	    checkedAt?: any;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectVerification(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -1509,7 +1509,7 @@ export namespace main {
 	        this.checkedAt = this.convertValues(source["checkedAt"], null);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1531,11 +1531,11 @@ export namespace main {
 	export class ExecutionNodeSafeFinding {
 	    code: string;
 	    safeMessage: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionNodeSafeFinding(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -1546,11 +1546,11 @@ export namespace main {
 	    id: string;
 	    action: string;
 	    mutates: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionNodeSafeStep(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1566,11 +1566,11 @@ export namespace main {
 	    findings?: ExecutionNodeSafeFinding[];
 	    error?: ProjectOpenError;
 	    verification?: ProjectVerification;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionNodePreparation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1581,7 +1581,7 @@ export namespace main {
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	        this.verification = this.convertValues(source["verification"], ProjectVerification);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1607,11 +1607,11 @@ export namespace main {
 	    checkedAt?: string;
 	    findings?: ExecutionNodeSafeFinding[];
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExecutionNodeReadiness(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1621,7 +1621,7 @@ export namespace main {
 	        this.findings = this.convertValues(source["findings"], ExecutionNodeSafeFinding);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1640,8 +1640,8 @@ export namespace main {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class HostKeyProbeResult {
 	    status: string;
 	    probeId?: string;
@@ -1649,11 +1649,11 @@ export namespace main {
 	    keyType?: string;
 	    fingerprint?: string;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new HostKeyProbeResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1663,7 +1663,7 @@ export namespace main {
 	        this.fingerprint = source["fingerprint"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1685,11 +1685,11 @@ export namespace main {
 	export class InstallationAcknowledgement {
 	    code: string;
 	    summary: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationAcknowledgement(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -1700,11 +1700,11 @@ export namespace main {
 	    role?: string;
 	    name?: string;
 	    uuid?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationTaskView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.role = source["role"];
@@ -1728,11 +1728,11 @@ export namespace main {
 	    errorCode?: string;
 	    errorSummary?: string;
 	    redacted: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationEventView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.runId = source["runId"];
@@ -1751,7 +1751,7 @@ export namespace main {
 	        this.errorSummary = source["errorSummary"];
 	        this.redacted = source["redacted"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1773,11 +1773,11 @@ export namespace main {
 	export class InstallationNodeState {
 	    status: string;
 	    safeLabel?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationNodeState(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -1793,11 +1793,11 @@ export namespace main {
 	    mutating: boolean;
 	    reboot: string;
 	    summary: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPlanAction(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1813,11 +1813,11 @@ export namespace main {
 	export class InstallationPlanFinding {
 	    code: string;
 	    safeMessage: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPlanFinding(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -1828,18 +1828,18 @@ export namespace main {
 	    id: string;
 	    order: number;
 	    actions: InstallationPlanAction[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPlanPhase(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.order = source["order"];
 	        this.actions = this.convertValues(source["actions"], InstallationPlanAction);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1863,11 +1863,11 @@ export namespace main {
 	    coreVersion: string;
 	    catalogDigest: string;
 	    protocol: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationRuntimeBinding(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.bundleDigest = source["bundleDigest"];
@@ -1891,11 +1891,11 @@ export namespace main {
 	    pkiStorePasswordRequired: boolean;
 	    secretOutputEncryptionRequired: boolean;
 	    secretOutputEncryptionPasswordPresent: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPlanView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1913,7 +1913,7 @@ export namespace main {
 	        this.secretOutputEncryptionRequired = source["secretOutputEncryptionRequired"];
 	        this.secretOutputEncryptionPasswordPresent = source["secretOutputEncryptionPasswordPresent"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1936,18 +1936,18 @@ export namespace main {
 	    status: string;
 	    plan?: InstallationPlanView;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPlanOperation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
 	        this.plan = this.convertValues(source["plan"], InstallationPlanView);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1966,31 +1966,31 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class InstallationPlanState {
 	    status: string;
 	    planId?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPlanState(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
 	        this.planId = source["planId"];
 	    }
 	}
-
+	
 	export class InstallationPrerequisite {
 	    code: string;
 	    destination: string;
 	    safeMessage: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationPrerequisite(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -2003,11 +2003,11 @@ export namespace main {
 	    revision: string;
 	    verificationStatus: string;
 	    hasUnsavedChanges: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationProjectState(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -2020,11 +2020,11 @@ export namespace main {
 	    runId: string;
 	    state: string;
 	    sequence: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationResultView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.runId = source["runId"];
@@ -2036,11 +2036,11 @@ export namespace main {
 	    runId: string;
 	    state: string;
 	    sequence: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationRunView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.runId = source["runId"];
@@ -2053,11 +2053,11 @@ export namespace main {
 	    run?: InstallationRunView;
 	    result?: InstallationResultView;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationRunOperation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2065,7 +2065,7 @@ export namespace main {
 	        this.result = this.convertValues(source["result"], InstallationResultView);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2084,8 +2084,8 @@ export namespace main {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class InstallationState {
 	    apiVersion: string;
 	    kind: string;
@@ -2094,11 +2094,11 @@ export namespace main {
 	    executionNode: InstallationNodeState;
 	    plan: InstallationPlanState;
 	    prerequisites?: InstallationPrerequisite[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationState(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -2109,7 +2109,7 @@ export namespace main {
 	        this.plan = this.convertValues(source["plan"], InstallationPlanState);
 	        this.prerequisites = this.convertValues(source["prerequisites"], InstallationPrerequisite);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2132,18 +2132,18 @@ export namespace main {
 	    subscriptionId: string;
 	    event?: InstallationEventView;
 	    errorCode?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationSubscriptionEvent(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.subscriptionId = source["subscriptionId"];
 	        this.event = this.convertValues(source["event"], InstallationEventView);
 	        this.errorCode = source["errorCode"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2167,11 +2167,11 @@ export namespace main {
 	    subscriptionId?: string;
 	    event?: InstallationSubscriptionEvent;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstallationSubscriptionResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2179,7 +2179,7 @@ export namespace main {
 	        this.event = this.convertValues(source["event"], InstallationSubscriptionEvent);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2198,18 +2198,18 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class OrphanRunRecoveryResult {
 	    status: string;
 	    recoveryId?: string;
 	    runId?: string;
 	    runState?: string;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new OrphanRunRecoveryResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2218,7 +2218,7 @@ export namespace main {
 	        this.runState = source["runState"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2240,11 +2240,11 @@ export namespace main {
 	export class OutputEncryptionPasswordInput {
 	    password: string;
 	    confirm: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new OutputEncryptionPasswordInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.password = source["password"];
@@ -2255,11 +2255,11 @@ export namespace main {
 	    serviceDeployment: string;
 	    purpose: string;
 	    encryptionPassword: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PendingRuntimeSecretFileInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serviceDeployment = source["serviceDeployment"];
@@ -2270,11 +2270,11 @@ export namespace main {
 	export class PendingRuntimeSecretValuesInput {
 	    serviceDeployment: string;
 	    values: Record<string, string>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PendingRuntimeSecretValuesInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serviceDeployment = source["serviceDeployment"];
@@ -2286,11 +2286,11 @@ export namespace main {
 	    plan?: installer.ProjectExportPlan;
 	    result?: installer.ProjectExportResult;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectExportOperationResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2298,7 +2298,7 @@ export namespace main {
 	        this.result = this.convertValues(source["result"], installer.ProjectExportResult);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2317,7 +2317,7 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class ProjectOpenResult {
 	    status: string;
 	    root?: string;
@@ -2330,11 +2330,11 @@ export namespace main {
 	    verification: ProjectVerification;
 	    diagnostics?: ApplicationDiagnostic[];
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectOpenResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2349,7 +2349,7 @@ export namespace main {
 	        this.diagnostics = this.convertValues(source["diagnostics"], ApplicationDiagnostic);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2368,7 +2368,7 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class RuntimeBundleUpdateResult {
 	    status: string;
 	    previewId?: string;
@@ -2380,11 +2380,11 @@ export namespace main {
 	    coreVersion?: string;
 	    projectRevision?: string;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RuntimeBundleUpdateResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2398,7 +2398,7 @@ export namespace main {
 	        this.projectRevision = source["projectRevision"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2427,11 +2427,11 @@ export namespace main {
 	    operations?: string[];
 	    referenceConfigured: boolean;
 	    hosts: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RuntimeSecretDescriptorView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.requirementRef = source["requirementRef"];
@@ -2446,25 +2446,27 @@ export namespace main {
 	    }
 	}
 	export class RuntimeSecretDescriptorOperation {
+	    secretsInstalled?: boolean;
 	    status: string;
 	    projectRevision?: string;
 	    descriptorSetFingerprint?: string;
 	    descriptors?: RuntimeSecretDescriptorView[];
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RuntimeSecretDescriptorOperation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.secretsInstalled = source["secretsInstalled"];
 	        this.status = source["status"];
 	        this.projectRevision = source["projectRevision"];
 	        this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
 	        this.descriptors = this.convertValues(source["descriptors"], RuntimeSecretDescriptorView);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2483,17 +2485,17 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class RuntimeSecretValuesInput {
 	    projectRevision: string;
 	    descriptorSetFingerprint: string;
 	    serviceDeployment: string;
 	    values: Record<string, string>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RuntimeSecretValuesInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.projectRevision = source["projectRevision"];
@@ -2504,11 +2506,11 @@ export namespace main {
 	}
 	export class SecretOutputDeliveryInput {
 	    packageId: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SecretOutputDeliveryInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.packageId = source["packageId"];
@@ -2520,11 +2522,11 @@ export namespace main {
 	    directory?: string;
 	    stagingPath?: string;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SecretOutputDeliveryOperation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2533,7 +2535,7 @@ export namespace main {
 	        this.stagingPath = source["stagingPath"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2557,11 +2559,11 @@ export namespace main {
 	    packages?: executionnode.SecretOutputPackage[];
 	    nextCursor?: string;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SecretOutputPackagesOperation(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2569,7 +2571,7 @@ export namespace main {
 	        this.nextCursor = source["nextCursor"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2593,11 +2595,11 @@ export namespace main {
 	    hostId?: string;
 	    information?: executionnode.ServerInformation;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerInformationResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2605,7 +2607,7 @@ export namespace main {
 	        this.information = this.convertValues(source["information"], executionnode.ServerInformation);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2632,11 +2634,11 @@ export namespace main {
 	    current?: ProjectOpenResult;
 	    diagnostics?: ApplicationDiagnostic[];
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new StructuralEditOperationResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2647,7 +2649,7 @@ export namespace main {
 	        this.diagnostics = this.convertValues(source["diagnostics"], ApplicationDiagnostic);
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2666,16 +2668,16 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class VerifiedPKIConsumer {
 	    deploymentId: string;
 	    memberId: string;
 	    hostId: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VerifiedPKIConsumer(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deploymentId = source["deploymentId"];
@@ -2690,11 +2692,11 @@ export namespace main {
 	    dnsNames: string[];
 	    ipAddresses: string[];
 	    consumers: VerifiedPKIConsumer[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VerifiedCertificateIdentity(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -2704,7 +2706,7 @@ export namespace main {
 	        this.ipAddresses = source["ipAddresses"];
 	        this.consumers = this.convertValues(source["consumers"], VerifiedPKIConsumer);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2723,18 +2725,18 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class VerifiedPKIView {
 	    status: string;
 	    identities?: VerifiedCertificateIdentity[];
 	    findings?: VerificationFinding[];
 	    findingsTruncated?: boolean;
 	    error?: ProjectOpenError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VerifiedPKIView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -2743,7 +2745,7 @@ export namespace main {
 	        this.findingsTruncated = source["findingsTruncated"];
 	        this.error = this.convertValues(source["error"], ProjectOpenError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2766,15 +2768,15 @@ export namespace main {
 }
 
 export namespace projectlifecycle {
-
+	
 	export class CatalogViewError {
 	    code: string;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CatalogViewError(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.code = source["code"];
@@ -2786,11 +2788,11 @@ export namespace projectlifecycle {
 	    bundleDigest: string;
 	    catalogDigest: string;
 	    bundleVersion: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CompatibilitySourceSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -2803,11 +2805,11 @@ export namespace projectlifecycle {
 	    servers: number;
 	    deployments: number;
 	    runs: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Counts(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.servers = source["servers"];
@@ -2819,11 +2821,11 @@ export namespace projectlifecycle {
 	    projectRoot: string;
 	    displayName: string;
 	    compatibilitySourceId: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CreateProjectRequest(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.projectRoot = source["projectRoot"];
@@ -2835,18 +2837,18 @@ export namespace projectlifecycle {
 	    id: string;
 	    name: string;
 	    source: CompatibilitySourceSummary;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Project(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.source = this.convertValues(source["source"], CompatibilitySourceSummary);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2869,11 +2871,11 @@ export namespace projectlifecycle {
 	    role: string;
 	    minimum: number;
 	    maximum?: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogRoleCardinality(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.role = source["role"];
@@ -2886,11 +2888,11 @@ export namespace projectlifecycle {
 	    maxParticipants?: number;
 	    distinctHosts: boolean;
 	    roleCardinality?: ProjectCatalogRoleCardinality[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogModeGuidance(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.minParticipants = source["minParticipants"];
@@ -2898,7 +2900,7 @@ export namespace projectlifecycle {
 	        this.distinctHosts = source["distinctHosts"];
 	        this.roleCardinality = this.convertValues(source["roleCardinality"], ProjectCatalogRoleCardinality);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2925,11 +2927,11 @@ export namespace projectlifecycle {
 	    roles: string[];
 	    requiredRuntimeSecretSettings?: string[];
 	    guidance: ProjectCatalogModeGuidance;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogMode(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -2940,7 +2942,7 @@ export namespace projectlifecycle {
 	        this.requiredRuntimeSecretSettings = source["requiredRuntimeSecretSettings"];
 	        this.guidance = this.convertValues(source["guidance"], ProjectCatalogModeGuidance);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -2959,19 +2961,19 @@ export namespace projectlifecycle {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class ProjectCatalogSecretInput {
 	    requirementRef: string;
 	    purpose: string;
 	    displayLabel: string;
 	    requiredWhen: string;
 	    operations: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogSecretInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.requirementRef = source["requirementRef"];
@@ -3000,11 +3002,11 @@ export namespace projectlifecycle {
 	    enum?: any[];
 	    staticDefaultState?: string;
 	    staticDefaultValue?: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogSetting(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -3031,11 +3033,11 @@ export namespace projectlifecycle {
 	    icon?: string;
 	    order?: number;
 	    documentationTopic?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogUI(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.icon = source["icon"];
@@ -3056,11 +3058,11 @@ export namespace projectlifecycle {
 	    configurationSettings: ProjectCatalogSetting[];
 	    secretInputs?: ProjectCatalogSecretInput[];
 	    secretOutputEntries?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogService(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -3076,7 +3078,7 @@ export namespace projectlifecycle {
 	        this.secretInputs = this.convertValues(source["secretInputs"], ProjectCatalogSecretInput);
 	        this.secretOutputEntries = source["secretOutputEntries"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -3095,8 +3097,8 @@ export namespace projectlifecycle {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class ProjectCatalogView {
 	    status: string;
 	    expectedBundleDigest: string;
@@ -3104,11 +3106,11 @@ export namespace projectlifecycle {
 	    bundleVersion?: string;
 	    services?: ProjectCatalogService[];
 	    error?: CatalogViewError;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCatalogView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
@@ -3118,7 +3120,7 @@ export namespace projectlifecycle {
 	        this.services = this.convertValues(source["services"], ProjectCatalogService);
 	        this.error = this.convertValues(source["error"], CatalogViewError);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -3141,7 +3143,7 @@ export namespace projectlifecycle {
 }
 
 export namespace runtimesecret {
-
+	
 	export class Input {
 	    username: string;
 	    sshMode: string;
@@ -3149,11 +3151,11 @@ export namespace runtimesecret {
 	    privateKeyPath: string;
 	    elevationMode: string;
 	    elevationPassword: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Input(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.username = source["username"];
@@ -3171,11 +3173,11 @@ export namespace runtimesecret {
 	    sudoPasswordStatus: string;
 	    pkiStorePasswordStatus: string;
 	    expiresAt?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Status(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];

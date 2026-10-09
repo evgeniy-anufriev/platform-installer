@@ -117,11 +117,13 @@
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | sort(attribute='configFileName') }}
+         flatten | selectattr('providerHostIds', 'contains', inventory_hostname) |
+         sort(attribute='configFileName') }}
     platform_haproxy_managed_application_backend_files: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | map(attribute='configFileName') | sort | list }}
+         flatten | selectattr('providerHostIds', 'contains', inventory_hostname) |
+         map(attribute='configFileName') | sort | list }}
   when: platform_haproxy_full_reconcile | bool
 
 - name: Retain exact proven backend inventory in base mode
@@ -137,14 +139,16 @@
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
          flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+         selectattr('providerHostIds', 'contains', inventory_hostname) |
          sort(attribute='configFileName') }}
     platform_haproxy_managed_application_backend_files: >-
-      {{ ((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
+      {{ (((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
            reject('match', '^30-backend-' ~ (platform_haproxy_partial_deployment_id | regex_escape) ~ '-')) | list) +
          (platform_haproxy_runtime_projection.backends.backends | dict2items |
           selectattr('key', 'in', platform_deployments) | map(attribute='value') |
           flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
-          map(attribute='configFileName') | list) | unique | sort }}
+          selectattr('providerHostIds', 'contains', inventory_hostname) |
+          map(attribute='configFileName') | list)) | unique | sort }}
   when:
     - not (platform_haproxy_full_reconcile | bool)
     - platform_haproxy_partial_deployment_id is defined

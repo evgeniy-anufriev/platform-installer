@@ -10,10 +10,12 @@ def main():
         "desired_state": {"type": "dict", "required": True},
         "source_service_types": {"type": "list", "elements": "str", "required": True},
         "source_deployment_id": {"type": "str", "required": False},
+        "inventory_deployments": {"type": "dict", "required": True},
     }, supports_check_mode=True)
     result = resolve_service_integrations(
         module.params["desired_state"], module.params["source_service_types"],
         module.params.get("source_deployment_id"),
+        module.params["inventory_deployments"],
     )
     module.exit_json(changed=False, resolved_service_integrations=result)
 

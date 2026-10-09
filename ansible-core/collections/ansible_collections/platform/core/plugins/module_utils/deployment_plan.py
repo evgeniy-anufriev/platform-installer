@@ -9,8 +9,10 @@ import re
 
 try:
     from .project_validation import DIGEST_PATTERN, canonical_digest
+    from .service_integration_resolution import haproxy_provider_hosts
 except ImportError:
     from project_validation import DIGEST_PATTERN, canonical_digest
+    from service_integration_resolution import haproxy_provider_hosts
 
 
 API_VERSION = "platform.installer/plan/v1alpha2"
@@ -164,7 +166,7 @@ def _artifact_source_authorities(requirements, sources, bundle_digest):
     return authorities, findings
 
 
-def _service_dependencies(deployment_id, deployment, definitions, deployments):
+def _service_dependencies(deployment_id, deployment, definitions, deployments, placements):
     definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) and isinstance(definitions, dict) else {}
     required = definition.get("dependencies", []) if isinstance(definition, dict) else []
     result = []
@@ -178,14 +180,10 @@ def _service_dependencies(deployment_id, deployment, definitions, deployments):
             if capability in (candidate_definition.get("capabilities", []) if isinstance(candidate_definition, dict) else []):
                 providers.append("apply:%s" % candidate_id)
         result.extend(providers)
-    # Keep the established source-before-HAProxy barrier until the generic
-    # source-owned backend/DNS integration path is implemented and accepted.
-    # Removing this edge before that path exists would let HAProxy activate a
-    # plan-wide backend projection before its sources are healthy.
-    for source_id, source in sorted(deployments.items()):
-        relation = source.get("haproxy") if isinstance(source, dict) else None
-        if source_id != deployment_id and isinstance(relation, dict) and relation.get("deploymentRef") == deployment_id:
-            result.append("apply:%s" % source_id)
+    # Base HAProxy does not consume future source backends. The existing
+    # source-owned integration needs its selected providers prepared first.
+    providers = haproxy_provider_hosts({"serviceDeployments": deployments}, placements, deployment)
+    result.extend("apply:%s" % provider_id for provider_id in providers)
     return sorted(set(result))
 
 
@@ -685,7 +683,17 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                             (request_id, ", ".join(sorted(deployments_for_request)), ", ".join(sorted(hosts_for_request))))
     reissue_summary = "Перевыпустить сертификаты: " + "; ".join(scope_labels)
     if reissue and len(reissue_summary.encode("utf-8")) > 512:
-        raise ValueError("PKI_REISSUE_SCOPE_TOO_LARGE")
+        # Repeated consumers across per-host requests must not make a valid
+        # scope unrepresentable. Retain the complete deployment/host scope;
+        # exact request identities remain bound in the execution manifest.
+        scope_deployments = sorted({consumer["deploymentId"] for request_id in request_ids
+                                    for consumer in request_by_id[request_id]["consumers"]})
+        scope_hosts = sorted({consumer["hostId"] for request_id in request_ids
+                             for consumer in request_by_id[request_id]["consumers"]})
+        reissue_summary = "Перевыпустить сертификаты (%s запросов; сервисы: %s; серверы: %s)" % (
+            len(request_ids), ", ".join(scope_deployments), ", ".join(scope_hosts))
+        if len(reissue_summary.encode("utf-8")) > 512:
+            raise ValueError("PKI_REISSUE_SCOPE_TOO_LARGE")
     reissue_targets = sorted(target_values)
     actions = []
     if pki_consumers:
@@ -696,7 +704,8 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     deployment_positions = {deployment_id: index for index, deployment_id in enumerate(deployment_order)}
     for deployment_id in deployment_order:
         deployment = deployments[deployment_id]
-        dependencies = _service_dependencies(deployment_id, deployment, definitions, deployments)
+        dependencies = _service_dependencies(deployment_id, deployment, definitions, deployments,
+                                             (snapshot.get("topology") or {}).get("placementsByHost", {}))
         prior_dependencies = []
         for dependency in dependencies:
             provider_id = dependency[len("apply:"):] if dependency.startswith("apply:") else dependency

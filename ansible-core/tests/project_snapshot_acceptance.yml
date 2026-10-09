@@ -36,7 +36,7 @@
           - first_snapshot.snapshot.hosts | length == 3
           - first_snapshot.snapshot.hosts.node1.platformDeployments['bind-main'].roles == ['primary']
           - first_snapshot.snapshot.hosts.node1.provenance.editPolicy == 'FUTURE_EDITABLE'
-          - first_snapshot.snapshot.serviceCatalog | length == 6
+          - first_snapshot.snapshot.serviceDeployments.values() | map(attribute='serviceType') | unique | difference(first_snapshot.snapshot.serviceCatalog.keys()) | length == 0
           - first_snapshot.snapshot.serviceDeployments | length == 6
           - first_snapshot.snapshot.effectiveConfiguration.services | length == 6
           - first_snapshot.snapshot.pki.certificateIdentities | length == 3

@@ -652,18 +652,6 @@ func TestF2PreservedProviderAndDependencyReferencesBlockDeletion(t *testing.T) {
 			},
 			field: "serviceDeployment",
 		},
-		{
-			name: "haproxy deployment reference",
-			configure: func(state map[string]any) {
-				asMap(asMap(state["serviceDeployments"])["consumer"])["haproxy"] = map[string]any{"deploymentRef": "provider"}
-			},
-			command: func(revision string) EditCommand {
-				c := f2Command(revision, "DeleteServiceDeployment")
-				c.DeploymentID = "provider"
-				return c
-			},
-			field: "deploymentRef",
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -692,6 +680,43 @@ func TestF2PreservedProviderAndDependencyReferencesBlockDeletion(t *testing.T) {
 				t.Fatalf("plan=%#v finding=%+v err=%v", plan, plan.Finding, err)
 			}
 		})
+	}
+}
+
+func TestF2LegacyHAProxyReferenceDoesNotPreventDeletingFormerProvider(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		root, revision := emptyManagedProject(t)
+		create := f2Command(revision, "CreateServer")
+		create.HostID, create.ServerType, create.DesiredHostname, create.Address = "node1", "infra", "node1.example.test", "192.0.2.10"
+		commitStructuralForTest(t, f2Backend(nil), root, projectlifecycle.ClassificationEmpty, revision, []EditCommand{create})
+		document, _, err := (&managedReadBudget{}).ownedDocument(root, desiredDocument)
+		if err != nil {
+			t.Fatal(err)
+		}
+		backend := map[string]any{"backend": map[string]any{"check": false}}
+		if legacy {
+			backend["deploymentRef"] = "provider"
+		}
+		asMap(document["platform_desired_state"])["serviceDeployments"] = map[string]any{
+			"provider": map[string]any{"serviceType": "haproxy", "mode": "default"},
+			"consumer": map[string]any{"serviceType": "consumer", "mode": "default", "haproxy": backend},
+		}
+		content, _ := deterministicYAML(document)
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(desiredDocument)), content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		revision, _ = ProjectRevision(root)
+		remove := f2Command(revision, "DeleteServiceDeployment")
+		remove.DeploymentID = "provider"
+		commitStructuralForTest(t, f2Backend(nil), root, projectlifecycle.ClassificationManaged, revision, []EditCommand{remove})
+		document, _, err = (&managedReadBudget{}).ownedDocument(root, desiredDocument)
+		if err != nil {
+			t.Fatal(err)
+		}
+		consumer := asMap(asMap(asMap(document["platform_desired_state"])["serviceDeployments"])["consumer"])
+		if !semanticEqual(consumer["haproxy"], backend) {
+			t.Fatalf("backend settings/legacy input rewritten: %#v", consumer["haproxy"])
+		}
 	}
 }
 

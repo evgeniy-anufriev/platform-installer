@@ -461,6 +461,15 @@ canonical desired state. Acceptance proved deduplication, full-model drift
 repair, desired-state add/remove cleanup, serial `4 → 5`, clean repeats and
 shared-PKI stability.
 
+Owner-authorized ENDPOINT-HAPROXY-PLACEMENT-01 replaces explicit provider
+selection with endpoint → Keepalived placements → same-group HAProxy host
+intersection, using existing source-owned integration and full reconcile.
+Package backend defaults and overrides remain Core-owned. Missing placement
+is an error with skipped integration, not a run failure. Source implementation
+and acceptance status are tracked in CURRENT_STATE and the
+[narrow implementation plan](endpoint-haproxy-placement-plan.md); earlier
+NET-04.2 acceptance does not prove this changed selection.
+
 ### UI-BE-01: Installer UI / backend boundary
 
 Status: DONE. The versioned query/semantic-command/execution boundary is

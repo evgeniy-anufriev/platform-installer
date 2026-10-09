@@ -39,6 +39,7 @@ listeners:
   keeper-client: {protocol: tcp, defaultPort: 9281, tlsCapable: true, scope: member}
   keeper-raft: {protocol: tcp, defaultPort: 9444, tlsCapable: true, scope: member}
 endpoint: {}
+x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 x-backendClientListener: {listener: client, allocation: {kind: HOST_LOCAL_ORDINAL, stride: 1}}
 capabilities: [service.clickhouse.https, service.clickhouse.keeper]
 dependencies: []

@@ -19,6 +19,12 @@ DIGEST = "sha256:" + "b" * 64
 
 
 class ProjectEditContractTests(unittest.TestCase):
+    def test_haproxy_backend_only_and_stale_legacy_input_are_read_compatible(self):
+        validator = SCHEMA.SchemaValidator(CONTRACTS)
+        for relation in ({"backend": {"check": False}}, {"deploymentRef": "former-proxy", "backend": {"ssl": False}}):
+            state = {"serviceDeployments": {"app": {"serviceType": "vault", "mode": "standalone", "haproxy": relation}}}
+            self.assertEqual([], validator.validate(state, DESIRED_STATE_SCHEMA))
+
     def setUp(self):
         self.validator = SCHEMA.SchemaValidator(CONTRACTS)
 

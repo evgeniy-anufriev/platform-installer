@@ -163,6 +163,16 @@ and routing are deferred to NET-03. Kafka is not a
 generic NET-01 endpoint consumer because its client reachability is governed
 by package-owned named and advertised listeners.
 
+HAProxy backend destinations are derived by Core from the service's
+`endpointGroup`, matching Keepalived `endpointGroupRef` placements, and
+same-group HAProxy placements on those hosts. All matching provider/host
+pairs participate; partial VIP coverage does not block planning. Legacy
+`haproxy.deploymentRef` remains readable but does not select a provider.
+`haproxy.backend` overrides package-owned `x-haproxyBackendDefaults`; no
+relation object is required to activate the derived integration. Missing
+HAProxy produces a nonfatal Core error and skipped integration. Existing
+source-owned publication and explicit full reconcile remain authoritative.
+
 ## Certificates
 
 Certificate identity is resolved by explicit certificate scope and profile, not by creating one request per service instance. A scope aggregates selected host, endpoint and explicit sources. SANs are deduplicated and deterministically ordered.

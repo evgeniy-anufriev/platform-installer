@@ -792,12 +792,6 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
     if any(isinstance(item, dict) and item.get("serviceType") == "haproxy" for item in deployments.values()):
         backend_result = resolve_haproxy_backends(topology, service_catalog, inventory_host_addresses or {}, endpoint_inventory, endpoint_result, {})
         findings.extend(backend_result["findings"])
-        for host_id, placement in sorted(endpoint_inventory.items()):
-            haproxy_count = sum(1 for deployment_id in placement
-                                if isinstance(deployments.get(deployment_id), dict)
-                                and deployments[deployment_id].get("serviceType") == "haproxy")
-            if haproxy_count > 1:
-                findings.append(_finding("HAPROXY_FRONTEND_PORT_COLLISION", "platform_deployments.%s" % host_id, "At most one HAProxy deployment may bind the fixed public port on a host"))
 
     for deployment_id, deployment in sorted(deployments.items()):
         if not isinstance(deployment, dict) or deployment.get("serviceType") != "keepalived":

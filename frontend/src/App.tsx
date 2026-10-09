@@ -575,10 +575,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   useEffect(() => {
     let live = true;
     const planId = installationState?.plan.planId;
-    if (!planId || !api.getInstallationPlan)
+    if (!planId || !api.getInstallationPlan) {
+      setInstallationPlan(undefined);
       return () => {
         live = false;
       };
+    }
     api
       .getInstallationPlan(planId)
       .then((value) => live && setInstallationPlan(value))
@@ -797,6 +799,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationState(next);
   };
   const createInstallationPlan = async (deploymentOrder: string[]) => {
+    if (["STARTING", "RUNNING", "CANCELLING"].includes(installationRun?.run?.state || "")) return;
     if (!api.createInstallationPlan) return;
     setInstallationBusy(true);
     try {
@@ -812,6 +815,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     planId: string,
     acknowledgements: string[],
   ) => {
+    if (["STARTING", "RUNNING", "CANCELLING"].includes(installationRun?.run?.state || "")) return;
     if (!api.approveInstallationPlan) return;
     setInstallationBusy(true);
     try {
@@ -827,6 +831,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const startApprovedInstallation = async (planId: string) => {
+    if (["STARTING", "RUNNING", "CANCELLING"].includes(installationRun?.run?.state || "")) return;
     if (!api.startApprovedInstallation) return;
     setInstallationBusy(true);
     try {
@@ -869,7 +874,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!api.cancelInstallationRun) return;
     setInstallationBusy(true);
     try {
-      setInstallationRun(await api.cancelInstallationRun(runId));
+      const operation = await api.cancelInstallationRun(runId);
+      setInstallationRun(operation);
+      if (operation.status !== "BLOCKED") {
+        setInstallationPlan(undefined);
+        await refreshInstallationState();
+      }
     } finally {
       setInstallationBusy(false);
     }
@@ -895,27 +905,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setSecretOutputPackages(secretOutputListingUnavailable());
     }
   }, [api]);
-  const deliverSecretOutput = useCallback(
-    async (packageId: string) => {
-      if (!api.deliverPendingSecretOutput) return;
-      try {
-        setOutputDelivery(await api.deliverPendingSecretOutput(packageId));
-      } catch {
-        setOutputDelivery(secretOutputDeliveryUnavailable());
-        return;
-      }
-      if (api.listPendingSecretOutputs) {
-        try {
-          setSecretOutputPackages(await api.listPendingSecretOutputs());
-        } catch {
-          setSecretOutputPackages(secretOutputListingUnavailable());
-        }
-      }
-    },
-    [api],
-  );
   const collectAndDeliverSecretOutputs = useCallback(
-    async (runId: string) => {
+    async (runId: string, manual = false) => {
       if (!api.listPendingSecretOutputs) return;
       let pending: SecretOutputPackagesOperation;
       try {
@@ -928,8 +919,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       const plan = installationPlan?.plan;
       if (
         pending.status !== "READY" ||
-        !plan?.secretOutputEncryptionRequired ||
-        !plan.secretOutputEncryptionPasswordPresent
+        (!manual && (!plan?.secretOutputEncryptionRequired ||
+        !plan.secretOutputEncryptionPasswordPresent))
       )
         return;
       const candidates = [...(pending.packages || [])];
@@ -950,11 +941,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         cursor = next.nextCursor;
       }
       for (const item of candidates) {
-        if (item.sourceRunId !== runId) continue;
+        if ((!manual && runId && item.sourceRunId !== runId) || item.state === "LOCAL_DELIVERED") continue;
         if (!api.deliverPendingSecretOutput) break;
         try {
           const delivery = await api.deliverPendingSecretOutput(item.packageId);
           setOutputDelivery(delivery);
+          if (delivery.status !== "DELIVERED") break;
         } catch {
           setOutputDelivery(secretOutputDeliveryUnavailable());
           return;
@@ -1655,19 +1647,18 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         setVerifiedPKI(view);
       }
     }
-    const refreshed = await api
-      .getExecutionNodeContext?.()
-      .catch(() => undefined);
-    setExecutionNode((current) =>
-      current
-        ? {
-            ...(refreshed || current),
-            status:
-              preparation.status === "PREPARED" ? "READY" : preparation.status,
-            runtimeDigest: refreshed?.runtimeDigest,
-          }
-        : current,
-    );
+    if (preparation.status === "PREPARED") {
+      await checkExecutionNode();
+    } else {
+      const refreshed = await api
+        .getExecutionNodeContext?.()
+        .catch(() => undefined);
+      setExecutionNode((current) => current ? {
+        ...(refreshed || current),
+        status: preparation.status,
+        runtimeDigest: refreshed?.runtimeDigest,
+      } : current);
+    }
     return preparation;
   };
 
@@ -2234,8 +2225,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               secretOutputPackages={secretOutputPackages}
               outputDelivery={outputDelivery}
               onRefreshSecretOutputs={() => void refreshSecretOutputs()}
-              onDeliverSecretOutput={(packageId) =>
-                void deliverSecretOutput(packageId)
+              onCollectSecretOutputs={() =>
+                collectAndDeliverSecretOutputs(installationRun?.run?.runId || "", true)
               }
               onStart={startApprovedInstallation}
               onCancel={cancelInstallationRun}

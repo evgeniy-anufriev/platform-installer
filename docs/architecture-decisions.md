@@ -440,3 +440,20 @@ Accepted by owner 2026-10-08. A single Servers action confirms the current SSH h
 ## ADR-032: Execution Node supports session SSH passwords
 
 Owner-approved 2026-10-08. Password and PEM use the existing OpenSSH SSH/SCP transport and exact confirmed host-key pin. Password is broker-owned memory, supplied through standard ASKPASS using early helper dispatch in the current executable and a command-owned one-use loopback capability. No password argv/environment/file, new credential DTO or desired-state store is introduced. Only a matching STARTING plan/RUNNING run may use a retained password after ordinary lease expiry; new operations require a live lease. Copies are wiped on callback return and hold release. PEM file/digest guards remain. See [plan](execution-node-password-auth-plan.md); broader preparation/Start acceptance remains separately gated.
+
+## ADR-033: Endpoint placement selects HAProxy providers
+
+Owner-approved 2026-10-09. Core derives HAProxy destinations through the
+service endpointGroup, matching Keepalived endpointGroupRef placements, and
+same-group HAProxy placements on those hosts. All matching provider/host pairs
+participate; neither full VIP coverage nor a unique provider is required.
+Legacy haproxy.deploymentRef is read-compatible and ignored for selection;
+haproxy.backend remains an override over package-owned defaults. Source Apply
+depends on the selected base providers, whose normal Apply already preserves
+source backends without resolving future services. Missing placement produces
+a safe FAILED diagnostic followed by SKIPPED integration without terminating
+the run. Runtime errors of selected providers remain fail-stop. Existing
+publication, archives and explicit full reconciliation are reused. Partial
+hooks do not discover previous excluded hosts after move/delete; no durable
+target store or new transaction guarantee is introduced. See the
+[narrow plan](endpoint-haproxy-placement-plan.md).

@@ -13,6 +13,29 @@ HAPROXY_PLAYBOOK = os.path.join(ROOT, "services", "haproxy", "playbooks", "integ
 
 
 class SourceDnsProjectionTests(unittest.TestCase):
+    def test_empty_source_initializes_an_empty_haproxy_host_scope(self):
+        executable = shutil.which("ansible-playbook")
+        if not executable:
+            self.skipTest("ansible-playbook is required")
+        with open(PLAYBOOK, encoding="utf-8") as source:
+            source_plays = yaml.safe_load(source)
+        initialize = source_plays[0]["tasks"][0]
+        with open(HAPROXY_PLAYBOOK, encoding="utf-8") as source:
+            proxy_plays = yaml.safe_load(source)
+        plays = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
+                  "tasks": [initialize, {"ansible.builtin.assert": {"that": [
+                      "platform_service_integration_projection.haproxyHosts == []"]}}]}]
+        for play in proxy_plays:
+            plays.append({"hosts": play["hosts"], "gather_facts": False,
+                          "tasks": [{"ansible.builtin.fail": {"msg": "No source must not target any proxy"}}]})
+        with tempfile.TemporaryDirectory(prefix="platform-source-empty-") as temporary:
+            path = os.path.join(temporary, "test.yml")
+            with open(path, "w", encoding="utf-8") as output:
+                yaml.safe_dump(plays, output, sort_keys=False)
+            result = subprocess.run([executable, "-i", "localhost,node1,node2,", path],
+                                    capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_production_task_preserves_list_and_record_addresses(self):
         ansible_playbook = shutil.which("ansible-playbook")
         if not ansible_playbook:

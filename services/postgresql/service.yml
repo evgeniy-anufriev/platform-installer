@@ -37,6 +37,7 @@ modes:
 listeners:
   client: {protocol: tcp, defaultPort: 5432, tlsCapable: true, scope: deployment}
 endpoint: {}
+x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 capabilities: [service.postgresql.client]
 dependencies: []
 configurationSchema: {$ref: configuration.schema.json}

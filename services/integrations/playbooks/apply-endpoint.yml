@@ -12,6 +12,7 @@
         platform_service_integration_projection:
           dnsDeployments: []
           haproxyDeployments: []
+          haproxyHosts: []
         platform_bind_source_dns_records: []
 
     - name: Require an explicit source identity when the project has endpoints
@@ -21,11 +22,24 @@
         fail_msg: SERVICE_INTEGRATION_SOURCE_ID_REQUIRED
       when: platform_desired_state.serviceDeployments | default({}) | dict2items | selectattr('value.endpointGroup', 'defined') | list | length > 0 and _platform_integration_source_id | length == 0
 
+    - name: Collect project inventory projections for Core endpoint resolution
+      ansible.builtin.set_fact:
+        _platform_integration_inventory_hosts: >-
+          {{ _platform_integration_inventory_hosts | default({}) |
+             combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
+        _platform_integration_inventory_deployments: >-
+          {{ _platform_integration_inventory_deployments | default({}) |
+             combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+      no_log: true
+      when: _platform_integration_source_id | length > 0
+
     - name: Resolve providers for the selected source deployment
       platform.core.resolve_service_integrations:
         desired_state: "{{ platform_desired_state }}"
         source_service_types: []
         source_deployment_id: "{{ _platform_integration_source_id }}"
+        inventory_deployments: "{{ _platform_integration_inventory_deployments | default({}) }}"
       register: _platform_integration_resolution
       when: _platform_integration_source_id | length > 0
 
@@ -38,20 +52,6 @@
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_integration_catalog_file
-      when:
-        - _platform_integration_source_id | length > 0
-        - platform_service_integration_projection.dnsDeployments | length > 0
-
-    - name: Collect project inventory projections for Core endpoint resolution
-      ansible.builtin.set_fact:
-        _platform_integration_inventory_hosts: >-
-          {{ _platform_integration_inventory_hosts | default({}) |
-             combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
-        _platform_integration_inventory_deployments: >-
-          {{ _platform_integration_inventory_deployments | default({}) |
-             combine({item: (hostvars[item].platform_deployments | default({}))}) }}
-      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
-      no_log: true
       when:
         - _platform_integration_source_id | length > 0
         - platform_service_integration_projection.dnsDeployments | length > 0

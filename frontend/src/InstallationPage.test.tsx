@@ -327,7 +327,7 @@ describe("InstallationPage", () => {
         onCreatePlan={vi.fn()}
         onApprovePlan={vi.fn()}
         onStart={onStart}
-        plan={plan}
+        runPlan={plan.plan}
         run={
           new main.InstallationRunOperation({
             status: "RUNNING",
@@ -1066,7 +1066,7 @@ describe("InstallationPage", () => {
   it("shows only safe output-delivery status and package metadata", async () => {
     const user = userEvent.setup();
     const refresh = vi.fn();
-    const deliver = vi.fn();
+    const deliver = vi.fn().mockResolvedValue(undefined);
     render(
       <InstallationPage
         state={state}
@@ -1097,7 +1097,7 @@ describe("InstallationPage", () => {
           directory: "C:\\VaultSecrets\\vault-ha",
         }}
         onRefreshSecretOutputs={refresh}
-        onDeliverSecretOutput={deliver}
+        onCollectSecretOutputs={deliver}
       />,
     );
     expect(
@@ -1111,13 +1111,33 @@ describe("InstallationPage", () => {
     expect(screen.queryByText(/Состояние: READY/)).toBeNull();
     expect(screen.queryByText(/root token|unseal key/i)).toBeNull();
     await user.click(
-      screen.getByRole("button", { name: "Проверить ожидающие файлы" }),
+      screen.getByRole("button", { name: "Проверить и сохранить зашифрованные файлы" }),
     );
-    await user.click(
-      screen.getByRole("button", { name: "Получить и сохранить зашифрованно" }),
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(deliver).toHaveBeenCalledOnce();
+  });
+
+  it("hides collection after verified local delivery", () => {
+    render(
+      <InstallationPage state={state} tab="result" onTabChange={vi.fn()}
+        onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()}
+        secretOutputPackages={{ status: "READY", packages: [{
+          protocol: "SecretOutputDelivery/v1alpha1", packageId: "pkg-safe", projectId: "project-1",
+          deploymentId: "vault-ha", sourceRunId: "run-safe", runtimeDigest: "sha256:runtime",
+          generation: 1, state: "LOCAL_DELIVERED", entries: ["admin-token", "unseal-shares"],
+        }] }} />,
     );
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(deliver).toHaveBeenCalledWith("pkg-safe");
+    expect(screen.getByText(/Состояние: Сохранён на инсталлере/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Проверить и сохранить зашифрованные файлы" })).toBeNull();
+    expect(screen.queryByText(/Ожидает получения/)).toBeNull();
+  });
+
+  it("blocks fresh plan creation while a run is active without a plan snapshot", () => {
+    render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()}
+      onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()}
+      run={new main.InstallationRunOperation({ status: "RUNNING", run: { runId: "run-1", state: "RUNNING", sequence: 1 } })} />);
+    expect(screen.getByRole("button", { name: "Сформировать свежий план" })).toHaveProperty("disabled", true);
   });
 
   it("shows a safe delivery failure without exposing transport details", () => {
@@ -1139,7 +1159,7 @@ describe("InstallationPage", () => {
           },
         }}
         onRefreshSecretOutputs={vi.fn()}
-        onDeliverSecretOutput={vi.fn()}
+        onCollectSecretOutputs={vi.fn()}
       />,
     );
 

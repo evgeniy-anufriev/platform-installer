@@ -255,6 +255,28 @@ class DeploymentPlanTests(unittest.TestCase):
         contracts = Path(__file__).resolve().parents[2] / "contracts"
         self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(plan, contracts / "plan" / "v1alpha2" / "schema.json"))
 
+    def test_many_reissue_requests_keep_complete_consumer_scope_in_bounded_summary(self):
+        requests = [{"id": "tls-profile-long-name-%02d--node1" % index,
+                     "certificateRequestFingerprint": DIGEST,
+                     "authorityId": "ca", "authorityFingerprint": DIGEST,
+                     "consumers": [{"deploymentId": "consumer", "hostId": "node1"}]}
+                    for index in range(12)]
+        pki = {"requests": requests, "materializationPlans": [
+            {"requestId": item["id"], "hostId": "node1"} for item in requests]}
+        selected = [{"requestId": item["id"], "expectedOldFingerprint": "sha256:" + "b" * 64,
+                     "desiredFingerprint": DIGEST, "recoveryFingerprint": None,
+                     "authorityId": "ca", "authorityFingerprint": DIGEST} for item in requests]
+        result = PLAN.build_deployment_plan(snapshot(), catalog(), runtime(),
+                                            bundle_artifact_sources=sources(),
+                                            pki_materialization=pki, pki_reissue=selected)
+        action = result["deploymentPlan"]["phases"][0]["actions"][0]
+        self.assertLessEqual(len(action["summary"].encode("utf-8")), 512)
+        self.assertIn("12 запросов", action["summary"])
+        self.assertIn("сервисы: consumer", action["summary"])
+        self.assertIn("серверы: node1", action["summary"])
+        self.assertEqual(["node1"], action["targets"])
+        self.assertEqual(selected, result["executionManifest"]["operations"][0]["reissueRequests"])
+
     def test_reissue_fingerprint_binds_old_and_recovery_observations(self):
         pki = {"requests": [{"id": "tls--node1", "certificateRequestFingerprint": DIGEST,
                               "authorityId": "ca", "authorityFingerprint": DIGEST,
@@ -421,11 +443,15 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertEqual({"platform_vault_mode": "raft-ha", "platform_vault_deployment": 3,
                           "platform_vault_document": 4, "platform_vault_member": 6}, values["node1"])
 
-    def test_haproxy_source_dependency_remains_until_partial_integration_is_accepted(self):
-        deployments = {"haproxy": {"serviceType": "haproxy"},
-                       "vault-ha": {"serviceType": "vault", "haproxy": {"deploymentRef": "haproxy"}}}
-        provider_dependencies = PLAN._service_dependencies("haproxy", deployments["haproxy"], {}, deployments)
-        self.assertEqual(["apply:vault-ha"], provider_dependencies)
+    def test_source_integration_depends_on_derived_base_haproxy_providers(self):
+        deployments = {"haproxy": {"serviceType": "haproxy", "endpointGroup": "public"},
+                       "vip": {"serviceType": "keepalived", "endpointGroupRef": "public"},
+                       "vault-ha": {"serviceType": "vault", "endpointGroup": "public"}}
+        placements = {"node1": {"haproxy": {}, "vip": {}}}
+        provider_dependencies = PLAN._service_dependencies("haproxy", deployments["haproxy"], {}, deployments, placements)
+        self.assertEqual([], provider_dependencies)
+        source_dependencies = PLAN._service_dependencies("vault-ha", deployments["vault-ha"], {}, deployments, placements)
+        self.assertEqual(["apply:haproxy"], source_dependencies)
 
     def test_requested_order_interleaves_apply_and_verify_and_checks_dependencies(self):
         state, definitions = snapshot(), catalog()

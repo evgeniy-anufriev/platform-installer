@@ -13,6 +13,35 @@ import (
 	"time"
 )
 
+func TestServiceSecretsPresentScopesAndExpiry(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Clear()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	password := RuntimeSecretInput{RequirementRef: "redis-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "redis-one"}
+	token := RuntimeSecretInput{RequirementRef: "vault-token", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "vault-one"}
+	if err := broker.SetPendingRuntimeSecretValuesForRequirements(binding, []string{password.RequirementRef}, map[string]string{password.RequirementRef: "synthetic-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if !broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{password}) || broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{token}) {
+		t.Fatal("presence must be scoped to requested service")
+	}
+	if err := broker.SetPendingServiceSecretInput(binding, token.ServiceDeployment, token.Purpose, []byte("synthetic-token"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if !broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{password, token}) {
+		t.Fatal("pending inputs not recognized")
+	}
+	if broker.ServiceSecretsPresent(Binding{Root: binding.Root, ID: "other"}, []RuntimeSecretInput{password}) {
+		t.Fatal("presence leaked across project binding")
+	}
+	broker.mu.Lock()
+	broker.pending.expiresAt = broker.now().Add(-time.Second)
+	broker.mu.Unlock()
+	if broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{password, token}) {
+		t.Fatal("expired inputs reported present")
+	}
+}
+
 func TestBrokerSetReplaceClearAndBinding(t *testing.T) {
 	broker := NewBroker()
 	first := Binding{Root: `C:\projects\one`, ID: "project-one"}

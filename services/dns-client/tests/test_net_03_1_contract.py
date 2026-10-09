@@ -18,19 +18,26 @@ class Net031DnsClientContractTests(unittest.TestCase):
         self.assertNotIn("advancedConfig", manifest)
         self.assertNotIn("virtualAddresses", manifest)
 
-    def test_projection_reuses_core_dns_and_endpoint_resolvers_without_generated_state(self):
+    def test_projection_reuses_core_dns_without_future_endpoint_requirements(self):
         projection = (ROOT / "playbooks" / "projection.yml").read_text(encoding="utf-8")
         self.assertIn("platform.core.resolve_dns_zones", projection)
-        self.assertIn("platform.core.resolve_service_endpoints", projection)
+        self.assertNotIn("platform.core.resolve_service_endpoints", projection)
         self.assertIn("primary] +", projection)
+        self.assertIn("'hostRecord':", projection)
+        self.assertNotIn("endpointRecord", projection)
+        self.assertNotIn("wildcardRecord", projection)
         self.assertNotIn("platform_generated_state", projection)
         self.assertNotIn("Persist", projection)
 
     def test_verify_is_separate_and_read_only(self):
         verify = (ROOT / "playbooks" / "verify.yml").read_text(encoding="utf-8")
+        role_verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
         self.assertIn("import_playbook: projection.yml", verify)
         self.assertIn("platform_dns_client_phase: verify", verify)
         self.assertNotIn("import_playbook: apply.yml", verify)
+        self.assertIn("getent, hosts, \"{{ platform_dns_client_local.hostRecord }}\"", role_verify)
+        self.assertNotIn("endpointRecord", role_verify)
+        self.assertNotIn("wildcardRecord", role_verify)
 
     def test_backend_selection_prefers_resolved_by_unit_existence(self):
         discovery = (ROLE / "tasks" / "discover.yml").read_text(encoding="utf-8")

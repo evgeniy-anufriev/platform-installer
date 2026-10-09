@@ -57,15 +57,3 @@
   ansible.builtin.command:
     argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
   changed_when: false
-
-- name: Resolve managed endpoint through normal system resolver
-  ansible.builtin.command:
-    argv: [getent, hosts, "{{ platform_dns_client_local.endpointRecord }}"]
-  changed_when: false
-  when: platform_dns_client_local.endpointRecord | length > 0
-
-- name: Resolve managed wildcard through normal system resolver
-  ansible.builtin.command:
-    argv: [getent, hosts, "{{ platform_dns_client_local.wildcardRecord | regex_replace('^\\*\\.', 'net031-wildcard-test.') }}"]
-  changed_when: false
-  when: platform_dns_client_local.wildcardRecord | length > 0

@@ -86,9 +86,8 @@
         "configuration": { "type": "object", "default": {} },
         "haproxy": {
           "type": "object",
-          "required": ["deploymentRef"],
           "properties": {
-            "deploymentRef": { "$ref": "#/$defs/identifier" },
+            "deploymentRef": { "$ref": "#/$defs/identifier", "description": "Legacy compatibility input; provider selection uses endpointGroup and Keepalived/HAProxy inventory placements." },
             "backend": { "$ref": "#/$defs/haproxyBackendSettingsPartial" }
           },
           "additionalProperties": false

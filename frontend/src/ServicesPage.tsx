@@ -456,6 +456,8 @@ export function ServicesPage({
     Record<string, string>
   >({});
   const [secretBusy, setSecretBusy] = useState(false);
+  const [installedSecrets, setInstalledSecrets] = useState<Record<string, boolean>>({});
+  const [secretStatusVersion, setSecretStatusVersion] = useState(0);
   const [secretError, setSecretError] = useState("");
   const [inputEncryptionPassword, setInputEncryptionPassword] = useState("");
   const [secretFileStates, setSecretFileStates] = useState<
@@ -484,6 +486,32 @@ export function ServicesPage({
       (left.order || 0) - (right.order || 0) ||
       left.id.localeCompare(right.id),
   );
+  const visibleSettings = settings.filter(
+    (setting) =>
+      !setting.runtimeSecretRequirementRef &&
+      setting.editorShape !== "RUNTIME_SECRET_REFERENCE_OBJECT",
+  );
+  const hasConfigurableSecrets =
+    settings.some((setting) => !!setting.runtimeSecretRequirementRef) ||
+    !!service?.secretInputs?.length;
+  useEffect(() => {
+    if (view !== "detail" || !selectedDeploymentId || !hasConfigurableSecrets || !onGetPendingRuntimeSecretDescriptors) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const operation = await onGetPendingRuntimeSecretDescriptors(selectedDeploymentId);
+        if (!cancelled) setInstalledSecrets((current) => ({
+          ...current,
+          [selectedDeploymentId]: operation.status === "READY" && operation.secretsInstalled === true,
+        }));
+      } catch {
+        if (!cancelled) setInstalledSecrets((current) => ({ ...current, [selectedDeploymentId]: false }));
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [view, selectedDeploymentId, hasConfigurableSecrets, onGetPendingRuntimeSecretDescriptors, secretStatusVersion, managed]);
   const members = selected
     ? finalMembers(managed, placementIntents, selected.deploymentId)
     : [];
@@ -657,6 +685,7 @@ export function ServicesPage({
         serviceDeployment: selected.deploymentId,
         values,
       });
+      setSecretStatusVersion((current) => current + 1);
       closeSecrets();
     } catch {
       setSecretValues({});
@@ -681,6 +710,7 @@ export function ServicesPage({
         encryptionPassword: inputEncryptionPassword,
       });
       setSecretFileStates((current) => ({ ...current, [purpose]: status }));
+      setSecretStatusVersion((current) => current + 1);
     } catch {
       setSecretError(
         "Файл не принят. Проверьте формат/пароль и повторите выбор.",
@@ -781,9 +811,13 @@ export function ServicesPage({
             {error}
           </p>
         )}
-        <section className="card service-secrets-action">
+        {hasConfigurableSecrets && <section className="card service-secrets-action">
           <div>
             <h2>Секреты</h2>
+            <span className={`status-chip status-chip--${installedSecrets[selected.deploymentId] ? "success" : "warning"}`} role="status">
+              <span className="status-chip-symbol" aria-hidden="true">{installedSecrets[selected.deploymentId] ? "✓" : "!"}</span>
+              {installedSecrets[selected.deploymentId] ? "Установлены" : "Не установлены"}
+            </span>
             <p className="muted">
               Для выбранного режима показаны только разрешённые каталогом поля.
               Значения остаются в памяти приложения, не сохраняются в проекте и
@@ -810,7 +844,7 @@ export function ServicesPage({
               {secretError}
             </p>
           )}
-        </section>
+        </section>}
         <div
           className="services-parameter-column"
           role="region"
@@ -847,7 +881,7 @@ export function ServicesPage({
                 <SavedOverrides overrides={savedOverrides} />
               )}
             </>
-          ) : settings.length === 0 ? (
+          ) : visibleSettings.length === 0 ? (
             <>
               <p className="muted">
                 Каталог не объявляет доступных параметров для этого экземпляра
@@ -859,7 +893,7 @@ export function ServicesPage({
             </>
           ) : (
             <div className="services-setting-list">
-              {settings.map((setting) => {
+              {visibleSettings.map((setting) => {
                 const current = settingValue(
                   savedOverrides,
                   selected.deploymentId,
@@ -1172,7 +1206,7 @@ export function ServicesPage({
               <MemberSettings
                 deploymentId={selected.deploymentId}
                 member={selectedMember}
-                settings={settings}
+                settings={visibleSettings}
                 deploymentOverrides={savedOverrides}
                 effectivePreview={
                   effectivePreview?.services[selected.deploymentId]?.members[

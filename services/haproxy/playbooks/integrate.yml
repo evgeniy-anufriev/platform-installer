@@ -1,6 +1,6 @@
 ---
 - name: Prepare and validate HAProxy candidate for one endpoint source
-  hosts: platform_targets
+  hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
@@ -10,7 +10,7 @@
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Activate one source backend after cluster-wide candidate validation
-  hosts: platform_targets
+  hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
@@ -20,7 +20,7 @@
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Reload HAProxy after source backend activation
-  hosts: platform_targets
+  hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true

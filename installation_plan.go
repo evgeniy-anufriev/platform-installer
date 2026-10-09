@@ -271,6 +271,9 @@ func (a *App) getInstallationPlanLocked(planID string) InstallationPlanOperation
 		a.installationPlanID = ""
 		return installationPlanFailure(err)
 	}
+	if record.Consumed {
+		return installationPlanFailure(errors.New("PLAN_STALE"))
+	}
 	revision, revisionErr := installer.ProjectRevision(a.current.Root)
 	if revisionErr != nil || !installationPlanMatches(record, a.current.Project.ID, revision, binding) {
 		a.installationPlanID = ""
@@ -410,5 +413,5 @@ func installationPlanStateFor(record executionnode.PlanRecord) string {
 
 func installationPlanFailure(err error) InstallationPlanOperation {
 	code := projectErrorCode(err)
-	return InstallationPlanOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	return InstallationPlanOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code), DiagnosticCodes: runtimeSecretDescriptorDiagnosticCodes(err)}}
 }

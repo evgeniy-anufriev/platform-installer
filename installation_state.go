@@ -109,6 +109,9 @@ func (a *App) installationPlanStateLocked() InstallationPlanState {
 		return InstallationPlanState{Status: "PLAN_STALE_OR_EXPIRED"}
 	}
 	status := "PLAN_REVIEW"
+	if record.Consumed {
+		return InstallationPlanState{Status: "PLAN_STALE_OR_EXPIRED"}
+	}
 	if record.Plan.Status == "BLOCKED" {
 		status = "PLAN_BLOCKED"
 	} else if record.Approved {

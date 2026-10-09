@@ -224,6 +224,23 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "SIZE_INVALID"):
                 journal.event_page(0, 10)
 
+    def test_missing_haproxy_reports_error_and_skip_without_terminating_run(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            task = _Task(name="Resolve providers")
+            task.action = "platform.core.resolve_service_integrations"
+            result = _Result(task, {"resolved_service_integrations": {"integrations": {
+                "missingHAProxySources": ["vault-ha"]}}, "secret": "never-journal-this"})
+            with mock.patch.object(execution_events_json, "EXECUTION_STATE_ROOT", root), mock.patch.dict(os.environ, {"PLATFORM_EXECUTION_RUN_ID": "run-1"}, clear=False):
+                execution_events_json.CallbackModule().v2_runner_on_ok(result)
+            events = journal.events()
+            self.assertEqual(["FAILED", "SKIPPED"], [item["status"] for item in events[-2:]])
+            self.assertEqual("vault-ha", events[-2]["serviceDeployment"])
+            self.assertIn("HAPROXY_ENDPOINT_PROVIDER_NOT_FOUND", events[-2]["safeMessage"])
+            self.assertEqual("RUNNING", journal.status()["state"])
+            self.assertNotIn("never-journal-this", json.dumps(events))
+            self.assert_events_match_contract(events)
+
     def test_callback_keeps_static_no_log_task_name_and_never_persists_result_payload(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)

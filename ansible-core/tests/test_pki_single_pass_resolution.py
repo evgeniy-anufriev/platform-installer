@@ -564,7 +564,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     # Only test ownership differs from the production assemble task.
                     selected[0]["ansible.builtin.assemble"].update(
                         owner=self.variables["platform_pki_owner"], group=self.variables["platform_pki_group"])
-                    state = tasks(service, "start.yml")[0]["ansible.builtin.systemd_service"]["state"]
+                    state = named(tasks(service, "start.yml"), "Start or reload validated HAProxy service")["ansible.builtin.systemd_service"]["state"]
                     observations = [{"ansible.builtin.set_fact": {"activation_state": state}}]
 
                 # Fresh processes exclude stale aggregate facts. Corrupt one

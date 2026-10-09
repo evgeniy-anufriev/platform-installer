@@ -9,11 +9,14 @@
       {{ 'platform-kafka' if ('broker' in kafka_input_member.roles and 'controller' in kafka_input_member.roles)
          else ('platform-kafka-broker' if 'broker' in kafka_input_member.roles else 'platform-kafka-controller') }}
     _platform_kafka_normalized_member_number: "{{ kafka_input_member.id | regex_replace('^.*-', '') }}"
-    _platform_kafka_normalized_legacy_unit_name: "{{ _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
+
+- name: Derive normalized Kafka member runtime directory
+  ansible.builtin.set_fact:
+    _platform_kafka_normalized_runtime_directory: "{{ _platform_kafka_normalized_compatibility_unit.runtime_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
 
 - name: Derive normalized Kafka member runtime resources
   ansible.builtin.set_fact:
-    _platform_kafka_normalized_runtime_directory: "{{ _platform_kafka_normalized_compatibility_unit.runtime_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
+    _platform_kafka_normalized_legacy_unit_name: "{{ _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
     _platform_kafka_normalized_unit_name: "{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
     _platform_kafka_normalized_unit_destination: "/etc/systemd/system/{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
     _platform_kafka_normalized_environment_pattern: "{{ _platform_kafka_normalized_compatibility_unit.environment_pattern | default(_platform_kafka_normalized_runtime_directory ~ '/systemd.env') }}"

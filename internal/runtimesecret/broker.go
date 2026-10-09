@@ -655,6 +655,40 @@ func (b *Broker) MissingRequiredSecrets(binding Binding, passwords []string, req
 	return result
 }
 
+// ServiceSecretsPresent reports presence only, without copying values or extending expiry.
+func (b *Broker) ServiceSecretsPresent(binding Binding, requirements []RuntimeSecretInput) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	valid := b.lease != nil && b.lease.binding == binding && b.now().Before(b.lease.expiresAt)
+	pendingValid := b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt)
+	if len(requirements) == 0 {
+		return false
+	}
+	for _, requirement := range requirements {
+		present := false
+		if requirement.Purpose == "SERVICE_PASSWORD" {
+			present = (valid && len(b.lease.runtimeSecretValues[requirement.RequirementRef]) > 0) ||
+				(pendingValid && len(b.pending.values[requirement.RequirementRef]) > 0)
+		} else {
+			if pendingValid {
+				input := b.pending.typed[typedSecretKey(requirement.ServiceDeployment, requirement.Purpose)]
+				present = len(input.Value) > 0 || len(input.Shares) > 0
+			}
+			if valid {
+				for _, input := range b.lease.runtimeSecretInputs {
+					if input.ServiceDeployment == requirement.ServiceDeployment && input.Purpose == requirement.Purpose {
+						present = present || len(input.Value) > 0 || len(input.Shares) > 0
+					}
+				}
+			}
+		}
+		if !present {
+			return false
+		}
+	}
+	return true
+}
+
 func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential) error) error {
 	if use == nil {
 		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")

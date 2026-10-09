@@ -53,6 +53,7 @@
   ansible.builtin.set_fact:
     _platform_bind_a_record_current_answer_lines: >-
       {{ _platform_bind_a_record_current.stdout_lines |
+         reject('match', '^\s*(;|$)') |
          select('search', 'IN') | list }}
 
 - name: Reject CNAME or foreign-owner answer before changing the A record
@@ -129,6 +130,7 @@
   ansible.builtin.set_fact:
     _platform_bind_a_record_after_answer_lines: >-
       {{ _platform_bind_a_record_after.stdout_lines |
+         reject('match', '^\s*(;|$)') |
          select('search', 'IN') | list }}
     _platform_bind_a_record_after_addresses: []
   when: _platform_bind_a_record_update is not skipped

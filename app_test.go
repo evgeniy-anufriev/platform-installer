@@ -914,7 +914,7 @@ func TestDeliverPendingSecretOutputEncryptsBeforeIdempotentAck(t *testing.T) {
 		t.Fatal(err)
 	}
 	listed := reopened.ListPendingSecretOutputs(nil)
-	if len(listed.Packages) != 1 || listed.Packages[0].PackageID != packageID {
+	if len(listed.Packages) != 1 || listed.Packages[0].PackageID != packageID || listed.Packages[0].State != "LOCAL_DELIVERED" {
 		t.Fatal("pending package did not survive reopen")
 	}
 	retry := reopened.DeliverPendingSecretOutput(SecretOutputDeliveryInput{PackageID: packageID})

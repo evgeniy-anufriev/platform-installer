@@ -955,7 +955,7 @@ describe("UI-01E2 server editor", () => {
   it("keeps Installation visible before readiness while preparation stays on Servers", async () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockResolvedValue({
-        status: "NOT_PREPARED",
+        status: "UPDATE_REQUIRED", runtimeDigest: "sha256:old",
         selectionKind: "EXPLICIT_EXTERNAL",
         selectionSource: "EXPLICIT",
         safeLabel: "desktop-qa · 192.0.2.10",
@@ -996,12 +996,14 @@ describe("UI-01E2 server editor", () => {
     expect(
       await screen.findByRole("button", { name: "Подтвердить подготовку" }),
     ).toBeTruthy();
+    vi.mocked(value.getExecutionNodeContext!).mockResolvedValue({ status: "READY", runtimeDigest: "sha256:new", selectionKind: "EXPLICIT_EXTERNAL", selectionSource: "EXPLICIT", safeLabel: "desktop-qa · 192.0.2.10", locked: true });
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(
       screen.getByRole("button", { name: "Подтвердить подготовку" }),
     );
     expect(value.prepareExecutionNode).toHaveBeenCalledWith("prepare-plan");
-    expect(await screen.findByText(/Проверка проекта: Проверено/)).toBeTruthy();
+    expect(value.checkExecutionNode).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText(/Проверен: Подготовлен/)).toBeTruthy();
   });
 
   it("requires a name before creating a metadata-only project", async () => {
@@ -2014,7 +2016,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
                 guidance: { minParticipants: 1, distinctHosts: false },
               },
             ],
-            configurationSettings: [],
+            configurationSettings: [{ id: "redisCredential", kind: "MANAGED", scopes: ["deployment"], editorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", runtimeSecretRequirementRef: "redis-password" }],
           },
         ],
       },
@@ -2189,7 +2191,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
         .fn()
         .mockResolvedValue("STORED"),
     });
-    value.chooseProject.mockResolvedValue(project);
+    value.chooseProject.mockResolvedValue({ ...project, catalog: { ...project.catalog, services: project.catalog.services.map((service) => ({ ...service, secretInputs: [{ requirementRef: "vault-admin-token", purpose: "SERVICE_ADMIN_TOKEN", displayLabel: "Administrative token", requiredWhen: "INITIALIZED", operations: ["SERVICE_APPLY", "SERVICE_VERIFY"] }] })) } });
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),

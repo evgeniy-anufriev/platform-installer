@@ -6,8 +6,10 @@ import re
 
 try:
     from .project_validation import canonical_digest
+    from .service_integration_resolution import haproxy_provider_hosts
 except ImportError:
     from project_validation import canonical_digest
+    from service_integration_resolution import haproxy_provider_hosts
 
 
 BACKEND_FIELDS = set(("balance", "check", "fall", "rise", "ssl", "sslVerify"))
@@ -155,28 +157,17 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
     for target_id, target in sorted(deployments.items()):
         if selected_ids is not None and target_id not in selected_ids:
             continue
-        relation = target.get("haproxy") if isinstance(target, dict) else None
-        if relation is None:
+        proxy_hosts = haproxy_provider_hosts(topology, inventory_deployments, target)
+        if not proxy_hosts:
             continue
+        relation = target.get("haproxy", {})
         field = "serviceDeployments.%s.haproxy" % target_id
         if not isinstance(relation, dict) or set(relation).difference(("deploymentRef", "backend")):
             findings.append(_finding("HAPROXY_INTEGRATION_INVALID", field, "HAProxy integration must contain only deploymentRef and backend"))
             continue
-        haproxy_id = relation.get("deploymentRef")
-        proxy = deployments.get(haproxy_id)
-        if not isinstance(proxy, dict):
-            findings.append(_finding("HAPROXY_DEPLOYMENT_NOT_FOUND", field + ".deploymentRef", "HAProxy deployment reference is not defined"))
-            continue
-        if proxy.get("serviceType") != "haproxy":
-            findings.append(_finding("HAPROXY_DEPLOYMENT_TYPE_INVALID", field + ".deploymentRef", "HAProxy deployment reference must select serviceType haproxy"))
-            continue
         definition = definitions.get(target.get("serviceType"), {})
         if not isinstance(definition.get("endpoint"), dict):
             findings.append(_finding("HAPROXY_TARGET_ENDPOINT_UNSUPPORTED", field, "HAProxy target service must support generic endpoints"))
-        if not target.get("endpointGroup") or not proxy.get("endpointGroup"):
-            findings.append(_finding("HAPROXY_ENDPOINT_GROUP_REQUIRED", field, "HAProxy target and deployment require endpointGroup"))
-        elif target.get("endpointGroup") != proxy.get("endpointGroup"):
-            findings.append(_finding("HAPROXY_ENDPOINT_GROUP_MISMATCH", field, "HAProxy target and deployment must use the same endpoint group"))
         try:
             member_stride = _member_client_allocation(definition)
         except ValueError:
@@ -195,7 +186,12 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
                 port = _catalog_default_port(definition)
         if not _valid_port(port):
             findings.append(_finding("HAPROXY_BACKEND_PORT_UNRESOLVED", "serviceDeployments.%s.configuration.port" % target_id, "HAProxy target requires a valid configuration.port"))
-        defaults = (backend_defaults or {}).get(target.get("serviceType"), {})
+        package_defaults = definition.get("x-haproxyBackendDefaults", {})
+        if not isinstance(package_defaults, dict):
+            findings.append(_finding("HAPROXY_BACKEND_DEFAULTS_INVALID", field, "Service package backend defaults must be a mapping"))
+            continue
+        defaults = dict(package_defaults)
+        defaults.update((backend_defaults or {}).get(target.get("serviceType"), {}))
         effective, setting_findings = normalize_backend_settings(defaults, relation.get("backend", {}), field)
         findings.extend(setting_findings)
         if findings:
@@ -282,8 +278,10 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
                   "endpoint": endpoint_map.get(target_id, {}), "settings": effective, "targets": targets}
         if expected_name is not None:
             record["expectedServerName"] = expected_name
-        record["fingerprint"] = canonical_digest(record)
-        resolved.setdefault(haproxy_id, []).append(record)
+        for haproxy_id, provider_hosts in sorted(proxy_hosts.items()):
+            provider_record = dict(record, providerHostIds=provider_hosts)
+            provider_record["fingerprint"] = canonical_digest(provider_record)
+            resolved.setdefault(haproxy_id, []).append(provider_record)
     if findings:
         resolved = {}
     return {"apiVersion": "platform.installer/resolved-haproxy-backend/v1alpha1", "kind": "ResolvedHAProxyBackends",

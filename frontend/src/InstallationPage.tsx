@@ -130,6 +130,8 @@ const runStatusLabel = (status: string) => {
 
 const outputPackageStateLabel = (status: string) => {
   switch (status) {
+    case "LOCAL_DELIVERED":
+      return "Сохранён на инсталлере";
     case "READY":
       return "Ожидает получения";
     case "ACKED_CLEANUP_PENDING":
@@ -204,7 +206,7 @@ export function InstallationPage({
   secretOutputPackages,
   outputDelivery,
   onRefreshSecretOutputs = () => {},
-  onDeliverSecretOutput = () => {},
+  onCollectSecretOutputs = async () => {},
 }: {
   state?: InstallationState;
   draftActive?: boolean;
@@ -232,7 +234,7 @@ export function InstallationPage({
   secretOutputPackages?: SecretOutputPackagesOperation;
   outputDelivery?: SecretOutputDeliveryOperation;
   onRefreshSecretOutputs?: () => void;
-  onDeliverSecretOutput?: (packageId: string) => void;
+  onCollectSecretOutputs?: () => Promise<void>;
 }) {
   const [orderError, setOrderError] = useState("");
   const deploymentOrder = useMemo(
@@ -440,8 +442,12 @@ export function InstallationPage({
           <PlanStage
             state={state}
             draftActive={draftActive}
-            operation={plan}
-            busy={busy}
+            operation={
+              ["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") && runPlan
+                ? { status: "PLAN_APPROVED", plan: runPlan }
+                : plan
+            }
+            busy={busy || ["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "")}
             onCreatePlan={createPlan}
             orderError={orderError}
             onApprovePlan={onApprovePlan}
@@ -474,9 +480,8 @@ export function InstallationPage({
             events={events}
             secretOutputPackages={secretOutputPackages}
             outputDelivery={outputDelivery}
-            onRefreshSecretOutputs={onRefreshSecretOutputs}
             onOpenPendingOutputs={onRefreshSecretOutputs}
-            onDeliverSecretOutput={onDeliverSecretOutput}
+            onCollectSecretOutputs={onCollectSecretOutputs}
           />
         )}
       </div>
@@ -542,7 +547,13 @@ function PlanStage({
     return (
       <article className="card installation-empty">
         <h2>План</h2>
-        <p>{operation?.error?.message || "Свежий план ещё не создан."}</p>
+        <p>
+          {operation?.error && <><code>{operation.error.code}</code> — </>}
+          {operation?.error?.message || "Свежий план ещё не создан."}
+          {!!operation?.error?.diagnosticCodes?.length && (
+            <> Диагностика Core: {operation.error.diagnosticCodes.join(", ")}</>
+          )}
+        </p>
         {orderError && <p className="error" role="alert">{orderError}</p>}
         <button onClick={onCreatePlan} disabled={busy}>
           Сформировать свежий план
@@ -556,6 +567,7 @@ function PlanStage({
   const outputRequired = !!plan.secretOutputEncryptionRequired;
   const outputReady = !outputRequired || outputPasswordPresent;
   const currentPlan =
+    !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
     !draftActive &&
     !state?.project?.hasUnsavedChanges &&
     state?.executionNode.status === "READY" &&
@@ -1219,9 +1231,8 @@ function ResultStage({
   events,
   secretOutputPackages,
   outputDelivery,
-  onRefreshSecretOutputs,
   onOpenPendingOutputs,
-  onDeliverSecretOutput,
+  onCollectSecretOutputs,
 }: {
   run?: InstallationRunOperation;
   plan?: InstallationPlanView;
@@ -1229,10 +1240,10 @@ function ResultStage({
   events: InstallationEventView[];
   secretOutputPackages?: SecretOutputPackagesOperation;
   outputDelivery?: SecretOutputDeliveryOperation;
-  onRefreshSecretOutputs: () => void;
   onOpenPendingOutputs: () => void;
-  onDeliverSecretOutput: (packageId: string) => void;
+  onCollectSecretOutputs: () => Promise<void>;
 }) {
+  const [collectingOutputs, setCollectingOutputs] = useState(false);
   const terminal =
     !!run?.run &&
     ["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(run.run.state);
@@ -1313,9 +1324,13 @@ function ResultStage({
           Здесь отображается только состояние доставки. Содержимое секретов в
           интерфейс не передаётся.
         </p>
-        <button className="outline" onClick={onRefreshSecretOutputs}>
-          Проверить ожидающие файлы
-        </button>
+        {(!secretOutputPackages || secretOutputPackages.status !== "READY" ||
+          secretOutputPackages.nextCursor ||
+          secretOutputPackages.packages?.some((item) => item.state !== "LOCAL_DELIVERED")) && (
+          <button className="outline" disabled={collectingOutputs} onClick={async () => { setCollectingOutputs(true); try { await onCollectSecretOutputs(); } finally { setCollectingOutputs(false); } }}>
+            Проверить и сохранить зашифрованные файлы
+          </button>
+        )}
         {secretOutputPackages?.error && (
           <p className="field-error" role="alert">
             {secretOutputPackages.error.message}
@@ -1351,9 +1366,6 @@ function ResultStage({
               {item.entries.length}
             </span>
             <small>Запуск: {item.sourceRunId} · Поколение: {item.generation}</small>
-            <button onClick={() => onDeliverSecretOutput(item.packageId)}>
-              Получить и сохранить зашифрованно
-            </button>
           </div>
         ))}
       </article>

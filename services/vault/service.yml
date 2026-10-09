@@ -19,6 +19,7 @@ listeners:
   client: {protocol: https, defaultPort: 8200, tlsCapable: true, scope: member}
   cluster: {protocol: tcp, defaultPort: 8201, tlsCapable: true, scope: member}
 endpoint: {}
+x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 x-backendClientListener: {listener: client, allocation: {kind: HOST_LOCAL_ORDINAL, stride: 2}}
 capabilities: [service.vault.api]
 dependencies: []

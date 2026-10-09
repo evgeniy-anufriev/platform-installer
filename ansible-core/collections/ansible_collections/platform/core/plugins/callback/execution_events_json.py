@@ -135,6 +135,29 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_ok(self, result):
         payload = result._result if isinstance(result._result, dict) else {}
         self._emit("TASK_COMPLETED", "CHANGED" if payload.get("changed") else "SUCCESS", result._task, result)
+        # Only this Core module's bounded projection can report a nonfatal
+        # integration error. Never journal arbitrary task payload/message text.
+        if (self._no_log(result._task, result) or not self._run_id() or
+                getattr(result._task, "action", "") != "platform.core.resolve_service_integrations"):
+            return
+        projection = payload.get("resolved_service_integrations", {})
+        integrations = projection.get("integrations") if isinstance(projection, dict) else None
+        missing = integrations.get("missingHAProxySources", []) if isinstance(integrations, dict) else []
+        if not isinstance(missing, list):
+            return
+        try:
+            journal = Journal(EXECUTION_STATE_ROOT, self._run_id())
+            for source in missing[:256]:
+                if not isinstance(source, str) or not SAFE_ROLE.fullmatch(source):
+                    continue
+                context = dict(self._context(), serviceDeployment=source)
+                journal.event("DIAGNOSTIC", "FAILED", "HAPROXY_ENDPOINT_PROVIDER_NOT_FOUND — HAProxy для endpoint не найден", **context)
+                journal.event("DIAGNOSTIC", "SKIPPED", "Интеграция HAProxy пропущена; установка сервиса продолжается", **context)
+        except Exception:
+            try:
+                Journal(EXECUTION_STATE_ROOT, self._run_id()).mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
+            except Exception:
+                pass
 
     def v2_runner_on_skipped(self, result):
         self._emit("TASK_COMPLETED", "SKIPPED", result._task, result)

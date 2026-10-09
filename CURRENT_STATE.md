@@ -1,6 +1,6 @@
 # Current state
 
-Updated 2026-10-08. This file is the sole current milestone/status source.
+Updated 2026-10-09. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
@@ -11,6 +11,7 @@ new destructive operation still requires explicit owner authorization.
 | Work | Current status | Evidence and next step |
 | --- | --- | --- |
 | SERVICE-INSTALL-11 | IN PROGRESS; overall acceptance remains open | I05 PASSED by explicit owner confirmation on 2026-10-08. Close remaining cases and strict repeat evidence separately; see [journal](docs/service-install-11-test-journal.md). |
+| ENDPOINT-HAPROXY-PLACEMENT-01 | Source implemented; FULL DIFF APPROVE; focused/standalone QA PASS, real acceptance pending | Owner approved narrow binding replacement and package backend defaults on 2026-10-09. Full Core 497-case run had one stale test assertion; corrected five-consumer test passed isolated recheck. Existing backend publication/reconcile reused; no new target store or transaction guarantee. Partial move/delete cannot discover former excluded hosts; explicit full reconcile remains necessary. See [plan](docs/endpoint-haproxy-placement-plan.md), [review](docs/endpoint-haproxy-placement-plan-review.md), [journal](docs/service-install-11-test-journal.md), ADR-033. No bundle release or real installation acceptance yet. |
 | SERVER-INFORMATION-CHECK-01 | Implemented; real informational flow and targeted review passed | [Plan](docs/server-information-check-plan.md). One explicit SSH key confirmation supplies information and installation trust. Real React/Wails target and Execution Node checks, cancellation and changed-credential rejection passed; no installation started. |
 | EXECUTION-NODE-PASSWORD-AUTH-01 | Implemented; targeted review APPROVE, sudo UI checks owner-confirmed | [Plan](docs/execution-node-password-auth-plan.md). Real React/Wails password checks passed for target node2 and Exec node1. Password hold survives lease expiry only for the exact active Start/run. Real Windows/RED OS password SCP passed; staging/cleanup and scoped sudo corrections reviewed. Owner confirmed the sudo correction works. Owner-confirmed correct/wrong/empty sudo cases accepted by independent EP-S04 recheck; zero remaining blockers. Full installation/Start with password remains separate. |
 | PROJECT-VERIFY-PASSWORD-FIX-01 | Implemented; owner confirms Verify completes, FULL DIFF APPROVE | [Plan](docs/project-verification-password-fix-plan.md). Password archive transfer no longer requires PEM; ordinary Verify uses a private temporary directory. Transfer failures show unavailable with their own reason. Go checks and 64 App tests/build/lint pass; exact owner terminal status/revision not supplied. |
@@ -37,8 +38,11 @@ The current journal records:
 - I01 and I04: PASSED.
 - I05: PASSED by owner confirmation; exact successful run identity remains
   an evidence detail to correlate when available, not a reason to reverse PASS.
-- H06/H07, S06 and I02: IN PROGRESS.
-- I03: NOT STARTED; isolated rehearsal/cleanup prerequisites still apply.
+- H06/H07 and S06: IN PROGRESS.
+- I02: PASSED by owner confirmation on 2026-10-09.
+- S04: PASSED by owner confirmation on 2026-10-09.
+- I03: PASSED by owner confirmation on 2026-10-09; exact run/terminal and
+  cleanup details were not supplied. This does not authorize another reset.
 - L01: FAILED; catalog labels for Keepalived, Kafka and Vault still contain
   English, and remaining screens have incomplete coverage. Translate service
   manifest metadata and regenerate catalog/bundle; do not hardcode service
@@ -56,6 +60,29 @@ uncommitted source changes were retained. New preparation/installation and
 naming acceptance remain separate; cleanup does not authorize Start.
 
 ## SI11 source corrections and recorded runtime checkpoint
+
+Kafka normalization correction (2026-10-09) is source-only: separate fact
+dependencies for runtime directory/environment path and compatibility/legacy
+unit name. Real localhost Ansible normalization of four sequential members
+and 21 Kafka contract tests passed on RED OS node2. Bundle -08 is released below; UI rebind/preparation and
+real installation retry are pending; see the journal.
+
+BIND dynamic A-record parsing correction (2026-10-09) is implemented in
+source only. DNS comments containing `NXDOMAIN` are excluded before and
+after updates; CNAME/foreign-owner rejection remains. Four production-task
+Ansible regressions and 15 BIND contract tests passed on RED OS node2.
+Bundle `si11-full-service-20261009-07` released below; UI rebind/preparation
+and real Vault retry remain pending; see the journal.
+
+Latest delivered project bundle: `si11-full-service-20261009-08`, built on
+node2 and validated at `.runtime/qa/full-services/bundle`, digest
+`sha256:311ce9b1f40690f12ec59ed5aa9d9d3ec45aa57b0d4030f1bf93996dfafa3462`.
+It removes premature DNS client endpoint verification and compacts repeated
+PKI reissue summary scope within the existing limit, and fixes BIND answer
+parsing for NXDOMAIN and Kafka normalization fact ordering. Published with the standard publisher into `cache/`.
+Target-free plan replay
+on the failed staged project returned EXECUTABLE; real UI rebind/plan/Start
+for this bundle is pending. See the journal; no installation was started.
 
 Historical run `installer-90f2d8f56b6b4cf447c630d04bc56fd6` failed during Vault
 endpoint integration at events 2922–2926 after earlier service actions passed.

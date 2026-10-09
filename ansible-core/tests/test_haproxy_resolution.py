@@ -19,14 +19,47 @@ HAPROXY = load("haproxy_resolution")
 
 CATALOG = {"definitions": {"haproxy": {"endpoint": {}}, "postgresql": {"endpoint": {}}}}
 TOPOLOGY = {"endpointGroups": {"asutp": {"address": {"domain": "asutp.scada.local", "wildcard": True}}}, "serviceDeployments": {
+    "vip": {"serviceType": "keepalived", "endpointGroupRef": "asutp"},
     "haproxy": {"serviceType": "haproxy", "mode": "https-host-routing", "endpointGroup": "asutp", "configuration": {"tlsProfile": "platform-tls"}},
     "postgres-main": {"serviceType": "postgresql", "mode": "standalone", "endpointGroup": "asutp", "configuration": {"port": 5432}, "haproxy": {"deploymentRef": "haproxy", "backend": {"ssl": False, "check": False}}},
 }}
-PLACEMENT = {"node1": {"haproxy": {"hostEndpoint": True}}, "node2": {"haproxy": {"hostEndpoint": True}}, "node3": {"haproxy": {"hostEndpoint": False}, "postgres-main": {}}}
+PLACEMENT = {"node1": {"haproxy": {"hostEndpoint": True}, "vip": {}}, "node2": {"haproxy": {"hostEndpoint": True}, "vip": {}}, "node3": {"haproxy": {"hostEndpoint": False}, "postgres-main": {}}}
 HOSTS = {"node1": {"ansible_host": "192.0.2.1"}, "node2": {"ansible_host": "192.0.2.2"}, "node3": {"ansible_host": "192.0.2.3"}}
 DEFAULTS = {"postgresql": {"balance": "leastconn", "check": True, "fall": 3, "rise": 2, "ssl": True, "sslVerify": "required"}}
 
 class HAProxyResolutionTests(unittest.TestCase):
+    def test_implicit_binding_uses_package_defaults_and_preserves_backend_overrides(self):
+        topology = copy.deepcopy(TOPOLOGY)
+        topology["serviceDeployments"]["postgres-main"].pop("haproxy")
+        catalog = copy.deepcopy(CATALOG)
+        catalog["definitions"]["postgresql"]["x-haproxyBackendDefaults"] = {
+            "balance": "roundrobin", "check": True, "fall": 3, "rise": 2,
+            "ssl": True, "sslVerify": "required"}
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, catalog, inventory_deployments=PLACEMENT)
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT, endpoints)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        self.assertEqual(catalog["definitions"]["postgresql"]["x-haproxyBackendDefaults"],
+                         result["backends"]["haproxy"][0]["settings"])
+        topology["serviceDeployments"]["postgres-main"]["haproxy"] = {"backend": {"check": False, "ssl": False}}
+        result = HAPROXY.resolve_haproxy_backends(topology, catalog, HOSTS, PLACEMENT, endpoints)
+        self.assertEqual({"balance": "roundrobin", "check": False, "ssl": False},
+                         result["backends"]["haproxy"][0]["settings"])
+
+    def test_backend_only_settings_and_multiple_provider_host_scopes(self):
+        topology = copy.deepcopy(TOPOLOGY)
+        topology["serviceDeployments"]["postgres-main"]["haproxy"].pop("deploymentRef")
+        topology["serviceDeployments"]["proxy2"] = dict(topology["serviceDeployments"]["haproxy"])
+        placements = copy.deepcopy(PLACEMENT)
+        placements["node1"]["proxy2"] = {}
+        placements["node2"].pop("vip")
+        endpoints = ENDPOINTS.resolve_service_endpoints(topology, CATALOG, inventory_deployments=placements)
+        result = HAPROXY.resolve_haproxy_backends(topology, CATALOG, HOSTS, placements, endpoints, DEFAULTS)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        self.assertEqual(["haproxy", "proxy2"], sorted(result["backends"]))
+        for records in result["backends"].values():
+            self.assertEqual(["node1"], records[0]["providerHostIds"])
+            self.assertEqual(5432, records[0]["targets"][0]["port"])
+
     def test_host_endpoint_is_opt_in(self):
         result = ENDPOINTS.resolve_service_endpoints(TOPOLOGY, CATALOG, inventory_deployments=PLACEMENT)
         self.assertEqual("PASS", result["status"], result["findings"])
@@ -99,10 +132,10 @@ class HAProxyResolutionTests(unittest.TestCase):
         self.assertEqual("PASS", result["status"], result["findings"])
         self.assertEqual(5432, result["backends"]["haproxy"][0]["targets"][0]["port"])
 
-    def test_removed_relation_is_absent_from_the_rebuilt_full_backend_model(self):
+    def test_removed_endpoint_is_absent_from_the_rebuilt_full_backend_model(self):
         topology = {key: value for key, value in TOPOLOGY.items()}
         topology["serviceDeployments"] = {key: dict(value) for key, value in TOPOLOGY["serviceDeployments"].items()}
-        topology["serviceDeployments"]["postgres-main"].pop("haproxy")
+        topology["serviceDeployments"]["postgres-main"].pop("endpointGroup")
         endpoints = ENDPOINTS.resolve_service_endpoints(topology, CATALOG, inventory_deployments=PLACEMENT)
         result = HAPROXY.resolve_haproxy_backends(topology, CATALOG, HOSTS, PLACEMENT, endpoints, DEFAULTS)
         self.assertEqual({}, result["backends"])

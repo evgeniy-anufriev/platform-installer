@@ -707,15 +707,15 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 		}
 		if haproxy, found := deployment["haproxy"]; found {
 			value := asMap(haproxy)
-			id, ok := value["deploymentRef"].(string)
-			if value == nil || !ok || !identifierPattern.MatchString(id) {
+			if value == nil {
 				return managedReadError("Managed deployment reference is malformed", desiredDocument)
 			}
-			if deployments[id] == nil {
-				if mutations.deletedDeployments[id] {
-					return referenceInUse("deploymentRef")
+			// Legacy input is preserved, but no longer selects a provider.
+			if reference, exists := value["deploymentRef"]; exists {
+				id, ok := reference.(string)
+				if !ok || !identifierPattern.MatchString(id) {
+					return managedReadError("Managed deployment reference is malformed", desiredDocument)
 				}
-				return referenceNotFound("deploymentRef")
 			}
 		}
 		if dependencies, found := deployment["dependencies"]; found {

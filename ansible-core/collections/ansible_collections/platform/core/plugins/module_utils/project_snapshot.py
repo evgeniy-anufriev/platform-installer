@@ -135,7 +135,7 @@ def _configuration_view(configuration, desired_state_path, role_default_paths, o
     return result
 
 
-def _integration_view(desired_state, catalog, endpoint_result, haproxy_result, dns_result):
+def _integration_view(desired_state, catalog, endpoint_result, haproxy_result, dns_result, hosts):
     deployments = desired_state.get("serviceDeployments", {}) if isinstance(desired_state, dict) else {}
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
     providers = {}
@@ -150,7 +150,7 @@ def _integration_view(desired_state, catalog, endpoint_result, haproxy_result, d
             })
     relations = service_integration_relations(desired_state, set(
         item.get("serviceType") for item in deployments.values() if isinstance(item, dict)
-    ))
+    ), inventory_deployments={host: value.get("platformDeployments", {}) for host, value in hosts.items()})
     for relation in relations:
         relation["endpoint"] = endpoint_result.get("endpoints", {}).get(relation["sourceDeploymentId"])
         relation["addressProviders"] = providers.get(relation.get("endpointGroupId"), [])
@@ -222,7 +222,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
             "hosts": endpoint_result.get("hostEndpoints", {}),
         }),
         "integrations": redact(_integration_view(
-            desired_state, catalog, endpoint_result, haproxy_result, dns_result,
+            desired_state, catalog, endpoint_result, haproxy_result, dns_result, hosts,
         )),
         "pki": {"status": pki_result.get("status"), "certificateIdentities": redact(identities)},
         "validation": validation,

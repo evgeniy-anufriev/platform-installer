@@ -38,7 +38,7 @@
 | S03 | Проверить Boolean, Integer/Number границы, Enum, bounded String/pattern subset и `TLS_PROFILE` ref; открыть unsupported/credential-shaped setting. | В РАБОТЕ | В текущем каталоге нет прямого редактируемого Boolean или Number descriptor: Boolean есть только внутри read-only object; числовые настройки представлены Integer. | Закрыть применимую матрицу Integer/Enum/TLS_PROFILE/bounded String. Не расширять каталог только ради искусственных Boolean/Number тестов. |
 | S03-B | Проверить границы поддерживаемых простых форм настроек. | ПРОЙДЕН | В настоящем Wails WebView ограниченная строковая настройка Docker account сначала показала default `platform-docker` без активного Apply. Ввод `qa-docker-user` и «Применить» создали только черновик; после «Отменить черновик» поле вернулось к `platform-docker`. Для верхней границы 32 ASCII-символа Review разрешил «Сохранить проект»; для 33 символов Review показал `INVALID_VALUE` без кнопки сохранения. Оба черновика отменены через UI. SHA-256 `project.yml` `60E96F0C…54DD91` и group-vars `E90535FA…94462F` не изменились. | Подтверждены позитивный и отрицательный предел bounded String и отсутствие неявной записи default. Отдельная проверка поддерживаемого pattern subset ещё открыта. |
 | S03-P | Проверить сохранение и отображение поддерживаемого параметра. | ПРОЙДЕН | В настоящем Wails WebView BIND Zone: сохранённое `example.internal`; допустимое `qa.example.internal` прошло Apply/Review с доступным «Сохранить проект», но черновик отменён. Недопустимое `_qa.example.internal` осталось в поле, а «Применить» было отключено (`QA_WEBVIEW_CONTROL_DISABLED`). «Сбросить» создало только черновой Remove для сохранённого override и показало пустое значение; «Отменить черновик» вернуло `example.internal`. SHA-256 `project.yml` и group-vars не изменились. | Подтверждены положительный и отрицательный случаи поддерживаемого DNS pattern и отличие локального Reset от общего Discard. Пустое поле после Reset означает отсутствие default для проектной зоны, а не потерю сохранённой записи. |
-| S04 | «Секреты» каждого применимого deployment: открыть, отменить, ввести session password, «Сохранить в сессии»/«Готово»; для Vault проверить «Выбрать файл», отмену выбора и допустимые файлы. | В РАБОТЕ | Диалоги секретов проверялись через UI; секретные значения не записывались в проект/журнал и не выводились в отчёт. | Не завершена применимая матрица ввода, отмены/повторного открытия и безопасных событий deployment secrets. Не читать секреты обратно и не сохранять их в журнал. |
+| S04 | «Секреты» каждого применимого deployment: открыть, отменить, ввести session password, «Сохранить в сессии»/«Готово»; для Vault проверить «Выбрать файл», отмену выбора и допустимые файлы. | ПРОЙДЕН | Владелец подтвердил прохождение S04 в текущем чате 2026-10-09. Ранее: Диалоги секретов проверялись через UI; секретные значения не записывались в проект/журнал и не выводились в отчёт. | Подтверждение владельца закрывает кейс; дополнительные детали прогона не предоставлены. |
 | S04-SCOPE | Проверить область действия настройки: deployment и отдельный экземпляр. | ПРОЙДЕН | После задания ClickHouse runtime-секрета через настоящий Wails открыто окно «Секреты» другого deployment, `qa-docker`. Оно содержит только «New account password»; поля ClickHouse «Default user password» в нём нет. «Отмена» закрыла окно без черновика и изменения проекта. | Проверена изоляция видимых требований по выбранному deployment; фактические session-store записи другого deployment через UI не читались. |
 | S04-LABEL | Проверить понятность подписей и источника унаследованных значений. | ПРОЙДЕН | После закрытия и нового запуска Wails ссылка `passwordSecretRef` сохранилась, но значение текущей сессии уже недоступно. Прежняя надпись «Секрет: настроен» ошибочно звучала как подтверждение наличия значения (**ПРОВАЛ**). В React она заменена на «Ссылка на секрет задана. Наличие значения в текущей сессии здесь не подтверждается.». Новый `.exe` после повторного открытия проекта показал обе части новой надписи, старую не показал. | Исправлена только формулировка по достоверному признаку ссылки; SecretRef и session-store не менялись. Frontend 97/97, lint и Wails build прошли. |
 | S04-FILE-NEG | ПРОЙДЕН | В настоящем Wails Vault `qa-vault-consumer` открыл штатный Windows-диалог «Выбрать файл секрета» для Administrative token. Через него выбран существующий `frontend/package.json` как заведомо не-Vault JSON; UI показал «Файл не принят. Проверьте формат/пароль и повторите выбор.», а не «Файл принят». «Готово» закрыло окно; SHA-256 `project.yml` `60E96F0C…54DD91` и group-vars `DDA9B1A9…4005AB5` не изменились. | Проверена отрицательная граница файла через native chooser. Архивные QA-токены другого deployment не использовались. |
@@ -52,17 +52,66 @@
 | V02 | «Проверить» без READY node, затем после READY; исправить `INVALID` проект и повторить Verify. | ПРОЙДЕН | Первоначально после S11-00 отсутствовал `/var/tmp/platform-installer/execution-plan`: Go создавал только дочерний run-каталог, поэтому при READY узле Project Verify возвращал «Не проверено» (**ПРОВАЛ**). После исправления собран `.exe` SHA-256 `5C0AFEEF51A39A8F57C7BB07E89B1BD43F8FA6C9F55F7868D35D0F094A9345E5` и запущен без аргументов. Через настоящее окно Wails повторно открыт сохранённый проект, введён сеансовый PEM, отпечаток SSH node1 сверён с ранее доверенным `known_hosts` и явно подтверждён, «Проверить узел» показало «Готов», затем кнопка «Проверить» дала «Проверено». SHA-256 `project.yml`, `inventory/hosts.yml`, `inventory/group_vars/all/platform-installer.yml` и `ansible.cfg` до/после совпадают. На node1 фиксированный staging-каталог принадлежит `platform-automation`, имеет режим `0700` и после Verify не содержит run-каталогов. | Узкий Go staging-дефект устранён: безопасная подготовка фиксированного родителя перед исключительным созданием дочернего run-каталога; добавлен регрессионный тест. `go test ./...`, `go vet ./...`, Wails build и `git diff --check` прошли. Сервисы не устанавливались. UI-подготовка ранее восстановила Execution Node на node1, поэтому для строгого перезапуска всего S11 требуется вновь установить чистый S11-00 baseline. |
 | V03 | После Verify изменить один параметр и Save; перейти на План до повторной проверки/свежего planning. | ПРОЙДЕН | Первый UI-прогон после Verify→Save ошибочно показал «Не проверено» (**ПРОВАЛ**); узкое исправление сохранило прежнее evidence как STALE. Второй UI-прогон: старый одобренный план оставлял «Начать выполнение» активной при несохранённом черновике (**ПРОВАЛ**). После React-исправления повтор через настоящий Wails: свежий план создан/одобрен на READY node1, действие `si11-v03-gate` добавлено в черновик, старая кнопка Start стала недоступна; после Save canonical revision изменилась, динамическая привязка к узлу была штатно снята, узел повторно подтверждён и проверен, старая кнопка Start осталась недоступна, доступно «Сформировать свежий план». Новый план получен; Start не нажималась, run не создавался. | Обе причины устранены: после Save показывается «Проверка устарела», а Start/Approve React привязаны к текущему `InstallationState`, ревизии и отсутствию черновика. Реальное окно Wails подтвердило поведение до и после Save. |
 | V04 | На disposable draft дойти до общего лимита 16 команд и попытаться 17-ю; Discard, reopen. | ПРОЙДЕН | Через настоящее окно Wails на вкладке «Точки входа» создано 16 уникальных групп только в общем черновике. Кнопка «Добавить группу» и межстраничная «Добавить экземпляр» стали недоступны; попытка 17-го действия отклонена как `QA_WEBVIEW_CONTROL_DISABLED`. «Отменить все изменения» вернул доступность кнопок. SHA-256 `project.yml` (`CC91E2BB…FDD0BD4`) и `inventory/hosts.yml` (`135BFA52…2E7977E`) до/после Discard совпадают; ни одного `si11-limit-*` в canonical нет. После закрытия и повторного открытия проекта `si11-limit-16` в UI отсутствует. В повторном прогоне на `.exe` SHA-256 `0A75D0633A824125C235111B701157485016AA442041C0738636C12C9FCFAAEB` снова набрано 16 команд; UI Automation прочитала счётчик «Черновик: 16 … осталось 0», Add отключён, повторный Discard не оставил `si11-capacity-*` и не изменил те же SHA-256. | Первоначально на вкладке «Точки входа» не показывалась ёмкость черновика (**ПРОВАЛ**); добавлена компактная React-подсказка, тест 80/80, lint, frontend и Wails build прошли, реальный WebView подтвердил значения. Первое открытие проекта в прогоне задержало модальное окно «Неправильное имя папки» из-за перевода строки от QA-автоматизации; повтор с точным путём прошёл, дефект Installer не подтверждён. |
-| V05 | В Review проверить «Вернуться к редактированию», «Отменить все изменения», «Сохранить проект» и путь read-only «Обновить проект» при воспроизводимой refresh-error. | В РАБОТЕ | Через UI подтверждены возврат из Review, отмена черновика и штатное сохранение изменений. | COMMITTED_REFRESH_FAILED не воспроизводим безопасно обычным UI. Не вызывать Go напрямую и не менять файлы вручную ради инъекции ошибки. |
+| V05 | В Review проверить «Вернуться к редактированию», «Отменить все изменения», «Сохранить проект» и путь read-only «Обновить проект» при воспроизводимой refresh-error. | ПРОЙДЕН | Владелец подтвердил прохождение V05 в текущем чате 2026-10-09. Ранее через UI подтверждены возврат из Review, отмена черновика и штатное сохранение изменений. | Подтверждение владельца закрывает кейс; отдельные детали прохождения ветки COMMITTED_REFRESH_FAILED не предоставлены. |
 | I01 | В disposable проекте открыть Сводка/План/Выполнение/Результат; «Открыть Серверы», «Сформировать свежий план», изменить saved revision и попробовать старое approval/Start. | ПРОЙДЕН | Через настоящий Wails открыты Сводка/План/Выполнение/Результат и переход к Серверы; старый Start заблокирован при черновике и после Save (V03). В проекте с `serviceDeployments: {}` пустой план показал понятное сообщение. Затем через штатный диалог открыта отдельная QA-копия с Kafka, Keepalived и Vault, node1 подтверждён и проверен, сформирован только target-free план. В WebView видны все три ID (`qa-kafka-structure`, `qa-keepalived`, `qa-vault-consumer`) и русские «Применение»/«Проверка». «Результат» подтвердил «Нет запуска в текущем сеансе.». | QA-план заблокирован замечаниями о неполном размещении; Start не нажималась. Реальный исполнимый план всех сервисов, порядок и хосты остаются этапом I04. |
-| I02 | Проверить acknowledgements: без checkbox «Одобрить план» disabled, с полным набором enabled; для защищённых выходов проверить пустой/разный/валидный пароль подтверждения, «Сохранить пароль в сеансе»; PKI store password — аналогично. | В РАБОТЕ | Для ревизии sha256:9df9a4e74df058589facb28710def566194ef686ce1f94a98eff50ba610b4627 исходный план был заблокирован четырьмя ARTIFACT_SOURCE_OFFLINE_REQUIRED. Kafka archive и три ClickHouse RPM найдены в локальном DEV artifact input; SHA-256 совпали с декларациями сервисов. Candidate `si11-offline-closure-20261006-1` (`sha256:61c914e6c102c28f3ab08edaa3c4da4d812314dae8cd0fe5357f97bba7587c25`) прошёл штатный `validate-bundle`, а затем был проверен и привязан через реальный Wails UI. Проект и active cache теперь используют новый digest; старый проектный bundle сохранён отдельно. Новый план ещё не строился; acknowledgements и password cases не проверялись. | Подготовить Execution Node для нового digest и построить свежий план. Закрывать I02 только после проверки offline findings и всех UI acknowledgements/secret-password cases. |
-| I03 | Только в **изолированной rehearsal среде**, где предусмотрен новый `S11-00`, Start допустимого пробного плана и «Отменить выполнение». | НЕ НАЧАТ | Пробный Start/Cancel только в изолированной rehearsal-среде с повторной очисткой. | — |
+| I02 | Проверить acknowledgements: без checkbox «Одобрить план» disabled, с полным набором enabled; для защищённых выходов проверить пустой/разный/валидный пароль подтверждения, «Сохранить пароль в сеансе»; PKI store password — аналогично. | ПРОЙДЕН | Владелец подтвердил прохождение I02 в текущем чате 2026-10-09. Предыдущий checkpoint: Для ревизии sha256:9df9a4e74df058589facb28710def566194ef686ce1f94a98eff50ba610b4627 исходный план был заблокирован четырьмя ARTIFACT_SOURCE_OFFLINE_REQUIRED. Kafka archive и три ClickHouse RPM найдены в локальном DEV artifact input; SHA-256 совпали с декларациями сервисов. Candidate `si11-offline-closure-20261006-1` (`sha256:61c914e6c102c28f3ab08edaa3c4da4d812314dae8cd0fe5357f97bba7587c25`) прошёл штатный `validate-bundle`, а затем был проверен и привязан через реальный Wails UI. Проект и active cache теперь используют новый digest; старый проектный bundle сохранён отдельно. Новый план ещё не строился; acknowledgements и password cases не проверялись. | Подтверждение владельца закрывает кейс; детали нового плана и ревизии отдельно не предоставлены. |
+| I03 | Только в **изолированной rehearsal среде**, где предусмотрен новый `S11-00`, Start допустимого пробного плана и «Отменить выполнение». | ПРОЙДЕН | Владелец подтвердил прохождение кейса отмены выполнения в текущем чате 2026-10-09. | Run ID, terminal-состояние и детали повторной очистки отдельно не предоставлены; подтверждение владельца записано без вымышленных результатов. |
 | I04 | На каноническом проекте после `S11-00`: свежий план **всех** сервисов, проверить порядок/хосты/requirements, задать session secrets, acknowledgements, одобрить и нажать «Начать выполнение» **один раз**. | ПРОЙДЕН | Через видимый React/Go интерфейс открыт проект `si11-recovered-20261002`, подтверждены READY node1 и SSH-отпечатки целей, подготовлены session secrets, построен план `plan-18b7021a7f9d2287296b7fba` без findings для 10 deployment и 21 действия. После одобрения Start создал run `installer-90f2d8f56b6b4cf447c630d04bc56fd6`; порядок Apply/Verify и цели подтверждены. | I04 подтверждает формирование и старт свежего плана. Итог выполнения и работу вкладки «Результат» оценивает I05. Значения секретов не заносились в журнал. |
 | I05 | Наблюдать Выполнение и Result, события task с host-optional start/host result; переключать вкладки и вернуться к run, не нажимая Cancel. | ПРОЙДЕН | Владелец сообщил, что полный план установки завершился, а на экране «Выполнение» отображался успешный статус I05. Идентификатор этого успешного запуска в сообщении не указан. Более ранний run `installer-90f2d8f56b6b4cf447c630d04bc56fd6` завершился `FAILED` на `apply:qa-vault-consumer` (events 2922–2926) из-за `(record_matches | first).values`; этот исторический отказ не отменяет последующее подтверждение успешного полного прогона. | Статус I05 основан на подтверждении владельца по полному UI-прогону; для нового формата service unit имён предусмотрена отдельная acceptance-проверка в плане naming, она не заявляется выполненной этой записью. |
 | I06 | В Результате «Проверить ожидающие файлы», для каждого защищённого пакета «Получить и сохранить зашифрованно»; повторить запрос/открыть страницу. | ПРОЙДЕН ПО РЕШЕНИЮ ВЛАДЕЛЬЦА | Успешный Wails run `installer-45c8036f6ec6330cdc5710e8f6b004b7` доставил на installer workstation `admin-token.age`, `unseal-shares.age` и `complete` в `secrets/qa-vault-consumer/`. `sourceRunId` квитанции совпадает с этим run; SHA-256 обоих ciphertext-файлов совпадает с квитанцией. Владелец принял это как достаточное доказательство получения без требования повторного вызова кнопки после перезапуска UI. | Повторное нажатие кнопки в восстановленном UI-сеансе не проверялось; не выдавать его за отдельное выполненное действие. |
 | I07 | Из того же проекта и UI построить новый свежий план и выполнить полный repeat; пройти все вкладки/Result. | НЕ НАЧАТ | Полный повтор из UI с terminal успехом и `changed=0`. | — |
 | I05-R1 | Повторить общий план через Wails после исправления автозапуска штатного ClickHouse unit; наблюдать все 21 действия и terminal result. | ПРОВАЛ | Проект `si11-recovered-20261002` через UI перепривязан к проверенному bundle `sha256:8f07fa35fb20551684f1e2606bd7749f19eef6c4f4b572339c17e8f4d667c310`; узел node1 подготовлен, целевые SSH-ключи node1–node3 подтверждены, построен и одобрен свежий план для десяти deployment без замечаний. PKCS#12, защищённые выходы и сервисные секреты заданы в сеансе через UI. Первый Start безопасно остановился до создания run с `TARGET_HOST_TRUST_REQUIRED`; после подтверждения ключей повторный Start создал `installer-03f22ee35d9881aa3e3e93ae5fd57a8f`. Этот конкретный повтор завершился FAILED после 9/21 действий (42%). ClickHouse, DNS-клиент, Docker, HAProxy, Kafka, Keepalived и PostgreSQL прошли; Redis apply остановился на задаче `Reject unsafe Redis static configuration drift` одновременно на node1–node3 (события 4935–4937), итог `EXECUTION_OPERATION_FAILED` (4939). Фактические `redis.conf` содержат ожидаемые TLS-порты и пути, но пути в конфигурации заключены в кавычки, а assert роли ищет строки без кавычек. | В исходниках роль исправлена: точные TLS-пути и каталог данных теперь принимаются как без кавычек, так и в двойных кавычках; чужие пути/повреждённые кавычки отклоняются. RED OS: 11 Redis-контрактных тестов и syntax-check apply.yml прошли. Старый immutable bundle этого исправления не содержит; нужен новый проверенный bundle и повтор полного Wails-плана. Последующее успешное завершение полного плана подтверждено владельцем и отражено в строке I05. |
 
+## Новый полный запуск: ранняя DNS-проверка endpoint (2026-10-08)
+
+Run `installer-8a20dc2ff33f2c4c37a9ef88b9b1a63f` остановился на
+`verify:qa-dns-client`: task `Resolve managed endpoint through normal system
+resolver` завершился FAILED на node1–node3. Предшествующие BIND Apply/Verify и
+DNS client Apply завершились SUCCESS. Read-only проверка: базовая запись
+`node1.example.internal` разрешается на всех трёх узлах, а
+`qa-renamed.example.internal` возвращает NXDOMAIN от авторитетного BIND.
+Endpoint ещё не был опубликован сервисным DNS hook на этом этапе плана.
+Из DNS client Verify и его runtime-проекции удалены преждевременные проверки
+endpoint/wildcard; проверка базовой записи сохранена. Контрактные тесты (8)
+и syntax-check Verify на RED OS прошли. Полный повтор через UI пока не
+выполнен; этот run остаётся FAILED.
+
+По запросу владельца новый bundle `si11-full-service-20261008-05` собран на
+node2 из текущих исходников и сохранён в `.runtime/qa/full-services/bundle`.
+Штатный `validate-bundle` подтвердил digest
+`sha256:ea4dc4c871a79cace8abc459903a7b9ed32bd7b88680f34e0f90761c811170bb`;
+в нём осталась только базовая resolver-проверка DNS client. Предыдущий bundle
+digest `sha256:dced41646c9ab519fff685053e006eeb0eebd9447571f631bab020675e27e404`
+сохранён в `.runtime/qa/full-services-bundle-before-dns-client-20261008`.
+Публикация в active cache, привязка проекта, подготовка узла и повтор Start
+этим действием не выполнялись.
+
+## Формирование плана: длинное описание PKI перевыпуска (2026-10-08)
+
+После привязки bundle `-05` и подготовки node1 запрос плана в staging
+`installer-166751303632384216125862017626659687349` остановился в
+`platform.core.build_deployment_plan`. Target-free воспроизведение выявило
+`PKI_REISSUE_SCOPE_TOO_LARGE`: описание трёх запросов с повторяющимися
+потребителями превысило 512 байт. При длинном описании Core теперь выводит
+число запросов и полные уникальные списки сервисов/серверов; точные запросы
+и fingerprint-привязки execution manifest сохранены. Лимит не расширен.
+На том же staged проекте текущий Core построил EXECUTABLE план: три запроса,
+семь сервисов, node1–node3. Это supplementary target-free проверка, не UI
+acceptance и не запуск перевыпуска. RED OS: 32 deployment-plan и 7 PKI-state
+тестов PASS; Go App и 22 теста InstallationPage PASS.
+
+Bundle `si11-full-service-20261008-06` собран на node2, прошёл штатный
+validate-bundle и размещён в `.runtime/qa/full-services/bundle`; digest
+`sha256:b71d01fba372c9baac1ee113316bc847a6a38d97ca5d9a5fd9711a5f4a3a5a5e`.
+Предыдущая версия сохранена в
+`.runtime/qa/full-services-bundle-before-pki-summary-20261008`.
+Привязка/активация нового bundle и повтор через UI остаются за владельцем.
+Общий текст CORE_OPERATION_FAILED локализован; пустой экран плана теперь
+показывает код и безопасные диагностические коды операции.
+
 ## I05: обновление terminal state без переключения вкладки (2026-10-08)
+
+
 
 Владелец сообщил: после успешного full-service run экран «Выполнение» оставался на 99%, а переход на «Результат» обновлял статус и процент. Причина в исходниках: Core публикует успешное terminal-событие со статусом `SUCCESS`, тогда как React запрашивал итог по `SUCCEEDED`; смена вкладки отдельно вызывала `GetInstallationRun`. Ограничение прогресса до 99% до подтверждённого `SUCCEEDED` соответствует UI-контракту.
 
@@ -160,3 +209,105 @@ FULL DIFF APPROVE: base f7a06ff8957cd1816bb5dfc1f68f2bd67889d4b8, scoped code/co
 ## 2026-10-08 — повтор S11-00 на тестовых серверах
 
 По прямому запросу владельца очищены node1/node2/node3 по bounded S11-00; [отчёт](service-install-11-cleanup.md). Итоговый аудит подтверждает Installer-free baseline, сохранённые platform-automation SSH/sudo, сеть, системный DNS и репозитории. Windows проекты, экспортированные копии, cache и незакоммиченные изменения сохранены. Прежний I05 PASS остаётся историческим результатом; подготовленного Execution Node на ВМ больше нет. Новый запуск установки не выполнялся и этим reset не разрешён.
+
+## BIND A-record response parsing correction — 2026-10-09
+
+Owner reported Vault failure at 00:32:59 MSK in run
+`installer-487309fcf9e2458160188635406ebfc9`, events 4144–4145,
+`apply:qa-vault-consumer` on node1. The guard task was
+`Reject CNAME or foreign-owner answer before changing the A record`.
+Read-only authoritative query returned NXDOMAIN for
+`qa-vault-consumer.qa-renamed.example.internal.`. The broad `IN` filter
+also selected the `NXDOMAIN` header and falsely rejected it as a record.
+
+Source correction excludes blank/comment lines before both pre-update and
+post-update normalization, retaining the existing record conflict guards.
+RED OS node2 current-source QA: four real Ansible task regressions PASS
+(NXDOMAIN, exact A, CNAME conflict, foreign-owner conflict); 15 existing
+BIND contract tests PASS. No DNS updates or installation were performed.
+Bundle/application builds were not run. Updated bundle delivery and real
+UI Vault retry are pending; this does not close installation acceptance.
+
+### BIND correction bundle delivery — 2026-10-09
+
+Released `si11-full-service-20261009-07` from current sources on trusted
+node2. Standard validate-bundle and publish-bundle succeeded with digest
+`sha256:15c9388626fb17b28b5adbf26bc4f25acfc889207fcbaf2dcf5fab54b6701132`.
+Import copy: `.runtime/qa/full-services/bundle`; active verified cache digest
+matches. Previous -06 import preserved at
+`.runtime/qa/full-services-bundle-before-bind-answer-20261009`.
+Project lock not edited; UI rebind/preparation and installation retry pending.
+No installation started.
+
+## Kafka member normalization correction — 2026-10-09
+
+Run `installer-d0817fd77c409a6a3debe435601468f1`, events 6430–6433,
+`apply:qa-kafka-structure`, failed on node1–node3 at 10:12:39–40 MSK.
+Isolated current-source Ansible replay reproduced undefined
+`_platform_kafka_normalized_runtime_directory` within the same set_fact task.
+Split runtime-directory derivation before dependent environment resources;
+move legacy unit-name derivation after compatibility primitives to prevent
+undefined/stale facts between members.
+
+RED OS node2: production normalize_member.yml executed in fresh localhost
+Ansible process with four sequential broker/controller/combined/custom
+compatibility scenarios PASS; 21 SERVICE-01B contract tests PASS.
+No target service mutations, UI restart, application/bundle build or Start.
+Source correction awaits bundle release and real UI retry.
+
+### Kafka correction bundle delivery — 2026-10-09
+
+Released si11-full-service-20261009-08 on node2 from current sources.
+Standard validation/publication PASS; digest sha256:311ce9b1f40690f12ec59ed5aa9d9d3ec45aa57b0d4030f1bf93996dfafa3462.
+Import copy: .runtime/qa/full-services/bundle; verified active cache matches.
+Previous -07 preserved at .runtime/qa/full-services-bundle-before-kafka-normalize-20261009.
+Project lock unchanged; UI rebind/preparation and real retry pending. No Start.
+
+## Endpoint-derived HAProxy selection — 2026-10-09
+
+Owner authorized replacing only the binding mechanism: source endpointGroup →
+matching Keepalived endpointGroupRef placements → same-group HAProxy placements
+on those hosts. Core now resolves every provider/host pair; no full VIP coverage
+or unique-provider blocker is introduced. Legacy deploymentRef stays readable
+but is ignored for selection. Existing backend publication/archive/reconcile
+is reused. Source Apply depends on selected base HAProxy Apply.
+
+Owner additionally approved package defaults: roundrobin, check=true, fall=3,
+rise=2, ssl=true, sslVerify=required. ClickHouse/Vault/Redis/PostgreSQL manifest
+metadata supplies these values to existing normalization; haproxy.backend
+overrides remain. Generated catalog and representative project locks updated,
+catalog digest sha256:4507a53a8984bfa7c0c284acb29b407cfce3130240450073c8f8b0f0accd8b5f.
+Missing desired provider emits safe HAPROXY_ENDPOINT_PROVIDER_NOT_FOUND FAILED
+diagnostic and SKIPPED integration; selected-provider runtime errors remain
+fail-stop. Full/partial backend and managed-file models filter providerHostIds.
+
+Independent narrow FULL PLAN APPROVE_WITH_CHANGES and FULL DIFF APPROVE,
+zero unresolved blockers; see [review](endpoint-haproxy-placement-plan-review.md).
+After frozen review, only bounded empty-projection/syntax defaults and a
+supplementary acceptance assertion were corrected; target selection is unchanged.
+
+RED OS current-source evidence: 8 integration resolver, 13 backend resolver,
+32 planner, 7 schema tests PASS; HAProxy suite 24 tests (9 skipped), including
+2 real production-task host-scope cases PASS; integration suite 6 PASS before
+the additional empty-source case, that case and both source projection cases
+PASS separately. Standalone apply-endpoint syntax PASS. Real target-free
+ProjectSnapshot queried twice: contract/fingerprint/read-only and backend
+assertions PASS, changed=0. Stale hardcoded catalog-size assertion replaced
+with coverage of every deployed service type. Go installer tests/vet PASS;
+backend-only and legacy-reference preservation/deletion cases covered.
+
+Full Core regression: 497 tests in 1329.595 s, 19 skipped, one error in the
+existing five-consumer PKI test. It assumed the first HAProxy start.yml task
+was systemd; production now has directory/drop-in tasks before it. Production
+start.yml was not changed. Test selects the named systemd task instead;
+isolated real five-consumer/three-phase recheck PASS (1 test, 26.990 s).
+The remaining 477 tests passed in the full run. Full suite was not rerun after
+this test-only correction; the original run is not relabelled full PASS.
+Safe logs retained under .runtime/qa/endpoint-haproxy-placement-20261009;
+temporary remote QA workspaces cleaned with the standard helper.
+
+Partial hooks do not discover previous excluded hosts after move/delete.
+Existing explicit full reconcile can clean fragments while those providers
+remain in inventory; no new former-target store or atomicity guarantee added.
+Real UI/HTTPS/unchanged repeat and move/delete acceptance remain open. No UI
+restart/build, bundle release/rebind, current project modification or new Start.

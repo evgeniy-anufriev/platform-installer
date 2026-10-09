@@ -266,7 +266,7 @@ export type InstallationPlanView = {
 export type InstallationPlanOperation = {
   status: "BLOCKED" | "PLAN_BLOCKED" | "PLAN_REVIEW" | "PLAN_APPROVED";
   plan?: InstallationPlanView;
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; diagnosticCodes?: string[] };
 };
 export type InstallationRunView = main.InstallationRunView;
 export type InstallationResultView = main.InstallationResultView;
@@ -382,6 +382,8 @@ export type RuntimeSecretDescriptor = {
   hosts: string[];
 };
 export type RuntimeSecretDescriptorOperation = {
+
+  secretsInstalled?: boolean;
   status: "READY" | "UNAVAILABLE";
   projectRevision?: string;
   descriptorSetFingerprint?: string;
@@ -433,7 +435,7 @@ export type SecretOutputPackage = {
   sourceRunId: string;
   runtimeDigest: string;
   generation: number;
-  state: "READY" | "ACKED_CLEANUP_PENDING";
+  state: "READY" | "ACKED_CLEANUP_PENDING" | "LOCAL_DELIVERED";
   entries: Array<"admin-token" | "unseal-shares">;
 };
 export type SecretOutputPackagesOperation = {
