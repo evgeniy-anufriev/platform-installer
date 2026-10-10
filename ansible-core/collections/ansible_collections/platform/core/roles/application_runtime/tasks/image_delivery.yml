@@ -39,6 +39,8 @@
           ansible.builtin.stat:
             path: "{{ application_image_stage.path }}/image.tar"
             checksum_algorithm: sha256
+            get_mime: false
+            get_attributes: false
           register: application_target_archive
         - name: Require exact locked archive bytes
           ansible.builtin.assert:

@@ -1,11 +1,4 @@
 ---
-- name: Initialize isolated application projection for this operation
-  ansible.builtin.set_fact:
-    platform_application_rows: []
-    platform_application_findings: []
-  no_log: true
-  become: false
-
 - name: Validate package closure before loading defaults
   platform.core.prepare_application_libraries:
     project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
@@ -16,6 +9,7 @@
 
 - name: Preserve safe preflight findings
   ansible.builtin.set_fact:
+    platform_application_rows: []
     platform_application_findings: "{{ _application_inputs.findings }}"
   no_log: true
   become: false

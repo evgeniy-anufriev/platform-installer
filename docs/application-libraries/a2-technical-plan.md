@@ -153,11 +153,12 @@ Compose видит изменённый label и пересоздаёт толь
 config используется **recreate**, отдельный restart по changed flag не нужен.
 Это явный tradeoff: container ID меняется при config update.
 
-Verify сравнивает expected digest, digest реально смонтированных declared files
-и label exact работающего контейнера. Расхождение — config drift или незавершённая
-активация; running/healthy не скрывает его. Label плюс recreate доказывают запуск
-процесса с доставленной конфигурацией, но не доказывают прикладное чтение каждого
-параметра: такое поведение проверяется отдельным подходящим fixture.
+По решению владельца 2026-10-10 обычный Verify выполняет один task `docker
+container inspect` на экземпляр: locked image ID, ownership labels проекта,
+библиотеки, экземпляра и хоста, Running и настроенный healthcheck. SHA256 файлов,
+config-digest и Compose config hash не проверяются. Это проверка идентичности и
+готовности, а не аудит конфигурационного drift. Apply сохраняет полный preflight
+и механизм config-digest/recreate; прикладное чтение конфигурации проверяется QA.
 
 Host/application overrides проходят ту же схему A1. Команда, user/restart,
 environment, ports берутся из effective settings, не из констант runtime role.
@@ -338,11 +339,11 @@ Registry credentials использовать существующим runtime-s
    Не ставить changed_when false на безусловный up для искусственного clean repeat.
 4. Readiness с bounded retries; healthcheck mode проверяет healthy именно нового
    exact container. Container mode отдельно отражается в результате.
-5. Verify проверяет image, identities, published ports, mounted configs,
-   expected/disk/container-label config digests и
-   expected effective Compose configuration; сравнение без публикации env.
-   Runtime `.env`/config drift проверять по desired render bytes, не утверждать
-   успех только на основании running. Verify не исправляет drift и не pull/load/up.
+5. Verify проверяет только image ID, ownership identities, Running и настроенный
+   healthcheck одним inspect task. Standalone Verify разрешает ожидаемые inputs
+   и обнаруживает account identities один раз на хост; target preflight,
+   registry/archive/file/port/Compose проверки не выполняются.
+   Verify не исправляет drift и не выполняет pull/load/up.
 
 Ownership: директория и существующий container должны принадлежать exact
 project/library/instance/host. Использовать existing Compose labels плюс
@@ -367,7 +368,7 @@ container_name либо небезопасный directory блокирует Ap
 - Bind config content меняет автоматически вычисленный config-digest label:
   Compose пересоздаёт exact instance. Проверка выполняется и на retry при
   unchanged files, поэтому прерывание до up не теряет обязательную активацию.
-  Verify проверяет expected/disk/container digests и readiness.
+  Обычный Verify проверяет image/ownership/readiness; config drift не проверяет.
 - Interrupted copy/load/up: повтор использует фактические files/images/containers,
   не флаг «успешно» из прошлого запуска. Provider rollback не обещается.
 - Multi-host failure: показать success/failure каждого host, библиотека целиком
@@ -428,9 +429,9 @@ Docker не устанавливать автоматически. Для ука
 | Ownership/port/path collision | Нет takeover/rewrite/delete чужих объектов |
 | Clean repeat | changed=0 и прежние container IDs; нет повторной доставки/recreate |
 | Env/base/config/image update | Только затронутые consumers меняются; readiness после изменения |
-| Drift/readiness negatives | Verify read-only; stopped/unhealthy/wrong image/config drift — failure |
+| Readiness/identity negatives | Verify read-only; stopped/unhealthy/wrong image/ownership — failure; config drift вне обычного Verify |
 | Interrupted operation/multi-host failure | Retry восстанавливает exact desired state; нет ложного общего PASS |
-| Interrupted config write → recreate | На existing image после write до up Verify сообщает digest mismatch; retry меняет ID/label только нужного instance, disk/label совпадают; следующий repeat changed=0 |
+| Interrupted config write → recreate | Обычный Verify не обнаруживает file/config drift; Apply retry меняет ID/label только нужного instance, disk/label совпадают; следующий repeat changed=0 |
 | Application config consumption | На startup-reader fixture значение в памяти меняется после retry; если такой режим existing image недоступен, prerequisite отмечен отдельно без ложного PASS |
 | Scope limit/parallel run | Исключённые hosts не считаются verified; конкурентный library-host Apply BLOCK |
 

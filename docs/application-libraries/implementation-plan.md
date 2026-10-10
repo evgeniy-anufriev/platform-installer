@@ -57,6 +57,47 @@ secret safety, ownership, явную проверку refs и безопасно
 
 ## A. Standalone Ansible + Core
 
+### Общее требование A1–A9: скорость выполнения и минимум действий
+
+Уточнение владельца 2026-10-10: скорость выполнения — приоритет всего этапа A.
+Минимизировать Ansible tasks, SSH/module invocations, SQL/API requests, повторное
+обнаружение и файловые операции. Десятки контейнеров и несколько providers не
+должны повторять общую подготовку для каждого instance/placement.
+
+- Разрешение проекта и построение jobs выполняются один раз на execution.
+  Общие readiness/discovery проверки — один раз на provider deployment;
+  library resources/shared secrets — один раз на logical library; account/
+  AppRole/policy — один раз на logical instance. Host materialization, image
+  availability и container startup выполняются только на нужных Docker-хостах.
+- Объединять compatible SQL/API/file операции в небольшое число явных фаз.
+  Не создавать task на каждый privilege, credential field, env variable или
+  Vault policy rule. Использовать существующие native bulk/batch средства;
+  отсутствие безопасного batch API не оправдывает новый framework.
+- Переиспользовать execution-local discovery/results, сохраняя обязательную
+  проверку writable state/ownership/version перед mutation. Не заводить
+  persistent cache фактов/секретов или второй desired-state store.
+- Чистый повтор не выполняет лишних DDL, password resets, KV versions, policy
+  writes, uploads, docker pull/load, recreate/restart и endpoint reload.
+  Сравнить actual/expected, применять только изменения. changed=0 сам по себе
+  недостаточен: измерять фактические вызовы и продолжительность.
+- Verify использует пакетные read-only проверки; не повторяет install/provisioning
+  и не reparирует drift. Полный standalone Apply не должен внутри каждого hook
+  повторно запускать общий infrastructure Verify/PKI/runtime preparation.
+- Не вводить scheduler, очередь, workers или daemon ради скорости; сначала
+  убрать дублирование и мелкие actions. Параллельность — только штатная Ansible,
+  где она не нарушает library/infra barriers, ownership, locks и CAS.
+- Скорость не отменяет guards, secret isolation, least privilege и safe retry.
+  Unsafe shortcut запрещён; проверку объединить/переиспользовать, а не удалить.
+
+В каждом подэтапе фиксировать first Apply / clean repeat / Verify duration,
+число module и provider calls; отдельно image delivery и readiness wait.
+Проверять масштабирование 1/10/30 instances и несколько hosts: общая работа
+не должна расти как instances × placements × providers. Числовой budget
+согласовывать по реальным RED OS замерам; не обещать непроверенный SLA.
+Известные длительности A2 — baseline для анализа, не основание повторять
+target QA без отдельного scope. Performance requirement не открывает уже
+закрытые A1/A2 на автоматический refactor.
+
 ### A1. Минимальный контракт и сквозные fixtures
 
 Подробный scope, последовательность и acceptance matrix:

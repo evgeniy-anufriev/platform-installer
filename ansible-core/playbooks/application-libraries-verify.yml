@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-preflight.yml
+- import_playbook: application-libraries-resolve-runtime.yml
 
 - name: Verify applications without mutations
   hosts: platform_targets
@@ -7,10 +7,21 @@
   become: true
   any_errors_fatal: true
   tasks:
+    - name: Discover Docker account identities once for read-only verification
+      ansible.builtin.getent:
+        database: passwd
+      when: hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list | length > 0
     - name: Verify each exact application placement
       ansible.builtin.include_role:
         name: platform.core.application_runtime
         tasks_from: verify
-      loop: "{{ platform_application_preflight_jobs | default([]) }}"
+      vars:
+        application_runtime_job: >-
+          {{ application_verify_input | combine({'dockerEnvironment': {
+            'HOME': getent_passwd[application_verify_input.account][4],
+            'XDG_RUNTIME_DIR': '/run/user/' ~ getent_passwd[application_verify_input.account][1],
+            'DOCKER_HOST': 'unix:///run/user/' ~ getent_passwd[application_verify_input.account][1] ~ '/docker.sock',
+            'DOCKER_CONFIG': platform_application_registry_config_directory if platform_application_registry_config_directory else getent_passwd[application_verify_input.account][4] ~ '/.docker'}}) }}
+      loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
-        loop_var: application_runtime_job
+        loop_var: application_verify_input

@@ -5,7 +5,7 @@
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: '0700'
-  loop: "{{ [application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configContents | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) }}"
+  loop: "{{ ([application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configContents | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list)) | map('regex_replace', '/+$', '') | unique | list }}"
 
 - name: Record instance ownership as derived runtime state
   ansible.builtin.copy:
@@ -31,12 +31,9 @@
     mode: '0600'
   no_log: true
 
-- name: Bind Compose context
-  ansible.builtin.include_tasks: context.yml
-
 - name: Parse effective Compose without startup or image mutation
   ansible.builtin.command:
-    argv: "{{ application_compose_argv + ['config', '--format', 'json'] }}"
+    argv: "{{ application_runtime_job.composeArgv + ['config', '--format', 'json'] }}"
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_compose_config

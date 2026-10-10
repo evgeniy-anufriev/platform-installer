@@ -1,14 +1,18 @@
 ---
-- name: Discover the selected Docker account
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ application_runtime_job.account }}"
+- name: Bind this operation's account and Docker configuration discovery key
+  ansible.builtin.set_fact:
+    application_discovery_key: "{{ [application_runtime_job.account, platform_application_registry_config_directory] | to_json }}"
+  no_log: true
+
+- name: Discover each selected account and rootless runtime once per operation
+  ansible.builtin.include_tasks: discover_runtime.yml
+  when: application_discovery_key not in application_runtime_discoveries
 
 - name: Bind exact account and runtime paths
   ansible.builtin.set_fact:
-    application_uid: "{{ getent_passwd[application_runtime_job.account][1] }}"
-    application_home: "{{ getent_passwd[application_runtime_job.account][4] }}"
-    application_root: "{{ getent_passwd[application_runtime_job.account][4] }}/{{ platform_application_root_relative }}"
+    application_uid: "{{ application_runtime_discoveries[application_discovery_key].uid }}"
+    application_home: "{{ application_runtime_discoveries[application_discovery_key].home }}"
+    application_root: "{{ application_runtime_discoveries[application_discovery_key].home }}/{{ platform_application_root_relative }}"
     application_project_id: "{{ application_runtime_job.projectId }}"
     application_name: "{{ application_runtime_job.applicationName }}"
     application_instance_id: "{{ application_runtime_job.instanceId }}"
@@ -35,32 +39,20 @@
     application_config_contents: []
   no_log: true
 
-- name: Inspect rootless daemon and Compose plugin without mutation
-  ansible.builtin.command:
-    argv: "{{ item }}"
-  loop:
-    - [docker, info, --format, json]
-    - [docker, compose, version, --short]
-  become_user: "{{ application_runtime_job.account }}"
-  environment: "{{ application_docker_environment }}"
-  register: application_runtime_probe
-  changed_when: false
-  no_log: true
-
 - name: Require rootless runtime and the locked target platform
   ansible.builtin.assert:
     that:
-      - "'rootless' in ((application_runtime_probe.results[0].stdout | from_json).SecurityOptions | join(' '))"
-      - (application_runtime_probe.results[0].stdout | from_json).Swarm.LocalNodeState == 'inactive'
-      - (application_runtime_probe.results[0].stdout | from_json).OSType == application_runtime_job.authority.requirement.platform.os
-      - (application_runtime_probe.results[0].stdout | from_json).Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
+      - "'rootless' in (application_runtime_discoveries[application_discovery_key].info.SecurityOptions | join(' '))"
+      - application_runtime_discoveries[application_discovery_key].info.Swarm.LocalNodeState == 'inactive'
+      - application_runtime_discoveries[application_discovery_key].info.OSType == application_runtime_job.authority.requirement.platform.os
+      - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
     fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
 
 - name: Resolve target image platform
   ansible.builtin.set_fact:
     application_image_platform:
-      os: "{{ (application_runtime_probe.results[0].stdout | from_json).OSType }}"
-      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get((application_runtime_probe.results[0].stdout | from_json).Architecture, (application_runtime_probe.results[0].stdout | from_json).Architecture) }}"
+      os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
+      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
   no_log: true
 
 - name: Require the registry to be explicitly approved on this node
@@ -179,6 +171,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
   loop: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
   register: application_ancestors
   no_log: true
@@ -197,6 +192,9 @@
   ansible.builtin.stat:
     path: "{{ item }}/.owner.json"
     follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
   loop: "{{ [application_library_path, application_instance_path] }}"
   register: application_owner_markers
   no_log: true
@@ -232,6 +230,9 @@
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
   loop: "{{ [application_library_path ~ '/.env', application_library_path ~ '/' ~ application_runtime_job.baseFilename, application_instance_path ~ '/compose.yml'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | list) }}"
   register: application_output_files
   no_log: true
@@ -288,5 +289,8 @@
         'configContents': application_config_contents, 'configDigest': application_config_digest,
         'archivePath': application_selected_archive_path,
         'composeContent': application_compose_content, 'baseContent': application_base_content,
+        'composeArgv': ['docker', 'compose', '--project-name', application_runtime_job.placement.composeProject,
+          '--project-directory', application_instance_path, '--env-file', application_library_path ~ '/.env',
+          '-f', application_instance_path ~ '/compose.yml'],
         'envContent': application_env_content})] }}
   no_log: true

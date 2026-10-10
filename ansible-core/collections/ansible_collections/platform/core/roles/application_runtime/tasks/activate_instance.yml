@@ -1,7 +1,4 @@
 ---
-- name: Bind Compose context
-  ansible.builtin.include_tasks: context.yml
-
 - name: Deliver the authorized image into the exact selected daemon
   ansible.builtin.include_tasks: image_delivery.yml
 
@@ -17,7 +14,7 @@
 
 - name: Reconcile exact instance with no pull build or dependency startup
   ansible.builtin.command:
-    argv: "{{ application_compose_argv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
+    argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   changed_when: false

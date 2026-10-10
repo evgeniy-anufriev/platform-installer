@@ -6,6 +6,8 @@ import os
 import sys
 import tempfile
 import unittest
+import shutil
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +17,7 @@ from application_runtime import bundle_archive, selected_archive, runtime_refere
 from artifact_authority import assemble_authority
 from schema_validation import SchemaValidator
 from application_libraries import load_package
+import application_libraries as APP
 import hashlib
 
 spec = importlib.util.spec_from_file_location("artifact_source_a2", UTILS.parent / "filter/artifact_source.py")
@@ -63,8 +66,8 @@ class ApplicationRuntimeTests(unittest.TestCase):
         package = load_package(str(root), "apigateway@1.0.0", "application", loader, validator)
         self.assertIn(package["render"]["compose_template"], package["files"])
 
-    def prepare_fixture(self, image_patch=None):
-        root = ROOT / "examples/valid/application-runtime"
+    def runtime_fixture(self, root=None):
+        root = root or ROOT / "examples/valid/application-runtime"
         loader = lambda path: json.loads(Path(path).read_text())
         validator = SchemaValidator(str(ROOT / "contracts"))
         app = load_package(str(root), "apigateway@1.0.0", "application", loader, validator)
@@ -77,8 +80,39 @@ class ApplicationRuntimeTests(unittest.TestCase):
             "sdku": {"instances": {"apigateway-sdku": {"placements": {"node1": {}}, "credentialRequirements": [], "agentRequired": False, "connections": {}}}}}},
             "effectiveConfiguration": {"services": {"docker": {"configuration": {"accountName": {"state": "RESOLVED", "value": "platform-docker"}}}}}}
         lock = loader(root / "inventory/group_vars/all/platform-installer.yml")["platform_artifact_lock"]
-        lock["x-container-images"]["images"][settings["image"]].update(image_patch or {})
-        return prepare_runtime(str(root), snapshot, [row], {}, lock, validator, loader)
+        return str(root), snapshot, [row], {}, lock, validator, loader
+
+    def prepare_fixture(self, image_patch=None):
+        inputs = self.runtime_fixture()
+        inputs[4]["x-container-images"]["images"][inputs[2][0]["settings"]["image"]].update(image_patch or {})
+        return prepare_runtime(*inputs)
+
+    def test_runtime_preparation_reads_shared_packages_once_for_many_placements(self):
+        inputs = self.runtime_fixture()
+        rows = inputs[2]
+        instance = inputs[1]["applicationLibraries"]["libraries"]["sdku"]["instances"]["apigateway-sdku"]
+        for number in range(2, 31):
+            host = "node%s" % number
+            instance["placements"][host] = {}
+            rows.append(dict(rows[0], hostId=host))
+        with patch.object(APP, "package_inputs", wraps=APP.package_inputs) as scans, \
+                patch.object(APP, "load_package", wraps=APP.load_package) as loads:
+            jobs = prepare_runtime(*inputs)
+        self.assertEqual(30, len(jobs))
+        self.assertEqual(1, scans.call_count)
+        self.assertEqual(2, loads.call_count)
+        self.assertEqual(2, len({(call.args[2], call.args[1]) for call in loads.call_args_list}))
+
+    def test_runtime_preparation_rechecks_changed_bytes_in_next_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(ROOT / "examples/valid/application-runtime", root, dirs_exist_ok=True)
+            inputs = self.runtime_fixture(root)
+            self.assertEqual(1, len(prepare_runtime(*inputs)))
+            with (root / "library-packages/sdku/1.0.0/files/.env").open("a") as stream:
+                stream.write("EXTRA=value\n")
+            with self.assertRaisesRegex(ValueError, "APPLICATION_PACKAGE_CHANGED"):
+                prepare_runtime(*inputs)
 
     def test_optional_fallback_is_not_an_eager_preparation_prerequisite(self):
         jobs = self.prepare_fixture()

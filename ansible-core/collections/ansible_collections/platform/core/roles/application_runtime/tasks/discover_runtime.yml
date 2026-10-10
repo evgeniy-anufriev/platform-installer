@@ -1,0 +1,35 @@
+---
+- name: Discover the selected Docker account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ application_runtime_job.account }}"
+
+- name: Require the discovered account HOME to be bounded before daemon probes
+  ansible.builtin.assert:
+    that: getent_passwd[application_runtime_job.account][4] is match('^/[a-zA-Z0-9_./-]+$')
+    fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
+
+- name: Inspect rootless daemon and Compose plugin without mutation
+  ansible.builtin.command:
+    argv: "{{ item }}"
+  loop:
+    - [docker, info, --format, json]
+    - [docker, compose, version, --short]
+  become_user: "{{ application_runtime_job.account }}"
+  environment:
+    HOME: "{{ getent_passwd[application_runtime_job.account][4] }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[application_runtime_job.account][1] }}"
+    DOCKER_HOST: "unix:///run/user/{{ getent_passwd[application_runtime_job.account][1] }}/docker.sock"
+    DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else getent_passwd[application_runtime_job.account][4] ~ '/.docker' }}"
+  register: application_runtime_probe
+  changed_when: false
+  no_log: true
+
+- name: Retain successful discovery only within this operation and target
+  ansible.builtin.set_fact:
+    application_runtime_discoveries: >-
+      {{ application_runtime_discoveries | combine({application_discovery_key: {
+        'uid': getent_passwd[application_runtime_job.account][1],
+        'home': getent_passwd[application_runtime_job.account][4],
+        'info': application_runtime_probe.results[0].stdout | from_json}}) }}
+  no_log: true
