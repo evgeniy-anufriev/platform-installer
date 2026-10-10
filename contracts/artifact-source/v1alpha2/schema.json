@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/artifact-source/v1alpha2/schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "requirement", "targetNode", "source", "reason"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/artifact-source/v1alpha2"},
+    "kind": {"const": "ResolvedArtifactSource"},
+    "requirement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "artifactType", "imageId", "platform", "localReference"],
+      "properties": {
+        "id": {"type": "string"}, "name": {"type": "string"}, "artifactType": {"const": "container-image"},
+        "imageId": {"$ref": "image-lock.schema.json#/$defs/digest"}, "localReference": {"type": "string"},
+        "platform": {"$ref": "image-lock.schema.json#/$defs/image/properties/platform"}
+      }
+    },
+    "targetNode": {"type": "string"}, "source": {"enum": ["REPOSITORY", "OFFLINE_BUNDLE", "BLOCKED"]},
+    "reason": {"type": "string"}, "artifacts": {"type": "array", "maxItems": 1, "items": {"type": "object"}}
+  }
+}

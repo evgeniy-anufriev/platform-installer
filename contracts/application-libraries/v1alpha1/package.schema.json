@@ -30,6 +30,46 @@
         "minLength": 1,
         "maxLength": 256
       }
+    },
+    "render": {
+      "oneOf": [
+        {
+          "required": [
+            "compose_template"
+          ],
+          "maxProperties": 1
+        },
+        {
+          "required": [
+            "base_compose_template",
+            "base_compose_filename",
+            "base_service"
+          ],
+          "maxProperties": 3
+        }
+      ],
+      "properties": {
+        "compose_template": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "base_service": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "base_compose_template": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "base_compose_filename": {
+          "type": "string",
+          "pattern": "^\\.[a-zA-Z0-9_-]+\\.ya?ml$"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
     }
   },
   "required": [

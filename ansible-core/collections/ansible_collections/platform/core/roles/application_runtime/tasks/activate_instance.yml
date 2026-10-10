@@ -1,0 +1,35 @@
+---
+- name: Bind Compose context
+  ansible.builtin.include_tasks: context.yml
+
+- name: Deliver the authorized image into the exact selected daemon
+  ansible.builtin.include_tasks: image_delivery.yml
+
+- name: Observe the previous exact container before reconciliation
+  ansible.builtin.command:
+    argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  register: application_container_before
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Reconcile exact instance with no pull build or dependency startup
+  ansible.builtin.command:
+    argv: "{{ application_compose_argv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  changed_when: false
+  no_log: true
+
+- name: Verify the observed instance after reconciliation
+  ansible.builtin.include_tasks: verify.yml
+
+- name: Report actual creation replacement or start of the managed container
+  ansible.builtin.debug:
+    msg: APPLICATION_CONTAINER_RECONCILED
+  changed_when: >-
+    application_container_before.rc != 0 or
+    (application_container_before.stdout | from_json)[0].Id != (application_container_verified.stdout | from_json)[0].Id or
+    not (application_container_before.stdout | from_json)[0].State.Running

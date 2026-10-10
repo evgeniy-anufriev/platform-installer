@@ -335,8 +335,36 @@
                       }
                     },
                     "oneOf": [
-                      {"required": ["account", "field"], "not": {"required": ["library_secret"]}},
-                      {"required": ["library_secret"], "not": {"anyOf": [{"required": ["account"]}, {"required": ["field"]}]}}
+                      {
+                        "required": [
+                          "account",
+                          "field"
+                        ],
+                        "not": {
+                          "required": [
+                            "library_secret"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "library_secret"
+                        ],
+                        "not": {
+                          "anyOf": [
+                            {
+                              "required": [
+                                "account"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "field"
+                              ]
+                            }
+                          ]
+                        }
+                      }
                     ],
                     "additionalProperties": false
                   }
@@ -353,6 +381,81 @@
             "mode"
           ],
           "additionalProperties": false
+        },
+        "readiness": {
+          "properties": {
+            "retries": {
+              "minimum": 1,
+              "maximum": 60,
+              "type": "integer"
+            },
+            "delay": {
+              "minimum": 1,
+              "maximum": 30,
+              "type": "integer"
+            },
+            "mode": {
+              "enum": [
+                "container",
+                "healthcheck"
+              ]
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object",
+          "additionalProperties": false
+        },
+        "config_files": {
+          "items": {
+            "oneOf": [
+              {
+                "required": [
+                  "template"
+                ]
+              },
+              {
+                "required": [
+                  "source"
+                ]
+              }
+            ],
+            "properties": {
+              "destination": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+              },
+              "template": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "0400",
+                  "0440",
+                  "0444",
+                  "0600",
+                  "0640",
+                  "0644"
+                ]
+              },
+              "source": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+              }
+            },
+            "required": [
+              "destination"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "type": "array"
         }
       },
       "required": [],

@@ -104,7 +104,7 @@ def load_package(root, reference, kind, loader, validator):
     folder = "%s-packages/%s/%s" % (kind, name, version)
     manifest_path = folder + "/" + kind + ".yml"
     manifest = loader(checked_file(root, manifest_path))
-    schema = os.path.join(validator.contracts_root, "application-libraries", "v1alpha1", "package.schema.json")
+    schema = os.path.join(validator.schema_root, "application-libraries", "v1alpha1", "package.schema.json")
     if validator.validate(manifest, schema):
         raise ValueError("Package manifest shape invalid")
     if (manifest["name"], manifest["version"], manifest["kind"]) != (name, version, kind.title() + "Package"):
@@ -131,7 +131,7 @@ def load_package(root, reference, kind, loader, validator):
     if set(defaults) != {key}:
         raise ValueError("Package defaults namespace invalid")
     definition = defaults[key]
-    if validator.validate(definition, os.path.join(validator.contracts_root, "application-libraries", "v1alpha1", kind + ".schema.json")):
+    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json")):
         raise ValueError("Package defaults shape invalid")
     if (definition["name"], definition["version"]) != (name, version):
         raise ValueError("Defaults identity mismatch")
@@ -147,14 +147,14 @@ def load_package(root, reference, kind, loader, validator):
                     raise ValueError("Library dotenv contract invalid")
                 env_keys.add(match_env[1])
     return {"name": name, "version": version, "defaultsPath": os.path.join(root, folder, defaults_path),
-            "definition": definition, "digest": canonical_digest(sorted(digest)), "logicalPath": folder}
+            "definition": definition, "digest": canonical_digest(sorted(digest)), "logicalPath": folder,
+            "render": manifest.get("render", {}), "files": manifest["files"]}
 
 
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
     # Kept here for callers/tests: no package/defaults is templated before validation.
-    validator.contracts_root = contracts_root
     deployments = desired.get("applicationLibraryDeployments", {})
     findings = validator.validate(deployments, os.path.join(contracts_root, "application-libraries", "v1alpha1", "deployments.schema.json"))
     for host, membership in sorted(memberships.items()):

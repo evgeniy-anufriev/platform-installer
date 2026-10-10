@@ -1,0 +1,63 @@
+---
+- name: Bind all placements consuming this one library-host projection
+  ansible.builtin.set_fact:
+    application_library_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  no_log: true
+
+- name: Require identical shared library bytes across its consumers
+  ansible.builtin.assert:
+    that:
+      - application_library_jobs | map(attribute='libraryPath') | unique | length == 1
+      - application_library_jobs | map(attribute='envContent') | unique | length == 1
+      - application_library_jobs | map(attribute='baseContent') | unique | length == 1
+    fail_msg: APPLICATION_LIBRARY_HOST_PROJECTION_CONFLICT
+  no_log: true
+
+- name: Create the library host directory in the validated private subtree
+  ansible.builtin.file:
+    path: "{{ application_library_jobs[0].libraryPath }}"
+    state: directory
+    owner: "{{ application_library_jobs[0].account }}"
+    mode: '0700'
+
+- name: Acquire one atomic library-host execution guard
+  ansible.builtin.command:
+    argv: [mkdir, "{{ application_library_jobs[0].libraryPath }}/.apply-lock"]
+  become_user: "{{ application_library_jobs[0].account }}"
+  register: application_library_lock
+  changed_when: false
+  failed_when: false
+
+- name: Refuse a concurrent or abandoned library-host lock
+  ansible.builtin.assert:
+    that: application_library_lock.rc == 0
+    fail_msg: APPLICATION_LIBRARY_HOST_LOCKED
+
+- name: Record only the guard acquired by this operation
+  ansible.builtin.set_fact:
+    application_held_locks: "{{ application_held_locks + [application_library_jobs[0]] }}"
+  no_log: true
+
+- name: Materialize the library and its exact selected instances
+  block:
+    - name: Record library host ownership as derived runtime state
+      ansible.builtin.copy:
+        content: "{{ {'project': application_library_jobs[0].projectId, 'library': application_library_id, 'host': inventory_hostname} | to_json(sort_keys=true) }}"
+        dest: "{{ application_library_jobs[0].libraryPath }}/.owner.json"
+        owner: "{{ application_library_jobs[0].account }}"
+        mode: '0600'
+    - name: Materialize the common nonsecret env and base Compose exactly once
+      ansible.builtin.copy:
+        content: "{{ item.content }}"
+        dest: "{{ application_library_jobs[0].libraryPath }}/{{ item.name }}"
+        owner: "{{ application_library_jobs[0].account }}"
+        mode: '0600'
+      loop:
+        - { name: .env, content: "{{ application_library_jobs[0].envContent }}" }
+        - { name: "{{ application_library_jobs[0].baseFilename }}", content: "{{ application_library_jobs[0].baseContent }}" }
+      no_log: true
+    - name: Materialize and validate each application in its own Compose project
+      ansible.builtin.include_tasks: apply_instance.yml
+      loop: "{{ application_library_jobs }}"
+      loop_control:
+        loop_var: application_runtime_job

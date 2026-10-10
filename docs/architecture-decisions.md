@@ -474,3 +474,15 @@ No provider mutations, Agent rendering, image delivery or Go/UI work is part of 
 Provider allocation unavailable in existing read-only projections is fail-closed,
 never inferred from a manifest port. See [A1 plan](application-libraries/a1-technical-plan.md)
 and [evidence](application-libraries/a1-test-journal.md).
+
+A2 extends the same boundary with explicit standalone materialization/Apply/Verify,
+native Compose and typed image descriptors inside the existing artifact lock.
+Repository selection stays node-scoped; controller verification reads only a
+target-selected fallback archive and completes across placements before writes.
+Image startup references derive from full image IDs, preventing different library
+images from retagging one shared mutable name without a daemon-wide registry or
+new identity store. Config-digest labels provide interruption recovery with native
+Compose recreate. Infrastructure-only planning and the A7 execution guard remain.
+See [A2 plan](application-libraries/a2-technical-plan.md) and
+[DIFF review](application-libraries/a2-diff-review.md); these do not authorize
+later provider, Go or UI stages.

@@ -73,6 +73,18 @@ inventory precedence. Package templates are trusted operator-authored executable
 inputs. A1 validates/fingerprints their closure but does not render them or execute
 application tasks. See [standalone fixture](../examples/valid/application-libraries/README.md).
 
+A2 adds explicit standalone `application-libraries-apply.yml` and
+`application-libraries-verify.yml` entrypoints. They reuse that resolver and the
+selected rootless Docker account; template rendering remains native Ansible.
+All selected placements pass preflight before materialization. Each library/host
+has a shared `.env` and base Compose; per-instance Compose/config files use
+validated package render descriptors. Apply uses native Compose and a generated
+config-digest ownership label to recover an interrupted configuration activation.
+Verify observes files, image identity and readiness without starting or loading
+containers. Accounts, Agent, PKI and infrastructure provider hooks remain later
+stages. See [runtime fixture](../examples/valid/application-runtime/README.md) and
+[A2 evidence](application-libraries/a2-test-journal.md).
+
 Production roles must also work with conventional manual inventory and variables:
 
 ```text

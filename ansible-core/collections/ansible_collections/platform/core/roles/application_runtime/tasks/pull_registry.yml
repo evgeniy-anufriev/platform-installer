@@ -1,0 +1,20 @@
+---
+- name: Pull one locked image without retaining a delivery override
+  block:
+    - name: Materialize the exact registry pull override
+      ansible.builtin.copy:
+        content: "{{ {'services': {application_runtime_job.instanceId: {'image': (application_runtime_job.authority.repository.reference | platform.core.application_pinned_registry_reference(application_runtime_job.authority.repository.manifestDigest))}}} | to_nice_yaml }}"
+        dest: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
+        owner: "{{ application_runtime_job.account }}"
+        mode: '0600'
+    - name: Pull the exact authorized platform manifest
+      ansible.builtin.command:
+        argv: "{{ application_compose_argv + ['-f', application_runtime_job.instancePath ~ '/.image-delivery.yml', 'pull', application_runtime_job.instanceId] }}"
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      no_log: true
+  always:
+    - name: Remove only the runtime-only registry override
+      ansible.builtin.file:
+        path: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
+        state: absent

@@ -1,0 +1,7 @@
+server {
+    listen 8080;
+    location /status {
+        default_type text/plain;
+        return 200 "{{ application_instance_id }}:{{ application_parameters.log_level }}\n";
+    }
+}

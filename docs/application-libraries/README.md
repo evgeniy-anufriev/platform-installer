@@ -1,8 +1,9 @@
 # Пользовательские библиотеки приложений
 
-Рабочая документация обсуждаемой функциональности. Описания и YAML являются
-проектными предложениями, а не поддерживаемым контрактом или доказательством
-готовности. Текущий статус проекта остаётся в [CURRENT_STATE](../../CURRENT_STATE.md).
+Документация функциональности, реализуемой по подэтапам. Архитектурные разделы
+и примеры будущих этапов описывают проектные предложения; реализованные контракты
+и доказательства проверок находятся в технических планах и журналах соответствующих
+подэтапов. Текущий статус остаётся в [CURRENT_STATE](../../CURRENT_STATE.md).
 
 Владелец завершил обсуждение и вернул стандартную процедуру ревью.
 Проведён [FULL PLAN review](plan-review.md): APPROVE_WITH_CHANGES, ноль blockers.
@@ -21,6 +22,10 @@ review черновика не считаются review этого расшир
 | [Общий план реализации](implementation-plan.md) | Подэтапы standalone Ansible + Core → Go backend → UI, критерии выхода и переиспользование механизмов |
 | [Технический план A1](a1-technical-plan.md) | Контракт vars/packages, slot mapping, read-only resolve, Core extension points, fixtures и QA gates |
 | [Ревью A1](a1-plan-review.md) | Независимый FULL PLAN review технического плана и bounded correction |
+| [Технический план A2](a2-technical-plan.md) | Standalone materialization, общий env/base Compose, registry/bundle image delivery, rootless Apply/Verify и QA |
+| [Ревью A2](a2-plan-review.md) | Независимый FULL PLAN review, blocker interrupted config activation и уточнения image authority/staging |
+| [DIFF ревью A2](a2-diff-review.md) | FULL BLOCK, согласованные исправления D01/D02 и единственный TARGETED_RECHECK |
+| [Журнал A2](a2-test-journal.md) | Проверки standalone runtime, публичного образа, повтора и ограничения доказательств |
 | [Архитектура](architecture.md) | Сущности, хранение, границы Core/Ansible/Go/UI |
 | [Конфигурация](configuration.md) | Defaults, group_vars, ID экземпляра, base Compose, HAProxy |
 | [Установка](execution.md) | Ресурсы библиотеки, общие provider hooks, порядок, повтор и сбои |

@@ -1,0 +1,209 @@
+"""Typed A2 preflight. Ansible owns precedence, templates and target execution."""
+import hashlib
+import os
+import re
+
+try:
+    from .application_libraries import checked_file, load_package, nonsecret_values
+    from .artifact_authority import assemble_authority
+except ImportError:
+    from application_libraries import checked_file, load_package, nonsecret_values
+    from artifact_authority import assemble_authority
+
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+REFERENCE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*(?:@sha256:[0-9a-f]{64})?$")
+LABEL = "platform.installer.config-digest"
+
+
+def runtime_reference(image_id):
+    if not isinstance(image_id, str) or not DIGEST.fullmatch(image_id):
+        raise ValueError("APPLICATION_IMAGE_ID_INVALID")
+    return "platform-application:sha256-" + image_id.split(":", 1)[1]
+
+
+def pinned_registry_reference(reference, digest):
+    if not isinstance(reference, str) or not REFERENCE.fullmatch(reference) or "@" in reference or not DIGEST.fullmatch(digest):
+        raise ValueError("APPLICATION_REGISTRY_REFERENCE_INVALID")
+    prefix, slash, name = reference.rpartition("/")
+    name = name.split(":", 1)[0]
+    return (prefix + slash + name) + "@" + digest
+
+
+def safe_relative(value):
+    return (isinstance(value, str) and bool(value) and not value.startswith("/") and
+            "\\" not in value and not any(x in ("", ".", "..") for x in value.split("/")))
+
+
+def bundle_archive(root, digest, record, loader):
+    """Verify the locked manifest and selected component; no bundle mutation."""
+    manifest_path = checked_file(root, "manifest.yaml")
+    with open(manifest_path, "rb") as stream:
+        if "sha256:" + hashlib.sha256(stream.read()).hexdigest() != digest:
+            raise ValueError("APPLICATION_BUNDLE_DIGEST_INVALID")
+    manifest = loader(manifest_path)
+    if manifest.get("apiVersion") != "platform.installer/execution-bundle/v1alpha1" or manifest.get("kind") != "ExecutionRuntimeBundle":
+        raise ValueError("APPLICATION_BUNDLE_MANIFEST_INVALID")
+    matches = [x for x in manifest.get("components", []) if x.get("path") == record["ref"]]
+    if len(matches) != 1 or matches[0].get("sha256") != record["sha256"] or matches[0].get("size") != record["size"]:
+        raise ValueError("APPLICATION_IMAGE_ARCHIVE_NOT_LOCKED")
+    if not safe_relative(record["ref"]) or not record["ref"].startswith("runtime/artifacts/"):
+        raise ValueError("APPLICATION_IMAGE_ARCHIVE_PATH_INVALID")
+    path = os.path.abspath(root)
+    for part in record["ref"].split("/"):
+        path = os.path.join(path, part)
+        if os.path.islink(path):
+            raise ValueError("APPLICATION_IMAGE_ARCHIVE_PATH_INVALID")
+    if not os.path.isfile(path):
+        raise ValueError("APPLICATION_IMAGE_ARCHIVE_MISSING")
+    sha = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha.update(chunk)
+    if "sha256:" + sha.hexdigest() != record["sha256"] or os.path.getsize(path) != record["size"]:
+        raise ValueError("APPLICATION_IMAGE_ARCHIVE_INVALID")
+    return path
+
+
+def selected_archive(root, source, offline, loader):
+    """Validate fallback bytes only after the target selected the fallback."""
+    if source == "REPOSITORY":
+        return None
+    if source != "OFFLINE_BUNDLE" or not offline:
+        raise ValueError("APPLICATION_IMAGE_SOURCE_INVALID")
+    if not root:
+        raise ValueError("APPLICATION_BUNDLE_REQUIRED")
+    return bundle_archive(root, offline["bundleDigest"], offline, loader)
+
+
+def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
+    libraries = snapshot.get("applicationLibraries", {})
+    if snapshot.get("validation", {}).get("status") != "PASS" or libraries.get("status") != "PASS":
+        raise ValueError("APPLICATION_RUNTIME_PROJECT_BLOCKED")
+    schema = os.path.join(validator.schema_root, "artifact-source/v1alpha2/image-lock.schema.json")
+    image_lock = lock.get("x-container-images", {}) if isinstance(lock, dict) else {}
+    if validator.validate(image_lock, schema) or not DIGEST.fullmatch(lock.get("digest", "")):
+        raise ValueError("APPLICATION_IMAGE_LOCK_INVALID")
+    jobs = []
+    for row in rows:
+        lib_id, app_id, host = row["libraryId"], row["instanceId"], row["hostId"]
+        library = libraries["libraries"][lib_id]
+        instance = library["instances"][app_id]
+        placement = instance["placements"][host]
+        settings = row["settings"]
+        if (row["resources"] or instance["credentialRequirements"] or instance["agentRequired"] or
+                settings.get("endpoint", {}).get("enabled", False) or
+                any(x.get("tls") for x in instance["connections"].values())):
+            raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
+        # Recheck packages after native variable composition, before any rendering.
+        app_ref = row["applicationName"] + "@" + row["applicationVersion"]
+        app = load_package(root, app_ref, "application", loader, validator)
+        lib = load_package(root, row["libraryRef"], "library", loader, validator)
+        if row["packageIdentity"] != {"application": app["digest"], "library": lib["digest"]}:
+            raise ValueError("APPLICATION_PACKAGE_CHANGED")
+        app_render, lib_render = app.get("render", {}), lib.get("render", {})
+        if not app_render.get("compose_template") or not lib_render.get("base_compose_template"):
+            raise ValueError("APPLICATION_RENDER_REQUIRED")
+        for package, key in ((app, "compose_template"), (lib, "base_compose_template")):
+            if package["render"][key] not in package["files"]:
+                raise ValueError("APPLICATION_RENDER_NOT_ALLOWLISTED")
+        configs = []
+        for config in settings.get("config_files", []):
+            name = config.get("template", config.get("source"))
+            if name not in app["files"] or not safe_relative(config["destination"]):
+                raise ValueError("APPLICATION_CONFIG_NOT_ALLOWLISTED")
+            configs.append(dict(config, path=checked_file(root, app["logicalPath"] + "/" + name)))
+        if len({x["destination"] for x in configs}) != len(configs):
+            raise ValueError("APPLICATION_CONFIG_DESTINATION_COLLISION")
+        image = image_lock["images"].get(settings["image"])
+        if not image:
+            raise ValueError("APPLICATION_IMAGE_NOT_LOCKED")
+        reference = runtime_reference(image["imageId"])
+        if not REFERENCE.fullmatch(settings["image"]):
+            raise ValueError("APPLICATION_IMAGE_REFERENCE_INVALID")
+        if image.get("localReference", reference) != reference:
+            raise ValueError("APPLICATION_IMAGE_REFERENCE_NOT_BOUND")
+        registry = image.get("registry")
+        if registry and (not REFERENCE.fullmatch(registry["reference"]) or "@" in registry["reference"]):
+            raise ValueError("APPLICATION_REGISTRY_REFERENCE_INVALID")
+        # Registry allowlist is node scoped, independent of package defaults.
+        configuration = snapshot["effectiveConfiguration"]["services"][row["runtimeRef"]]["configuration"]
+        account_setting = configuration.get("accountName", {})
+        account = account_setting.get("value") if account_setting.get("state") == "RESOLVED" else None
+        if not isinstance(account, str) or not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", account):
+            raise ValueError("APPLICATION_DOCKER_ACCOUNT_REQUIRED")
+        offline = image.get("archive")
+        archive_path = None
+        if offline:
+            if not safe_relative(offline["ref"]) or not offline["ref"].startswith("runtime/artifacts/"):
+                raise ValueError("APPLICATION_IMAGE_ARCHIVE_PATH_INVALID")
+            offline = dict(offline, kind="OFFLINE_BUNDLE", type="archive", bundleDigest=lock["digest"])
+        requirement = {"id": app_id + ":image", "name": settings["image"], "artifactType": "container-image",
+                       "imageId": image["imageId"], "platform": image["platform"], "localReference": reference}
+        authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
+        jobs.append(dict(row, placement=placement, account=account, configs=configs,
+                         appTemplate=checked_file(root, app["logicalPath"] + "/" + app_render["compose_template"]),
+                         baseTemplate=checked_file(root, lib["logicalPath"] + "/" + lib_render["base_compose_template"]),
+                         baseFilename=lib_render["base_compose_filename"], baseService=lib_render["base_service"],
+                         envSource=checked_file(root, lib["logicalPath"] + "/files/.env") if "files/.env" in lib["files"] else None,
+                         archivePath=archive_path, authority=authority))
+    return jobs
+
+
+def validate_compose(config, job, instance_path, library_path, digest):
+    """Closed simple Compose profile; CLI parses Compose, Core checks authority."""
+    allowed_top = {"name", "services", "networks", "volumes"}
+    if set(config) - allowed_top or set(config.get("services", {})) != {job["instanceId"]} or config.get("volumes"):
+        raise ValueError("APPLICATION_COMPOSE_PROFILE_INVALID")
+    if config.get("name") != job["placement"]["composeProject"]:
+        raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
+    service = config["services"][job["instanceId"]]
+    allowed = {"image", "container_name", "hostname", "command", "entrypoint", "environment", "ports", "volumes", "networks",
+               "labels", "user", "restart", "healthcheck", "read_only", "tmpfs", "init"}
+    if set(service) - allowed:
+        raise ValueError("APPLICATION_COMPOSE_PROFILE_INVALID")
+    if service.get("image") != job["authority"]["requirement"]["localReference"] or service.get("container_name") != job["placement"]["containerName"]:
+        raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
+    launch = service.get("entrypoint") or service.get("command")
+    if launch != job["settings"]["command"] or (service.get("entrypoint") and service.get("command")):
+        raise ValueError("APPLICATION_COMPOSE_COMMAND_INVALID")
+    for key in ("user", "restart"):
+        if key in job["settings"] and service.get(key) != job["settings"][key]:
+            raise ValueError("APPLICATION_COMPOSE_CONFIGURATION_INVALID")
+    if job["settings"].get("readiness", {}).get("mode") == "healthcheck" and not service.get("healthcheck"):
+        raise ValueError("APPLICATION_HEALTHCHECK_REQUIRED")
+    expected_labels = {"platform.installer.project": job["projectId"], "platform.installer.library": job["libraryId"],
+                       "platform.installer.instance": job["instanceId"], "platform.installer.host": job["hostId"], LABEL: digest}
+    if service.get("labels") != expected_labels:
+        raise ValueError("APPLICATION_COMPOSE_LABEL_INVALID")
+    expected_env = dict(job["settings"].get("environment", {}), **{key: job["instanceId"] for key in job["identityNames"]})
+    for key, value in expected_env.items():
+        if service.get("environment", {}).get(key) != str(value):
+            raise ValueError("APPLICATION_COMPOSE_ENVIRONMENT_INVALID")
+    findings = []
+    nonsecret_values(service.get("environment", {}), "environment", findings)
+    if findings:
+        raise ValueError("APPLICATION_COMPOSE_SECRET_INVALID")
+    expected_ports = sorted((str(x["published"]), x["container"]) for x in job["settings"].get("ports", {}).values())
+    ports = service.get("ports", [])
+    if sorted((str(x["published"]), x["target"]) for x in ports) != expected_ports or any(x.get("protocol", "tcp") != "tcp" for x in ports):
+        raise ValueError("APPLICATION_COMPOSE_PORT_INVALID")
+    expected_mounts = {os.path.join(instance_path, "config", x["destination"]) for x in job["configs"]}
+    mounts = service.get("volumes", [])
+    if len(mounts) != len(expected_mounts) or {x.get("source") for x in mounts} != expected_mounts or any(x.get("type") != "bind" or not x.get("read_only") or not x.get("target", "").startswith("/") for x in mounts):
+        raise ValueError("APPLICATION_COMPOSE_MOUNT_INVALID")
+    for network in config.get("networks", {}).values():
+        if network.get("external") or network.get("driver", "bridge") != "bridge":
+            raise ValueError("APPLICATION_COMPOSE_NETWORK_INVALID")
+    return True
+
+
+def validate_config_contents(configs):
+    for item in configs:
+        content = item["content"]
+        if not isinstance(content, str) or len(content.encode("utf-8")) > 1024 * 1024:
+            raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
+        findings = []
+        nonsecret_values(content, "config", findings)
+        if findings or re.search(r"(?:password|passphrase|token|secret|role.?id)\s*[:=]", content, re.I):
+            raise ValueError("APPLICATION_CONFIG_SECRET_FORBIDDEN")
+    return True

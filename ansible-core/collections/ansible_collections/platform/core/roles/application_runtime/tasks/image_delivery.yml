@@ -1,0 +1,91 @@
+---
+- name: Inspect the locked local image before delivery
+  ansible.builtin.command:
+    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  register: application_local_image
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Deliver only when the locked local image is not already available
+  when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
+  block:
+    - name: Pull from the authorized registry with private override cleanup
+      ansible.builtin.include_tasks: pull_registry.yml
+      when: application_runtime_job.source.source == 'REPOSITORY'
+    - name: Stage the verified archive privately for the Docker account
+      when: application_runtime_job.source.source == 'OFFLINE_BUNDLE'
+      block:
+        - name: Allocate an account-readable private archive staging directory
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: .application-image-
+            path: "{{ application_runtime_job.libraryPath }}"
+          register: application_image_stage
+        - name: Assign only the private stage to the selected account
+          ansible.builtin.file:
+            path: "{{ application_image_stage.path }}"
+            owner: "{{ application_runtime_job.account }}"
+            mode: '0700'
+        - name: Copy the exact locked archive from the verified Execution Node bundle
+          ansible.builtin.copy:
+            src: "{{ application_runtime_job.archivePath }}"
+            dest: "{{ application_image_stage.path }}/image.tar"
+            owner: "{{ application_runtime_job.account }}"
+            mode: '0600'
+        - name: Check the target archive content and size
+          ansible.builtin.stat:
+            path: "{{ application_image_stage.path }}/image.tar"
+            checksum_algorithm: sha256
+          register: application_target_archive
+        - name: Require exact locked archive bytes
+          ansible.builtin.assert:
+            that:
+              - "'sha256:' ~ application_target_archive.stat.checksum == application_runtime_job.authority.offlineBundle.sha256"
+              - application_target_archive.stat.size == application_runtime_job.authority.offlineBundle.size
+            fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
+        - name: Load into the selected rootless daemon
+          ansible.builtin.command:
+            argv: [docker, load, --input, "{{ application_image_stage.path }}/image.tar"]
+          become_user: "{{ application_runtime_job.account }}"
+          environment: "{{ application_runtime_job.dockerEnvironment }}"
+          no_log: true
+      always:
+        - name: Remove only the private stage allocated by this operation
+          ansible.builtin.file:
+            path: "{{ application_image_stage.path }}"
+            state: absent
+          when: application_image_stage.path is defined
+    - name: Require the exact loaded or pulled image ID to exist
+      ansible.builtin.command:
+        argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      changed_when: false
+      no_log: true
+    - name: Assign the exact authorized local reference
+      ansible.builtin.command:
+        argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.authority.requirement.localReference }}"]
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      no_log: true
+
+- name: Verify local image identity and platform before startup
+  ansible.builtin.command:
+    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  register: application_delivered_image
+  changed_when: false
+  no_log: true
+
+- name: Require exact image and platform
+  ansible.builtin.assert:
+    that:
+      - (application_delivered_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
+      - (application_delivered_image.stdout | from_json)[0].Os == application_runtime_job.authority.requirement.platform.os
+      - (application_delivered_image.stdout | from_json)[0].Architecture == application_runtime_job.authority.requirement.platform.architecture
+    fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
+  no_log: true

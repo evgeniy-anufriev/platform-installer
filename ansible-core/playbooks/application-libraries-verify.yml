@@ -1,0 +1,16 @@
+---
+- import_playbook: application-libraries-preflight.yml
+
+- name: Verify applications without mutations
+  hosts: platform_targets
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Verify each exact application placement
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: verify
+      loop: "{{ platform_application_preflight_jobs | default([]) }}"
+      loop_control:
+        loop_var: application_runtime_job

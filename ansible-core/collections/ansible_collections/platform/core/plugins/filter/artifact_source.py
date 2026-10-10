@@ -1,5 +1,7 @@
 """Closed target-local realization of Core-authorized artifact sources."""
 from __future__ import absolute_import, division, print_function
+import copy
+import json
 
 
 def _version_matches(required, actual):
@@ -13,6 +15,8 @@ def resolve_artifact_source(authority, requirement, target, target_os="", stdout
     """Apply the only approved policy: compatible repository, then offline."""
     if not isinstance(authority, dict) or not isinstance(requirement, dict) or not isinstance(target, str):
         raise ValueError("ARTIFACT_SOURCE_AUTHORITY_INVALID")
+    if authority.get("apiVersion") == "platform.installer/artifact-source-authority/v1alpha2":
+        return resolve_image_source(authority, requirement, target, target_os, stdout, returncode)
     source_requirement = authority.get("requirement")
     if (authority.get("apiVersion") != "platform.installer/artifact-source-authority/v1alpha1" or
             authority.get("kind") != "ArtifactSourceAuthority" or
@@ -42,6 +46,35 @@ def resolve_artifact_source(authority, requirement, target, target_os="", stdout
     offline = authority.get("offlineBundle")
     if isinstance(offline, dict) and set(offline) == {"kind", "bundleDigest", "ref", "sha256", "size", "type"} and offline.get("kind") == "OFFLINE_BUNDLE":
         result.update({"source": "OFFLINE_BUNDLE", "reason": "BUNDLE_COMPATIBLE", "artifactRef": source_requirement.get("requirementId"), "artifacts": [{"ref": offline["ref"], "sha256": offline["sha256"], "size": offline["size"], "type": offline["type"]}]})
+    return result
+
+
+def resolve_image_source(authority, requirement, target, platform, stdout, returncode):
+    expected = authority.get("requirement", {})
+    if (authority.get("kind") != "ArtifactSourceAuthority" or authority.get("sourcePolicy") != "REPOSITORY_THEN_OFFLINE" or
+            expected != requirement or expected.get("artifactType") != "container-image"):
+        raise ValueError("ARTIFACT_SOURCE_AUTHORITY_INVALID")
+    result = {"apiVersion": "platform.installer/artifact-source/v1alpha2", "kind": "ResolvedArtifactSource",
+              "requirement": copy.deepcopy(expected), "targetNode": target, "source": "BLOCKED", "reason": "IMAGE_SOURCE_UNAVAILABLE"}
+    if platform != expected["platform"]:
+        result["reason"] = "IMAGE_PLATFORM_INCOMPATIBLE"
+        return result
+    registry = authority["repository"]
+    if registry.get("reference"):
+        if returncode not in (0, 2):
+            result["reason"] = "IMAGE_REGISTRY_PROBE_FAILED"
+            return result
+        if returncode == 0:
+            try:
+                manifest = json.loads(stdout)
+            except (ValueError, TypeError):
+                result["reason"] = "IMAGE_REGISTRY_PROBE_INVALID"
+                return result
+            if manifest.get("config", {}).get("digest") == expected["imageId"]:
+                result.update(source="REPOSITORY", reason="REPOSITORY_COMPATIBLE")
+                return result
+    if authority.get("offlineBundle"):
+        result.update(source="OFFLINE_BUNDLE", reason="BUNDLE_COMPATIBLE", artifacts=[copy.deepcopy(authority["offlineBundle"])])
     return result
 
 

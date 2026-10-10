@@ -1,0 +1,50 @@
+---
+- name: Create the exact instance configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ application_runtime_job.account }}"
+    mode: '0700'
+  loop: "{{ [application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configContents | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) }}"
+
+- name: Record instance ownership as derived runtime state
+  ansible.builtin.copy:
+    content: "{{ {'project': application_runtime_job.projectId, 'library': application_runtime_job.libraryId, 'instance': application_runtime_job.instanceId, 'host': inventory_hostname} | to_json(sort_keys=true) }}"
+    dest: "{{ application_runtime_job.instancePath }}/.owner.json"
+    owner: "{{ application_runtime_job.account }}"
+    mode: '0600'
+
+- name: Materialize declared instance config bytes
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
+    owner: "{{ application_runtime_job.account }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ application_runtime_job.configContents }}"
+  no_log: true
+
+- name: Materialize instance Compose including its automatic config-digest label
+  ansible.builtin.copy:
+    content: "{{ application_runtime_job.composeContent }}"
+    dest: "{{ application_runtime_job.instancePath }}/compose.yml"
+    owner: "{{ application_runtime_job.account }}"
+    mode: '0600'
+  no_log: true
+
+- name: Bind Compose context
+  ansible.builtin.include_tasks: context.yml
+
+- name: Parse effective Compose without startup or image mutation
+  ansible.builtin.command:
+    argv: "{{ application_compose_argv + ['config', '--format', 'json'] }}"
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  register: application_compose_config
+  changed_when: false
+  no_log: true
+
+- name: Require the closed Compose execution profile and exact identities
+  ansible.builtin.assert:
+    that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.libraryPath, application_runtime_job.configDigest) }}"
+    fail_msg: APPLICATION_COMPOSE_PROFILE_INVALID
+  no_log: true
