@@ -213,6 +213,17 @@ Docker names/path components валидируются; silent sanitization с в
 
 ## 7. Secret descriptors и будущие hooks
 
+A1 фиксирует `connection_defaults` в library role defaults, с ключом serviceType
+существующего каталога и override на уровне экземпляра библиотеки. Binding
+хранит deploymentRef; connectionRef не повторяется по deployments. Для Kafka
+selector обязателен, для остальных опускается при единственном интерфейсе,
+подходящем требованиям connection приложения. Redis/Sentinel различаются
+назначением; TLS policy не подменяется именем listener. Core переиспользует
+Kafka listener resolution и небольшую явную mapping существующих effective
+проекций остальных providers. Infrastructure apply roles и их desired state
+не меняются; нет нового каталога, Go/UI resolver или постоянной runtime-модели.
+Подробные примеры и первоначальная матрица — в [конфигурации](configuration.md#выбор-интерфейса-подключения-по-servicetype).
+
 Для всех hooks A1 фиксирует единое условие: нет соответствующего service ref
 в effective bindings — hook пропускается; есть ref и декларация действия —
 hook включается. Заданный unknown ref или обязательная зависимость объявленного
@@ -220,10 +231,12 @@ hook включается. Заданный unknown ref или обязател�
 provider. HAProxy/DNS references и действия проверяются независимо.
 
 Непустой effective `accounts` включает credential provisioning. При отсутствии
-или пустом accounts projection не требует account hooks, Vault writes,
-policy/AppRole/RoleID, Agent config или identity mounts; запуск прямой командой.
-Это проверяется после overrides. Secret bindings без accounts — validation error,
-включая shared-secret-only вариант; ресурсы библиотеки и endpoints независимы.
+или пустом accounts projection не требует account hooks и credential writes.
+Непустой effective secret_bindings включает Agent, policy/AppRole/RoleID и
+identity mounts, в том числе для shared-secret-only без accounts. Каждая source
+содержит ровно account+field либо library_secret; смешанные и неполные источники
+блокируются. Проверка выполняется после overrides. Ресурсы библиотеки и endpoints
+независимы; без secret_bindings используется прямая команда приложения.
 
 Схема различает `generated`, `runtime_secret_ref`, `vault_ref`, `pki_credential`
 и связь app env → account field/library secret. Для mode existing запрещены
@@ -325,8 +338,12 @@ Docker daemon. Отсутствие offline archive описывает неза�
 | Generated/runtime_secret_ref/vault_ref/PKI binding | Только descriptors; missing runtime value не печатается и не запрашивается при pure resolve |
 | Accounts отсутствует/пуст, secret bindings отсутствуют | Нет credential/Vault/Agent steps; обычный запуск и независимый endpoint |
 | Provider ref отсутствует, действия для него не объявлены | Соответствующий hook SKIP; прочие hooks независимы |
+| Два Kafka deployments одного serviceType | Общий connectionRef из library defaults проверен на каждом deployment |
+| Kafka без selector; unknown/несовместимый selector | BLOCKED с точным полем |
+| Другой provider без selector, один/несколько подходящих интерфейсов | Единственный разрешён; неоднозначность BLOCKED; Redis не выбирает Sentinel |
+| Изменённый effective порт/member address/TLS | Подключение следует проекции сервиса, не manifest defaultPort |
 | Provider ref задан, но не разрешается; либо действие требует отсутствующий ref | BLOCKED finding с точным полем |
-| Accounts пуст, secret binding объявлен | BLOCKED с точным полем, без молчаливого пропуска секрета |
+| Accounts пуст, shared secret binding объявлен | Agent/AppRole требуются без account hooks; неизвестный shared secret или отсутствующий Vault ref блокируются |
 | Literal password/token/RoleID в desired fields | Отклонение schema/secret checks, safe error без значения |
 | Unsupported SASL/account capability | Не становится разрешённым execution по факту успешного shape validation |
 | Defaults/override/list precedence | Штатный Ansible и explicit combine; отсутствует Python/Go substitute |

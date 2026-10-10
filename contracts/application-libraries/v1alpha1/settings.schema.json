@@ -1,0 +1,362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/settings.schema.json",
+  "$defs": {
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "generated"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "runtime_secret_ref"
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^(?:[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*|.*\\{\\{.+\\}\\}.*)$",
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "kind",
+            "ref"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "literal"
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "vault_ref"
+            },
+            "binding": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "mount": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "document": {
+              "type": "string",
+              "minLength": 1
+            },
+            "field": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "kind",
+            "binding",
+            "mount",
+            "document",
+            "field"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "pki_credential"
+            },
+            "binding": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "credential": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "kind",
+            "binding",
+            "credential"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "account": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "managed",
+            "existing"
+          ]
+        },
+        "databaseRef": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+          "maxLength": 128
+        },
+        "credentials": {
+          "type": "object",
+          "properties": {
+            "username": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/source"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": false
+            },
+            "password": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/source"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "mode",
+        "credentials"
+      ],
+      "additionalProperties": false
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "user": {
+          "type": "string"
+        },
+        "restart": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "ports": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "container": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "published": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "required": [
+              "container",
+              "published"
+            ],
+            "additionalProperties": false
+          },
+          "maxProperties": 128
+        },
+        "endpoint": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "listener": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "endpoint_group": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "haproxy": {
+              "type": "object"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "accounts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/account"
+          },
+          "maxProperties": 128
+        },
+        "provisioner": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "vault-agent"
+            },
+            "mode": {
+              "const": "process-supervisor"
+            },
+            "auth": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "const": "approle"
+                }
+              },
+              "required": [
+                "method"
+              ],
+              "additionalProperties": false
+            },
+            "approle": {
+              "type": "object",
+              "properties": {
+                "bind_secret_id": {
+                  "const": false
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            "secrets": {
+              "type": "object",
+              "properties": {
+                "mount": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                  "maxLength": 128
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            "secret_bindings": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "account": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                        "maxLength": 128
+                      },
+                      "field": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                        "maxLength": 128
+                      },
+                      "library_secret": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                        "maxLength": 128
+                      }
+                    },
+                    "oneOf": [
+                      {"required": ["account", "field"], "not": {"required": ["library_secret"]}},
+                      {"required": ["library_secret"], "not": {"anyOf": [{"required": ["account"]}, {"required": ["field"]}]}}
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "source"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "type",
+            "mode"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  }
+}

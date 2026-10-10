@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Application library host membership v1alpha1",
+  "type": "object",
+  "propertyNames": {
+    "type": "string",
+    "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+    "maxLength": 128
+  },
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "overrides": {
+        "type": "object",
+        "properties": {
+          "ports": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "container": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "published": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              },
+              "required": [
+                "container",
+                "published"
+              ],
+              "additionalProperties": false
+            },
+            "maxProperties": 128
+          },
+          "parameters": {
+            "type": "object"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "maxProperties": 128,
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/membership.schema.json"
+}

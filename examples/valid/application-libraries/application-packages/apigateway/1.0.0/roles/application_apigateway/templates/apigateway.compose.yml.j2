@@ -1,0 +1,7 @@
+services:
+  {{ application_instance_id }}:
+    extends:
+      file: .base_compose.yml
+      service: base
+    image: {{ application_runtime.image }}
+    container_name: {{ application_runtime.container_name }}

@@ -127,6 +127,12 @@ secret safety, ownership, явную проверку refs и безопасно
 
 ### A3. Ресурсы библиотеки и общий PostgreSQL hook
 
+- В A1 закрепить выбор интерфейса в `connection_defaults` библиотеки по serviceType,
+  с override экземпляра библиотеки. Binding выбирает только deploymentRef.
+  Kafka требует connectionRef; другие providers — только при неоднозначности
+  подходящих интерфейсов. Использовать существующие effective проекции Core,
+  не менять инфраструктурные apply roles и не вводить новый каталог интерфейсов.
+
 - Для всех provider hooks использовать одно условие: соответствующий service ref
   и объявленное действие. Без ref hook пропускается; неизвестный заданный ref
   или обязательный ref отсутствующий у объявленного действия блокирует validation.
@@ -149,11 +155,12 @@ create/retry; нет takeover по username и неявного удаления
 
 ### A4. Vault provisioning, Agent и общие PKI-секреты
 
-- Credential/Vault/Agent steps включаются только при непустом effective accounts
-  из application defaults после overrides. Иначе нет УЗ/grants hooks, secrets
-  экземпляра, policy/AppRole/RoleID и Agent files/volumes; запуск прямой командой.
-  Secret bindings без accounts блокируются validation. Library resources и
-  endpoints сохраняют независимые условия; shared secrets нужны только потребителям.
+- Account/grants hooks и credential writes включаются при непустом effective
+  accounts после overrides. Vault Agent, policy/AppRole/RoleID и Agent files/volumes
+  включаются при непустом secret_bindings, включая shared-only без accounts.
+  Каждая source выбирает ровно account+field либо library_secret; одновременно
+  разные bindings могут использовать оба вида. Без bindings запуск прямой командой.
+  Library resources и endpoints независимы; shared secrets нужны только потребителям.
 
 - Один provider-owned Vault hook: secrets, минимальная policy, AppRole.
 - Managed KV v2: отсутствующий документ создавать через `put` с CAS=0,

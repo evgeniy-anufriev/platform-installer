@@ -1,6 +1,6 @@
 # Current state
 
-Updated 2026-10-09. This file is the sole current milestone/status source.
+Updated 2026-10-10. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
@@ -10,6 +10,7 @@ new destructive operation still requires explicit owner authorization.
 
 | Work | Current status | Evidence and next step |
 | --- | --- | --- |
+| APPLICATION-LIBRARIES-A1 | DONE for standalone contracts/read-only resolution; acceptance PASS on 2026-10-10 | Implementation branch codex/application-libraries. Independent recheck closed A1-D01–03; A1-D04 corrected and tested. RED OS: 15 focused + 14 standalone PASS. Core broad run: 517 cases, 19 root/isolated-acceptance skips; six PKI timeout errors and one stale Redis fixture failure corrected in tests, all seven failed cases then PASS. Combined regression evidence: 498 passed/19 skipped; original FAILED run retained, no claim of a second full run. QA copies verified and cleaned. See [review](docs/application-libraries/a1-diff-review.md), [journal](docs/application-libraries/a1-test-journal.md) for exact source identity and execution prerequisites. Review budget consumed; A2 and Go/UI not authorized. |
 | SERVICE-INSTALL-11 | IN PROGRESS; overall acceptance remains open | I05 PASSED by explicit owner confirmation on 2026-10-08. Close remaining cases and strict repeat evidence separately; see [journal](docs/service-install-11-test-journal.md). |
 | ENDPOINT-HAPROXY-PLACEMENT-01 | Source implemented; FULL DIFF APPROVE; focused/standalone QA PASS, real acceptance pending | Owner approved narrow binding replacement and package backend defaults on 2026-10-09. Full Core 497-case run had one stale test assertion; corrected five-consumer test passed isolated recheck. Existing backend publication/reconcile reused; no new target store or transaction guarantee. Partial move/delete cannot discover former excluded hosts; explicit full reconcile remains necessary. See [plan](docs/endpoint-haproxy-placement-plan.md), [review](docs/endpoint-haproxy-placement-plan-review.md), [journal](docs/service-install-11-test-journal.md), ADR-033. No bundle release or real installation acceptance yet. |
 | SERVER-INFORMATION-CHECK-01 | Implemented; real informational flow and targeted review passed | [Plan](docs/server-information-check-plan.md). One explicit SSH key confirmation supplies information and installation trust. Real React/Wails target and Execution Node checks, cancellation and changed-credential rejection passed; no installation started. |

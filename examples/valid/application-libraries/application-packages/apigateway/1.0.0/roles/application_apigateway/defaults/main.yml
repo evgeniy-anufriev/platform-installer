@@ -1,0 +1,145 @@
+{
+  "platform_application_definition": {
+    "name": "apigateway",
+    "version": "1.0.0",
+    "defaults": {
+      "image": "platform-application-connection-probe:qa",
+      "command": [
+        "/usr/bin/connection-probe"
+      ],
+      "parameters": {
+        "log_level": "INFO",
+        "redis": {
+          "user": "{{ application_instance_id }}",
+          "password_ref": "{{ application_instance_id }}-redis-password"
+        }
+      },
+      "environment": {
+        "SERVER_ALLOWED_ORIGINS": "*"
+      },
+      "ports": {
+        "http": {
+          "container": 10101,
+          "published": 18080
+        }
+      },
+      "accounts": {
+        "postgres": {
+          "mode": "managed",
+          "credentials": {
+            "username": {
+              "source": {
+                "kind": "literal",
+                "value": "{{ application_instance_id }}"
+              }
+            },
+            "password": {
+              "source": {
+                "kind": "runtime_secret_ref",
+                "ref": "{{ application_instance_id }}-postgres-password"
+              }
+            }
+          }
+        },
+        "redis": {
+          "mode": "managed",
+          "credentials": {
+            "username": {
+              "source": {
+                "kind": "literal",
+                "value": "{{ application_parameters.redis.user }}"
+              }
+            },
+            "password": {
+              "source": {
+                "kind": "runtime_secret_ref",
+                "ref": "{{ application_parameters.redis.password_ref }}"
+              }
+            }
+          }
+        },
+        "clickhouse": {
+          "mode": "managed",
+          "credentials": {
+            "username": {
+              "source": {
+                "kind": "literal",
+                "value": "{{ application_instance_id }}"
+              }
+            },
+            "password": {
+              "source": {
+                "kind": "runtime_secret_ref",
+                "ref": "{{ application_instance_id }}-clickhouse-password"
+              }
+            }
+          }
+        }
+      },
+      "provisioner": {
+        "type": "vault-agent",
+        "mode": "process-supervisor",
+        "auth": {
+          "method": "approle"
+        },
+        "approle": {
+          "bind_secret_id": false
+        },
+        "secrets": {
+          "mount": "applications"
+        },
+        "secret_bindings": {
+          "PG_PASSWORD": {
+            "source": {
+              "account": "postgres",
+              "field": "password"
+            }
+          },
+          "REDIS_PASSWORD": {
+            "source": {
+              "account": "redis",
+              "field": "password"
+            }
+          },
+          "CLICKHOUSE_PASSWORD": {
+            "source": {
+              "account": "clickhouse",
+              "field": "password"
+            }
+          },
+          "JAVA_KEYSTORE_PASSWORD": {
+            "source": {
+              "library_secret": "java_keystore_password"
+            }
+          }
+        }
+      }
+    },
+    "connections": {
+      "postgres": {
+        "library_binding": "database",
+        "protocol": "tcp"
+      },
+      "redis": {
+        "library_binding": "cache",
+        "protocol": "tcp"
+      },
+      "kafka": {
+        "library_binding": "messaging",
+        "protocol": "tcp"
+      },
+      "clickhouse": {
+        "library_binding": "analytics",
+        "protocol": "https"
+      },
+      "vault": {
+        "library_binding": "secrets",
+        "protocol": "https"
+      }
+    },
+    "identity_environment": [
+      "EVO_MANAGER_APP_ID",
+      "KAFKA_APPLICATION_ID_CONFIG"
+    ]
+  }
+}

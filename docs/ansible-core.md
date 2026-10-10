@@ -64,6 +64,15 @@ A service manifest describes capability, not project intent. A project can insta
 
 ## Role contract
 
+`platform.core.resolve_application_libraries` is the A1 controller-only library
+resolver. Project snapshot/validate entrypoints call it only when application
+deployments are declared. It loads validated package defaults using ordinary
+Ansible include_vars in independent namespaces and uses built-in recursive combine
+with list replacement for composition; Python does not evaluate Jinja or recreate
+inventory precedence. Package templates are trusted operator-authored executable
+inputs. A1 validates/fingerprints their closure but does not render them or execute
+application tasks. See [standalone fixture](../examples/valid/application-libraries/README.md).
+
 Production roles must also work with conventional manual inventory and variables:
 
 ```text

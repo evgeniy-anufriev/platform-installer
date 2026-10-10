@@ -1,0 +1,32 @@
+---
+- name: Initialize isolated application projection for this operation
+  ansible.builtin.set_fact:
+    platform_application_rows: []
+    platform_application_findings: []
+  no_log: true
+  become: false
+
+- name: Validate package closure before loading defaults
+  platform.core.prepare_application_libraries:
+    project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+    contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
+  register: _application_inputs
+  no_log: true
+  become: false
+
+- name: Preserve safe preflight findings
+  ansible.builtin.set_fact:
+    platform_application_findings: "{{ _application_inputs.findings }}"
+  no_log: true
+  become: false
+
+- name: Resolve each application and host with ordinary Ansible variables
+  ansible.builtin.include_tasks: instance.yml
+  vars:
+    _library_package: "{{ lookup('vars', '_library_package_' ~ ((application_job.libraryId ~ application_job.hostId) | hash('sha256'))) }}"
+    _application_package: "{{ lookup('vars', '_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))) }}"
+  loop: "{{ _application_inputs.jobs }}"
+  loop_control:
+    loop_var: application_job
+    label: "{{ application_job.libraryId }} / {{ application_job.slotId }} / {{ application_job.hostId }}"
+  no_log: true

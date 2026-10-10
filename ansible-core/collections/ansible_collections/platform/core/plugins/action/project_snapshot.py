@@ -21,6 +21,10 @@ from ansible_collections.platform.core.plugins.module_utils.service_configuratio
 from ansible_collections.platform.core.plugins.module_utils.service_endpoint_resolution import resolve_service_endpoints
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidationError, SchemaValidator
 from ansible_collections.platform.core.plugins.module_utils.topology_resolution import resolve_topology
+from ansible_collections.platform.core.plugins.module_utils.application_libraries import (
+    infrastructure_state, schema_version, prepare, validate_public_projection, project as project_application_libraries,
+)
+from ansible_collections.platform.core.plugins.module_utils.project_validation import canonical_digest
 
 
 _CANONICAL_PORT = re.compile(r"^(0|[1-9][0-9]*)$")
@@ -304,6 +308,12 @@ class ActionModule(ActionBase):
             catalog = catalog_file.get("platform_service_catalog", catalog_file)
             repo_root = self._repo_root(catalog_path, catalog)
             desired_state = task_vars.get("platform_desired_state", {})
+            application_desired_state = desired_state
+            desired_schema_version = schema_version(desired_state, task_vars.get("platform_desired_state_contract"))
+            applications_enabled = "applicationLibraryDeployments" in desired_state
+            if applications_enabled and "platform_application_rows" not in task_vars:
+                raise ValueError("Application resolve role must run before snapshot")
+            desired_state = infrastructure_state(desired_state)
             service_types = set(
                 item.get("serviceType")
                 for item in desired_state.get("serviceDeployments", {}).values()
@@ -342,7 +352,7 @@ class ActionModule(ActionBase):
             try:
                 validator = SchemaValidator(os.path.join(repo_root, "contracts"))
                 schema_specs = [
-                    ("project/v2alpha1/desired-state.schema.json", desired_state),
+                    ("project/%s/desired-state.schema.json" % desired_schema_version, application_desired_state),
                     ("service-catalog/v1alpha1/schema.json", catalog),
                 ]
                 if manifest:
@@ -426,6 +436,41 @@ class ActionModule(ActionBase):
                 references={"hosts": self._generic_host_references(project_root)},
                 identity_source="PROJECT_MANIFEST" if metadata.get("id") else "PATH_FALLBACK",
             )
+            if applications_enabled:
+                rechecked = prepare(project_root, application_desired_state,
+                                    {host: hostvars[host].get("platform_application_libraries", {}) for host in target_ids},
+                                    task_vars.get("platform_desired_state_contract"), self._load, os.path.join(repo_root, "contracts"))
+                expected = {(job["libraryId"], job["slotId"], job["hostId"]): job for job in rechecked["jobs"]}
+                rows = task_vars["platform_application_rows"]
+                actual = {(row["libraryId"], row["slotId"], row["hostId"]) for row in rows}
+                if not rechecked["findings"] and (actual != set(expected) or len(rows) != len(expected)):
+                    raise ValueError("Application projection placement identity mismatch")
+                resolved_findings = []
+                for row in rows:
+                    job = expected.get((row["libraryId"], row["slotId"], row["hostId"]))
+                    if job is None or row["packageIdentity"] != {"application": job["application"]["digest"], "library": job["library"]["digest"]}:
+                        raise ValueError("Application package inputs changed during resolution")
+                    definition = {"name": row["applicationName"], "version": "1.0.0", "defaults": row["settings"],
+                                  "connections": row["connections"], "identity_environment": row["identityNames"]}
+                    resolved_findings.extend(validator.validate(definition, os.path.join(repo_root, "contracts", "application-libraries", "v1alpha1", "application.schema.json")))
+                applications = project_application_libraries(
+                    task_vars["platform_application_rows"], materialized, configuration, catalog, hosts,
+                    metadata.get("id", os.path.basename(project_root)),
+                )
+                applications["findings"].extend(task_vars.get("platform_application_findings", []))
+                applications["findings"].extend(rechecked["findings"])
+                applications["findings"].extend(resolved_findings)
+                applications["findings"].extend(validate_public_projection(applications))
+                if applications["findings"]:
+                    applications.update(status="BLOCKED", libraries={})
+                    snapshot.update(status="PARTIAL", partial=True)
+                    snapshot["findings"].extend(applications["findings"])
+                    snapshot["validation"]["status"] = "BLOCKED"
+                    snapshot["readiness"]["status"] = "BLOCKED"
+                snapshot["apiVersion"] = "platform.installer/project-snapshot/v2alpha1"
+                snapshot["applicationLibraries"] = applications
+                snapshot.pop("snapshotFingerprint", None)
+                snapshot["snapshotFingerprint"] = canonical_digest(snapshot)
             # This is controller-private Core plumbing for the immediately
             # following plan action.  `snapshot` remains the redacted public
             # read-only projection returned to Go/Wails.

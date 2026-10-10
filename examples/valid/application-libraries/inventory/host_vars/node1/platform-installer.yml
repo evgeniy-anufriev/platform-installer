@@ -1,0 +1,64 @@
+{
+  "platform_application_libraries": {
+    "sdku": {},
+    "cspa": {}
+  },
+  "platform_deployments": {
+    "docker": {},
+    "postgres-sdku": {
+      "members": {
+        "pg-sdku": {
+          "roles": [
+            "database"
+          ]
+        }
+      }
+    },
+    "postgres-cspa": {
+      "members": {
+        "pg-cspa": {
+          "roles": [
+            "database"
+          ]
+        }
+      }
+    },
+    "redis-main": {
+      "members": {
+        "redis-1": {
+          "roles": [
+            "redis"
+          ]
+        }
+      }
+    },
+    "clickhouse-main": {
+      "members": {
+        "ch-1": {
+          "roles": [
+            "server"
+          ]
+        }
+      }
+    },
+    "vault-main": {
+      "members": {
+        "vault-1": {
+          "roles": [
+            "vault"
+          ]
+        }
+      }
+    },
+    "kafka-main": {
+      "members": {
+        "kafka-1": {
+          "roles": [
+            "broker",
+            "controller"
+          ]
+        }
+      }
+    }
+  }
+}

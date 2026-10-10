@@ -1,0 +1,14 @@
+{
+  "platform_application_libraries": {
+    "sdku": {
+      "overrides": {
+        "parameters": {
+          "log_level": "TRACE"
+        }
+      }
+    }
+  },
+  "platform_deployments": {
+    "docker": {}
+  }
+}

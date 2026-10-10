@@ -1,0 +1,39 @@
+{
+  "patternProperties": {
+    "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+  },
+  "properties": {
+    "tlsProfiles": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/tlsProfiles"
+    },
+    "serviceDeployments": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/serviceDeployments"
+    },
+    "secretRequirements": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/secretRequirements"
+    },
+    "certificateProfiles": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/certificateProfiles"
+    },
+    "certificateScopes": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/certificateScopes"
+    },
+    "applicationLibraryDeployments": {
+      "$ref": "../../application-libraries/v1alpha1/deployments.schema.json"
+    },
+    "certificateAuthorities": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/certificateAuthorities"
+    },
+    "endpointGroups": {
+      "$ref": "../v2alpha1/desired-state.schema.json#/properties/endpointGroups"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "type": "object",
+  "title": "Platform desired state with libraries v3alpha1",
+  "required": [
+    "serviceDeployments"
+  ],
+  "$id": "https://platform-installer.local/contracts/project/v3alpha1/desired-state.schema.json"
+}

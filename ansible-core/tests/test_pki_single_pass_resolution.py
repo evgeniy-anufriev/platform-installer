@@ -118,7 +118,9 @@ class PKISinglePassResolutionTests(unittest.TestCase):
             command += ["--skip-tags", TAG]
         result = subprocess.run(command, cwd=self.root, env=self.environment,
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                timeout=90, check=False)
+                                # Real PEM/PKCS12 materialization includes multiple
+                                # Ansible process/module and keytool invocations.
+                                timeout=180, check=False)
         if success:
             self.assertEqual(0, result.returncode, result.stdout[-12000:])
         else:
@@ -531,7 +533,10 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                 }
                 for prefix in ("platform_kafka_member_config", "platform_kafka_member_environment",
                                "_platform_redis_config", "_platform_redis_unit",
-                               "_platform_sentinel_config", "_platform_sentinel_unit"):
+                               "_platform_redis_acl_config", "_platform_redis_acl_file",
+                               "_platform_redis_acl_legacy_password",
+                               "_platform_sentinel_config", "_platform_sentinel_unit",
+                               "_platform_sentinel_acl_config", "_platform_sentinel_acl_legacy_password"):
                     variables[prefix] = {"changed": False}
                 for owner_service in roles:
                     variables[f"platform_{owner_service}_user"] = self.variables["platform_pki_owner"]

@@ -208,6 +208,19 @@ permit the member scope.
 
 ## Versioning and migration
 
+Application libraries opt into desired state v3alpha1 through ordinary group vars:
+`platform_desired_state_contract: platform.installer/project-desired-state/v3alpha1`.
+`platform_desired_state.applicationLibraryDeployments` references exact local
+`application-packages/<name>/<version>` and `library-packages/<name>/<version>`;
+their manifest file allowlists and content digests participate in project revision.
+Host membership is `platform_application_libraries.<library-id>` in host_vars.
+Ansible resolves namespaces/defaults/overrides before Core validates the derived
+rows. No project.yml is required. Infrastructure-only projects retain v2alpha1
+desired-state validation and v1alpha1 snapshots without application packages.
+Applications produce snapshot v2alpha1, explicitly rejected by the current
+execution planner until the application execution integration stage.
+See [A1 implementation notes](application-libraries/a1-test-journal.md).
+
 ## Server type metadata
 
 An inventory host may carry one stable descriptive type ID as

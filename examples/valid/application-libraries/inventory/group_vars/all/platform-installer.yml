@@ -1,0 +1,221 @@
+{
+  "platform_desired_state_contract": "platform.installer/project-desired-state/v3alpha1",
+  "platform_desired_state": {
+    "certificateAuthorities": {
+      "apps-ca": {
+        "mode": "MANAGED",
+        "commonName": "Application QA CA"
+      }
+    },
+    "certificateProfiles": {
+      "apps-cert": {
+        "authorityRef": "apps-ca",
+        "usages": [
+          "serverAuth",
+          "clientAuth"
+        ],
+        "sanPolicy": {
+          "includeEndpointWildcard": false
+        }
+      }
+    },
+    "tlsProfiles": {
+      "apps-tls": {
+        "certificateProfileRef": "apps-cert",
+        "scope": "HOST",
+        "storePasswordSecretRef": "runtime:pki-store-password"
+      }
+    },
+    "serviceDeployments": {
+      "docker": {
+        "serviceType": "docker",
+        "mode": "existing-user",
+        "configuration": {
+          "accountName": "platform-docker",
+          "tlsProfile": "apps-tls"
+        }
+      },
+      "postgres-sdku": {
+        "serviceType": "postgresql",
+        "mode": "standalone",
+        "configuration": {
+          "tlsProfile": "apps-tls",
+          "adminSuperuser": {
+            "username": "postgres",
+            "passwordSecretRef": "runtime:pg-sdku-admin"
+          }
+        }
+      },
+      "postgres-cspa": {
+        "serviceType": "postgresql",
+        "mode": "standalone",
+        "configuration": {
+          "port": 5433,
+          "tlsProfile": "apps-tls"
+        }
+      },
+      "redis-main": {
+        "serviceType": "redis",
+        "mode": "standalone",
+        "configuration": {
+          "tlsProfile": "apps-tls",
+          "redisCredential": {
+            "passwordSecretRef": "runtime:redis-admin"
+          }
+        }
+      },
+      "clickhouse-main": {
+        "serviceType": "clickhouse",
+        "mode": "standalone",
+        "configuration": {
+          "tlsProfile": "apps-tls",
+          "defaultCredential": {
+            "passwordSecretRef": "runtime:ch-admin"
+          }
+        }
+      },
+      "vault-main": {
+        "serviceType": "vault",
+        "mode": "standalone",
+        "configuration": {
+          "tlsProfile": "apps-tls"
+        }
+      },
+      "kafka-main": {
+        "serviceType": "kafka",
+        "mode": "kraft-standalone",
+        "configuration": {
+          "tlsProfile": "apps-tls",
+          "listeners": {
+            "PLAINTEXT": {
+              "purpose": "client",
+              "securityProtocol": "PLAINTEXT",
+              "port": 9092
+            },
+            "SSL": {
+              "purpose": "interBroker",
+              "securityProtocol": "SSL",
+              "port": 9094
+            },
+            "CONTROLLER": {
+              "purpose": "controller",
+              "securityProtocol": "SSL",
+              "port": 9093
+            },
+            "CLIENT_SSL": {
+              "purpose": "client",
+              "securityProtocol": "SSL",
+              "port": 9095
+            }
+          }
+        }
+      }
+    },
+    "applicationLibraryDeployments": {
+      "sdku": {
+        "libraryRef": "sdku@1.0.0",
+        "runtimeRef": "docker",
+        "bindings": {
+          "database": {
+            "deploymentRef": "postgres-sdku"
+          },
+          "cache": {
+            "deploymentRef": "redis-main"
+          },
+          "messaging": {
+            "deploymentRef": "kafka-main"
+          },
+          "analytics": {
+            "deploymentRef": "clickhouse-main"
+          },
+          "secrets": {
+            "deploymentRef": "vault-main"
+          },
+          "application_pki": {
+            "profileRef": "apps-tls"
+          }
+        },
+        "resources": {
+          "applicationDatabase": {
+            "kind": "postgresql.database",
+            "binding": "database",
+            "parameters": {
+              "name": "sdku"
+            }
+          }
+        },
+        "applications": {
+          "gateway": {
+            "overrides": {
+              "parameters": {
+                "log_level": "DEBUG",
+                "redis": {
+                  "user": "test-user",
+                  "password_ref": "sdku-redis-password"
+                }
+              },
+              "ports": {
+                "http": {
+                  "container": 10101,
+                  "published": 18081
+                }
+              }
+            }
+          }
+        }
+      },
+      "cspa": {
+        "libraryRef": "cspa@1.0.0",
+        "runtimeRef": "docker",
+        "bindings": {
+          "database": {
+            "deploymentRef": "postgres-cspa"
+          },
+          "cache": {
+            "deploymentRef": "redis-main"
+          },
+          "messaging": {
+            "deploymentRef": "kafka-main"
+          },
+          "analytics": {
+            "deploymentRef": "clickhouse-main"
+          },
+          "secrets": {
+            "deploymentRef": "vault-main"
+          },
+          "application_pki": {
+            "profileRef": "apps-tls"
+          }
+        },
+        "resources": {
+          "applicationDatabase": {
+            "kind": "postgresql.database",
+            "binding": "database",
+            "parameters": {
+              "name": "cspa"
+            }
+          }
+        },
+        "applications": {
+          "gateway": {
+            "overrides": {
+              "parameters": {
+                "log_level": "WARN",
+                "redis": {
+                  "user": "test-user",
+                  "password_ref": "cspa-redis-password"
+                }
+              },
+              "ports": {
+                "http": {
+                  "container": 10101,
+                  "published": 18082
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

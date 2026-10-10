@@ -595,6 +595,8 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
 
 def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None):
     """Return a public plan and private manifest from already resolved Core data."""
+    if isinstance(snapshot, dict) and snapshot.get("apiVersion") == "platform.installer/project-snapshot/v2alpha1":
+        raise ValueError("APPLICATION_LIBRARY_EXECUTION_NOT_IMPLEMENTED")
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}

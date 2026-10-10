@@ -2,6 +2,15 @@
 
 ## Общие provider hooks
 
+Перед подготовкой подключений Core определяет serviceType каждого binding
+deployment и применяет `connection_defaults` библиотеки с overrides.
+Kafka требует явный connectionRef; остальные providers допускают отсутствие
+selector только для единственного интерфейса, подходящего назначению и протоколу
+connection приложения. Разрешение использует существующие effective listeners,
+адреса, ports и TLS; неоднозначность или несовместимость блокирует validation.
+Выбор общий по serviceType внутри библиотеки, не отдельный для каждого deployment.
+См. [конфигурацию](configuration.md#выбор-интерфейса-подключения-по-servicetype).
+
 Общее условие для любого provider hook — наличие соответствующей ссылки
 на инфраструктурный сервис в effective конфигурации. Отсутствующий service ref
 (в том числе отсутствие deploymentRef через library binding) означает SKIP
@@ -16,14 +25,15 @@
 зависимость. Для HAProxy и DNS условия проверяются отдельно; включённый endpoint
 проверяется по требованиям выбранного режима публикации. Account hooks требуют
 соответствующего account и provider ref, Vault hook — Vault ref и secret demand;
-ранее установленное условие accounts для Agent также сохраняется.
+Agent требуется при непустом effective secret_bindings.
 
 Шаги account provisioning и Vault Agent условные: если effective `accounts`
-отсутствует или пуст, hooks создания УЗ/grants и секретов экземпляра пропускаются,
-policy/AppRole/RoleID не создаются, Agent файлы/volumes не материализуются.
-Контейнер запускается напрямую штатной командой приложения. Library resources
-и endpoint hooks сохраняют свои независимые условия. Несогласованные secret
-bindings без accounts блокируются при validation до выполнения.
+отсутствует или пуст, hooks создания УЗ/grants и credential-секретов пропускаются.
+Непустой secret_bindings требует Vault ref и включает policy/AppRole/RoleID,
+Agent файлы/volumes, включая shared-only без accounts. При пустом bindings
+контейнер запускается напрямую штатной командой приложения. Library resources
+и endpoint hooks сохраняют независимые условия. Каждая source выбирает один
+источник: account+field либо library_secret; разные bindings могут использовать оба.
 
 Приложение или библиотека объявляет типизированный ресурс, например
 `postgresql.database`, `postgresql.account`, Kafka principal/ACL, Redis ACL user.

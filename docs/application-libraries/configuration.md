@@ -3,6 +3,13 @@
 Примеры не являются готовым к запуску контрактом. Имена полей должны быть
 согласованы со схемами проекта и service packages до реализации.
 
+A1 формализует сокращённый standalone контракт в
+[fixture](../../examples/valid/application-libraries/README.md): package defaults
+используют `platform_application_definition` / `platform_library_definition`,
+деплойменты выбирают recipe slots (например `gateway`), serviceType — точный ID
+существующего каталога. Остальные примеры этой главы описывают будущие этапы;
+они не означают готовые apply hooks или поддержку UI.
+
 ## Defaults приложения
 
 ```yaml
@@ -80,6 +87,63 @@ platform_application_definitions:
 
 ## Экземпляр в group_vars
 
+### Выбор интерфейса подключения по serviceType
+
+`connectionRef` находится в defaults библиотеки, в `connection_defaults`,
+ключом которого является существующий `serviceType` пакета инфраструктуры.
+Bindings экземпляра выбирают deployment через `deploymentRef`, не повторяя
+выбор listener для каждого deployment. Ниже сокращённые имена serviceType;
+при формализации используются точные идентификаторы существующего каталога:
+
+```yaml
+# Library role defaults
+connection_defaults:
+  kafka:
+    connectionRef: CLIENT_SSL
+  postgresql: {}
+  redis: {}
+  clickhouse: {}
+```
+
+`CLIENT_SSL` — пример явно настроенного Kafka listener, не встроенное имя.
+Он должен существовать в effective `configuration.listeners` deployment и
+иметь `purpose: client`. Group_vars переопределяет выбор один раз для всех
+deployments этого serviceType в данном экземпляре библиотеки:
+
+```yaml
+platform_desired_state:
+  applicationLibraryDeployments:
+    sdku:
+      connection_defaults:
+        kafka:
+          connectionRef: EXTERNAL_SSL
+      bindings:
+        messaging: {deploymentRef: kafka-main}
+```
+
+Core определяет serviceType выбранного deployment, применяет library defaults
+с overrides и разрешает интерфейс существующей runtime-проекцией сервиса.
+Для Kafka effective `connectionRef` обязателен. Для других providers он может
+отсутствовать, если есть ровно один подходящий клиентский интерфейс/порт после
+фильтрации по назначению и протоколу, требуемым приложению. Несколько подходящих
+интерфейсов требуют явного выбора в defaults соответствующего serviceType.
+Неизвестный или несовместимый connectionRef блокирует validation; нет выбора
+первого listener и нет fallback на другой порт. TLS и noTLS на одном порту
+не различаются только connectionRef: используются effective TLS-параметры
+сервиса и требования приложения. Фактические адреса/порты не дублируются в vars
+библиотеки и не берутся безусловно из manifest defaultPort.
+
+Назначения Redis и Sentinel различаются в описании connections приложения.
+Одно значение connectionRef для Redis не переключает эти назначения; если
+значение задано, оно должно быть совместимо с каждым использующим его
+подключением. Одновременные Redis/Sentinel bindings без явного connectionRef
+разрешаются отдельно по требуемому назначению. Не вводить отдельные defaults
+по deployment и новый каталог интерфейсов.
+
+Первоначальная поддержка: PostgreSQL `client`, Redis `client`/`sentinel`,
+ClickHouse `client`, Kafka — точное имя клиентского listener. ClickHouse `native`
+подключается только после реализации корректной effective проекции.
+
 ### Приложения без секретов
 
 Все инфраструктурные hooks условные: отсутствие соответствующего service ref
@@ -92,16 +156,19 @@ platform_application_definitions:
 Наличие непустого effective `accounts` — условие включения credential provisioning.
 Исходное описание находится в defaults приложения; условие проверяется после
 разрешённых overrides. Если `accounts` отсутствует или пуст, не выполняются
-account/grants hooks, запись секретов экземпляра в Vault, создание его policy/AppRole
-и доставка RoleID; не рендерится `agent.hcl` и не подключаются Agent volumes.
-Контейнер запускает обычную команду приложения без Vault Agent provisioner.
+account/grants hooks и запись credential-секретов аккаунтов в Vault.
+Непустой effective `secret_bindings` включает Vault Agent: нужны Vault ref,
+policy/AppRole, доставка RoleID, `agent.hcl` и Agent volumes. Если bindings пусты,
+Agent не нужен; контейнер запускает обычную команду приложения.
 Ресурсы библиотеки, nonsecret подключения и endpoint HAProxy/DNS выполняются
 по собственным декларациям и не зависят от наличия accounts.
 
-В выбранном минимальном контракте `secret_bindings` без accounts — ошибка
-validation: нельзя молча потерять требуемый shared secret (например пароль PKCS).
-Приложение, которому нужен только общий секрет без УЗ, потребует отдельного
-согласования условия включения Agent; не добавлять фиктивный account.
+Приложение может использовать account- и shared-секреты одновременно либо только
+shared-секреты без accounts. Каждая запись `secret_bindings.*.source` выбирает
+строго один вариант: `{account, field}` либо `{library_secret}`. Пустые,
+неполные, смешанные и несуществующие ссылки блокируют validation. Для account
+Core вычисляет путь документа Vault и проецирует credential field в поле секрета;
+повторять путь в пользовательских parameters не требуется.
 
 ```yaml
 platform_desired_state:
@@ -186,6 +253,11 @@ ID экземпляра библиотеки. Повтор одного applicat
 slots в начальном scope запрещён из-за коллизии вычисляемого ID.
 
 ## Композиция и идентичность
+
+Производное имя Compose project включает project/library/instance/host и
+проверяется по `^[a-z0-9][a-z0-9_-]*$`. Точки в компонентах допустимы для общей
+грамматики ID, но блокируют Compose projection с
+`APPLICATION_COMPOSE_PROJECT_INVALID`. Скрытого преобразования ID нет.
 
 Ansible разрешает каждый вход штатно. Общая роль затем соединяет defaults
 приложения, recipe overrides и instance overrides через явный

@@ -4,6 +4,12 @@ The roadmap is dependency-based, not a calendar promise. A milestone is complete
 
 ## Phase A — Architecture baseline
 
+Application libraries follow the separate [implementation plan](application-libraries/implementation-plan.md):
+A1 standalone schemas/read-only Ansible+Core resolution, then rendering/image
+delivery/provider hooks and execution integration, then Go and UI. Infrastructure
+installation without library selection remains supported. A1 does not authorize A2
+or real container/provider mutation; active status is recorded only in CURRENT_STATE.
+
 ### ARCH-01: Repository and boundaries
 
 Deliverables:
