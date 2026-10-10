@@ -1,0 +1,14 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "ApplicationPackage",
+  "name": "apigateway",
+  "version": "1.0.0",
+  "files": [
+    "roles/application_apigateway/defaults/main.yml",
+    "roles/application_apigateway/templates/apigateway.compose.yml.j2",
+    "roles/application_apigateway/templates/default.conf.j2"
+  ],
+  "render": {
+    "compose_template": "roles/application_apigateway/templates/apigateway.compose.yml.j2"
+  }
+}

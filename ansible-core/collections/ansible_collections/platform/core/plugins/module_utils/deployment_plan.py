@@ -8,6 +8,11 @@ import json
 import re
 
 try:
+    from .artifact_authority import assemble_authority
+except ImportError:
+    from artifact_authority import assemble_authority
+
+try:
     from .project_validation import DIGEST_PATTERN, canonical_digest
     from .service_integration_resolution import haproxy_provider_hosts
 except ImportError:
@@ -155,14 +160,7 @@ def _artifact_source_authorities(requirements, sources, bundle_digest):
         if requirement["requiredOffline"] and offline is None:
             findings.append(_source_finding("ARTIFACT_SOURCE_OFFLINE_REQUIRED", requirement, "Required offline bundle artifact is unavailable"))
             continue
-        authorities.append({
-            "apiVersion": "platform.installer/artifact-source-authority/v1alpha1",
-            "kind": "ArtifactSourceAuthority",
-            "requirement": copy.deepcopy(requirement),
-            "sourcePolicy": SOURCE_POLICY,
-            "repository": {"kind": "REPOSITORY"},
-            "offlineBundle": offline,
-        })
+        authorities.append(assemble_authority(requirement, offline))
     return authorities, findings
 
 

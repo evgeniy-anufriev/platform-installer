@@ -1,0 +1,37 @@
+{
+  "platform_application_definition": {
+    "connections": {},
+    "identity_environment": [
+      "EVO_MANAGER_APP_ID",
+      "KAFKA_APPLICATION_ID_CONFIG"
+    ],
+    "version": "1.0.0",
+    "name": "apigateway",
+    "defaults": {
+      "user": "0:0",
+      "command": [
+        "nginx",
+        "-g",
+        "daemon off;"
+      ],
+      "environment": {},
+      "image": "docker.io/library/nginx:1.28.0-alpine",
+      "restart": "unless-stopped",
+      "config_files": [
+        {
+          "destination": "default.conf",
+          "template": "roles/application_apigateway/templates/default.conf.j2",
+          "mode": "0644"
+        }
+      ],
+      "readiness": {
+        "delay": 2,
+        "retries": 10,
+        "mode": "container"
+      },
+      "parameters": {
+        "log_level": "INFO"
+      }
+    }
+  }
+}

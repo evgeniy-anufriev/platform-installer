@@ -1,0 +1,15 @@
+---
+- name: Bind explicit Compose invocation and runtime environment
+  ansible.builtin.set_fact:
+    application_compose_argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ application_runtime_job.placement.composeProject }}"
+      - --project-directory
+      - "{{ application_runtime_job.instancePath }}"
+      - --env-file
+      - "{{ application_runtime_job.libraryPath }}/.env"
+      - -f
+      - "{{ application_runtime_job.instancePath }}/compose.yml"
+  no_log: true

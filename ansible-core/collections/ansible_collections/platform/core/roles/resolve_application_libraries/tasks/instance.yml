@@ -49,6 +49,7 @@
         'slotId': application_job.slotId,
         'instanceId': application_instance_id,
         'applicationName': application_name,
+        'applicationVersion': application_job.application.version,
         'hostId': application_job.hostId,
         'runtimeRef': application_job.deployment.runtimeRef,
         'bindings': application_job.deployment.bindings | default({}),

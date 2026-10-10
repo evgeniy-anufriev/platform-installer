@@ -118,9 +118,11 @@ class PKISinglePassResolutionTests(unittest.TestCase):
             command += ["--skip-tags", TAG]
         result = subprocess.run(command, cwd=self.root, env=self.environment,
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                # Real PEM/PKCS12 materialization includes multiple
-                                # Ansible process/module and keytool invocations.
-                                timeout=180, check=False)
+                                # RED OS real PEM/PKCS12 runs reach truststore
+                                # verification after 180s under the QA workload.
+                                # Bound the whole native play, including repeated
+                                # Ansible modules and keytool calls, to ten minutes.
+                                timeout=600, check=False)
         if success:
             self.assertEqual(0, result.returncode, result.stdout[-12000:])
         else:

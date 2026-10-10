@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/artifact-source/v1alpha2/image-lock.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "images"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/container-images/v1alpha1"},
+    "images": {"type": "object", "minProperties": 1, "maxProperties": 128, "additionalProperties": {"$ref": "#/$defs/image"}}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "image": {
+      "type": "object", "additionalProperties": false,
+      "required": ["imageId", "platform"],
+      "anyOf": [{"required": ["registry"]}, {"required": ["archive"]}],
+      "properties": {
+        "imageId": {"$ref": "#/$defs/digest"},
+        "localReference": {"type": "string", "pattern": "^platform-application:sha256-[a-f0-9]{64}$"},
+        "platform": {"type": "object", "additionalProperties": false, "required": ["os", "architecture"], "properties": {
+          "os": {"const": "linux"}, "architecture": {"enum": ["amd64", "arm64"]}, "variant": {"type": "string", "pattern": "^[a-z0-9]+$"}
+        }},
+        "registry": {"type": "object", "additionalProperties": false, "required": ["reference", "manifestDigest"], "properties": {
+          "reference": {"type": "string", "minLength": 1, "maxLength": 256}, "manifestDigest": {"$ref": "#/$defs/digest"}
+        }},
+        "archive": {"type": "object", "additionalProperties": false, "required": ["ref", "sha256", "size"], "properties": {
+          "ref": {"type": "string", "pattern": "^runtime/artifacts/[a-zA-Z0-9_./-]+$"}, "sha256": {"$ref": "#/$defs/digest"}, "size": {"type": "integer", "minimum": 1}
+        }}
+      }
+    }
+  }
+}

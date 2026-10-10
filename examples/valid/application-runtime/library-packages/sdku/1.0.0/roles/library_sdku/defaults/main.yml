@@ -1,0 +1,14 @@
+{
+  "platform_library_definition": {
+    "name": "sdku",
+    "version": "1.0.0",
+    "slots": {
+      "gateway": {
+        "applicationRef": "apigateway@1.0.0",
+        "required": true
+      }
+    },
+    "connection_defaults": {},
+    "shared_secrets": {}
+  }
+}

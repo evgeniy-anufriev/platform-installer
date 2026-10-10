@@ -1,0 +1,45 @@
+---
+- name: Resolve and validate the complete standalone application scope
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Resolve native application defaults and placements
+      ansible.builtin.include_role:
+        name: platform.core.resolve_application_libraries
+    - name: Build existing read-only project snapshot
+      platform.core.project_snapshot:
+        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+      register: application_snapshot
+      no_log: true
+    - name: Assemble standalone image authority without enabling deployment planner
+      platform.core.prepare_application_runtime:
+        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
+        snapshot: "{{ application_snapshot.snapshot }}"
+      register: application_runtime_inputs
+      no_log: true
+    - name: Require successful standalone authority preparation
+      ansible.builtin.assert:
+        that: application_runtime_inputs.status == 'PASS'
+        fail_msg: "{{ application_runtime_inputs.code | default('APPLICATION_RUNTIME_INPUT_INVALID') }}"
+
+- name: Read-only preflight every selected target before application mutations
+  hosts: platform_targets
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Initialize this operation's private preflight rows
+      ansible.builtin.set_fact:
+        platform_application_preflight_jobs: []
+      no_log: true
+    - name: Validate and render each selected placement in memory
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: preflight
+      loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+      loop_control:
+        loop_var: application_runtime_job

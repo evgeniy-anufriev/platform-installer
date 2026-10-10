@@ -10,6 +10,12 @@ delivery/provider hooks and execution integration, then Go and UI. Infrastructur
 installation without library selection remains supported. A1 does not authorize A2
 or real container/provider mutation; active status is recorded only in CURRENT_STATE.
 
+[A2](application-libraries/a2-technical-plan.md) covers explicit standalone
+rendering, pinned image delivery and rootless Compose Apply/Verify. Its exit gates
+include multi-host registry/offline selection, clean repeat, interrupted activation,
+image isolation and readiness. Provider/secret hooks and Installer execution
+integration are separate stages; A2 does not unlock Go/UI by itself.
+
 ### ARCH-01: Repository and boundaries
 
 Deliverables:

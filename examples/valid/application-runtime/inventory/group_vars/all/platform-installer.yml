@@ -1,0 +1,114 @@
+{
+  "platform_desired_state_contract": "platform.installer/project-desired-state/v3alpha1",
+  "platform_desired_state": {
+    "certificateAuthorities": {
+      "apps-ca": {
+        "mode": "MANAGED",
+        "commonName": "Application QA CA"
+      }
+    },
+    "certificateProfiles": {
+      "apps-cert": {
+        "authorityRef": "apps-ca",
+        "usages": [
+          "serverAuth",
+          "clientAuth"
+        ],
+        "sanPolicy": {
+          "includeEndpointWildcard": false
+        }
+      }
+    },
+    "tlsProfiles": {
+      "apps-tls": {
+        "certificateProfileRef": "apps-cert",
+        "scope": "HOST",
+        "storePasswordSecretRef": "runtime:pki-store-password"
+      }
+    },
+    "serviceDeployments": {
+      "docker": {
+        "serviceType": "docker",
+        "mode": "existing-user",
+        "configuration": {
+          "accountName": "platform-docker",
+          "tlsProfile": "apps-tls"
+        }
+      }
+    },
+    "applicationLibraryDeployments": {
+      "sdku": {
+        "libraryRef": "sdku@1.0.0",
+        "runtimeRef": "docker",
+        "bindings": {},
+        "resources": {},
+        "applications": {
+          "gateway": {
+            "overrides": {
+              "ports": {
+                "http": {
+                  "published": 28180,
+                  "container": 8080
+                }
+              },
+              "parameters": {
+                "log_level": "INFO"
+              }
+            }
+          }
+        },
+        "connection_defaults": {}
+      },
+      "cspa": {
+        "libraryRef": "cspa@1.0.0",
+        "runtimeRef": "docker",
+        "bindings": {},
+        "resources": {},
+        "applications": {
+          "gateway": {
+            "overrides": {
+              "ports": {
+                "http": {
+                  "published": 28181,
+                  "container": 8080
+                }
+              },
+              "parameters": {
+                "log_level": "INFO"
+              }
+            }
+          }
+        },
+        "connection_defaults": {}
+      }
+    }
+  },
+  "platform_artifact_lock": {
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "apiVersion": "platform.installer/artifacts/v1alpha1",
+    "x-container-images": {
+      "images": {
+        "docker.io/library/nginx:1.28.0-alpine": {
+          "platform": {
+            "os": "linux",
+            "architecture": "amd64"
+          },
+          "archive": {
+            "size": 1,
+            "ref": "runtime/artifacts/applications/nginx.tar",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "imageId": "sha256:c318e336065b17ff460aeac6d14bce5d0b13e35f25d5cb1843b635359fc00c9a",
+          "registry": {
+            "manifestDigest": "sha256:09ab424a8c788f8d0fe3a64429f6d19dfa526885c8609b748d0943a75dcb9f8c",
+            "reference": "docker.io/library/nginx:1.28.0-alpine"
+          }
+        }
+      },
+      "apiVersion": "platform.installer/container-images/v1alpha1"
+    }
+  },
+  "platform_application_approved_registries": [
+    "docker.io"
+  ]
+}

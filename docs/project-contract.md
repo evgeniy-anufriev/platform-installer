@@ -221,6 +221,19 @@ Applications produce snapshot v2alpha1, explicitly rejected by the current
 execution planner until the application execution integration stage.
 See [A1 implementation notes](application-libraries/a1-test-journal.md).
 
+For standalone A2, the existing `platform_artifact_lock` carries the typed
+`x-container-images` extension described by artifact-source/v1alpha2. It is not
+a separate desired-state lock file. Each image records its config/image digest,
+platform and optional registry platform-manifest and offline archive descriptors;
+these digests identify different objects. The runtime startup reference is derived
+from the full image ID. A supplied `localReference` must equal that reference.
+Node-approved compatible registry delivery wins; selected offline fallback bytes
+are verified only when fallback is needed. An unused archive need not exist.
+Rendered files, ownership/config labels and Docker observations are derived state.
+The current Installer execution planner still rejects application snapshots until
+A7; standalone A2 entrypoints do not bypass that guard. See
+[fixture contract](../examples/valid/application-runtime/README.md).
+
 ## Server type metadata
 
 An inventory host may carry one stable descriptive type ID as
