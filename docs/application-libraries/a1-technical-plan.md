@@ -213,6 +213,17 @@ Docker names/path components валидируются; silent sanitization с в
 
 ## 7. Secret descriptors и будущие hooks
 
+A1 фиксирует `connection_defaults` в library role defaults, с ключом serviceType
+существующего каталога и override на уровне экземпляра библиотеки. Binding
+хранит deploymentRef; connectionRef не повторяется по deployments. Для Kafka
+selector обязателен, для остальных опускается при единственном интерфейсе,
+подходящем требованиям connection приложения. Redis/Sentinel различаются
+назначением; TLS policy не подменяется именем listener. Core переиспользует
+Kafka listener resolution и небольшую явную mapping существующих effective
+проекций остальных providers. Infrastructure apply roles и их desired state
+не меняются; нет нового каталога, Go/UI resolver или постоянной runtime-модели.
+Подробные примеры и первоначальная матрица — в [конфигурации](configuration.md#выбор-интерфейса-подключения-по-servicetype).
+
 Для всех hooks A1 фиксирует единое условие: нет соответствующего service ref
 в effective bindings — hook пропускается; есть ref и декларация действия —
 hook включается. Заданный unknown ref или обязательная зависимость объявленного
@@ -325,6 +336,10 @@ Docker daemon. Отсутствие offline archive описывает неза�
 | Generated/runtime_secret_ref/vault_ref/PKI binding | Только descriptors; missing runtime value не печатается и не запрашивается при pure resolve |
 | Accounts отсутствует/пуст, secret bindings отсутствуют | Нет credential/Vault/Agent steps; обычный запуск и независимый endpoint |
 | Provider ref отсутствует, действия для него не объявлены | Соответствующий hook SKIP; прочие hooks независимы |
+| Два Kafka deployments одного serviceType | Общий connectionRef из library defaults проверен на каждом deployment |
+| Kafka без selector; unknown/несовместимый selector | BLOCKED с точным полем |
+| Другой provider без selector, один/несколько подходящих интерфейсов | Единственный разрешён; неоднозначность BLOCKED; Redis не выбирает Sentinel |
+| Изменённый effective порт/member address/TLS | Подключение следует проекции сервиса, не manifest defaultPort |
 | Provider ref задан, но не разрешается; либо действие требует отсутствующий ref | BLOCKED finding с точным полем |
 | Accounts пуст, secret binding объявлен | BLOCKED с точным полем, без молчаливого пропуска секрета |
 | Literal password/token/RoleID в desired fields | Отклонение schema/secret checks, safe error без значения |

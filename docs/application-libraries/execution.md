@@ -2,6 +2,15 @@
 
 ## Общие provider hooks
 
+Перед подготовкой подключений Core определяет serviceType каждого binding
+deployment и применяет `connection_defaults` библиотеки с overrides.
+Kafka требует явный connectionRef; остальные providers допускают отсутствие
+selector только для единственного интерфейса, подходящего назначению и протоколу
+connection приложения. Разрешение использует существующие effective listeners,
+адреса, ports и TLS; неоднозначность или несовместимость блокирует validation.
+Выбор общий по serviceType внутри библиотеки, не отдельный для каждого deployment.
+См. [конфигурацию](configuration.md#выбор-интерфейса-подключения-по-servicetype).
+
 Общее условие для любого provider hook — наличие соответствующей ссылки
 на инфраструктурный сервис в effective конфигурации. Отсутствующий service ref
 (в том числе отсутствие deploymentRef через library binding) означает SKIP

@@ -80,6 +80,63 @@ platform_application_definitions:
 
 ## Экземпляр в group_vars
 
+### Выбор интерфейса подключения по serviceType
+
+`connectionRef` находится в defaults библиотеки, в `connection_defaults`,
+ключом которого является существующий `serviceType` пакета инфраструктуры.
+Bindings экземпляра выбирают deployment через `deploymentRef`, не повторяя
+выбор listener для каждого deployment. Ниже сокращённые имена serviceType;
+при формализации используются точные идентификаторы существующего каталога:
+
+```yaml
+# Library role defaults
+connection_defaults:
+  kafka:
+    connectionRef: CLIENT_SSL
+  postgresql: {}
+  redis: {}
+  clickhouse: {}
+```
+
+`CLIENT_SSL` — пример явно настроенного Kafka listener, не встроенное имя.
+Он должен существовать в effective `configuration.listeners` deployment и
+иметь `purpose: client`. Group_vars переопределяет выбор один раз для всех
+deployments этого serviceType в данном экземпляре библиотеки:
+
+```yaml
+platform_desired_state:
+  applicationLibraryDeployments:
+    sdku:
+      connection_defaults:
+        kafka:
+          connectionRef: EXTERNAL_SSL
+      bindings:
+        messaging: {deploymentRef: kafka-main}
+```
+
+Core определяет serviceType выбранного deployment, применяет library defaults
+с overrides и разрешает интерфейс существующей runtime-проекцией сервиса.
+Для Kafka effective `connectionRef` обязателен. Для других providers он может
+отсутствовать, если есть ровно один подходящий клиентский интерфейс/порт после
+фильтрации по назначению и протоколу, требуемым приложению. Несколько подходящих
+интерфейсов требуют явного выбора в defaults соответствующего serviceType.
+Неизвестный или несовместимый connectionRef блокирует validation; нет выбора
+первого listener и нет fallback на другой порт. TLS и noTLS на одном порту
+не различаются только connectionRef: используются effective TLS-параметры
+сервиса и требования приложения. Фактические адреса/порты не дублируются в vars
+библиотеки и не берутся безусловно из manifest defaultPort.
+
+Назначения Redis и Sentinel различаются в описании connections приложения.
+Одно значение connectionRef для Redis не переключает эти назначения; если
+значение задано, оно должно быть совместимо с каждым использующим его
+подключением. Одновременные Redis/Sentinel bindings без явного connectionRef
+разрешаются отдельно по требуемому назначению. Не вводить отдельные defaults
+по deployment и новый каталог интерфейсов.
+
+Первоначальная поддержка: PostgreSQL `client`, Redis `client`/`sentinel`,
+ClickHouse `client`, Kafka — точное имя клиентского listener. ClickHouse `native`
+подключается только после реализации корректной effective проекции.
+
 ### Приложения без секретов
 
 Все инфраструктурные hooks условные: отсутствие соответствующего service ref

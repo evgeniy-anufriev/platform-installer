@@ -1,5 +1,8 @@
 # A1 — независимое FULL PLAN review
 
+Позднейшее решение о `connection_defaults` библиотеки по serviceType и
+`connectionRef` добавлено после этого A1 review; прежний hash его не покрывает.
+
 Позднейшие уточнения владельца об исходном общем `.env` пакета библиотеки
 и автоматическом ID приложения `<application_name>-<library_instance_id>`
 и пользовательских Redis parameters `user`/`password_ref` с account defaults
