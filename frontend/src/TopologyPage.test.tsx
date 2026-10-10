@@ -380,6 +380,31 @@ describe("UI-01F3 TopologyPage", () => {
     });
   });
 
+  it("shows the assigned consumer group while its deletion is pending", async () => {
+    const onAppend = vi.fn().mockResolvedValue(true);
+    const endpointManaged = {
+      ...managed,
+      endpointGroups: { edge: { endpointGroupId: "edge", domain: "edge.example.test", wildcard: false } },
+      deployments: {
+        alpha: { deploymentId: "alpha", serviceType: "known", mode: "cluster", endpointGroup: "edge" },
+      },
+    } as unknown as OpenResult["managed"];
+    const consumerCatalog = {
+      ...catalog,
+      services: [{ ...(catalog!.services![0]), endpointConsumer: true }],
+    } as unknown as OpenResult["catalog"];
+    render(<ControlledTopology {...props()} activeTab="entryPoints"
+      managed={endpointManaged} catalog={consumerCatalog}
+      intents={[{ operation: "DeleteEndpointGroup", endpointGroupId: "edge" }]}
+      onAppend={onAppend} />);
+
+    const selection = screen.getByRole("combobox", { name: "Endpoint group for alpha" }) as HTMLSelectElement;
+    expect(selection.value).toBe("edge");
+    expect(screen.getByRole("option", { name: "edge · будет удалена" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Очистить" }));
+    expect(onAppend).toHaveBeenCalledWith({ operation: "ClearServiceEndpointGroup", deploymentId: "alpha" });
+  });
+
   it("labels a provider draft as stale without inferring a PKI result", () => {
     render(
       <ControlledTopology

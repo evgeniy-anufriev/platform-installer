@@ -266,6 +266,47 @@ func TestF2CertificateScopeCompositeMemberBlocksRemoval(t *testing.T) {
 	}
 }
 
+func TestF2DeletingPlacedDeploymentNamesEveryProjectPlacement(t *testing.T) {
+	root, revision := emptyManagedProject(t)
+	initial := []EditCommand{
+		func() EditCommand {
+			c := f2Command(revision, "CreateServer")
+			c.HostID, c.ServerType, c.DesiredHostname, c.Address = "node1", "infra", "node1.example.test", "192.0.2.10"
+			return c
+		}(),
+		func() EditCommand {
+			c := f2Command(revision, "CreateServer")
+			c.HostID, c.ServerType, c.DesiredHostname, c.Address = "node2", "infra", "node2.example.test", "192.0.2.11"
+			return c
+		}(),
+		func() EditCommand {
+			c := f2Command(revision, "CreateServiceDeployment")
+			c.DeploymentID, c.ServiceType, c.Mode = "qa-kafka", "kafka", "kraft"
+			return c
+		}(),
+		func() EditCommand {
+			c := f2Command(revision, "ReconcileDeploymentPlacement")
+			c.DeploymentID = "qa-kafka"
+			c.Members = []PlacementMember{
+				{MemberID: "kafka-2", HostID: "node2", Roles: []string{"broker"}},
+				{MemberID: "kafka-1", HostID: "node1", Roles: []string{"broker"}},
+			}
+			return c
+		}(),
+	}
+	first := commitStructuralForTest(t, f2Backend(f2Catalog()), root, projectlifecycle.ClassificationEmpty, revision, initial)
+	remove := f2Command(first.NewProjectRevision, "DeleteServiceDeployment")
+	remove.DeploymentID = "qa-kafka"
+	plan, err := f2Backend(f2Catalog()).PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, first.NewProjectRevision, []EditCommand{remove})
+	if err != nil || plan == nil || plan.Status != "BLOCKED" || plan.Finding == nil {
+		t.Fatalf("plan=%#v err=%v", plan, err)
+	}
+	want := "Нельзя удалить экземпляр: он всё ещё размещён — «qa-kafka»: узел node1, участник kafka-1; узел node2, участник kafka-2. Сначала удалите эти размещения и повторите проверку."
+	if plan.Finding.Code != "REFERENCE_IN_USE" || plan.Finding.SafeMessage != want {
+		t.Fatalf("finding=%#v, want safeMessage %q", plan.Finding, want)
+	}
+}
+
 func TestF2CertificateScopeReferencesBlockMatchingRemoval(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -598,6 +639,36 @@ func TestF2EndpointAssignmentRequiresConsumerCapability(t *testing.T) {
 	plan, err := f2Backend(f2Catalog()).PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, first.NewProjectRevision, []EditCommand{set})
 	if err != nil || plan.Status != "BLOCKED" || plan.Finding == nil || plan.Finding.Code != "CAPABILITY_NOT_SUPPORTED" {
 		t.Fatalf("plan=%#v finding=%+v err=%v", plan, plan.Finding, err)
+	}
+}
+
+func TestF2EndpointGroupDeletionNamesConsumerAndAcceptsClearedAssignment(t *testing.T) {
+	root, revision := emptyManagedProject(t)
+	createDeployment := f2Command(revision, "CreateServiceDeployment")
+	createDeployment.DeploymentID, createDeployment.ServiceType, createDeployment.Mode = "qa-kafka", "kafka", "kraft"
+	createGroup := f2Command(revision, "CreateEndpointGroup")
+	createGroup.EndpointGroupID = "edge"
+	createGroup.EndpointGroup = map[string]any{"address": map[string]any{"domain": "edge.example.test", "wildcard": false}}
+	assign := f2Command(revision, "SetServiceEndpointGroup")
+	assign.DeploymentID, assign.EndpointGroupID = "qa-kafka", "edge"
+	first := commitStructuralForTest(t, f2Backend(f2Catalog()), root, projectlifecycle.ClassificationEmpty, revision, []EditCommand{createDeployment, createGroup, assign})
+
+	remove := f2Command(first.NewProjectRevision, "DeleteEndpointGroup")
+	remove.EndpointGroupID = "edge"
+	plan, err := f2Backend(f2Catalog()).PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, first.NewProjectRevision, []EditCommand{remove})
+	if err != nil || plan == nil || plan.Status != "BLOCKED" || plan.Finding == nil {
+		t.Fatalf("plan=%#v err=%v", plan, err)
+	}
+	want := "Нельзя удалить группу endpoint: «edge» назначена потребителю «qa-kafka». Сначала очистите эти назначения и повторите проверку."
+	if plan.Finding.Code != "REFERENCE_IN_USE" || plan.Finding.Field != "endpointGroup" || plan.Finding.SafeMessage != want {
+		t.Fatalf("finding=%#v, want safeMessage %q", plan.Finding, want)
+	}
+
+	clear := f2Command(first.NewProjectRevision, "ClearServiceEndpointGroup")
+	clear.DeploymentID = "qa-kafka"
+	result := commitStructuralForTest(t, f2Backend(f2Catalog()), root, projectlifecycle.ClassificationManaged, first.NewProjectRevision, []EditCommand{remove, clear})
+	if len(result.Managed.EndpointGroups) != 0 || result.Managed.Deployments["qa-kafka"].EndpointGroup != "" {
+		t.Fatalf("endpoint group remains after clear and delete: %#v", result.Managed)
 	}
 }
 

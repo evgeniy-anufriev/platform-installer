@@ -2777,8 +2777,11 @@ function ProjectExportDialog({
 }
 
 function reviewFindingMessage(code: string, fallback: string): string {
-  if (code === "REFERENCE_IN_USE")
+  if (code === "REFERENCE_IN_USE") {
+    if (fallback.startsWith("Нельзя удалить экземпляр:") || fallback.startsWith("Нельзя удалить группу endpoint:"))
+      return fallback;
     return "Объект используется. Сначала удалите связанные ссылки.";
+  }
   if (code === "INVALID_VALUE")
     return "Значение не соответствует ограничениям каталога.";
   return fallback;

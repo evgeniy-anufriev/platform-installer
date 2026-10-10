@@ -622,6 +622,7 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 	}
 	members := make(map[string]bool)
 	placementCount := 0
+	deletedDeploymentPlacements := make(map[string][]string)
 	for logical, document := range candidate.documents {
 		if !strings.HasPrefix(logical, "inventory/host_vars/") {
 			continue
@@ -634,7 +635,36 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 		for deploymentID, raw := range placements {
 			if deployments[deploymentID] == nil {
 				if mutations.deletedDeployments[deploymentID] {
-					return referenceInUse("deploymentId")
+					placement := asMap(raw)
+					if placement == nil {
+						return managedReadError("Managed placement is malformed", logical)
+					}
+					memberRaw, hasMembers := placement["members"]
+					_, hasRoles := placement["roles"]
+					if hasMembers && hasRoles {
+						return managedReadError("Managed placement ambiguously mixes member and host forms", logical)
+					}
+					if !hasMembers {
+						if _, rolesErr := managedRoles(placement["roles"], logical); rolesErr != nil {
+							return rolesErr
+						}
+						deletedDeploymentPlacements[deploymentID] = append(deletedDeploymentPlacements[deploymentID], "узел "+hostID)
+					} else {
+						memberMap := asMap(memberRaw)
+						if memberMap == nil {
+							return managedReadError("Managed member placement is malformed", logical)
+						}
+						for memberID := range memberMap {
+							if !identifierPattern.MatchString(memberID) || asMap(memberMap[memberID]) == nil {
+								return managedReadError("Managed member placement is malformed", logical)
+							}
+							if _, rolesErr := managedRoles(asMap(memberMap[memberID])["roles"], logical); rolesErr != nil {
+								return rolesErr
+							}
+							deletedDeploymentPlacements[deploymentID] = append(deletedDeploymentPlacements[deploymentID], "узел "+hostID+", участник "+memberID)
+						}
+					}
+					continue
 				}
 				return referenceNotFound("deploymentId")
 			}
@@ -686,6 +716,10 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 			}
 		}
 	}
+	if len(deletedDeploymentPlacements) > 0 {
+		return deploymentPlacementInUse(deletedDeploymentPlacements)
+	}
+	deletedGroupReferences := make([]endpointGroupReference, 0)
 	for deploymentID, raw := range deployments {
 		deployment := asMap(raw)
 		if deployment == nil {
@@ -699,7 +733,8 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 				}
 				if groups[id] == nil {
 					if mutations.deletedGroups[id] {
-						return referenceInUse(field)
+						deletedGroupReferences = append(deletedGroupReferences, endpointGroupReference{groupID: id, deploymentID: deploymentID, field: field})
+						continue
 					}
 					return referenceNotFound(field)
 				}
@@ -737,7 +772,9 @@ func (candidate *structuralCandidate) validateFinalReferences(mutations topology
 				}
 			}
 		}
-		_ = deploymentID
+	}
+	if len(deletedGroupReferences) > 0 {
+		return endpointGroupReferencesInUse(deletedGroupReferences)
 	}
 	if err := validateCertificateScopeReferences(state["certificateScopes"], inventory, deployments, members, mutations); err != nil {
 		return err
@@ -990,6 +1027,48 @@ func optionalReferenceList(value map[string]any, key string) ([]any, bool) {
 
 func referenceInUse(field string) error {
 	return blocked("REFERENCE_IN_USE", "Referenced entity must be cleared before removal", field)
+}
+
+type endpointGroupReference struct {
+	groupID, deploymentID, field string
+}
+
+func endpointGroupReferencesInUse(references []endpointGroupReference) error {
+	sort.Slice(references, func(i, j int) bool {
+		left, right := references[i], references[j]
+		if left.groupID != right.groupID {
+			return left.groupID < right.groupID
+		}
+		if left.deploymentID != right.deploymentID {
+			return left.deploymentID < right.deploymentID
+		}
+		return left.field < right.field
+	})
+	details := make([]string, 0, len(references))
+	for _, reference := range references {
+		binding := "«" + reference.groupID + "» назначена потребителю «" + reference.deploymentID + "»"
+		if reference.field == "endpointGroupRef" {
+			binding = "«" + reference.groupID + "» используется провайдером «" + reference.deploymentID + "»"
+		}
+		details = append(details, binding)
+	}
+	return blocked("REFERENCE_IN_USE", "Нельзя удалить группу endpoint: "+strings.Join(details, "; ")+". Сначала очистите эти назначения и повторите проверку.", references[0].field)
+}
+
+func deploymentPlacementInUse(placements map[string][]string) error {
+	deploymentIDs := make([]string, 0, len(placements))
+	for deploymentID := range placements {
+		deploymentIDs = append(deploymentIDs, deploymentID)
+	}
+	sort.Strings(deploymentIDs)
+	details := make([]string, 0)
+	for _, deploymentID := range deploymentIDs {
+		locations := placements[deploymentID]
+		sort.Strings(locations)
+		details = append(details, "«"+deploymentID+"»: "+strings.Join(locations, "; "))
+	}
+	message := "Нельзя удалить экземпляр: он всё ещё размещён — " + strings.Join(details, ". ") + ". Сначала удалите эти размещения и повторите проверку."
+	return blocked("REFERENCE_IN_USE", message, "deploymentId")
 }
 
 func referenceNotFound(field string) error {

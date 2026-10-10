@@ -349,7 +349,9 @@ export function EntryPointsView({
                 .map((deployment) => {
                   const canSet =
                     catalogReady && eligible(deployment.serviceType);
-                  const choices = groups.filter((group) => !group.state);
+                  const choices = groups.filter(
+                    (group) => !group.state || group.id === deployment.endpointGroup,
+                  );
                   const assignmentStatus = !canSet
                     ? {
                         tone: "neutral",
@@ -404,7 +406,7 @@ export function EntryPointsView({
                           <option value="">Выберите группу</option>
                           {choices.map((group) => (
                             <option value={group.id} key={group.id}>
-                              {group.id}
+                              {group.id}{group.state === "deleting" ? " · будет удалена" : ""}
                             </option>
                           ))}
                         </select>

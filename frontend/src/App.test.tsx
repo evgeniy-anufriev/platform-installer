@@ -2978,7 +2978,9 @@ describe("UI-01I2 project export", () => {
   });
 });
 
-it("shows a Russian explanation for REFERENCE_IN_USE in Review", async () => {
+it("shows the specific blocking references for REFERENCE_IN_USE in Review", async () => {
+  const safeMessage =
+    "Нельзя удалить экземпляр: он всё ещё размещён — «qa-clickhouse»: узел node1, участник clickhouse-1. Сначала удалите эти размещения и повторите проверку.";
   const value = api({
     reviewEditSession: vi.fn().mockResolvedValue({
       status: "BLOCKED",
@@ -2986,7 +2988,7 @@ it("shows a Russian explanation for REFERENCE_IN_USE in Review", async () => {
         saveAllowed: false,
         finding: {
           code: "REFERENCE_IN_USE",
-          safeMessage: "Referenced entity must be cleared before removal",
+          safeMessage,
         },
       },
     }),
@@ -3000,13 +3002,27 @@ it("shows a Russian explanation for REFERENCE_IN_USE in Review", async () => {
     screen.getByRole("button", { name: "Просмотреть изменения" }),
   );
   expect(
-    await screen.findByText(
-      "Объект используется. Сначала удалите связанные ссылки.",
-    ),
+    await screen.findByText(safeMessage),
   ).toBeTruthy();
-  expect(
-    screen.queryByText("Referenced entity must be cleared before removal"),
-  ).toBeNull();
+});
+
+it("shows the endpoint consumer blocking group deletion in Review", async () => {
+  const safeMessage =
+    "Нельзя удалить группу endpoint: «edge» назначена потребителю «qa-vault-consumer». Сначала очистите эти назначения и повторите проверку.";
+  const value = api({
+    reviewEditSession: vi.fn().mockResolvedValue({
+      status: "BLOCKED",
+      plan: {
+        saveAllowed: false,
+        finding: { code: "REFERENCE_IN_USE", safeMessage },
+      },
+    }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+  await userEvent.click(screen.getAllByRole("button", { name: "Удалить" }).at(-1)!);
+  await userEvent.click(screen.getByRole("button", { name: "Просмотреть изменения" }));
+  expect(await screen.findByText(safeMessage)).toBeTruthy();
 });
 
 it("shows a Russian explanation for INVALID_VALUE in Review", async () => {

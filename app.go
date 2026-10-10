@@ -2014,7 +2014,7 @@ func projectErrorMessage(code string) string {
 	case "SERVER_METADATA_REQUIRED":
 		return "Для редактирования сервера заполните обязательные метаданные."
 	case "REFERENCE_IN_USE":
-		return "Удаление заблокировано: сервер остаётся в канонических ссылках проекта."
+		return "Удаление заблокировано: в проекте остались ссылки на удаляемый объект."
 	case "EDIT_SHADOWED", "SERVER_RECREATE_IN_SESSION_UNSUPPORTED":
 		return "Черновик содержит конфликтующие изменения сервера. Отмените его и начните заново."
 	case "EDIT_SESSION_EMPTY", "EDIT_SESSION_COMMANDS_UNSUPPORTED":
