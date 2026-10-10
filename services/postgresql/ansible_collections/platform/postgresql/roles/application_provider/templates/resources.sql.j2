@@ -1,0 +1,53 @@
+{% include 'session.sql.j2' %}
+{% for owner in platform_postgresql_application_job.libraries | sort(attribute='name') %}
+SELECT pg_advisory_lock(hashtextextended({{ ('platform.application.role:' ~ owner.name) | platform.postgresql.application_sql_literal }}, 0));
+{% endfor %}
+{% for db in platform_postgresql_application_job.databases | sort(attribute='name') %}
+SELECT pg_advisory_lock(hashtextextended({{ ('platform.application.database:' ~ db.name) | platform.postgresql.application_sql_literal }}, 0));
+{% endfor %}
+{% include 'preflight.sql.j2' %}
+DO $platform_owners$
+BEGIN
+{% for owner in platform_postgresql_application_job.libraries %}
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {{ owner.name | platform.postgresql.application_sql_literal }}) THEN
+    CREATE ROLE {{ owner.name | platform.postgresql.application_sql_identifier }} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    COMMENT ON ROLE {{ owner.name | platform.postgresql.application_sql_identifier }} IS {{ owner.marker | platform.postgresql.application_sql_literal }};
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+  END IF;
+{% endfor %}
+END
+$platform_owners$;
+{% for db in platform_postgresql_application_job.databases if db.mode == 'managed' %}
+SELECT format('CREATE DATABASE %I OWNER %I TEMPLATE template0 ENCODING %L ALLOW_CONNECTIONS false',
+ {{ db.name | platform.postgresql.application_sql_literal }}, {{ db.owner | platform.postgresql.application_sql_literal }}, 'UTF8')
+ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = {{ db.name | platform.postgresql.application_sql_literal }})
+\gexec
+DO $platform_database$
+DECLARE d record;
+BEGIN
+  SELECT * INTO d FROM pg_database WHERE datname = {{ db.name | platform.postgresql.application_sql_literal }};
+  IF d.datdba IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname = {{ db.owner | platform.postgresql.application_sql_literal }})
+     OR d.datistemplate OR d.datconnlimit != -1 OR pg_encoding_to_char(d.encoding) != 'UTF8'
+     OR (shobj_description(d.oid, 'pg_database') IS NOT NULL AND shobj_description(d.oid, 'pg_database') != {{ db.marker | platform.postgresql.application_sql_literal }}) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_DATABASE_CONFLICT';
+  END IF;
+  IF shobj_description(d.oid, 'pg_database') IS NULL THEN
+    COMMENT ON DATABASE {{ db.name | platform.postgresql.application_sql_identifier }} IS {{ db.marker | platform.postgresql.application_sql_literal }};
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+  END IF;
+  IF EXISTS (SELECT FROM aclexplode(coalesce(d.datacl, acldefault('d', d.datdba))) a WHERE a.grantee = 0) THEN
+    REVOKE ALL ON DATABASE {{ db.name | platform.postgresql.application_sql_identifier }} FROM PUBLIC;
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+  END IF;
+  IF NOT d.datallowconn THEN
+    ALTER DATABASE {{ db.name | platform.postgresql.application_sql_identifier }} ALLOW_CONNECTIONS true;
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+  END IF;
+END
+$platform_database$;
+{% endfor %}
+{% for application_provider_database in platform_postgresql_application_job.databases %}
+\connect {{ application_provider_database.name }}
+{% set application_provider_operation = 'resources' %}
+{% include 'database.sql.j2' %}
+{% endfor %}

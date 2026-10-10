@@ -1,0 +1,6 @@
+{% include 'preflight.sql.j2' %}
+{% for application_provider_database in platform_postgresql_application_job.databases %}
+\connect {{ application_provider_database.name }}
+{% set application_provider_operation = 'verify' %}
+{% include 'database.sql.j2' %}
+{% endfor %}

@@ -9,7 +9,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:4507a53a8984bfa7c0c284acb29b407cfce3130240450073c8f8b0f0accd8b5f
+  digest: sha256:45fc3603889c0cbe2a435c1dc94be7ca975943727a736d6d6c648da3c79d4a43
   services:
     bind:
       definitionVersion: 1.0.0-alpha.1
@@ -28,4 +28,4 @@ catalogLock:
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:f160ca21b5248ccfc86836658c3c2e84296b0f21a56fa6d9aaee0d00e078fb83
+      digest: sha256:64d8b92c163de12d46a64c895062a28e103c2d63cb8831466244cd97ec25d4d6

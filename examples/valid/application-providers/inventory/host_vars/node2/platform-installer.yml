@@ -1,0 +1,8 @@
+{
+  "platform_application_libraries": {
+    "sdku": {}
+  },
+  "platform_deployments": {
+    "docker": {}
+  }
+}

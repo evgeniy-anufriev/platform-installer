@@ -373,6 +373,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                            "connections": connections, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
+        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
+        if instance['connections'] != connections:
+            findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
         instance["imageRequirement"] = {"image": settings.get("image"), "delivery": "DEFERRED_TO_A2_1"}

@@ -1,0 +1,28 @@
+---
+- name: Authenticate selected logical accounts over verified TLS
+  ansible.builtin.command:
+    argv: [psql, -X, -Atqc, 'SELECT 1']
+  vars:
+    application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
+  environment:
+    PGHOST: "{{ application_provider_target.address }}"
+    PGPORT: "{{ application_provider_target.port | string }}"
+    PGDATABASE: "{{ 'postgres' if application_provider_probe_scope == 'existing' and item.mode == 'managed' else item.database }}"
+    PGUSER: "{{ item.name }}"
+    PGPASSWORD: "{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[item.passwordRef], rstrip=False) }}"
+    PGSSLMODE: verify-full
+    PGSSLROOTCERT: "{{ application_provider_target.pkiPlans[0].targetDirectory }}/ca-chain.pem"
+    PGCONNECT_TIMEOUT: '10'
+    PGPASSFILE: /dev/null
+  delegate_to: "{{ application_provider_target.hostId }}"
+  become: true
+  become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
+  register: application_provider_login
+  changed_when: false
+  failed_when: application_provider_login.rc != 0 or application_provider_login.stdout != '1'
+  loop: "{{ platform_postgresql_application_job.accounts }}"
+  when: >-
+    application_provider_probe_scope == 'all' or
+    (application_provider_probe_scope == 'existing' and item.name in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles) or
+    (application_provider_probe_scope == 'new' and item.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles)
+  no_log: true

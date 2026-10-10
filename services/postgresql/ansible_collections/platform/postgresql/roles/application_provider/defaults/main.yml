@@ -1,0 +1,10 @@
+---
+platform_postgresql_application_job: {}
+platform_application_provider_runtime: {}
+platform_postgresql_secret_files: {}
+platform_postgresql_application_secret_root: ''
+platform_postgresql_user: postgres
+platform_postgresql_application_socket: /var/run/postgresql
+platform_postgresql_application_lock_timeout: 5000
+platform_postgresql_application_statement_timeout: 30000
+platform_postgresql_application_phase: preflight

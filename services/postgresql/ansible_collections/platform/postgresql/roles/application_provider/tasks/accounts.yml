@@ -1,0 +1,20 @@
+---
+- name: Create missing logical accounts in one maintenance session
+  ansible.builtin.command:
+    argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
+    stdin: "{{ lookup('ansible.builtin.template', 'accounts.sql.j2') }}"
+  vars:
+    application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
+    application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
+  delegate_to: "{{ application_provider_target.hostId }}"
+  become: true
+  become_user: "{{ application_provider_os_user }}"
+  register: application_provider_account_result
+  changed_when: "'APPLICATION_PROVIDER_CHANGED' in application_provider_account_result.stdout or 'APPLICATION_PROVIDER_CHANGED' in application_provider_account_result.stderr"
+  when: platform_postgresql_application_job.accounts | length > 0
+  no_log: true
+
+- name: Authenticate all accounts against their declared database
+  ansible.builtin.include_tasks: login.yml
+  vars:
+    application_provider_probe_scope: all

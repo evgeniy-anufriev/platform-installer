@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:4507a53a8984bfa7c0c284acb29b407cfce3130240450073c8f8b0f0accd8b5f
+digest: sha256:45fc3603889c0cbe2a435c1dc94be7ca975943727a736d6d6c648da3c79d4a43
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -734,6 +734,9 @@ definitions:
       sslVerify: required
     capabilities:
     - service.postgresql.client
+    - service.postgresql.database
+    - service.postgresql.schema
+    - service.postgresql.account
     dependencies: []
     configurationSchema:
       $ref: ../../services/postgresql/configuration.schema.json
@@ -908,7 +911,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:f160ca21b5248ccfc86836658c3c2e84296b0f21a56fa6d9aaee0d00e078fb83
+    x-definitionDigest: sha256:64d8b92c163de12d46a64c895062a28e103c2d63cb8831466244cd97ec25d4d6
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1

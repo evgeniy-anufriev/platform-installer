@@ -1,0 +1,3 @@
+---
+- ansible.builtin.include_tasks: "{{ platform_postgresql_application_phase }}.yml"
+  when: platform_postgresql_application_phase in ['preflight', 'resources', 'accounts', 'verify']

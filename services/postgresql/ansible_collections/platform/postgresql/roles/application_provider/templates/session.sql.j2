@@ -1,0 +1,11 @@
+\set ON_ERROR_STOP on
+SET standard_conforming_strings = on;
+SET lock_timeout = '{{ platform_postgresql_application_lock_timeout | int }}ms';
+SET statement_timeout = '{{ platform_postgresql_application_statement_timeout | int }}ms';
+DO $platform_session$
+BEGIN
+  IF pg_is_in_recovery() OR current_setting('transaction_read_only') != 'off' THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_NOT_WRITABLE';
+  END IF;
+END
+$platform_session$;

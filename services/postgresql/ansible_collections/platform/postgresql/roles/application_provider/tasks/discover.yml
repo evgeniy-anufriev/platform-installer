@@ -1,0 +1,23 @@
+---
+- name: Inspect all database members once without querying monitor
+  ansible.builtin.command:
+    argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ item.port }}", -U, "{{ hostvars[item.hostId].platform_postgresql_user | default(platform_postgresql_user) }}", -d, postgres, -Atqc, "SELECT CASE WHEN NOT pg_is_in_recovery() AND current_setting('transaction_read_only') = 'off' THEN 'writable' ELSE 'readonly' END"]
+  delegate_to: "{{ item.hostId }}"
+  become: true
+  become_user: "{{ hostvars[item.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
+  loop: "{{ platform_postgresql_application_job.candidates }}"
+  register: application_provider_members
+  changed_when: false
+  no_log: true
+
+- name: Require exactly one writable data member
+  ansible.builtin.assert:
+    that: application_provider_members.results | selectattr('stdout', 'equalto', 'writable') | list | length == 1
+    fail_msg: APPLICATION_PROVIDER_WRITABLE_MEMBER_INVALID
+
+- name: Preserve selected member only within this invocation
+  ansible.builtin.set_fact:
+    platform_application_provider_runtime: >-
+      {{ platform_application_provider_runtime | combine({platform_postgresql_application_job.providerId:
+        {'candidate': (application_provider_members.results | selectattr('stdout', 'equalto', 'writable') | first).item}}) }}
+  no_log: true

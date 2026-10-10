@@ -1,0 +1,91 @@
+{
+  "platform_application_definition": {
+    "name": "datamanager",
+    "version": "1.0.0",
+    "defaults": {
+      "image": "platform-application-connection-probe:qa",
+      "command": [
+        "/usr/bin/connection-probe"
+      ],
+      "parameters": {
+        "postgres": {
+          "password_ref": "{{ application_instance_id }}-postgres-password",
+          "user": "{{ application_instance_id }}"
+        },
+        "log_level": "INFO"
+      },
+      "environment": {
+        "SERVER_ALLOWED_ORIGINS": "*"
+      },
+      "ports": {
+        "http": {
+          "container": 10101,
+          "published": 18080
+        }
+      },
+      "accounts": {
+        "postgres": {
+          "grants": [
+            {
+              "schema": "api",
+              "privileges": [
+                "USAGE"
+              ]
+            }
+          ],
+          "databaseRef": "application-database",
+          "credentials": {
+            "username": {
+              "source": {
+                "value": "{{ application_parameters.postgres.user }}",
+                "kind": "literal"
+              }
+            },
+            "password": {
+              "source": {
+                "ref": "{{ application_parameters.postgres.password_ref }}",
+                "kind": "runtime_secret_ref"
+              }
+            }
+          },
+          "mode": "managed"
+        }
+      },
+      "provisioner": {
+        "type": "vault-agent",
+        "mode": "process-supervisor",
+        "auth": {
+          "method": "approle"
+        },
+        "approle": {
+          "bind_secret_id": false
+        },
+        "secrets": {
+          "mount": "applications"
+        },
+        "secret_bindings": {
+          "PG_PASSWORD": {
+            "source": {
+              "field": "password",
+              "account": "postgres"
+            }
+          }
+        }
+      }
+    },
+    "connections": {
+      "vault": {
+        "library_binding": "secrets",
+        "protocol": "https"
+      },
+      "postgres": {
+        "library_binding": "database",
+        "protocol": "tcp"
+      }
+    },
+    "identity_environment": [
+      "EVO_MANAGER_APP_ID",
+      "KAFKA_APPLICATION_ID_CONFIG"
+    ]
+  }
+}

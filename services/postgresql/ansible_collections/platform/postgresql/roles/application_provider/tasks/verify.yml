@@ -1,0 +1,18 @@
+---
+- name: Verify this logical scope without repair in one native session
+  ansible.builtin.command:
+    argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -Atq, -v, ON_ERROR_STOP=1, -f, -]
+    stdin: "{{ lookup('ansible.builtin.template', 'verify.sql.j2') }}"
+  vars:
+    application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
+    application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
+  delegate_to: "{{ application_provider_target.hostId }}"
+  become: true
+  become_user: "{{ application_provider_os_user }}"
+  changed_when: false
+  no_log: true
+
+- name: Verify authenticated access to declared databases
+  ansible.builtin.include_tasks: login.yml
+  vars:
+    application_provider_probe_scope: all

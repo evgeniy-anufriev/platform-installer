@@ -1,0 +1,32 @@
+---
+- import_playbook: application-libraries-providers-resolve.yml
+- name: Preflight all selected providers without mutations
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Reset provider execution facts for this invocation
+      ansible.builtin.set_fact:
+        platform_application_provider_runtime: {}
+    - name: Discover each unique PostgreSQL deployment once
+      ansible.builtin.include_role:
+        name: platform.postgresql.application_provider
+        tasks_from: discover
+      loop: "{{ application_provider_inputs.jobs }}"
+      loop_control:
+        loop_var: platform_postgresql_application_job
+    - name: Preflight library resources separately
+      ansible.builtin.include_role:
+        name: platform.postgresql.application_provider
+        tasks_from: preflight
+      loop: "{{ application_provider_inputs.libraryJobs }}"
+      loop_control:
+        loop_var: platform_postgresql_application_job
+    - name: Preflight each logical application instance separately
+      ansible.builtin.include_role:
+        name: platform.postgresql.application_provider
+        tasks_from: preflight
+      loop: "{{ application_provider_inputs.instanceJobs }}"
+      loop_control:
+        loop_var: platform_postgresql_application_job
