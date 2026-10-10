@@ -6,11 +6,13 @@
 | --- | --- |
 | ApplicationDefinition | Пакет приложения: Compose-шаблон, role defaults, schema, files/templates, поддерживаемые подключения и secret bindings |
 | LibraryDefinition | Переиспользуемый состав приложений, общие настройки, инфраструктурные слоты и ресурсы подготовки |
-| LibraryDeployment | Конкретная библиотека в проекте: bindings к service deployments, overrides, placement |
-| ApplicationInstance | Именованный экземпляр пакета внутри библиотеки; собственные параметры, УЗ, AppRole и endpoint |
+| LibraryDeployment | Конкретная библиотека в проекте: bindings к service deployments, overrides, явный набор Docker-хостов |
+| ApplicationInstance | Именованный логический экземпляр пакета внутри библиотеки; собственные параметры, УЗ, AppRole и endpoint, размещаемый на выбранных хостах |
 
 Например, `apigateway` — определение, `apigateway-sdku` и `apigateway-cspa` —
-экземпляры. Пользователь задаёт ID один раз ключом экземпляра. Из него
+экземпляры. Пользователь задаёт ID экземпляра библиотеки (`sdku`, `cspa`),
+а Core/Ansible автоматически вычисляет `application_instance_id` как
+`<application_name>-<library_instance_id>`. Отдельного ввода ID приложения нет. Из него
 материализуются service key, необходимые application IDs и пути. Для глобальных
 ресурсов учитываются также project/library identity и ограничения provider.
 Переименование — отдельная явная операция, не незаметное изменение label.
@@ -25,6 +27,7 @@ project/
     application.yml
     roles/application_apigateway/defaults/main.yml
     roles/application_apigateway/templates/apigateway.compose.yml.j2
+    roles/application_apigateway/templates/agent.hcl.j2
     files/
   library-packages/sdku/1.0.0/
     library.yml
@@ -53,10 +56,20 @@ Standalone допускает обычные operator-owned group_vars/host_vars
 - Local Save остаётся node-free и не исполняет пользовательские роли/шаблоны.
 - Desired inputs, generated workspace, observed results и runtime secrets разделены.
 
-Первая предлагаемая граница — одно развёртывание библиотеки на одном хосте
-и одном выбранном rootless Docker runtime. Multi-host/HA приложений отдельно.
-Уточнение единицы Compose project остаётся открытым для нескольких экземпляров
-одного исходного манифеста с одинаковыми `${...}`.
+Одна библиотека может явно размещаться на нескольких хостах с Docker; состав
+хостов задают обычные inventory/host_vars без второго списка placement. Подготовка
+общих ресурсов и provider accounts выполняется для логической библиотеки и
+экземпляра, а материализация Compose, запуск и readiness — на каждом выбранном
+хосте. На каждом хосте свой локальный Compose project и рабочий каталог;
+Swarm/Kubernetes и автоматический scheduler для этого не нужны. `SERVER_ID`
+Ansible проецирует из уже существующего ID хоста в inventory (ключа
+`host_vars`, доступного как `inventory_hostname`) в локальный `.env` для
+`${SERVER_ID}` в исходном Compose-манифесте. Отдельного поля ID и повторного
+ввода нет. Контейнеры и пути получают host suffix,
+а одинаковый published port допустим на разных хостах; конфликты проверяются
+отдельно на каждом хосте. Endpoint собирает готовые targets всех размещений.
+HA/failover поведения приложения и автоматического переразмещения это само по
+себе не обещает.
 
 Compose-манифест приложения остаётся переиспользуемым исходным шаблоном.
 Идентичность/разрешённые настройки экземпляра материализуются Ansible;

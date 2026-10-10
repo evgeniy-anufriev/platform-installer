@@ -2,6 +2,29 @@
 
 ## Общие provider hooks
 
+Общее условие для любого provider hook — наличие соответствующей ссылки
+на инфраструктурный сервис в effective конфигурации. Отсутствующий service ref
+(в том числе отсутствие deploymentRef через library binding) означает SKIP
+соответствующего hook. Не подбирать сервис автоматически и не требовать весь
+набор инфраструктуры для каждого приложения. Заданная, но неразрешимая ссылка —
+ошибка validation, а не SKIP. Hook вызывается только при наличии также декларации
+нужного действия: resource, account, secret или endpoint. Ссылка сама по себе
+не является командой создания ресурса.
+
+Если объявлено действие, требующее отсутствующего service ref, validation
+блокирует выполнение с точным полем: нельзя молча пропустить обязательную
+зависимость. Для HAProxy и DNS условия проверяются отдельно; включённый endpoint
+проверяется по требованиям выбранного режима публикации. Account hooks требуют
+соответствующего account и provider ref, Vault hook — Vault ref и secret demand;
+ранее установленное условие accounts для Agent также сохраняется.
+
+Шаги account provisioning и Vault Agent условные: если effective `accounts`
+отсутствует или пуст, hooks создания УЗ/grants и секретов экземпляра пропускаются,
+policy/AppRole/RoleID не создаются, Agent файлы/volumes не материализуются.
+Контейнер запускается напрямую штатной командой приложения. Library resources
+и endpoint hooks сохраняют свои независимые условия. Несогласованные secret
+bindings без accounts блокируются при validation до выполнения.
+
 Приложение или библиотека объявляет типизированный ресурс, например
 `postgresql.database`, `postgresql.account`, Kafka principal/ACL, Redis ACL user.
 Core разрешает binding и вызывает объявленный capability provider package.
@@ -34,10 +57,17 @@ library mutations. План и approval общие; отдельного скр�
 5. Выполняются общие ресурсы библиотеки: БД, схемы, topics, общие Vault-секреты.
 6. Барьер: все обязательные действия библиотеки выполнены и проверены.
 7. Для экземпляров: credentials, provider accounts/grants, Vault policy/AppRole.
-8. Материализация base Compose, env, instance Compose, agent/config files.
-9. Compose validation и запуск; Vault Agent получает секреты и запускает процесс.
-10. Readiness приложения и проверка фактических подключений.
-11. Общий endpoint-hook публикует HAProxy/DNS; проверяется внешний endpoint.
+8. Для каждого выбранного Docker-хоста: materialization base Compose, `.env`
+   с `${SERVER_ID}` из его inventory ID, instance Compose и agent/config files.
+9. На каждом хосте: Compose validation и запуск; Vault Agent получает секреты
+   и запускает процесс.
+10. Readiness каждого размещения и проверка фактических подключений.
+11. Общий endpoint-hook публикует готовые host targets в HAProxy/DNS;
+    проверяется внешний endpoint.
+
+Общие ресурсы библиотеки и provider accounts не создаются повторно для каждого
+Docker-хоста. Отказ одного размещения виден отдельно и не превращает частично
+готовую библиотеку в успешную; автоматический failover/rollback не предполагается.
 
 Provider hooks БД/УЗ/endpoint во втором этапе используют уже установленную
 инфраструктуру, а не повторно устанавливают её. Для standalone с ранее
@@ -65,6 +95,19 @@ endpoint partial/full reconcile сохраняются, в том числе н�
 
 ## Endpoint и источники
 
+### Доставка образов
+
+Отдельная фаза перед Compose startup обеспечивает образы на **каждом** Docker-хосте
+библиотеки. Если выбран настроенный approved registry — выполняется явный
+`docker compose pull`; при offline source архив доставляется из verified bundle
+и загружается через `docker load`. Команды обращаются к выбранному rootless daemon
+целевого хоста. Затем проверяются image identity/platform и соответствие lock;
+`compose up` использует уже подготовленный локальный reference без неявного pull
+или build. Bundle архив и загруженный образ имеют разные identities, их нельзя
+сравнивать как один digest. Подробный scope: [A2.1](implementation-plan.md#a21-доставка-образов-на-docker-хосты).
+
+### Публикация endpoint
+
 Публикация расширяет существующий apply-endpoint pipeline источником application.
 Новые source IDs не пересекаются со старыми service IDs; старые FQDN/ownership
 prefixes должны сохраняться. Backend использует доступный HAProxy host published
@@ -83,6 +126,8 @@ namespace требуют явного policy-контракта, не молча
 - Ручной Ansible без Go/UI/project.yml, стандартные vars и одинаковое разрешение.
 - СДКУ/ЦСПА с общим application definition, разными bindings и независимыми IDs.
 - Два экземпляра на одном хосте; отсутствие утечки параметров между экземплярами.
+- Одна библиотека на двух Docker-хостах: `SERVER_ID` из существующего host ID,
+  два локальных Compose-запуска, readiness обоих targets и общий endpoint.
 - Барьер библиотеки, общие provider hooks, least privilege, чужие resources.
 - Repeat changed=0, interrupted create, retry, rotation, сохранение данных.
 - Offline images, digest mismatch, port/TLS conflicts, safe paths, отсутствие secrets в output.

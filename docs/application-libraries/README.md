@@ -6,6 +6,8 @@
 
 Владелец завершил обсуждение и вернул стандартную процедуру ревью.
 Проведён [FULL PLAN review](plan-review.md): APPROVE_WITH_CHANGES, ноль blockers.
+Его проверенная версия предшествовала уточнению о размещении библиотеки на
+нескольких Docker-хостах; для этой части прежний вердикт не переносится автоматически.
 Это не разрешение реализации всех этапов; следующий ограниченный scope утверждает владелец.
 Этот раздел консолидирует обсуждение, включая более поздние уточнения про
 Compose-наследование, идентичность экземпляров и общие PKI-секреты. Ранние
@@ -17,6 +19,8 @@ review черновика не считаются review этого расшир
 | --- | --- |
 | [FULL PLAN review](plan-review.md) | Независимый отчёт, идентичность проверенной версии и неблокирующие корректировки |
 | [Общий план реализации](implementation-plan.md) | Подэтапы standalone Ansible + Core → Go backend → UI, критерии выхода и переиспользование механизмов |
+| [Технический план A1](a1-technical-plan.md) | Контракт vars/packages, slot mapping, read-only resolve, Core extension points, fixtures и QA gates |
+| [Ревью A1](a1-plan-review.md) | Независимый FULL PLAN review технического плана и bounded correction |
 | [Архитектура](architecture.md) | Сущности, хранение, границы Core/Ansible/Go/UI |
 | [Конфигурация](configuration.md) | Defaults, group_vars, ID экземпляра, base Compose, HAProxy |
 | [Установка](execution.md) | Ресурсы библиотеки, общие provider hooks, порядок, повтор и сбои |

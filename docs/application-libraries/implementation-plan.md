@@ -59,12 +59,19 @@ secret safety, ownership, явную проверку refs и безопасно
 
 ### A1. Минимальный контракт и сквозные fixtures
 
+Подробный scope, последовательность и acceptance matrix:
+[технический план A1](a1-technical-plan.md).
+
 - Зафиксировать формы application/library definitions и instances, overrides,
   placement, bindings, resources, secret bindings и endpoint backend settings.
-- Определить mapping recipe slot → единственный пользовательский instance ID.
-  ID автоматически заполняет нужные env; отдельного повторного ввода нет.
+- Вычислять application instance ID как `<application_name>-<library_instance_id>`;
+  пользователь задаёт только ID библиотеки. Recipe slot выбирает definition,
+  повтор одного definition в нескольких slots блокируется в начальном scope.
+  Вычисленный ID автоматически заполняет нужные env.
 - Выбрать простейшую Compose layout, доказывающую два экземпляра одного приложения
-  на одном хосте: service keys, `.env` scopes, paths, ports и names без коллизий.
+  на одном хосте и одну библиотеку на двух Docker-хостах: service keys, локальные
+  `.env`/Compose projects, paths, ports и names без коллизий. `${SERVER_ID}`
+  проецировать из существующего ID inventory-хоста, без отдельного поля в `host_vars`.
 - Сохранить defaults authority, явный combine и существующий ansible.cfg.
 - Подготовить компактные fixtures СДКУ/ЦСПА с одним application definition и
   различными instance IDs/bindings. Проверить их current schemas там, где возможно.
@@ -80,6 +87,27 @@ secret safety, ownership, явную проверку refs и безопасно
 
 ### A2. Материализация и запуск простого контейнера
 
+#### A2.1. Доставка образов на Docker-хосты
+
+До Compose startup обеспечить образы на каждом хосте размещения библиотеки.
+Переиспользовать существующую node-scoped source policy и bundle transfer:
+совместимый образ в настроенном approved registry имеет приоритет, иначе
+использовать verified immutable bundle, иначе BLOCK.
+
+- Registry: получить закреплённый образ штатным `docker compose pull` в выбранном
+  rootless Docker runtime; registry credentials поступают только через runtime
+  secret механизм. Pull выполняется явно в фазе доставки, а не случайно при `up`.
+- Bundle: доставить архив образа на каждый Docker-хост, проверить artifact digest
+  и выполнить `docker load` в его выбранном daemon. Проверить загруженную image
+  identity/platform по lock metadata; digest архива и image identity различаются.
+- Compose использует reference, соответствующий проверенному локальному образу;
+  offline startup выполняется без pull/build. Если архив не сохраняет пригодный
+  registry digest reference, локальный reference материализуется из lock metadata,
+  а не вычисляется из имени tar-файла. Собственный image importer не создавать.
+- Повтор использует уже проверенный образ; предусмотреть отсутствие registry,
+  повреждённый архив, несовместимую platform, недостающий образ и два Docker-хоста.
+  Сборка/DEV acquisition и изменение bundle остаются отдельными операциями.
+
 - Общие tasks формируют base Compose и несекретный `.env` библиотеки.
 - Template приложения получает identity и instance overrides, сохраняя extends.
 - Использовать выбранный существующий rootless Docker runtime; Docker installer
@@ -93,9 +121,17 @@ secret safety, ownership, явную проверку refs и безопасно
 **Результат:** ручной ansible-playbook запускает два изолированных экземпляра.
 **Выход:** defaults/overrides, readiness, repeat changed=0, отсутствие port/path
 коллизий; изменение одного instance не перезапускает другой без причины.
+Повторить запуск одной библиотеки на двух Docker-хостах; общие ресурсы и УЗ
+готовятся один раз, а Compose и `${SERVER_ID}` материализуются для каждого хоста.
 Это технический baseline, ещё не полный сценарий приложения с УЗ/Vault.
 
 ### A3. Ресурсы библиотеки и общий PostgreSQL hook
+
+- Для всех provider hooks использовать одно условие: соответствующий service ref
+  и объявленное действие. Без ref hook пропускается; неизвестный заданный ref
+  или обязательный ref отсутствующий у объявленного действия блокирует validation.
+  Не требовать все providers и не выбирать их автоматически; refs через library
+  bindings учитываются. HAProxy и DNS hooks проверяются независимо.
 
 - Сначала реализовать один provider end-to-end: создание БД/схемы библиотеки,
   затем УЗ и grants экземпляров через один PostgreSQL entrypoint.
@@ -113,7 +149,24 @@ create/retry; нет takeover по username и неявного удаления
 
 ### A4. Vault provisioning, Agent и общие PKI-секреты
 
+- Credential/Vault/Agent steps включаются только при непустом effective accounts
+  из application defaults после overrides. Иначе нет УЗ/grants hooks, secrets
+  экземпляра, policy/AppRole/RoleID и Agent files/volumes; запуск прямой командой.
+  Secret bindings без accounts блокируются validation. Library resources и
+  endpoints сохраняют независимые условия; shared secrets нужны только потребителям.
+
 - Один provider-owned Vault hook: secrets, минимальная policy, AppRole.
+- Managed KV v2: отсутствующий документ создавать через `put` с CAS=0,
+  изменённые поля существующего — через `patch` с текущей версией CAS; одинаковые
+  значения не записывать. Проверить сохранение соседних полей, CAS conflict,
+  read-only `vault_ref` и согласованность password rotation с provider.
+- AppRole: `bind_secret_id=false`; Core автоматически вычисляет `token_bound_cidrs`
+  из адресов выхода хостов размещения к Vault (`/32` или `/128`, объединение для
+  нескольких хостов), без ручного CIDR в vars. После создания роли читать RoleID
+  и доставлять в защищённую volume-папку
+  каждого Docker-хоста с read-only mount и правами чтения для Vault Agent;
+  SecretID не создавать. Проверить разрешённый/запрещённый источник и фактический
+  source address при rootless/NAT, restart/re-auth по сохранённому RoleID.
 - Defaults связывает env name с account field, library secret либо явно existing
   Vault secret. Хук не получает произвольный исполняемый путь от приложения.
 - На библиотечном этапе публиковать общий java_keystore_password из точного PKI
@@ -153,7 +206,8 @@ restart/re-auth и согласованность keystore/password; admin secre
 
 - Расширить source identity существующей интеграции на application instance.
 - Defaults backend и instance overrides отображать в существующий HAProxy
-  contract. Адрес/порт получать из placement и выбранного listener.
+  contract. Адрес/порт каждого target получать из host placement и выбранного
+  listener; один endpoint включает готовые targets всех выбранных хостов.
 - Сохранить service IDs/FQDN/ownership и existing provider selection/reconcile.
 - Публиковать после readiness; проверить frontend/backend TLS и protocol-specific
   probes. Не считать HTTP probe универсальным для всех listener protocols.
@@ -223,6 +277,9 @@ capabilities и порядок providers, не заменять проверки
 с разными ID и bindings. При возможности использовать предоставленные реальные
 манифесты/образы; недоступность обязательного образа отмечается prerequisite,
 тестовый контейнер не выдаётся за приёмку реального приложения.
+Проверить одну библиотеку на двух Docker-хостах: один логический instance,
+два локальных Compose-запуска, разные `${SERVER_ID}` из inventory host IDs,
+готовность обоих targets и один общий endpoint.
 
 В QA использовать уже собранный
 [тестовый образ подключений](../../tests/application-connection-probe/README.md)
@@ -339,7 +396,8 @@ visual acceptance отдельно. Mocked tests/Go harness не заменяю�
 
 ## Вне начального объёма
 
-Multi-host scheduling/HA приложений, Swarm/Kubernetes, универсальный Compose importer,
+Автоматическое multi-host планирование/переразмещение и HA/failover приложения,
+Swarm/Kubernetes, универсальный Compose importer,
 новый package marketplace, arbitrary hook scripting, автоматические миграции любой
 БД, динамические credentials всех providers и межсервисный rollback engine.
 Обязательные сценарии account provisioning, Vault shared secrets, backend overrides
