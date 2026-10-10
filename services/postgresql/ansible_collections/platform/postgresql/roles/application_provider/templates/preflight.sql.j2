@@ -1,0 +1,62 @@
+{% include 'session.sql.j2' %}
+DO $platform_preflight$
+DECLARE r record; d record;
+BEGIN
+{% for owner in platform_postgresql_application_job.libraries %}
+  SELECT * INTO r FROM pg_roles WHERE rolname = {{ owner.name | platform.postgresql.application_sql_literal }};
+  IF FOUND AND (shobj_description(r.oid, 'pg_authid') IS DISTINCT FROM {{ owner.marker | platform.postgresql.application_sql_literal }}
+    OR r.rolcanlogin OR r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls
+    OR EXISTS (SELECT FROM pg_auth_members WHERE member = r.oid OR roleid = r.oid)) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_OWNER_CONFLICT';
+  END IF;
+{% endfor %}
+{% for db in platform_postgresql_application_job.databases %}
+  SELECT * INTO d FROM pg_database WHERE datname = {{ db.name | platform.postgresql.application_sql_literal }};
+{% if db.mode == 'existing' %}
+  IF NOT FOUND OR NOT d.datallowconn THEN RAISE EXCEPTION 'APPLICATION_PROVIDER_DATABASE_REQUIRED'; END IF;
+{% else %}
+  IF FOUND AND (d.datdba IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname = {{ db.owner | platform.postgresql.application_sql_literal }})
+    OR NOT EXISTS(SELECT FROM pg_roles oo WHERE oo.oid=d.datdba AND shobj_description(oo.oid,'pg_authid')={{ db.ownerMarker | platform.postgresql.application_sql_literal }}
+                  AND NOT oo.rolcanlogin AND NOT oo.rolsuper AND NOT oo.rolcreatedb AND NOT oo.rolcreaterole AND NOT oo.rolreplication AND NOT oo.rolbypassrls)
+    OR d.datistemplate OR d.datconnlimit != -1 OR pg_encoding_to_char(d.encoding) != 'UTF8'
+    OR (shobj_description(d.oid, 'pg_database') IS NOT NULL AND shobj_description(d.oid, 'pg_database') != {{ db.marker | platform.postgresql.application_sql_literal }})) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_DATABASE_CONFLICT';
+  END IF;
+{% endif %}
+{% endfor %}
+{% for account in platform_postgresql_application_job.accounts %}
+  SELECT * INTO r FROM pg_roles WHERE rolname = {{ account.name | platform.postgresql.application_sql_literal }};
+{% if account.mode == 'existing' %}
+  IF NOT FOUND OR NOT r.rolcanlogin THEN RAISE EXCEPTION 'APPLICATION_PROVIDER_ACCOUNT_REQUIRED'; END IF;
+{% else %}
+  IF FOUND AND (shobj_description(r.oid, 'pg_authid') IS DISTINCT FROM {{ account.marker | platform.postgresql.application_sql_literal }}
+    OR NOT r.rolcanlogin OR NOT r.rolinherit OR r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls
+    OR r.rolconnlimit != -1 OR r.rolvaliduntil IS NOT NULL OR r.rolconfig IS NOT NULL
+    OR EXISTS (SELECT FROM pg_auth_members WHERE member = r.oid OR roleid = r.oid)
+    OR EXISTS (SELECT FROM pg_database WHERE datdba = r.oid)
+) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_ACCOUNT_CONFLICT';
+  END IF;
+{% endif %}
+{% endfor %}
+END
+$platform_preflight$;
+SELECT json_build_object(
+ 'databases', coalesce((SELECT json_agg(datname) FROM pg_database WHERE datallowconn AND datname IN (
+{% for db in platform_postgresql_application_job.databases %}{{ db.name | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% else %}NULL{% endfor %})), '[]'::json),
+ 'roles', coalesce((SELECT json_agg(rolname) FROM pg_roles WHERE rolname IN (
+{% for account in platform_postgresql_application_job.accounts %}{{ account.name | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% else %}NULL{% endfor %})), '[]'::json));
+
+{% if application_provider_check_objects | default(false) %}
+{% for application_provider_database in platform_postgresql_application_job.databases %}
+SELECT EXISTS (SELECT FROM pg_database WHERE datname = {{ application_provider_database.name | platform.postgresql.application_sql_literal }} AND datallowconn) AS inspect_database
+\gset
+\if :inspect_database
+\connect {{ application_provider_database.name }}
+{% set application_provider_operation = 'preflight' %}
+{% include 'database.sql.j2' %}
+\connect postgres
+\endif
+{% endfor %}
+
+{% endif %}

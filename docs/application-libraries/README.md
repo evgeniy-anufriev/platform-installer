@@ -26,6 +26,10 @@ review черновика не считаются review этого расшир
 | [Ревью A2](a2-plan-review.md) | Независимый FULL PLAN review, blocker interrupted config activation и уточнения image authority/staging |
 | [DIFF ревью A2](a2-diff-review.md) | FULL BLOCK, согласованные исправления D01/D02 и единственный TARGETED_RECHECK |
 | [Журнал A2](a2-test-journal.md) | Проверки standalone runtime, публичного образа, повтора и ограничения доказательств |
+| [Технический план A3](a3-technical-plan.md) | Общий PostgreSQL hook: ресурсы библиотеки, accounts/grants, ownership/retry и минимальная стоимость выполнения |
+| [DIFF review A3](a3-diff-review.md) | FULL DIFF findings and owner-approved targeted recheck |
+| [QA journal A3](a3-test-journal.md) | Functional standalone/Core/PostgreSQL evidence; no benchmark |
+| [Ревью плана A3](a3-plan-review.md) | FULL PLAN APPROVE_WITH_CHANGES, ноль blockers, bounded уточнение application privilege scope |
 | [Ревью скорости A1/A2](a1-a2-speed-review.md) | Независимый FULL DIFF оптимизаций; operation-local reuse и сохранение guards |
 | [Журнал скорости A1/A2](a1-a2-speed-test-journal.md) | Сопоставимый before/after benchmark, focused/native проверки и ограничения |
 | [Архитектура](architecture.md) | Сущности, хранение, границы Core/Ansible/Go/UI |

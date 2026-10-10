@@ -1,0 +1,22 @@
+---
+- import_playbook: application-libraries-providers-preflight.yml
+- name: Prepare all library resources before any application account
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Ensure and verify resources of each library
+      ansible.builtin.include_role:
+        name: platform.postgresql.application_provider
+        tasks_from: resources
+      loop: "{{ application_provider_inputs.libraryJobs }}"
+      loop_control:
+        loop_var: platform_postgresql_application_job
+    - name: Ensure each application instance accounts grants and authenticated access
+      ansible.builtin.include_role:
+        name: platform.postgresql.application_provider
+        tasks_from: accounts
+      loop: "{{ application_provider_inputs.instanceJobs }}"
+      loop_control:
+        loop_var: platform_postgresql_application_job

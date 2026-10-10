@@ -1,0 +1,89 @@
+{% include 'session.sql.j2' %}
+SELECT pg_advisory_lock(hashtextextended('platform.application.database:' || current_database(), 0));
+DO $platform_objects$
+DECLARE n record; c record; r record; a record; g record;
+        allowed text[]; actual text[]; object_kind text; object_sql text;
+BEGIN
+{% set db = application_provider_database %}
+{% if db.mode == 'managed' %}
+  IF NOT EXISTS (SELECT FROM pg_database d JOIN pg_roles o ON o.oid=d.datdba
+       WHERE d.datname=current_database() AND o.rolname={{ db.owner | platform.postgresql.application_sql_literal }}
+       AND shobj_description(o.oid,'pg_authid')={{ db.ownerMarker | platform.postgresql.application_sql_literal }}
+       AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolreplication AND NOT o.rolbypassrls
+       AND shobj_description(d.oid,'pg_database')={{ db.marker | platform.postgresql.application_sql_literal }}) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_DATABASE_CONFLICT';
+  END IF;
+
+{% endif %}
+{% for schema in db.schemas %}
+  SELECT * INTO n FROM pg_namespace WHERE nspname={{ schema.name | platform.postgresql.application_sql_literal }};
+{% if schema.mode == 'managed' %}
+  IF FOUND AND (n.nspowner IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname={{ db.owner | platform.postgresql.application_sql_literal }})
+      OR obj_description(n.oid,'pg_namespace') IS DISTINCT FROM {{ schema.marker | platform.postgresql.application_sql_literal }}) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_SCHEMA_CONFLICT';
+  END IF;
+{% if application_provider_operation == 'resources' %}
+  IF NOT FOUND THEN
+    CREATE SCHEMA {{ schema.name | platform.postgresql.application_sql_identifier }} AUTHORIZATION {{ db.owner | platform.postgresql.application_sql_identifier }};
+    COMMENT ON SCHEMA {{ schema.name | platform.postgresql.application_sql_identifier }} IS {{ schema.marker | platform.postgresql.application_sql_literal }};
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+  END IF;
+{% elif application_provider_operation != 'preflight' %}
+  IF NOT FOUND THEN RAISE EXCEPTION 'APPLICATION_PROVIDER_SCHEMA_REQUIRED'; END IF;
+{% endif %}
+
+{% else %}
+  IF NOT FOUND THEN RAISE EXCEPTION 'APPLICATION_PROVIDER_SCHEMA_REQUIRED'; END IF;
+{% endif %}
+{% endfor %}
+{% for account in db.accounts %}
+  SELECT * INTO r FROM pg_roles WHERE rolname={{ account.name | platform.postgresql.application_sql_literal }};
+{% if application_provider_operation != 'preflight' %}
+  IF NOT FOUND OR NOT r.rolcanlogin THEN RAISE EXCEPTION 'APPLICATION_PROVIDER_ACCOUNT_REQUIRED'; END IF;
+{% endif %}
+{% if account.mode == 'managed' %}
+  IF r.oid IS NOT NULL AND shobj_description(r.oid,'pg_authid') IS DISTINCT FROM {{ account.marker | platform.postgresql.application_sql_literal }} THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_ACCOUNT_CONFLICT';
+  END IF;
+{% endif %}
+{% if application_provider_operation != 'preflight' %}
+  IF NOT has_database_privilege(r.oid,current_database(),'CONNECT') THEN
+{% if account.mode == 'managed' and application_provider_operation == 'grants' %}
+    GRANT CONNECT ON DATABASE {{ db.name | platform.postgresql.application_sql_identifier }} TO {{ account.name | platform.postgresql.application_sql_identifier }};
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+  END IF;
+{% endif %}
+{% for grant in account.grants %}
+{% if grant.kind != 'schema' %}
+  SELECT cc.* INTO c FROM pg_class cc JOIN pg_namespace nn ON nn.oid=cc.relnamespace
+    WHERE nn.nspname={{ grant.schema | platform.postgresql.application_sql_literal }} AND cc.relname={{ grant.name | platform.postgresql.application_sql_literal }};
+  IF NOT FOUND OR c.relkind NOT IN ({% if grant.kind == 'sequence' %}'S'{% else %}'r','p'{% endif %}) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_MIGRATION_REQUIRED';
+  END IF;
+{% if account.mode == 'managed' %}
+  IF c.relowner IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname={{ db.owner | platform.postgresql.application_sql_literal }}) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_OBJECT_CONFLICT';
+  END IF;
+{% endif %}
+{% endif %}
+{% if application_provider_operation != 'preflight' %}
+{% for privilege in grant.privileges %}
+  IF NOT {{ 'has_schema_privilege' if grant.kind == 'schema' else 'has_sequence_privilege' if grant.kind == 'sequence' else 'has_table_privilege' }}(r.oid,
+     {% if grant.kind == 'schema' %}{{ grant.schema | platform.postgresql.application_sql_literal }}{% else %}{{ ('"' ~ grant.schema ~ '"."' ~ grant.name ~ '"') | platform.postgresql.application_sql_literal }}{% endif %},
+     {{ privilege | platform.postgresql.application_sql_literal }}) THEN
+{% if account.mode == 'managed' and application_provider_operation == 'grants' %}
+    GRANT {{ privilege }} ON {{ 'SCHEMA' if grant.kind == 'schema' else 'SEQUENCE' if grant.kind == 'sequence' else 'TABLE' }} {{ grant.schema | platform.postgresql.application_sql_identifier }}{% if grant.kind != 'schema' %}.{{ grant.name | platform.postgresql.application_sql_identifier }}{% endif %} TO {{ account.name | platform.postgresql.application_sql_identifier }};
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+  END IF;
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+END
+$platform_objects$;

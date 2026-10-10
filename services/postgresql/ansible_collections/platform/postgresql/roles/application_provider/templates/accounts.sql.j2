@@ -1,0 +1,30 @@
+{% include 'session.sql.j2' %}
+{% for account in platform_postgresql_application_job.accounts | sort(attribute='name') %}
+SELECT pg_advisory_lock(hashtextextended({{ ('platform.application.role:' ~ account.name) | platform.postgresql.application_sql_literal }}, 0));
+{% endfor %}
+{% include 'preflight.sql.j2' %}
+SET password_encryption = 'scram-sha-256';
+-- Password-bearing statements must not be copied to PostgreSQL diagnostics.
+SET log_statement = 'none';
+SET log_min_duration_statement = -1;
+SET log_min_error_statement = 'panic';
+{% for account in platform_postgresql_application_job.accounts if account.mode == 'managed' %}
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {{ account.name | platform.postgresql.application_sql_literal }}) AS create_account
+\gset
+\if :create_account
+BEGIN;
+SELECT format('CREATE ROLE %I LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L',
+ {{ account.name | platform.postgresql.application_sql_literal }},
+ {{ lookup('ansible.builtin.file', platform_postgresql_secret_files[account.passwordRef], rstrip=False) | platform.postgresql.application_sql_literal }})
+\gexec
+COMMENT ON ROLE {{ account.name | platform.postgresql.application_sql_identifier }} IS {{ account.marker | platform.postgresql.application_sql_literal }};
+COMMIT;
+SELECT 'APPLICATION_PROVIDER_CHANGED';
+\endif
+{% endfor %}
+
+{% for application_provider_database in platform_postgresql_application_job.databases %}
+\connect {{ application_provider_database.name }}
+{% set application_provider_operation = 'grants' %}
+{% include 'database.sql.j2' %}
+{% endfor %}

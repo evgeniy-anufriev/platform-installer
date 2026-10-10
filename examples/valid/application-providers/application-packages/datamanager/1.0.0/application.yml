@@ -1,0 +1,11 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "ApplicationPackage",
+  "name": "datamanager",
+  "version": "1.0.0",
+  "files": [
+    "roles/application_datamanager/defaults/main.yml",
+    "roles/application_datamanager/templates/datamanager.compose.yml.j2",
+    "roles/application_datamanager/templates/agent.hcl.j2"
+  ]
+}

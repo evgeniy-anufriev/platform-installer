@@ -1,0 +1,23 @@
+exit_after_auth = false
+vault {
+  address = {{ application_runtime.vault.address | to_json }}
+  ca_cert = {{ application_runtime.vault.ca_cert_file | to_json }}
+}
+auto_auth {
+  method "approle" {
+    mount_path = {{ application_runtime.vault.auth_mount | to_json }}
+    config = {
+      role_id_file_path = {{ application_runtime.vault.role_id_file | to_json }}
+    }
+  }
+}
+{% for binding in application_runtime.vault.env_templates %}
+env_template {{ binding.name | to_json }} {
+  contents = {{ binding.contents | to_json }}
+  error_on_missing_key = true
+}
+{% endfor %}
+exec {
+  command = {{ application_runtime.command | to_json }}
+  restart_on_secret_changes = "always"
+}

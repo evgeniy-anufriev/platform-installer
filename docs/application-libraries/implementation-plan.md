@@ -59,6 +59,14 @@ secret safety, ownership, явную проверку refs и безопасно
 
 ### Общее требование A1–A9: скорость выполнения и минимум действий
 
+Граница hooks уточнена владельцем 2026-10-10: resource batch относится к одной
+логической библиотеке, account/grants hook — к одному логическому экземпляру
+приложения. Не объединять mutations разных библиотек/экземпляров в provider-wide
+batch. Общий provider discovery допускается один раз в invocation; Docker
+placements не размножают logical hooks. Применять это правило ко всем следующим
+providers, включая Vault/Redis/ClickHouse/Kafka и endpoint hooks. Benchmark
+сравнения отменены владельцем; дополнительные benchmark runs не выполнять.
+
 Уточнение владельца 2026-10-10: скорость выполнения — приоритет всего этапа A.
 Минимизировать Ansible tasks, SSH/module invocations, SQL/API requests, повторное
 обнаружение и файловые операции. Десятки контейнеров и несколько providers не
@@ -69,7 +77,9 @@ secret safety, ownership, явную проверку refs и безопасно
   library resources/shared secrets — один раз на logical library; account/
   AppRole/policy — один раз на logical instance. Host materialization, image
   availability и container startup выполняются только на нужных Docker-хостах.
-- Объединять compatible SQL/API/file операции в небольшое число явных фаз.
+- Объединять compatible SQL/API/file операции внутри одной библиотеки либо
+  одного экземпляра в небольшое число явных фаз. Не объединять разные logical
+  scopes ради уменьшения числа provider calls.
   Не создавать task на каждый privilege, credential field, env variable или
   Vault policy rule. Использовать существующие native bulk/batch средства;
   отсутствие безопасного batch API не оправдывает новый framework.
@@ -171,6 +181,10 @@ target QA без отдельного scope. Performance requirement не отк
 Это технический baseline, ещё не полный сценарий приложения с УЗ/Vault.
 
 ### A3. Ресурсы библиотеки и общий PostgreSQL hook
+
+Подробные contracts, последовательность, performance и QA:
+[технический план A3](a3-technical-plan.md). Реализация требует отдельного
+решения владельца после независимого PLAN review.
 
 - В A1 закрепить выбор интерфейса в `connection_defaults` библиотеки по serviceType,
   с override экземпляра библиотеки. Binding выбирает только deploymentRef.

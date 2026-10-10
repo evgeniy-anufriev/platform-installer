@@ -58,6 +58,7 @@
             "kind": {
               "enum": [
                 "postgresql.database",
+                "postgresql.schema",
                 "clickhouse.database"
               ]
             },
@@ -68,6 +69,14 @@
             },
             "parameters": {
               "type": "object"
+            },
+            "mode": {
+              "enum": ["managed", "existing"]
+            },
+            "databaseRef": {
+              "type": "string",
+              "pattern": "^[a-z][A-Za-z0-9_-]*$",
+              "maxLength": 128
             }
           },
           "required": [
