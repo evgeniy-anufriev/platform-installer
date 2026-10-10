@@ -78,6 +78,17 @@ RED OS 14 tests PASS including native Redis/Sentinel8.6.4 repeat/negative fixtur
 Apply/Verify syntax PASS; FULL DIFF review APPROVE, zero findings. Bundle
 validated/published as -14; real Wails installation acceptance pending; evidence in SI11 journal.
 
+Redis Sentinel peer-authentication correction (2026-10-10), delivered in bundle -16:
+the reported Verify failed because Sentinel ACLs require a password, but
+sentinel.conf lacked sentinel sentinel-user/pass for Sentinel-to-Sentinel
+connections. All three Sentinel services and TLS listeners were active and
+mutual TLS handshakes passed; all nodes marked peers down. New and retained
+configs now set the existing default ACL user and Sentinel runtime password;
+password-bearing tasks use no_log and changed config restarts Sentinel.
+RED OS Redis suite 15 tests PASS; Apply/Verify syntax PASS. Bundle -16 is
+validated/published and matches the project import; real Apply/Verify
+acceptance remains pending. Evidence: [SI11 journal](docs/service-install-11-test-journal.md).
+
 Vault AppRole addition (2026-10-09), delivered in bundle -13: owner requested enabling
 AppRole at approle/. Configure enables only absent mount, rejects a conflicting
 method before writes and preserves existing settings; Verify requires AppRole.
@@ -146,12 +157,11 @@ Ansible regressions and 15 BIND contract tests passed on RED OS node2.
 Bundle `si11-full-service-20261009-07` released below; UI rebind/preparation
 and real Vault retry remain pending; see the journal.
 
-Latest delivered project bundle: `si11-full-service-20261009-14`, built on
+Latest delivered project bundle: `si11-full-service-20261010-16`, built on
 node2 and validated at `.runtime/qa/full-services/bundle`, digest
-`sha256:af9a46c7dfd3c668a5c7dec201023b5936309035f93c53a20d17cb4f88b2fbe4`.
-It removes premature DNS client endpoint verification and compacts repeated
-PKI reissue summary scope within the existing limit, and fixes BIND answer
-parsing for NXDOMAIN and Kafka normalization fact ordering. Version -09 also
+`sha256:26e33c2ad706c0eb281a356ac8717218cb7255fe6c5eabfa0f937c69bb4e576a`.
+It includes the prior -15 changes plus Redis Sentinel peer authentication.
+Version -09 also
 includes endpoint-derived HAProxy placement/defaults and Kafka skipped ownership
 handling. Version -10 includes partial HAProxy package/PКI-context correction
 and persistent Docker shell environment. Version -11 includes HAProxy/PKI and
@@ -159,9 +169,13 @@ service runtime optimization plus Redis/Sentinel absent-unit ownership fix.
 Version -12 also fixes PostgreSQL existing-unit ownership line matching.
 Version -13 enables and verifies Vault AppRole without changing existing mounts.
 Version -14 adds Redis/Sentinel default-user ACL files and automatic PostgreSQL
-client-subnet TLS/SCRAM access.
+client-subnet TLS/SCRAM access. Version -15 adds ClickHouse
+`remote_servers.default` configuration. Version -16 adds Sentinel peer
+authentication using the existing default ACL user and runtime secret.
 Published with the standard publisher into `cache/`; project import
-digest matches. Project lock unchanged; UI rebind/preparation still required.
+digest matches. Previous -15 is preserved at
+`.runtime/qa/full-services/bundle.previous-20261010-15`. Project lock unchanged;
+UI rebind/preparation still required.
 Target-free plan replay
 on the failed staged project returned EXECUTABLE; real UI rebind/plan/Start
 for this bundle is pending. See the journal; no installation was started.

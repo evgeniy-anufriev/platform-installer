@@ -115,6 +115,24 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
+- name: Configure Sentinel peer authentication for the default ACL user
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/sentinel.conf"
+    regexp: '^sentinel sentinel-user\s+'
+    line: 'sentinel sentinel-user default'
+  register: _platform_sentinel_peer_user
+  when: "'sentinel' in redis_member.roles"
+  no_log: true
+
+- name: Configure Sentinel peer password from the runtime secret
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/sentinel.conf"
+    regexp: '^sentinel sentinel-pass\s+'
+    line: "sentinel sentinel-pass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}"
+  register: _platform_sentinel_peer_password
+  when: "'sentinel' in redis_member.roles"
+  no_log: true
+
 - name: Reload systemd for Redis member units
   ansible.builtin.systemd_service:
     daemon_reload: true
@@ -143,7 +161,7 @@
     state: restarted
   when:
     - "'sentinel' in redis_member.roles"
-    - _platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
+    - _platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_sentinel_peer_user.changed or _platform_sentinel_peer_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
 
 - name: Start unchanged Sentinel member
   ansible.builtin.systemd_service:
@@ -152,4 +170,4 @@
     state: started
   when:
     - "'sentinel' in redis_member.roles"
-    - not (_platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))
+    - not (_platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_sentinel_peer_user.changed or _platform_sentinel_peer_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))

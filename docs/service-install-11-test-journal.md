@@ -696,3 +696,30 @@ and original directory with `-original` suffix. qa-sync workspace cleaned.
 Project lock unchanged; UI rebind/preparation and real acceptance remain open.
 No UI restart, desktop binary rebuild or installation performed. Go terminal
 event forwarding fix is source-only until a desktop binary rebuild.
+
+### Sentinel peer authentication — 2026-10-10
+
+Reported Redis Verify failure at 10:32:55 MSK on `Verify Sentinel TLS quorum
+and discover its current master`, node3. Read-only checks found all three
+Sentinel services active and TLS listeners reachable; mutual TLS handshakes
+from each node to all Sentinel endpoints verified successfully. Sentinel logs
+showed each instance marking its two peers down after service restarts. The
+retained ACL files enable the password-protected `default` user, while all
+three sentinel.conf files lacked `sentinel sentinel-user/pass`; the existing
+`sentinel auth-pass` only authenticates against the monitored Redis master.
+This left Sentinel peers unable to authenticate, so `CKQUORUM` could not pass.
+
+The role now renders peer credentials for new installs and converges retained
+configs using the existing Sentinel runtime secret, with `no_log`; a config
+change restarts only that Sentinel member. RED OS node2 current-source Redis
+suite: 15 tests PASS in 44.688s. Redis Apply and Verify syntax checks PASS.
+`git diff --check` PASS. Built `si11-full-service-20261010-16` on trusted
+node2 using existing Python 3.11.15/Ansible 2.18.15 and the previously
+verified runtime inputs; no downloads. Standard `validate-bundle` and
+`publish-bundle` PASS, digest
+`sha256:26e33c2ad706c0eb281a356ac8717218cb7255fe6c5eabfa0f937c69bb4e576a`.
+Project import at `.runtime/qa/full-services/bundle` validates to the same
+digest as active cache. Previous -15 is preserved at
+`.runtime/qa/full-services/bundle.previous-20261010-15`; project lock unchanged.
+QA workspace cleaned. No target configuration was changed, and no UI was
+restarted. UI rebind/preparation and real Apply/Verify acceptance remain pending.

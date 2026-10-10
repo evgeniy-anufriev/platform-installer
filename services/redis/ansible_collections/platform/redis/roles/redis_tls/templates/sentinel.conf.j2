@@ -15,3 +15,5 @@ sentinel announce-ip {{ redis_member.address }}
 sentinel announce-port {{ redis_member.sentinel_port }}
 sentinel monitor {{ (_platform_redis_instances | first).id }} {{ (_platform_redis_instances | first).address }} {{ (_platform_redis_instances | first).redis_port }} 2
 sentinel auth-pass {{ (_platform_redis_instances | first).id }} {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}
+sentinel sentinel-user default
+sentinel sentinel-pass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}
