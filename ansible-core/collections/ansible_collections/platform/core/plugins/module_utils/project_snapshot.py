@@ -28,6 +28,11 @@ def project_documents(project_root, installer_owned_paths=None):
     root = os.path.realpath(project_root)
     owned = set(_logical(item) for item in (installer_owned_paths or []))
     candidates = ["project.yml", "ansible.cfg", "inventory/hosts.yml"]
+    try:
+        from .application_libraries import package_inputs
+    except ImportError:
+        from application_libraries import package_inputs
+    candidates.extend(package_inputs(root))
     for directory in ("inventory/group_vars", "inventory/host_vars"):
         absolute = os.path.join(root, directory.replace("/", os.sep))
         if not os.path.isdir(absolute):

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Library definition defaults v1alpha1",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "slots": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "applicationRef": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "overrides": {
+            "$ref": "settings.schema.json#/$defs/settings"
+          }
+        },
+        "required": [
+          "applicationRef"
+        ],
+        "additionalProperties": false
+      },
+      "maxProperties": 128
+    },
+    "connection_defaults": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "connectionRef": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "maxProperties": 128
+    },
+    "shared_secrets": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "settings.schema.json#/$defs/source"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "maxProperties": 128
+    }
+  },
+  "required": [
+    "name",
+    "version",
+    "slots"
+  ],
+  "additionalProperties": false,
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/library.schema.json"
+}

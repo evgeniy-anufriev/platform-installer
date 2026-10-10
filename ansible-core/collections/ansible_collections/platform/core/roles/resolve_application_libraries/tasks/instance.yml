@@ -1,0 +1,66 @@
+---
+- name: Load validated library defaults in an isolated namespace
+  ansible.builtin.include_vars:
+    file: "{{ application_job.library.defaultsPath }}"
+    name: "_library_package_{{ (application_job.libraryId ~ application_job.hostId) | hash('sha256') }}"
+  no_log: true
+  become: false
+
+- name: Load validated application defaults in an isolated namespace
+  ansible.builtin.include_vars:
+    file: "{{ application_job.application.defaultsPath }}"
+    name: "_application_package_{{ (application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256') }}"
+  no_log: true
+  become: false
+
+- name: Bind identities and parameter context independently for this placement
+  ansible.builtin.set_fact:
+    application_name: "{{ application_job.application.name }}"
+    application_instance_id: "{{ application_job.application.name }}-{{ application_job.libraryId }}"
+  no_log: true
+  become: false
+
+- name: Resolve parameters after this placement identity is available
+  ansible.builtin.set_fact:
+    application_parameters: >-
+      {{ _application_package.platform_application_definition.defaults.parameters | default({}) |
+         combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
+- name: Compose distinct entities with built-in Ansible combine
+  ansible.builtin.set_fact:
+    _application_effective: >-
+      {{ _application_package.platform_application_definition.defaults |
+         combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
+         combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
+- name: Collect machine-owned resolved row for existing structured actions
+  ansible.builtin.set_fact:
+    platform_application_rows: >-
+      {{ platform_application_rows + [{
+        'libraryId': application_job.libraryId,
+        'libraryRef': application_job.deployment.libraryRef,
+        'slotId': application_job.slotId,
+        'instanceId': application_instance_id,
+        'applicationName': application_name,
+        'hostId': application_job.hostId,
+        'runtimeRef': application_job.deployment.runtimeRef,
+        'bindings': application_job.deployment.bindings | default({}),
+        'resources': application_job.deployment.resources | default({}),
+        'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
+          combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
+        'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
+          combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
+        'connections': _application_package.platform_application_definition.connections | default({}),
+        'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
+        'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
+        'settings': _application_effective | combine(application_job.hostOverride, recursive=true, list_merge='replace')
+      }] }}
+  no_log: true
+  become: false

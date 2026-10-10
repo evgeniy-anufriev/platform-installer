@@ -457,3 +457,20 @@ publication, archives and explicit full reconciliation are reused. Partial
 hooks do not discover previous excluded hosts after move/delete; no durable
 target store or new transaction guarantee is introduced. See the
 [narrow plan](endpoint-haproxy-placement-plan.md).
+
+## ADR-034: Application libraries use an additive Ansible-only resolve boundary
+
+Owner authorized A1 implementation on 2026-10-10. Application/library packages
+remain local versioned portable inputs, not another catalog or persistence layer.
+Package metadata declares a bounded exact file closure; defaults stay in ordinary
+role files. Only validated defaults load on the Execution Node. Ansible composes
+application defaults, recipe slot overrides, instance overrides and allowed host
+overrides using its built-ins. Core checks derived identities, connections,
+credential descriptors and package revisions without another precedence engine.
+Connection selectors default by serviceType inside each library; Kafka requires
+an explicit named client listener. Infrastructure-only behavior stays unchanged.
+Read-only library snapshots use v2alpha1; current execution refuses them until A7.
+No provider mutations, Agent rendering, image delivery or Go/UI work is part of A1.
+Provider allocation unavailable in existing read-only projections is fail-closed,
+never inferred from a manifest port. See [A1 plan](application-libraries/a1-technical-plan.md)
+and [evidence](application-libraries/a1-test-journal.md).

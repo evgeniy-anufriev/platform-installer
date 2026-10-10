@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "platform.installer/project-snapshot/v2alpha1/schema.json",
+  "title": "ProjectSnapshot with application libraries v2alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "status",
+    "partial",
+    "project",
+    "projectRevision",
+    "catalogRevision",
+    "coreVersion",
+    "documents",
+    "hosts",
+    "references",
+    "serviceCatalog",
+    "serviceDeployments",
+    "effectiveConfiguration",
+    "endpointGroups",
+    "topology",
+    "endpoints",
+    "integrations",
+    "pki",
+    "validation",
+    "readiness",
+    "findings",
+    "snapshotFingerprint",
+    "applicationLibraries"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/project-snapshot/v2alpha1"
+    },
+    "kind": {
+      "const": "ProjectSnapshot"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "PARTIAL"
+      ]
+    },
+    "partial": {
+      "type": "boolean"
+    },
+    "project": {
+      "type": "object"
+    },
+    "projectRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "catalogRevision": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "coreVersion": {
+      "type": "string"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "hosts": {
+      "type": "object"
+    },
+    "references": {
+      "type": "object"
+    },
+    "serviceCatalog": {
+      "type": "object"
+    },
+    "serviceDeployments": {
+      "type": "object"
+    },
+    "effectiveConfiguration": {
+      "type": "object"
+    },
+    "endpointGroups": {
+      "type": "object"
+    },
+    "topology": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "endpoints": {
+      "type": "object"
+    },
+    "integrations": {
+      "type": "object"
+    },
+    "pki": {
+      "type": "object"
+    },
+    "validation": {
+      "type": "object"
+    },
+    "readiness": {
+      "type": "object"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "snapshotFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "applicationLibraries": {
+      "type": "object"
+    }
+  }
+}

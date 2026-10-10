@@ -81,11 +81,26 @@
       run_once: true
 
   tasks:
+    - name: Resolve optional application libraries with ordinary Ansible
+      ansible.builtin.include_role:
+        name: platform.core.resolve_application_libraries
+      when: platform_desired_state.applicationLibraryDeployments is defined
+
+    - name: Validate application projection through the shared snapshot path
+      platform.core.project_snapshot:
+        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+      register: platform_application_validation
+      when: platform_desired_state.applicationLibraryDeployments is defined
+      become: false
+      no_log: true
+
     - name: Validate desired project on the Ansible controller
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
-        ansible_desired_state: "{{ platform_desired_state | default({}) }}"
+        ansible_desired_state: "{{ platform_desired_state | default({}) | dict2items | rejectattr('key', 'equalto', 'applicationLibraryDeployments') | items2dict }}"
+        application_findings: "{{ platform_application_validation.snapshot.findings | default([]) }}"
         generated_state: "{{ platform_generated_state | default({}) }}"
         project_id: >-
           {{ platform_project_id |

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Application definition defaults v1alpha1",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "defaults": {
+      "allOf": [
+        {
+          "$ref": "settings.schema.json#/$defs/settings"
+        },
+        {
+          "required": [
+            "image",
+            "command"
+          ]
+        }
+      ]
+    },
+    "connections": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "library_binding": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          },
+          "purpose": {
+            "enum": [
+              "client",
+              "sentinel"
+            ]
+          },
+          "protocol": {
+            "enum": [
+              "tcp",
+              "https",
+              "http"
+            ]
+          }
+        },
+        "required": [
+          "library_binding"
+        ],
+        "additionalProperties": false
+      },
+      "maxProperties": 128
+    },
+    "identity_environment": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "version",
+    "defaults"
+  ],
+  "additionalProperties": false,
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/application.schema.json"
+}

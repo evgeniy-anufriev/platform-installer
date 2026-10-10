@@ -2,11 +2,14 @@
 
 ## Связки приложения
 
-Credential/Vault provisioning включается только при непустом effective `accounts`
-из defaults с разрешёнными overrides. Без accounts не создаются УЗ, secrets
-экземпляра, policy/AppRole или RoleID и не рендерятся файлы Vault Agent;
-приложение запускается напрямую. Secret bindings при пустом accounts блокируются
-validation, включая shared-secret-only случай; см. [условие](configuration.md#приложения-без-секретов).
+Account provisioning включается при непустом effective `accounts` из defaults
+после overrides. Vault Agent включается при непустом `secret_bindings`: нужны
+Vault ref, policy/AppRole, RoleID и Agent файлы. Поддерживаются одновременно
+account- и shared-секреты, а также shared-only без accounts и без создания УЗ.
+Каждая source выбирает ровно `{account, field}` либо `{library_secret}`;
+пустые, неполные и смешанные источники блокируются validation.
+Без secret_bindings приложение запускается напрямую;
+см. [условие](configuration.md#приложения-без-секретов).
 Общие секреты библиотеки обрабатываются на уровне библиотеки только при наличии
 потребителей, а не автоматически для каждого приложения.
 

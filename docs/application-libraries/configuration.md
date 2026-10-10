@@ -3,6 +3,13 @@
 Примеры не являются готовым к запуску контрактом. Имена полей должны быть
 согласованы со схемами проекта и service packages до реализации.
 
+A1 формализует сокращённый standalone контракт в
+[fixture](../../examples/valid/application-libraries/README.md): package defaults
+используют `platform_application_definition` / `platform_library_definition`,
+деплойменты выбирают recipe slots (например `gateway`), serviceType — точный ID
+существующего каталога. Остальные примеры этой главы описывают будущие этапы;
+они не означают готовые apply hooks или поддержку UI.
+
 ## Defaults приложения
 
 ```yaml
@@ -149,16 +156,19 @@ ClickHouse `client`, Kafka — точное имя клиентского listen
 Наличие непустого effective `accounts` — условие включения credential provisioning.
 Исходное описание находится в defaults приложения; условие проверяется после
 разрешённых overrides. Если `accounts` отсутствует или пуст, не выполняются
-account/grants hooks, запись секретов экземпляра в Vault, создание его policy/AppRole
-и доставка RoleID; не рендерится `agent.hcl` и не подключаются Agent volumes.
-Контейнер запускает обычную команду приложения без Vault Agent provisioner.
+account/grants hooks и запись credential-секретов аккаунтов в Vault.
+Непустой effective `secret_bindings` включает Vault Agent: нужны Vault ref,
+policy/AppRole, доставка RoleID, `agent.hcl` и Agent volumes. Если bindings пусты,
+Agent не нужен; контейнер запускает обычную команду приложения.
 Ресурсы библиотеки, nonsecret подключения и endpoint HAProxy/DNS выполняются
 по собственным декларациям и не зависят от наличия accounts.
 
-В выбранном минимальном контракте `secret_bindings` без accounts — ошибка
-validation: нельзя молча потерять требуемый shared secret (например пароль PKCS).
-Приложение, которому нужен только общий секрет без УЗ, потребует отдельного
-согласования условия включения Agent; не добавлять фиктивный account.
+Приложение может использовать account- и shared-секреты одновременно либо только
+shared-секреты без accounts. Каждая запись `secret_bindings.*.source` выбирает
+строго один вариант: `{account, field}` либо `{library_secret}`. Пустые,
+неполные, смешанные и несуществующие ссылки блокируют validation. Для account
+Core вычисляет путь документа Vault и проецирует credential field в поле секрета;
+повторять путь в пользовательских parameters не требуется.
 
 ```yaml
 platform_desired_state:
@@ -243,6 +253,11 @@ ID экземпляра библиотеки. Повтор одного applicat
 slots в начальном scope запрещён из-за коллизии вычисляемого ID.
 
 ## Композиция и идентичность
+
+Производное имя Compose project включает project/library/instance/host и
+проверяется по `^[a-z0-9][a-z0-9_-]*$`. Точки в компонентах допустимы для общей
+грамматики ID, но блокируют Compose projection с
+`APPLICATION_COMPOSE_PROJECT_INVALID`. Скрытого преобразования ID нет.
 
 Ansible разрешает каждый вход штатно. Общая роль затем соединяет defaults
 приложения, recipe overrides и instance overrides через явный

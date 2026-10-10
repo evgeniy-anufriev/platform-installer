@@ -1,0 +1,11 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "LibraryPackage",
+  "name": "cspa",
+  "version": "1.0.0",
+  "files": [
+    "roles/library_cspa/defaults/main.yml",
+    "roles/library_cspa/templates/.base_compose.yml.j2",
+    "files/.env"
+  ]
+}

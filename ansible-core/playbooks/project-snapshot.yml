@@ -4,6 +4,11 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Resolve optional application libraries with ordinary Ansible
+      ansible.builtin.include_role:
+        name: platform.core.resolve_application_libraries
+      when: platform_desired_state.applicationLibraryDeployments is defined
+
     - name: Build deterministic read-only snapshot on the controller
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(omit) }}"

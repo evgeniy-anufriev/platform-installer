@@ -231,10 +231,12 @@ hook включается. Заданный unknown ref или обязател�
 provider. HAProxy/DNS references и действия проверяются независимо.
 
 Непустой effective `accounts` включает credential provisioning. При отсутствии
-или пустом accounts projection не требует account hooks, Vault writes,
-policy/AppRole/RoleID, Agent config или identity mounts; запуск прямой командой.
-Это проверяется после overrides. Secret bindings без accounts — validation error,
-включая shared-secret-only вариант; ресурсы библиотеки и endpoints независимы.
+или пустом accounts projection не требует account hooks и credential writes.
+Непустой effective secret_bindings включает Agent, policy/AppRole/RoleID и
+identity mounts, в том числе для shared-secret-only без accounts. Каждая source
+содержит ровно account+field либо library_secret; смешанные и неполные источники
+блокируются. Проверка выполняется после overrides. Ресурсы библиотеки и endpoints
+независимы; без secret_bindings используется прямая команда приложения.
 
 Схема различает `generated`, `runtime_secret_ref`, `vault_ref`, `pki_credential`
 и связь app env → account field/library secret. Для mode existing запрещены
@@ -341,7 +343,7 @@ Docker daemon. Отсутствие offline archive описывает неза�
 | Другой provider без selector, один/несколько подходящих интерфейсов | Единственный разрешён; неоднозначность BLOCKED; Redis не выбирает Sentinel |
 | Изменённый effective порт/member address/TLS | Подключение следует проекции сервиса, не manifest defaultPort |
 | Provider ref задан, но не разрешается; либо действие требует отсутствующий ref | BLOCKED finding с точным полем |
-| Accounts пуст, secret binding объявлен | BLOCKED с точным полем, без молчаливого пропуска секрета |
+| Accounts пуст, shared secret binding объявлен | Agent/AppRole требуются без account hooks; неизвестный shared secret или отсутствующий Vault ref блокируются |
 | Literal password/token/RoleID в desired fields | Отклонение schema/secret checks, safe error без значения |
 | Unsupported SASL/account capability | Не становится разрешённым execution по факту успешного shape validation |
 | Defaults/override/list precedence | Штатный Ansible и explicit combine; отсутствует Python/Go substitute |

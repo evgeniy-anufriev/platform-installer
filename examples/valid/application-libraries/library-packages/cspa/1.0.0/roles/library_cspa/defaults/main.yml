@@ -1,0 +1,26 @@
+{
+  "platform_library_definition": {
+    "name": "cspa",
+    "version": "1.0.0",
+    "slots": {
+      "gateway": {
+        "applicationRef": "apigateway@1.0.0",
+        "required": true
+      }
+    },
+    "connection_defaults": {
+      "kafka": {
+        "connectionRef": "CLIENT_SSL"
+      }
+    },
+    "shared_secrets": {
+      "java_keystore_password": {
+        "source": {
+          "kind": "pki_credential",
+          "binding": "application_pki",
+          "credential": "store-password"
+        }
+      }
+    }
+  }
+}

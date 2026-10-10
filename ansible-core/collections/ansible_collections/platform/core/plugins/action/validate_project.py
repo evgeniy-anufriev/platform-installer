@@ -120,6 +120,7 @@ class ActionModule(ActionBase):
                 "safeDetails": {"reason": str(error).split(":", 1)[0]},
             })
         result["findings"].extend(state_findings)
+        result["findings"].extend(args.get("application_findings", []))
         result["findings"].sort(key=lambda item: (item.get("field", ""), item.get("code", "")))
         blocked = [item for item in result["findings"] if item.get("status") == "BLOCKED"]
         result["summary"]["blocked"] = len(blocked)
