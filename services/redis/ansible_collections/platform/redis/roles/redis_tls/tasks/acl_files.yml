@@ -32,7 +32,11 @@
     that:
       - (item.content | b64decode | trim) is match('^user default on ')
       - (item.content | b64decode | trim).split('\n') | length == 1
-      - (item.content | b64decode | regex_findall('#[0-9a-f]{64}')) == ['#' ~ (lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item.item.item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256'))]
+      - (item.content | b64decode | regex_findall('#[0-9a-f]{64}') | length) == 1
+      - >-
+        _platform_redis_acl_overwrite_allowed | default(false) | bool
+        or (item.content | b64decode | regex_findall('#[0-9a-f]{64}'))
+        == ['#' ~ (lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item.item.item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256'))]
       - "'nopass' not in (item.content | b64decode).split()"
       - "'>' not in (item.content | b64decode)"
     fail_msg: REDIS_ACL_STATE_MIGRATION_REQUIRED
@@ -48,24 +52,47 @@
   register: _platform_redis_acl_configs
   no_log: true
 
-- name: Refuse foreign ACL paths or inline user definitions in retained configurations
+- name: Refuse foreign inline users or ACL paths in retained configurations
   ansible.builtin.assert:
     that:
-      - not (item.content | b64decode is search('(?m)^\s*user\s'))
-      - (item.content | b64decode | regex_findall('(?m)^\s*aclfile\s+(.+)$')) in [[], [redis_member.config_directory ~ '/' ~ item.item ~ '.users.acl'], ['"' ~ redis_member.config_directory ~ '/' ~ item.item ~ '.users.acl"']]
+      - >-
+        (item.content | b64decode | regex_findall('(?m)^[ \t]*user[ \t]+([^ \t\r\n]+)') | unique | list)
+        in [[], ['default']]
+      - >-
+        (item.content | b64decode | regex_findall('(?m)^[ \t]*aclfile[ \t]+(.+)$'))
+        in [[], [redis_member.config_directory ~ '/' ~ item.item ~ '.users.acl'],
+        ['"' ~ redis_member.config_directory ~ '/' ~ item.item ~ '.users.acl"']]
+      - >-
+        not (item.content | b64decode is search('(?m)^[ \t]*user[ \t]+default[ \t]+'))
+        or (_platform_redis_acl_overwrite_allowed | default(false) | bool)
     fail_msg: REDIS_ACL_CONFIGURATION_MIGRATION_REQUIRED
   loop: "{{ _platform_redis_acl_configs.results }}"
   when: not (item.skipped | default(false))
   no_log: true
 
-- name: Seed absent Redis and Sentinel ACL files with the current default password hash
+- name: Remove retained inline default-user definitions for this owned deployment
+  ansible.builtin.replace:
+    path: "{{ redis_member.config_directory }}/{{ item.item }}.conf"
+    regexp: '(?m)^[ \t]*user[ \t]+default[ \t]+[^\r\n]*(?:\r?\n|$)'
+    replace: ''
+  loop: "{{ _platform_redis_acl_configs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not (item.skipped | default(false))
+    - _platform_redis_acl_overwrite_allowed | default(false) | bool
+    - item.content | b64decode is search('(?m)^[ \t]*user[ \t]+default[ \t]+')
+  no_log: true
+
+- name: Write the current default-user ACL for the owned Redis deployment
   ansible.builtin.copy:
     dest: "{{ redis_member.config_directory }}/{{ item }}.users.acl"
     content: |
       user default on #{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256') }} ~* &* +@all
-    force: false
+    force: "{{ _platform_redis_acl_overwrite_allowed | default(false) | bool }}"
     owner: "{{ platform_redis_user }}"
     group: "{{ platform_redis_group }}"
     mode: '0600'
   loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
+  register: _platform_redis_acl_file
   no_log: true

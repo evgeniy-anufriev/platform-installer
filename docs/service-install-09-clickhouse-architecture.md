@@ -60,6 +60,19 @@ never plaintext. The verifier is treated as sensitive and not logged. Direct
 Ansible receives the same ordinary credential reference and protected local
 secret-file input, without Installer dependence. Missing/invalid password
 blocks apply and authenticated verify; wrong password is rejected at HTTPS.
+The managed `default` account enables ClickHouse SQL access management so an
+authorized SQL session can create and manage accounts. SQL-managed access
+entities are persisted in a private, member-scoped directory under that
+instance's data path; its ownership and mode are checked before apply and the
+directory is preserved on repeat runs. Accounts created with ordinary SQL are
+local to the ClickHouse member where they are created; this configuration does
+not replicate them automatically to other HA members.
+In `raft-ha` mode, each member also declares the same named `remote_servers`
+cluster, `default`, with all three replicas over secure native TCP. This enables
+distributed DDL such as `CREATE USER analyst ON CLUSTER default`; ClickHouse
+executes that statement on each member, where the resulting account is stored
+in that member's private access-control directory. Standalone mode has no
+Keeper-backed distributed DDL cluster.
 
 The role renders service-specific XML
 from the established runtime projection and existing PKI materialization; it

@@ -37,6 +37,17 @@
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
   no_log: true
 
+- name: Create private persistent SQL access-control directories
+  ansible.builtin.file:
+    path: "{{ item.data_directory }}/access"
+    state: directory
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0700'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
 - name: Bind member data paths to one immutable managed identity
   ansible.builtin.copy:
     content: "{{ {'apiVersion': 'platform.installer/clickhouse-member-marker/v1alpha1', 'deploymentId': platform_clickhouse_deployment_id, 'memberId': item.id, 'unitId': item.unit_id} | to_nice_json }}\n"

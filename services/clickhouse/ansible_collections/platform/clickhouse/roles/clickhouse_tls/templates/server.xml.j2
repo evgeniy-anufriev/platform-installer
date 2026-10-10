@@ -10,6 +10,7 @@
   <interserver_https_port>{{ clickhouse_member.interserver_port }}</interserver_https_port>
   <interserver_https_host>{{ clickhouse_member.address | e }}</interserver_https_host>
   <path>{{ clickhouse_member.data_directory | e }}/data/</path>
+  <access_control_path>{{ clickhouse_member.data_directory | e }}/access/</access_control_path>
   <tmp_path>{{ clickhouse_member.data_directory | e }}/tmp/</tmp_path>
   <user_files_path>{{ clickhouse_member.data_directory | e }}/user_files/</user_files_path>
   <format_schema_path>{{ clickhouse_member.data_directory | e }}/format_schemas/</format_schema_path>
@@ -32,6 +33,19 @@
     </client>
   </openSSL>
 {% if platform_clickhouse_mode == 'raft-ha' %}
+  <remote_servers>
+    <default>
+      <shard>
+{% for replica in _platform_clickhouse_instances %}
+        <replica>
+          <host>{{ replica.address | e }}</host>
+          <port>{{ replica.native_port }}</port>
+          <secure>1</secure>
+        </replica>
+{% endfor %}
+      </shard>
+    </default>
+  </remote_servers>
   <zookeeper>
 {% for keeper in _platform_clickhouse_instances %}
     <node><host>{{ keeper.address | e }}</host><port>{{ keeper.keeper_client_port }}</port><secure>1</secure></node>

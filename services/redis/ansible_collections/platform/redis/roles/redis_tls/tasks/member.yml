@@ -127,7 +127,7 @@
     name: "platform-redis@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
-  when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
+  when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
 
 - name: Start unchanged Redis member
   ansible.builtin.systemd_service:
@@ -143,7 +143,7 @@
     state: restarted
   when:
     - "'sentinel' in redis_member.roles"
-    - _platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
+    - _platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
 
 - name: Start unchanged Sentinel member
   ansible.builtin.systemd_service:
@@ -152,4 +152,4 @@
     state: started
   when:
     - "'sentinel' in redis_member.roles"
-    - not (_platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))
+    - not (_platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false)))

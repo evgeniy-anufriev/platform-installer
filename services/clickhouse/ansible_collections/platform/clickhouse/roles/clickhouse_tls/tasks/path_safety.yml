@@ -36,14 +36,14 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Inspect member and private PKI paths without following links
+- name: Inspect member, SQL access-control and private PKI paths without following links
   ansible.builtin.stat:
-    path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else item.0[item.1] }}"
+    path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else (item.0.data_directory ~ '/access' if item.1 == 'access_control_directory' else item.0[item.1]) }}"
     follow: false
     get_checksum: false
     get_mime: false
     get_attributes: false
-  loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory', 'config_pki']) | list }}"
+  loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory', 'access_control_directory', 'config_pki']) | list }}"
   register: _platform_clickhouse_private_path_stats
 
 - name: Refuse substituted or foreign member and private PKI paths

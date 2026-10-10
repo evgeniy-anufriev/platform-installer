@@ -12,6 +12,45 @@ TASKS = Path(__file__).resolve().parents[1] / "ansible_collections/platform/redi
 
 
 class RedisUnitOwnershipRuntimeTests(unittest.TestCase):
+    def test_acl_overwrite_gate_requires_all_markers_and_exact_deployment_units(self):
+        executable = shutil.which("ansible-playbook")
+        if not executable:
+            self.skipTest("Ansible runtime required")
+        source = yaml.safe_load(TASKS.read_text(encoding="utf-8"))
+        authorize = next(task for task in source if task.get("name") ==
+                         "Authorize ACL overwrite only for a fully marked deployment with its exact owned units")
+        show = {"ansible.builtin.debug": {"var": "_platform_redis_acl_overwrite_allowed"}}
+        owned_redis = {"content": "# platform-redis-managed: qa/member-1/redis"}
+        owned_sentinel = {"content": "# platform-redis-managed: qa/member-1/sentinel"}
+        scenarios = [
+            ("same deployment", True, {"results": [owned_redis]},
+             {"results": [owned_sentinel]}, True),
+            ("no state marker", False, {"results": [owned_redis]},
+             {"results": [owned_sentinel]}, False),
+            ("missing redis unit", True, {"results": [{"skipped": True}]},
+             {"results": [owned_sentinel]}, False),
+            ("missing sentinel unit", True, {"results": [owned_redis]},
+             {"results": [{"skipped": True}]}, False),
+        ]
+        with tempfile.TemporaryDirectory(prefix="platform-redis-acl-gate-") as directory:
+            root = Path(directory)
+            for label, marked, redis_units, sentinel_units, expected in scenarios:
+                with self.subTest(scenario=label):
+                    variables = {
+                        "_platform_redis_all_have_persistent_state": marked,
+                        "_platform_redis_local_instances": [{"roles": ["redis", "sentinel"]}],
+                        "_platform_redis_existing_unit_headers": redis_units,
+                        "_platform_sentinel_existing_unit_headers": sentinel_units,
+                    }
+                    play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
+                             "vars": variables, "tasks": [copy.deepcopy(authorize), show]}]
+                    path = root / "gate.yml"
+                    path.write_text(yaml.safe_dump(play), encoding="utf-8")
+                    result = subprocess.run([executable, "-i", "localhost,", str(path)],
+                                            capture_output=True, text=True, timeout=60)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    self.assertIn("_platform_redis_acl_overwrite_allowed\": " + str(expected).lower(), result.stdout)
+
     def test_missing_owned_and_foreign_redis_and_sentinel_units(self):
         executable = shutil.which("ansible-playbook")
         if not executable:

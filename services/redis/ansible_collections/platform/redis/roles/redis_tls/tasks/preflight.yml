@@ -239,6 +239,18 @@
     _platform_redis_all_have_persistent_state: >-
       {{ _platform_redis_mode_marker.results | selectattr('stat.exists') | list | length == (_platform_redis_local_instances | length) }}
 
+- name: Authorize ACL overwrite only for a fully marked deployment with its exact owned units
+  ansible.builtin.set_fact:
+    _platform_redis_acl_overwrite_allowed: >-
+      {{ _platform_redis_all_have_persistent_state | bool
+         and (_platform_redis_existing_unit_headers.results
+              | rejectattr('skipped', 'defined') | list | length
+              == (_platform_redis_local_instances | length))
+         and ((_platform_sentinel_existing_unit_headers.results | default([])
+               | rejectattr('skipped', 'defined') | list | length)
+              == (_platform_redis_local_instances
+                  | selectattr('roles', 'contains', 'sentinel') | list | length)) }}
+
 - name: Reject partially initialized Redis deployment across target hosts
   ansible.builtin.assert:
     that:

@@ -589,6 +589,64 @@ Independent FULL DIFF APPROVE, zero findings, 11-file manifest SHA256
 No installed services changed, bundle build or UI restart. Real TLS/HA
 installation migration through Wails remains a separate acceptance gate.
 
+### Same-deployment ACL convergence — 2026-10-10
+
+Owner clarified that ACL may be overwritten when the existing Redis/Sentinel
+state belongs to the same deployment. The current-source fix gates overwrite on
+state markers for every member and exact Redis/Sentinel service-unit ownership
+headers; only the existing single `default` ACL hash may be refreshed. The
+retained inline `user default` may be removed. Non-default inline users and
+foreign ACL paths remain fail-closed. Extra ACL users, unsafe paths, symlinks,
+wrong owners and malformed ACL content are never adopted. RED OS node2 current-
+source Redis suite: 15 tests PASS, 41.742s, including ACL convergence,
+same-deployment gate, foreign-config preservation, ownership, repeat apply and
+read-only verification. Temporary QA workspace cleaned. Node3 was inspected
+read-only: its `sentinel.conf` contains inline `user default`; no ACL files yet
+exist, and the `qa-redis/redis-3` Redis/Sentinel unit headers plus
+`sentinel-ha` state marker match the current deployment. No target mutation,
+service restart or bundle update was performed.
+
+The initial independent FULL DIFF review blocked the earlier broader patch over
+deployment identity proof and removal of foreign ACL configuration. The source
+was narrowed to resolve those findings. Owner declined the optional targeted
+recheck, so the current diff has no independent review approval.
+
+### ClickHouse SQL user management — 2026-10-10
+
+The managed ClickHouse `default` user now enables SQL access management, and
+each member receives a private `access_control_path` under its data directory.
+The directory is created for the ClickHouse service account with mode `0700`
+and checked for ownership and symlink substitution. SQL-created accounts are
+member-local and are not automatically replicated across HA members. Current-
+source ClickHouse tests passed on RED OS (3 tests); apply and verify playbooks
+passed `ansible-playbook --syntax-check`. Independent FULL review: no blocking
+findings; non-blocking note CH-USER-SCOPE-01 records the member-local scope.
+Runtime `CREATE USER`, persistence across restart and any HA-wide account
+distribution remain untested; SERVICE-INSTALL-09 acceptance is still open.
+
+Owner then requested an HA `remote_servers` cluster named `default`. The role
+now renders all three normalized ClickHouse members as secure native-TCP
+replicas in that cluster for `raft-ha`; the shared template emits no distributed
+cluster in standalone mode, which has no Keeper-backed DDL queue. A focused
+template test verifies cluster name, all members, ports and TLS. ClickHouse
+tests and apply/verify syntax checks pass on RED OS. Live `CREATE USER ... ON
+CLUSTER default` and persistence across restart remain unverified.
+
+### ClickHouse remote_servers.default bundle delivery — 2026-10-10
+
+Built `si11-full-service-20261010-15` on trusted node2 with strict host-key
+validation, existing Python 3.11.15/Ansible 2.18.15, current-source qa-sync
+input and the previously verified bundle runtime inputs; no downloads.
+validate-bundle and standard publish-bundle PASS with digest
+`sha256:2aaac5001bf4c235f42f722cb636f3376ef924f65305172d2514218fb51d596f`.
+The project import at `.runtime/qa/full-services/bundle` was validated and
+matches the active cache. Previous `-14` is preserved at
+`.runtime/qa/full-services-bundle-before-remote-servers-default-20261010` and
+as `.runtime/qa/full-services/bundle.previous-20261009-14`. Project metadata
+and lock were not edited; UI rebind/preparation and live CREATE USER ON CLUSTER
+default acceptance remain separate. No UI restart or installation was
+performed. The node2 build workspace was cleaned with qa-sync.
+
 ### PostgreSQL automatic client-subnet TLS access — 2026-10-09
 
 Owner requested hostssl all all192.168.56.0/24 scram-sha-256, then explicitly
