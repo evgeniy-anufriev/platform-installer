@@ -1,0 +1,37 @@
+---
+- name: Require a project identity for system CA trust reconciliation
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_effective_project_id | length > 0
+    fail_msg: PKI_PROJECT_ID_REQUIRED
+
+- name: Derive this project's system CA trust anchor namespace
+  ansible.builtin.set_fact:
+    _platform_pki_trust_project_token: "{{ _platform_pki_effective_project_id | hash('sha256') }}"
+    _platform_pki_trust_authority_ids: "{{ _platform_pki_local_plans | map(attribute='authorityId') | unique | list }}"
+
+- name: Ensure the system CA trust anchor directory exists
+  ansible.builtin.file:
+    path: /etc/pki/ca-trust/source/anchors
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install current project CA certificates into system trust anchors
+  ansible.builtin.copy:
+    src: "{{ platform_pki_state_root }}/{{ _platform_pki_effective_project_id }}/authorities/{{ item }}/ca.crt"
+    dest: "/etc/pki/ca-trust/source/anchors/platform-installer-{{ _platform_pki_trust_project_token }}-{{ item | hash('sha256') }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ _platform_pki_trust_authority_ids }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _platform_pki_trust_anchor_copies
+
+- name: Refresh system CA trust
+  ansible.builtin.command:
+    argv: [update-ca-trust]
+  changed_when: >-
+    {{ _platform_pki_trust_anchor_copies.changed | default(false) | bool }}

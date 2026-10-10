@@ -486,3 +486,17 @@ Compose recreate. Infrastructure-only planning and the A7 execution guard remain
 See [A2 plan](application-libraries/a2-technical-plan.md) and
 [DIFF review](application-libraries/a2-diff-review.md); these do not authorize
 later provider, Go or UI stages.
+
+## ADR-035: Managed PKI authorities enter the target OS trust store
+
+For each resolved PKI authority selected for a target, `platform.core.pki_deploy`
+installs its public CA certificate under `/etc/pki/ca-trust/source/anchors/` and
+runs `update-ca-trust`. The anchor filename is derived from separate hashes of
+the project and authority identities, allowing distinct projects and authorities
+to coexist. Installed anchors are intentionally retained, including when an
+authority is no longer selected by the project. Refresh runs on each PKI
+deployment, making a retry recover when the prior `update-ca-trust` command failed
+after file changes. This is system-wide trust on the target and complements service-local
+certificate copies; it does not change certificate issuance, service endpoints,
+or desired project data. The implementation targets the supported RED OS
+trust-store layout.

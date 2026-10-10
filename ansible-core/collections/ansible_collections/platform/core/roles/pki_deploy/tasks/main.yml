@@ -7,6 +7,11 @@
   ansible.builtin.set_fact:
     _platform_pki_local_plans: "{{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)) | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
 
+- name: Reconcile project CA certificates in system trust
+  ansible.builtin.include_tasks: trust_anchors.yml
+  when: _platform_pki_local_plans | length > 0
+  tags: platform_installer_pki_materialization
+
 - name: Deploy target-owned PKI material atomically
   ansible.builtin.include_tasks: plan.yml
   loop: "{{ _platform_pki_local_plans | sort(attribute='id') | list }}"
