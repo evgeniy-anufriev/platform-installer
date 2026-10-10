@@ -417,7 +417,23 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	}
 	if !a.startOutcomeUnknown {
 		typedInputs := typedRuntimeSecretRequirements(planRecord.Plan)
-		if len(typedInputs) > 0 {
+		passwordRequirements, requirementErr := installationPlanRuntimeSecretRequirements(planRecord.Plan)
+		if requirementErr != nil {
+			a.editMu.Unlock()
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(requirementErr), Message: projectErrorMessage(projectErrorCode(requirementErr))}}
+		}
+		if len(passwordRequirements) > 0 {
+			missing, secretErr := a.missingInstallationSecretsLocked(planRecord.Plan, false)
+			if secretErr != nil {
+				a.editMu.Unlock()
+				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(secretErr), Message: projectErrorMessage(projectErrorCode(secretErr))}}
+			}
+			if len(missing) > 0 {
+				a.editMu.Unlock()
+				return InstallationRunOperation{Status: "BLOCKED", Error: missingInstallationSecretsError(missing)}
+			}
+		}
+		if len(typedInputs) > 0 || len(passwordRequirements) > 0 {
 			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
 			if descriptors.Status != "READY" {
 				a.editMu.Unlock()
@@ -427,7 +443,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 				code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
 				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 			}
-			if !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs) {
+			if len(typedInputs) > 0 && !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs) {
 				a.editMu.Unlock()
 				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_STALE", Message: "Типизированные входы сервисов не совпадают с требованиями одобренного плана. Сформируйте свежий план и повторите ввод секретов."}}
 			}

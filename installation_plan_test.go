@@ -20,19 +20,24 @@ type installationPlanTransport struct{}
 
 type countingSecretDescriptorTransport struct {
 	installationPlanTransport
-	calls int
+	calls       int
+	descriptors []executionnode.RuntimeSecretDescriptor
 }
 
 func (transport *countingSecretDescriptorTransport) BuildRuntimeSecretDescriptors(_ context.Context, _ executionnode.Node, _ string, _ map[string]any, request executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error) {
 	transport.calls++
+	descriptors := transport.descriptors
+	if descriptors == nil {
+		descriptors = []executionnode.RuntimeSecretDescriptor{
+			{RequirementRef: "service-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "service-main", DisplayLabel: "Пароль сервиса", RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
+			{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "service-main", DisplayLabel: "Токен", RequiredWhen: "INITIALIZED", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
+		}
+	}
 	return executionnode.RuntimeSecretDescriptorResult{
 		ProjectIdentity: request.ProjectIdentity, ProjectRevision: request.ProjectRevision,
 		DescriptorSetFingerprint: "synthetic-fingerprint",
 		Runtime:                  executionnode.RuntimeEvidence{BundleDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", CoreVersion: "test-core", CatalogDigest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", Protocol: "platform.installer/execution-runtime/v1alpha1"},
-		Descriptors: []executionnode.RuntimeSecretDescriptor{
-			{RequirementRef: "service-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "service-main", DisplayLabel: "Пароль сервиса", RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
-			{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "service-main", DisplayLabel: "Токен", RequiredWhen: "INITIALIZED", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
-		},
+		Descriptors:              descriptors,
 	}, nil
 }
 
@@ -195,6 +200,55 @@ func TestRequiredServicePasswordBlocksApprovalUntilPresent(t *testing.T) {
 	start := app.StartApprovedInstallation(created.Plan.ID)
 	if start.Error == nil || start.Error.Code != "INSTALLATION_SECRETS_MISSING" || client.starts != 0 {
 		t.Fatalf("start after service password loss=%+v starts=%d", start, client.starts)
+	}
+}
+
+func TestStartPromotesPendingPasswordsForPasswordOnlyPlan(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	transport := &countingSecretDescriptorTransport{}
+	app.binding.reader.transport = transport
+	services := map[string][]string{
+		"qa-postgresql": {"postgresql-admin-password", "postgresql-monitor-password", "postgresql-replication-password"},
+		"qa-redis":      {"redis-password", "redis-sentinel-password"},
+	}
+	passwords := make([]string, 0, 5)
+	for deployment, references := range services {
+		for _, reference := range references {
+			passwords = append(passwords, reference)
+			builder.requiredCredentials = append(builder.requiredCredentials, executionnode.RequiredCredential{RequirementRef: reference, Purpose: "SERVICE_PASSWORD"})
+			transport.descriptors = append(transport.descriptors, executionnode.RuntimeSecretDescriptor{RequirementRef: reference, Purpose: "SERVICE_PASSWORD", ServiceDeployment: deployment, DisplayLabel: reference, RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}})
+		}
+	}
+	binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh-password"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, references := range services {
+		values := make(map[string]string, len(references))
+		for _, reference := range references {
+			values[reference] = "synthetic-service-password"
+		}
+		if err := app.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, references, values); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if missing := app.secrets.MissingRequiredSecrets(binding, passwords, false, true); len(missing) != 0 {
+		t.Fatalf("pending passwords not visible at approval: %v", missing)
+	}
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if approved.Error != nil || approved.Plan == nil || !approved.Plan.Approved {
+		t.Fatalf("approval=%+v", approved)
+	}
+	start := app.StartApprovedInstallation(created.Plan.ID)
+	if transport.calls != 1 || start.Error != nil && (start.Error.Code == "INSTALLATION_SECRETS_MISSING" || strings.HasPrefix(start.Error.Code, "RUNTIME_SECRET_DESCRIPTORS_")) {
+		t.Fatalf("pending passwords were not Core-attested before Start: calls=%d status=%s error=%+v starts=%d", transport.calls, start.Status, start.Error, client.starts)
+	}
+	if missing := app.secrets.MissingRequiredSecrets(binding, passwords, false, false); len(missing) != 0 {
+		t.Fatalf("passwords not attached after Core attestation: %v", missing)
 	}
 }
 
