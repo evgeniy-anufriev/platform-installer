@@ -1,0 +1,75 @@
+---
+- name: Preflight all document values before mutations
+  platform.vault.application_document:
+    document: "{{ item }}"
+    provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+    secret_root: "{{ platform_postgresql_application_secret_root }}"
+    secret_files: "{{ platform_postgresql_secret_files }}"
+  loop: "{{ platform_vault_application_job.documents }}"
+  changed_when: false
+  when: not application_vault_identity_only | default(false)
+  register: application_vault_document_sources
+  no_log: true
+
+- name: Read document ownership and CAS versions before provider writes
+  ansible.builtin.uri:
+    url: "{{ application_vault_provider.url }}/v1/{{ item.mount }}/data/{{ item.document }}"
+    headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
+    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    validate_certs: true
+    follow_redirects: none
+    timeout: 10
+    status_code: [200, 404]
+    return_content: true
+  vars:
+    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+  loop: "{{ platform_vault_application_job.documents }}"
+  when: not application_vault_identity_only | default(false)
+  register: application_vault_document_states
+  no_log: true
+
+- name: Validate ownership and retain source bytes and CAS versions once
+  ansible.builtin.set_fact:
+    platform_application_vault_values: "{{ platform_application_vault_values | default({}) | combine(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId)) }}"
+    platform_application_vault_documents: "{{ platform_application_vault_documents | default({}) | combine(application_vault_document_states.results | platform.vault.application_vault_document_cache(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId), platform_vault_application_job.providerId)) }}"
+  when: not application_vault_identity_only | default(false)
+  no_log: true
+
+- name: Prove exact PKCS12 password before shared publication
+  ansible.builtin.command:
+    argv: [openssl, pkcs12, -in, "{{ item.0.targetDirectory }}/{{ item.1 }}", -noout, -passin, stdin]
+    stdin: "{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[item.0.storePasswordSecretRef], rstrip=false) }}"
+  when: not application_vault_identity_only | default(false)
+  delegate_to: "{{ item.0.hostId }}"
+  become: true
+  loop: "{{ platform_vault_application_job.documents | map(attribute='fields') | map('dict2items') | flatten | map(attribute='value') | selectattr('pkiPlans', 'defined') | map(attribute='pkiPlans') | flatten | product(['keystore.p12', 'truststore.p12']) | list }}"
+  changed_when: false
+  no_log: true
+
+- name: Read current policy and role before any Vault mutation
+  ansible.builtin.uri:
+    url: "{{ application_vault_provider.url }}/v1/{{ item }}"
+    headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
+    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    validate_certs: true
+    follow_redirects: none
+    timeout: 10
+    status_code: [200, 404]
+    return_content: true
+  vars:
+    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+  loop:
+    - "sys/policies/acl/{{ platform_vault_application_job.identity }}"
+    - "auth/approle/role/{{ platform_vault_application_job.identity }}"
+  register: application_vault_identity_before
+  when: platform_vault_application_job.identity is defined
+  no_log: true
+
+- name: Reject foreign policy or unexpected role policies
+  ansible.builtin.assert:
+    that:
+      - application_vault_identity_before.results[0].status == 404 or application_vault_identity_before.results[0].json.data.policy.startswith('# ' ~ platform_vault_application_job.owner ~ '\n')
+      - application_vault_identity_before.results[1].status == 404 or (application_vault_identity_before.results[0].status == 200 and application_vault_identity_before.results[1].json.data.token_policies == [platform_vault_application_job.identity])
+    fail_msg: APPLICATION_VAULT_IDENTITY_OWNERSHIP_INVALID
+  when: platform_vault_application_job.identity is defined
+  no_log: true

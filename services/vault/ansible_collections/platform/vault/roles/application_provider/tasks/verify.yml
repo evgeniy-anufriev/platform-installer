@@ -1,0 +1,62 @@
+---
+- name: Validate private identity ownership and namespace without mutation
+  platform.core.application_identity_files:
+    account: "{{ application_runtime_job.account }}"
+    user: "{{ application_runtime_job.settings.user | default('0:0') }}"
+    instance_path: "{{ application_vault_instance_path }}"
+    preflight: true
+  no_log: true
+
+- name: Read persistent RoleID only into runtime memory
+  ansible.builtin.slurp:
+    src: "{{ application_vault_instance_path }}/vault/role-id"
+  register: application_vault_verify_identity
+  no_log: true
+
+- name: Authenticate only with the instance RoleID through its resolved connection
+  ansible.builtin.uri:
+    url: "{{ application_runtime_job.vault.endpoint_url }}/v1/auth/approle/login"
+    method: POST
+    body_format: json
+    body: {role_id: "{{ application_vault_verify_identity.content | b64decode }}"}
+    ca_path: "{{ application_vault_instance_path }}/vault/ca.pem"
+    validate_certs: true
+    follow_redirects: none
+    timeout: 10
+    status_code: [200]
+    return_content: true
+  register: application_vault_verify_login
+  no_log: true
+
+- name: Verify declared read capabilities without keeping the probe token
+  block:
+    - name: Read only the declared instance secret paths
+      ansible.builtin.uri:
+        url: "{{ application_runtime_job.vault.endpoint_url }}/v1/{{ item }}"
+        headers: {X-Vault-Token: "{{ application_vault_verify_login.json.auth.client_token }}"}
+        ca_path: "{{ application_vault_instance_path }}/vault/ca.pem"
+        validate_certs: true
+        follow_redirects: none
+        timeout: 10
+        status_code: [200]
+        return_content: true
+      loop: "{{ application_runtime_job.vault.readFields.keys() | list }}"
+      register: application_vault_verify_reads
+      no_log: true
+    - name: Require every declared field to exist and be nonempty
+      ansible.builtin.assert:
+        that: "{{ application_vault_verify_reads.results | platform.vault.application_vault_verify_fields(application_runtime_job.vault.readFields) }}"
+        fail_msg: APPLICATION_VAULT_REQUIRED_FIELD_MISSING
+      no_log: true
+  always:
+    - name: Revoke only this verification token
+      ansible.builtin.uri:
+        url: "{{ application_runtime_job.vault.endpoint_url }}/v1/auth/token/revoke-self"
+        method: POST
+        headers: {X-Vault-Token: "{{ application_vault_verify_login.json.auth.client_token }}"}
+        ca_path: "{{ application_vault_instance_path }}/vault/ca.pem"
+        validate_certs: true
+        follow_redirects: none
+        timeout: 10
+        status_code: [200, 204]
+      no_log: true

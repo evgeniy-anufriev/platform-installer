@@ -37,7 +37,7 @@
           "required": [
             "compose_template"
           ],
-          "maxProperties": 1
+          "maxProperties": 2
         },
         {
           "required": [
@@ -49,6 +49,9 @@
         }
       ],
       "properties": {
+        "agent_template": {
+          "type": "string", "minLength": 1, "maxLength": 256
+        },
         "compose_template": {
           "minLength": 1,
           "maxLength": 256,
@@ -79,6 +82,8 @@
     "version",
     "files"
   ],
+  "allOf": [{"if": {"properties": {"kind": {"const": "LibraryPackage"}}},
+             "then": {"properties": {"render": {"not": {"required": ["agent_template"]}}}}}],
   "additionalProperties": false,
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/package.schema.json"
 }

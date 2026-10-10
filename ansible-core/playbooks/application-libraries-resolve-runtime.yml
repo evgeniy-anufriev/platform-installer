@@ -14,6 +14,29 @@
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_snapshot
       no_log: true
+    - name: Require a valid snapshot before preparing runtime hooks
+      ansible.builtin.assert:
+        that: application_snapshot.snapshot.validation.status == 'PASS'
+        fail_msg: "{{ application_snapshot.snapshot.findings | map(attribute='code') | unique | list }}"
+    - name: Resolve Vault and PostgreSQL hooks from the same snapshot
+      platform.core.prepare_application_vault:
+        snapshot_result: "{{ application_snapshot }}"
+      register: application_vault_inputs
+      no_log: true
+    - name: Require valid Vault projection before target contacts
+      ansible.builtin.assert:
+        that: application_vault_inputs.status == 'PASS'
+        fail_msg: "{{ application_vault_inputs.code | default('APPLICATION_VAULT_INPUT_INVALID') }}"
+    - name: Resolve PostgreSQL hooks from the same snapshot
+      platform.core.prepare_application_providers:
+        snapshot_result: "{{ application_snapshot }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+      register: application_provider_inputs
+      no_log: true
+    - name: Bind the same snapshot for runtime provider preflight
+      ansible.builtin.set_fact:
+        application_provider_snapshot: "{{ application_snapshot }}"
+      no_log: true
     - name: Assemble standalone image authority without enabling deployment planner
       platform.core.prepare_application_runtime:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"

@@ -1,7 +1,7 @@
 """Trusted SQL quoting and protected controller credential-file validation."""
 import os
 import re
-import stat
+from ansible_collections.platform.core.plugins.module_utils.application_credentials import protected_secret_files
 import hashlib
 from ansible.errors import AnsibleFilterError
 
@@ -18,36 +18,6 @@ def sql_identifier(value):
     if '\x00' in text:
         raise AnsibleFilterError('APPLICATION_PROVIDER_IDENTIFIER_INVALID')
     return '"' + text.replace('"', '""') + '"'
-
-
-def protected_secret_files(files, refs, runtime_root):
-    """No values returned; paths must remain under caller's private runtime root."""
-    try:
-        root = os.path.abspath(runtime_root)
-        if not runtime_root or root != os.path.realpath(root):
-            raise ValueError()
-        owner = os.getuid()
-        root_stat = os.lstat(root)
-        if not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != owner or root_stat.st_mode & 0o077:
-            raise ValueError()
-        for ref in set(refs):
-            path = os.path.abspath(files[ref])
-            if path == root or os.path.commonpath([root, path]) != root or os.path.realpath(path) != path:
-                raise ValueError()
-            current = path
-            while current != root:
-                info = os.lstat(current)
-                if info.st_uid != owner or info.st_mode & 0o077 or stat.S_ISLNK(info.st_mode):
-                    raise ValueError()
-                if current == path:
-                    if not stat.S_ISREG(info.st_mode) or info.st_size < 1 or info.st_size > 4096:
-                        raise ValueError()
-                elif not stat.S_ISDIR(info.st_mode):
-                    raise ValueError()
-                current = os.path.dirname(current)
-        return True
-    except (ValueError, OSError, KeyError, TypeError):
-        raise AnsibleFilterError('APPLICATION_PROVIDER_SECRET_FILE_INVALID')
 
 
 def validate_job(job):

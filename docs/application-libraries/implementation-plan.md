@@ -227,8 +227,11 @@ create/retry; нет takeover по username и неявного удаления
   значения не записывать. Проверить сохранение соседних полей, CAS conflict,
   read-only `vault_ref` и согласованность password rotation с provider.
 - AppRole: `bind_secret_id=false`; Core автоматически вычисляет `token_bound_cidrs`
-  из адресов выхода хостов размещения к Vault (`/32` или `/128`, объединение для
-  нескольких хостов), без ручного CIDR в vars. После создания роли читать RoleID
+  из адресов выхода хостов размещения к Vault (IPv4 `/24` плюс `127.0.0.1/32`, union для
+  нескольких хостов), без ручного CIDR в vars. Владелец подтвердил, что видимый
+  Vault source IP, включая proxy, входит в /24; host-level isolation не заявляется.
+  Endpoint при наличии имеет приоритет, иначе resolved client address/port;
+  error fallback запрещён. После создания роли читать RoleID
   и доставлять в защищённую volume-папку
   каждого Docker-хоста с read-only mount и правами чтения для Vault Agent;
   SecretID не создавать. Проверить разрешённый/запрещённый источник и фактический

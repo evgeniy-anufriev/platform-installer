@@ -75,6 +75,55 @@ def selected_archive(root, source, offline, loader):
     return bundle_archive(root, offline["bundleDigest"], offline, loader)
 
 
+def validate_compose(config, job, instance_path, digest):
+    """Check only values projected by Core; leave package-authored Compose fields alone."""
+    services = config.get("services", {})
+    if config.get("name") != job["placement"]["composeProject"] or set(services) != {job["instanceId"]}:
+        raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
+    service = services[job["instanceId"]]
+    if (service.get("image") != job["authority"]["requirement"]["localReference"] or
+            service.get("container_name") != job["placement"]["containerName"]):
+        raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
+    launch = service.get("entrypoint") or service.get("command")
+    expected_launch = ['/usr/bin/vault', 'agent', '-config=/opt/vault/agent.hcl'] if job.get('agentTemplate') else job['settings']['command']
+    if launch != expected_launch or (service.get("entrypoint") and service.get("command")):
+        raise ValueError("APPLICATION_COMPOSE_COMMAND_INVALID")
+    for key in ("user", "restart"):
+        if key in job["settings"] and service.get(key) != job["settings"][key]:
+            raise ValueError("APPLICATION_COMPOSE_CONFIGURATION_INVALID")
+    if job["settings"].get("readiness", {}).get("mode") == "healthcheck" and not service.get("healthcheck"):
+        raise ValueError("APPLICATION_HEALTHCHECK_REQUIRED")
+    expected_labels = {"platform.installer.project": job["projectId"], "platform.installer.library": job["libraryId"],
+                       "platform.installer.instance": job["instanceId"], "platform.installer.host": job["hostId"], LABEL: digest}
+    labels = service.get("labels", {})
+    if any(labels.get(name) != value for name, value in expected_labels.items()):
+        raise ValueError("APPLICATION_COMPOSE_LABEL_INVALID")
+    expected_env = dict(job["settings"].get("environment", {}), **{key: job["instanceId"] for key in job["identityNames"]})
+    environment = service.get("environment", {})
+    if any(environment.get(key) != str(value) for key, value in expected_env.items()):
+        raise ValueError("APPLICATION_COMPOSE_ENVIRONMENT_INVALID")
+    findings = []
+    nonsecret_values(environment, "environment", findings)
+    if findings:
+        raise ValueError("APPLICATION_COMPOSE_SECRET_INVALID")
+    expected_ports = sorted((str(x["published"]), x["container"]) for x in job["settings"].get("ports", {}).values())
+    ports = service.get("ports", [])
+    if sorted((str(x["published"]), x["target"]) for x in ports) != expected_ports:
+        raise ValueError("APPLICATION_COMPOSE_PORT_INVALID")
+    expected_mounts = {os.path.join(instance_path, "config", x["destination"]): None for x in job["configs"]}
+    core_mounts = {os.path.join(instance_path, 'vault'): '/opt/vault'} if job.get('agentTemplate') else {}
+    if job.get('vault', {}).get('pkiPlans'):
+        core_mounts[os.path.join(instance_path, 'pki')] = '/opt/application/pki'
+    expected_mounts.update(core_mounts)
+    for source, target in expected_mounts.items():
+        matches = [x for x in service.get("volumes", []) if x.get("source") == source]
+        if len(matches) != 1 or matches[0].get("type") != "bind" or not matches[0].get("read_only"):
+            raise ValueError("APPLICATION_COMPOSE_MOUNT_INVALID")
+        if (target is not None and matches[0].get("target") != target) or not matches[0].get("target", "").startswith("/"):
+            raise ValueError("APPLICATION_COMPOSE_MOUNT_INVALID")
+    return True
+
+
 def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
     libraries = snapshot.get("applicationLibraries", {})
     if snapshot.get("validation", {}).get("status") != "PASS" or libraries.get("status") != "PASS":
@@ -91,8 +140,9 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         instance = library["instances"][app_id]
         placement = instance["placements"][host]
         settings = row["settings"]
-        if (row["resources"] or instance["credentialRequirements"] or instance["agentRequired"] or
-                settings.get("endpoint", {}).get("enabled", False) or
+        if (settings.get("endpoint", {}).get("enabled", False) or
+                any(r['kind'] not in {'postgresql.database', 'postgresql.schema'} for r in row['resources'].values()) or
+                any(instance['connections'].get(k, {}).get('serviceType') != 'postgresql' for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
         # Recheck packages after native variable composition, before any rendering.
@@ -102,6 +152,9 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         if row["packageIdentity"] != {"application": app["digest"], "library": lib["digest"]}:
             raise ValueError("APPLICATION_PACKAGE_CHANGED")
         app_render, lib_render = app.get("render", {}), lib.get("render", {})
+        agent_template = app_render.get('agent_template') if instance['agentRequired'] else None
+        if instance['agentRequired'] and (not agent_template or agent_template not in app['files']):
+            raise ValueError('APPLICATION_AGENT_TEMPLATE_REQUIRED')
         if not app_render.get("compose_template") or not lib_render.get("base_compose_template"):
             raise ValueError("APPLICATION_RENDER_REQUIRED")
         for package, key in ((app, "compose_template"), (lib, "base_compose_template")):
@@ -142,60 +195,13 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
                        "imageId": image["imageId"], "platform": image["platform"], "localReference": reference}
         authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
         jobs.append(dict(row, placement=placement, account=account, configs=configs,
+                         agentTemplate=checked_file(root, app['logicalPath']+'/'+agent_template) if agent_template else None,
                          appTemplate=checked_file(root, app["logicalPath"] + "/" + app_render["compose_template"]),
                          baseTemplate=checked_file(root, lib["logicalPath"] + "/" + lib_render["base_compose_template"]),
                          baseFilename=lib_render["base_compose_filename"], baseService=lib_render["base_service"],
                          envSource=checked_file(root, lib["logicalPath"] + "/files/.env") if "files/.env" in lib["files"] else None,
                          archivePath=archive_path, authority=authority))
     return jobs
-
-
-def validate_compose(config, job, instance_path, library_path, digest):
-    """Closed simple Compose profile; CLI parses Compose, Core checks authority."""
-    allowed_top = {"name", "services", "networks", "volumes"}
-    if set(config) - allowed_top or set(config.get("services", {})) != {job["instanceId"]} or config.get("volumes"):
-        raise ValueError("APPLICATION_COMPOSE_PROFILE_INVALID")
-    if config.get("name") != job["placement"]["composeProject"]:
-        raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
-    service = config["services"][job["instanceId"]]
-    allowed = {"image", "container_name", "hostname", "command", "entrypoint", "environment", "ports", "volumes", "networks",
-               "labels", "user", "restart", "healthcheck", "read_only", "tmpfs", "init"}
-    if set(service) - allowed:
-        raise ValueError("APPLICATION_COMPOSE_PROFILE_INVALID")
-    if service.get("image") != job["authority"]["requirement"]["localReference"] or service.get("container_name") != job["placement"]["containerName"]:
-        raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
-    launch = service.get("entrypoint") or service.get("command")
-    if launch != job["settings"]["command"] or (service.get("entrypoint") and service.get("command")):
-        raise ValueError("APPLICATION_COMPOSE_COMMAND_INVALID")
-    for key in ("user", "restart"):
-        if key in job["settings"] and service.get(key) != job["settings"][key]:
-            raise ValueError("APPLICATION_COMPOSE_CONFIGURATION_INVALID")
-    if job["settings"].get("readiness", {}).get("mode") == "healthcheck" and not service.get("healthcheck"):
-        raise ValueError("APPLICATION_HEALTHCHECK_REQUIRED")
-    expected_labels = {"platform.installer.project": job["projectId"], "platform.installer.library": job["libraryId"],
-                       "platform.installer.instance": job["instanceId"], "platform.installer.host": job["hostId"], LABEL: digest}
-    if service.get("labels") != expected_labels:
-        raise ValueError("APPLICATION_COMPOSE_LABEL_INVALID")
-    expected_env = dict(job["settings"].get("environment", {}), **{key: job["instanceId"] for key in job["identityNames"]})
-    for key, value in expected_env.items():
-        if service.get("environment", {}).get(key) != str(value):
-            raise ValueError("APPLICATION_COMPOSE_ENVIRONMENT_INVALID")
-    findings = []
-    nonsecret_values(service.get("environment", {}), "environment", findings)
-    if findings:
-        raise ValueError("APPLICATION_COMPOSE_SECRET_INVALID")
-    expected_ports = sorted((str(x["published"]), x["container"]) for x in job["settings"].get("ports", {}).values())
-    ports = service.get("ports", [])
-    if sorted((str(x["published"]), x["target"]) for x in ports) != expected_ports or any(x.get("protocol", "tcp") != "tcp" for x in ports):
-        raise ValueError("APPLICATION_COMPOSE_PORT_INVALID")
-    expected_mounts = {os.path.join(instance_path, "config", x["destination"]) for x in job["configs"]}
-    mounts = service.get("volumes", [])
-    if len(mounts) != len(expected_mounts) or {x.get("source") for x in mounts} != expected_mounts or any(x.get("type") != "bind" or not x.get("read_only") or not x.get("target", "").startswith("/") for x in mounts):
-        raise ValueError("APPLICATION_COMPOSE_MOUNT_INVALID")
-    for network in config.get("networks", {}).values():
-        if network.get("external") or network.get("driver", "bridge") != "bridge":
-            raise ValueError("APPLICATION_COMPOSE_NETWORK_INVALID")
-    return True
 
 
 def validate_config_contents(configs):
@@ -207,4 +213,28 @@ def validate_config_contents(configs):
         nonsecret_values(content, "config", findings)
         if findings or re.search(r"(?:password|passphrase|token|secret|role.?id)\s*[:=]", content, re.I):
             raise ValueError("APPLICATION_CONFIG_SECRET_FORBIDDEN")
+    return True
+
+
+def agent_config(runtime):
+    """Closed supervisor profile: no arbitrary exec, template files or token sinks."""
+    import json
+    vault = runtime['vault']
+    q = json.dumps
+    lines = ['exit_after_auth = false', 'vault {', '  address = '+q(vault['endpoint_url']),
+             '  ca_cert = '+q(vault['ca_container_path']), '}', 'auto_auth {', '  method "approle" {',
+             '    mount_path = '+q(vault['auth_mount']), '    config = {',
+             '      role_id_file_path = '+q(vault['role_id_container_path']), '    }', '  }', '}']
+    lines += ['template_config {', '  exit_on_retry_failure = true', '}']
+    for binding in vault['env_templates']:
+        lines += ['env_template '+q(binding['name'])+' {', '  contents = '+q(binding['contents']),
+                  '  error_on_missing_key = true', '}']
+    lines += ['exec {', '  command = '+q(runtime['application_command']),
+              '  restart_on_secret_changes = "always"', '}']
+    return '\n'.join(lines)+'\n'
+
+
+def validate_agent(content, runtime):
+    if content.replace('\r\n', '\n').strip() != agent_config(runtime).strip():
+        raise ValueError('APPLICATION_AGENT_PROFILE_INVALID')
     return True

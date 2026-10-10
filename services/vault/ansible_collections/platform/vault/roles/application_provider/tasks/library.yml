@@ -1,0 +1,7 @@
+---
+- name: Reconcile documents once per logical library or instance
+  ansible.builtin.include_tasks: document.yml
+  loop: "{{ platform_vault_application_job.documents }}"
+  loop_control:
+    loop_var: application_vault_document
+  no_log: true

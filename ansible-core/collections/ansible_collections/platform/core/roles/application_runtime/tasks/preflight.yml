@@ -39,6 +39,16 @@
     application_config_contents: []
   no_log: true
 
+- name: Prove actual namespace mapping and private identity paths before provider writes
+  platform.core.application_identity_files:
+    account: "{{ application_runtime_job.account }}"
+    user: "{{ application_runtime_job.settings.user | default('0:0') }}"
+    instance_path: "{{ application_instance_path }}"
+    pki_plans: "{{ application_runtime_job.vault.pkiPlans | default([]) }}"
+    preflight: true
+  when: application_runtime_job.agentTemplate
+  no_log: true
+
 - name: Require rootless runtime and the locked target platform
   ansible.builtin.assert:
     that:
@@ -148,10 +158,32 @@
       base_compose_path: "{{ application_library_path }}/{{ application_runtime_job.baseFilename }}"
       base_service: "{{ application_runtime_job.baseService }}"
       config_path: "{{ application_instance_path }}/config"
+      vault: "{{ application_runtime_job.vault | default({}) }}"
+      application_command: "{{ application_runtime_job.settings.command }}"
+      vault_path: "{{ application_instance_path }}/vault"
+      pki_path: "{{ application_instance_path }}/pki"
     library_runtime:
       library_id: "{{ application_runtime_job.libraryId }}"
       host_id: "{{ inventory_hostname }}"
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
+  no_log: true
+
+- name: Render allowlisted Agent configuration without secret values
+  ansible.builtin.set_fact:
+    application_agent_content: "{{ lookup('ansible.builtin.template', application_runtime_job.agentTemplate) if application_runtime_job.agentTemplate else '' }}"
+  no_log: true
+
+- name: Bind nonsecret Agent configuration to container reconciliation digest
+  ansible.builtin.set_fact:
+    application_config_digest: "{{ [application_config_digest, application_agent_content | hash('sha256')] | to_json | hash('sha256') }}"
+  when: application_runtime_job.agentTemplate
+  no_log: true
+
+- name: Require the closed Agent supervisor profile and exact child command
+  ansible.builtin.assert:
+    that: "{{ application_agent_content | platform.core.application_validate_agent(application_runtime) }}"
+    fail_msg: APPLICATION_AGENT_PROFILE_INVALID
+  when: application_runtime_job.agentTemplate
   no_log: true
 
 - name: Render expected Compose and library bytes using native Ansible templates
@@ -288,7 +320,7 @@
         'dockerEnvironment': application_docker_environment, 'source': application_image_source,
         'configContents': application_config_contents, 'configDigest': application_config_digest,
         'archivePath': application_selected_archive_path,
-        'composeContent': application_compose_content, 'baseContent': application_base_content,
+        'composeContent': application_compose_content, 'baseContent': application_base_content, 'agentContent': application_agent_content,
         'composeArgv': ['docker', 'compose', '--project-name', application_runtime_job.placement.composeProject,
           '--project-directory', application_instance_path, '--env-file', application_library_path ~ '/.env',
           '-f', application_instance_path ~ '/compose.yml'],

@@ -1,0 +1,52 @@
+---
+- name: Acquire the exact provider runtime admin token once
+  platform.vault.application_credentials:
+    provider_id: "{{ platform_vault_application_provider.providerId }}"
+    single_provider: "{{ platform_vault_application_single_provider }}"
+  register: application_vault_admin
+  no_log: true
+
+- name: Read the selected provider CA from its exact PKI materialization
+  ansible.builtin.slurp:
+    src: "{{ platform_vault_application_provider.caSource }}"
+  delegate_to: "{{ platform_vault_application_provider.caHost }}"
+  become: true
+  register: application_vault_ca
+  no_log: true
+
+- name: Preserve provider credentials only within this invocation
+  ansible.builtin.set_fact:
+    platform_application_vault_runtime: "{{ platform_application_vault_runtime | combine({platform_vault_application_provider.providerId: platform_vault_application_provider | combine({'token': application_vault_admin.token, 'ca': application_vault_ca.content | b64decode})}) }}"
+  no_log: true
+
+- name: Write public trust CA into protected runtime workspace
+  ansible.builtin.copy:
+    content: "{{ application_vault_ca.content | b64decode }}"
+    dest: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
+    mode: '0600'
+  no_log: true
+
+- name: Check Vault mounts through the selected endpoint without redirect
+  ansible.builtin.uri:
+    url: "{{ platform_vault_application_provider.url }}/v1/{{ item }}"
+    headers: {X-Vault-Token: "{{ application_vault_admin.token }}"}
+    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
+    validate_certs: true
+    follow_redirects: none
+    timeout: 10
+    return_content: true
+    status_code: [200]
+  loop: [sys/mounts, sys/auth]
+  register: application_vault_mounts
+  no_log: true
+
+- name: Require existing AppRole auth mount
+  ansible.builtin.assert:
+    that: application_vault_mounts.results[1].json.data['approle/'].type == 'approle'
+    fail_msg: APPLICATION_VAULT_APPROLE_MOUNT_REQUIRED
+  no_log: true
+
+- name: Preserve only mount types for this provider
+  ansible.builtin.set_fact:
+    platform_application_vault_runtime: "{{ platform_application_vault_runtime | combine({platform_vault_application_provider.providerId: platform_application_vault_runtime[platform_vault_application_provider.providerId] | combine({'mounts': application_vault_mounts.results[0].json.data})}) }}"
+  no_log: true

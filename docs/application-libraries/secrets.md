@@ -224,9 +224,10 @@ Agent входит только по RoleID, SecretID не создаётся и
 сетевое ограничение роли называется `token_bound_cidrs` (не `token_cidrs`) и
 задаёт разрешённые адреса для входа и использования выданного токена. Core
 автоматически вычисляет его из хостов размещения экземпляра; пользователь
-не вводит CIDR в defaults/group_vars. Для прямого подключения используются
-host CIDR: IPv4 `/32`, IPv6 `/128`. Для одной роли на нескольких хостах берётся
-объединение адресов этих хостов, а не вся общая подсеть.
+не вводит CIDR в defaults/group_vars. По решению владельца A4 используются
+IPv4 подсети `/24` хостов и `127.0.0.1/32`; для нескольких хостов — их union.
+Владелец гарантирует, что видимый Vault адрес, включая proxy, входит в эти /24.
+Изоляция отдельных хостов внутри подсети не заявляется; IPv6-only deferred.
 
 ```yaml
 # Предлагаемые defaults provisioner; token_bound_cidrs — производная проекция Core.
@@ -247,7 +248,9 @@ AppRole файл доставляется на каждый хост. При и�
 хоста к Vault, который определяется из существующей сетевой runtime-проекции
 и проверяется execution preflight. SSH-адрес не считается автоматически адресом
 этого маршрута. Если источник нельзя достоверно определить, выполнение блокируется
-до его разрешения; ошибка входа не приводит к расширению до подсети или `0.0.0.0/0`.
+до его разрешения; ошибка входа не расширяет согласованные /24 или localhost.
+Hook и Agent используют endpoint, если он настроен; иначе resolved client
+address/port. Ошибка endpoint не разрешает его обход.
 
 Образ приложения содержит совместимый Agent. Generic provisioning формирует
 agent.hcl и безопасные bootstrap references. Agent запускает приложение с env:
@@ -295,3 +298,39 @@ supervisor `env_template` и обычные file template blocks не смеши
 Справка: [Agent supervisor](https://developer.hashicorp.com/vault/docs/agent-and-proxy/agent/process-supervisor),
 [AppRole auto-auth](https://developer.hashicorp.com/vault/docs/agent-and-proxy/autoauth/methods/approle).
 Параметры роли: [AppRole API](https://developer.hashicorp.com/vault/api-docs/auth/approle).
+
+### Авторизация application Vault hook (уточнение A4)
+
+Библиотечный vault_ref задаёт только binding на общий Vault deployment.
+Installer расшифровывает выбранный .age существующей Go-библиотекой filippo.io/age
+и передаёт SERVICE_ADMIN_TOKEN через защищённые runtime inputs. Core не получает
+локальный Windows path или пароль расшифровки.
+Standalone использует platform_vault_admin_token либо защищённый bootstrap-файл
+platform_vault_bootstrap_output_dir/admin-token без шифрования age.
+Application hook не требует unseal-ключей: они остаются входами роли установки Vault.
+Подробности и future A7 requirement binding приведены в A4 §3.1;
+UI implementation/acceptance ещё не выполнены. Source.kind=vault_ref для KV field
+остаётся отдельным назначением. Admin token не передаётся контейнеру.
+
+Одна переменная может читать shared secret, другая — account field. Несколько
+переменных могут читать одно поле: проекция добавляет каждому Go template
+уникальный комментарий без вывода, чтобы Agent не объединял одинаковые шаблоны.
+Для строгого error_on_missing_key имена KV fields в Agent bindings ограничены
+идентификаторами `[A-Za-z_][A-Za-z0-9_]*` и читаются через `.Data.data.field`.
+Обычные `.env` и Compose не содержат credential values.
+
+Runtime files задаются существующими переменными
+`platform_postgresql_application_secret_root` (private, invocation-scoped) и
+`platform_postgresql_secret_files` (reference → protected file). Названия сохранены
+для совместимости A3; общий guard вынесен в Core. Временные входы из KV удаляются
+в always после provider stage. SERVICE_ADMIN_TOKEN находится только в памяти;
+typed runtime input имеет приоритет. age CLI не требуется.
+
+Endpoint Vault имеет HTTPS порт 443 по принятому общему правилу. Без endpoint
+используется resolved client port; hook и Agent получают один и тот же URL.
+
+
+Производные KV credential files добавляются в platform_application_credential_files.
+PostgreSQL использует platform_postgresql_application_credential_files — объединение
+исходного platform_postgresql_secret_files с производной картой. Исходный extra-vars
+input не перезаписывается set_fact; производные файлы очищаются в always.

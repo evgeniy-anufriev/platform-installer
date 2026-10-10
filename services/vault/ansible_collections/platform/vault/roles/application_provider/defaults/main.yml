@@ -1,0 +1,8 @@
+---
+platform_vault_application_token_ttl: 3600
+platform_vault_application_token_max_ttl: 86400
+platform_vault_application_single_provider: false
+platform_application_vault_runtime: {}
+platform_application_vault_identities: {}
+platform_vault_admin_token: ''
+platform_vault_bootstrap_output_dir: ''

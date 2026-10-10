@@ -27,6 +27,8 @@ review черновика не считаются review этого расшир
 | [DIFF ревью A2](a2-diff-review.md) | FULL BLOCK, согласованные исправления D01/D02 и единственный TARGETED_RECHECK |
 | [Журнал A2](a2-test-journal.md) | Проверки standalone runtime, публичного образа, повтора и ограничения доказательств |
 | [Технический план A3](a3-technical-plan.md) | Общий PostgreSQL hook: ресурсы библиотеки, accounts/grants, ownership/retry и минимальная стоимость выполнения |
+| [Технический план A4](a4-technical-plan.md) | Vault endpoint/client port, KV v2, AppRole, shared PKI secrets, private Agent delivery и standalone QA |
+| [PLAN review A4](a4-plan-review.md) | FULL PLAN BLOCK → owner-approved TARGETED_RECHECK APPROVE_WITH_CHANGES, ноль blockers |
 | [DIFF review A3](a3-diff-review.md) | FULL DIFF findings and owner-approved targeted recheck |
 | [QA journal A3](a3-test-journal.md) | Functional standalone/Core/PostgreSQL evidence; no benchmark |
 | [Ревью плана A3](a3-plan-review.md) | FULL PLAN APPROVE_WITH_CHANGES, ноль blockers, bounded уточнение application privilege scope |
@@ -74,3 +76,8 @@ review черновика не считаются review этого расшир
 
 При последующей формализации синхронизировать канонические контракты, ADR и roadmap.
 Подробные результаты будущей QA вести отдельно от архитектурного описания.
+
+A4 standalone: COMPLETE by owner acceptance. See [QA journal](a4-test-journal.md)
+for native evidence and the owner-confirmed AppRole reauthentication after
+`maxTTL`; the independent [review report](a4-diff-review.md) records its verdict
+against the evidence snapshot it inspected.

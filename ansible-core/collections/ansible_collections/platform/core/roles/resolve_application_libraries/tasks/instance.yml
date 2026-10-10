@@ -43,6 +43,7 @@
         'hostId': application_job.hostId,
         'runtimeRef': application_job.deployment.runtimeRef,
         'bindings': application_job.deployment.bindings | default({}),
+        'vaultRef': application_job.deployment.vault_ref | default({}),
         'resources': application_job.deployment.resources | default({}),
         'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
           combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
