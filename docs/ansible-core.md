@@ -80,7 +80,10 @@ All selected placements pass preflight before materialization. Each library/host
 has a shared `.env` and base Compose; per-instance Compose/config files use
 validated package render descriptors. Apply uses native Compose and a generated
 config-digest ownership label to recover an interrupted configuration activation.
-Verify observes files, image identity and readiness without starting or loading
+Ordinary Verify uses one container inspect task per placement for locked image
+identity, project/library/instance/host ownership, Running and configured
+healthcheck. It does not inspect file/config digests or Compose hashes, and its
+standalone entrypoint skips target/source preflight. It never starts or loads
 containers. Accounts, Agent, PKI and infrastructure provider hooks remain later
 stages. See [runtime fixture](../examples/valid/application-runtime/README.md) and
 [A2 evidence](application-libraries/a2-test-journal.md).

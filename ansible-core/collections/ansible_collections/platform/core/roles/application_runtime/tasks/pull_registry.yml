@@ -9,7 +9,7 @@
         mode: '0600'
     - name: Pull the exact authorized platform manifest
       ansible.builtin.command:
-        argv: "{{ application_compose_argv + ['-f', application_runtime_job.instancePath ~ '/.image-delivery.yml', 'pull', application_runtime_job.instanceId] }}"
+        argv: "{{ application_runtime_job.composeArgv + ['-f', application_runtime_job.instancePath ~ '/.image-delivery.yml', 'pull', application_runtime_job.instanceId] }}"
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       no_log: true

@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 UTILS = os.path.join(REPO, "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils")
@@ -36,6 +37,29 @@ class ApplicationLibrariesTest(unittest.TestCase):
         self.assertEqual([("cspa", "node1"), ("sdku", "node1"), ("sdku", "node2")], [(job["libraryId"], job["hostId"]) for job in prepared["jobs"]])
         self.assertEqual(1, len({job["application"]["digest"] for job in prepared["jobs"]}))
         self.assertNotEqual(prepared["jobs"][0]["library"]["digest"], prepared["jobs"][1]["library"]["digest"])
+
+    def test_preparation_scans_once_and_loads_each_shared_package_once(self):
+        with patch.object(APP, "package_inputs", wraps=APP.package_inputs) as scans, \
+                patch.object(APP, "load_package", wraps=APP.load_package) as loads:
+            prepared = self.prepare()
+        self.assertEqual([], prepared["findings"])
+        self.assertEqual(1, scans.call_count)
+        self.assertEqual(3, loads.call_count)  # Two libraries share one application.
+        self.assertEqual(3, len({(call.args[2], call.args[1]) for call in loads.call_args_list}))
+
+    def test_preparation_cache_does_not_hide_changes_in_next_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
+            before = self.prepare(directory)
+            self.assertEqual([], before["findings"])
+            with open(os.path.join(directory, "library-packages/sdku/1.0.0/files/.env"), "a") as stream:
+                stream.write("EXTRA=value\n")
+            after = self.prepare(directory)
+            self.assertEqual([], after["findings"])
+            before_digests = {job["libraryId"]: job["library"]["digest"] for job in before["jobs"]}
+            after_digests = {job["libraryId"]: job["library"]["digest"] for job in after["jobs"]}
+            self.assertNotEqual(before_digests["sdku"], after_digests["sdku"])
+            self.assertEqual(before_digests["cspa"], after_digests["cspa"])
 
     def test_explicit_version_and_legacy_compatibility(self):
         self.assertEqual("v2alpha1", APP.schema_version({"serviceDeployments": {}}, None))

@@ -30,16 +30,6 @@
   no_log: true
   become: false
 
-- name: Compose distinct entities with built-in Ansible combine
-  ansible.builtin.set_fact:
-    _application_effective: >-
-      {{ _application_package.platform_application_definition.defaults |
-         combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
-         combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
-
 - name: Collect machine-owned resolved row for existing structured actions
   ansible.builtin.set_fact:
     platform_application_rows: >-
@@ -61,7 +51,11 @@
         'connections': _application_package.platform_application_definition.connections | default({}),
         'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
         'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
-        'settings': _application_effective | combine(application_job.hostOverride, recursive=true, list_merge='replace')
+        'settings': _application_package.platform_application_definition.defaults |
+          combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
+          combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
+          combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
+          combine(application_job.hostOverride, recursive=true, list_merge='replace')
       }] }}
   no_log: true
   become: false

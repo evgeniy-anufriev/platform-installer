@@ -96,7 +96,7 @@ def package_inputs(root):
     return paths
 
 
-def load_package(root, reference, kind, loader, validator):
+def load_package(root, reference, kind, loader, validator, inputs=None):
     match = REF.fullmatch(reference or "")
     if not match:
         raise ValueError("Invalid exact package reference")
@@ -115,7 +115,7 @@ def load_package(root, reference, kind, loader, validator):
     listed = set(manifest["files"]) | {kind + ".yml"}
     discovered = set()
     digest = []
-    for relative in package_inputs(root):
+    for relative in package_inputs(root) if inputs is None else inputs:
         if not relative.startswith(folder + "/"):
             continue
         short = relative[len(folder) + 1:]
@@ -151,6 +151,23 @@ def load_package(root, reference, kind, loader, validator):
             "render": manifest.get("render", {}), "files": manifest["files"]}
 
 
+def invocation_package_loader(root, loader, validator):
+    """Share checked inputs and read-only packages only within one preparation."""
+    inputs = None
+    packages = {}
+
+    def load(reference, kind):
+        nonlocal inputs
+        key = (kind, reference)
+        if key not in packages:
+            if inputs is None:
+                inputs = package_inputs(root)
+            packages[key] = load_package(root, reference, kind, loader, validator, inputs)
+        return packages[key]
+
+    return load
+
+
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
@@ -165,10 +182,11 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
     if findings:
         return {"jobs": [], "findings": findings}
     jobs = []
+    package = invocation_package_loader(root, loader, validator)
     for library_id, deployment in sorted(deployments.items()):
         field = "applicationLibraryDeployments." + library_id
         try:
-            library = load_package(root, deployment["libraryRef"], "library", loader, validator)
+            library = package(deployment["libraryRef"], "library")
             selected = deployment["applications"]
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
@@ -179,7 +197,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             app_names = set()
             for slot_id in sorted(selected):
                 slot = slots[slot_id]
-                application = load_package(root, slot["applicationRef"], "application", loader, validator)
+                application = package(slot["applicationRef"], "application")
                 if application["name"] in app_names:
                     raise ValueError("Duplicate application definition")
                 app_names.add(application["name"])

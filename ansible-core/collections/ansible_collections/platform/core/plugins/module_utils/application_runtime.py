@@ -4,10 +4,10 @@ import os
 import re
 
 try:
-    from .application_libraries import checked_file, load_package, nonsecret_values
+    from .application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from .artifact_authority import assemble_authority
 except ImportError:
-    from application_libraries import checked_file, load_package, nonsecret_values
+    from application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from artifact_authority import assemble_authority
 
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -84,6 +84,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
     if validator.validate(image_lock, schema) or not DIGEST.fullmatch(lock.get("digest", "")):
         raise ValueError("APPLICATION_IMAGE_LOCK_INVALID")
     jobs = []
+    package_loader = invocation_package_loader(root, loader, validator)
     for row in rows:
         lib_id, app_id, host = row["libraryId"], row["instanceId"], row["hostId"]
         library = libraries["libraries"][lib_id]
@@ -96,8 +97,8 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
         # Recheck packages after native variable composition, before any rendering.
         app_ref = row["applicationName"] + "@" + row["applicationVersion"]
-        app = load_package(root, app_ref, "application", loader, validator)
-        lib = load_package(root, row["libraryRef"], "library", loader, validator)
+        app = package_loader(app_ref, "application")
+        lib = package_loader(row["libraryRef"], "library")
         if row["packageIdentity"] != {"application": app["digest"], "library": lib["digest"]}:
             raise ValueError("APPLICATION_PACKAGE_CHANGED")
         app_render, lib_render = app.get("render", {}), lib.get("render", {})

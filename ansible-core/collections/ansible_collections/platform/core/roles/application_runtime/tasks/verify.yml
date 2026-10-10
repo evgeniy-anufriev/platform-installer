@@ -1,90 +1,25 @@
 ---
-- name: Bind the same exact Compose invocation used by Apply
-  ansible.builtin.include_tasks: context.yml
-
-- name: Inspect container readiness without exposing environment
+- name: Verify exact application image ownership and readiness
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_container_verified
+  vars:
+    application_verified_object: "{{ (application_container_verified.stdout | from_json)[0] }}"
+    application_verified_labels: "{{ application_verified_object.Config.Labels | default({}, true) }}"
   changed_when: false
-  until: >-
-    application_container_verified.rc == 0 and
-    (application_container_verified.stdout | from_json)[0].State.Running and
-    (application_runtime_job.settings.readiness.mode | default('container') == 'container' or
-     (application_container_verified.stdout | from_json)[0].State.get('Health', {}).get('Status') == 'healthy')
+  failed_when: >-
+    application_container_verified.rc != 0 or
+    application_verified_object.Image != application_runtime_job.authority.requirement.imageId or
+    application_verified_labels.get('platform.installer.project') != application_runtime_job.projectId or
+    application_verified_labels.get('platform.installer.library') != application_runtime_job.libraryId or
+    application_verified_labels.get('platform.installer.instance') != application_runtime_job.instanceId or
+    application_verified_labels.get('platform.installer.host') != application_runtime_job.hostId or
+    not application_verified_object.State.Running or
+    (application_runtime_job.settings.readiness.mode | default('container') != 'container' and
+     application_verified_object.State.get('Health', {}).get('Status') != 'healthy')
+  until: application_container_verified is not failed
   retries: "{{ application_runtime_job.settings.readiness.retries | default(10) }}"
   delay: "{{ application_runtime_job.settings.readiness.delay | default(2) }}"
-  no_log: true
-
-- name: Require image ownership and activated config fingerprint
-  ansible.builtin.assert:
-    that:
-      - (application_container_verified.stdout | from_json)[0].Image == application_runtime_job.authority.requirement.imageId
-      - (application_container_verified.stdout | from_json)[0].Config.Labels['platform.installer.config-digest'] == application_runtime_job.configDigest
-      - (application_container_verified.stdout | from_json)[0].Config.Labels['platform.installer.project'] == application_runtime_job.projectId
-      - (application_container_verified.stdout | from_json)[0].Config.Labels['platform.installer.library'] == application_runtime_job.libraryId
-      - (application_container_verified.stdout | from_json)[0].Config.Labels['platform.installer.instance'] == application_runtime_job.instanceId
-      - (application_container_verified.stdout | from_json)[0].Config.Labels['platform.installer.host'] == application_runtime_job.hostId
-    fail_msg: APPLICATION_CONTAINER_ACTIVATION_INVALID
-  no_log: true
-
-- name: Inspect expected runtime file bytes
-  ansible.builtin.stat:
-    path: "{{ item.path }}"
-    follow: false
-    checksum_algorithm: sha256
-  loop: >-
-    {{ [{'path': application_runtime_job.libraryPath ~ '/.env', 'content': application_runtime_job.envContent},
-        {'path': application_runtime_job.libraryPath ~ '/' ~ application_runtime_job.baseFilename, 'content': application_runtime_job.baseContent},
-        {'path': application_runtime_job.instancePath ~ '/compose.yml', 'content': application_runtime_job.composeContent}] }}
-  register: application_runtime_files
-  no_log: true
-
-- name: Require exact expected library and Compose bytes
-  ansible.builtin.assert:
-    that:
-      - item.stat.exists
-      - item.stat.isreg | default(false)
-      - not (item.stat.islnk | default(false))
-      - item.stat.checksum | default('') == item.item.content | hash('sha256')
-    fail_msg: APPLICATION_RUNTIME_FILE_DRIFT
-  loop: "{{ application_runtime_files.results }}"
-  no_log: true
-
-- name: Inspect actual declared mounted configs
-  ansible.builtin.stat:
-    path: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
-    follow: false
-    checksum_algorithm: sha256
-  loop: "{{ application_runtime_job.configContents }}"
-  register: application_config_files
-  no_log: true
-
-- name: Require expected config bytes on disk
-  ansible.builtin.assert:
-    that:
-      - item.stat.isreg | default(false)
-      - not (item.stat.islnk | default(false))
-      - item.stat.checksum | default('') == item.item.sha256
-    fail_msg: APPLICATION_CONFIG_DISK_DRIFT
-  loop: "{{ application_config_files.results }}"
-  no_log: true
-
-- name: Compute the current native Compose service hash without mutation
-  ansible.builtin.command:
-    argv: "{{ application_compose_argv + ['config', '--hash', application_runtime_job.instanceId] }}"
-  become_user: "{{ application_runtime_job.account }}"
-  environment: "{{ application_runtime_job.dockerEnvironment }}"
-  register: application_expected_compose_hash
-  changed_when: false
-  no_log: true
-
-- name: Require the running container to match the effective Compose configuration
-  ansible.builtin.assert:
-    that:
-      - application_expected_compose_hash.stdout.split() | length == 2
-      - (application_container_verified.stdout | from_json)[0].Config.Labels['com.docker.compose.config-hash'] == application_expected_compose_hash.stdout.split()[1]
-    fail_msg: APPLICATION_EFFECTIVE_COMPOSE_DRIFT
   no_log: true

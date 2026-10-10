@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -149,6 +150,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
                    "-e", "platform_service_catalog_path=" + str(REPO / "examples/catalog/service-catalog.yml"),
                    "-e", "platform_execution_bundle_root=" + str(self.bundle)]
         log = self.logs / (self._testMethodName + "-" + operation + ".log")
+        started = time.monotonic()
         try:
             completed = subprocess.run(command, env=self.env, capture_output=True, timeout=600)
         except subprocess.TimeoutExpired as error:
@@ -158,6 +160,8 @@ class ApplicationRuntimeQA(unittest.TestCase):
             raise
         log.write_bytes(completed.stdout + completed.stderr)
         log.chmod(0o600)
+        print("A2_TIMING case=%s operation=%s seconds=%.3f" %
+              (self._testMethodName, operation, time.monotonic() - started), flush=True)
         if success and completed.returncode:
             type(self).failed = True
         if success:
@@ -176,10 +180,19 @@ class ApplicationRuntimeQA(unittest.TestCase):
         return rows
 
     def test_01_apply_verify_and_clean_repeat(self):
-        self.play("apply")
-        self.play("verify")
+        initial = self.play("apply")
+        verified = self.play("verify")
         before = self.containers()
         output = self.play("apply")
+        if not self.ssh:
+            # Two libraries share an account; every invocation still rediscovers it.
+            for observed in (initial, output):
+                self.assertEqual(1, observed.count("TASK [platform.core.application_runtime : Discover the selected Docker account]"))
+                self.assertEqual(1, observed.count("TASK [platform.core.application_runtime : Inspect rootless daemon and Compose plugin without mutation]"))
+            self.assertNotIn('Probe the exact platform manifest', verified)
+            self.assertNotIn('Inspect rootless daemon and Compose plugin', verified)
+            self.assertNotIn('Inspect expected runtime file bytes', verified)
+            self.assertRegex(verified, r"node1\s+:\s+ok=\d+\s+changed=0")
         self.assertRegex(output, r"node1\s+:\s+ok=\d+\s+changed=0")
         self.assertEqual(before, self.containers())
         if self.ssh:
@@ -204,7 +217,8 @@ class ApplicationRuntimeQA(unittest.TestCase):
         subprocess.run(["sudo", "-n", "-u", ACCOUNT, "tee", str(config_path)], input=content.encode(), stdout=subprocess.DEVNULL, check=True)
         with urllib.request.urlopen("http://127.0.0.1:28180/status", timeout=30) as response:
             self.assertEqual("apigateway-sdku:INFO\n", response.read().decode())
-        self.play("verify", success=False)
+        # Lightweight Verify checks identity/readiness, not configuration drift.
+        self.play("verify")
         self.play("apply")
         after = self.containers()
         self.assertNotEqual(before["sdku"]["id"], after["sdku"]["id"])
