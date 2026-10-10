@@ -86,6 +86,8 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_monitor_healthcheck_role_is_least_privilege_and_has_no_password(self):
         self.assertIn("Reconcile pg_auto_failover healthcheck probe role without a password", self.main)
         self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION", self.main)
+        self.assertIn("SELECT FROM pg_authid WHERE rolname = 'pgautofailover_monitor'", self.main)
+        self.assertNotIn("SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin", self.main)
         self.assertIn("rolpassword IS NULL", self.main)
         self.assertIn("PASSWORD NULL", self.main)
         self.assertNotIn("healthcheckCredential", self.main + self.failover)

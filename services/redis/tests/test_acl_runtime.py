@@ -82,6 +82,7 @@ class RedisACLRuntimeTests(unittest.TestCase):
                 for kind in ['redis', 'sentinel']:
                     acl = root / (kind + '.users.acl')
                     content = acl.read_text(encoding='utf-8')
+                    self.assertIn('user default on sanitize-payload ', content)
                     self.assertIn('#' + hashlib.sha256(('fixture-' + kind + '-password').encode()).hexdigest(), content)
                     self.assertNotIn('fixture-', content)
                     self.assertEqual(acl.stat().st_mode & 0o777, 0o600)

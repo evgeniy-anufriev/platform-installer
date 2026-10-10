@@ -510,7 +510,7 @@
       - -d
       - postgres
       - -Atqc
-      - "SELECT CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin AND NOT rolsuper AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND rolpassword IS NULL) THEN 'safe' ELSE 'unsafe' END"
+      - "SELECT CASE WHEN EXISTS (SELECT FROM pg_authid WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin AND NOT rolsuper AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND rolpassword IS NULL) THEN 'safe' ELSE 'unsafe' END"
   become_user: "{{ platform_postgresql_user }}"
   register: platform_postgresql_healthcheck_role
   changed_when: false

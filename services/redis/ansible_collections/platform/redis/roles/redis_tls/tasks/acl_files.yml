@@ -88,7 +88,7 @@
   ansible.builtin.copy:
     dest: "{{ redis_member.config_directory }}/{{ item }}.users.acl"
     content: |
-      user default on #{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256') }} ~* &* +@all
+      user default on sanitize-payload #{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256') }} ~* &* +@all
     force: "{{ _platform_redis_acl_overwrite_allowed | default(false) | bool }}"
     owner: "{{ platform_redis_user }}"
     group: "{{ platform_redis_group }}"

@@ -2,6 +2,14 @@
 
 ## Status
 
+I07 repeat finding (2026-10-10): the healthcheck role's no-password invariant
+remains required. The Apply probe used `pg_roles.rolpassword IS NULL`, but
+PostgreSQL's public `pg_roles` view masks that field. A read-only check on the
+current primary showed `pg_roles` reporting non-null while protected
+`pg_authid` reported the actual password as null. The probe now reads only the
+nullness predicate from `pg_authid` as the local PostgreSQL superuser; it does
+not return or log a password. Full UI repeat acceptance is still open.
+
 Owner addition (2026-10-09): managed HBA permits all database/user client
 connections from the observed subnet of the local PostgreSQL member address
 using `hostssl all all <network/prefix> scram-sha-256`. Subnet/prefix comes
