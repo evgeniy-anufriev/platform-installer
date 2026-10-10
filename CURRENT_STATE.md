@@ -45,8 +45,8 @@ The current journal records:
 - I07: FAILED by owner evidence from the 2026-10-10 full repeat: Redis ACL
   and Redis/Sentinel restarts reported `changed` on node1–node3; PostgreSQL
   healthcheck role reconciliation reported `changed` on node2. Both source
-  fixes passed focused RED OS QA; a new bundle and full UI repeat with
-  `changed=0` remain open.
+  fixes passed focused RED OS QA. Bundle -17 is verified and published;
+  project rebind and full UI repeat with `changed=0` remain open.
 - H06/H07 and S06: IN PROGRESS.
 - I02: PASSED by owner confirmation on 2026-10-09.
 - S04: PASSED by owner confirmation on 2026-10-09.

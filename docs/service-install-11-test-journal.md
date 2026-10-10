@@ -723,3 +723,20 @@ digest as active cache. Previous -15 is preserved at
 `.runtime/qa/full-services/bundle.previous-20261010-15`; project lock unchanged.
 QA workspace cleaned. No target configuration was changed, and no UI was
 restarted. UI rebind/preparation and real Apply/Verify acceptance remain pending.
+
+### I07 repeat idempotence bundle delivery — 2026-10-10
+
+Commit `25fc821` fixes Redis ACL canonical formatting after `ACL SAVE` and
+the PostgreSQL healthcheck-role null-password probe. Redis ACL runtime repeat
+and 12 Redis contract tests passed on RED OS; 27 PostgreSQL focused tests and
+the exact read-only `pg_authid` predicate on node2 passed. Built
+`si11-full-service-20261010-17` on trusted node2 from the committed source
+and previously verified runtime inputs, with no downloads. Standard
+`validate-bundle` and `publish-bundle` passed; project import and active cache
+both have digest
+`sha256:e9e15482bf9e0a4d14fd5fc39247be1a1e12d766eb6b4a97dd8a7a25c2a3e9a5`.
+The prior -16 project bundle is preserved as
+`.runtime/qa/full-services/bundle.previous-20261010-16`. Project metadata
+still locks the prior digest; UI rebind and node preparation are separate
+steps. Build workspace was cleaned. No target configuration or UI process was
+changed; a full repeat with `changed=0` is still required for I07.
