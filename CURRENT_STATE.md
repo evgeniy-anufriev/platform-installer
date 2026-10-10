@@ -43,11 +43,10 @@ The current journal records:
 - I01 and I04: PASSED.
 - I05: PASSED by owner confirmation; exact successful run identity remains
   an evidence detail to correlate when available, not a reason to reverse PASS.
-- I07: FAILED by owner evidence from the 2026-10-10 full repeat: Redis ACL
-  and Redis/Sentinel restarts reported `changed` on node1–node3; PostgreSQL
-  healthcheck role reconciliation reported `changed` on node2. Both source
-  fixes passed focused RED OS QA. Bundle -17 is verified and published;
-  project rebind and full UI repeat with `changed=0` remain open.
+- I07: PASSED by explicit owner confirmation on 2026-10-10 after bundle -17.
+  The earlier repeat with Redis/PostgreSQL `changed` remains historical failure
+  evidence in the journal; the successful run ID and exact recap were not
+  supplied with the confirmation.
 - H06/H07 and S06: IN PROGRESS.
 - I02: PASSED by owner confirmation on 2026-10-09.
 - S04: PASSED by owner confirmation on 2026-10-09.
