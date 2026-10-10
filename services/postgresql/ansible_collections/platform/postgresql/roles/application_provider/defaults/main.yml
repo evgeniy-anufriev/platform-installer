@@ -2,6 +2,7 @@
 platform_postgresql_application_job: {}
 platform_application_provider_runtime: {}
 platform_postgresql_secret_files: {}
+platform_postgresql_application_credential_files: "{{ platform_postgresql_secret_files | combine(platform_application_credential_files | default({})) }}"
 platform_postgresql_application_secret_root: ''
 platform_postgresql_user: postgres
 platform_postgresql_application_socket: /var/run/postgresql

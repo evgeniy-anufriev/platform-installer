@@ -1,5 +1,7 @@
 ---
 - import_playbook: application-libraries-preflight.yml
+- import_playbook: application-libraries-vault-preflight.yml
+- import_playbook: application-libraries-provider-stage.yml
 
 - name: Apply preflighted application libraries on selected Docker hosts
   hosts: platform_targets

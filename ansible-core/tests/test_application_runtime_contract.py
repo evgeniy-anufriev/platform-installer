@@ -1,5 +1,4 @@
 """Focused typed preflight/security tests; real Compose QA is separate."""
-import copy
 import importlib.util
 import json
 import os
@@ -175,23 +174,31 @@ class ApplicationRuntimeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_config_contents([{"content": content}])
 
-    def test_compose_rejects_identity_secret_privilege_and_external_mount(self):
+    def test_compose_checks_core_projection_but_allows_user_fields_and_bind_address(self):
         job = {"instanceId": "api-sdku", "projectId": "project", "libraryId": "sdku", "hostId": "node1",
                "placement": {"composeProject": "project-sdku-api-node1", "containerName": "project-api-node1"},
-               "authority": self.authority, "settings": {"command": ["/usr/bin/probe"]}, "identityNames": [], "configs": []}
+               "authority": {"requirement": {"localReference": "probe:locked"}},
+               "settings": {"command": ["/usr/bin/probe"], "ports": {"http": {"published": 28180, "container": 8080}},
+                            "environment": {"CORE_OPTION": "resolved"}},
+               "identityNames": ["EVO_MANAGER_APP_ID"], "configs": []}
         service = {"image": "probe:locked", "container_name": "project-api-node1", "command": ["/usr/bin/probe"],
                    "labels": {"platform.installer.project": "project", "platform.installer.library": "sdku",
-                              "platform.installer.instance": "api-sdku", "platform.installer.host": "node1", "platform.installer.config-digest": "c" * 64}}
-        config = {"name": "project-sdku-api-node1", "services": {"api-sdku": service}}
-        self.assertTrue(validate_compose(config, job, "/private/api", "/private/lib", "c" * 64))
-        for patch in ({"privileged": True}, {"image": "unlocked:latest"}, {"entrypoint": ["/other/launcher"]}, {"environment": {"PGPASSWORD": "DO-NOT-PRINT"}},
-                      {"volumes": [{"type": "bind", "source": "/etc", "target": "/host", "read_only": True}]},
-                      {"labels": dict(service["labels"], **{"platform.installer.config-digest": "forged"})}):
-            changed = copy.deepcopy(config)
-            changed["services"]["api-sdku"].update(patch)
-            with self.assertRaises(ValueError):
-                validate_compose(changed, job, "/private/api", "/private/lib", "c" * 64)
-
+                              "platform.installer.instance": "api-sdku", "platform.installer.host": "node1",
+                              "platform.installer.config-digest": "c" * 64, "user-label": "allowed"},
+                   "environment": {"CORE_OPTION": "resolved", "EVO_MANAGER_APP_ID": "api-sdku", "CUSTOM_OPTION": "user-value"},
+                   "ports": [{"host_ip": "127.0.0.1", "published": "28180", "target": 8080, "protocol": "tcp"}],
+                   "logging": {"driver": "local"}}
+        config = {"name": "project-sdku-api-node1", "services": {"api-sdku": service},
+                  "volumes": {"user-data": {"driver": "local"}}, "x-user-extension": {"custom": True}}
+        self.assertTrue(validate_compose(config, dict(job, configs=[]), "/private/api", "c" * 64))
+        service["ports"][0]["host_ip"] = "0.0.0.0"
+        self.assertTrue(validate_compose(config, dict(job, configs=[]), "/private/api", "c" * 64))
+        changed = dict(service, image="unlocked:latest")
+        with self.assertRaisesRegex(ValueError, "APPLICATION_COMPOSE_IDENTITY_INVALID"):
+            validate_compose(dict(config, services={"api-sdku": changed}), dict(job, configs=[]), "/private/api", "c" * 64)
+        changed = dict(service, ports=[{"published": "28181", "target": 8080}])
+        with self.assertRaisesRegex(ValueError, "APPLICATION_COMPOSE_PORT_INVALID"):
+            validate_compose(dict(config, services={"api-sdku": changed}), dict(job, configs=[]), "/private/api", "c" * 64)
 
 if __name__ == "__main__":
     unittest.main()

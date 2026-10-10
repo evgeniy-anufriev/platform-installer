@@ -25,6 +25,17 @@ class ActionModule(ActionBase):
                                    SchemaValidator(args["contracts_root"]), self._loader.load_from_file)
             for job in jobs:
                 job["projectId"] = snapshot["project"]["id"]
+                if job.get('agentTemplate'):
+                    vault = values['application_vault_inputs']
+                    matches = [x for x in vault['instanceJobs'] if x['instanceId'] == job['instanceId'] and x['libraryId'] == job['libraryId']]
+                    if len(matches) != 1:
+                        raise ValueError('APPLICATION_VAULT_INSTANCE_REQUIRED')
+                    instance = matches[0]
+                    provider = next(x for x in vault['providers'] if x['providerId'] == instance['providerId'])
+                    shared = [p for x in vault['libraryJobs'] if x['libraryId'] == job['libraryId'] for d in x['documents'] for f in d['fields'].values() for p in f.get('pkiPlans', []) if p['hostId'] == job['hostId']]
+                    job['vault'] = dict(endpoint_url=provider['url'], ca_container_path='/opt/vault/ca.pem',
+                                        auth_mount='auth/approle', role_id_container_path='/opt/vault/role-id',
+                                        env_templates=instance['envTemplates'], readFields=instance['readFields'], providerId=instance['providerId'], pkiPlans=shared)
             return {"changed": False, "jobs": jobs, "status": "PASS"}
         except (ValueError, KeyError, TypeError, OSError) as error:
             code = str(error)

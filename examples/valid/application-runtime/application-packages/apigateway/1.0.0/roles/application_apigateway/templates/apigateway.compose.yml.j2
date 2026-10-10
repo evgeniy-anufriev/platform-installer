@@ -19,7 +19,7 @@ services:
       platform.installer.config-digest: {{ application_config_digest | to_json }}
     ports:
 {% for name, port in application_effective.ports.items() %}
-      - "127.0.0.1:{{ port.published }}:{{ port.container }}"
+      - "0.0.0.0:{{ port.published }}:{{ port.container }}"
 {% endfor %}
     volumes:
       - {{ (application_runtime.config_path ~ '/default.conf:/etc/nginx/conf.d/default.conf:ro') | to_json }}

@@ -10,6 +10,14 @@
   "additionalProperties": {
     "type": "object",
     "properties": {
+      "vault_ref": {
+        "type": "object",
+        "properties": {
+          "binding": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]*$"}
+        },
+        "required": ["binding"],
+        "additionalProperties": false
+      },
       "libraryRef": {
         "type": "string",
         "pattern": "^[a-z][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+$"

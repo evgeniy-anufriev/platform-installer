@@ -379,6 +379,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
+        if instance['agentRequired'] != agent_required or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
+            findings.append(finding('APPLICATION_HOST_SECRET_BINDING_CONFLICT', field))
         instance["imageRequirement"] = {"image": settings.get("image"), "delivery": "DEFERRED_TO_A2_1"}
         instance["secretBindings"] = secret_bindings
         instance["runtimeSecretRequirements"] = sorted({source["ref"] for account in accounts.values()

@@ -1,0 +1,40 @@
+---
+- name: Resolve and preflight application Vault providers without mutations
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Prepare target-free Vault projection from the exact provider snapshot
+      platform.core.prepare_application_vault:
+        snapshot_result: "{{ application_provider_snapshot }}"
+      register: application_vault_inputs
+      no_log: true
+    - name: Require supported Vault scope before writes
+      ansible.builtin.assert:
+        that: application_vault_inputs.status == 'PASS'
+        fail_msg: "{{ application_vault_inputs.code | default('APPLICATION_VAULT_INPUT_INVALID') }}"
+    - name: Initialize private provider facts
+      ansible.builtin.set_fact:
+        platform_application_vault_runtime: {}
+        platform_application_vault_identities: {}
+        platform_application_vault_values: {}
+        platform_application_vault_documents: {}
+        platform_application_credential_files: {}
+      no_log: true
+    - name: Discover each Vault deployment once
+      ansible.builtin.include_role:
+        name: platform.vault.application_provider
+        tasks_from: discover
+      vars:
+        platform_vault_application_single_provider: "{{ application_vault_inputs.providers | length == 1 }}"
+      loop: "{{ application_vault_inputs.providers }}"
+      loop_control:
+        loop_var: platform_vault_application_provider
+    - name: Preflight library and logical instance secret scopes
+      ansible.builtin.include_role:
+        name: platform.vault.application_provider
+        tasks_from: preflight
+      loop: "{{ application_vault_inputs.libraryJobs + application_vault_inputs.instanceJobs }}"
+      loop_control:
+        loop_var: platform_vault_application_job

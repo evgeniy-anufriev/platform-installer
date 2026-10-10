@@ -139,7 +139,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     credentials = account['credentials']
                     if set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal':
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_INVALID')
-                    if credentials['password']['source']['kind'] != 'runtime_secret_ref':
+                    if credentials['password']['source']['kind'] not in {'runtime_secret_ref', 'vault_ref'}:
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_SOURCE_DEFERRED')
                     username = identifier(credentials['username']['source']['value'], True)
                     admin = configuration['services'][ref]['configuration'].get('adminSuperuser', {}).get('value', {}).get('username')
@@ -153,7 +153,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     claim((ref, 'account', username), (library_id, instance_id, account_id), account['mode'])
                     value = dict(name=username, mode=account['mode'], instanceId=instance_id, accountId=account_id,
                                  database=database['name'], libraryId=library_id,
-                                 passwordRef=credentials['password']['source']['ref'], grants=grants,
+                                 passwordRef=(credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else 'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
                                  marker=marker(project_id, ref, library_id, 'account', instance_id + '/' + account_id))
                     job['accounts'].append(value)
                     database['accounts'].append(value)

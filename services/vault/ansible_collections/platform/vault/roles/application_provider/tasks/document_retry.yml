@@ -1,0 +1,43 @@
+---
+- name: Read document and CAS version through resolved provider endpoint
+  ansible.builtin.uri:
+    url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
+    headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
+    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    validate_certs: true
+    follow_redirects: none
+    timeout: 10
+    status_code: [200, 404]
+    return_content: true
+  vars:
+    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+  register: application_vault_document_before
+  no_log: true
+
+- name: Recompute owned minimal document delta after CAS conflict
+  ansible.builtin.set_fact:
+    application_vault_delta: "{{ application_vault_document_before | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
+  vars:
+    document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ application_vault_document.mount ~ '/' ~ application_vault_document.document }}"
+  no_log: true
+
+- name: Retry only the differing fields with the latest CAS version
+  ansible.builtin.uri:
+    url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
+    method: "{{ application_vault_delta.method }}"
+    headers:
+      X-Vault-Token: "{{ application_vault_provider.token }}"
+      Content-Type: "{{ 'application/merge-patch+json' if application_vault_delta.method == 'PATCH' else 'application/json' }}"
+    body_format: json
+    body: "{{ application_vault_delta.body }}"
+    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    validate_certs: true
+    follow_redirects: none
+    timeout: 10
+    status_code: [200, 400]
+  vars:
+    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+  register: application_vault_document_write
+  when: application_vault_delta.changed
+  changed_when: application_vault_document_write.status == 200
+  no_log: true

@@ -23,3 +23,11 @@
   retries: "{{ application_runtime_job.settings.readiness.retries | default(10) }}"
   delay: "{{ application_runtime_job.settings.readiness.delay | default(2) }}"
   no_log: true
+
+- name: Verify AppRole login and exact secret reads after container readiness
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: verify
+  vars:
+    application_vault_instance_path: "{{ getent_passwd[application_runtime_job.account][4] }}/{{ platform_application_root_relative }}/{{ application_runtime_job.placement.runtimePath }}"
+  when: application_runtime_job.agentTemplate | default(false)

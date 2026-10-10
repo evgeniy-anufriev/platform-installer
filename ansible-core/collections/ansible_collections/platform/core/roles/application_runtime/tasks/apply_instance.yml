@@ -31,6 +31,18 @@
     mode: '0600'
   no_log: true
 
+- name: Deliver private RoleID and PKI files for the actual container UID
+  platform.core.application_identity_files:
+    account: "{{ application_runtime_job.account }}"
+    user: "{{ application_runtime_job.settings.user | default('0:0') }}"
+    instance_path: "{{ application_runtime_job.instancePath }}"
+    role_id: "{{ hostvars['localhost'].platform_application_vault_identities[application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId].roleId }}"
+    ca: "{{ hostvars['localhost'].platform_application_vault_runtime[application_runtime_job.vault.providerId].ca }}"
+    agent: "{{ application_runtime_job.agentContent }}"
+    pki_plans: "{{ application_runtime_job.vault.pkiPlans | default([]) }}"
+  when: application_runtime_job.agentTemplate
+  no_log: true
+
 - name: Parse effective Compose without startup or image mutation
   ansible.builtin.command:
     argv: "{{ application_runtime_job.composeArgv + ['config', '--format', 'json'] }}"
@@ -40,8 +52,8 @@
   changed_when: false
   no_log: true
 
-- name: Require the closed Compose execution profile and exact identities
+- name: Check only Core-projected Compose values
   ansible.builtin.assert:
-    that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.libraryPath, application_runtime_job.configDigest) }}"
-    fail_msg: APPLICATION_COMPOSE_PROFILE_INVALID
+    that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.configDigest) }}"
+    fail_msg: APPLICATION_CORE_COMPOSE_PROJECTION_INVALID
   no_log: true

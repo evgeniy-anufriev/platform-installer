@@ -15,7 +15,7 @@ SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {{ account.name | platfo
 BEGIN;
 SELECT format('CREATE ROLE %I LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L',
  {{ account.name | platform.postgresql.application_sql_literal }},
- {{ lookup('ansible.builtin.file', platform_postgresql_secret_files[account.passwordRef], rstrip=False) | platform.postgresql.application_sql_literal }})
+ {{ lookup('ansible.builtin.file', platform_postgresql_application_credential_files[account.passwordRef], rstrip=False) | platform.postgresql.application_sql_literal }})
 \gexec
 COMMENT ON ROLE {{ account.name | platform.postgresql.application_sql_identifier }} IS {{ account.marker | platform.postgresql.application_sql_literal }};
 COMMIT;
