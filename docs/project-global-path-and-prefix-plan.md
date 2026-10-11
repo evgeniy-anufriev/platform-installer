@@ -52,8 +52,13 @@ defaults. The owner deferred application data directories, which remain under
 their current application account homes. It excludes Installer execution
 runtime, workspace, cache and bootstrap locations by owner decision. The current `managed_data_path_guard`
 allows only `/var/lib` under `/var`; a custom root requires the same guarded
-absolute-path policy before any mutation. Kafka discovery/plan projection must
-consume the same project variable and effective path as Apply/Verify.
+absolute-path policy before any mutation. For a non-default configured root,
+the existing guard creates or repairs only that directory as the session's SSH
+technical user (`ansible_user`) with mode `0755`; service data descendants keep
+their service-specific owners. Verify checks the same owner and mode without
+changing the filesystem. The system-wide default `/var/lib` remains root-owned
+and is never chowned. Kafka discovery/plan projection must consume the same
+project variable and effective path as Apply/Verify.
 
 The Services screen gets the effective directory from the target-free Core
 configuration preview. Service packages declare which deployment/member

@@ -19,11 +19,15 @@
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
-    platform_managed_data_path: "{{ item.data_directory }}"
+    platform_managed_data_path: "{{ platform_managed_data_path_instance.data_directory }}"
     platform_managed_data_owner: "{{ platform_vault_user }}"
+    platform_managed_data_root_directory: "{{ platform_data_root_directory | default('/var/lib') }}"
+    platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
+    platform_managed_data_root_verify_only: "{{ platform_vault_verify_only | bool }}"
   loop: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
   loop_control:
-    label: "{{ item.id }}"
+    loop_var: platform_managed_data_path_instance
+    label: "{{ platform_managed_data_path_instance.id }}"
 
 - name: Serialize Vault apply across Installer and standalone Ansible callers
   block:

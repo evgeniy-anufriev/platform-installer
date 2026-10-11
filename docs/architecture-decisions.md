@@ -534,6 +534,13 @@ deployment/member paths retain precedence. Application data remains in the
 application account home, and Installer execution workspaces and cache are
 outside this setting.
 
+For a configured non-default service data root, the existing managed data path
+guard creates or repairs that one directory as the current SSH technical user
+(`ansible_user`) with mode `0755`. Service data directories below it remain
+owned by their service accounts. Verify checks the root owner and mode without
+changing them. The system-wide `/var/lib` default remains root-owned and is
+never chowned.
+
 An empty name prefix adds nothing to service-owned target resource names.
 A nonempty validated prefix is prepended where service resources are created
 and checked. Installer PKI paths and application runtime names retain their

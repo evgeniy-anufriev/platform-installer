@@ -13,16 +13,23 @@
   vars:
     platform_managed_data_path: "{{ platform_clickhouse_data_root }}"
     platform_managed_data_owner: "{{ platform_clickhouse_user }}"
+    platform_managed_data_root_directory: "{{ platform_data_root_directory | default('/var/lib') }}"
+    platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
+    platform_managed_data_root_verify_only: "{{ platform_clickhouse_verify_only | bool }}"
 
 - name: Guard effective ClickHouse member data paths
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
-    platform_managed_data_path: "{{ item.data_directory }}"
+    platform_managed_data_path: "{{ platform_managed_data_path_instance.data_directory }}"
     platform_managed_data_owner: "{{ platform_clickhouse_user }}"
+    platform_managed_data_root_directory: "{{ platform_data_root_directory | default('/var/lib') }}"
+    platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
+    platform_managed_data_root_verify_only: "{{ platform_clickhouse_verify_only | bool }}"
   loop: "{{ _platform_clickhouse_local_instances }}"
   loop_control:
-    label: "{{ item.id }}"
+    loop_var: platform_managed_data_path_instance
+    label: "{{ platform_managed_data_path_instance.id }}"
 
 - name: Inspect shared ClickHouse data root before adding co-located members
   ansible.builtin.stat:

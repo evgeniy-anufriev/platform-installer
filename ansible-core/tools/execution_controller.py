@@ -29,12 +29,27 @@ MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096
 MAX_PKI_PLAN_STRING_BYTES = 4096
 MAX_OPERATION_FAILURE_CAPTURE_BYTES = 32768
+MAX_RAW_OPERATION_FAILURE_CAPTURE_BYTES = 4 * 1024 * 1024
 MAX_ROLE_VARIABLE_HOSTS = 4096
 MAX_ROLE_VARIABLES_PER_HOST = 256
 MAX_ROLE_VARIABLE_BYTES = 65536
 OPERATION_ERROR_CODE = re.compile(br'(?:"error_code"\s*:\s*"|error_code\s*[=:]\s*)([A-Z][A-Z0-9_]{2,127})')
 _PKI_PLAN_FIELDS = frozenset(("id", "requestId", "tlsProfileId", "authorityId", "hostId", "targetDirectory", "formats", "keyAlias", "trustAlias", "storePasswordSecretRef", "materializationFingerprint"))
 _PKI_PLAN_FORMATS = ("PEM", "PKCS12_KEYSTORE", "PKCS12_TRUSTSTORE")
+
+# Only fixed, non-sensitive tokens emitted by managed_data_path_guard may be
+# promoted from an Ansible failure message into the persistent run journal.
+_SAFE_TASK_DIAGNOSTIC_CODES = frozenset((
+    "MANAGED_DATA_PATH_STAT_FAILED_PERMISSION_DENIED",
+    "MANAGED_DATA_PATH_STAT_FAILED_OPERATION_NOT_PERMITTED",
+    "MANAGED_DATA_PATH_STAT_FAILED_SYMLINK_LOOP",
+    "MANAGED_DATA_PATH_STAT_FAILED_READ_ONLY_FILESYSTEM",
+    "MANAGED_DATA_PATH_STAT_FAILED_IO_ERROR",
+    "MANAGED_DATA_PATH_STAT_FAILED_UNSUPPORTED_STAT_ARGUMENT",
+    "MANAGED_DATA_PATH_STAT_FAILED_PYTHON_DEPENDENCY_MISSING",
+    "MANAGED_DATA_PATH_STAT_FAILED_UNKNOWN_STAT_ERROR",
+))
+_SAFE_TASK_DIAGNOSTIC_CODE = re.compile(r"(?<![A-Za-z0-9_-])(MANAGED_DATA_PATH_STAT_FAILED_[A-Z0-9_]+)(?![A-Za-z0-9_-])")
 
 
 def _safe_pki_plan_string(value):
@@ -66,6 +81,11 @@ def _operation_error_code(output):
     message = result.get("msg")
     if not isinstance(message, str):
         return "ANSIBLE_FAILURE_UNCLASSIFIED"
+    # Match only the guard's closed allowlist. Never return or persist `msg`,
+    # which may contain credentials or other sensitive task output.
+    for diagnostic in reversed(_SAFE_TASK_DIAGNOSTIC_CODE.findall(message)):
+        if diagnostic in _SAFE_TASK_DIAGNOSTIC_CODES:
+            return diagnostic
     message = message.lower()
     for code, phrases in (
         ("ANSIBLE_BECOME_TIMEOUT", ("timeout waiting for privilege escalation prompt",)),
@@ -82,14 +102,124 @@ def _operation_error_code(output):
     return "ANSIBLE_FAILURE_UNCLASSIFIED"
 
 
-def _wait_for_operation(process, stopped):
+def _raw_failure_capture_authorized(journal, project_identity, run_id):
+    """Require the private authorization record to match this exact run."""
+    path = os.path.join(journal.directory, "raw-ansible-capture-authorization.json")
+    try:
+        details = os.lstat(path)
+        if not stat.S_ISREG(details.st_mode) or stat.S_ISLNK(details.st_mode) or details.st_size > 512:
+            return False
+        with open(path, "r", encoding="ascii") as stream:
+            authorization = json.load(stream)
+        return authorization == {"projectIdentity": project_identity, "runId": run_id}
+    except (OSError, ValueError, UnicodeError):
+        return False
+
+
+def _claim_raw_ansible_failure_capture(release, journal, project_identity):
+    """Claim at most one raw-output run for the project named by a bundle marker."""
+    if not isinstance(project_identity, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", project_identity) is None:
+        return False
+    marker = os.path.join(release, "runtime", "diagnostics", "capture-raw-ansible-output-for-project")
+    try:
+        details = os.lstat(marker)
+        if not stat.S_ISREG(details.st_mode) or stat.S_ISLNK(details.st_mode) or details.st_size > 256:
+            return False
+        with open(marker, "r", encoding="ascii") as stream:
+            if stream.read(257).strip() != project_identity:
+                return False
+    except (OSError, UnicodeError):
+        return False
+
+    claims = os.path.join(journal.root, "raw-ansible-diagnostic-claims")
+    try:
+        os.mkdir(claims, 0o700)
+    except FileExistsError:
+        pass
+    if os.path.islink(claims) or not os.path.isdir(claims):
+        return False
+    os.chmod(claims, 0o700)
+    claim_name = hashlib.sha256(project_identity.encode("ascii")).hexdigest() + ".json"
+    claim_path = os.path.join(claims, claim_name)
+    payload = {"projectIdentity": project_identity, "runId": journal.run_id}
+    try:
+        descriptor = os.open(claim_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    except FileExistsError:
+        return False
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="ascii") as stream:
+            json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        try:
+            os.unlink(claim_path)
+        except OSError:
+            pass
+        raise
+
+    authorization = os.path.join(journal.directory, "raw-ansible-capture-authorization.json")
+    auth_descriptor = os.open(authorization, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        os.fchmod(auth_descriptor, 0o600)
+        with os.fdopen(auth_descriptor, "w", encoding="ascii") as stream:
+            json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        try:
+            os.unlink(authorization)
+        except OSError:
+            pass
+        raise
+    return _raw_failure_capture_authorized(journal, project_identity, journal.run_id)
+
+
+def _write_private_failure_output(journal, operation, output):
+    """Persist one bounded failed-operation tail inside the private run directory."""
+    if not isinstance(output, bytes) or not output:
+        return
+    metadata = journal.metadata()
+    if not _raw_failure_capture_authorized(journal, metadata.get("projectIdentity"), journal.run_id):
+        raise LifecycleError("RAW_DIAGNOSTIC_AUTHORIZATION_INVALID")
+    directory = os.path.join(journal.directory, "raw-ansible-diagnostics")
+    try:
+        os.mkdir(directory, 0o700)
+    except FileExistsError:
+        pass
+    if os.path.islink(directory) or not os.path.isdir(directory):
+        raise LifecycleError("RAW_DIAGNOSTIC_DIRECTORY_INVALID")
+    os.chmod(directory, 0o700)
+    operation_id = operation.get("operationId") if isinstance(operation, dict) else None
+    if not isinstance(operation_id, str):
+        raise LifecycleError("RAW_DIAGNOSTIC_OPERATION_INVALID")
+    name = "ansible-output-" + hashlib.sha256(operation_id.encode("utf-8")).hexdigest() + ".log"
+    path = os.path.join(directory, name)
+    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(output[-MAX_RAW_OPERATION_FAILURE_CAPTURE_BYTES:])
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+
+
+def _wait_for_operation(process, stopped, capture_failed_output=False):
     """Drain child output without persisting it or allowing an output flood.
 
-    The retained rolling window exists only in memory and is reduced to a
-    machine error token or fixed coarse failure class before it reaches the
-    journal. Raw Ansible messages never cross that boundary.
+    The rolling window is reduced to a safe machine code before it reaches the
+    journal. Raw bytes are returned only for a failed operation when a bundle
+    marker has been atomically claimed by this project's run ID.
     """
     captured = bytearray()
+    raw_captured = bytearray() if capture_failed_output else None
     descriptor = process.stdout.fileno()
     while True:
         if stopped[0]:
@@ -98,6 +228,11 @@ def _wait_for_operation(process, stopped):
                 process.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 process.kill()
+                process.wait()
+            try:
+                process.stdout.close()
+            except OSError:
+                pass
             return None
         readable, _, _ = select.select([descriptor], [], [], 0.1)
         if readable:
@@ -106,6 +241,10 @@ def _wait_for_operation(process, stopped):
                 captured.extend(chunk)
                 if len(captured) > MAX_OPERATION_FAILURE_CAPTURE_BYTES:
                     del captured[:-MAX_OPERATION_FAILURE_CAPTURE_BYTES]
+                if raw_captured is not None:
+                    raw_captured.extend(chunk)
+                    if len(raw_captured) > MAX_RAW_OPERATION_FAILURE_CAPTURE_BYTES:
+                        del raw_captured[:-MAX_RAW_OPERATION_FAILURE_CAPTURE_BYTES]
             elif process.poll() is not None:
                 break
         if process.poll() is not None and not readable:
@@ -114,7 +253,9 @@ def _wait_for_operation(process, stopped):
         process.stdout.close()
     except OSError:
         pass
-    return process.returncode, _operation_error_code(bytes(captured))
+    output = bytes(captured)
+    raw_output = bytes(raw_captured) if raw_captured is not None else None
+    return process.returncode, _operation_error_code(output), raw_output if process.returncode else None
 
 
 def _pki_materialization_plans(manifest):
@@ -620,6 +761,8 @@ def _dispatch(release, journal, manifest, stopped):
         if not isinstance(operation, dict) or not isinstance(operation.get("operationId"), str) or operation["operationId"] in identifiers:
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
         identifiers.add(operation["operationId"])
+    capture_raw_failure_output = _claim_raw_ansible_failure_capture(
+        release, journal, manifest.get("projectIdentity"))
     commands = [(operation, _command(release, journal, operation)) for operation in operations]
     pki_applied_in_run = False
     for operation, command in commands:
@@ -679,7 +822,7 @@ def _dispatch(release, journal, manifest, stopped):
                     command.extend(["-e", "@" + secret_inputs_path])
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                        env=_environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials)))
-            completed = _wait_for_operation(process, stopped)
+            completed = _wait_for_operation(process, stopped, capture_raw_failure_output)
         finally:
             for temporary_path in (credentials_path, secret_inputs_path):
                 if temporary_path is not None and os.path.lexists(temporary_path):
@@ -690,9 +833,11 @@ def _dispatch(release, journal, manifest, stopped):
                 os.close(pki_lock_descriptor)
         if completed is None:
             return "CANCELLED"
-        returncode, error_code = completed
+        returncode, error_code, raw_failure_output = completed
         journal.emit_task_observability_diagnostic(phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
         if returncode:
+            if raw_failure_output is not None:
+                _write_private_failure_output(journal, operation, raw_failure_output)
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))

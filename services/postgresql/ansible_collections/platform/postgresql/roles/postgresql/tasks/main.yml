@@ -9,6 +9,9 @@
   vars:
     platform_managed_data_path: "{{ platform_postgresql_data_directory }}"
     platform_managed_data_owner: "{{ platform_postgresql_user }}"
+    platform_managed_data_root_directory: "{{ platform_data_root_directory | default('/var/lib') }}"
+    platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
+    platform_managed_data_root_verify_only: "{{ platform_postgresql_verify_only | bool }}"
 
 - name: Resolve the exact PostgreSQL PKI consumer plan before mutation
   ansible.builtin.include_tasks: resolve_tls.yml

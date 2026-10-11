@@ -1,0 +1,116 @@
+---
+- name: Test shared project data root ownership with the existing path guard
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_user: platform-automation
+  tasks:
+    - name: Create a private disposable QA parent under /var/lib
+      ansible.builtin.tempfile:
+        path: /var/lib
+        state: directory
+        prefix: platform-installer-managed-data-root-qa-
+      become: true
+      register: _platform_managed_data_root_qa_parent
+
+    - name: Exercise shared root repair and Verify policy
+      block:
+        - name: Set an isolated path owned by an unrelated built-in account
+          ansible.builtin.set_fact:
+            _platform_managed_data_root_qa_path: "{{ _platform_managed_data_root_qa_parent.path }}/data"
+
+        - name: Require the test account used for the foreign-owner case
+          ansible.builtin.command:
+            argv: [getent, passwd, nobody]
+          changed_when: false
+
+        - name: Create the root in the broken service-owned state
+          ansible.builtin.file:
+            path: "{{ _platform_managed_data_root_qa_path }}"
+            state: directory
+            owner: nobody
+            mode: '0700'
+          become: true
+
+        - name: Require Verify to reject the wrong root owner
+          block:
+            - ansible.builtin.include_role:
+                name: platform.core.managed_data_path_guard
+                apply:
+                  become: true
+              vars:
+                platform_managed_data_path: "{{ _platform_managed_data_root_qa_path }}/qa-redis"
+                platform_managed_data_owner: redis
+                platform_managed_data_root_directory: "{{ _platform_managed_data_root_qa_path }}"
+                platform_managed_data_root_owner: "{{ ansible_user }}"
+                platform_managed_data_root_verify_only: true
+            - ansible.builtin.fail:
+                msg: PROJECT_DATA_ROOT_INVALID_OWNER_ADMITTED
+          rescue:
+            - ansible.builtin.assert:
+                that:
+                  - "'PROJECT_DATA_ROOT_OWNERSHIP_INVALID' in (ansible_failed_result | to_json)"
+                  - "'PROJECT_DATA_ROOT_INVALID_OWNER_ADMITTED' not in (ansible_failed_result | to_json)"
+
+        - name: Reconcile the shared root to the SSH technical user
+          ansible.builtin.include_role:
+            name: platform.core.managed_data_path_guard
+            apply:
+              become: true
+          vars:
+            platform_managed_data_path: "{{ _platform_managed_data_root_qa_path }}/qa-redis"
+            platform_managed_data_owner: redis
+            platform_managed_data_root_directory: "{{ _platform_managed_data_root_qa_path }}"
+            platform_managed_data_root_owner: "{{ ansible_user }}"
+
+        - name: Inspect the reconciled shared root
+          ansible.builtin.stat:
+            path: "{{ _platform_managed_data_root_qa_path }}"
+            follow: false
+          become: true
+          register: _platform_managed_data_root_qa_stat
+
+        - name: Require technical-user ownership and mode 0755
+          ansible.builtin.assert:
+            that:
+              - _platform_managed_data_root_qa_stat.stat.pw_name == ansible_user
+              - _platform_managed_data_root_qa_stat.stat.mode == '0755'
+
+        - name: Confirm that the default /var/lib root is never chowned
+          block:
+            - ansible.builtin.stat:
+                path: /var/lib
+                follow: false
+              become: true
+              register: _platform_var_lib_before
+
+            - ansible.builtin.include_role:
+                name: platform.core.managed_data_path_guard
+                apply:
+                  become: true
+              vars:
+                platform_managed_data_path: /var/lib/platform-installer-managed-data-root-qa-default
+                platform_managed_data_owner: platform-automation
+                platform_managed_data_root_directory: /var/lib
+                platform_managed_data_root_owner: "{{ ansible_user }}"
+
+            - ansible.builtin.stat:
+                path: /var/lib
+                follow: false
+              become: true
+              register: _platform_var_lib_after
+
+            - ansible.builtin.assert:
+                that:
+                  - _platform_var_lib_before.stat.pw_name == 'root'
+                  - _platform_var_lib_before.stat.mode == '0755'
+                  - _platform_var_lib_after.stat.pw_name == _platform_var_lib_before.stat.pw_name
+                  - _platform_var_lib_after.stat.mode == _platform_var_lib_before.stat.mode
+
+      always:
+        - name: Remove only the disposable QA parent
+          ansible.builtin.file:
+            path: "{{ _platform_managed_data_root_qa_parent.path }}"
+            state: absent
+          become: true
