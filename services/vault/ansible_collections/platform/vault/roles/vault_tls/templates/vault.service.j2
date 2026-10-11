@@ -1,4 +1,4 @@
-# platform-vault-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}
+# {{ platform_vault_name }}-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}
 [Unit]
 Description=Platform Vault {{ vault_member.instance_name }}
 After=network-online.target
@@ -16,8 +16,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths={{ vault_member.data_directory }} /var/log/platform-vault-audit
-BindPaths={{ vault_member.log_directory }}:/var/log/platform-vault-audit
+ReadWritePaths={{ vault_member.data_directory }} /var/log/{{ platform_vault_name }}-audit
+BindPaths={{ vault_member.log_directory }}:/var/log/{{ platform_vault_name }}-audit
 LimitNOFILE=65536
 KillSignal=SIGINT
 TimeoutStopSec=60

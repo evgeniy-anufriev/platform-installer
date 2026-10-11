@@ -65,6 +65,7 @@ type Page =
   | "about"
   | "settings";
 type StructuralIntent =
+  | { operation: "SetProjectSetting"; setting: "platform_data_root_directory" | "platform_name_prefix"; value: string }
   | ServerIntent
   | DeploymentIntent
   | PlacementIntent
@@ -2281,6 +2282,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {!loading && !creating && (
             <UtilityPages
               page={page}
+              managed={managed}
+              onAppendProjectSetting={appendStructuralIntent}
               events={installationEvents}
               runId={installationRun?.run?.runId}
               configVersion={applicationConfigVersion}

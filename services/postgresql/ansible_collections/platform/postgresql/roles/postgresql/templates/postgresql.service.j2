@@ -1,5 +1,5 @@
 [Unit]
-# platform-postgresql-managed: {{ platform_postgresql_deployment_id }}/{{ (_platform_postgresql_local_members | first).id }}
+# {{ platform_postgresql_name }}-managed: {{ platform_postgresql_deployment_id }}/{{ (_platform_postgresql_local_members | first).id }}
 Description=Platform PostgreSQL {{ _platform_postgresql_unit_name }}
 After=network-online.target
 Wants=network-online.target

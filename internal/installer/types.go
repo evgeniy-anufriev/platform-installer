@@ -15,6 +15,7 @@ const (
 	EditCommandAPIVersionV7    = "platform.installer/edit-command/v1alpha7"
 	EditCommandAPIVersionV8    = "platform.installer/edit-command/v1alpha8"
 	EditCommandAPIVersionV9    = "platform.installer/edit-command/v1alpha9"
+	EditCommandAPIVersionV10   = "platform.installer/edit-command/v1alpha10"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -261,13 +262,15 @@ type StructuralSaveResult struct {
 // an Ansible-resolved ProjectSnapshot and exposes only directly owned provider
 // fields, never Core-derived endpoint, DNS or PKI semantics.
 type ManagedProjectView struct {
-	ProjectRevision  string                          `json:"projectRevision"`
-	Servers          map[string]ManagedServer        `json:"servers"`
-	Deployments      map[string]ManagedDeployment    `json:"deployments"`
-	EndpointGroups   map[string]ManagedEndpointGroup `json:"endpointGroups"`
-	MemberPlacements []ManagedMemberPlacement        `json:"memberPlacements"`
-	HostPlacements   []ManagedHostPlacement          `json:"hostPlacements"`
-	PKI              ManagedPKI                      `json:"pki"`
+	ProjectRevision   string                          `json:"projectRevision"`
+	DataRootDirectory string                          `json:"dataRootDirectory"`
+	NamePrefix        string                          `json:"namePrefix"`
+	Servers           map[string]ManagedServer        `json:"servers"`
+	Deployments       map[string]ManagedDeployment    `json:"deployments"`
+	EndpointGroups    map[string]ManagedEndpointGroup `json:"endpointGroups"`
+	MemberPlacements  []ManagedMemberPlacement        `json:"memberPlacements"`
+	HostPlacements    []ManagedHostPlacement          `json:"hostPlacements"`
+	PKI               ManagedPKI                      `json:"pki"`
 }
 
 // ManagedPKI contains direct Installer-owned desired input only; it never

@@ -1,4 +1,8 @@
 ---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
 - name: Resolve optional typed runtime lease inputs
   ansible.builtin.include_tasks: resolve_runtime_inputs.yml
 

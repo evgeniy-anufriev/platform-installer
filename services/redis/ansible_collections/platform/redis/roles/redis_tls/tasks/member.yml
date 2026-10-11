@@ -68,7 +68,7 @@
 - name: Render Redis systemd instance unit
   ansible.builtin.template:
     src: redis.service.j2
-    dest: "/etc/systemd/system/platform-redis@{{ redis_member.instance_name }}.service"
+    dest: "/etc/systemd/system/{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     owner: root
     group: root
     mode: '0644'
@@ -90,7 +90,7 @@
 - name: Render Sentinel systemd instance unit
   ansible.builtin.template:
     src: sentinel.service.j2
-    dest: "/etc/systemd/system/platform-redis-sentinel@{{ redis_member.instance_name }}.service"
+    dest: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
     owner: root
     group: root
     mode: '0644'
@@ -142,21 +142,21 @@
 
 - name: Enable and start Redis member
   ansible.builtin.systemd_service:
-    name: "platform-redis@{{ redis_member.instance_name }}.service"
+    name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
   when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
 
 - name: Start unchanged Redis member
   ansible.builtin.systemd_service:
-    name: "platform-redis@{{ redis_member.instance_name }}.service"
+    name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: started
   when: not (_platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
 
 - name: Enable and start Sentinel member
   ansible.builtin.systemd_service:
-    name: "platform-redis-sentinel@{{ redis_member.instance_name }}.service"
+    name: "{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
   when:
@@ -165,7 +165,7 @@
 
 - name: Start unchanged Sentinel member
   ansible.builtin.systemd_service:
-    name: "platform-redis-sentinel@{{ redis_member.instance_name }}.service"
+    name: "{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
     enabled: true
     state: started
   when:

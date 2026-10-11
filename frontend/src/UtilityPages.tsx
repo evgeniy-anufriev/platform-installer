@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { InstallationEventView } from "./backend";
+import type { InstallationEventView, ManagedProjectView } from "./backend";
 import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
 import "./utility-pages.css";
 
@@ -961,6 +961,8 @@ function EventLog({
 
 type Props = {
   page: string;
+  managed?: ManagedProjectView;
+  onAppendProjectSetting?: (intent: { operation: "SetProjectSetting"; setting: "platform_data_root_directory" | "platform_name_prefix"; value: string }) => Promise<boolean>;
   events: InstallationEventView[];
   runId?: string;
   configVersion?: number;
@@ -1216,6 +1218,8 @@ function HelpPage({ onNavigate }: { onNavigate?: (page: HelpPageId) => void }) {
 
 export function UtilityPages({
   page,
+  managed,
+  onAppendProjectSetting,
   events,
   runId,
   configVersion,
@@ -1223,6 +1227,22 @@ export function UtilityPages({
   configError,
   onNavigate,
 }: Props) {
+  const [dataRootDirectory, setDataRootDirectory] = useState(managed?.dataRootDirectory || "/var/lib");
+  const [namePrefix, setNamePrefix] = useState(managed?.namePrefix || "");
+  const [settingBusy, setSettingBusy] = useState(false);
+  useEffect(() => {
+    setDataRootDirectory(managed?.dataRootDirectory || "/var/lib");
+    setNamePrefix(managed?.namePrefix || "");
+  }, [managed?.projectRevision]);
+  const stageSetting = async (setting: "platform_data_root_directory" | "platform_name_prefix", value: string) => {
+    if (!onAppendProjectSetting || !managed) return;
+    setSettingBusy(true);
+    try {
+      await onAppendProjectSetting({ operation: "SetProjectSetting", setting, value });
+    } finally {
+      setSettingBusy(false);
+    }
+  };
   if (page === "help") return <HelpPage onNavigate={onNavigate} />;
 
   if (page === "logs")
@@ -1280,11 +1300,29 @@ export function UtilityPages({
         <header className="utility-page-title">
           <div>
             <h1 id="settings-title">Настройки</h1>
-            <p>
-              Локальная конфигурация приложения и сведения о хранении данных.
-            </p>
+            <p>Параметры проекта и локальная конфигурация приложения.</p>
           </div>
         </header>
+        <section className="utility-card">
+          <h2>Параметры проекта</h2>
+          <p>Изменения добавляются в общий черновик проекта. Просмотрите их и нажмите «Сохранить» в шапке.</p>
+          <label>
+            Корневой каталог данных сервисов
+            <input value={dataRootDirectory} onChange={(event) => setDataRootDirectory(event.target.value)} disabled={!managed || settingBusy} />
+          </label>
+          <button type="button" disabled={!managed || settingBusy || dataRootDirectory === (managed.dataRootDirectory || "/var/lib")} onClick={() => void stageSetting("platform_data_root_directory", dataRootDirectory)}>
+            Добавить каталог в черновик
+          </button>
+          <p>Путь применяется к каталогам данных сервисов по умолчанию. Данные при изменении пути автоматически не переносятся.</p>
+          <label>
+            Префикс имён ресурсов
+            <input value={namePrefix} onChange={(event) => setNamePrefix(event.target.value)} disabled={!managed || settingBusy} />
+          </label>
+          <button type="button" disabled={!managed || settingBusy || namePrefix === (managed.namePrefix || "")} onClick={() => void stageSetting("platform_name_prefix", namePrefix)}>
+            Добавить префикс в черновик
+          </button>
+          <p>Пустое значение создаёт имена ресурсов сервисов без префикса. Новый префикс создаёт новые имена ресурсов; прежние ресурсы автоматически не переименовываются.</p>
+        </section>
         <section className="utility-card">
           <h2>Конфигурация приложения</h2>
           {configError ? (

@@ -33,6 +33,8 @@ type topologyMutationSet struct {
 
 func topologyOperation(operation string) bool {
 	switch operation {
+	case "SetProjectSetting":
+		return true
 	case "CreateServiceDeployment", "DeleteServiceDeployment",
 		"ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement",
 		"CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",
@@ -137,6 +139,12 @@ func validateStructuralCommandConflicts(commands []EditCommand) error {
 			lifecycle[key] = true
 		}
 		switch command.Operation {
+		case "SetProjectSetting":
+			key = "project-setting/" + command.Setting
+			if relations[key] {
+				return blocked("EDIT_COMMAND_CONFLICT", "Edit session contains conflicting project setting intents", "command.setting")
+			}
+			relations[key] = true
 		case "SetServiceEndpointGroup", "ClearServiceEndpointGroup":
 			key = "endpoint-relation/" + command.DeploymentID
 			if relations[key] {
@@ -251,6 +259,14 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 	state, deployments, groups, err := candidate.desired()
 	if err != nil {
 		return nil, mutations, err
+	}
+	for _, command := range commands {
+		if command.Operation != "SetProjectSetting" {
+			continue
+		}
+		candidate.documents[desiredDocument][command.Setting] = command.Value
+		candidate.dirty[desiredDocument] = true
+		changes = append(changes, commandSummary(command))
 	}
 	for _, command := range commands {
 		if command.Operation != "CreateServer" && command.Operation != "UpdateServer" && command.Operation != "DeleteServer" {
@@ -591,7 +607,7 @@ func (candidate *structuralCandidate) reconcilePlacement(command EditCommand, de
 		} else {
 			value["roles"] = stringValues(host.Roles)
 		}
-		if command.APIVersion == EditCommandAPIVersionV9 {
+		if command.APIVersion == EditCommandAPIVersionV9 || command.APIVersion == EditCommandAPIVersionV10 {
 			// v1alpha9 makes priority a required part of each final host-scoped
 			// placement entry. Earlier immutable contracts retain their existing
 			// preservation behavior for fields they cannot express.

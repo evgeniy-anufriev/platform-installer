@@ -72,7 +72,7 @@
 
 - name: Create the fixed audit mountpoint used inside each unit namespace
   ansible.builtin.file:
-    path: /var/log/platform-vault-audit
+    path: "/var/log/{{ platform_vault_name }}-audit"
     state: directory
     owner: root
     group: root
@@ -190,7 +190,7 @@
 - name: Ensure the immutable role-owned member identity marker exists
   ansible.builtin.copy:
     content: "{{ {'apiVersion': 'platform.installer/vault-member-marker/v1alpha1', 'deploymentId': platform_vault_deployment_id, 'memberId': item.id, 'instanceName': item.instance_name} | to_nice_json }}\n"
-    dest: "{{ item.data_directory }}/.platform-vault-member.json"
+    dest: "{{ item.data_directory }}/.{{ platform_vault_name }}-member.json"
     owner: "{{ platform_vault_user }}"
     group: "{{ platform_vault_group }}"
     mode: '0600'

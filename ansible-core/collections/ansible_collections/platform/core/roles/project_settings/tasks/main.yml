@@ -1,0 +1,15 @@
+---
+- name: Validate portable project resource settings
+  ansible.builtin.assert:
+    that:
+      - platform_data_root_directory is string
+      - platform_data_root_directory | length <= 240
+      - platform_data_root_directory is match('^/(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,95}/)*[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
+      - "'.' not in platform_data_root_directory.split('/')"
+      - "'..' not in platform_data_root_directory.split('/')"
+      - platform_data_root_directory.split('/')[1] not in ['bin', 'boot', 'dev', 'etc', 'home', 'lib', 'lib64', 'proc', 'root', 'run', 'sbin', 'sys', 'tmp', 'usr']
+      - platform_data_root_directory.split('/')[1] != 'var' or platform_data_root_directory == '/var/lib' or platform_data_root_directory.startswith('/var/lib/')
+      - platform_name_prefix is string
+      - platform_name_prefix == '' or platform_name_prefix is match('^[a-z][a-z0-9_]{0,23}$')
+    fail_msg: PROJECT_RESOURCE_SETTINGS_INVALID
+    quiet: true

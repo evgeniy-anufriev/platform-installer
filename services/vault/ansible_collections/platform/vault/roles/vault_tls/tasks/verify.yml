@@ -58,7 +58,7 @@
       - _platform_vault_configuration.results[0].json.data['file/'] is defined
       - _platform_vault_configuration.results[0].json.data['file/'].type == 'file'
       - (_platform_vault_configuration.results[0].json.data['file/'].local | default(false) | bool) == false
-      - _platform_vault_configuration.results[0].json.data['file/'].options.file_path == '/var/log/platform-vault-audit/audit.log'
+      - _platform_vault_configuration.results[0].json.data['file/'].options.file_path == '/var/log/' ~ platform_vault_name ~ '-audit/audit.log'
       - (_platform_vault_configuration.results[0].json.data['file/'].options.log_raw | default(false) | string | lower) in ['false', '0']
       - _platform_vault_configuration.results[1].json.data['secret/'].type == 'kv'
       - _platform_vault_configuration.results[1].json.data['secret/'].options.version | string == '2'

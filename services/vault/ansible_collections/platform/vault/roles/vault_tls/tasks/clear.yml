@@ -1,6 +1,7 @@
 ---
 - name: Validate every selected member before stopping any local Vault unit
   platform.vault.clear_member:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
     deployment_id: "{{ platform_vault_deployment_id }}"
     member_id: "{{ item.id }}"
     data_directory: "{{ item.data_directory }}"
@@ -21,6 +22,7 @@
 
 - name: Clear Raft contents through freshly validated held member directories
   platform.vault.clear_member:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
     deployment_id: "{{ platform_vault_deployment_id }}"
     member_id: "{{ item.id }}"
     data_directory: "{{ item.data_directory }}"

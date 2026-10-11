@@ -14,7 +14,7 @@
 
 - name: Read Platform systemd-resolved drop-in without mutation
   ansible.builtin.slurp:
-    src: /etc/systemd/resolved.conf.d/platform-installer.conf
+    src: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
   register: _platform_dns_client_resolved_dropin
   when: platform_dns_client_backend == 'systemd-resolved'
 

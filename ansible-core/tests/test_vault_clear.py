@@ -42,9 +42,9 @@ class VaultClearContractTests(unittest.TestCase):
     def test_bad_identity_and_confirmation_fail_before_any_filesystem_access(self):
         for member in ('../vault', '1bad', 'a' * 129, '', 'vault/other'):
             with self.subTest(member=member), self.assertRaisesRegex(CLEAR.ClearFailure, 'IDENTITY_INVALID'):
-                CLEAR.clear_member('qa', member, 'qa')
+                CLEAR.clear_member('qa', member, '/var/lib/qa', 'qa')
         with self.assertRaisesRegex(CLEAR.ClearFailure, 'CONFIRMATION_REQUIRED'):
-            CLEAR.clear_member('qa', 'vault-1', '')
+            CLEAR.clear_member('qa', 'vault-1', '/var/lib/qa', '')
 
     def test_ansible_invalid_request_fails_safely_without_raw_payload(self):
         if not shutil.which('ansible-playbook'):
@@ -53,7 +53,8 @@ class VaultClearContractTests(unittest.TestCase):
             play = Path(directory) / 'probe.json'
             play.write_text(json.dumps([{'hosts': 'localhost', 'connection': 'local',
                 'gather_facts': False, 'tasks': [{'platform.vault.clear_member': {
-                    'deployment_id': 'qa', 'member_id': 'vault-1', 'confirmation': ''}}]}]))
+                    'deployment_id': 'qa', 'member_id': 'vault-1',
+                    'data_directory': '/var/lib/qa', 'confirmation': ''}}]}]))
             env = dict(os.environ, ANSIBLE_NOCOLOR='1',
                        ANSIBLE_COLLECTIONS_PATHS=str(ROOT / 'services/vault'))
             result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(play)],
@@ -93,20 +94,19 @@ class VaultClearSafetyTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.account = pwd.getpwnam('nobody')
         self.deployment, self.member = 'qa', 'vault-1'
-        import hashlib
-        self.unit = 'platform-vault-' + hashlib.sha256(b'qa\nvault-1').hexdigest()
+        self.unit = 'vault@qa-1'
         self.data_root = self.root / 'data'
         self.config_root = self.root / 'config'
         self.units = self.root / 'units'
         self.data = self.data_root / 'qa/vault-1'
-        self.configs = self.config_root / 'qa/vault-1'
+        self.configs = self.config_root / 'vault/qa/vault-1'
         self.config = self.configs / 'vault.hcl'
         for path in (self.data, self.configs, self.units):
             path.mkdir(parents=True)
         for path in (self.data, self.configs):
             path.chmod(0o700)
             os.chown(path, self.account.pw_uid, self.account.pw_gid)
-        self.marker = self.data / CLEAR.MARKER
+        self.marker = self.data / '.vault-member.json'
         self.marker.write_text(json.dumps({'apiVersion': 'platform.installer/vault-member-marker/v1alpha1',
             'deploymentId': 'qa', 'memberId': 'vault-1', 'instanceName': self.unit}))
         self.config.write_text('storage "raft" {\n  path = "' + str(self.data) +
@@ -115,16 +115,16 @@ class VaultClearSafetyTests(unittest.TestCase):
             path.chmod(0o600)
             os.chown(path, self.account.pw_uid, self.account.pw_gid)
         self.unit_file = self.units / (self.unit + '.service')
-        self.unit_file.write_text('# platform-vault-managed: qa/vault-1\nUser=platform-vault\n' +
+        self.unit_file.write_text('# vault-managed: qa/vault-1\nUser=vault\n' +
                                  'ExecStart=/usr/bin/vault server -config=' + str(self.config) + '\n')
         self.payload = self.data / 'raft'
         self.payload.mkdir()
         (self.payload / 'raft.db').write_bytes(b'SYNTHETIC_PRIVATE_DATA')
-        self.properties = {'ActiveState': 'inactive', 'MainPID': '0', 'User': 'platform-vault',
+        self.properties = {'ActiveState': 'inactive', 'MainPID': '0', 'User': 'vault',
             'FragmentPath': str(self.unit_file),
             'ExecStart': '{ path=/usr/bin/vault ; argv[]=/usr/bin/vault server -config=' + str(self.config) + ' ; }'}
         # Fixed production roots are replaced only inside this in-process test.
-        for name, value in [('DATA_ROOT', str(self.data_root)), ('CONFIG_ROOT', str(self.config_root)),
+        for name, value in [('CONFIG_ROOT', str(self.config_root)),
                             ('UNIT_ROOT', str(self.units))]:
             mock = patch.object(CLEAR, name, value)
             mock.start()
@@ -138,7 +138,7 @@ class VaultClearSafetyTests(unittest.TestCase):
             self.addCleanup(mock.stop)
 
     def clear(self, inspect_only=False):
-        return CLEAR.clear_member('qa', 'vault-1', 'qa', inspect_only)
+        return CLEAR.clear_member('qa', 'vault-1', str(self.data), 'qa', inspect_only)
 
     def test_clear_repeat_preserves_root_marker_config_audit_and_siblings(self):
         other = self.data_root / 'other'
@@ -299,7 +299,7 @@ for index, kind in enumerate(('bind', 'tmpfs')):
     (target/'mounted-data').write_text('mounted')
     with mock.patch.object(m.pwd, 'getpwnam', return_value=account), mock.patch.object(m, 'unit_properties', return_value=properties):
         try:
-            m.clear_member('qa', 'vault-1', 'qa')
+            m.clear_member('qa', 'vault-1', str(data), 'qa')
         except m.ClearFailure as error:
             assert str(error) == 'VAULT_CLEAR_MOUNT_IN_USE'
         else:
@@ -382,7 +382,7 @@ for kind in ('bind', 'tmpfs'):
         assert moved.wait(10)
     with mock.patch.object(m.pwd,'getpwnam',return_value=account), mock.patch.object(m,'unit_properties',return_value=properties), mock.patch.object(m,'reject_submounts',side_effect=pause):
         try:
-            m.clear_member('qa','vault-1','qa')
+            m.clear_member('qa','vault-1',str(data),'qa')
         except m.ClearFailure as error:
             assert str(error) == 'VAULT_CLEAR_MOUNT_IN_USE', str(error)
         else:

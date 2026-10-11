@@ -33,10 +33,8 @@ RETURN = r'''
 changed: {description: Whether Raft contents were removed, type: bool, returned: always}
 '''
 
-CONFIG_ROOT = '/etc/platform-vault'
+CONFIG_ROOT = '/etc'
 UNIT_ROOT = '/etc/systemd/system'
-MARKER = '.platform-vault-member.json'
-SERVICE = 'platform-vault'
 IDENTIFIER = re.compile(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*\Z')
 
 
@@ -183,7 +181,13 @@ def same_source(fd, path):
             stat.S_ISDIR(current.st_mode), 'VAULT_CLEAR_SOURCE_CHANGED')
 
 
-def clear_member(deployment, member, data_directory, confirmation, inspect_only=False):
+def clear_member(deployment, member, data_directory, confirmation, inspect_only=False, name_prefix=''):
+    require(isinstance(name_prefix, str) and
+            (name_prefix == '' or re.fullmatch(r'[a-z][a-z0-9_]{0,23}', name_prefix) is not None),
+            'VAULT_CLEAR_IDENTITY_INVALID')
+    service_name = (name_prefix + '-' if name_prefix else '') + 'vault'
+    config_root = CONFIG_ROOT + '/' + service_name
+    marker_name = '.' + service_name + '-member.json'
     require(all(isinstance(value, str) and len(value) <= 128 and IDENTIFIER.fullmatch(value)
                 for value in (deployment, member)), 'VAULT_CLEAR_IDENTITY_INVALID')
     require(confirmation == deployment, 'VAULT_CLEAR_CONFIRMATION_REQUIRED')
@@ -196,17 +200,17 @@ def clear_member(deployment, member, data_directory, confirmation, inspect_only=
                 (os.open, os.stat, os.unlink, os.rmdir)) and os.listdir in os.supports_fd,
             'VAULT_CLEAR_SAFE_DELETE_UNAVAILABLE')
     private_mount_namespace()
-    uid = pwd.getpwnam(SERVICE).pw_uid
+    uid = pwd.getpwnam(service_name).pw_uid
     require(re.fullmatch(r'[a-z0-9][a-z0-9-]*', deployment) is not None and
             re.fullmatch(r'.+-[1-9][0-9]*', member) is not None,
             'VAULT_CLEAR_IDENTITY_INVALID')
-    unit = 'platform-vault@' + deployment + '-' + member.rsplit('-', 1)[1]
+    unit = service_name + '@' + deployment + '-' + member.rsplit('-', 1)[1]
     require(len(unit + '.service') <= 255, 'VAULT_CLEAR_IDENTITY_INVALID')
     data = data_directory
-    config = CONFIG_ROOT + '/' + deployment + '/' + member + '/vault.hcl'
+    config = config_root + '/' + deployment + '/' + member + '/vault.hcl'
     with ExitStack() as stack:
         directory = owned_directory(stack, data, uid, service_owned_ancestors=True)
-        marker = json.loads(read_owned_file(directory, MARKER, uid, 4096, private=True))
+        marker = json.loads(read_owned_file(directory, marker_name, uid, 4096, private=True))
         require(marker == {'apiVersion': 'platform.installer/vault-member-marker/v1alpha1',
                            'deploymentId': deployment, 'memberId': member, 'instanceName': unit},
                 'VAULT_CLEAR_OWNERSHIP_UNKNOWN')
@@ -218,17 +222,17 @@ def clear_member(deployment, member, data_directory, confirmation, inspect_only=
         units = owned_directory(stack, UNIT_ROOT)
         text = read_owned_file(units, unit + '.service', 0, 65536)
         start = '/usr/bin/vault server -config=' + config
-        require(text.splitlines()[0] == '# platform-vault-managed: ' + deployment + '/' + member
+        require(text.splitlines()[0] == '# ' + service_name + '-managed: ' + deployment + '/' + member
                 and text.splitlines().count('ExecStart=' + start) == 1 and
-                text.splitlines().count('User=' + SERVICE) == 1, 'VAULT_CLEAR_UNIT_INVALID')
+                text.splitlines().count('User=' + service_name) == 1, 'VAULT_CLEAR_UNIT_INVALID')
         properties = unit_properties(unit)
         require(properties.get('FragmentPath') == UNIT_ROOT + '/' + unit + '.service' and
-                properties.get('User') == SERVICE and
+                properties.get('User') == service_name and
                 ('argv[]=' + start + ' ;') in properties.get('ExecStart', ''),
                 'VAULT_CLEAR_UNIT_INVALID')
         reject_submounts(data)
         same_source(directory, data)
-        children = sorted(name for name in os.listdir(directory) if name != MARKER)
+        children = sorted(name for name in os.listdir(directory) if name != marker_name)
         if inspect_only:
             return bool(children)
         require(properties.get('ActiveState') in ('inactive', 'failed') and
@@ -239,7 +243,7 @@ def clear_member(deployment, member, data_directory, confirmation, inspect_only=
             same_source(directory, data)
             remove_raft_child(directory, name, member_mount)
         same_source(directory, data)
-        require(os.listdir(directory) == [MARKER], 'VAULT_CLEAR_INCOMPLETE')
+        require(os.listdir(directory) == [marker_name], 'VAULT_CLEAR_INCOMPLETE')
         os.fsync(directory)
         return bool(children)
 
@@ -252,11 +256,13 @@ def main():
         'data_directory': {'type': 'str', 'required': True},
         'confirmation': {'type': 'str', 'required': True},
         'inspect_only': {'type': 'bool', 'default': False},
+        'name_prefix': {'type': 'str', 'default': ''},
     }, supports_check_mode=True)
     try:
         predicted = clear_member(module.params['deployment_id'], module.params['member_id'],
                                  module.params['data_directory'], module.params['confirmation'],
-                                 module.params['inspect_only'] or module.check_mode)
+                                 module.params['inspect_only'] or module.check_mode,
+                                 module.params['name_prefix'])
         module.exit_json(changed=predicted if module.check_mode or
                          not module.params['inspect_only'] else False)
     except ClearFailure as error:

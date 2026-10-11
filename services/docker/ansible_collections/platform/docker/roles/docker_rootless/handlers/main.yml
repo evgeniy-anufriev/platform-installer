@@ -1,6 +1,6 @@
 ---
 - name: Restart rootless Docker bridge
   ansible.builtin.systemd_service:
-    name: "platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: restarted
     daemon_reload: true

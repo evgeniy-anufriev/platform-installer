@@ -5,12 +5,12 @@ platform_bind_binary: /usr/sbin/named
 platform_bind_checkconf_binary: /usr/sbin/named-checkconf
 platform_bind_checkzone_binary: /usr/sbin/named-checkzone
 platform_bind_distribution_config: /etc/named.conf
-platform_bind_include_file: /etc/named/platform-installer.conf
-platform_bind_options_include_file: /etc/named/platform-installer-options.conf
-platform_bind_candidate_main_config: /etc/named.conf.platform-candidate
-platform_bind_primary_zone_directory: /var/named/platform-installer
-platform_bind_secondary_zone_directory: /var/named/slaves/platform-installer
-platform_bind_recovery_directory: /var/lib/platform-installer/bind-recovery
+platform_bind_include_file: "/etc/named/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
+platform_bind_options_include_file: "/etc/named/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer-options.conf"
+platform_bind_candidate_main_config: "/etc/named.conf.{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}candidate"
+platform_bind_primary_zone_directory: "/var/named/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer"
+platform_bind_secondary_zone_directory: "/var/named/slaves/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer"
+platform_bind_recovery_directory: "{{ platform_data_root_directory | default('/var/lib') }}/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer/bind-recovery"
 platform_bind_rndc_binary: /usr/sbin/rndc
 platform_bind_phase: prepare
 # Empty by default. A recovery must be explicitly audited and supplied for one

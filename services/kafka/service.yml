@@ -91,7 +91,7 @@ configuration:
       type: string
       scopes: [deployment, member]
       validation: {minLength: 1, maxLength: 255}
-      ui: {label: Каталог данных, section: Хранение, order: 0, description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников используются отдельные подкаталоги. Существующие данные автоматически не переносятся.}
+      ui: {label: Каталог данных, section: Хранение, order: 0, description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Для нескольких участников используются отдельные подкаталоги. Существующие данные автоматически не переносятся.}
     runtimePathNamespace:
       kind: MANAGED
       roleVariable: platform_kafka_runtime_path_namespace

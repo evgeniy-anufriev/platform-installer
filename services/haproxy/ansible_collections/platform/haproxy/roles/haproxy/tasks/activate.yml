@@ -19,6 +19,7 @@
 
 - name: Prove backend ownership and archive only stale owned fragments
   platform.haproxy.archive_managed_backends:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
     config_directory: "{{ platform_haproxy_config_directory }}"
     candidate_files: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
     previous_inventory: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"

@@ -4,7 +4,7 @@
 # daemon or stale former member before any config/unit is changed.
 - name: Inspect exact Redis member unit paths before rendering
   ansible.builtin.stat:
-    path: "/etc/systemd/system/platform-redis@{{ item.instance_name }}.service"
+    path: "/etc/systemd/system/{{ platform_redis_name }}@{{ item.instance_name }}.service"
     follow: false
     get_mime: false
     get_attributes: false
@@ -24,7 +24,7 @@
 
 - name: Read ownership headers from existing Redis member units
   ansible.builtin.slurp:
-    src: "/etc/systemd/system/platform-redis@{{ item.item.instance_name }}.service"
+    src: "/etc/systemd/system/{{ platform_redis_name }}@{{ item.item.instance_name }}.service"
   register: _platform_redis_existing_unit_headers
   loop: "{{ _platform_redis_unit_path_stats.results }}"
   when: item.stat.exists
@@ -35,7 +35,7 @@
   ansible.builtin.assert:
     that: >-
       (item.content | b64decode | split('\n') | first)
-      == ('# platform-redis-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/redis')
+      == ('# ' ~ platform_redis_name ~ '-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/redis')
     fail_msg: REDIS_UNIT_OWNERSHIP_UNKNOWN
   loop: "{{ _platform_redis_existing_unit_headers.results | default([]) }}"
   when: not (item.skipped | default(false))
@@ -44,7 +44,7 @@
 
 - name: Inspect exact Sentinel unit paths before rendering
   ansible.builtin.stat:
-    path: "/etc/systemd/system/platform-redis-sentinel@{{ item.instance_name }}.service"
+    path: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ item.instance_name }}.service"
     follow: false
     get_mime: false
     get_attributes: false
@@ -64,7 +64,7 @@
 
 - name: Read ownership headers from existing Sentinel units
   ansible.builtin.slurp:
-    src: "/etc/systemd/system/platform-redis-sentinel@{{ item.item.instance_name }}.service"
+    src: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ item.item.instance_name }}.service"
   register: _platform_sentinel_existing_unit_headers
   loop: "{{ _platform_sentinel_unit_path_stats.results }}"
   when: item.stat.exists
@@ -75,7 +75,7 @@
   ansible.builtin.assert:
     that: >-
       (item.content | b64decode | split('\n') | first)
-      == ('# platform-redis-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/sentinel')
+      == ('# ' ~ platform_redis_name ~ '-managed: ' ~ platform_redis_deployment_id ~ '/' ~ item.item.item.id ~ '/sentinel')
     fail_msg: REDIS_UNIT_OWNERSHIP_UNKNOWN
   loop: "{{ _platform_sentinel_existing_unit_headers.results | default([]) }}"
   when: not (item.skipped | default(false))
@@ -92,11 +92,11 @@
   loop: >-
     {{ (_platform_redis_local_instances
         | map(attribute='legacy_instance_name')
-        | map('regex_replace', '^', 'platform-redis@')
+        | map('regex_replace', '^', platform_redis_name ~ '@')
         | map('regex_replace', '$', '.service') | list)
        + (_platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel')
           | map(attribute='legacy_instance_name')
-          | map('regex_replace', '^', 'platform-redis-sentinel@')
+          | map('regex_replace', '^', platform_redis_name ~ '-sentinel@')
           | map('regex_replace', '$', '.service') | list) }}
   register: _platform_redis_legacy_unit_files
 
@@ -110,7 +110,7 @@
 
 - name: Inspect existing Redis member state marker
   ansible.builtin.stat:
-    path: "{{ item.data_directory }}/.platform-redis-mode"
+    path: "{{ item.data_directory }}/.{{ platform_redis_name }}-mode"
     get_mime: false
     get_attributes: false
     get_checksum: false
@@ -275,7 +275,7 @@
       - grep
       - -Fx
       - "mode={{ platform_redis_mode }}"
-      - "{{ item.data_directory }}/.platform-redis-mode"
+      - "{{ item.data_directory }}/.{{ platform_redis_name }}-mode"
   changed_when: false
   failed_when: false
   register: _platform_redis_mode_marker_value
@@ -377,7 +377,7 @@
 
 - name: Read local Redis owned unit state
   ansible.builtin.command:
-    argv: [systemctl, is-active, "platform-redis@{{ item.instance_name }}.service"]
+    argv: [systemctl, is-active, "{{ platform_redis_name }}@{{ item.instance_name }}.service"]
   changed_when: false
   failed_when: false
   register: _platform_redis_owned_unit
@@ -408,7 +408,7 @@
 
 - name: Read local Sentinel owned unit state
   ansible.builtin.command:
-    argv: [systemctl, is-active, "platform-redis-sentinel@{{ item.instance_name }}.service"]
+    argv: [systemctl, is-active, "{{ platform_redis_name }}-sentinel@{{ item.instance_name }}.service"]
   changed_when: false
   failed_when: false
   register: _platform_redis_sentinel_owned_unit

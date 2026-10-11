@@ -15,11 +15,11 @@
     that:
       - >-
         ((_platform_redis_instances | selectattr('host', 'equalto', item)
-          | map(attribute='instance_name') | map('regex_replace', '^', 'platform-redis@')
+          | map(attribute='instance_name') | map('regex_replace', '^', platform_redis_name ~ '@')
           | map('regex_replace', '$', '.service') | list)
          + (_platform_redis_instances | selectattr('host', 'equalto', item)
             | selectattr('roles', 'contains', 'sentinel')
-            | map(attribute='instance_name') | map('regex_replace', '^', 'platform-redis-sentinel@')
+            | map(attribute='instance_name') | map('regex_replace', '^', platform_redis_name ~ '-sentinel@')
             | map('regex_replace', '$', '.service') | list))
         | unique | length ==
         ((_platform_redis_instances | selectattr('host', 'equalto', item) | list | length)

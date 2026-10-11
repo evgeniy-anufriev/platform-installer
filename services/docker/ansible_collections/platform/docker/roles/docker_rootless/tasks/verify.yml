@@ -24,7 +24,7 @@
 
 - name: Check LXC network, target and user bridge are active
   ansible.builtin.command:
-    argv: [systemctl, is-active, lxc-net.service, platform-docker-lxc-ready.target, "platform-docker-rootless-{{ platform_docker_account_name }}.service"]
+    argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
   register: _platform_docker_system_units
   changed_when: false
 

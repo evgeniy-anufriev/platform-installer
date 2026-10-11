@@ -13,10 +13,10 @@ class VaultRoleContractTests(unittest.TestCase):
         validate = (ROLE / "tasks/validate.yml").read_text(encoding="utf-8")
         preflight = (ROLE / "tasks/preflight.yml").read_text(encoding="utf-8")
         clear = (ROOT / "services/vault/ansible_collections/platform/vault/plugins/modules/clear_member.py").read_text(encoding="utf-8")
-        self.assertIn("'platform-vault@' ~ platform_vault_deployment_id", normalize)
+        self.assertIn("(platform_vault_name ~ '@') ~ platform_vault_deployment_id", normalize)
         self.assertIn("^.+-[1-9][0-9]*$", validate)
         self.assertIn("VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
-        self.assertIn("platform-vault@", clear)
+        self.assertIn("service_name + '@'", clear)
         self.assertNotIn("hashlib", clear)
 
     def test_cluster_shared_mount_configuration_runs_only_on_canonical_seed(self):
@@ -165,7 +165,7 @@ class VaultRoleContractTests(unittest.TestCase):
 
     def test_typed_runtime_inputs_are_closed_and_never_logged(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        include = main[0]
+        include = next(task for task in main if task["name"] == "Resolve optional typed runtime lease inputs")
         self.assertEqual("Resolve optional typed runtime lease inputs", include["name"])
         tasks = yaml.safe_load((ROLE / "tasks/resolve_runtime_inputs.yml").read_text(encoding="utf-8"))
         self.assertTrue(all(task.get("no_log") for task in tasks))
@@ -367,7 +367,8 @@ class VaultRoleContractTests(unittest.TestCase):
                 options["log_raw"] = value
             result = {"results": [{"json": {"data": {"file/": {
                 "type": "file", "local": False, "options": options}}}}]}
-            variables = {"_platform_vault_owned_configuration": result,
+            variables = {"platform_vault_name": "platform-vault",
+                         "_platform_vault_owned_configuration": result,
                          "_platform_vault_configuration": result}
             for guard in (configure_guard, verify_guard):
                 with self.subTest(value="absent" if value is absent else value, guard=guard):
@@ -382,7 +383,7 @@ class VaultRoleContractTests(unittest.TestCase):
             audit = {"type": "file", "local": False, "options": {
                 "file_path": "/var/log/platform-vault-audit/audit.log", "log_raw": "0"}}
             audit[field] = value
-            variables = {"_platform_vault_owned_configuration": {
+            variables = {"platform_vault_name": "platform-vault", "_platform_vault_owned_configuration": {
                 "results": [{"json": {"data": {"file/": audit}}}]}}
             conditional = Conditional(loader=loader)
             conditional.when = [configure_guard]
@@ -390,8 +391,8 @@ class VaultRoleContractTests(unittest.TestCase):
 
     def test_vault_systemd_unit_uses_shared_audit_namespace_binding(self):
         unit = (ROLE / "templates/vault.service.j2").read_text(encoding="utf-8")
-        self.assertIn("BindPaths={{ vault_member.log_directory }}:/var/log/platform-vault-audit", unit)
-        self.assertIn("ReadWritePaths={{ vault_member.data_directory }} /var/log/platform-vault-audit", unit)
+        self.assertIn("BindPaths={{ vault_member.log_directory }}:/var/log/{{ platform_vault_name }}-audit", unit)
+        self.assertIn("ReadWritePaths={{ vault_member.data_directory }} /var/log/{{ platform_vault_name }}-audit", unit)
 
     def test_audit_rotation_is_bounded_and_signals_only_its_vault_instance(self):
         rotation = (ROLE / "templates/vault-audit.logrotate.j2").read_text(encoding="utf-8")
@@ -430,7 +431,7 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertIn("Require existing rotation files to carry this deployment member identity", names)
         for template in ("vault.service.j2", "vault-audit.logrotate.j2"):
             first = (ROLE / "templates" / template).read_text(encoding="utf-8").splitlines()[0]
-            self.assertEqual(first, "# platform-vault-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}")
+            self.assertEqual(first, "# {{ platform_vault_name }}-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}")
 
     def test_artifact_source_gate_matches_existing_service_mode_policy(self):
         vault = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))

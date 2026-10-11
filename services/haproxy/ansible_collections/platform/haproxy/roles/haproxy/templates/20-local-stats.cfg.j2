@@ -1,4 +1,4 @@
-frontend platform-local-stats
+frontend {{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}local-stats
     bind {{ ansible_host | default(inventory_hostname) }}:{{ platform_haproxy_internal_stats_port }}{% if platform_haproxy_stats_backend_defaults.ssl %} ssl crt {{ platform_haproxy_pki_directory }}/haproxy.pem{% endif %}{{ '\n' }}
     mode http
     acl permitted src {{ platform_haproxy_participant_addresses | join(' ') }}

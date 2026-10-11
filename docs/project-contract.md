@@ -64,6 +64,22 @@ platform_desired_state:
 user in desired state. Older projects may still contain it for compatibility;
 when present, it is validated against the catalog lock.
 
+Two portable project-wide variables may be written beside
+`platform_desired_state` in Installer-owned
+`inventory/group_vars/all/platform-installer.yml`:
+
+```yaml
+platform_data_root_directory: /var/lib
+platform_name_prefix: ''
+```
+
+The data root supplies the default data path for services only; explicit
+deployment/member paths take precedence. It does not relocate application
+data or Installer runtime state. An empty prefix creates service resource names without an added prefix. A
+nonempty prefix is prepended to newly managed service resources and must match
+`^[a-z][a-z0-9_]{0,23}$`. These variables remain ordinary Ansible inventory
+input for standalone Core and are edited through project Review/Save in UI.
+
 Inventory hosts own physical placement and member-scoped desired settings:
 
 ```yaml

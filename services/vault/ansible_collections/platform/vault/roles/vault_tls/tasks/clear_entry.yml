@@ -6,8 +6,8 @@
   ansible.builtin.assert:
     that:
       - platform_vault_confirm_destructive_reset == platform_vault_deployment_id
-      - platform_vault_user == 'platform-vault'
-      - platform_vault_group == 'platform-vault'
+      - platform_vault_user == platform_vault_name
+      - platform_vault_group == platform_vault_name
     fail_msg: VAULT_CLEAR_CONFIRMATION_REQUIRED
 
 - name: Normalize selected Vault member identities for clear
@@ -19,6 +19,7 @@
 
 - name: Inspect Vault clear without mutation in check mode
   platform.vault.clear_member:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
     deployment_id: "{{ platform_vault_deployment_id }}"
     member_id: "{{ item.id }}"
     data_directory: "{{ item.data_directory }}"

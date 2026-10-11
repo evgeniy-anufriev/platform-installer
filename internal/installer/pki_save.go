@@ -46,7 +46,7 @@ func reducePKICommand(state map[string]any, command EditCommand, mutations topol
 	if values == nil {
 		return blocked("INVALID_EDIT_COMMAND", "PKI operation is unsupported", "command.operation")
 	}
-	if command.APIVersion != EditCommandAPIVersionV7 && command.APIVersion != EditCommandAPIVersionV8 && command.APIVersion != EditCommandAPIVersionV9 {
+	if command.APIVersion != EditCommandAPIVersionV7 && command.APIVersion != EditCommandAPIVersionV8 && command.APIVersion != EditCommandAPIVersionV9 && command.APIVersion != EditCommandAPIVersionV10 {
 		return blocked("EDIT_OPERATION_UNAVAILABLE", "PKI editing requires v1alpha7 or a compatible later contract", "command.apiVersion")
 	}
 	if command.Operation[:6] == "Create" {

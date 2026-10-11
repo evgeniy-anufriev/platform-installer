@@ -8,8 +8,8 @@
       - platform_redis_version == '8.6.4-1.red80'
       - platform_redis_data_root is string
       - platform_redis_data_root | length <= 255
-      - platform_redis_config_root == '/etc/platform-redis'
-      - platform_redis_log_root == '/var/log/platform-redis'
+      - platform_redis_config_root == '/etc/' ~ platform_redis_name
+      - platform_redis_log_root == '/var/log/' ~ platform_redis_name
       - platform_redis_instances is iterable
       - platform_redis_instances is not string
       - platform_redis_advanced_config is mapping
@@ -31,10 +31,10 @@
       - item.id is defined
       - item.id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
       - item.id is match('^.+-[1-9][0-9]*$')
-      - ('platform-redis@' ~ platform_redis_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
+      - (platform_redis_name ~ '@' ~ platform_redis_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
       - >-
         'sentinel' not in item.roles or
-        ('platform-redis-sentinel@' ~ platform_redis_deployment_id ~ '-'
+        (platform_redis_name ~ '-sentinel@' ~ platform_redis_deployment_id ~ '-'
          ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
       - item.host is defined
       - item.host | string | length > 0

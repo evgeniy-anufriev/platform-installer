@@ -2,14 +2,14 @@
 - name: Validate the canonical Vault lock host
   ansible.builtin.assert:
     that:
-      - platform_vault_bootstrap_lock_root == '/run/lock/platform-vault'
+      - platform_vault_bootstrap_lock_root == '/run/lock/' ~ platform_vault_name
       - platform_vault_lock_token is string
       - platform_vault_lock_token is match('^[0-9a-f]{32}$')
     fail_msg: VAULT_LOCK_INPUT_INVALID
 
 - name: Inspect the fixed Vault lock directory without following symlinks
   ansible.builtin.stat:
-    path: /run/lock/platform-vault
+    path: "/run/lock/{{ platform_vault_name }}"
     follow: false
     get_mime: false
     get_attributes: false
@@ -24,7 +24,7 @@
 
 - name: Create the root-owned Vault lock directory on the canonical first member
   ansible.builtin.file:
-    path: /run/lock/platform-vault
+    path: "/run/lock/{{ platform_vault_name }}"
     state: directory
     owner: root
     group: root
@@ -33,7 +33,7 @@
 - name: Derive the shared deployment lock identity
   ansible.builtin.set_fact:
     _platform_vault_lock_key: "{{ platform_vault_deployment_id | hash('sha256') }}"
-    _platform_vault_lock_unit: "platform-vault-lock-{{ platform_vault_lock_token }}"
+    _platform_vault_lock_unit: "{{ platform_vault_name }}-lock-{{ platform_vault_lock_token }}"
 
 - name: Inspect the persistent shared lock object without following symlinks
   ansible.builtin.stat:

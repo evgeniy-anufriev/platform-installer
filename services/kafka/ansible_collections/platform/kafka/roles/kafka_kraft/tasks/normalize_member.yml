@@ -6,8 +6,8 @@
     _platform_kafka_normalized_compatibility_unit: "{{ kafka_input_member._compatibility_unit | default({}) }}"
     _platform_kafka_normalized_deployment_id: "{{ kafka_input_member.deployment_id | default(platform_kafka_deployment_id) }}"
     _platform_kafka_normalized_unit_service: >-
-      {{ 'platform-kafka' if ('broker' in kafka_input_member.roles and 'controller' in kafka_input_member.roles)
-         else ('platform-kafka-broker' if 'broker' in kafka_input_member.roles else 'platform-kafka-controller') }}
+      {{ platform_kafka_name if ('broker' in kafka_input_member.roles and 'controller' in kafka_input_member.roles)
+         else (platform_kafka_name ~ '-broker' if 'broker' in kafka_input_member.roles else platform_kafka_name ~ '-controller') }}
     _platform_kafka_normalized_member_number: "{{ kafka_input_member.id | regex_replace('^.*-', '') }}"
 
 - name: Derive normalized Kafka member runtime directory
@@ -85,7 +85,7 @@
            'config_directory': _platform_kafka_normalized_config_directory,
            'runtime_directory': _platform_kafka_normalized_runtime_directory,
            'systemd_unit_name': _platform_kafka_normalized_unit_name,
-           'systemd_unit_ownership_marker': '# platform-kafka-managed: ' ~ _platform_kafka_normalized_unit_name,
+           'systemd_unit_ownership_marker': '# ' ~ platform_kafka_name ~ '-managed: ' ~ _platform_kafka_normalized_unit_name,
            'systemd_unit_destination': _platform_kafka_normalized_unit_destination,
            'systemd_environment_pattern': _platform_kafka_normalized_environment_pattern,
            'systemd_description': _platform_kafka_normalized_description,

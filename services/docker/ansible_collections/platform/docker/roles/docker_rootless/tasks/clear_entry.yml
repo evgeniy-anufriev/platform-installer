@@ -31,7 +31,7 @@
     get_attributes: false
     get_checksum: false
   loop:
-    - "/etc/systemd/system/platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    - "/etc/systemd/system/{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     - "{{ _platform_docker_clear_home }}/.config/systemd/user/docker.service"
   register: _platform_docker_clear_units
 
@@ -65,7 +65,7 @@
 
 - name: Stop and disable only the selected account's system bridge
   ansible.builtin.systemd_service:
-    name: "platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: stopped
     enabled: false
 

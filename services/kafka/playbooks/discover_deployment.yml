@@ -5,7 +5,7 @@
       'deploymentId': _kafka_discovery_deployment.key,
       'memberId': item.key,
       'hostId': inventory_hostname,
-      'metadataPath': ((item.value.configuration.dataDirectory | default((_kafka_discovery_deployment.value.configuration.dataDirectory | default('/var/lib/' ~ _kafka_discovery_deployment.key)) ~ ('/' ~ item.key if ((hostvars[inventory_hostname].platform_deployments | default({})).get(_kafka_discovery_deployment.key, {}).get('members', {}) | length > 1) else ''))) ~ '/meta.properties')
+      'metadataPath': ((item.value.configuration.dataDirectory | default((_kafka_discovery_deployment.value.configuration.dataDirectory | default((platform_data_root_directory | default('/var/lib')) ~ '/' ~ _kafka_discovery_deployment.key)) ~ ('/' ~ item.key if ((hostvars[inventory_hostname].platform_deployments | default({})).get(_kafka_discovery_deployment.key, {}).get('members', {}) | length > 1) else ''))) ~ '/meta.properties')
     } ] }}"
   loop: "{{ (hostvars[inventory_hostname].platform_deployments | default({})).get(_kafka_discovery_deployment.key, {}).get('members', {}) | dict2items }}"
   loop_control:

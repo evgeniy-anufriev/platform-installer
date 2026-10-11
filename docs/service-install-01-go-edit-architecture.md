@@ -39,9 +39,9 @@ saved project and append only the service under test through the same typed
 EditSession/Review/Save lifecycle. This changes test-fixture persistence, not
 portable-project ownership or any service contract.
 
-## Contract: project-edit/v1alpha9
+## Contract: project-edit/v1alpha10
 
-`project-edit/v1alpha9` is the new active command contract for new Installer
+`project-edit/v1alpha10` is the active command contract for new Installer
 sessions. It is an additive, immutable-version evolution of v1alpha8:
 
 - all v1alpha8 operations retain exactly their v1alpha8 semantics;

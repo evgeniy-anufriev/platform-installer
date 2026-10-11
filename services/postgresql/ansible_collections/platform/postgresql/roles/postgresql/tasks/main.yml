@@ -1,4 +1,8 @@
 ---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
 - name: Guard PostgreSQL data path before mutation
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
@@ -62,7 +66,7 @@
 - name: Derive the exact PostgreSQL systemd unit name
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
-      {{ 'platform-postgresql@' ~ platform_postgresql_deployment_id ~ '-'
+      {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
          ~ ((_platform_postgresql_local_members | first).id | string | regex_replace('^.*-', '')) ~ '.service' }}
 
 - name: Inspect the legacy PostgreSQL unit path before mutation
@@ -110,7 +114,7 @@
 - name: Refuse replacement of a foreign PostgreSQL unit
   ansible.builtin.assert:
     that: >-
-      ('# platform-postgresql-managed: ' ~ platform_postgresql_deployment_id ~ '/'
+      ('# ' ~ platform_postgresql_name ~ '-managed: ' ~ platform_postgresql_deployment_id ~ '/'
        ~ (_platform_postgresql_local_members | first).id)
       in (_platform_postgresql_existing_unit.content | b64decode | split('\n'))
     fail_msg: POSTGRES_UNIT_OWNERSHIP_UNKNOWN

@@ -104,8 +104,8 @@ class RedisContractTests(unittest.TestCase):
         self.assertIn("REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
         self.assertIn("REDIS_UNIT_OWNERSHIP_UNKNOWN", preflight)
         self.assertIn("REDIS_UNIT_PATH_UNSAFE", preflight)
-        self.assertIn("# platform-redis-managed:", (role / "templates/redis.service.j2").read_text(encoding="utf-8"))
-        self.assertIn("# platform-redis-managed:", (role / "templates/sentinel.service.j2").read_text(encoding="utf-8"))
+        self.assertIn("# {{ platform_redis_name }}-managed:", (role / "templates/redis.service.j2").read_text(encoding="utf-8"))
+        self.assertIn("# {{ platform_redis_name }}-managed:", (role / "templates/sentinel.service.j2").read_text(encoding="utf-8"))
 
     def test_repository_source_version_matches_dnf_repoquery_identity(self):
         value = manifest()
@@ -113,13 +113,13 @@ class RedisContractTests(unittest.TestCase):
         defaults = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "defaults" / "main.yml").read_text(encoding="utf-8")
         package_source = (ROOT / "services" / "redis" / "artifacts.yml").read_text(encoding="utf-8")
         self.assertIn('platform_redis_version: "8.6.4-1.red80"', defaults)
-        self.assertIn('platform_redis_data_root: "/var/lib/{{ platform_redis_deployment_id }}"', defaults)
-        self.assertIn("platform_redis_config_root: /etc/platform-redis", defaults)
-        self.assertIn("platform_redis_log_root: /var/log/platform-redis", defaults)
+        self.assertIn("platform_data_root_directory | default('/var/lib')", defaults)
+        self.assertIn('platform_redis_config_root: "/etc/{{ platform_redis_name }}"', defaults)
+        self.assertIn('platform_redis_log_root: "/var/log/{{ platform_redis_name }}"', defaults)
         validate = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "validate.yml").read_text(encoding="utf-8")
         self.assertIn("platform_redis_data_root is string", validate)
-        self.assertIn("platform_redis_config_root == '/etc/platform-redis'", validate)
-        self.assertIn("platform_redis_log_root == '/var/log/platform-redis'", validate)
+        self.assertIn("platform_redis_config_root == '/etc/' ~ platform_redis_name", validate)
+        self.assertIn("platform_redis_log_root == '/var/log/' ~ platform_redis_name", validate)
         self.assertIn("redis-8.6.4-1.red80", package_source)
 
     def test_secret_references_are_runtime_only_contract_values(self):

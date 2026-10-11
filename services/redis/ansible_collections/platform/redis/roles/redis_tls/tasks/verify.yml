@@ -1,7 +1,7 @@
 ---
 - name: Check Redis member systemd state
   ansible.builtin.command:
-    argv: [systemctl, is-active, "platform-redis@{{ redis_member.instance_name }}.service"]
+    argv: [systemctl, is-active, "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"]
   changed_when: false
   register: _platform_redis_unit_state
 
@@ -110,7 +110,7 @@
 
 - name: Check Sentinel member systemd state
   ansible.builtin.command:
-    argv: [systemctl, is-active, "platform-redis-sentinel@{{ redis_member.instance_name }}.service"]
+    argv: [systemctl, is-active, "{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"]
   changed_when: false
   register: _platform_sentinel_unit_state
   when: "'sentinel' in redis_member.roles"

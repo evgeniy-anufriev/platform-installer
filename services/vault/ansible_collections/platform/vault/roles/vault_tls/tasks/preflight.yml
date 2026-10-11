@@ -130,7 +130,7 @@
 
 - name: Inspect the fixed role-owned member identity marker
   ansible.builtin.stat:
-    path: "{{ item.item.data_directory }}/.platform-vault-member.json"
+    path: "{{ item.item.data_directory }}/.{{ platform_vault_name }}-member.json"
     follow: false
     get_mime: false
     get_attributes: false
@@ -155,7 +155,7 @@
 
 - name: Read existing member identity markers without following links
   ansible.builtin.slurp:
-    src: "{{ item.item.item.data_directory }}/.platform-vault-member.json"
+    src: "{{ item.item.item.data_directory }}/.{{ platform_vault_name }}-member.json"
   loop: "{{ _platform_vault_member_markers.results | selectattr('skipped', 'undefined') | selectattr('stat.exists') | list }}"
   register: _platform_vault_member_marker_content
   no_log: true
@@ -246,7 +246,7 @@
     that:
       - >-
         (item.content | b64decode | split('\n') | first) ==
-        ('# platform-vault-managed: ' ~ platform_vault_deployment_id ~ '/' ~ item.item.item.id)
+        ('# ' ~ platform_vault_name ~ '-managed: ' ~ platform_vault_deployment_id ~ '/' ~ item.item.item.id)
     fail_msg: VAULT_CONFIG_OWNERSHIP_UNKNOWN
   loop: "{{ _platform_vault_unit_file_contents.results | default([]) }}"
   no_log: true
@@ -256,7 +256,7 @@
     that:
       - >-
         (item.content | b64decode | split('\n') | first) ==
-        ('# platform-vault-managed: ' ~ platform_vault_deployment_id ~ '/' ~ item.item.item.id)
+        ('# ' ~ platform_vault_name ~ '-managed: ' ~ platform_vault_deployment_id ~ '/' ~ item.item.item.id)
     fail_msg: VAULT_CONFIG_OWNERSHIP_UNKNOWN
   loop: "{{ _platform_vault_rotation_file_contents.results | default([]) }}"
   no_log: true

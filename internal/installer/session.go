@@ -116,7 +116,7 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 	if state.busy {
 		return EditSession{}, blocked("EDIT_SESSION_BUSY", "Edit session review is in progress", "sessionId")
 	}
-	command.APIVersion = EditCommandAPIVersionV9
+	command.APIVersion = EditCommandAPIVersionV10
 	command.Kind = "EditCommand"
 	command.BaseProjectRevision = state.public.BaseProjectRevision
 	if backend == nil {
@@ -163,7 +163,7 @@ func (s *EditSessionStore) AmendConfiguration(sessionID string, index int, expec
 		return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Configuration draft changed", "command")
 	}
 	normalize := func(command *EditCommand) {
-		command.APIVersion = EditCommandAPIVersionV9
+		command.APIVersion = EditCommandAPIVersionV10
 		command.Kind = "EditCommand"
 		command.BaseProjectRevision = state.public.BaseProjectRevision
 	}

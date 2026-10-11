@@ -1,6 +1,7 @@
 ---
 - name: Capture exact prior Platform HAProxy backend inventory before candidate reset
   platform.haproxy.archive_managed_backends:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
     operation: capture
     config_directory: "{{ platform_haproxy_config_directory }}"
   register: _platform_haproxy_prior_backend_capture

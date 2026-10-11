@@ -84,6 +84,8 @@ export type VerificationStatus = {
 };
 export type ManagedProjectView = {
   projectRevision: string;
+  dataRootDirectory?: string;
+  namePrefix?: string;
   servers: Record<
     string,
     {

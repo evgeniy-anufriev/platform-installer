@@ -4,6 +4,11 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Validate portable service resource settings
+      ansible.builtin.include_role:
+        name: platform.core.project_settings
+      run_once: true
+
     - name: Build authoritative target-free project snapshot
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"

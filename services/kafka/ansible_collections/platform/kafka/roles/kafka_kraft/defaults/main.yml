@@ -4,7 +4,7 @@ platform_kafka_archive_directory: kafka_2.13-4.3.1
 platform_kafka_install_directory: /opt/kafka
 platform_kafka_config_directory: /etc/kafka
 platform_kafka_config_file: /etc/kafka/server.properties
-platform_kafka_data_directory: "/var/lib/{{ platform_kafka_deployment_id }}"
+platform_kafka_data_directory: "{{ platform_data_root_directory | default('/var/lib') }}/{{ platform_kafka_deployment_id }}"
 platform_kafka_user: kafka
 platform_kafka_group: kafka
 platform_kafka_java_package: java-21-openjdk-headless
@@ -28,6 +28,7 @@ platform_kafka_listeners:
 platform_kafka_log_retention_hours: 168
 platform_kafka_advanced_config: {}
 platform_kafka_service_name: kafka
+platform_kafka_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}kafka"
 platform_kafka_deployment_id: "{{ platform_execution_service_deployment | default(platform_kafka_service_name, true) }}"
 platform_kafka_advertised_host: "{{ ansible_host | default(inventory_hostname) }}"
 platform_kafka_verify_only: false

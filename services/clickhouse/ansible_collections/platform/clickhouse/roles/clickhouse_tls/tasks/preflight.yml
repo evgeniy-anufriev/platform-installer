@@ -89,7 +89,7 @@
 - name: Refuse replacement of a foreign instance unit
   ansible.builtin.assert:
     that: >-
-      (item.content | b64decode).startswith('# platform-clickhouse-managed: ' ~
+      (item.content | b64decode).startswith('# ' ~ platform_clickhouse_name ~ '-managed: ' ~
        platform_clickhouse_deployment_id ~ '/' ~ item.item.item.0.id ~ '/' ~ item.item.item.1 ~ '\n')
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_PATH
   loop: "{{ _platform_clickhouse_existing_unit_headers.results }}"
@@ -108,7 +108,7 @@
 
 - name: Inspect exact member identity markers
   ansible.builtin.stat:
-    path: "{{ item.data_directory }}/.platform-clickhouse-member.json"
+    path: "{{ item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
     follow: false
     get_mime: false
     get_attributes: false
@@ -142,7 +142,7 @@
 
 - name: Read existing ClickHouse member markers
   ansible.builtin.slurp:
-    path: "{{ item.item.data_directory }}/.platform-clickhouse-member.json"
+    path: "{{ item.item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
   loop: "{{ _platform_clickhouse_marker_stats.results }}"
   when: item.stat.isreg | default(false)
   register: _platform_clickhouse_existing_markers

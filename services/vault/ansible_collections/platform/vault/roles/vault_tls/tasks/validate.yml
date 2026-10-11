@@ -19,10 +19,10 @@
       - platform_vault_unseal_shares == 1 or platform_vault_unseal_threshold >= 2
       - platform_vault_instances is sequence and platform_vault_instances is not string and platform_vault_instances is not mapping
       - platform_vault_instances | length == (1 if platform_vault_mode == 'standalone' else 3)
-      - platform_vault_config_root == '/etc/platform-vault'
+      - platform_vault_config_root == '/etc/' ~ platform_vault_name
       - platform_vault_data_root is string
       - platform_vault_data_root | length <= 255
-      - platform_vault_log_root == '/var/log/platform-vault'
+      - platform_vault_log_root == '/var/log/' ~ platform_vault_name
       - platform_vault_tls_profile is string and platform_vault_tls_profile | length > 0
     fail_msg: VAULT_CONFIGURATION_INVALID
 
@@ -33,7 +33,7 @@
       - item.id is string and item.id | length <= 128
       - item.id is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
       - item.id is match('^.+-[1-9][0-9]*$')
-      - ('platform-vault@' ~ platform_vault_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
+      - (platform_vault_name ~ '@' ~ platform_vault_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
       - item.host is string and item.host | length > 0
       - item.address is string and item.address | length <= 253
       - item.address is match('^[A-Za-z0-9][A-Za-z0-9.-]*$')

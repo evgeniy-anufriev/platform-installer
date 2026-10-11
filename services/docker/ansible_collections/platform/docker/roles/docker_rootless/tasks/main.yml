@@ -1,4 +1,8 @@
 ---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
 - name: Validate Docker rootless inputs and target compatibility
   ansible.builtin.include_tasks: validate.yml
 

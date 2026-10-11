@@ -143,7 +143,7 @@ def write_snapshot(parent, name, data, source):
         os.close(fd)
 
 
-def capture_prior_candidate(config_directory):
+def capture_prior_candidate(config_directory, name_prefix=''):
     """Prove old active backends against the retained complete candidate graph."""
     try:
         config_fd = open_directory_path(config_directory)
@@ -165,7 +165,7 @@ def capture_prior_candidate(config_directory):
                     "HAPROXY_PRIOR_GRAPH_INVALID")
             # Old releases retained their validated .platform-candidate. If it
             # is missing or differs, no old file is automatically owned.
-            candidate_fd = os.open(".platform-candidate", OPEN_DIR, dir_fd=config_fd)
+            candidate_fd = os.open("." + (name_prefix + "-" if name_prefix else "") + "candidate", OPEN_DIR, dir_fd=config_fd)
             try:
                 secure_directory(candidate_fd)
                 require(os.fstat(candidate_fd).st_dev == os.fstat(config_fd).st_dev,
@@ -201,7 +201,7 @@ def capture_prior_candidate(config_directory):
         os.close(config_fd)
 
 
-def archive(config_directory, candidate_files, activation_required, previous_inventory=None):
+def archive(config_directory, candidate_files, activation_required, previous_inventory=None, name_prefix=''):
     if previous_inventory is None:
         previous_inventory = []
     require(isinstance(candidate_files, list) and len(candidate_files) <= MAX_FILES and
@@ -251,7 +251,8 @@ def archive(config_directory, candidate_files, activation_required, previous_inv
                 main = None
             if main is None:
                 return {"changed": False, "archived": [], "archivePath": None}
-            archive_fd = child_directory(config_fd, ".platform-backend-archive", create=True)
+            archive_name = "." + (name_prefix + "-" if name_prefix else "") + "backend-archive"
+            archive_fd = child_directory(config_fd, archive_name, create=True)
             try:
                 token = "activation-" + uuid.uuid4().hex
                 session_fd = child_directory(archive_fd, token, create=True)
@@ -297,7 +298,7 @@ def archive(config_directory, candidate_files, activation_required, previous_inv
             finally:
                 os.close(archive_fd)
             return {"changed": True, "archived": stale,
-                    "archivePath": os.path.join(config_directory, ".platform-backend-archive", token)}
+                    "archivePath": os.path.join(config_directory, archive_name, token)}
         finally:
             os.close(conf_fd)
     finally:
@@ -311,19 +312,23 @@ def main():
         "activation_required": {"type": "bool", "default": False},
         "operation": {"type": "str", "choices": ["capture", "archive"], "default": "archive"},
         "previous_inventory": {"type": "list", "elements": "dict", "default": []},
+        "name_prefix": {"type": "str", "default": ""},
     }, supports_check_mode=False)
     try:
+        if module.params["name_prefix"] and not re.fullmatch(r"[a-z][a-z0-9_]{0,23}", module.params["name_prefix"]):
+            raise ValueError("HAPROXY_RESOURCE_PREFIX_INVALID")
         if module.params["operation"] == "capture":
             result = {"changed": False, "previousInventory": capture_prior_candidate(
-                module.params["config_directory"])}
+                module.params["config_directory"], module.params["name_prefix"])}
         else:
             result = archive(module.params["config_directory"], module.params["candidate_files"],
                              module.params["activation_required"],
-                             module.params["previous_inventory"])
+                             module.params["previous_inventory"], module.params["name_prefix"])
         module.exit_json(**result)
-    except (ArchiveError, OSError) as error:
+    except (ArchiveError, OSError, ValueError) as error:
         # The archive path and file contents are intentionally not included.
         module.fail_json(msg=error.args[0] if isinstance(error, ArchiveError)
+                         else "HAPROXY_RESOURCE_PREFIX_INVALID" if isinstance(error, ValueError)
                          else "HAPROXY_ARCHIVE_IO_FAILURE")
 
 

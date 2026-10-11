@@ -5,6 +5,11 @@
   gather_facts: false
   any_errors_fatal: true
   pre_tasks:
+    - name: Validate portable service resource settings
+      ansible.builtin.include_role:
+        name: platform.core.project_settings
+      run_once: true
+
     - name: Inspect optional legacy portable project manifest
       ansible.builtin.stat:
         path: >-

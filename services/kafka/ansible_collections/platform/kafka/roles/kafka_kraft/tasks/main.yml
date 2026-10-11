@@ -1,4 +1,8 @@
 ---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
 - name: Project managed Kafka members when the public list is absent
   ansible.builtin.include_tasks: project_runtime.yml
   when:
@@ -56,8 +60,8 @@
       - item.roles | length > 0
       - item.roles | difference(['broker', 'controller']) | length == 0
       - >-
-        ((('platform-kafka' if ('broker' in item.roles and 'controller' in item.roles)
-           else ('platform-kafka-broker' if 'broker' in item.roles else 'platform-kafka-controller'))
+        (((platform_kafka_name if ('broker' in item.roles and 'controller' in item.roles)
+           else (platform_kafka_name ~ '-broker' if 'broker' in item.roles else platform_kafka_name ~ '-controller'))
           ~ '@' ~ (item.deployment_id | default(platform_kafka_deployment_id)) ~ '-'
           ~ ((item.id | string) | regex_replace('^.*-', '')) ~ '.service') | length) <= 255
       - item.node_id is defined

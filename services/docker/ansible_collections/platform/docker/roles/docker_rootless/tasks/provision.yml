@@ -200,7 +200,7 @@
 
 - name: Inspect LXC dnsmasq override for foreign ownership
   ansible.builtin.stat:
-    path: /etc/lxc/platform-docker-dnsmasq.conf
+    path: "/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
     follow: false
     get_mime: false
     get_attributes: false
@@ -217,7 +217,7 @@
 
 - name: Read existing Docker-owned LXC dnsmasq override
   ansible.builtin.slurp:
-    src: /etc/lxc/platform-docker-dnsmasq.conf
+    src: "/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
   register: _platform_docker_lxc_dnsmasq_content
   when: _platform_docker_lxc_dnsmasq_file.stat.exists
 
@@ -250,7 +250,7 @@
       - >-
         _platform_docker_lxc_dhcp_config.rc == 1 or
         _platform_docker_lxc_dhcp_config.stdout_lines ==
-        ['LXC_DHCP_CONFILE=/etc/lxc/platform-docker-dnsmasq.conf']
+        ['LXC_DHCP_CONFILE=/etc/lxc/' ~ platform_docker_name ~ '-dnsmasq.conf']
     fail_msg: DOCKER_LXC_DHCP_CONFIG_CONFLICT
 
 - name: Inspect target resolver's non-stub upstream file
@@ -286,7 +286,7 @@
 
 - name: Keep LXC DHCP while allowing existing host DNS to own port 53
   ansible.builtin.copy:
-    dest: /etc/lxc/platform-docker-dnsmasq.conf
+    dest: "/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
     owner: root
     group: root
     mode: '0644'
@@ -300,7 +300,7 @@
   ansible.builtin.lineinfile:
     path: /etc/sysconfig/lxc-net
     regexp: '^LXC_DHCP_CONFILE='
-    line: LXC_DHCP_CONFILE=/etc/lxc/platform-docker-dnsmasq.conf
+    line: "LXC_DHCP_CONFILE=/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
   register: _platform_docker_lxc_dnsmasq_reference_change
 
 - name: Restart LXC network only when its managed DHCP configuration changes
@@ -433,8 +433,8 @@
 - name: Inspect existing system Docker unit destinations
   ansible.builtin.include_tasks: guard_root_destination.yml
   loop:
-    - { path: /etc/systemd/system/platform-docker-lxc-ready.target, marker: '# Platform Installer V2 managed LXC readiness target' }
-    - { path: "/etc/systemd/system/platform-docker-rootless-{{ platform_docker_account_name }}.service", marker: '# Platform Installer V2 managed rootless Docker system/user bridge' }
+    - { path: "/etc/systemd/system/{{ platform_docker_name }}-lxc-ready.target", marker: '# Platform Installer V2 managed LXC readiness target' }
+    - { path: "/etc/systemd/system/{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service", marker: '# Platform Installer V2 managed rootless Docker system/user bridge' }
   vars:
     platform_docker_guard_path: "{{ item.path }}"
     platform_docker_guard_marker: "{{ item.marker }}"
@@ -444,7 +444,7 @@
 - name: Install system LXC readiness target
   ansible.builtin.template:
     src: platform-docker-lxc-ready.target.j2
-    dest: /etc/systemd/system/platform-docker-lxc-ready.target
+    dest: "/etc/systemd/system/{{ platform_docker_name }}-lxc-ready.target"
     owner: root
     group: root
     mode: '0644'
@@ -453,7 +453,7 @@
 - name: Install selected-account system/user bridge
   ansible.builtin.template:
     src: platform-docker-rootless-bridge.service.j2
-    dest: "/etc/systemd/system/platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    dest: "/etc/systemd/system/{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     owner: root
     group: root
     mode: '0644'
@@ -491,13 +491,13 @@
 
 - name: Enable and activate target from every LXC network start
   ansible.builtin.systemd_service:
-    name: platform-docker-lxc-ready.target
+    name: "{{ platform_docker_name }}-lxc-ready.target"
     enabled: true
     state: started
 
 - name: Enable and activate selected-account bridge after target
   ansible.builtin.systemd_service:
-    name: "platform-docker-rootless-{{ platform_docker_account_name }}.service"
+    name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     enabled: true
     state: started
 

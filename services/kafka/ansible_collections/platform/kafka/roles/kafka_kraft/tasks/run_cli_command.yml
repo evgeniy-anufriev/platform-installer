@@ -8,7 +8,7 @@
 - name: Create ephemeral Kafka CLI command configuration
   ansible.builtin.tempfile:
     state: file
-    prefix: platform-kafka-cli-
+    prefix: "{{ platform_kafka_name }}-cli-"
     suffix: .properties
   register: _platform_kafka_cli_command_config
   changed_when: false

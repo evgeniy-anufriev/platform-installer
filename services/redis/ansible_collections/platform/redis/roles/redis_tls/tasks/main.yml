@@ -1,4 +1,8 @@
 ---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
 - name: Validate resolved Redis artifact source before mutation
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate

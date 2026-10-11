@@ -5,10 +5,11 @@ platform_redis_port: 6379
 platform_redis_sentinel_port: 26379
 platform_redis_user: redis
 platform_redis_group: redis
-platform_redis_data_root: "/var/lib/{{ platform_redis_deployment_id }}"
+platform_redis_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}redis"
+platform_redis_data_root: "{{ platform_data_root_directory | default('/var/lib') }}/{{ platform_redis_deployment_id }}"
 platform_redis_member_data_directory: "{{ platform_redis_data_root }}"
-platform_redis_config_root: /etc/platform-redis
-platform_redis_log_root: /var/log/platform-redis
+platform_redis_config_root: "/etc/{{ platform_redis_name }}"
+platform_redis_log_root: "/var/log/{{ platform_redis_name }}"
 platform_redis_tls_profile: infrastructure-tls
 platform_redis_credential:
   passwordSecretRef: ''

@@ -38,17 +38,30 @@ class BackendArchiveTests(unittest.TestCase):
         return ("# platform-installer-managed-backend/v1 " + name + "\nbackend test\n").encode()
 
     def prior_proof(self):
-        prior = self.root / ".platform-candidate"
+        prior = self.root / ".candidate"
         (prior / "conf.d").mkdir(parents=True)
         shutil.copy2(self.root / "haproxy.cfg", prior / "haproxy.cfg")
         for source in (self.root / "conf.d").iterdir():
             shutil.copy2(source, prior / "conf.d" / source.name)
         return archive_module.capture_prior_candidate(str(self.root))
 
+    def test_explicit_prefix_uses_matching_candidate_and_archive(self):
+        (self.root / "haproxy.cfg").write_bytes(b"global\n")
+        old = "30-backend-old-main.cfg"
+        self.write(old, self.owned(old))
+        prior = self.root / ".platform-candidate"
+        (prior / "conf.d").mkdir(parents=True)
+        shutil.copy2(self.root / "haproxy.cfg", prior / "haproxy.cfg")
+        shutil.copy2(self.root / "conf.d" / old, prior / "conf.d" / old)
+        proof = archive_module.capture_prior_candidate(str(self.root), "platform")
+        result = archive_module.archive(str(self.root), [], True, proof, "platform")
+        self.assertEqual([old], result["archived"])
+        self.assertEqual(".platform-backend-archive", Path(result["archivePath"]).parent.name)
+
     def test_fresh_install_creates_no_archive(self):
         result = archive_module.archive(str(self.root), ["30-backend-vault-main.cfg"], True)
         self.assertFalse(result["changed"])
-        self.assertFalse((self.root / ".platform-backend-archive").exists())
+        self.assertFalse((self.root / ".backend-archive").exists())
 
     def test_owned_stale_is_moved_with_bytes_and_snapshot(self):
         (self.root / "haproxy.cfg").write_bytes(b"global\n")
@@ -72,7 +85,7 @@ class BackendArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(archive_module.ArchiveError, "OWNERSHIP_UNPROVEN"):
             archive_module.archive(str(self.root), [], True)
         self.assertEqual(b"backend foreign\n", unowned.read_bytes())
-        self.assertFalse((self.root / ".platform-backend-archive").exists())
+        self.assertFalse((self.root / ".backend-archive").exists())
 
     def test_legacy_headerless_owned_fragment_is_archived_with_prior_graph_proof(self):
         (self.root / "haproxy.cfg").write_bytes(b"global\n")
@@ -91,7 +104,7 @@ class BackendArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(archive_module.ArchiveError, "OWNERSHIP_UNPROVEN"):
             archive_module.archive(str(self.root), [], True, [])
         self.assertTrue(foreign.exists())
-        self.assertFalse((self.root / ".platform-backend-archive").exists())
+        self.assertFalse((self.root / ".backend-archive").exists())
 
     def test_prior_candidate_mismatch_cannot_admit_old_fragment(self):
         (self.root / "haproxy.cfg").write_bytes(b"global\n")
@@ -116,7 +129,7 @@ class BackendArchiveTests(unittest.TestCase):
         self.write(name, self.owned(name))
         result = archive_module.archive(str(self.root), [name], False, self.prior_proof())
         self.assertFalse(result["changed"])
-        self.assertFalse((self.root / ".platform-backend-archive").exists())
+        self.assertFalse((self.root / ".backend-archive").exists())
 
     def test_partial_move_failure_restores_already_moved_files(self):
         (self.root / "haproxy.cfg").write_bytes(b"global\n")

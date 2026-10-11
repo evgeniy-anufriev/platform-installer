@@ -134,6 +134,21 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		return err
 	}
 	state := asMap(document["platform_desired_state"])
+	view.DataRootDirectory = "/var/lib"
+	if raw, found := document["platform_data_root_directory"]; found {
+		value, ok := raw.(string)
+		if !ok || !validProjectSetting("platform_data_root_directory", value) {
+			return managedReadError("Managed service data root is invalid", desiredDocument)
+		}
+		view.DataRootDirectory = value
+	}
+	if raw, found := document["platform_name_prefix"]; found {
+		value, ok := raw.(string)
+		if !ok || !validProjectSetting("platform_name_prefix", value) {
+			return managedReadError("Managed resource name prefix is invalid", desiredDocument)
+		}
+		view.NamePrefix = value
+	}
 	deployments := asMap(state["serviceDeployments"])
 	groups := asMap(state["endpointGroups"])
 	if state == nil || deployments == nil {

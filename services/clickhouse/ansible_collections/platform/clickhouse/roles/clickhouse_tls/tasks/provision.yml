@@ -58,7 +58,7 @@
 - name: Bind member data paths to one immutable managed identity
   ansible.builtin.copy:
     content: "{{ {'apiVersion': 'platform.installer/clickhouse-member-marker/v1alpha1', 'deploymentId': platform_clickhouse_deployment_id, 'memberId': item.id, 'unitId': item.unit_id} | to_nice_json }}\n"
-    dest: "{{ item.data_directory }}/.platform-clickhouse-member.json"
+    dest: "{{ item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
     owner: "{{ platform_clickhouse_user }}"
     group: "{{ platform_clickhouse_group }}"
     mode: '0600'

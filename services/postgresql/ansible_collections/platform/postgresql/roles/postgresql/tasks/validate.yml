@@ -21,7 +21,7 @@
       - item is mapping
       - item.id is defined
       - item.id | string is match('^.+-[1-9][0-9]*$')
-      - ('platform-postgresql@' ~ platform_postgresql_deployment_id ~ '-' ~ ((item.id | string) | regex_replace('^.*-', '')) ~ '.service') | length <= 255
+      - (platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-' ~ ((item.id | string) | regex_replace('^.*-', '')) ~ '.service') | length <= 255
       - item.host is defined
       - platform_postgresql_mode != 'pg_auto_failover' or item.hostname is defined
       - platform_postgresql_mode != 'pg_auto_failover' or item.address is defined

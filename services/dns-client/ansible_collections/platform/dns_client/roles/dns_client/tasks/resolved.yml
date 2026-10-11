@@ -18,7 +18,7 @@
 - name: Render Platform split DNS systemd-resolved drop-in
   ansible.builtin.template:
     src: platform-installer.conf.j2
-    dest: /etc/systemd/resolved.conf.d/platform-installer.conf
+    dest: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
     owner: root
     group: root
     mode: '0644'

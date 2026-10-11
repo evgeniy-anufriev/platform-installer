@@ -523,3 +523,21 @@ path. Operators must migrate existing data separately before applying a path
 change. Redis retains its existing directory consistency check. Adding Vault
 and changing defaults can likewise select a new empty data directory on a
 reapply unless the operator migrates existing data first.
+
+## ADR-037: Portable service data root and target resource prefix
+
+The portable project carries `platform_data_root_directory` and
+`platform_name_prefix` as ordinary Ansible variables beside its desired state.
+Installer Review/Save edits the same managed document. The service data root
+defaults to `/var/lib` and supplies service data paths only; explicit
+deployment/member paths retain precedence. Application data remains in the
+application account home, and Installer execution workspaces and cache are
+outside this setting.
+
+An empty name prefix adds nothing to service-owned target resource names.
+A nonempty validated prefix is prepended where service resources are created
+and checked. Installer PKI paths and application runtime names retain their
+existing names. It does not rename internal
+contract keys, collection names or Installer runtime identity paths. The
+owner will remove old deployments before rollout; the Installer does not
+migrate or remove old resources when the prefix changes.

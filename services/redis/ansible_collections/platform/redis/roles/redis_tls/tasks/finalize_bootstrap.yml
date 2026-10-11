@@ -14,7 +14,7 @@
 - name: Write Redis persistent ownership marker after successful bootstrap
   ansible.builtin.copy:
     content: "mode={{ platform_redis_mode }}\n"
-    dest: "{{ item.data_directory }}/.platform-redis-mode"
+    dest: "{{ item.data_directory }}/.{{ platform_redis_name }}-mode"
     owner: "{{ platform_redis_user }}"
     group: "{{ platform_redis_group }}"
     mode: '0600'

@@ -1,8 +1,8 @@
 # Platform Installer V2 managed rootless Docker system/user bridge
 [Unit]
 Description=Start rootless Docker for {{ platform_docker_account_name }} after LXC network
-BindsTo=platform-docker-lxc-ready.target
-After=platform-docker-lxc-ready.target user@{{ _platform_docker_uid }}.service
+BindsTo={{ platform_docker_name }}-lxc-ready.target
+After={{ platform_docker_name }}-lxc-ready.target user@{{ _platform_docker_uid }}.service
 Requires=user@{{ _platform_docker_uid }}.service
 
 [Service]

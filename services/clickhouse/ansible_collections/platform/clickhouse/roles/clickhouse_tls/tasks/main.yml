@@ -1,4 +1,8 @@
 ---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
 - name: Validate ClickHouse desired inputs
   ansible.builtin.include_tasks: validate.yml
 
