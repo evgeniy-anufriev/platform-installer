@@ -16,6 +16,30 @@ from build_execution_runtime_bundle import write_ui_static_defaults
 
 
 class ServiceConfigurationPreviewTests(unittest.TestCase):
+    def test_postgresql_default_directory_includes_postgres_child_directory(self):
+        catalog = {"definitions": {"postgresql": {
+            "x-dataDirectoryProjection": {
+                "deploymentSetting": "dataDirectory",
+                "rootVariable": "platform_data_root_directory",
+                "deploymentPathSuffix": "postgres",
+                "appendMemberIdWhenCoLocated": False,
+            },
+            "configuration": {"settings": {
+                "dataDirectory": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+            }},
+        }}}
+        deferred = {"state": "DEFERRED", "source": "RUNTIME_DEFERRED"}
+        configuration = {"services": {"qa-postgresql": {
+            "serviceType": "postgresql",
+            "configuration": {"dataDirectory": deferred},
+            "members": {},
+        }}}
+        result = _safe_configuration_preview(
+            configuration, catalog, "sha256:" + "a" * 64,
+            {"node1": {"platform_data_root_directory": "/data"}},
+        )["services"]["qa-postgresql"]["configuration"]["dataDirectory"]
+        self.assertEqual("/data/qa-postgresql/postgres", result["value"])
+
     def test_core_projection_keeps_ordinary_values_and_excludes_secret_objects(self):
         revision = "sha256:" + "a" * 64
         catalog = {"definitions": {"vault": {"configuration": {"settings": {

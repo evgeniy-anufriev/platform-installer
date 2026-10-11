@@ -20,6 +20,13 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.tls = (ROLE / "tasks/resolve_tls.yml").read_text(encoding="utf-8")
         self.handlers = (ROLE / "handlers/main.yml").read_text(encoding="utf-8")
 
+    def test_default_data_directory_is_nested_under_deployment_postgres(self):
+        defaults = (ROLE / "defaults/main.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "platform_postgresql_data_directory: \"{{ platform_data_root_directory | default('/var/lib') }}/{{ platform_postgresql_deployment_id }}/postgres\"",
+            defaults,
+        )
+
     def test_standalone_retains_platform_initdb(self):
         self.assertIn("Initialize PostgreSQL exactly once", self.main)
         self.assertIn("platform_postgresql_mode == 'standalone'", self.main)

@@ -7,7 +7,7 @@ platform_postgresql_user: postgres
 platform_postgresql_group: postgres
 platform_postgresql_user_home: /var/lib/pgsql
 platform_postgresql_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}postgresql"
-platform_postgresql_data_directory: "{{ platform_data_root_directory | default('/var/lib') }}/{{ platform_postgresql_deployment_id }}"
+platform_postgresql_data_directory: "{{ platform_data_root_directory | default('/var/lib') }}/{{ platform_postgresql_deployment_id }}/postgres"
 platform_postgresql_config_directory: "/etc/{{ (platform_name_prefix | default('') ~ '/') if (platform_name_prefix | default('')) else '' }}postgresql"
 platform_postgresql_log_directory: "/var/log/{{ (platform_name_prefix | default('') ~ '/') if (platform_name_prefix | default('')) else '' }}postgresql"
 platform_postgresql_tls_profile: infrastructure-tls

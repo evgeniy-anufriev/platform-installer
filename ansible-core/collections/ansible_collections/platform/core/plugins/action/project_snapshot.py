@@ -83,17 +83,20 @@ def _project_effective_data_directories(configuration, catalog, hostvars):
         definition = definitions.get(service.get("serviceType"), {})
         projection = definition.get("x-dataDirectoryProjection") if isinstance(definition, dict) else None
         if not isinstance(projection, dict) or set(projection) - {
-            "deploymentSetting", "memberSetting", "rootVariable", "appendMemberIdWhenCoLocated"
+            "deploymentSetting", "memberSetting", "rootVariable", "deploymentPathSuffix", "appendMemberIdWhenCoLocated"
         }:
             continue
         deployment_setting = projection.get("deploymentSetting")
         member_setting = projection.get("memberSetting")
         root_variable = projection.get("rootVariable")
+        deployment_path_suffix = projection.get("deploymentPathSuffix", "")
         append_member = projection.get("appendMemberIdWhenCoLocated")
         if (not isinstance(deployment_setting, str) or
                 (member_setting is not None and not isinstance(member_setting, str)) or
                 not isinstance(root_variable, str) or
                 not root_variable.startswith("platform_") or
+                not isinstance(deployment_path_suffix, str) or
+                (deployment_path_suffix and (deployment_path_suffix.startswith("/") or ".." in deployment_path_suffix.split("/"))) or
                 type(append_member) is not bool):
             continue
 
@@ -129,6 +132,8 @@ def _project_effective_data_directories(configuration, catalog, hostvars):
             if root is None:
                 return None
             parts = [root, deployment_id]
+            if deployment_path_suffix:
+                parts.extend(deployment_path_suffix.split("/"))
             if member_id is not None:
                 parts.append(member_id)
             path = posixpath.normpath(posixpath.join(*parts))

@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:bcdddc848a25c22b7eab5dfb3c43f76ecccb759154e91262dbe2760679a1cf63
+digest: sha256:928f45a27c8f81999b02c0922d2d20837c4d9b7b0b5452ce3cef8643fbbd2a3d
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -818,8 +818,8 @@ definitions:
             label: Каталог данных
             section: Хранение
             order: 0
-            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Существующие
-              данные автоматически не переносятся.
+            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>/postgres.
+              Существующие данные автоматически не переносятся.
         configDirectory:
           kind: MANAGED
           roleVariable: platform_postgresql_config_directory
@@ -953,6 +953,7 @@ definitions:
     x-dataDirectoryProjection:
       deploymentSetting: dataDirectory
       rootVariable: platform_data_root_directory
+      deploymentPathSuffix: postgres
       appendMemberIdWhenCoLocated: false
     roleEntrypoints:
       apply:
@@ -965,7 +966,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:ce03b97a34d254d7a98a7ec2069862fad959bed41f57e8bc0a5e833b44e79a3e
+    x-definitionDigest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1

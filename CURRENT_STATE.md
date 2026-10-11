@@ -65,12 +65,15 @@ The current journal records:
 The [UI test cases](docs/service-install-11-ui-test-cases.md) and
 [test journal](docs/service-install-11-test-journal.md) define detailed coverage.
 The journal is evidence, not permission to perform a new run or reset.
-S11-00 cleanup was repeated on 2026-10-11 by explicit owner request on
-node1/node2/node3; service deployments and target Installer runtime/data are
-absent. The Installer-free QA baseline is restored, not a pristine OS. See
-[cleanup record](docs/service-install-11-cleanup.md). Windows projects/cache
-and local secrets were retained. New preparation/installation and naming
-acceptance remain separate; cleanup does not authorize Start.
+S11-00 cleanup was repeated on 2026-10-11, then the `full-services` project was
+installed again. On the latest target audit, only Redis/Sentinel deployment
+`qa-redis` was removed from node1/node2/node3 at the owner's request; its data,
+service configs/ACLs and per-member TLS copies, logs, custom units, Redis RPM,
+and dedicated Redis user/group/home were deleted. Shared PKI and other services
+were retained. See the historical
+[cleanup record](docs/service-install-11-cleanup.md) for S11-00; the latest
+bundle and target state are recorded below. This targeted removal does not close
+SI11 or authorize another installation run.
 
 ## SI11 source corrections and recorded runtime checkpoint
 
@@ -169,8 +172,22 @@ Ansible regressions and 15 BIND contract tests passed on RED OS node2.
 Bundle `si11-full-service-20261009-07` released below; UI rebind/preparation
 and real Vault retry remain pending; see the journal.
 
-Latest delivered project bundle: `si11-full-service-20261011-21`, built on
-node2 and validated at `.runtime/qa/full-services/bundle`, digest
+Latest delivered project bundle: `si11-full-service-20261011-25`, built on
+node2 from the current source, validated and published with digest
+`sha256:0f84e55b0ba7f8e26609991f8ee2fb5672de3fea07d5ca52ed84ddecaf2c22c7`.
+Its runtime contains the one-run raw Ansible failure-output marker for project
+`project-b46aa3f5f57a495f`; captured diagnostics remain protected on the
+Execution Node and must not be printed or copied into project files. The bundle
+is in `.runtime/qa/full-services/bundle`; previous -24 is preserved at
+`.runtime/qa/full-services/bundle.previous-20261011-before-25`. Project lock
+is unchanged, so normal UI rebind and node preparation are required before a
+dependent project flow. The Redis failure evidence supplied by the owner shows
+`WRONGPASS` on node2 while authenticating to the master; no password value was
+recorded. Redis has since been removed from all three targets. No new install
+plan was started.
+
+Previous project bundle: `si11-full-service-20261011-21`, built on node2 and
+validated at `.runtime/qa/full-services/bundle` at the time, digest
 `sha256:a24029d8a65fbc8327c1eae776bbea841235b6dbe122922f7aec9b6600418ec2`.
 It includes the prior -15 changes plus Redis Sentinel peer authentication.
 Version -09 also
@@ -189,7 +206,7 @@ data paths for Kafka, Redis, ClickHouse and PostgreSQL. Version -21 adds data
 directory preview metadata and catalog/fixture-lock updates for Kafka, Redis,
 ClickHouse, PostgreSQL and Vault.
 Published with the standard publisher into `cache/`; project import
-digest matches. Previous -20 is preserved at
+digest matched at the time. Previous -20 is preserved at
 `.runtime/qa/full-services/bundle.previous-20261011-20`. Project lock unchanged;
 its catalog digest still references the prior bundle, so use the normal UI
 rebind before dependent project flows.
