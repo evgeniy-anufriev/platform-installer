@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:7e5e9c182d0e76164639b968eb8ca5a8d7ce927dd69e94f78a8890b63a3e9d66
+digest: sha256:bcdddc848a25c22b7eab5dfb3c43f76ecccb759154e91262dbe2760679a1cf63
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -233,6 +233,11 @@ definitions:
               requirementRef: clickhouse-default-password
               purpose: SERVICE_PASSWORD
     x-memberDataDirectorySetting: dataDirectory
+    x-dataDirectoryProjection:
+      deploymentSetting: dataRoot
+      memberSetting: dataDirectory
+      rootVariable: platform_data_root_directory
+      appendMemberIdWhenCoLocated: true
     roleEntrypoints:
       apply:
         fqcn: platform.clickhouse.clickhouse_tls
@@ -265,7 +270,7 @@ definitions:
       digest: sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
       requiredOffline: true
     compatibilityRef: ../../services/clickhouse/compatibility.yml
-    x-definitionDigest: sha256:ef98b7e206fcb37943c333ffb5b50ec92b525df62b2735b5d983da6b1abb124a
+    x-definitionDigest: sha256:dc489f76b01196af3bbdeaad8de649148d4c9c148cfaea198578dd404a42a5f8
     x-sourceManifest: services/clickhouse/service.yml
   docker:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -670,6 +675,11 @@ definitions:
     - inter.broker.listener.name
     - listener.name.*.ssl.keystore.location
     - listener.name.*.ssl.truststore.location
+    x-dataDirectoryProjection:
+      deploymentSetting: dataDirectory
+      memberSetting: dataDirectory
+      rootVariable: platform_data_root_directory
+      appendMemberIdWhenCoLocated: true
     roleEntrypoints:
       apply:
         fqcn: platform.kafka.kafka_kraft
@@ -697,7 +707,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:63158ec216d0113267633c9b26b5a67aa19d4fad4b81ef0a9e4091eb21b5ba8d
+    x-definitionDigest: sha256:8491615d10a211d97d1a1d06456010de4608fb822e997ca9b7b82522c96148be
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -940,6 +950,10 @@ definitions:
     - primary_slot_name
     - shared_preload_libraries
     - pg_hba_file
+    x-dataDirectoryProjection:
+      deploymentSetting: dataDirectory
+      rootVariable: platform_data_root_directory
+      appendMemberIdWhenCoLocated: false
     roleEntrypoints:
       apply:
         fqcn: platform.postgresql.postgresql
@@ -951,7 +965,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:6d57f57a1dec36f86b7b389c9a9809c44f3ac8e6a052237b1959d38d7bc97010
+    x-definitionDigest: sha256:ce03b97a34d254d7a98a7ec2069862fad959bed41f57e8bc0a5e833b44e79a3e
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1174,6 +1188,11 @@ definitions:
     - pidfile
     - logfile
     x-memberDataDirectorySetting: dataDirectory
+    x-dataDirectoryProjection:
+      deploymentSetting: dataRoot
+      memberSetting: dataDirectory
+      rootVariable: platform_data_root_directory
+      appendMemberIdWhenCoLocated: true
     roleEntrypoints:
       apply:
         fqcn: platform.redis.redis_tls
@@ -1192,7 +1211,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/redis/compatibility.yml
-    x-definitionDigest: sha256:d73647e0cc278f01539c115a7f815eacf58a0a35a29587161e6a799319779cc6
+    x-definitionDigest: sha256:73141d74c3aa6cf7f81ca7a950464bc3fd020317627705772381ff5ab72381ef
     x-sourceManifest: services/redis/service.yml
   vault:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1359,6 +1378,11 @@ definitions:
             section: Initialization
             order: 31
     x-memberDataDirectorySetting: dataDirectory
+    x-dataDirectoryProjection:
+      deploymentSetting: dataRoot
+      memberSetting: dataDirectory
+      rootVariable: platform_data_root_directory
+      appendMemberIdWhenCoLocated: true
     roleEntrypoints:
       apply:
         fqcn: platform.vault.vault_tls
@@ -1399,7 +1423,7 @@ definitions:
         requiredWhen: SEALED
         operations:
         - SERVICE_APPLY
-    x-definitionDigest: sha256:26df8cb9b588f15e57e9e72162bad1449aeed4ab6be202ba7f8411dc8e5d61a5
+    x-definitionDigest: sha256:56a20469e72099c3b7b052e54198533582ffe76c134081317986e8ae76bb3c88
     x-sourceManifest: services/vault/service.yml
   keepalived:
     apiVersion: platform.installer/service-manifest/v1alpha1

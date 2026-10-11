@@ -1514,7 +1514,7 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
 	switch command.Operation {
-	case "CreateServer", "UpdateServer", "DeleteServer",
+	case "SetProjectSetting", "CreateServer", "UpdateServer", "DeleteServer",
 		"CreateServiceDeployment", "DeleteServiceDeployment",
 		"ReconcileDeploymentPlacement", "ReconcileHostScopedDeploymentPlacement",
 		"CreateEndpointGroup", "UpdateEndpointGroup", "DeleteEndpointGroup",

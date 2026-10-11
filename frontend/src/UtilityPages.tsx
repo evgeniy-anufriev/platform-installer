@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { InstallationEventView, ManagedProjectView } from "./backend";
+import type { EditResult, InstallationEventView, ManagedProjectView } from "./backend";
 import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
 import "./utility-pages.css";
 
@@ -962,7 +962,9 @@ function EventLog({
 type Props = {
   page: string;
   managed?: ManagedProjectView;
+  projectSettingDraftValues?: Partial<Record<"platform_data_root_directory" | "platform_name_prefix", string>>;
   onAppendProjectSetting?: (intent: { operation: "SetProjectSetting"; setting: "platform_data_root_directory" | "platform_name_prefix"; value: string }) => Promise<boolean>;
+  editError?: EditResult["error"] | null;
   events: InstallationEventView[];
   runId?: string;
   configVersion?: number;
@@ -1219,7 +1221,9 @@ function HelpPage({ onNavigate }: { onNavigate?: (page: HelpPageId) => void }) {
 export function UtilityPages({
   page,
   managed,
+  projectSettingDraftValues,
   onAppendProjectSetting,
+  editError,
   events,
   runId,
   configVersion,
@@ -1227,13 +1231,19 @@ export function UtilityPages({
   configError,
   onNavigate,
 }: Props) {
-  const [dataRootDirectory, setDataRootDirectory] = useState(managed?.dataRootDirectory || "/var/lib");
-  const [namePrefix, setNamePrefix] = useState(managed?.namePrefix || "");
+  const savedDataRootDirectory = managed?.dataRootDirectory || "/var/lib";
+  const savedNamePrefix = managed?.namePrefix || "";
+  const draftDataRootDirectory = projectSettingDraftValues?.platform_data_root_directory;
+  const draftNamePrefix = projectSettingDraftValues?.platform_name_prefix;
+  const dataRootDirectoryChanged = draftDataRootDirectory !== undefined && draftDataRootDirectory !== savedDataRootDirectory;
+  const namePrefixChanged = draftNamePrefix !== undefined && draftNamePrefix !== savedNamePrefix;
+  const [dataRootDirectory, setDataRootDirectory] = useState(draftDataRootDirectory || savedDataRootDirectory);
+  const [namePrefix, setNamePrefix] = useState(draftNamePrefix ?? savedNamePrefix);
   const [settingBusy, setSettingBusy] = useState(false);
   useEffect(() => {
-    setDataRootDirectory(managed?.dataRootDirectory || "/var/lib");
-    setNamePrefix(managed?.namePrefix || "");
-  }, [managed?.projectRevision]);
+    setDataRootDirectory(draftDataRootDirectory || savedDataRootDirectory);
+    setNamePrefix(draftNamePrefix ?? savedNamePrefix);
+  }, [managed?.projectRevision, savedDataRootDirectory, savedNamePrefix, draftDataRootDirectory, draftNamePrefix]);
   const stageSetting = async (setting: "platform_data_root_directory" | "platform_name_prefix", value: string) => {
     if (!onAppendProjectSetting || !managed) return;
     setSettingBusy(true);
@@ -1306,21 +1316,28 @@ export function UtilityPages({
         <section className="utility-card">
           <h2>Параметры проекта</h2>
           <p>Изменения добавляются в общий черновик проекта. Просмотрите их и нажмите «Сохранить» в шапке.</p>
-          <label>
-            Корневой каталог данных сервисов
-            <input value={dataRootDirectory} onChange={(event) => setDataRootDirectory(event.target.value)} disabled={!managed || settingBusy} />
-          </label>
-          <button type="button" disabled={!managed || settingBusy || dataRootDirectory === (managed.dataRootDirectory || "/var/lib")} onClick={() => void stageSetting("platform_data_root_directory", dataRootDirectory)}>
-            Добавить каталог в черновик
-          </button>
+          {editError && <p className="field-error" role="alert"><code>{editError.code}</code> — {editError.message}</p>}
+          <div className={`project-setting-field${dataRootDirectoryChanged ? " project-setting-field--changed" : ""}`}>
+            <label>
+              Корневой каталог данных сервисов
+              <input value={dataRootDirectory} onChange={(event) => setDataRootDirectory(event.target.value)} disabled={!managed || settingBusy} />
+            </label>
+            {dataRootDirectoryChanged && <small className="project-setting-draft-status" role="status">В черновике: <code>{draftDataRootDirectory}</code>. Сохраните проект в шапке, чтобы зафиксировать это значение.</small>}
+            <button type="button" disabled={!managed || settingBusy || dataRootDirectory === (draftDataRootDirectory ?? savedDataRootDirectory)} onClick={() => void stageSetting("platform_data_root_directory", dataRootDirectory)}>
+              Добавить каталог в черновик
+            </button>
+          </div>
           <p>Путь применяется к каталогам данных сервисов по умолчанию. Данные при изменении пути автоматически не переносятся.</p>
-          <label>
-            Префикс имён ресурсов
-            <input value={namePrefix} onChange={(event) => setNamePrefix(event.target.value)} disabled={!managed || settingBusy} />
-          </label>
-          <button type="button" disabled={!managed || settingBusy || namePrefix === (managed.namePrefix || "")} onClick={() => void stageSetting("platform_name_prefix", namePrefix)}>
-            Добавить префикс в черновик
-          </button>
+          <div className={`project-setting-field${namePrefixChanged ? " project-setting-field--changed" : ""}`}>
+            <label>
+              Префикс имён ресурсов
+              <input value={namePrefix} onChange={(event) => setNamePrefix(event.target.value)} disabled={!managed || settingBusy} />
+            </label>
+            {namePrefixChanged && <small className="project-setting-draft-status" role="status">В черновике задан префикс «{draftNamePrefix || "не задан"}». Сохраните проект в шапке, чтобы зафиксировать это значение.</small>}
+            <button type="button" disabled={!managed || settingBusy || namePrefix === (draftNamePrefix ?? savedNamePrefix)} onClick={() => void stageSetting("platform_name_prefix", namePrefix)}>
+              Добавить префикс в черновик
+            </button>
+          </div>
           <p>Пустое значение создаёт имена ресурсов сервисов без префикса. Новый префикс создаёт новые имена ресурсов; прежние ресурсы автоматически не переименовываются.</p>
         </section>
         <section className="utility-card">

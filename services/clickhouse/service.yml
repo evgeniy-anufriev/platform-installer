@@ -69,6 +69,7 @@ configuration:
           passwordSecretRef: {type: string, minLength: 1}
       ui: {label: Default user password, section: Credentials, order: 40, x-runtimeSecretRequirement: {requirementRef: clickhouse-default-password, purpose: SERVICE_PASSWORD}}
 x-memberDataDirectorySetting: dataDirectory
+x-dataDirectoryProjection: {deploymentSetting: dataRoot, memberSetting: dataDirectory, rootVariable: platform_data_root_directory, appendMemberIdWhenCoLocated: true}
 roleEntrypoints:
   apply: {fqcn: platform.clickhouse.clickhouse_tls, variablesPrefix: platform_clickhouse_, x-memberListVariable: platform_clickhouse_instances}
   verify: {fqcn: platform.clickhouse.clickhouse_tls, variablesPrefix: platform_clickhouse_, x-memberListVariable: platform_clickhouse_instances}

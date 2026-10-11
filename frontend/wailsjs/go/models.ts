@@ -702,6 +702,8 @@ export namespace installer {
 	}
 	export class ManagedProjectView {
 	    projectRevision: string;
+	    dataRootDirectory: string;
+	    namePrefix: string;
 	    servers: Record<string, ManagedServer>;
 	    deployments: Record<string, ManagedDeployment>;
 	    endpointGroups: Record<string, ManagedEndpointGroup>;
@@ -716,6 +718,8 @@ export namespace installer {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.projectRevision = source["projectRevision"];
+	        this.dataRootDirectory = source["dataRootDirectory"];
+	        this.namePrefix = source["namePrefix"];
 	        this.servers = this.convertValues(source["servers"], ManagedServer, true);
 	        this.deployments = this.convertValues(source["deployments"], ManagedDeployment, true);
 	        this.endpointGroups = this.convertValues(source["endpointGroups"], ManagedEndpointGroup, true);

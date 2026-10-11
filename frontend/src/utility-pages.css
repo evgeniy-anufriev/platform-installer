@@ -34,6 +34,42 @@
   margin: 0 0 10px;
   font-size: 14px;
 }
+.project-setting-field {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.project-setting-field--changed {
+  border-color: #efd28d;
+  background: #fffbeb;
+}
+.project-setting-field label {
+  display: grid;
+  width: min(100%, 520px);
+  gap: 6px;
+  font-weight: 600;
+}
+.project-setting-field input {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #cbd7e6;
+  border-radius: 6px;
+  background: #fff;
+  color: #17243a;
+  font: inherit;
+}
+.project-setting-field--changed input {
+  border-color: #d5a83f;
+}
+.project-setting-draft-status {
+  color: #805400;
+  font-size: 12px;
+  font-weight: 600;
+}
 .help-page {
   gap: 12px;
 }

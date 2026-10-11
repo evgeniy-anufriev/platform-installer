@@ -130,7 +130,7 @@ Execution Node panel. Its primary items are:
 | Logs | historical runs, audit and sanitized diagnostics |
 | Help | offline help and troubleshooting entry point |
 | About | version and compatibility information |
-| Settings | portable project data-root and resource-name prefix through Review/Save, plus separate application-local information |
+| Settings | portable project data-root and resource-name prefix through Review/Save, plus separate application-local information; staged project values are highlighted and say that project Save is still required |
 
 Installation has local navigation: **Summary**, **Plan**, **Execution**,
 **Result**. Execution Node selection and preparation belong to Servers, not an

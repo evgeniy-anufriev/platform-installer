@@ -497,6 +497,60 @@ it("restores Logs, Help, About and Settings navigation without requiring an open
   ).toBeTruthy();
 });
 
+it("highlights project settings staged in the shared draft and keeps them visible across navigation", async () => {
+  const value = api();
+  value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
+  render(<App api={value} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
+  const dataRoot = screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" });
+  await userEvent.clear(dataRoot);
+  await userEvent.type(dataRoot, "/data");
+  await userEvent.click(screen.getByRole("button", { name: "Добавить каталог в черновик" }));
+
+  const draftStatus = () => screen.findByText((_, element) =>
+    Boolean(
+      element?.classList.contains("project-setting-draft-status") &&
+      element.textContent?.includes("/data"),
+    ),
+  );
+  expect(await draftStatus()).toBeTruthy();
+  expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
+  expect(dataRoot.closest(".project-setting-field")?.className).toContain("project-setting-field--changed");
+
+  await userEvent.click(screen.getByRole("button", { name: "Проект" }));
+  await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
+  expect(screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" })).toHaveProperty("value", "/data");
+  expect(await draftStatus()).toBeTruthy();
+});
+
+it("shows the error when adding the first project setting to the shared draft fails", async () => {
+  const value = api();
+  value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
+  value.appendEditCommand.mockResolvedValue({
+    status: "BLOCKED",
+    error: {
+      code: "EDIT_OPERATION_NOT_AVAILABLE",
+      message: "Операция недоступна.",
+    },
+  });
+  render(<App api={value} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
+  const dataRoot = screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" });
+  await userEvent.clear(dataRoot);
+  await userEvent.type(dataRoot, "/data");
+  await userEvent.click(screen.getByRole("button", { name: "Добавить каталог в черновик" }));
+
+  const error = await screen.findByRole("alert");
+  expect(error.textContent).toContain("EDIT_OPERATION_NOT_AVAILABLE");
+  expect(error.textContent).toContain("Операция недоступна.");
+  expect(screen.getByText("Сохранено")).toBeTruthy();
+  expect(value.discardEditSession).toHaveBeenCalledWith(sessionID);
+});
+
 it("shows the read-only Installation state without requesting a deployment plan", async () => {
   const getInstallationState = vi.fn().mockResolvedValue({
     apiVersion: "platform.installer/installation-state/v1alpha1",

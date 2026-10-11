@@ -361,6 +361,29 @@ func TestAppAppendAcceptsV8ServiceConfigurationOperations(t *testing.T) {
 	}
 }
 
+func TestAppAppendAcceptsProjectSettings(t *testing.T) {
+	root := t.TempDir()
+	manifest := "apiVersion: platform.installer/v2alpha1\nkind: PlatformProject\nmetadata:\n  id: project-aaaaaaaaaaaaaaaa\n  name: Test\ndesiredStateContract: platform.installer/project-desired-state/v2alpha1\n"
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(editorReaderStub{}, lifecycleStub{}, testApplicationConfig())
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Classification: projectlifecycle.ClassificationEmpty, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}}
+	started := app.StartEditSession()
+	if started.Error != nil || started.Session == nil {
+		t.Fatalf("start=%#v", started)
+	}
+	result := app.AppendEditCommand(started.Session.SessionID, installer.EditCommand{
+		Operation: "SetProjectSetting", Setting: "platform_data_root_directory", Value: "/data",
+	})
+	if result.Error != nil || result.Session == nil || result.Session.CommandCount != 1 {
+		t.Fatalf("append project setting=%#v", result)
+	}
+	if _, err := os.Stat(filepath.Join(root, "inventory", "group_vars", "all", "platform-installer.yml")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("draft unexpectedly persisted before review/save: %v", err)
+	}
+}
+
 func TestAmendLastConfigurationCommandClosesDraftAndRestoresSavedNodeAccess(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("name: unchanged\n"), 0o600); err != nil {

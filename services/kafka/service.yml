@@ -140,6 +140,7 @@ x-reservedAdvancedProperties:
   - inter.broker.listener.name
   - listener.name.*.ssl.keystore.location
   - listener.name.*.ssl.truststore.location
+x-dataDirectoryProjection: {deploymentSetting: dataDirectory, memberSetting: dataDirectory, rootVariable: platform_data_root_directory, appendMemberIdWhenCoLocated: true}
 roleEntrypoints:
   apply:
     fqcn: platform.kafka.kafka_kraft

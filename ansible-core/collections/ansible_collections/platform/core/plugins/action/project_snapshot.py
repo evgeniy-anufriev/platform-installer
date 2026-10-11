@@ -5,7 +5,9 @@ __metaclass__ = type
 import copy
 import json
 import os
+import posixpath
 import re
+from collections.abc import Mapping
 
 from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
@@ -28,6 +30,7 @@ from ansible_collections.platform.core.plugins.module_utils.project_validation i
 
 
 _CANONICAL_PORT = re.compile(r"^(0|[1-9][0-9]*)$")
+_SAFE_DATA_ROOT = re.compile(r"^/(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,95}/)*[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
 
 
 def _materialize_resolved_members(desired_state, topology, inventory_deployments, target_ids):
@@ -51,8 +54,142 @@ def _materialize_resolved_members(desired_state, topology, inventory_deployments
     return materialized
 
 
-def _safe_configuration_preview(configuration, catalog, revision):
+def _safe_data_root(value):
+    if not isinstance(value, str) or len(value) > 240 or not _SAFE_DATA_ROOT.fullmatch(value):
+        return None
+    return posixpath.normpath(value)
+
+
+def _project_effective_data_directories(configuration, catalog, hostvars):
+    """Resolve declared service data paths for presentation only.
+
+    Apply/Verify continue to use role defaults and ordinary Ansible precedence.
+    This projection fills deferred path defaults only in the target-free UI
+    preview, from the same resolved deployment/member placement and host vars.
+    """
+    configuration = copy.deepcopy(configuration)
+    services = configuration.get("services", {}) if isinstance(configuration, dict) else {}
+    definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
+    # Ansible exposes ``hostvars`` as its HostVars mapping proxy, not always a
+    # built-in dict. Accept the mapping contract or project-global inventory
+    # values silently disappear from this presentation-only calculation.
+    hostvars = hostvars if isinstance(hostvars, Mapping) else {}
+    if not isinstance(services, dict) or not isinstance(definitions, dict):
+        return configuration
+
+    for deployment_id, service in services.items():
+        if not isinstance(deployment_id, str) or not isinstance(service, dict):
+            continue
+        definition = definitions.get(service.get("serviceType"), {})
+        projection = definition.get("x-dataDirectoryProjection") if isinstance(definition, dict) else None
+        if not isinstance(projection, dict) or set(projection) - {
+            "deploymentSetting", "memberSetting", "rootVariable", "appendMemberIdWhenCoLocated"
+        }:
+            continue
+        deployment_setting = projection.get("deploymentSetting")
+        member_setting = projection.get("memberSetting")
+        root_variable = projection.get("rootVariable")
+        append_member = projection.get("appendMemberIdWhenCoLocated")
+        if (not isinstance(deployment_setting, str) or
+                (member_setting is not None and not isinstance(member_setting, str)) or
+                not isinstance(root_variable, str) or
+                not root_variable.startswith("platform_") or
+                type(append_member) is not bool):
+            continue
+
+        deployment_values = service.get("configuration", {})
+        members = service.get("members", {})
+        if not isinstance(deployment_values, dict) or not isinstance(members, dict):
+            continue
+        deployment_value = deployment_values.get(deployment_setting)
+        if isinstance(deployment_value, dict) and deployment_value.get("state") == "RESOLVED":
+            base_path = _safe_data_root(deployment_value.get("value"))
+            explicit_deployment = deployment_value.get("source") not in ("ROLE_DEFAULT", "STATIC_REFERENCE")
+        else:
+            base_path = None
+            explicit_deployment = False
+
+        member_hosts = {
+            member.get("variableContext", {}).get("hostId")
+            for member in members.values()
+            if isinstance(member, dict) and isinstance(member.get("variableContext"), dict)
+        }
+        member_hosts.discard(None)
+        root_hosts = member_hosts or set(hostvars)
+        default_roots = {}
+        for host_id in root_hosts:
+            values = hostvars.get(host_id)
+            raw_root = values.get(root_variable, "/var/lib") if isinstance(values, Mapping) else None
+            root = _safe_data_root(raw_root)
+            if root is not None:
+                default_roots[host_id] = root
+
+        def default_path(host_id, member_id=None):
+            root = default_roots.get(host_id)
+            if root is None:
+                return None
+            parts = [root, deployment_id]
+            if member_id is not None:
+                parts.append(member_id)
+            path = posixpath.normpath(posixpath.join(*parts))
+            return path if len(path) <= 255 else None
+
+        if not explicit_deployment:
+            unique_roots = set(default_roots.values())
+            if len(unique_roots) == 1:
+                base_path = default_path(next(iter(default_roots))) if default_roots else None
+            else:
+                base_path = None
+            if base_path is not None:
+                deployment_values[deployment_setting] = {
+                    "state": "RESOLVED", "source": "ROLE_DEFAULT", "value": base_path,
+                }
+
+        host_counts = {}
+        for host_id in member_hosts:
+            host_counts[host_id] = sum(
+                1 for member in members.values()
+                if isinstance(member, dict) and
+                isinstance(member.get("variableContext"), dict) and
+                member["variableContext"].get("hostId") == host_id
+            )
+
+        if member_setting is None:
+            continue
+        for member_id, member in members.items():
+            if not isinstance(member_id, str) or not isinstance(member, dict):
+                continue
+            values = member.get("configuration", {})
+            context = member.get("variableContext", {})
+            host_id = context.get("hostId") if isinstance(context, dict) else None
+            if not isinstance(values, dict) or not isinstance(host_id, str):
+                continue
+            current = values.get(member_setting)
+            if isinstance(current, dict) and current.get("state") == "RESOLVED" and current.get("source") == "MEMBER_OVERRIDE":
+                continue
+            if explicit_deployment and base_path is not None:
+                path = base_path
+                if append_member and host_counts.get(host_id, 0) > 1:
+                    path = posixpath.normpath(posixpath.join(base_path, member_id))
+            else:
+                path = default_path(
+                    host_id,
+                    member_id if append_member and host_counts.get(host_id, 0) > 1 else None,
+                )
+            if path is not None and len(path) <= 255:
+                values[member_setting] = {
+                    "state": "RESOLVED",
+                    "source": "MEMBER_OVERRIDE" if current and current.get("source") == "MEMBER_OVERRIDE" else (
+                        "DEPLOYMENT_OVERRIDE" if explicit_deployment else "ROLE_DEFAULT"
+                    ),
+                    "value": path,
+                }
+    return configuration
+
+
+def _safe_configuration_preview(configuration, catalog, revision, hostvars=None):
     """Project only bounded, manifest-mapped ordinary values for the UI."""
+    configuration = _project_effective_data_directories(configuration, catalog, hostvars)
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
     services = configuration.get("services", {}) if isinstance(configuration, dict) else {}
     if not isinstance(services, dict) or len(services) > 512:
@@ -386,7 +523,7 @@ class ActionModule(ActionBase):
             )
             if self._task.args.get("configuration_only") is True:
                 _, revision = project_documents(project_root, [])
-                return {"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision)}
+                return {"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars)}
             deployments = materialized.get("serviceDeployments", {}) if isinstance(materialized, dict) else {}
             definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
             _, _, secret_findings = _service_runtime_secret_requirements(

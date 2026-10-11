@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+from collections import UserDict
 from pathlib import Path
 
 
@@ -49,6 +50,121 @@ class ServiceConfigurationPreviewTests(unittest.TestCase):
         self.assertNotIn("secret_value", json.dumps(result))
         configuration["services"]["deployment"]["configuration"]["name"] = {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": "x" * 4097}
         self.assertNotIn("value", _safe_configuration_preview(configuration, catalog, "sha256:" + "a" * 64)["services"]["deployment"]["configuration"]["name"])
+
+    def test_effective_data_directories_follow_project_root_and_colocation(self):
+        catalog = {"definitions": {"redis": {
+            "x-dataDirectoryProjection": {
+                "deploymentSetting": "dataRoot",
+                "memberSetting": "dataDirectory",
+                "rootVariable": "platform_data_root_directory",
+                "appendMemberIdWhenCoLocated": True,
+            },
+            "configuration": {"settings": {
+                "dataRoot": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+                "dataDirectory": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+            }},
+        }}}
+        deferred = {"state": "DEFERRED", "source": "RUNTIME_DEFERRED"}
+        configuration = {"services": {"qa-redis": {
+            "serviceType": "redis",
+            "configuration": {"dataRoot": deferred},
+            "members": {
+                "redis-a": {"variableContext": {"hostId": "node1"}, "configuration": {"dataDirectory": deferred}},
+                "redis-b": {"variableContext": {"hostId": "node1"}, "configuration": {"dataDirectory": deferred}},
+                "redis-c": {"variableContext": {"hostId": "node2"}, "configuration": {"dataDirectory": deferred}},
+            },
+        }}}
+        result = _safe_configuration_preview(
+            configuration, catalog, "sha256:" + "a" * 64,
+            {"node1": {"platform_data_root_directory": "/data"}, "node2": {"platform_data_root_directory": "/data"}},
+        )["services"]["qa-redis"]
+        self.assertEqual("/data/qa-redis", result["configuration"]["dataRoot"]["value"])
+        self.assertEqual("/data/qa-redis/redis-a", result["members"]["redis-a"]["dataDirectory"]["value"])
+        self.assertEqual("/data/qa-redis/redis-b", result["members"]["redis-b"]["dataDirectory"]["value"])
+        self.assertEqual("/data/qa-redis", result["members"]["redis-c"]["dataDirectory"]["value"])
+        self.assertEqual("DEFERRED", configuration["services"]["qa-redis"]["configuration"]["dataRoot"]["state"])
+
+    def test_effective_data_directories_accept_ansible_hostvars_mapping(self):
+        catalog = {"definitions": {"clickhouse": {
+            "x-dataDirectoryProjection": {
+                "deploymentSetting": "dataRoot",
+                "memberSetting": "dataDirectory",
+                "rootVariable": "platform_data_root_directory",
+                "appendMemberIdWhenCoLocated": True,
+            },
+            "configuration": {"settings": {
+                "dataRoot": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+                "dataDirectory": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+            }},
+        }}}
+        deferred = {"state": "DEFERRED", "source": "RUNTIME_DEFERRED"}
+        configuration = {"services": {"qa-clickhouse": {
+            "serviceType": "clickhouse",
+            "configuration": {"dataRoot": deferred},
+            "members": {
+                "clickhouse-1": {"variableContext": {"hostId": "node1"}, "configuration": {"dataDirectory": deferred}},
+            },
+        }}}
+
+        # HostVars and HostVarsVars are mapping proxies in Ansible; UserDict
+        # exercises that contract without requiring an Ansible runtime here.
+        hostvars = UserDict({"node1": UserDict({"platform_data_root_directory": "/data"})})
+        result = _safe_configuration_preview(
+            configuration, catalog, "sha256:" + "a" * 64, hostvars,
+        )["services"]["qa-clickhouse"]
+
+        self.assertEqual("/data/qa-clickhouse", result["configuration"]["dataRoot"]["value"])
+        self.assertEqual("/data/qa-clickhouse", result["members"]["clickhouse-1"]["dataDirectory"]["value"])
+
+    def test_effective_data_directory_preserves_explicit_paths_and_hides_unsafe_root(self):
+        catalog = {"definitions": {"kafka": {
+            "x-dataDirectoryProjection": {
+                "deploymentSetting": "dataDirectory",
+                "memberSetting": "dataDirectory",
+                "rootVariable": "platform_data_root_directory",
+                "appendMemberIdWhenCoLocated": True,
+            },
+            "configuration": {"settings": {
+                "dataDirectory": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+            }},
+        }}}
+        configuration = {"services": {"kafka-main": {
+            "serviceType": "kafka",
+            "configuration": {"dataDirectory": {"state": "RESOLVED", "source": "DEPLOYMENT_OVERRIDE", "value": "/mnt/kafka"}},
+            "members": {
+                "broker-a": {"variableContext": {"hostId": "node1"}, "configuration": {"dataDirectory": {"state": "RESOLVED", "source": "DEPLOYMENT_OVERRIDE", "value": "/mnt/kafka"}}},
+                "broker-b": {"variableContext": {"hostId": "node1"}, "configuration": {"dataDirectory": {"state": "RESOLVED", "source": "MEMBER_OVERRIDE", "value": "/srv/kafka-b"}}},
+            },
+        }}}
+        result = _safe_configuration_preview(configuration, catalog, "sha256:" + "a" * 64, {"node1": {"platform_data_root_directory": "/data"}})["services"]["kafka-main"]
+        self.assertEqual("/mnt/kafka", result["configuration"]["dataDirectory"]["value"])
+        self.assertEqual("/mnt/kafka/broker-a", result["members"]["broker-a"]["dataDirectory"]["value"])
+        self.assertEqual("/srv/kafka-b", result["members"]["broker-b"]["dataDirectory"]["value"])
+
+        unsafe = {"services": {"qa-redis": {
+            "serviceType": "redis",
+            "configuration": {"dataRoot": {"state": "DEFERRED", "source": "RUNTIME_DEFERRED"}},
+            "members": {"redis-a": {"variableContext": {"hostId": "node1"}, "configuration": {"dataDirectory": {"state": "DEFERRED", "source": "RUNTIME_DEFERRED"}}}},
+        }}}
+        redis_definition = {
+            "x-dataDirectoryProjection": {
+                "deploymentSetting": "dataRoot",
+                "memberSetting": "dataDirectory",
+                "rootVariable": "platform_data_root_directory",
+                "appendMemberIdWhenCoLocated": True,
+            },
+            "configuration": {"settings": {
+                "dataRoot": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+                "dataDirectory": {"kind": "MANAGED", "type": "string", "validation": {"minLength": 1, "maxLength": 255}, "ui": {}},
+            }},
+        }
+        for unsafe_root in ("{{ secret_path }}", "/data/../etc", "/data with spaces"):
+            hidden = _safe_configuration_preview(
+                unsafe, {"definitions": {"redis": redis_definition}}, "sha256:" + "b" * 64,
+                {"node1": {"platform_data_root_directory": unsafe_root}},
+            )
+            self.assertNotIn("value", hidden["services"]["qa-redis"]["configuration"]["dataRoot"])
+            self.assertNotIn(unsafe_root, json.dumps(hidden))
 
     def test_bundle_component_omits_secret_object_and_marks_expression_deferred(self):
         with tempfile.TemporaryDirectory() as directory:

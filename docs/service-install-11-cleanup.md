@@ -93,3 +93,45 @@ Removed Kafka, Redis/Sentinel, Vault, ClickHouse/Keeper, PostgreSQL/pg_auto_fail
 Final audit: SSH and sudo -n work on all three, sshd/systemd-resolved active; no QA RPMs/accounts/service processes/listening endpoints, no enumerated Installer/service roots or QA temp directories. The old queried named.service appears only as not-found/inactive, with no installed unit/package/process. /etc/hosts remains unchanged and matches ebe6a0f64091eb7a69a4a5d4ce98c1b9c3ee1311d5e0148ba4e612d67d87dc4e on each VM. No LXC bridge/veth or Keepalived VIP remains. Existing enabled RED OS repositories remain. Root free space: node1 25 GiB, node2 28 GiB, node3 27 GiB. Empty /run/clickhouse-server on node2/node3 was separately owner/process/mount checked and removed. Protected platform-automation SSH/sudo bootstrap files and OS-owned egl_external_platform.d retained.
 
 Evidence: .runtime/qa/s11-00-cleanup-20261008/ holds inventories, literal bounded cleanup scripts and per-node safe cleanup/audit logs; no secret contents captured. Windows projects, exported copies, bundle cache, protected local secrets and all uncommitted source changes retained. This repeat proves an Installer-free QA baseline, not pristine OS or secure erasure of shared OS journals. A new installation/run is not authorized by cleanup.
+
+## Repeat cleanup — 2026-10-11
+
+Owner explicitly authorized removal of all Installer-installed services, their
+data and the Installer runtime/data on node1/node2/node3
+(192.168.56.101/.102/.103). Strict known-host SSH as `platform-automation`
+with the persistent EXEC-01 identity and `sudo -n` succeeded. Before mutation,
+no Installer/Ansible execution process was active. The exact selected service
+units and service RPMs were inventoried; all service data/runtime roots passed
+literal-path, owner, realpath and mount-boundary checks. RPM erase dry-runs
+passed on all nodes.
+
+Stopped and removed BIND, ClickHouse/Keeper, Kafka, PostgreSQL/pg_auto_failover,
+Redis/Sentinel, Vault, HAProxy, Keepalived, DNS-client configuration and
+rootless Docker/LXC. Removed their 28 service RPMs per node, service
+configuration/data/log paths, exact custom units/drop-ins, generated
+`rpmsave` files, service accounts and rootless subuid/subgid entries. On all
+three nodes removed `/etc/platform-installer` and `/var/tmp/platform-installer`;
+on node1 also removed `/var/lib/platform-installer` (about 6.6 GiB) and 16
+bounded Installer QA workspaces. The separate
+`/var/lib/platform-app-probe-qa` directory on node1 was preserved as agreed;
+its Docker engine was removed with the Installer-installed Docker deployment.
+
+One initial node2 cleanup invocation returned nonzero after completing its
+mutations because a final check incorrectly required node1's separate
+`platform-app-probe-qa` directory on every host. A fresh read-only node2 audit
+confirmed the cleanup state before continuing; node3 and node1 then completed.
+The node1 Kafka unit took longer to stop cleanly; no data was removed until all
+service processes had stopped.
+
+Final audit PASS on all three nodes: no Installer runtime roots, service data
+roots, QA temp workspaces, service RPMs/accounts/processes, Installer units or
+service-specific RPM residuals remain. Only OS baseline `bind-libs`,
+`bind-utils` and `bind-license` remain from the BIND package family. The
+systemd resolver is active, `/etc/hosts` retains baseline SHA-256
+`ebe6a0f64091eb7a69a4a5d4ce98c1b9c3ee1311d5e0148ba4e612d67d87dc4e`, and
+`platform-automation` SSH/sudo remains usable. No service listeners, Keepalived
+VIP or LXC bridge remains. Workstation sources, project, bundle cache and
+protected local secrets were not touched. This is not secure erasure of OS
+journals or proof of a pristine OS; no installation was started.
+
+Safe final audit metadata: `.runtime/qa/s11-00-cleanup-20261011/audit.txt`.

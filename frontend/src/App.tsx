@@ -73,6 +73,18 @@ type StructuralIntent =
   | ProviderIntent
   | CertificateIntent
   | ConfigurationIntent;
+type ProjectSettingDraftValues = Partial<
+  Record<"platform_data_root_directory" | "platform_name_prefix", string>
+>;
+
+function projectSettingValuesFromDraft(intents: StructuralIntent[]): ProjectSettingDraftValues {
+  const values: ProjectSettingDraftValues = {};
+  for (const intent of intents) {
+    if (intent.operation === "SetProjectSetting") values[intent.setting] = intent.value;
+  }
+  return values;
+}
+
 type ServicePreviewObservation = {
   value: ServiceConfigurationPreview;
   root: string;
@@ -1301,18 +1313,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       }
       const next = await api.appendEditCommand(id, intent);
       if (next.error || !next.session) {
+        const appendError = next.error || {
+          code: "EDIT_COMMAND_BLOCKED",
+          message: "Изменение не добавлено в черновик.",
+        };
         if (created) {
           await api.discardEditSession(id);
           clearDraft();
         } else {
           setEdit(next);
-          setEditError(
-            next.error || {
-              code: "EDIT_COMMAND_BLOCKED",
-              message: "Изменение не добавлено в черновик.",
-            },
-          );
         }
+        setEditError(appendError);
         return false;
       }
       setEdit(next);
@@ -2283,7 +2294,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <UtilityPages
               page={page}
               managed={managed}
+              projectSettingDraftValues={projectSettingValuesFromDraft(intents)}
               onAppendProjectSetting={appendStructuralIntent}
+              editError={editError}
               events={installationEvents}
               runId={installationRun?.run?.runId}
               configVersion={applicationConfigVersion}

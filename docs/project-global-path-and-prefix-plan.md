@@ -55,6 +55,33 @@ allows only `/var/lib` under `/var`; a custom root requires the same guarded
 absolute-path policy before any mutation. Kafka discovery/plan projection must
 consume the same project variable and effective path as Apply/Verify.
 
+The Services screen gets the effective directory from the target-free Core
+configuration preview. Service packages declare which deployment/member
+settings describe their data paths; Core projects the path from the selected
+hosts' saved `platform_data_root_directory` and resolved placement. This is a
+read-only presentation value: it does not alter desired state or Apply/Verify
+precedence. The preview is for the last saved revision, so a project-setting
+draft appears after Save. While a project-setting value is staged, the
+Settings page highlights it, shows the staged value and states that Save in the
+project header is still required. Explicit service and member paths remain
+visible and authoritative.
+
+Implementation correction (2026-10-11): the Wails-facing
+`App.AppendEditCommand` allowlist must include `SetProjectSetting`, in addition
+to the Installer writer's command validation. A rejected first command used to
+discard the new edit session and clear its error, leaving Settings without
+feedback. The operation is now accepted and first-command failures are shown
+on Settings; focused Go and React regression tests cover both paths.
+
+Implementation correction (2026-10-11, service-path preview): Ansible exposes
+`hostvars` as a mapping proxy. The target-free Services preview had accepted
+only a built-in `dict`, so it discarded `platform_data_root_directory` and left
+both deployment and member paths deferred even when Core preview succeeded.
+The preview now consumes the `Mapping` interface for hostvars and per-host
+values. A regression test exercises nested mapping proxies and confirms the
+`/data/qa-clickhouse` output. Bundle `si11-full-service-20261011-22` contains
+the fix; UI acceptance after normal bundle rebind remains pending.
+
 ## Safety and acceptance
 
 Changing a prefix after installation changes resource identity. The owner

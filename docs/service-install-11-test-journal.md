@@ -788,3 +788,36 @@ Wails production build PASS. Bundle `si11-full-service-20261011-19` собран
 Проектный `.runtime/qa/full-services/bundle` и active `cache/` проверены с тем
 же digest; -18 сохранён как `bundle.previous-20261011-18`. Проектный lock не
 менялся, UI и установка не запускались. Временный workspace node2 очищен.
+
+### Сборка приложения и bundle -20 — 2026-10-11
+
+Wails production build PASS: `build/bin/platform-installer-ui.exe` обновлён,
+UI не запускался. Bundle `si11-full-service-20261011-20` собран из текущего
+дерева на доверенном node2 с прежними runtime-входами; загрузок не было.
+`validate-bundle` и `publish-bundle` PASS, digest
+`sha256:540a9bfc163749d0ee5faa2fda16b56eeae2357356356a6065fa85e03667b665`.
+Проектный bundle и active `cache/` проверены с этим digest; предыдущий -19
+сохранён как `bundle.previous-20261011-19`. Проектный lock не менялся,
+установка не запускалась. Временный workspace node2 очищен.
+
+### Сборка приложения и bundle -21 — 2026-10-11
+
+Wails production build PASS: `build/bin/platform-installer-ui.exe` обновлён;
+приложение не запускалось. `si11-full-service-20261011-21` собран на доверенном
+node2 из текущего дерева и существующих runtime-входов
+`si11-bundle-runtime-20261006`; новые артефакты не скачивались. Стандартная
+`validate-bundle` PASS. Digest bundle:
+`sha256:a24029d8a65fbc8327c1eae776bbea841235b6dbe122922f7aec9b6600418ec2`,
+catalog digest:
+`sha256:bcdddc848a25c22b7eab5dfb3c43f76ecccb759154e91262dbe2760679a1cf63`.
+Новый bundle установлен в `.runtime/qa/full-services/bundle`, опубликован в
+активный `cache/`; обе копии повторно валидированы с одинаковым digest.
+Предыдущий импорт -20 сохранён в
+`.runtime/qa/full-services/bundle.previous-20261011-20`, node2 QA workspace
+очищен.
+
+`project.yml` не менялся: его `catalogLock.digest` остаётся на прежнем
+`sha256:7e5e9c182d0e76164639b968eb8ca5a8d7ce927dd69e94f78a8890b63a3e9d66`.
+Нужна штатная перепривязка bundle в UI перед зависимыми проектными действиями.
+UI не запускался, установка не начиналась. Wails/UI и реальная установка с
+новым bundle не принимались.

@@ -10,7 +10,7 @@ new destructive operation still requires explicit owner authorization.
 
 | Work | Current status | Evidence and next step |
 | --- | --- | --- |
-| PROJECT-RESOURCE-SETTINGS-01 | IN PROGRESS; Core path PASS, real UI acceptance pending | [Plan](docs/project-global-path-and-prefix-plan.md), ADR-037. Owner chose service-only data root, portable project settings, empty service-name prefix by default and underscore-capable prefix. Installer PKI paths stay fixed. FULL DIFF review: APPROVE_WITH_CHANGES, zero blockers. RED OS project copy with `/srv/service-data` and `qa` passed Validate, ProjectSnapshot and target-free DeploymentPlan (`EXECUTABLE`, all `changed=0`); focused role/rendering tests and syntax checks passed. Real React/Wails Review/Save and Core acceptance through UI remain; no rollout or bundle publication claimed. Existing deployments will be removed by owner before rollout. |
+| PROJECT-RESOURCE-SETTINGS-01 | IN PROGRESS; append path and Core path-preview fixes implemented; bundle -22 added to `full-services`; normal UI rebind and visual acceptance pending | [Plan](docs/project-global-path-and-prefix-plan.md), ADR-037. Owner chose service-only data root, portable project settings, empty service-name prefix by default and underscore-capable prefix. Installer PKI paths stay fixed. FULL DIFF review: APPROVE_WITH_CHANGES, zero blockers. Earlier RED OS project copy with `/srv/service-data` and `qa` passed Validate, ProjectSnapshot and target-free DeploymentPlan (`EXECUTABLE`, all `changed=0`); five focused suites (67 test executions), catalog reproducibility, App.test.tsx (72), frontend typecheck/lint, `go test ./...`, `go vet ./...` and Wails production build passed. Owner's current UI confirms project setting `/data` is saved and Core preview runs, but ClickHouse deployment/member paths remained deferred. Root cause: Core discarded Ansible's `hostvars` mapping proxy by requiring `dict`; corrected to accept `Mapping`. Focused RED OS regression suite passed (8/8). Bundle `si11-full-service-20261011-22` validates at `sha256:600e9d6ef487c098bd12d95cc1fc558eedfaf3061be6cce896d2f444af68096f`, preserving prior -21 under `.runtime/qa/full-services-bundle-before-path-preview-20261011-21`. UI must normally rebind to the new bundle before preview acceptance; no install or node mutation performed. Existing deployments will be removed by owner before rollout. |
 | APPLICATION-LIBRARIES-A5 | Current A5 scope implemented; initial FULL DIFF BLOCK resolved by owner-approved TARGETED_RECHECK APPROVE; A5-C01 closed by owner risk acceptance | [Plan](docs/application-libraries/a5-technical-plan.md), [review](docs/application-libraries/a5-diff-review.md), [journal](docs/application-libraries/a5-test-journal.md). Redis/Sentinel TLS hooks and infrastructure account preservation PASS; ClickHouse standalone and three-server ON CLUSTER account/grant repeat/Verify PASS. Shared credential root/files remove PostgreSQL coupling, with legacy Core input compatibility; 67 application and 12 Vault tests PASS. Full A4 regression PASS after existing-Vault-source Verify correction. A5 common entrypoint/container Apply/Verify/repeat PASS, including Redis/Sentinel, ClickHouse and Kafka SSL ApiVersions without authentication; updated QA image built on RED OS rootless Docker. Core regression: 534 PASS/19 skip (553 tests, 16 unchanged native PKI recovery cases excluded). Final ClickHouse concurrent-repeat/witness checks PASS. Owner accepted late queued-DDL/retry overlap risk and excludes pending markers/task correlation/special retry gates; historical PLAN BLOCK remains, not reviewer APPROVE. C02 queue verifier hygiene is nonblocking. Owner-authorized D01/D02 native tests and targeted review APPROVE: Redis member failure/retry, ClickHouse HA fail-closed/retry, two-library/two-host projection with account preservation. D03 documented/tested. A5 current-scope implementation, RED OS QA and review are complete; C02 production Keeper queue policy proof remains nonblocking. Merged into master from codex/application-libraries; Go/UI remain out of scope. |
 | APPLICATION-LIBRARIES-A4 | COMPLETE: standalone A4 accepted by owner; Go/UI remain out of scope | [Plan](docs/application-libraries/a4-technical-plan.md), [journal](docs/application-libraries/a4-test-journal.md). Two-host RED OS fixture passed HTTPS/443 endpoint routing, multi-host placement, AppRole renewal/restart and scope/CIDR. Latest native fixture passed live KV CAS retry with neighbor preservation, missing-field/unsafe-path fail-closed, Apply/Verify/repeat and standalone token/bootstrap; Vault provider tests 12 PASS and Apply syntax-check PASS. Owner confirms automatic Vault Agent AppRole reauthentication after `maxTTL` expiration was personally verified and works, closing A4-D01. Independent targeted-recheck BLOCK is retained as the reviewer’s finding on its evidence snapshot; closure is by owner acceptance, not a reviewer PASS. No Go/UI implementation, commit or master sync authorization. |
 | APPLICATION-LIBRARIES-LIGHT-VERIFY | Owner-authorized implementation; focused standalone QA PASS | [Journal](docs/application-libraries/lightweight-verify-test-journal.md). One inspect task per instance: image ID, ownership, Running/configured healthcheck. Standalone skips target/source preflight; Apply retains full preflight. Independent FULL DIFF APPROVE_WITH_CHANGES, zero blockers; documentation corrected, negative identity coverage remains nonblocking. Two-container Apply/Verify/repeat and real healthy/unhealthy PASS; six supplementary predicate cases PASS. QA-found unhealthy condition corrected after review; no repeat review claimed. Remote QA cleaned. |
@@ -65,11 +65,12 @@ The current journal records:
 The [UI test cases](docs/service-install-11-ui-test-cases.md) and
 [test journal](docs/service-install-11-test-journal.md) define detailed coverage.
 The journal is evidence, not permission to perform a new run or reset.
-S11-00 was repeated on 2026-10-08 by explicit owner request on node1/node2/node3;
-the Installer-free QA baseline is restored, not a pristine OS. See
-[cleanup record](docs/service-install-11-cleanup.md). Windows projects/cache and
-uncommitted source changes were retained. New preparation/installation and
-naming acceptance remain separate; cleanup does not authorize Start.
+S11-00 cleanup was repeated on 2026-10-11 by explicit owner request on
+node1/node2/node3; service deployments and target Installer runtime/data are
+absent. The Installer-free QA baseline is restored, not a pristine OS. See
+[cleanup record](docs/service-install-11-cleanup.md). Windows projects/cache
+and local secrets were retained. New preparation/installation and naming
+acceptance remain separate; cleanup does not authorize Start.
 
 ## SI11 source corrections and recorded runtime checkpoint
 
@@ -168,9 +169,9 @@ Ansible regressions and 15 BIND contract tests passed on RED OS node2.
 Bundle `si11-full-service-20261009-07` released below; UI rebind/preparation
 and real Vault retry remain pending; see the journal.
 
-Latest delivered project bundle: `si11-full-service-20261011-18`, built on
+Latest delivered project bundle: `si11-full-service-20261011-21`, built on
 node2 and validated at `.runtime/qa/full-services/bundle`, digest
-`sha256:9800aa0d70b7f5a5058a2bd557578bcf37b9cd87449c1cb63345bbbd4b959360`.
+`sha256:a24029d8a65fbc8327c1eae776bbea841235b6dbe122922f7aec9b6600418ec2`.
 It includes the prior -15 changes plus Redis Sentinel peer authentication.
 Version -09 also
 includes endpoint-derived HAProxy placement/defaults and Kafka skipped ownership
@@ -184,11 +185,14 @@ client-subnet TLS/SCRAM access. Version -15 adds ClickHouse
 `remote_servers.default` configuration. Version -16 adds Sentinel peer
 authentication using the existing default ACL user and runtime secret. Version
 -17 fixes Redis/PostgreSQL repeat idempotence. Version -18 exposes safe absolute
-data paths for Kafka, Redis, ClickHouse and PostgreSQL.
+data paths for Kafka, Redis, ClickHouse and PostgreSQL. Version -21 adds data
+directory preview metadata and catalog/fixture-lock updates for Kafka, Redis,
+ClickHouse, PostgreSQL and Vault.
 Published with the standard publisher into `cache/`; project import
-digest matches. Previous -17 is preserved at
-`.runtime/qa/full-services/bundle.previous-20261010-17`. Project lock unchanged;
-UI rebind/preparation still required.
+digest matches. Previous -20 is preserved at
+`.runtime/qa/full-services/bundle.previous-20261011-20`. Project lock unchanged;
+its catalog digest still references the prior bundle, so use the normal UI
+rebind before dependent project flows.
 Target-free plan replay
 on the failed staged project returned EXECUTABLE; real UI rebind/plan/Start
 for this bundle is pending. See the journal; no installation was started.
