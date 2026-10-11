@@ -8,7 +8,7 @@
   ansible.builtin.assert:
     that:
       - platform_postgresql_application_job.mode in ['standalone', 'pg_auto_failover']
-      - platform_postgresql_application_credential_files | platform.postgresql.application_protected_secret_files(platform_postgresql_application_job.accounts | map(attribute='passwordRef') | list, platform_postgresql_application_secret_root)
+      - platform_postgresql_application_credential_files | platform.postgresql.application_protected_secret_files(platform_postgresql_application_job.accounts | map(attribute='passwordRef') | list, platform_application_secret_root | default(platform_postgresql_application_secret_root, true))
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   when: platform_postgresql_application_job.accounts | length > 0
   no_log: true

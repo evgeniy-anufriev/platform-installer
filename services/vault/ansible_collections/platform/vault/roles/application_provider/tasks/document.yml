@@ -14,7 +14,7 @@
       Content-Type: "{{ 'application/merge-patch+json' if application_vault_delta.method == 'PATCH' else 'application/json' }}"
     body_format: json
     body: "{{ application_vault_delta.body }}"
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10

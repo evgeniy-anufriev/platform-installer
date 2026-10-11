@@ -25,23 +25,44 @@
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: discover
-          loop: "{{ application_provider_inputs.jobs }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
         - name: Preflight all PostgreSQL scopes before mutations
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: preflight
-          loop: "{{ application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs }}"
+          loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
+        - name: Preflight Redis and Sentinel instance scopes before any provider mutations
+          ansible.builtin.include_role:
+            name: platform.redis.application_provider
+            tasks_from: preflight
+          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+          loop_control:
+            loop_var: platform_redis_application_job
+        - name: Preflight ClickHouse library and instance scopes before mutations
+          ansible.builtin.include_role:
+            name: platform.clickhouse.application_provider
+            tasks_from: preflight
+          loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+          loop_control:
+            loop_var: platform_clickhouse_application_job
         - name: Create all library resources before instances
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: resources
-          loop: "{{ application_provider_inputs.libraryJobs }}"
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
+        - name: Create each ClickHouse library database batch before accounts
+          ansible.builtin.include_role:
+            name: platform.clickhouse.application_provider
+            tasks_from: resources
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+          loop_control:
+            loop_var: platform_clickhouse_application_job
         - name: Publish each library shared secrets once
           ansible.builtin.include_role:
             name: platform.vault.application_provider
@@ -53,9 +74,23 @@
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: accounts
-          loop: "{{ application_provider_inputs.instanceJobs }}"
+          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
+        - name: Ensure and authenticate each Redis and Sentinel logical instance
+          ansible.builtin.include_role:
+            name: platform.redis.application_provider
+            tasks_from: accounts
+          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+          loop_control:
+            loop_var: platform_redis_application_job
+        - name: Ensure each ClickHouse instance with one user and grant batch
+          ansible.builtin.include_role:
+            name: platform.clickhouse.application_provider
+            tasks_from: accounts
+          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+          loop_control:
+            loop_var: platform_clickhouse_application_job
         - name: Publish each instance credentials and AppRole once
           ansible.builtin.include_role:
             name: platform.vault.application_provider
@@ -66,7 +101,7 @@
       always:
         - name: Remove only invocation-derived Vault account credential files
           ansible.builtin.file:
-            path: "{{ platform_postgresql_application_secret_root }}/{{ item.passwordRef }}"
+            path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent
           loop: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
           changed_when: false

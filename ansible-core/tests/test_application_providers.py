@@ -6,8 +6,10 @@ import sys
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+for service in ('redis', 'clickhouse'):
+    sys.path.insert(0, os.path.join(ROOT, 'services', service))
 sys.path.insert(0, os.path.join(ROOT, 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
-from application_providers import project_providers, normalize_grants, identifier
+from application_providers import project_providers, normalize_grants, identifier, normalize_redis_grants, normalize_clickhouse_grants
 
 
 class ApplicationProvidersTest(unittest.TestCase):
@@ -47,6 +49,50 @@ class ApplicationProvidersTest(unittest.TestCase):
         self.assertEqual([], result['libraryJobs'][0]['databases'][0]['accounts'])
         self.assertEqual(1, len(result['instanceJobs']))
         self.assertEqual('gateway-lib', result['instanceJobs'][0]['instanceId'])
+
+    def test_two_libraries_two_placements_keep_one_hook_per_provider_scope(self):
+        """Two Docker placements must not duplicate the two library account hooks."""
+        applications = self.snapshot['applicationLibraries']['libraries']
+        applications.clear()
+        rows = []
+        desired = {'serviceDeployments': {}}
+        placements = {'h1': '192.0.2.1', 'h2': '192.0.2.2'}
+        for library_id, provider_id, host in [('sdku', 'redis-sdku', 'h1'), ('cspa', 'redis-cspa', 'h2')]:
+            account_id = 'redis'
+            instance_id = 'gateway-' + library_id
+            account = {'mode': 'managed', 'credentials': {
+                'username': {'source': {'kind': 'literal', 'value': 'gateway_' + library_id}},
+                'password': {'source': {'kind': 'runtime_secret_ref', 'ref': library_id + '-redis-password'}}},
+                'grants': {'commands': ['ping', 'get'], 'keys': [library_id + ':*']}}
+            connection = {'serviceType': 'redis', 'deploymentRef': provider_id}
+            applications[library_id] = {'resources': {}, 'instances': {instance_id: {
+                'connections': {account_id: connection}, 'credentialRequirements': {account_id: account}}}}
+            for placement_host in ('h1', 'h2'):
+                rows.append(dict(libraryId=library_id, instanceId=instance_id, hostId=placement_host,
+                                 resources={}, bindings={'redis': {'deploymentRef': provider_id}}, connectionDefaults={},
+                                 settings={'accounts': {account_id: account}}))
+            desired['serviceDeployments'][provider_id] = {'serviceType': 'redis', 'mode': 'standalone'}
+        self.snapshot['applicationLibraries']['status'] = 'PASS'
+        self.snapshot['hosts'].update({host: {'ansibleHost': address} for host, address in placements.items()})
+        self.snapshot['topology']['resolved']['serviceDeployments'] = {
+            provider: {'members': {'member': {'host': host, 'roles': ['redis']}}}
+            for provider, host in [('redis-sdku', 'h1'), ('redis-cspa', 'h2')]}
+        self.config['services'] = {provider: {'configuration': {
+            'redisPort': {'state': 'RESOLVED', 'value': 6379}, 'sentinelPort': {'state': 'RESOLVED', 'value': 26379}}}
+                                   for provider in ('redis-sdku', 'redis-cspa')}
+        self.catalog['definitions']['redis'] = {'capabilities': ['service.redis.account']}
+
+        result = project_providers(rows, self.snapshot, self.config, desired, self.catalog)
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual({'redis-sdku', 'redis-cspa'}, {job['providerId'] for job in result['jobs']})
+        self.assertEqual(2, len(result['instanceJobs']))
+        self.assertEqual({'sdku', 'cspa'}, {job['libraryId'] for job in result['instanceJobs']})
+        self.assertEqual({'gateway-sdku', 'gateway-cspa'}, {job['instanceId'] for job in result['instanceJobs']})
+        self.assertEqual(1, sum(account['libraryId'] == 'sdku' for job in result['instanceJobs'] for account in job['accounts']))
+        self.assertEqual(1, sum(account['libraryId'] == 'cspa' for job in result['instanceJobs'] for account in job['accounts']))
+        self.assertEqual({'h1', 'h2'}, {candidate['hostId'] for job in result['jobs'] for candidate in job['candidates']})
+        self.assertEqual({'redis-sdku': {'sdku'}, 'redis-cspa': {'cspa'}}, {
+            job['providerId']: {account['libraryId'] for account in job['accounts']} for job in result['jobs']})
 
     def test_conflicting_host_resources_bindings_and_accounts_block(self):
         for field in ('resources', 'bindings', 'settings'):
@@ -111,6 +157,72 @@ class ApplicationProvidersTest(unittest.TestCase):
         for name in ('postgres', 'pg_authid', 'template0', 'x' * 64, 'x;drop role y', 'api"'):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 identifier(name)
+
+    def test_redis_acl_typed_grants_and_sentinel_discovery_only(self):
+        result = normalize_redis_grants({'commands': ['set', 'ping', 'ping'], 'keys': ['sdku:*']})
+        self.assertEqual({'commands': ['ping', 'set'], 'keys': ['sdku:*'], 'channels': []}, result)
+        self.assertEqual(['ping', 'sentinel|get-master-addr-by-name'], normalize_redis_grants(
+            {'commands': ['ping', 'sentinel|get-master-addr-by-name']}, True)['commands'])
+        for value, sentinel in [({'commands': ['+@all']}, False), ({'commands': ['acl']}, False),
+                                ({'commands': ['ping'], 'keys': ['safe:* +@all']}, False),
+                                ({'commands': ['sentinel|monitor']}, True),
+                                ({'commands': ['ping'], 'keys': ['sdku:*']}, True), ([], False)]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize_redis_grants(value, sentinel)
+
+    def test_clickhouse_explicit_scopes_and_no_global_privileges(self):
+        databases = {'analytics': {'providerId': 'ch', 'name': 'sdku'}}
+        grants = [{'databaseRef': 'analytics', 'tables': ['events'], 'privileges': ['SELECT']},
+                  {'databaseRef': 'analytics', 'tables': ['events'], 'privileges': ['INSERT']}]
+        self.assertEqual([{'database': 'sdku', 'table': 'events', 'privileges': ['INSERT', 'SELECT']}],
+                         normalize_clickhouse_grants(grants, databases, 'ch'))
+        for value in [dict(grants[0], privileges=['ALL']), dict(grants[0], databaseRef='foreign'),
+                      dict(grants[0], tables=['events;DROP']), dict(grants[0], sql='GRANT ALL')]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize_clickhouse_grants([value], databases, 'ch')
+
+    def test_redis_and_sentinel_one_instance_job_distinct_listener_accounts(self):
+        self.resources.clear()
+        self.accounts.clear()
+        for alias in ('redis', 'sentinel'):
+            self.accounts[alias] = {'mode': 'managed', 'credentials': {
+                'username': {'source': {'kind': 'literal', 'value': 'gateway-lib'}},
+                'password': {'source': {'kind': 'runtime_secret_ref', 'ref': alias + '-password'}}},
+                'grants': {'commands': ['ping']}}
+        self.desired['serviceDeployments']['pg'] = {'serviceType': 'redis', 'mode': 'sentinel-ha'}
+        self.snapshot['topology']['resolved']['serviceDeployments']['pg']['members'] = {
+            'r-1': {'host': 'h1', 'roles': ['redis']}, 'r-2': {'host': 'h1', 'roles': ['redis', 'sentinel']}}
+        instance = self.snapshot['applicationLibraries']['libraries']['lib']['instances']['gateway-lib']
+        instance['connections'] = {alias: {'serviceType': 'redis', 'deploymentRef': 'pg', 'connectionRef':
+                                  'client' if alias == 'redis' else 'sentinel', 'targets': [{'memberId': alias}]} for alias in self.accounts}
+        self.config['services']['pg']['configuration'] = {key: {'state': 'RESOLVED', 'value': value}
+                                                        for key, value in [('redisPort', 6379), ('sentinelPort', 26379)]}
+        self.catalog['definitions']['redis'] = {'capabilities': ['service.redis.account', 'service.redis.sentinel.account']}
+        result = self.resolve()
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual([], result['libraryJobs'])
+        self.assertEqual(1, len(result['instanceJobs']))
+        self.assertEqual(2, len(result['instanceJobs'][0]['accounts']))
+        self.catalog['definitions']['redis']['capabilities'].remove('service.redis.sentinel.account')
+        self.assertEqual('BLOCKED', self.resolve()['status'])
+
+    def test_clickhouse_database_library_barrier_and_instance_scope(self):
+        self.resources.clear()
+        self.resources['db'] = {'kind': 'clickhouse.database', 'binding': 'pg', 'parameters': {'name': 'analytics'}}
+        self.accounts['postgres']['grants'] = [{'databaseRef': 'db', 'tables': ['events'], 'privileges': ['SELECT']}]
+        self.desired['serviceDeployments']['pg'] = {'serviceType': 'clickhouse', 'mode': 'standalone'}
+        self.snapshot['topology']['resolved']['serviceDeployments']['pg']['members']['data']['roles'] = ['server']
+        self.snapshot['applicationLibraries']['libraries']['lib']['instances']['gateway-lib']['connections']['postgres']['serviceType'] = 'clickhouse'
+        self.config['services']['pg']['configuration']['port']['value'] = 8443
+        self.config['services']['pg']['configuration']['nativePort'] = {'state': 'RESOLVED', 'value': 9440}
+        self.catalog['definitions']['clickhouse'] = {'capabilities': ['service.clickhouse.database', 'service.clickhouse.account']}
+        result = self.resolve()
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual(1, len(result['libraryJobs']))
+        self.assertEqual(1, len(result['instanceJobs']))
+        self.assertEqual([], result['libraryJobs'][0]['accounts'])
+        self.assertEqual([], result['libraryJobs'][0]['libraries'])
+        self.assertEqual('analytics', result['instanceJobs'][0]['accounts'][0]['grants'][0]['database'])
 
 
 if __name__ == '__main__':

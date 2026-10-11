@@ -84,8 +84,18 @@ Ordinary Verify uses one container inspect task per placement for locked image
 identity, project/library/instance/host ownership, Running and configured
 healthcheck. It does not inspect file/config digests or Compose hashes, and its
 standalone entrypoint skips target/source preflight. It never starts or loads
-containers. Accounts, Agent, PKI and infrastructure provider hooks remain later
-stages. See [runtime fixture](../examples/valid/application-runtime/README.md) and
+containers. A3/A4 add PostgreSQL library resources/accounts, protected Vault
+secret publication and container Agent/PKI materialization. A5 extends the same
+provider jobs with Redis/Sentinel ACLs and ClickHouse databases/accounts; Verify
+adds read-only provider checks after inspect without repeating provider preflight.
+Each library resource scope precedes logical instance account/grant scopes and
+Vault publication. HA ClickHouse user/grant writes use one ON CLUSTER default
+batch per logical instance, followed by per-server result/login verification.
+Shared protected credential files use `platform_application_secret_root`; the
+old PostgreSQL root is accepted at standalone Core entrypoints as a compatibility
+alias, and conflicting nonempty roots fail. See
+[A5 plan/evidence](application-libraries/a5-test-journal.md),
+[runtime fixture](../examples/valid/application-runtime/README.md) and
 [A2 evidence](application-libraries/a2-test-journal.md).
 
 Production roles must also work with conventional manual inventory and variables:

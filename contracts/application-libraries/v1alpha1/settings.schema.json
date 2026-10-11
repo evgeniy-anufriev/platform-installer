@@ -158,10 +158,14 @@
           "additionalProperties": false
         },
         "grants": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
+          "oneOf": [
+            {"type": "array", "maxItems": 256, "items": {"type": "object"}},
+            {"type": "object", "properties": {
+              "commands": {"type": "array", "minItems": 1, "maxItems": 256, "items": {"type": "string", "maxLength": 256}},
+              "keys": {"type": "array", "maxItems": 256, "items": {"type": "string", "maxLength": 256}},
+              "channels": {"type": "array", "maxItems": 256, "items": {"type": "string", "maxLength": 256}}
+            }, "required": ["commands"], "additionalProperties": false}
+          ]
         }
       },
       "required": [

@@ -1,4 +1,4 @@
-"""Target-free PostgreSQL hook projection. Ansible remains the variable resolver."""
+"""Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
 import re
 
@@ -11,6 +11,49 @@ NAME = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
 USER = re.compile(r'^[a-z_][a-z0-9_-]{0,62}$')
 GRANTS = {'schema': {'USAGE'}, 'table': {'SELECT', 'INSERT', 'UPDATE', 'DELETE'},
           'sequence': {'USAGE', 'SELECT', 'UPDATE'}}
+
+
+def normalize_redis_grants(value, sentinel=False):
+    """Typed ACL tokens only; no categories, raw ACL rules or global defaults."""
+    allowed = {'commands'} if sentinel else {'commands', 'keys', 'channels'}
+    if not isinstance(value, dict) or set(value) - allowed:
+        raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+    result = {}
+    for key in allowed:
+        values = value.get(key, [])
+        if not isinstance(values, list) or len(values) > 256 or any(not isinstance(item, str) or not item or len(item) > 256 for item in values):
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        if key == 'commands':
+            if not values or any(not re.fullmatch(r'[a-z][a-z0-9]*(?:\|[a-z][a-z0-9-]*)?', item) for item in values):
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+            # Only discovery, never Sentinel administration in application hooks.
+            if sentinel and not set(values) <= {'ping', 'auth', 'hello', 'sentinel|get-master-addr-by-name'}:
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+            if not sentinel and any(item.split('|')[0] in {'acl', 'config', 'flushall', 'flushdb', 'shutdown', 'module', 'debug', 'replicaof', 'slaveof', 'sentinel'} for item in values):
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        elif any(any(char.isspace() or ord(char) < 32 for char in item) or item[0] in {'~', '&', '+', '-', '#', '>', '<', '%'} for item in values):
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        result[key] = sorted(set(values))
+    return result
+
+
+def normalize_clickhouse_grants(values, databases, provider_id):
+    if not isinstance(values, list) or len(values) > 256:
+        raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+    merged = {}
+    for value in values:
+        if not isinstance(value, dict) or set(value) != {'databaseRef', 'tables', 'privileges'}:
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        database = databases.get(value['databaseRef'])
+        tables, privileges = value['tables'], value['privileges']
+        if (not database or database['providerId'] != provider_id or not isinstance(tables, list) or not tables or len(tables) > 256
+                or not isinstance(privileges, list) or not privileges or any(not isinstance(item, str) for item in privileges)
+                or not set(privileges) <= {'SELECT', 'INSERT'}):
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        for table in tables:
+            name = '*' if table == '*' else identifier(table)
+            merged.setdefault((database['name'], name), set()).update(privileges)
+    return [dict(database=key[0], table=key[1], privileges=sorted(value)) for key, value in sorted(merged.items())]
 
 
 def identifier(value, username=False):
@@ -66,17 +109,22 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
     def provider(ref):
         deployment = materialized['serviceDeployments'][ref]
         definition = catalog['definitions'][deployment['serviceType']]
-        if deployment['serviceType'] != 'postgresql' or deployment['mode'] not in {'standalone', 'pg_auto_failover'}:
+        service_type = deployment['serviceType']
+        modes = {'postgresql': {'standalone', 'pg_auto_failover'}, 'redis': {'standalone', 'sentinel-ha'},
+                 'clickhouse': {'standalone', 'raft-ha'}}
+        if deployment['mode'] not in modes.get(service_type, set()):
             raise ValueError('APPLICATION_PROVIDER_MODE_UNSUPPORTED')
-        if not {'service.postgresql.database', 'service.postgresql.schema', 'service.postgresql.account'} <= set(definition.get('capabilities', [])):
+        capabilities = {'postgresql': {'service.postgresql.database', 'service.postgresql.schema', 'service.postgresql.account'},
+                        'redis': {'service.redis.account'}, 'clickhouse': {'service.clickhouse.database', 'service.clickhouse.account'}}
+        if not capabilities[service_type] <= set(definition.get('capabilities', [])):
             raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
         if ref not in jobs:
-            connection = resolve_connection(ref, {'purpose': 'client'}, None, materialized, configuration, catalog, snapshot['hosts'])
+            connection = resolve_connection(ref, {'purpose': 'native' if service_type == 'clickhouse' else 'client'}, None, materialized, configuration, catalog, snapshot['hosts'])
             targets = connection['targets']
-            if len(targets) != (1 if deployment['mode'] == 'standalone' else 2):
+            if service_type == 'postgresql' and len(targets) != (1 if deployment['mode'] == 'standalone' else 2):
                 raise ValueError('APPLICATION_PROVIDER_MEMBERS_INVALID')
             jobs[ref] = {'providerId': ref, 'projectId': project_id, 'mode': deployment['mode'],
-                         'candidates': targets, 'libraries': [], 'databases': [], 'accounts': []}
+                         'serviceType': service_type, 'candidates': targets, 'libraries': [], 'databases': [], 'accounts': []}
         return jobs[ref]
 
     def claim(key, owner, mode):
@@ -100,23 +148,25 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
             databases, schemas = {}, []
             for resource_id, resource in sorted(library.get('resources', {}).items()):
-                if resource['kind'] not in {'postgresql.database', 'postgresql.schema'}:
+                if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database'}:
                     raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                 ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')
                 job = provider(ref)
+                if resource['kind'].split('.')[0] != job['serviceType']:
+                    raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
                 if set(resource['parameters']) != {'name'}:
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
                 name, mode = identifier(resource['parameters']['name']), resource.get('mode', 'managed')
                 value = dict(resourceId=resource_id, name=name, mode=mode,
                              marker=marker(project_id, ref, library_id, resource['kind'], resource_id))
-                if resource['kind'] == 'postgresql.database':
+                if resource['kind'] in {'postgresql.database', 'clickhouse.database'}:
                     owner = 'pla_' + hashlib.sha256((project_id + ':' + ref + ':' + library_id).encode()).hexdigest()[:24]
                     value.update(providerId=ref, libraryId=library_id, owner=owner, schemas=[], accounts=[],
                                  ownerMarker=marker(project_id, ref, library_id, 'owner', library_id))
                     claim((ref, 'database', name), (library_id, resource_id), mode)
                     databases[resource_id] = value
                     job['databases'].append(value)
-                    if mode == 'managed' and not any(o['name'] == owner for o in job['libraries']):
+                    if job['serviceType'] == 'postgresql' and mode == 'managed' and not any(o['name'] == owner for o in job['libraries']):
                         job['libraries'].append({'name': owner, 'marker': value['ownerMarker']})
                 else:
                     schemas.append((ref, resource, value))
@@ -129,12 +179,13 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
             for instance_id, instance in sorted(library.get('instances', {}).items()):
                 for account_id, account in sorted(instance.get('credentialRequirements', {}).items()):
                     connection = instance['connections'].get(account_id, {})
-                    if connection.get('serviceType') != 'postgresql':
+                    service_type = connection.get('serviceType')
+                    if service_type not in {'postgresql', 'redis', 'clickhouse'}:
                         raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                     ref = connection['deploymentRef']
                     job = provider(ref)
                     database = databases.get(account.get('databaseRef'))
-                    if not database or database['providerId'] != ref or (account['mode'] == 'managed' and database['mode'] != 'managed'):
+                    if service_type != 'redis' and (not database or database['providerId'] != ref or (account['mode'] == 'managed' and database['mode'] != 'managed')):
                         raise ValueError('APPLICATION_PROVIDER_DATABASE_REF_INVALID')
                     credentials = account['credentials']
                     if set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal':
@@ -143,20 +194,34 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_SOURCE_DEFERRED')
                     username = identifier(credentials['username']['source']['value'], True)
                     admin = configuration['services'][ref]['configuration'].get('adminSuperuser', {}).get('value', {}).get('username')
-                    if username in {admin, 'autoctl_node', 'pgautofailover_replicator'}:
+                    if username in {admin, 'default', 'autoctl_node', 'pgautofailover_replicator'}:
                         raise ValueError('APPLICATION_PROVIDER_IDENTIFIER_INVALID')
-                    grants = normalize_grants(account.get('grants', []))
-                    schemas_by_name = {s['name']: s for s in database['schemas']}
-                    if any(g['schema'] not in schemas_by_name or
-                           (account['mode'] == 'managed' and schemas_by_name[g['schema']]['mode'] != 'managed') for g in grants):
-                        raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
-                    claim((ref, 'account', username), (library_id, instance_id, account_id), account['mode'])
+                    listener = connection.get('connectionRef', 'client')
+                    if service_type == 'redis':
+                        if listener == 'sentinel' and 'service.redis.sentinel.account' not in catalog['definitions']['redis'].get('capabilities', []):
+                            raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
+                        grants = normalize_redis_grants(account.get('grants', {}), listener == 'sentinel')
+                        if 'databaseRef' in account:
+                            raise ValueError('APPLICATION_PROVIDER_DATABASE_REF_INVALID')
+                    elif service_type == 'clickhouse':
+                        grants = normalize_clickhouse_grants(account.get('grants', []), databases, ref)
+                        if account['mode'] == 'managed' and any(databases[g['databaseRef']]['mode'] != 'managed' for g in account.get('grants', [])):
+                            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+                    else:
+                        grants = normalize_grants(account.get('grants', []))
+                        schemas_by_name = {s['name']: s for s in database['schemas']}
+                        if any(g['schema'] not in schemas_by_name or
+                               (account['mode'] == 'managed' and schemas_by_name[g['schema']]['mode'] != 'managed') for g in grants):
+                            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+                    claim((ref, listener if service_type == 'redis' else 'account', username), (library_id, instance_id, account_id), account['mode'])
                     value = dict(name=username, mode=account['mode'], instanceId=instance_id, accountId=account_id,
-                                 database=database['name'], libraryId=library_id,
+                                 database=database['name'] if database else None, libraryId=library_id,
+                                 listener=listener, candidates=connection.get('targets', job['candidates']),
                                  passwordRef=(credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else 'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
                                  marker=marker(project_id, ref, library_id, 'account', instance_id + '/' + account_id))
                     job['accounts'].append(value)
-                    database['accounts'].append(value)
+                    if database:
+                        database['accounts'].append(value)
     except (KeyError, TypeError, ValueError) as error:
         code = str(error)
         if not code.startswith('APPLICATION_PROVIDER_'):
@@ -180,6 +245,8 @@ def split_provider_jobs(providers):
         for library_id, instance_id in sorted({(a['libraryId'], a['instanceId']) for a in job['accounts']}):
             accounts = [a for a in job['accounts'] if (a['libraryId'], a['instanceId']) == (library_id, instance_id)]
             database_names = {a['database'] for a in accounts}
+            if job.get('serviceType') == 'clickhouse':
+                database_names.update(grant['database'] for account in accounts for grant in account['grants'])
             databases = [dict(db, accounts=[a for a in accounts if a['database'] == db['name']])
                          for db in job['databases'] if db['name'] in database_names]
             instance_jobs.append(dict(job, libraryId=library_id, instanceId=instance_id, libraries=[],

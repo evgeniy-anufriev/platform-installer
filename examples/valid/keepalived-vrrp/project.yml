@@ -9,7 +9,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:8265eef83fb7fa3b209bce69f15c8fb7eab45e51e601c9b854b55f152170202e
+  digest: sha256:7e5e9c182d0e76164639b968eb8ca5a8d7ce927dd69e94f78a8890b63a3e9d66
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1

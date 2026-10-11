@@ -1,0 +1,29 @@
+---
+- name: Require protected credentials for the bounded ClickHouse scope
+  ansible.builtin.assert:
+    that:
+      - platform_clickhouse_application_phase in ['preflight', 'resources', 'accounts', 'verify']
+      - >-
+        platform_clickhouse_application_credential_files | platform.core.application_protected_secret_files(
+        (platform_clickhouse_application_job.accounts | map(attribute='passwordRef') | list)
+        + [platform_clickhouse_application_job.adminPasswordRef], platform_application_secret_root)
+    fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+  no_log: true
+
+- name: Execute one ClickHouse library or instance scope with native TLS
+  platform.clickhouse.application_scope:
+    job: "{{ platform_clickhouse_application_job }}"
+    directory: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_config_root | default(platform_clickhouse_config_root) }}/{{ platform_clickhouse_application_job.providerId }}/{{ clickhouse_application_target.memberId }}"
+    admin_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_application_credential_files[platform_clickhouse_application_job.adminPasswordRef], rstrip=false) }}"
+    passwords: "{{ dict(clickhouse_application_password_refs | zip(query('ansible.builtin.file', *clickhouse_application_password_paths, rstrip=false))) }}"
+    phase: "{{ platform_clickhouse_application_phase }}"
+    lock_timeout: "{{ platform_clickhouse_application_lock_timeout }}"
+    query_timeout: "{{ platform_clickhouse_application_query_timeout }}"
+  vars:
+    clickhouse_application_target: "{{ platform_clickhouse_application_job.candidates | sort(attribute='memberId') | sort(attribute='hostId') | first }}"
+    clickhouse_application_password_refs: "{{ platform_clickhouse_application_job.accounts | map(attribute='passwordRef') | list }}"
+    clickhouse_application_password_paths: "{{ clickhouse_application_password_refs | map('extract', platform_clickhouse_application_credential_files) | list }}"
+  delegate_to: "{{ clickhouse_application_target.hostId }}"
+  become: true
+  become_user: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_user | default(platform_clickhouse_user) }}"
+  no_log: true

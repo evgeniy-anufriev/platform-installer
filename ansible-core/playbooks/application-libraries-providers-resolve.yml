@@ -1,4 +1,5 @@
 ---
+- import_playbook: application-libraries-credential-root.yml
 - name: Resolve standalone application provider inputs without target calls
   hosts: localhost
   connection: local

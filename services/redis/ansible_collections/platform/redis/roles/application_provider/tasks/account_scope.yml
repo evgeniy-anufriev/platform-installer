@@ -1,0 +1,39 @@
+---
+- name: Require private invocation credentials before any Redis account calls
+  ansible.builtin.assert:
+    that:
+      - platform_redis_application_job.serviceType == 'redis'
+      - platform_redis_application_phase in ['preflight', 'apply', 'verify']
+      - >-
+        platform_redis_application_credential_files | platform.core.application_protected_secret_files(
+        (platform_redis_application_job.accounts | map(attribute='passwordRef') | list)
+        + (platform_redis_application_job.accounts | map(attribute='adminPasswordRef') | list),
+        platform_application_secret_root)
+    fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+  no_log: true
+
+- name: Check or ensure each Redis and Sentinel account member in one bounded call
+  platform.redis.application_account:
+    address: "{{ item.1.address }}"
+    port: "{{ item.1.port }}"
+    directory: "{{ redis_application_directory }}"
+    ca: "{{ redis_application_directory }}/pki/ca-chain.pem"
+    certificate: "{{ redis_application_directory }}/pki/certificate.pem"
+    private_key: "{{ redis_application_directory }}/pki/private-key.pem"
+    admin_password: "{{ lookup('ansible.builtin.file', platform_redis_application_credential_files[item.0.adminPasswordRef], rstrip=false) }}"
+    username: "{{ item.0.name }}"
+    password: "{{ lookup('ansible.builtin.file', platform_redis_application_credential_files[item.0.passwordRef], rstrip=false) }}"
+    marker: "{{ item.0.marker }}"
+    listener: "{{ item.0.listener }}"
+    grants: "{{ item.0.grants }}"
+    mode: "{{ item.0.mode }}"
+    verify: "{{ platform_redis_application_phase == 'verify' }}"
+    preflight: "{{ platform_redis_application_phase == 'preflight' }}"
+    timeout: "{{ platform_redis_application_lock_timeout }}"
+  vars:
+    redis_application_directory: "{{ hostvars[item.1.hostId].platform_redis_config_root | default(platform_redis_config_root) }}/{{ item.1.memberId }}"
+  delegate_to: "{{ item.1.hostId }}"
+  become: true
+  become_user: "{{ hostvars[item.1.hostId].platform_redis_user | default(platform_redis_user) }}"
+  loop: "{{ platform_redis_application_job.accounts | subelements('candidates') }}"
+  no_log: true

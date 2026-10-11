@@ -37,7 +37,7 @@ listeners:
   sentinel: {protocol: tcp, defaultPort: 26379, tlsCapable: true, scope: member}
 endpoint: {}
 x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
-capabilities: [service.redis.client, service.redis.sentinel]
+capabilities: [service.redis.client, service.redis.sentinel, service.redis.account, service.redis.sentinel.account]
 dependencies: []
 configurationSchema: {$ref: configuration.schema.json}
 configuration:

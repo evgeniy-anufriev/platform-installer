@@ -3,8 +3,8 @@
   platform.vault.application_document:
     document: "{{ item }}"
     provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-    secret_root: "{{ platform_postgresql_application_secret_root }}"
-    secret_files: "{{ platform_postgresql_secret_files }}"
+    secret_root: "{{ platform_application_secret_root }}"
+    secret_files: "{{ platform_application_secret_files }}"
   loop: "{{ platform_vault_application_job.documents }}"
   changed_when: false
   when: not application_vault_identity_only | default(false)
@@ -15,7 +15,7 @@
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item.mount }}/data/{{ item.document }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10
@@ -38,7 +38,7 @@
 - name: Prove exact PKCS12 password before shared publication
   ansible.builtin.command:
     argv: [openssl, pkcs12, -in, "{{ item.0.targetDirectory }}/{{ item.1 }}", -noout, -passin, stdin]
-    stdin: "{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[item.0.storePasswordSecretRef], rstrip=false) }}"
+    stdin: "{{ lookup('ansible.builtin.file', platform_application_secret_files[item.0.storePasswordSecretRef], rstrip=false) }}"
   when: not application_vault_identity_only | default(false)
   delegate_to: "{{ item.0.hostId }}"
   become: true
@@ -50,7 +50,7 @@
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10

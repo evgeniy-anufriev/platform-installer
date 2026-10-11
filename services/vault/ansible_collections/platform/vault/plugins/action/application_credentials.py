@@ -14,7 +14,7 @@ class ActionModule(ActionBase):
         try:
             args = self._task.args
             ref = args['provider_id']
-            protected_secret_files({}, [], values.get('platform_postgresql_application_secret_root', ''))
+            protected_secret_files({}, [], values.get('platform_application_secret_root', ''))
             inputs = [i for i in values.get('platform_runtime_secret_inputs', [])
                       if i.get('purpose') == 'SERVICE_ADMIN_TOKEN' and (i.get('serviceDeployment') == ref or (i.get('serviceDeployment') is None and args.get('single_provider', False)))]
             if inputs:

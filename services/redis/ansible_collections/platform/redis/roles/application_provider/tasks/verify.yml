@@ -1,0 +1,4 @@
+---
+- ansible.builtin.import_tasks: account_scope.yml
+  vars:
+    platform_redis_application_phase: verify

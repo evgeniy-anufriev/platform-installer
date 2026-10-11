@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:8265eef83fb7fa3b209bce69f15c8fb7eab45e51e601c9b854b55f152170202e
+digest: sha256:7e5e9c182d0e76164639b968eb8ca5a8d7ce927dd69e94f78a8890b63a3e9d66
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -90,6 +90,8 @@ definitions:
     capabilities:
     - service.clickhouse.https
     - service.clickhouse.keeper
+    - service.clickhouse.database
+    - service.clickhouse.account
     dependencies: []
     configurationSchema:
       $ref: ../../services/clickhouse/configuration.schema.json
@@ -188,8 +190,9 @@ definitions:
             label: Каталог данных
             section: Хранение
             order: 0
-            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном
-              сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.
+            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Для нескольких
+              участников на одном сервере создаются отдельные подкаталоги. Существующие данные автоматически
+              не переносятся.
         dataDirectory:
           kind: MANAGED
           roleVariable: platform_clickhouse_member_data_directory
@@ -262,7 +265,7 @@ definitions:
       digest: sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
       requiredOffline: true
     compatibilityRef: ../../services/clickhouse/compatibility.yml
-    x-definitionDigest: sha256:38f3c0ad2bdb5a2bca19e89473fe08f45d47dc8ffde408b2afcd8ff927a39321
+    x-definitionDigest: sha256:ef98b7e206fcb37943c333ffb5b50ec92b525df62b2735b5d983da6b1abb124a
     x-sourceManifest: services/clickhouse/service.yml
   docker:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -595,8 +598,8 @@ definitions:
             label: Каталог данных
             section: Хранение
             order: 0
-            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников используются
-              отдельные подкаталоги. Существующие данные автоматически не переносятся.
+            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Для нескольких
+              участников используются отдельные подкаталоги. Существующие данные автоматически не переносятся.
         runtimePathNamespace:
           kind: MANAGED
           roleVariable: platform_kafka_runtime_path_namespace
@@ -694,7 +697,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:2b5eb34cad11a11a522bf18d8a7eb3c26c837c7609e7f5179a7324c2b60928f0
+    x-definitionDigest: sha256:63158ec216d0113267633c9b26b5a67aa19d4fad4b81ef0a9e4091eb21b5ba8d
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -805,8 +808,8 @@ definitions:
             label: Каталог данных
             section: Хранение
             order: 0
-            description: По умолчанию /var/lib/<ID развёртывания>. Существующие данные автоматически не
-              переносятся.
+            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Существующие
+              данные автоматически не переносятся.
         configDirectory:
           kind: MANAGED
           roleVariable: platform_postgresql_config_directory
@@ -948,7 +951,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:d0ac034a3176cbe1303ec8146fb41fe0b0740ff49a1cb3e6e82deb4d41997d2a
+    x-definitionDigest: sha256:6d57f57a1dec36f86b7b389c9a9809c44f3ac8e6a052237b1959d38d7bc97010
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1019,6 +1022,8 @@ definitions:
     capabilities:
     - service.redis.client
     - service.redis.sentinel
+    - service.redis.account
+    - service.redis.sentinel.account
     dependencies: []
     configurationSchema:
       $ref: ../../services/redis/configuration.schema.json
@@ -1077,8 +1082,9 @@ definitions:
             label: Каталог данных
             section: Хранение
             order: 0
-            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном
-              сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.
+            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Для нескольких
+              участников на одном сервере создаются отдельные подкаталоги. Существующие данные автоматически
+              не переносятся.
         dataDirectory:
           kind: MANAGED
           roleVariable: platform_redis_member_data_directory
@@ -1186,7 +1192,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/redis/compatibility.yml
-    x-definitionDigest: sha256:68384e93c745f329d7c07ea365925f229c3dba853124dd601b7a4165c40eb810
+    x-definitionDigest: sha256:d73647e0cc278f01539c115a7f815eacf58a0a35a29587161e6a799319779cc6
     x-sourceManifest: services/redis/service.yml
   vault:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1269,8 +1275,9 @@ definitions:
             label: Каталог данных
             section: Хранение
             order: 0
-            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном
-              сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.
+            description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Для нескольких
+              участников на одном сервере создаются отдельные подкаталоги. Существующие данные автоматически
+              не переносятся.
         dataDirectory:
           kind: MANAGED
           roleVariable: platform_vault_member_data_directory
@@ -1392,7 +1399,7 @@ definitions:
         requiredWhen: SEALED
         operations:
         - SERVICE_APPLY
-    x-definitionDigest: sha256:b9f03aa17e558cf424601fdac2ffd353f4ba7082490327ec5611ceba99fcbdf9
+    x-definitionDigest: sha256:26df8cb9b588f15e57e9e72162bad1449aeed4ab6be202ba7f8411dc8e5d61a5
     x-sourceManifest: services/vault/service.yml
   keepalived:
     apiVersion: platform.installer/service-manifest/v1alpha1

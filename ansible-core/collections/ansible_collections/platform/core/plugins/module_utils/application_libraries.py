@@ -244,7 +244,7 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
                                 "port": item["port"], "protocol": "tcp", "tls": item["securityProtocol"] == "SSL"})
     else:
         mapping = {"postgresql": {"client": ("port", "tcp")}, "redis": {"client": ("redisPort", "tcp"), "sentinel": ("sentinelPort", "tcp")},
-                   "clickhouse": {"client": ("port", "https")}, "vault": {"client": ("port", "https")}}
+                   "clickhouse": {"client": ("port", "https"), "native": ("nativePort", "tcp")}, "vault": {"client": ("port", "https")}}
         eligible = {key: value for key, value in mapping.get(service_type, {}).items()
                     if key == purpose and (not declaration.get("protocol") or value[1] == declaration["protocol"])}
         if selector:
@@ -252,17 +252,41 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
         if len(eligible) != 1:
             raise ValueError("Connection selector ambiguous or unsupported")
         selector, (setting, protocol) = next(iter(eligible.items()))
+        allocated = {}
+        if service_type in {'redis', 'clickhouse'}:
+            # Import the provider's pure allocation function, also consumed by
+            # its infrastructure role. Do not copy slot arithmetic here.
+            if service_type == 'redis':
+                from ansible_collections.platform.redis.plugins.module_utils.member_projection import project_members
+                bases = {'port': 'redisPort', 'sentinel_port': 'sentinelPort'}
+            else:
+                from ansible_collections.platform.clickhouse.plugins.module_utils.member_projection import project_members
+                bases = {'port': 'port', 'native_port': 'nativePort'}
+            settings = {key: _value(effective.get('configuration', {}), value) for key, value in bases.items()
+                        if _value(effective.get('configuration', {}), value) is not None}
+            required = {'port', 'sentinel_port'} if service_type == 'redis' else {'port', 'native_port'} if purpose == 'native' else {'port'}
+            if not required <= settings.keys() or any(not isinstance(port, int) or isinstance(port, bool) for port in settings.values()):
+                raise ValueError('Effective connection port unavailable')
+            inputs = [dict(value, id=key) for key, value in members.items()]
+            if service_type == 'clickhouse':
+                for item in inputs:
+                    override = _value(effective.get('members', {}).get(item['id'], {}).get('configuration', {}), 'port')
+                    if override is not None:
+                        item['port'] = override
+            allocated = {item['id']: item for item in project_members(inputs, deployment_id, settings)}
         for member_id, member in sorted(members.items()):
             if service_type == "postgresql" and "database" not in member.get("roles", []):
+                continue
+            if service_type == 'redis' and ('sentinel' if purpose == 'sentinel' else 'redis') not in member.get('roles', []):
+                continue
+            if service_type == 'clickhouse' and 'server' not in member.get('roles', []):
                 continue
             member_effective = effective.get("members", {}).get(member_id, {}).get("configuration", {})
             # Multiple local instances require the provider's allocation projection,
             # not an invented copy of its slot/ordinal algorithm in this resolver.
-            if service_type == "redis" and len(members) > 1:
-                raise ValueError("Redis allocated member projection deferred")
-            if service_type == "clickhouse" and sum(item.get("host") == member.get("host") for item in members.values()) > 1:
-                raise ValueError("ClickHouse allocated member projection deferred")
             port = _value(member_effective, setting)
+            if allocated:
+                port = allocated[member_id]['sentinel_port' if purpose == 'sentinel' else 'redis_port' if service_type == 'redis' else 'native_port' if purpose == 'native' else 'https_port']
             if port is None:
                 port = _value(effective.get("configuration", {}), setting)
             if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
@@ -272,7 +296,10 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
                             "port": port, "protocol": protocol, "tlsProfileRef": _value(member_effective, "tlsProfile") or _value(effective.get("configuration", {}), "tlsProfile")})
     if not targets:
         raise ValueError("Connection targets unavailable")
-    return {"deploymentRef": deployment_id, "serviceType": service_type, "connectionRef": selector, "targets": targets}
+    connection = {"deploymentRef": deployment_id, "serviceType": service_type, "connectionRef": selector, "targets": targets}
+    if service_type == 'redis' and purpose == 'sentinel':
+        connection['masterName'] = min(allocated.values(), key=lambda member: member['slot'])['id']
+    return connection
 
 
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
@@ -295,12 +322,18 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         nonsecret_values(settings.get("endpoint", {}), field + ".endpoint", findings)
         for resource_id, resource in row["resources"].items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
-        accounts = settings.get("accounts", {})
+        declared_accounts = settings.get("accounts", {})
+        accounts = declared_accounts
         secret_bindings = settings.get("provisioner", {}).get("secret_bindings", {})
+        skipped = {name for name, declaration in row['connections'].items()
+                   if not row['bindings'].get(declaration['library_binding'], {}).get('deploymentRef')}
+        accounts = {name: account for name, account in accounts.items() if name not in skipped}
+        secret_bindings = {name: binding for name, binding in secret_bindings.items()
+                           if binding['source'].get('account') not in skipped}
         agent_required = bool(secret_bindings)
         if (accounts or agent_required) and settings.get("provisioner", {}).get("type") != "vault-agent":
             findings.append(finding("APPLICATION_PROVISIONER_REQUIRED", field))
-        for name, account in accounts.items():
+        for name, account in declared_accounts.items():
             nonsecret_values(account.get("grants", []), field + ".accounts." + name + ".grants", findings)
             for credential, descriptor in account["credentials"].items():
                 source = descriptor["source"]
@@ -335,7 +368,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         for name in accounts:
             if name not in connections:
                 findings.append(finding("APPLICATION_ACCOUNT_PROVIDER_MISSING", field + ".accounts." + name))
-            if name in connections and connections[name]["serviceType"] == "kafka" and accounts[name]["mode"] == "managed":
+            if name in connections and connections[name]["serviceType"] == "kafka":
                 findings.append(finding("APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED", field + ".accounts." + name))
         if (accounts or agent_required) and "vault" not in connections:
             findings.append(finding("APPLICATION_VAULT_REQUIRED", field))

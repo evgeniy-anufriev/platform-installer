@@ -19,11 +19,24 @@ class ActionModule(ActionBase):
                                        values['platform_desired_state'], catalog)
             if result['status'] == 'PASS':
                 for job in result['jobs'] + result['libraryJobs'] + result['instanceJobs']:
+                    settings = configuration['services'][job['providerId']]['configuration']
+                    if job['serviceType'] == 'clickhouse':
+                        credential = settings.get('defaultCredential', {})
+                        if credential.get('state') != 'RESOLVED' or not credential.get('value', {}).get('passwordSecretRef'):
+                            raise ValueError('APPLICATION_PROVIDER_ADMIN_CREDENTIAL_REQUIRED')
+                        job['adminPasswordRef'] = credential['value']['passwordSecretRef']
+                    if job['serviceType'] in {'redis', 'clickhouse'}:
+                        for account in job['accounts']:
+                            setting = ('sentinelCredential' if account['listener'] == 'sentinel' else 'redisCredential') if job['serviceType'] == 'redis' else 'defaultCredential'
+                            credential = settings.get(setting, {})
+                            if credential.get('state') != 'RESOLVED' or not credential.get('value', {}).get('passwordSecretRef'):
+                                raise ValueError('APPLICATION_PROVIDER_ADMIN_CREDENTIAL_REQUIRED')
+                            account['adminPasswordRef'] = credential['value']['passwordSecretRef']
                     for candidate in job['candidates']:
                         plans = [p for p in prepared['pki_materialization'].get('materializationPlans', [])
                                  if p['hostId'] == candidate['hostId'] and p['tlsProfileId'] == candidate.get('tlsProfileRef')]
                         candidate['pkiPlans'] = plans
-                        if job['accounts'] and len(plans) != 1:
+                        if (job['accounts'] or job['serviceType'] == 'clickhouse') and len(plans) != 1:
                             raise ValueError('APPLICATION_PROVIDER_PKI_PLAN_REQUIRED')
             return dict(result, changed=False)
         except (KeyError, TypeError, ValueError, OSError):

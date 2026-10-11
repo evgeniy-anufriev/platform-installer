@@ -1,0 +1,83 @@
+---
+- name: Verify application providers without service mutation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Verify logical scopes with invocation-only credential custody
+      when: application_provider_inputs.jobs | length > 0
+      block:
+        - name: Require protected runtime custody before reading Vault-backed credentials
+          ansible.builtin.assert:
+            that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
+            fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+          when: application_vault_inputs.sourceJobs | default([]) | length > 0
+          no_log: true
+        - name: Initialize Vault discovery only when an account reads an existing secret
+          ansible.builtin.set_fact:
+            platform_application_vault_runtime: {}
+          when: application_vault_inputs.sourceJobs | default([]) | length > 0
+          no_log: true
+        - name: Discover each Vault credential source provider once
+          ansible.builtin.include_role:
+            name: platform.vault.application_provider
+            tasks_from: discover
+          vars:
+            platform_vault_application_single_provider: "{{ application_vault_inputs.providers | length == 1 }}"
+          loop: "{{ application_vault_inputs.providers | default([]) | selectattr('providerId', 'in', application_vault_inputs.sourceJobs | default([]) | map(attribute='providerId') | unique | list) | list }}"
+          loop_control:
+            loop_var: platform_vault_application_provider
+        - name: Read existing Vault credential sources for provider probes
+          ansible.builtin.include_role:
+            name: platform.vault.application_provider
+            tasks_from: sources
+          loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
+          loop_control:
+            loop_var: application_vault_source
+        - name: Reset read-only PostgreSQL discovery for this invocation
+          ansible.builtin.set_fact:
+            platform_application_provider_runtime: {}
+        - name: Discover each PostgreSQL deployment once for verification
+          ansible.builtin.include_role:
+            name: platform.postgresql.application_provider
+            tasks_from: discover
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
+          loop_control:
+            loop_var: platform_postgresql_application_job
+        - name: Verify each library resource identity
+          ansible.builtin.include_role:
+            name: platform.postgresql.application_provider
+            tasks_from: verify
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
+          loop_control:
+            loop_var: platform_postgresql_application_job
+        - name: Verify Redis and Sentinel accounts without ACL mutation
+          ansible.builtin.include_role:
+            name: platform.redis.application_provider
+            tasks_from: verify
+          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+          loop_control:
+            loop_var: platform_redis_application_job
+        - name: Verify all ClickHouse library and instance scopes without DDL
+          ansible.builtin.include_role:
+            name: platform.clickhouse.application_provider
+            tasks_from: verify
+          loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+          loop_control:
+            loop_var: platform_clickhouse_application_job
+        - name: Verify each application instance grants separately
+          ansible.builtin.include_role:
+            name: platform.postgresql.application_provider
+            tasks_from: verify
+          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
+          loop_control:
+            loop_var: platform_postgresql_application_job
+      always:
+        - name: Remove only invocation-derived credential files
+          ansible.builtin.file:
+            path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
+            state: absent
+          loop: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
+          changed_when: false
+          no_log: true

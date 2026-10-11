@@ -12,6 +12,9 @@ param(
     [Parameter(ParameterSetName = 'Sync')]
     [switch]$IncludeGo,
 
+    [Parameter(ParameterSetName = 'Sync')]
+    [switch]$IncludeApplicationProbe,
+
     [Parameter(Mandatory = $true, ParameterSetName = 'Cleanup')]
     [switch]$Cleanup,
 
@@ -49,6 +52,9 @@ $ErrorActionPreference = 'Stop'
 $sourceDirectories = @('ansible-core', 'services', 'examples', 'contracts', 'config')
 $sourceFiles = @()
 $goEmbedDirectory = $null
+if ($IncludeApplicationProbe) {
+    $sourceDirectories += 'tests'
+}
 if ($IncludeGo) {
     $sourceDirectories += @('cmd', 'internal')
     $sourceFiles += @('go.mod', 'go.sum')
