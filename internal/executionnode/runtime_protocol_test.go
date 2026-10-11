@@ -182,10 +182,13 @@ func TestCandidateStagingCreatesOwnedPrivateBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	claim := runner.calls[0].input
-	for _, guard := range []string{"stat -c %a /var/tmp", `mkdir -m 0700 -- "$base"`, `stat -c %u "$base"`, `[ ! -L "$base" ]`} {
+	for _, guard := range []string{"stat -c %a /var/tmp", `[ "$(stat -c %u "$base")" = 0 ]`, `[ "$(stat -c %a "$base")" = 711 ]`, `[ "$(stat -c %u "$parent")" = "$(id -u)" ]`, `[ "$(stat -c %a "$parent")" = 700 ]`, `mkdir -- "$1"`} {
 		if !strings.Contains(claim, guard) {
 			t.Fatalf("candidate staging guard %q missing", guard)
 		}
+	}
+	if strings.Contains(claim, `mkdir -m 0700 -- "$base"`) || strings.Contains(claim, `install -d -m 0700 -- "$parent"`) {
+		t.Fatal("candidate claim must use the reconciled fixed workspace")
 	}
 }
 

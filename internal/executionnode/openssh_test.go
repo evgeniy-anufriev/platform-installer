@@ -85,6 +85,39 @@ func TestOpenSSHTransportUsesStrictHostKeyCheckingAndNoDownloader(t *testing.T) 
 	}
 }
 
+func TestWorkspaceOwnershipReconciliationIsScopedAndVerifiesCurrentSSHOwner(t *testing.T) {
+	runner := &outputRunner{outputs: [][]byte{[]byte("CHANGED=no\n")}}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	if _, err := transport.ReconcileWorkspaceOwnership(context.Background(), testNode()); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].name != "ssh" {
+		t.Fatalf("calls=%+v", runner.calls)
+	}
+	script := runner.calls[0].input
+	for _, required := range []string{
+		"uid=$(id -u)",
+		"owner=$(sudo -n stat -c %u -- \"$workspace\")",
+		"if [ \"$owner\" != \"$uid\" ]; then",
+		"find \"$workspace\" -mindepth 1 -maxdepth 1 -print -quit",
+		"sudo -n chown -- \"$uid:$gid\" -- \"$workspace\"",
+		"stat -c %u -- \"$workspace\"",
+		"[ \"$(sudo -n stat -c %u -- \"$workspace\")\" = \"$uid\" ]",
+		"workspace=$base/execution-plan",
+		"sudo -n chmod 0711 -- \"$base\"",
+		"printf 'CHANGED=%s\\n' \"$changed\"",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("ownership check omitted %q", required)
+		}
+	}
+	for _, forbidden := range []string{"/var/lib/platform-installer", "private", "payload", "sudo -n chmod -R", "sudo -n chown -R", "sudo -n chown -- \"$uid:$gid\" -- \"$base\""} {
+		if strings.Contains(script, forbidden) {
+			t.Fatalf("ownership check exceeds workspace boundary with %q", forbidden)
+		}
+	}
+}
+
 func TestUITransportUsesOnlySessionHostKeyTrustAndGuard(t *testing.T) {
 	runner := &recordingRunner{}
 	guarded, released := 0, 0

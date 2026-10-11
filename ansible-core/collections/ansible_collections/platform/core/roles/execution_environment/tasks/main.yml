@@ -43,13 +43,20 @@
     validate: /usr/sbin/visudo -cf %s
   when: platform_execution_sudoers_content | length > 0
 
-- name: Create execution workspace
+- name: Create shared execution workspace root
+  ansible.builtin.file:
+    path: "{{ platform_execution_workspace }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0711"
+
+- name: Create private execution workspace directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     mode: "0700"
   loop:
-    - "{{ platform_execution_workspace }}"
     - "{{ platform_execution_private_workspace }}"
     - "{{ platform_execution_payload_root }}"
 
@@ -83,7 +90,7 @@
     - platform_execution_technical_user | length > 0
     - not platform_execution_known_hosts_stat.stat.exists
 
-- name: Assign managed execution workspace ownership
+- name: Assign managed execution private workspace ownership
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -91,7 +98,6 @@
     group: "{{ platform_execution_technical_group }}"
     mode: "0700"
   loop:
-    - "{{ platform_execution_workspace }}"
     - "{{ platform_execution_private_workspace }}"
   when: platform_execution_technical_user | length > 0
 

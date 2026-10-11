@@ -29,6 +29,7 @@ import (
 func TestPreparationStepFailurePublishesOnlySafePhase(t *testing.T) {
 	for _, code := range []string{
 		"EXECUTION_NODE_PREPARE_INSPECT_FAILED",
+		"EXECUTION_NODE_PREPARE_WORKSPACE_FAILED",
 		"EXECUTION_NODE_PREPARE_STAGE_FAILED",
 		"EXECUTION_NODE_PREPARE_ACTIVATE_FAILED",
 	} {

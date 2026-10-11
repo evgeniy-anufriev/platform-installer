@@ -716,7 +716,7 @@ func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, ar
 	}
 	claim := privateProjectStageScript
 	if purpose == "candidate" {
-		claim = "set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\n[ -d /var/tmp ] && [ ! -L /var/tmp ] || exit 64\n[ \"$(stat -c %u /var/tmp)\" = 0 ] && [ \"$(stat -c %a /var/tmp)\" = 1777 ] || exit 64\nbase=/var/tmp/platform-installer\nparent=$base/execution-plan\numask 077\nif [ ! -e \"$base\" ]; then mkdir -m 0700 -- \"$base\"; fi\n[ -d \"$base\" ] && [ ! -L \"$base\" ] || exit 64\n[ \"$(stat -c %u \"$base\")\" = \"$(id -u)\" ] || exit 64\n[ ! -L \"$parent\" ] || exit 64\ninstall -d -m 0700 -- \"$parent\"\n[ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 64\n[ \"$(stat -c %u \"$parent\")\" = \"$(id -u)\" ] || exit 64\nmkdir -- \"$1\"\n"
+		claim = "set -eu\ncase \"$1\" in /var/tmp/platform-installer/execution-plan/installer-*) ;; *) exit 64;; esac\n[ -d /var/tmp ] && [ ! -L /var/tmp ] || exit 64\n[ \"$(stat -c %u /var/tmp)\" = 0 ] && [ \"$(stat -c %a /var/tmp)\" = 1777 ] || exit 64\nbase=/var/tmp/platform-installer\nparent=$base/execution-plan\n[ -d \"$base\" ] && [ ! -L \"$base\" ] || exit 64\n[ \"$(stat -c %u \"$base\")\" = 0 ] && [ \"$(stat -c %a \"$base\")\" = 711 ] || exit 64\n[ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 64\n[ \"$(stat -c %u \"$parent\")\" = \"$(id -u)\" ] && [ \"$(stat -c %a \"$parent\")\" = 700 ] || exit 64\numask 077\nmkdir -- \"$1\"\n"
 	}
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote}, []byte(claim)); err != nil {
 		return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}

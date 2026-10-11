@@ -150,6 +150,70 @@ func (t OpenSSHTransport) InspectExecutionNode(ctx context.Context, node Node) (
 	return Inspection{State: state, OS: values["OS"], OSVersion: values["VERSION"], Architecture: values["ARCH"], Elevation: values["ELEVATION"] == "yes", FreeBytes: parseInt64(values["FREE"]), Runtime: runtime}, nil
 }
 
+// ReconcileWorkspaceOwnership keeps the fixed candidate staging path writable
+// by the SSH identity used for this preparation. The shared workspace parent
+// remains root-owned and traversable; private, payload and /var/lib runtime
+// trees are outside the ownership change.
+func (t OpenSSHTransport) ReconcileWorkspaceOwnership(ctx context.Context, node Node) (bool, error) {
+	output, err := t.ssh(ctx, node, "sh", []string{"-s"}, []byte(reconcileWorkspaceOwnershipScript))
+	if err != nil {
+		return false, err
+	}
+	switch parseFacts(string(output))["CHANGED"] {
+	case "yes":
+		return true, nil
+	case "no":
+		return false, nil
+	default:
+		return false, errors.New("EXECUTION_WORKSPACE_RECONCILIATION_INVALID")
+	}
+}
+
+const reconcileWorkspaceOwnershipScript = `set -eu
+base=/var/tmp/platform-installer
+workspace=$base/execution-plan
+[ -d /var/tmp ] && [ ! -L /var/tmp ] || exit 64
+[ "$(stat -c %u /var/tmp)" = 0 ] && [ "$(stat -c %a /var/tmp)" = 1777 ] || exit 64
+uid=$(id -u)
+gid=$(id -g)
+changed=no
+if sudo -n test -L "$base"; then exit 64; fi
+if ! sudo -n test -e "$base"; then
+  sudo -n install -d -o root -g root -m 0711 -- "$base"
+  changed=yes
+fi
+sudo -n test -d "$base" && sudo -n test ! -L "$base" || exit 64
+base_owner=$(sudo -n stat -c %u -- "$base")
+base_mode=$(sudo -n stat -c %a -- "$base")
+if [ "$base_owner" != 0 ] || [ "$base_mode" != 711 ]; then
+  sudo -n chown root:root -- "$base"
+  sudo -n chmod 0711 -- "$base"
+  changed=yes
+fi
+if sudo -n test -L "$workspace"; then exit 64; fi
+if ! sudo -n test -e "$workspace"; then
+  sudo -n install -d -o "$uid" -g "$gid" -m 0700 -- "$workspace"
+  changed=yes
+fi
+sudo -n test -d "$workspace" && sudo -n test ! -L "$workspace" || exit 64
+unsafe=$(sudo -n find "$workspace" -xdev \( -type l -o \( ! -type d -a ! -type f \) \) -print -quit)
+[ -z "$unsafe" ] || exit 65
+owner=$(sudo -n stat -c %u -- "$workspace")
+if [ "$owner" != "$uid" ]; then
+  entries=$(sudo -n find "$workspace" -mindepth 1 -maxdepth 1 -print -quit)
+  [ -z "$entries" ] || exit 65
+  sudo -n chown -- "$uid:$gid" -- "$workspace"
+  changed=yes
+fi
+workspace_mode=$(sudo -n stat -c %a -- "$workspace")
+if [ "$workspace_mode" != 700 ]; then
+  sudo -n chmod 0700 -- "$workspace"
+  changed=yes
+fi
+[ "$(sudo -n stat -c %u -- "$workspace")" = "$uid" ] || exit 66
+printf 'CHANGED=%s\n' "$changed"
+`
+
 func (t OpenSSHTransport) InspectAcquisitionSource(ctx context.Context, node Node) (AcquisitionEnvironment, error) {
 	inspection, err := t.InspectExecutionNode(ctx, node)
 	if err != nil {

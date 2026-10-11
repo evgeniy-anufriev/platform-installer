@@ -1895,6 +1895,8 @@ func projectErrorMessage(code string) string {
 		return "Execution Node недоступен. Проект на диске не изменён."
 	case "EXECUTION_NODE_PREPARE_INSPECT_FAILED":
 		return "Подготовка остановилась при повторной проверке узла. Проверьте соединение и повторите подготовку. Проект не изменён."
+	case "EXECUTION_NODE_PREPARE_WORKSPACE_FAILED":
+		return "Не удалось передать рабочий каталог Execution Node текущему SSH-пользователю. Проверьте владельца каталога и отсутствие симлинков, затем повторите подготовку."
 	case "EXECUTION_NODE_PREPARE_STAGE_FAILED":
 		return "Подготовка остановилась при передаче проверенного runtime bundle. Проверьте доступность узла и свободное место. Проект не изменён."
 	case "EXECUTION_NODE_PREPARE_ACTIVATE_FAILED":

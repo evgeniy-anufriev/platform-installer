@@ -175,6 +175,7 @@ func (s *ServiceExecutionService) Resolve(ctx context.Context, request ServiceEx
 // command execution to the application or a future UI.
 type Transport interface {
 	InspectExecutionNode(context.Context, Node) (Inspection, error)
+	ReconcileWorkspaceOwnership(context.Context, Node) (bool, error)
 	StageVerifiedBundle(context.Context, Node, executionbundle.Verified) (string, error)
 	ActivateStagedRuntime(context.Context, Node, string, executionbundle.Verified) (Runtime, error)
 	DiscardStagedRuntime(context.Context, Node, string) error
@@ -261,12 +262,16 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 		return result, nil
 	}
 	state := requiredState(inspection, bundle)
-	if state == Ready {
-		result.State, result.Runtime = Ready, inspection.Runtime
-		return result, nil
-	}
 	if state == Incompatible || state == Broken || state == Unreachable {
 		result.State, result.Findings = state, inspection.Findings
+		return result, nil
+	}
+	workspaceChanged, err := s.transport.ReconcileWorkspaceOwnership(ctx, node)
+	if err != nil {
+		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_WORKSPACE_FAILED", cause: err}
+	}
+	if state == Ready {
+		result.State, result.Runtime, result.Changed = Ready, inspection.Runtime, workspaceChanged
 		return result, nil
 	}
 	stage, err := s.transport.StageVerifiedBundle(ctx, node, bundle)
@@ -331,12 +336,12 @@ func requiredState(i Inspection, bundle executionbundle.Verified) State {
 }
 func preparationSteps(state State) []Step {
 	if state == Ready {
-		return []Step{{"verify-ready", "VERIFY", false}}
+		return []Step{{"reconcile-workspace", "RECONCILE", true}, {"verify-ready", "VERIFY", false}}
 	}
 	if state == Incompatible || state == Broken || state == Unreachable {
 		return []Step{{"blocked", "BLOCKED", false}}
 	}
-	return []Step{{"verify-bundle", "VERIFY", false}, {"stage-runtime", "TRANSFER", true}, {"activate-runtime", "ACTIVATE", true}, {"capability-handshake", "VERIFY", false}}
+	return []Step{{"verify-bundle", "VERIFY", false}, {"reconcile-workspace", "RECONCILE", true}, {"stage-runtime", "TRANSFER", true}, {"activate-runtime", "ACTIVATE", true}, {"capability-handshake", "VERIFY", false}}
 }
 func planDigest(plan Plan) string {
 	plan.ID, plan.Digest, plan.ExpiresAt = "", "", time.Time{}
