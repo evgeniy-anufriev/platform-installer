@@ -27,11 +27,14 @@ configurationSchema: {$ref: configuration.schema.json}
 configuration:
   additionalProperties: false
   settings:
+    dataRoot: {kind: MANAGED, roleVariable: platform_vault_data_root, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 255}, ui: {label: Каталог данных, section: Хранение, order: 0, description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.}}
+    dataDirectory: {kind: MANAGED, roleVariable: platform_vault_member_data_directory, type: string, scopes: [member], validation: {minLength: 1, maxLength: 255}, ui: {label: Каталог данных участника, section: Хранение, order: 0, description: Абсолютный путь на сервере; переопределяет каталог данных только этого участника.}}
     tlsProfile: {kind: MANAGED, roleVariable: platform_vault_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 10, x-referenceKind: TLS_PROFILE}}
     port: {kind: MANAGED, roleVariable: platform_vault_api_port, type: integer, scopes: [deployment, member], validation: {minimum: 1, maximum: 65535}, ui: {label: API TLS base port, section: Network, order: 20}}
     clusterPort: {kind: MANAGED, roleVariable: platform_vault_cluster_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Cluster base port, section: Network, order: 21}}
     unsealShares: {kind: MANAGED, roleVariable: platform_vault_unseal_shares, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 255}, ui: {label: Unseal shares, section: Initialization, order: 30}}
     unsealThreshold: {kind: MANAGED, roleVariable: platform_vault_unseal_threshold, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 255}, ui: {label: Unseal threshold, section: Initialization, order: 31}}
+x-memberDataDirectorySetting: dataDirectory
 roleEntrypoints:
   apply: {fqcn: platform.vault.vault_tls, variablesPrefix: platform_vault_, x-memberListVariable: platform_vault_instances}
   verify: {fqcn: platform.vault.vault_tls, variablesPrefix: platform_vault_, x-memberListVariable: platform_vault_instances}

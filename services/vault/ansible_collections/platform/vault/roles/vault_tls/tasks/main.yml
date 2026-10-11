@@ -8,6 +8,19 @@
 - name: Normalize Vault instance ports and private resource identities
   ansible.builtin.include_tasks: normalize.yml
 
+- name: Reject overlapping local Vault data paths
+  ansible.builtin.include_tasks: validate_data_paths.yml
+
+- name: Guard local Vault data paths before mutation
+  ansible.builtin.include_role:
+    name: platform.core.managed_data_path_guard
+  vars:
+    platform_managed_data_path: "{{ item.data_directory }}"
+    platform_managed_data_owner: "{{ platform_vault_user }}"
+  loop: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+  loop_control:
+    label: "{{ item.id }}"
+
 - name: Serialize Vault apply across Installer and standalone Ansible callers
   block:
     - name: Create one invocation identity for deployment locking

@@ -16,6 +16,7 @@ description: Clears Raft contents only, keeping the member root and identity mar
 options:
   deployment_id: {type: str, required: true}
   member_id: {type: str, required: true}
+  data_directory: {type: str, required: true}
   confirmation: {type: str, required: true}
   inspect_only: {type: bool, default: false}
 author: Platform Installer
@@ -24,6 +25,7 @@ EXAMPLES = r'''
 - platform.vault.clear_member:
     deployment_id: vault-ha
     member_id: vault-1
+    data_directory: /var/lib/vault-ha
     confirmation: vault-ha
     inspect_only: true
 '''
@@ -31,7 +33,6 @@ RETURN = r'''
 changed: {description: Whether Raft contents were removed, type: bool, returned: always}
 '''
 
-DATA_ROOT = '/var/lib/platform-vault'
 CONFIG_ROOT = '/etc/platform-vault'
 UNIT_ROOT = '/etc/systemd/system'
 MARKER = '.platform-vault-member.json'
@@ -61,7 +62,7 @@ def private_mount_namespace():
             'VAULT_CLEAR_MOUNT_ISOLATION_UNAVAILABLE')  # MS_PRIVATE | MS_REC
 
 
-def owned_directory(stack, path, service_uid=None):
+def owned_directory(stack, path, service_uid=None, service_owned_ancestors=False):
     fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     stack.callback(os.close, fd)
     components = path.strip('/').split('/')
@@ -76,7 +77,8 @@ def owned_directory(stack, path, service_uid=None):
                     stat.S_IMODE(metadata.st_mode) == 0o700,
                     'VAULT_CLEAR_PATH_UNSAFE')
         else:
-            require(metadata.st_uid == 0 and metadata.st_mode & 0o022 == 0,
+            allowed_owners = (0, service_uid) if service_owned_ancestors else (0,)
+            require(metadata.st_uid in allowed_owners and metadata.st_mode & 0o022 == 0,
                     'VAULT_CLEAR_PATH_UNSAFE')
     return fd
 
@@ -181,10 +183,14 @@ def same_source(fd, path):
             stat.S_ISDIR(current.st_mode), 'VAULT_CLEAR_SOURCE_CHANGED')
 
 
-def clear_member(deployment, member, confirmation, inspect_only=False):
+def clear_member(deployment, member, data_directory, confirmation, inspect_only=False):
     require(all(isinstance(value, str) and len(value) <= 128 and IDENTIFIER.fullmatch(value)
                 for value in (deployment, member)), 'VAULT_CLEAR_IDENTITY_INVALID')
     require(confirmation == deployment, 'VAULT_CLEAR_CONFIRMATION_REQUIRED')
+    require(isinstance(data_directory, str) and 1 < len(data_directory) <= 255 and
+            data_directory.startswith('/') and
+            all(component not in ('', '.', '..') for component in data_directory[1:].split('/')),
+            'VAULT_CLEAR_PATH_UNSAFE')
     require(os.geteuid() == 0, 'VAULT_CLEAR_ROOT_REQUIRED')
     require(all(function in os.supports_dir_fd for function in
                 (os.open, os.stat, os.unlink, os.rmdir)) and os.listdir in os.supports_fd,
@@ -196,10 +202,10 @@ def clear_member(deployment, member, confirmation, inspect_only=False):
             'VAULT_CLEAR_IDENTITY_INVALID')
     unit = 'platform-vault@' + deployment + '-' + member.rsplit('-', 1)[1]
     require(len(unit + '.service') <= 255, 'VAULT_CLEAR_IDENTITY_INVALID')
-    data = DATA_ROOT + '/' + deployment + '/' + member
+    data = data_directory
     config = CONFIG_ROOT + '/' + deployment + '/' + member + '/vault.hcl'
     with ExitStack() as stack:
-        directory = owned_directory(stack, data, uid)
+        directory = owned_directory(stack, data, uid, service_owned_ancestors=True)
         marker = json.loads(read_owned_file(directory, MARKER, uid, 4096, private=True))
         require(marker == {'apiVersion': 'platform.installer/vault-member-marker/v1alpha1',
                            'deploymentId': deployment, 'memberId': member, 'instanceName': unit},
@@ -243,12 +249,13 @@ def main():
     module = AnsibleModule(argument_spec={
         'deployment_id': {'type': 'str', 'required': True},
         'member_id': {'type': 'str', 'required': True},
+        'data_directory': {'type': 'str', 'required': True},
         'confirmation': {'type': 'str', 'required': True},
         'inspect_only': {'type': 'bool', 'default': False},
     }, supports_check_mode=True)
     try:
         predicted = clear_member(module.params['deployment_id'], module.params['member_id'],
-                                 module.params['confirmation'],
+                                 module.params['data_directory'], module.params['confirmation'],
                                  module.params['inspect_only'] or module.check_mode)
         module.exit_json(changed=predicted if module.check_mode or
                          not module.params['inspect_only'] else False)

@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:46e357cc8f725734bc9596722c3624c071baf537cc7b1437836d8277a3adf6ff
+digest: sha256:8265eef83fb7fa3b209bce69f15c8fb7eab45e51e601c9b854b55f152170202e
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -185,11 +185,25 @@ definitions:
             minLength: 1
             maxLength: 255
           ui:
-            label: Корневой каталог данных
+            label: Каталог данных
             section: Хранение
-            order: 30
-            description: Абсолютный путь на сервере. Данные участников размещаются в отдельных подкаталогах.
-              Существующие данные автоматически не переносятся.
+            order: 0
+            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном
+              сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.
+        dataDirectory:
+          kind: MANAGED
+          roleVariable: platform_clickhouse_member_data_directory
+          type: string
+          scopes:
+          - member
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Каталог данных участника
+            section: Хранение
+            order: 0
+            description: Абсолютный путь на сервере; переопределяет каталог данных только этого участника.
         defaultCredential:
           kind: MANAGED
           roleVariable: platform_clickhouse_default_credential
@@ -215,6 +229,7 @@ definitions:
             x-runtimeSecretRequirement:
               requirementRef: clickhouse-default-password
               purpose: SERVICE_PASSWORD
+    x-memberDataDirectorySetting: dataDirectory
     roleEntrypoints:
       apply:
         fqcn: platform.clickhouse.clickhouse_tls
@@ -247,7 +262,7 @@ definitions:
       digest: sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
       requiredOffline: true
     compatibilityRef: ../../services/clickhouse/compatibility.yml
-    x-definitionDigest: sha256:1230febf341fe91b5d307543b64b421d0dd27824291ce0f5bbc45f232e75c3ab
+    x-definitionDigest: sha256:38f3c0ad2bdb5a2bca19e89473fe08f45d47dc8ffde408b2afcd8ff927a39321
     x-sourceManifest: services/clickhouse/service.yml
   docker:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -579,9 +594,9 @@ definitions:
           ui:
             label: Каталог данных
             section: Хранение
-            order: 30
-            description: Абсолютный путь на сервере. У участников на одном сервере должны быть разные
-              каталоги. Существующие данные автоматически не переносятся.
+            order: 0
+            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников используются
+              отдельные подкаталоги. Существующие данные автоматически не переносятся.
         runtimePathNamespace:
           kind: MANAGED
           roleVariable: platform_kafka_runtime_path_namespace
@@ -679,7 +694,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:9e2336771dddc21d73fda1cfe7bfffd83d6dc39c511a80dfa5a03f69fd542512
+    x-definitionDigest: sha256:2b5eb34cad11a11a522bf18d8a7eb3c26c837c7609e7f5179a7324c2b60928f0
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -789,8 +804,9 @@ definitions:
           ui:
             label: Каталог данных
             section: Хранение
-            order: 20
-            description: Абсолютный путь на сервере. Существующие данные автоматически не переносятся.
+            order: 0
+            description: По умолчанию /var/lib/<ID развёртывания>. Существующие данные автоматически не
+              переносятся.
         configDirectory:
           kind: MANAGED
           roleVariable: platform_postgresql_config_directory
@@ -932,7 +948,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:b5683f88b4c1ed0680cce725df68ee0d81bf8bec613d11a2cb26a658724aea8d
+    x-definitionDigest: sha256:d0ac034a3176cbe1303ec8146fb41fe0b0740ff49a1cb3e6e82deb4d41997d2a
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1058,11 +1074,25 @@ definitions:
             minLength: 1
             maxLength: 255
           ui:
-            label: Корневой каталог данных
+            label: Каталог данных
             section: Хранение
-            order: 30
-            description: Абсолютный путь на сервере. Данные участников размещаются в отдельных подкаталогах.
-              Существующие данные автоматически не переносятся.
+            order: 0
+            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном
+              сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.
+        dataDirectory:
+          kind: MANAGED
+          roleVariable: platform_redis_member_data_directory
+          type: string
+          scopes:
+          - member
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Каталог данных участника
+            section: Хранение
+            order: 0
+            description: Абсолютный путь на сервере; переопределяет каталог данных только этого участника.
         redisCredential:
           kind: MANAGED
           roleVariable: platform_redis_credential
@@ -1137,6 +1167,7 @@ definitions:
     - dir
     - pidfile
     - logfile
+    x-memberDataDirectorySetting: dataDirectory
     roleEntrypoints:
       apply:
         fqcn: platform.redis.redis_tls
@@ -1155,7 +1186,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/redis/compatibility.yml
-    x-definitionDigest: sha256:b833332935ce9a93822e535d002114e8ea47c2f86b1287984412bcbe01b30432
+    x-definitionDigest: sha256:68384e93c745f329d7c07ea365925f229c3dba853124dd601b7a4165c40eb810
     x-sourceManifest: services/redis/service.yml
   vault:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1225,6 +1256,35 @@ definitions:
     configuration:
       additionalProperties: false
       settings:
+        dataRoot:
+          kind: MANAGED
+          roleVariable: platform_vault_data_root
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Каталог данных
+            section: Хранение
+            order: 0
+            description: По умолчанию /var/lib/<ID развёртывания>. Для нескольких участников на одном
+              сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.
+        dataDirectory:
+          kind: MANAGED
+          roleVariable: platform_vault_member_data_directory
+          type: string
+          scopes:
+          - member
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Каталог данных участника
+            section: Хранение
+            order: 0
+            description: Абсолютный путь на сервере; переопределяет каталог данных только этого участника.
         tlsProfile:
           kind: MANAGED
           roleVariable: platform_vault_tls_profile
@@ -1291,6 +1351,7 @@ definitions:
             label: Unseal threshold
             section: Initialization
             order: 31
+    x-memberDataDirectorySetting: dataDirectory
     roleEntrypoints:
       apply:
         fqcn: platform.vault.vault_tls
@@ -1331,7 +1392,7 @@ definitions:
         requiredWhen: SEALED
         operations:
         - SERVICE_APPLY
-    x-definitionDigest: sha256:cfca75625a39d63915fed820744ba15c2ded1c131a4ac97332cb373e59fd7d94
+    x-definitionDigest: sha256:b9f03aa17e558cf424601fdac2ffd353f4ba7082490327ec5611ceba99fcbdf9
     x-sourceManifest: services/vault/service.yml
   keepalived:
     apiVersion: platform.installer/service-manifest/v1alpha1

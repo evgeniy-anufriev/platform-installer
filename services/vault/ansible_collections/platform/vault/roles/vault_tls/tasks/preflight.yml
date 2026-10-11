@@ -37,7 +37,7 @@
     get_mime: false
     get_attributes: false
     get_checksum: false
-  loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_data_root }}", "{{ platform_vault_log_root }}"]
+  loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_log_root }}"]
   register: _platform_vault_roots
 
 - name: Reject symlinked or non-directory Vault role roots
@@ -48,6 +48,24 @@
   loop_control:
     label: "{{ item.item }}"
 
+- name: Inspect shared Vault data root before adding co-located members
+  ansible.builtin.stat:
+    path: "{{ platform_vault_data_root }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  register: _platform_vault_shared_data_root
+  when: _platform_vault_local_instances | length > 1
+
+- name: Require a root-owned shared Vault data parent
+  ansible.builtin.assert:
+    that:
+      - not _platform_vault_shared_data_root.stat.exists or _platform_vault_shared_data_root.stat.uid == 0
+      - not _platform_vault_shared_data_root.stat.exists or _platform_vault_shared_data_root.stat.mode == '0755'
+    fail_msg: VAULT_SHARED_DATA_ROOT_UNSAFE
+  when: _platform_vault_local_instances | length > 1
+
 - name: Resolve the service account identity for owned Vault path validation
   ansible.builtin.command:
     argv: [id, -u, "{{ platform_vault_user }}"]
@@ -57,7 +75,7 @@
 
 - name: Build the bounded Vault path ancestry inspection set
   ansible.builtin.set_fact:
-    _platform_vault_path_checks: "{{ [{'path': platform_vault_config_root, 'owner': 'root'}, {'path': platform_vault_data_root, 'owner': 'root'}, {'path': platform_vault_log_root, 'owner': 'root'}] }}"
+    _platform_vault_path_checks: "{{ [{'path': platform_vault_config_root, 'owner': 'root'}, {'path': platform_vault_log_root, 'owner': 'root'}] }}"
 
 - name: Add each fixed deployment and member path component to preflight
   ansible.builtin.set_fact:
@@ -65,7 +83,6 @@
       {'path': platform_vault_config_root ~ '/' ~ platform_vault_deployment_id, 'owner': 'root'},
       {'path': item.config_directory, 'owner': 'service'},
       {'path': item.config_directory ~ '/pki', 'owner': 'service'},
-      {'path': platform_vault_data_root ~ '/' ~ platform_vault_deployment_id, 'owner': 'root'},
       {'path': item.data_directory, 'owner': 'service'},
       {'path': platform_vault_log_root ~ '/' ~ platform_vault_deployment_id, 'owner': 'root'},
       {'path': item.log_directory, 'owner': 'service'}

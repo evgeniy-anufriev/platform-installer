@@ -24,6 +24,9 @@
     _platform_redis_local_instances: >-
       {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
 
+- name: Reject overlapping local Redis data paths
+  ansible.builtin.include_tasks: validate_data_paths.yml
+
 - name: Guard local Redis data paths before mutation
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard

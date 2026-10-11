@@ -483,6 +483,8 @@ sections, fields, validation and help are declared by the selected service
 package; consequently service-specific terms belong here only.
 
 - managed settings use manifest type, validation, scopes and `ui.label/order`;
+- settings follow the package's numeric `ui.order` across sections, so data
+  directory settings can remain first without service-specific React rules;
 - advanced settings use a separate native-property editor;
 - manifest `x-reservedAdvancedProperties` is displayed as protected and is
   validated before save/apply;

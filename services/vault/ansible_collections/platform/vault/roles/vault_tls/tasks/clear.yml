@@ -3,6 +3,7 @@
   platform.vault.clear_member:
     deployment_id: "{{ platform_vault_deployment_id }}"
     member_id: "{{ item.id }}"
+    data_directory: "{{ item.data_directory }}"
     confirmation: "{{ platform_vault_confirm_destructive_reset }}"
     inspect_only: true
   loop: "{{ _platform_vault_local_instances }}"
@@ -22,6 +23,7 @@
   platform.vault.clear_member:
     deployment_id: "{{ platform_vault_deployment_id }}"
     member_id: "{{ item.id }}"
+    data_directory: "{{ item.data_directory }}"
     confirmation: "{{ platform_vault_confirm_destructive_reset }}"
   loop: "{{ _platform_vault_local_instances }}"
   loop_control:

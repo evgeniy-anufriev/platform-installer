@@ -1,0 +1,22 @@
+---
+- name: Reject overlapping co-located member data paths without target changes
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    platform_redis_data_root: /var/lib/qa-stateful
+    platform_clickhouse_data_root: /var/lib/qa-stateful
+    platform_vault_data_root: /var/lib/qa-stateful
+  tasks:
+    - name: Test each service against root and nested member conflicts
+      ansible.builtin.include_tasks: service_data_directory_collision_case.yml
+      loop:
+        - {service: redis, first: /var/lib/qa-stateful, second: /var/lib/qa-stateful/member-2}
+        - {service: redis, first: /data/members, second: /data/members/second}
+        - {service: clickhouse, first: /var/lib/qa-stateful, second: /var/lib/qa-stateful/member-2}
+        - {service: clickhouse, first: /data/members, second: /data/members/second}
+        - {service: vault, first: /var/lib/qa-stateful, second: /var/lib/qa-stateful/member-2}
+        - {service: vault, first: /data/members, second: /data/members/second}
+      loop_control:
+        loop_var: collision_case
+        label: "{{ collision_case.service }}: {{ collision_case.first }} / {{ collision_case.second }}"

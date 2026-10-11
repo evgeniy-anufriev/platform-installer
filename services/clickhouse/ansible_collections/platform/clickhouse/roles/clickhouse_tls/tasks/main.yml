@@ -5,6 +5,9 @@
 - name: Normalize ClickHouse member placement
   ansible.builtin.include_tasks: normalize.yml
 
+- name: Reject overlapping local ClickHouse data paths
+  ansible.builtin.include_tasks: validate_data_paths.yml
+
 - name: Validate approved ClickHouse artifact authority
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate

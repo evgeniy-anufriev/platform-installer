@@ -422,6 +422,31 @@ class DeploymentPlanTests(unittest.TestCase):
             {key: item[key] for key in item if key == "port"}
             for item in values["node1"]["platform_vault_instances"]])
 
+    def test_member_data_paths_are_projected_without_host_variable_conflict(self):
+        definition = {
+            "configuration": {"settings": {
+                "dataRoot": {"roleVariable": "platform_vault_data_root", "scopes": ["deployment"]},
+                "dataDirectory": {"roleVariable": "platform_vault_member_data_directory", "scopes": ["member"]},
+            }},
+            "x-memberDataDirectorySetting": "dataDirectory",
+        }
+        resolved = {"members": {
+            "vault-1": {"host": "node1", "roles": ["vault"]},
+            "vault-2": {"host": "node1", "roles": ["vault"]},
+        }}
+        deferred = {"state": "DEFERRED", "reason": "NON_LITERAL_ROLE_DEFAULT"}
+        service = {"services": {"vault-ha": {"mode": "raft-ha",
+            "configuration": {"dataRoot": deferred},
+            "members": {
+                "vault-1": {"variableContext": {"hostId": "node1"}, "configuration": {"dataRoot": deferred, "dataDirectory": {"state": "RESOLVED", "source": "MEMBER_OVERRIDE", "value": "/data/vault-one"}}},
+                "vault-2": {"variableContext": {"hostId": "node1"}, "configuration": {"dataRoot": deferred, "dataDirectory": {"state": "RESOLVED", "source": "MEMBER_OVERRIDE", "value": "/data/vault-two"}}},
+            }}}}
+        values = PLAN._execution_role_variables("vault-ha", definition, "platform_vault_", service,
+            ["node1"], resolved, {"node1": {"ansibleHost": "192.0.2.1"}}, "platform_vault_instances")
+        self.assertNotIn("platform_vault_member_data_directory", values["node1"])
+        self.assertEqual(["/data/vault-one", "/data/vault-two"],
+            [item["data_directory"] for item in values["node1"]["platform_vault_instances"]])
+
     def test_role_defaults_are_not_promoted_to_runtime_facts(self):
         settings = {key: {"roleVariable": "platform_vault_" + key} for key in
                     ("literal", "reference", "dynamic", "deployment", "document", "member")}

@@ -503,20 +503,23 @@ trust-store layout.
 
 ## ADR-036: Service data directories remain package-owned settings
 
-Kafka and PostgreSQL expose their member data directory as `dataDirectory`;
-Redis and ClickHouse expose the root beneath which their member directories are
-created as `dataRoot`. The existing schema-driven Services editor presents these
-package declarations as bounded text fields, with service role variables as the
-single desired-state mapping. Core resolves and forwards overrides through its
-existing service configuration contract. Before target mutation, the roles
-reject unsafe absolute paths and linked, foreign or writable ancestors. A
-change of path does not move existing data; a safe service migration needs a
-separate operator-controlled procedure. Runtime-only member paths and facts
-remain derived state.
+Kafka and PostgreSQL expose `dataDirectory`; Redis, ClickHouse and Vault expose
+deployment `dataRoot` and member `dataDirectory`. The existing schema-driven
+Services editor presents these declarations as bounded text fields. The
+default data path on each target host is `/var/lib/<deploymentId>`. When
+members of one deployment share a host, their default paths gain member-ID
+subdirectories. An explicit member directory is an exact path. Core places
+member overrides in the existing member list, while role defaults remain
+Ansible-owned. Before target mutation, roles reject unsafe absolute paths,
+linked, foreign or writable ancestors and local path collisions. Changing a
+path never moves existing data; migration is a separate operator procedure.
+Runtime-only member paths and facts remain derived state.
 
 Owner decision (2026-10-11): changing a data path on an already installed
 deployment is not guarded by this UI change. For PostgreSQL, Kafka and
 ClickHouse, a subsequent apply can initialize a new empty directory and
 reconfigure the service to use it while the old data remains at the former
 path. Operators must migrate existing data separately before applying a path
-change. Redis retains its existing directory consistency check.
+change. Redis retains its existing directory consistency check. Adding Vault
+and changing defaults can likewise select a new empty data directory on a
+reapply unless the operator migrates existing data first.

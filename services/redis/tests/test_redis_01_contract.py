@@ -80,7 +80,8 @@ class RedisContractTests(unittest.TestCase):
     def test_modes_keep_member_scoped_tls_contract(self):
         value = manifest()
         settings = value["configuration"]["settings"]
-        self.assertNotIn("dataRoot", settings)
+        self.assertEqual(["deployment"], settings["dataRoot"]["scopes"])
+        self.assertEqual(["member"], settings["dataDirectory"]["scopes"])
         self.assertNotIn("configRoot", settings)
         self.assertEqual(value["modes"]["standalone"]["placement"]["minMembers"], 1)
         ha = value["modes"]["sentinel-ha"]
@@ -112,11 +113,11 @@ class RedisContractTests(unittest.TestCase):
         defaults = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "defaults" / "main.yml").read_text(encoding="utf-8")
         package_source = (ROOT / "services" / "redis" / "artifacts.yml").read_text(encoding="utf-8")
         self.assertIn('platform_redis_version: "8.6.4-1.red80"', defaults)
-        self.assertIn("platform_redis_data_root: /var/lib/platform-redis", defaults)
+        self.assertIn('platform_redis_data_root: "/var/lib/{{ platform_redis_deployment_id }}"', defaults)
         self.assertIn("platform_redis_config_root: /etc/platform-redis", defaults)
         self.assertIn("platform_redis_log_root: /var/log/platform-redis", defaults)
         validate = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "validate.yml").read_text(encoding="utf-8")
-        self.assertIn("platform_redis_data_root == '/var/lib/platform-redis'", validate)
+        self.assertIn("platform_redis_data_root is string", validate)
         self.assertIn("platform_redis_config_root == '/etc/platform-redis'", validate)
         self.assertIn("platform_redis_log_root == '/var/log/platform-redis'", validate)
         self.assertIn("redis-8.6.4-1.red80", package_source)

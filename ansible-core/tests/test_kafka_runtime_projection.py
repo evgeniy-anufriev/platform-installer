@@ -26,7 +26,7 @@ class KafkaRuntimeProjectionTests(unittest.TestCase):
         second = projection.project_kafka_runtime(topology, {"services": {"kafka-main": config}}, {"node1": "192.168.56.101"})
         self.assertEqual(first, second)
         instances = first["kafka-main"]["instances"]
-        self.assertEqual("/var/lib/kafka/kafka-split/controller-1", instances[1]["data_directory"])
+        self.assertEqual("/var/lib/kafka-main/controller-1", instances[1]["data_directory"])
         self.assertEqual("192.168.56.101", instances[0]["advertised_host"])
 
     def test_explicit_address_wins_over_transport_address(self):

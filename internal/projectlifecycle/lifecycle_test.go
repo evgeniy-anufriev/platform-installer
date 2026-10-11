@@ -391,6 +391,7 @@ func TestH1GeneratedCatalogSettingsAreAccepted(t *testing.T) {
 		"clickhouse": "dataRoot",
 		"postgresql": "dataDirectory",
 		"redis":      "dataRoot",
+		"vault":      "dataRoot",
 	} {
 		found := false
 		for _, service := range view.Services {
@@ -405,6 +406,22 @@ func TestH1GeneratedCatalogSettingsAreAccepted(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("%s.%s is not editable", serviceType, settingID)
+		}
+	}
+	for _, serviceType := range []string{"clickhouse", "redis", "vault"} {
+		found := false
+		for _, service := range view.Services {
+			if service.ID != serviceType {
+				continue
+			}
+			for _, setting := range service.ConfigurationSettings {
+				if setting.ID == "dataDirectory" && setting.EditorShape == "BOUNDED_STRING" && len(setting.Scopes) == 1 && setting.Scopes[0] == "member" {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%s.dataDirectory is not member-editable", serviceType)
 		}
 	}
 }

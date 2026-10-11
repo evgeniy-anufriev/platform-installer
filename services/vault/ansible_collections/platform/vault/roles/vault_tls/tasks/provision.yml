@@ -44,7 +44,7 @@
     owner: root
     group: root
     mode: '0755'
-  loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_data_root }}", "{{ platform_vault_log_root }}"]
+  loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_log_root }}"]
 
 - name: Ensure the deployment-level Vault directories remain root-owned
   ansible.builtin.file:
@@ -55,8 +55,16 @@
     mode: '0750'
   loop:
     - "{{ platform_vault_config_root }}/{{ platform_vault_deployment_id }}"
-    - "{{ platform_vault_data_root }}/{{ platform_vault_deployment_id }}"
     - "{{ platform_vault_log_root }}/{{ platform_vault_deployment_id }}"
+
+- name: Create shared Vault data parent for co-located members
+  ansible.builtin.file:
+    path: "{{ platform_vault_data_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: _platform_vault_local_instances | length > 1
 
 - name: Initialize this host's exact changed-member restart set
   ansible.builtin.set_fact:

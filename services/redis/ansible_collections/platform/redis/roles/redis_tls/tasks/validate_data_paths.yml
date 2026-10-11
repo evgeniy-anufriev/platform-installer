@@ -1,0 +1,23 @@
+---
+- name: Keep the shared Redis data root separate from co-located members
+  ansible.builtin.assert:
+    that: item.data_directory != platform_redis_data_root
+    fail_msg: "REDIS_DATA_DIRECTORY_COLLISION: {{ item.id }}: {{ item.data_directory }} is the shared root"
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  when: _platform_redis_local_instances | length > 1
+
+- name: Refuse overlapping Redis member directories on the same host
+  ansible.builtin.assert:
+    that:
+      - not item.0.data_directory.startswith(item.1.data_directory ~ '/')
+      - not item.1.data_directory.startswith(item.0.data_directory ~ '/')
+      - item.0.data_directory != item.1.data_directory
+    fail_msg: >-
+      REDIS_DATA_DIRECTORY_COLLISION: {{ item.0.id }}={{ item.0.data_directory }},
+      {{ item.1.id }}={{ item.1.data_directory }}
+  loop: "{{ _platform_redis_local_instances | product(_platform_redis_local_instances) | list }}"
+  loop_control:
+    label: "{{ item.0.id }} / {{ item.1.id }}"
+  when: item.0.id < item.1.id

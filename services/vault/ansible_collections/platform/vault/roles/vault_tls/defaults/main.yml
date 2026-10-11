@@ -13,7 +13,8 @@ platform_vault_confirm_destructive_reset: ''
 platform_vault_user: platform-vault
 platform_vault_group: platform-vault
 platform_vault_config_root: /etc/platform-vault
-platform_vault_data_root: /var/lib/platform-vault
+platform_vault_data_root: "/var/lib/{{ platform_vault_deployment_id }}"
+platform_vault_member_data_directory: "{{ platform_vault_data_root }}"
 platform_vault_log_root: /var/log/platform-vault
 platform_vault_bootstrap_output_dir: ''
 platform_vault_admin_token: ''

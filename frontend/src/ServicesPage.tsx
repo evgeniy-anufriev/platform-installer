@@ -482,8 +482,8 @@ export function ServicesPage({
     : undefined;
   const settings = [...(service?.configurationSettings || [])].sort(
     (left, right) =>
-      (left.section || "").localeCompare(right.section || "") ||
       (left.order || 0) - (right.order || 0) ||
+      (left.section || "").localeCompare(right.section || "") ||
       left.id.localeCompare(right.id),
   );
   const visibleSettings = settings.filter(

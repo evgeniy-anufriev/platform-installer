@@ -4,7 +4,7 @@ platform_kafka_archive_directory: kafka_2.13-4.3.1
 platform_kafka_install_directory: /opt/kafka
 platform_kafka_config_directory: /etc/kafka
 platform_kafka_config_file: /etc/kafka/server.properties
-platform_kafka_data_directory: /var/lib/kafka
+platform_kafka_data_directory: "/var/lib/{{ platform_kafka_deployment_id }}"
 platform_kafka_user: kafka
 platform_kafka_group: kafka
 platform_kafka_java_package: java-21-openjdk-headless

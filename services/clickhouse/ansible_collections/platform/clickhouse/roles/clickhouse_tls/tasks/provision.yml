@@ -21,11 +21,18 @@
     mode: '0755'
   loop:
     - "{{ platform_clickhouse_config_root }}"
-    - "{{ platform_clickhouse_data_root }}"
     - "{{ platform_clickhouse_log_root }}"
     - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
-    - "{{ platform_clickhouse_data_root }}/{{ platform_clickhouse_deployment_id }}"
     - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
+
+- name: Create shared ClickHouse data parent for co-located members
+  ansible.builtin.file:
+    path: "{{ platform_clickhouse_data_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: _platform_clickhouse_local_instances | length > 1
 
 - name: Create private ClickHouse member directories
   ansible.builtin.file:

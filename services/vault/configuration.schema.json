@@ -8,6 +8,16 @@
       "minimum": 1,
       "type": "integer"
     },
+    "dataDirectory": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
+    "dataRoot": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
     "port": {
       "maximum": 65535,
       "minimum": 1,

@@ -31,15 +31,17 @@ def project_kafka_runtime(resolved_topology, resolved_configuration, host_addres
             address = effective.get("advertisedHost", addresses.get(host, host))
             deployment_config = service.get("configuration", {})
             namespace = deployment_config.get("runtimePathNamespace", deployment_id)
-            data_root = deployment_config.get("dataDirectoryRoot", "/var/lib/kafka")
+            data_root = deployment_config.get("dataDirectory", "/var/lib/%s" % deployment_id)
+            co_located = sum(1 for other in deployment.get("members", {}).values()
+                             if other.get("host") == host) > 1
             log_root = deployment_config.get("logDirectoryRoot", "/var/log/kafka")
             config_root = deployment_config.get("configDirectoryRoot", "/etc/kafka")
             if deployment.get("mode") == "kraft-standalone":
-                data_path = deployment_config.get("dataDirectory", data_root)
+                data_path = effective.get("dataDirectory", data_root + ("/" + member_id if co_located else ""))
                 log_path = deployment_config.get("logDirectory", log_root)
                 config_path = deployment_config.get("configDirectory", config_root)
             else:
-                data_path = "%s/%s/%s" % (data_root.rstrip("/"), namespace, member_id)
+                data_path = effective.get("dataDirectory", data_root + ("/" + member_id if co_located else ""))
                 log_path = "%s/%s/%s" % (log_root.rstrip("/"), namespace, member_id)
                 config_path = "%s/%s/%s" % (config_root.rstrip("/"), deployment_config.get("configPathNamespace", "kafka"), member_id)
             instance = {

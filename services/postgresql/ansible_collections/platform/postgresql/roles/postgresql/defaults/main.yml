@@ -6,7 +6,7 @@ platform_postgresql_port: 5432
 platform_postgresql_user: postgres
 platform_postgresql_group: postgres
 platform_postgresql_user_home: /var/lib/pgsql
-platform_postgresql_data_directory: /var/lib/platform/postgresql
+platform_postgresql_data_directory: "/var/lib/{{ platform_postgresql_deployment_id }}"
 platform_postgresql_config_directory: /etc/platform/postgresql
 platform_postgresql_log_directory: /var/log/platform/postgresql
 platform_postgresql_tls_profile: infrastructure-tls

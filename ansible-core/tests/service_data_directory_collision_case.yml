@@ -1,0 +1,24 @@
+---
+- name: Project conflicting local member paths for each service
+  ansible.builtin.set_fact:
+    _platform_redis_local_instances: "{{ collision_members }}"
+    _platform_clickhouse_local_instances: "{{ collision_members }}"
+    _platform_vault_local_instances: "{{ collision_members }}"
+    _platform_vault_instances: "{{ collision_members }}"
+  vars:
+    collision_members:
+      - {id: member-1, host: localhost, data_directory: "{{ collision_case.first }}"}
+      - {id: member-2, host: localhost, data_directory: "{{ collision_case.second }}"}
+
+- name: Verify the role rejects the conflict before mutation
+  block:
+    - name: Run the selected role's data path validation
+      ansible.builtin.include_tasks: >-
+        ../../services/{{ collision_case.service }}/ansible_collections/platform/{{ collision_case.service }}/roles/{{ collision_case.service }}_tls/tasks/validate_data_paths.yml
+    - name: Fail if conflicting paths were accepted
+      ansible.builtin.fail:
+        msg: EXPECTED_PATH_REJECTION_MISSING
+  rescue:
+    - name: Require the expected collision result
+      ansible.builtin.assert:
+        that: (ansible_failed_result | to_json) is search('DATA_DIRECTORY_COLLISION')

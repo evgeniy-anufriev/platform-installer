@@ -474,6 +474,16 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         raise ValueError("EXECUTION_CONFIGURATION_INVALID")
     client_listener = definition.get("x-backendClientListener") if isinstance(definition, dict) else None
     member_port_variable = None
+    member_data_setting = definition.get("x-memberDataDirectorySetting") if isinstance(definition, dict) else None
+    member_data_variable = None
+    if member_data_setting is not None:
+        data_entry = settings.get(member_data_setting)
+        if (not isinstance(member_data_setting, str) or not isinstance(data_entry, dict) or
+                "member" not in data_entry.get("scopes", []) or member_list_variable is None):
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+        member_data_variable = data_entry.get("roleVariable")
+        if not isinstance(member_data_variable, str) or not member_data_variable.startswith(prefix):
+            raise ValueError("EXECUTION_CONFIGURATION_INVALID")
     if client_listener is not None:
         port_setting = settings.get("port")
         if (not isinstance(client_listener, dict) or
@@ -485,7 +495,7 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         if not isinstance(member_port_variable, str) or not member_port_variable.startswith(prefix):
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
 
-    def role_values(values):
+    def role_values(values, member_scope=False):
         if not isinstance(values, dict):
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
         result = {prefix + "mode": service["mode"]}
@@ -494,6 +504,8 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
             role_variable = entry.get("roleVariable") if isinstance(entry, dict) else None
             if not isinstance(role_variable, str) or not role_variable.startswith(prefix):
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+            if member_scope and role_variable == member_data_variable:
+                continue
             if not isinstance(resolved, dict):
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
             # A read-only Core projection of a role default is not an override.
@@ -519,7 +531,7 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         values = member.get("configuration") if isinstance(member, dict) else None
         if not isinstance(member_id, str) or not isinstance(host_id, str) or not host_id:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
-        variables = role_values(values)
+        variables = role_values(values, member_scope=True)
         if host_id not in by_host:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
         # A package-declared client port is represented per member in the
@@ -551,6 +563,13 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
             instance = {"id": member_id, "host": host_id, "hostname": host_id,
                         "address": address, "roles": sorted(roles)}
+            if member_data_setting is not None:
+                data_value = members.get(member_id, {}).get("configuration", {}).get(member_data_setting)
+                if isinstance(data_value, dict) and data_value.get("source") == "MEMBER_OVERRIDE":
+                    data_path = data_value.get("value")
+                    if not isinstance(data_path, str) or not data_path.startswith("/"):
+                        raise ValueError("EXECUTION_CONFIGURATION_INVALID")
+                    instance["data_directory"] = data_path
             if member_port_variable is not None:
                 port_value = members.get(member_id, {}).get("configuration", {}).get("port")
                 if isinstance(port_value, dict) and port_value.get("source") == "MEMBER_OVERRIDE":

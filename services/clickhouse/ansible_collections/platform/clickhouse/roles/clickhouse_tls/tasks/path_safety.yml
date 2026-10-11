@@ -14,6 +14,34 @@
     platform_managed_data_path: "{{ platform_clickhouse_data_root }}"
     platform_managed_data_owner: "{{ platform_clickhouse_user }}"
 
+- name: Guard effective ClickHouse member data paths
+  ansible.builtin.include_role:
+    name: platform.core.managed_data_path_guard
+  vars:
+    platform_managed_data_path: "{{ item.data_directory }}"
+    platform_managed_data_owner: "{{ platform_clickhouse_user }}"
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Inspect shared ClickHouse data root before adding co-located members
+  ansible.builtin.stat:
+    path: "{{ platform_clickhouse_data_root }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  register: _platform_clickhouse_shared_data_root
+  when: _platform_clickhouse_local_instances | length > 1
+
+- name: Require a root-owned shared ClickHouse data parent
+  ansible.builtin.assert:
+    that:
+      - not _platform_clickhouse_shared_data_root.stat.exists or _platform_clickhouse_shared_data_root.stat.uid == 0
+      - not _platform_clickhouse_shared_data_root.stat.exists or _platform_clickhouse_shared_data_root.stat.mode == '0755'
+    fail_msg: CLICKHOUSE_SHARED_DATA_ROOT_UNSAFE
+  when: _platform_clickhouse_local_instances | length > 1
+
 - name: Inspect managed ClickHouse root and deployment ancestors without following links
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -23,10 +51,8 @@
     get_attributes: false
   loop:
     - "{{ platform_clickhouse_config_root }}"
-    - "{{ platform_clickhouse_data_root }}"
     - "{{ platform_clickhouse_log_root }}"
     - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
-    - "{{ platform_clickhouse_data_root }}/{{ platform_clickhouse_deployment_id }}"
     - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
   register: _platform_clickhouse_ancestor_stats
 
