@@ -46,6 +46,7 @@ configuration:
     tlsProfile: {kind: MANAGED, roleVariable: platform_redis_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: Redis TLS profile, section: TLS, order: 10, x-referenceKind: TLS_PROFILE}}
     redisPort: {kind: MANAGED, roleVariable: platform_redis_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Redis TLS base port, section: Network, order: 20}}
     sentinelPort: {kind: MANAGED, roleVariable: platform_redis_sentinel_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Sentinel TLS base port, section: Network, order: 21}}
+    dataRoot: {kind: MANAGED, roleVariable: platform_redis_data_root, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 255}, ui: {label: Корневой каталог данных, section: Хранение, order: 30, description: Абсолютный путь на сервере. Данные участников размещаются в отдельных подкаталогах. Существующие данные автоматически не переносятся.}}
     redisCredential:
       kind: MANAGED
       roleVariable: platform_redis_credential

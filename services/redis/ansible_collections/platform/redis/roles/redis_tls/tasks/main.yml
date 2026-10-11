@@ -24,6 +24,16 @@
     _platform_redis_local_instances: >-
       {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
 
+- name: Guard local Redis data paths before mutation
+  ansible.builtin.include_role:
+    name: platform.core.managed_data_path_guard
+  vars:
+    platform_managed_data_path: "{{ item.data_directory }}"
+    platform_managed_data_owner: "{{ platform_redis_user }}"
+  loop: "{{ _platform_redis_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
 - name: Prove local Redis listener ownership before mutation
   ansible.builtin.include_tasks: preflight.yml
   when: not (platform_redis_verify_only | bool)

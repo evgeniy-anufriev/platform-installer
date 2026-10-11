@@ -101,6 +101,23 @@
     _platform_kafka_local_controller_instances: "{{ _platform_kafka_local_instances | selectattr('roles', 'contains', 'controller') | list }}"
     _platform_kafka_local_broker_instances: "{{ _platform_kafka_local_instances | selectattr('roles', 'contains', 'broker') | list }}"
 
+- name: Refuse shared data directories for Kafka members on the same host
+  ansible.builtin.assert:
+    that: >-
+      _platform_kafka_local_instances | map(attribute='data_directory') | unique | list | length ==
+      _platform_kafka_local_instances | length
+    fail_msg: KAFKA_DATA_DIRECTORY_COLLISION
+
+- name: Guard local Kafka data paths before mutation
+  ansible.builtin.include_role:
+    name: platform.core.managed_data_path_guard
+  vars:
+    platform_managed_data_path: "{{ item.data_directory }}"
+    platform_managed_data_owner: "{{ platform_kafka_user }}"
+  loop: "{{ _platform_kafka_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
 - name: Inspect legacy Kafka unit templates before mutation
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item }}"

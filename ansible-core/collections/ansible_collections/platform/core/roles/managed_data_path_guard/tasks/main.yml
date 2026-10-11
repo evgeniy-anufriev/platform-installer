@@ -1,0 +1,40 @@
+---
+- name: Reject unsafe managed data directory names
+  ansible.builtin.assert:
+    that:
+      - platform_managed_data_path is string
+      - platform_managed_data_path | length <= 255
+      - platform_managed_data_path is match('^/(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,95}/)+[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
+      - "'.' not in platform_managed_data_path.split('/')"
+      - "'..' not in platform_managed_data_path.split('/')"
+      - platform_managed_data_path.split('/')[1] not in ['bin', 'boot', 'dev', 'etc', 'home', 'lib', 'lib64', 'proc', 'root', 'run', 'sbin', 'sys', 'tmp', 'usr']
+      - platform_managed_data_path.split('/')[1] != 'var' or platform_managed_data_path.startswith('/var/lib/')
+      - platform_managed_data_owner is string
+      - platform_managed_data_owner is match('^[a-z_][a-z0-9_-]*$')
+    fail_msg: MANAGED_DATA_PATH_UNSAFE
+    quiet: true
+
+- name: Inspect each managed data directory ancestor without following links
+  ansible.builtin.stat:
+    path: "{{ '/' ~ (platform_managed_data_path.split('/')[1:item + 1] | join('/')) }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop: "{{ range(1, platform_managed_data_path.split('/') | length) | list }}"
+  register: _platform_managed_data_path_components
+
+- name: Reject linked, foreign or writable managed data directory ancestors
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or (item.stat.isdir | default(false))
+      - not item.stat.exists or not (item.stat.islnk | default(false))
+      - not item.stat.exists or item.stat.pw_name in ['root', platform_managed_data_owner]
+      - not item.stat.exists or item.stat.mode | default('') | length >= 3
+      - not item.stat.exists or item.stat.mode[-1:] not in ['2', '3', '6', '7']
+      - not item.stat.exists or item.stat.mode[-2:-1] not in ['2', '3', '6', '7']
+    fail_msg: MANAGED_DATA_PATH_ANCESTOR_UNSAFE
+    quiet: true
+  loop: "{{ _platform_managed_data_path_components.results }}"
+  loop_control:
+    label: "{{ item.item }}"

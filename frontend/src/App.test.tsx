@@ -2395,6 +2395,66 @@ describe("UI-01H2 services navigation and safe settings", () => {
     ).toBeTruthy();
   });
 
+  it("edits a catalog-declared service data root through the shared session", async () => {
+    const value = api();
+    value.chooseProject.mockResolvedValue({
+      ...project,
+      managed: {
+        ...project.managed,
+        deployments: {
+          "qa-redis": {
+            deploymentId: "qa-redis",
+            serviceType: "redis",
+            mode: "standalone",
+          },
+        },
+      },
+      catalog: {
+        ...project.catalog,
+        services: [
+          {
+            ...project.catalog.services[0],
+            id: "redis",
+            displayName: "Redis",
+            configurationSettings: [
+              {
+                id: "dataRoot",
+                kind: "MANAGED",
+                scopes: ["deployment"],
+                label: "Корневой каталог данных",
+                editorShape: "BOUNDED_STRING",
+                minLength: 1,
+                maxLength: 255,
+                staticDefaultState: "LITERAL",
+                staticDefaultValue: "/var/lib/platform-redis",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^qa-redis/ }));
+    const field = screen.getByRole("textbox", {
+      name: "Корневой каталог данных",
+    });
+    expect(field).toHaveProperty("value", "/var/lib/platform-redis");
+    await userEvent.clear(field);
+    await userEvent.type(field, "/mnt/data/redis");
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(value.appendEditCommand).toHaveBeenCalledWith(sessionID, {
+      operation: "SetServiceConfigurationValue",
+      deploymentId: "qa-redis",
+      scope: "DEPLOYMENT",
+      setting: "dataRoot",
+      value: "/mnt/data/redis",
+    });
+  });
+
   it("clears unapplied service form input when the shared draft is discarded", async () => {
     const value = api();
     value.chooseProject.mockResolvedValue(project);

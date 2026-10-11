@@ -90,8 +90,8 @@ configuration:
       roleVariable: platform_kafka_data_directory
       type: string
       scopes: [deployment, member]
-      validation: {minLength: 1}
-      ui: {label: Data directory, order: 30}
+      validation: {minLength: 1, maxLength: 255}
+      ui: {label: Каталог данных, section: Хранение, order: 30, description: Абсолютный путь на сервере. У участников на одном сервере должны быть разные каталоги. Существующие данные автоматически не переносятся.}
     runtimePathNamespace:
       kind: MANAGED
       roleVariable: platform_kafka_runtime_path_namespace

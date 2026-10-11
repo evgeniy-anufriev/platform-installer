@@ -500,3 +500,23 @@ after file changes. This is system-wide trust on the target and complements serv
 certificate copies; it does not change certificate issuance, service endpoints,
 or desired project data. The implementation targets the supported RED OS
 trust-store layout.
+
+## ADR-036: Service data directories remain package-owned settings
+
+Kafka and PostgreSQL expose their member data directory as `dataDirectory`;
+Redis and ClickHouse expose the root beneath which their member directories are
+created as `dataRoot`. The existing schema-driven Services editor presents these
+package declarations as bounded text fields, with service role variables as the
+single desired-state mapping. Core resolves and forwards overrides through its
+existing service configuration contract. Before target mutation, the roles
+reject unsafe absolute paths and linked, foreign or writable ancestors. A
+change of path does not move existing data; a safe service migration needs a
+separate operator-controlled procedure. Runtime-only member paths and facts
+remain derived state.
+
+Owner decision (2026-10-11): changing a data path on an already installed
+deployment is not guarded by this UI change. For PostgreSQL, Kafka and
+ClickHouse, a subsequent apply can initialize a new empty directory and
+reconfigure the service to use it while the old data remains at the former
+path. Operators must migrate existing data separately before applying a path
+change. Redis retains its existing directory consistency check.

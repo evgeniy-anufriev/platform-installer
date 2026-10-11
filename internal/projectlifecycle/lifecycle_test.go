@@ -384,8 +384,28 @@ func TestH1GeneratedCatalogSettingsAreAccepted(t *testing.T) {
 	for _, setting := range kafka.ConfigurationSettings {
 		shapes[setting.ID] = setting.EditorShape
 	}
-	if shapes["quorumMode"] != "ENUM" || shapes["nodeId"] != "INTEGER" || shapes["tlsProfile"] != "TLS_PROFILE" || shapes["listeners"] != "UNSUPPORTED" || shapes["dataDirectory"] != "UNSUPPORTED" {
+	if shapes["quorumMode"] != "ENUM" || shapes["nodeId"] != "INTEGER" || shapes["tlsProfile"] != "TLS_PROFILE" || shapes["listeners"] != "UNSUPPORTED" || shapes["dataDirectory"] != "BOUNDED_STRING" {
 		t.Fatalf("shapes=%#v", shapes)
+	}
+	for serviceType, settingID := range map[string]string{
+		"clickhouse": "dataRoot",
+		"postgresql": "dataDirectory",
+		"redis":      "dataRoot",
+	} {
+		found := false
+		for _, service := range view.Services {
+			if service.ID != serviceType {
+				continue
+			}
+			for _, setting := range service.ConfigurationSettings {
+				if setting.ID == settingID && setting.EditorShape == "BOUNDED_STRING" {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%s.%s is not editable", serviceType, settingID)
+		}
 	}
 }
 

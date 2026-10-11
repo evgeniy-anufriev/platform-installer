@@ -743,5 +743,26 @@ changed; at bundle-delivery time a full repeat with `changed=0` was still
 required for I07.
 
 После доставки bundle -17 владелец подтвердил прохождение I07 2026-10-10.
+
+### Настраиваемые каталоги данных и bundle -18 — 2026-10-11
+
+Для Kafka и PostgreSQL существующие `dataDirectory`, а для Redis и ClickHouse
+новые `dataRoot` объявлены в пакетах как редактируемые строковые параметры.
+Каталоги допускают безопасные абсолютные пути; read-only Ansible preflight
+проверяет синтаксис и существующие компоненты пути. Go lifecycle tests,
+редакторский React test, проверка Core на RED OS и Wails production build PASS.
+Независимый FULL DIFF review нашёл DP-D01: смена пути уже установленного
+PostgreSQL, Kafka или ClickHouse может переключить сервис на новое пустое
+хранилище без переноса прежних данных. Владелец 2026-10-11 явно решил не
+добавлять защиту; оператор переносит данные отдельно.
+
+`si11-full-service-20261011-18` собран на доверенном node2 из текущих
+исходников и проверенных runtime-пакетов -17 без скачивания. Штатные
+`validate-bundle` и `publish-bundle` PASS, digest
+`sha256:9800aa0d70b7f5a5058a2bd557578bcf37b9cd87449c1cb63345bbbd4b959360`.
+Bundle в `.runtime/qa/full-services/bundle` и active `cache/` совпадают;
+предыдущий -17 сохранён как `bundle.previous-20261010-17`. Проектный lock
+не менялся, UI не запускался, установка не начиналась. QA workspace node2
+очищен. Реальная проверка Wails и перепривязка bundle в UI остаются открыты.
 Подтверждение закрывает кейс; run ID и точный recap успешного повтора не были
 предоставлены. Ранее зафиксированный `changed` остаётся историей исправления.

@@ -166,9 +166,9 @@ Ansible regressions and 15 BIND contract tests passed on RED OS node2.
 Bundle `si11-full-service-20261009-07` released below; UI rebind/preparation
 and real Vault retry remain pending; see the journal.
 
-Latest delivered project bundle: `si11-full-service-20261010-16`, built on
+Latest delivered project bundle: `si11-full-service-20261011-18`, built on
 node2 and validated at `.runtime/qa/full-services/bundle`, digest
-`sha256:26e33c2ad706c0eb281a356ac8717218cb7255fe6c5eabfa0f937c69bb4e576a`.
+`sha256:9800aa0d70b7f5a5058a2bd557578bcf37b9cd87449c1cb63345bbbd4b959360`.
 It includes the prior -15 changes plus Redis Sentinel peer authentication.
 Version -09 also
 includes endpoint-derived HAProxy placement/defaults and Kafka skipped ownership
@@ -180,10 +180,12 @@ Version -13 enables and verifies Vault AppRole without changing existing mounts.
 Version -14 adds Redis/Sentinel default-user ACL files and automatic PostgreSQL
 client-subnet TLS/SCRAM access. Version -15 adds ClickHouse
 `remote_servers.default` configuration. Version -16 adds Sentinel peer
-authentication using the existing default ACL user and runtime secret.
+authentication using the existing default ACL user and runtime secret. Version
+-17 fixes Redis/PostgreSQL repeat idempotence. Version -18 exposes safe absolute
+data paths for Kafka, Redis, ClickHouse and PostgreSQL.
 Published with the standard publisher into `cache/`; project import
-digest matches. Previous -15 is preserved at
-`.runtime/qa/full-services/bundle.previous-20261010-15`. Project lock unchanged;
+digest matches. Previous -17 is preserved at
+`.runtime/qa/full-services/bundle.previous-20261010-17`. Project lock unchanged;
 UI rebind/preparation still required.
 Target-free plan replay
 on the failed staged project returned EXECUTABLE; real UI rebind/plan/Start

@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:45fc3603889c0cbe2a435c1dc94be7ca975943727a736d6d6c648da3c79d4a43
+digest: sha256:46e357cc8f725734bc9596722c3624c071baf537cc7b1437836d8277a3adf6ff
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -175,6 +175,21 @@ definitions:
             label: Keeper Raft base port
             section: Network
             order: 24
+        dataRoot:
+          kind: MANAGED
+          roleVariable: platform_clickhouse_data_root
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Корневой каталог данных
+            section: Хранение
+            order: 30
+            description: Абсолютный путь на сервере. Данные участников размещаются в отдельных подкаталогах.
+              Существующие данные автоматически не переносятся.
         defaultCredential:
           kind: MANAGED
           roleVariable: platform_clickhouse_default_credential
@@ -232,7 +247,7 @@ definitions:
       digest: sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
       requiredOffline: true
     compatibilityRef: ../../services/clickhouse/compatibility.yml
-    x-definitionDigest: sha256:8ea25d8d24ad57c9b6d284016adef062a6b543f89b60779e1e06343a320fdd5a
+    x-definitionDigest: sha256:1230febf341fe91b5d307543b64b421d0dd27824291ce0f5bbc45f232e75c3ab
     x-sourceManifest: services/clickhouse/service.yml
   docker:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -560,9 +575,13 @@ definitions:
           - member
           validation:
             minLength: 1
+            maxLength: 255
           ui:
-            label: Data directory
+            label: Каталог данных
+            section: Хранение
             order: 30
+            description: Абсолютный путь на сервере. У участников на одном сервере должны быть разные
+              каталоги. Существующие данные автоматически не переносятся.
         runtimePathNamespace:
           kind: MANAGED
           roleVariable: platform_kafka_runtime_path_namespace
@@ -660,7 +679,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:570fdeed0430a2b2ec1aefcdea7c5b88e39dd17b6b68ad3a7d713d3e8e7b2158
+    x-definitionDigest: sha256:9e2336771dddc21d73fda1cfe7bfffd83d6dc39c511a80dfa5a03f69fd542512
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -766,10 +785,12 @@ definitions:
           - member
           validation:
             minLength: 1
+            maxLength: 255
           ui:
-            label: Data directory
-            section: Storage
+            label: Каталог данных
+            section: Хранение
             order: 20
+            description: Абсолютный путь на сервере. Существующие данные автоматически не переносятся.
         configDirectory:
           kind: MANAGED
           roleVariable: platform_postgresql_config_directory
@@ -911,7 +932,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:64d8b92c163de12d46a64c895062a28e103c2d63cb8831466244cd97ec25d4d6
+    x-definitionDigest: sha256:b5683f88b4c1ed0680cce725df68ee0d81bf8bec613d11a2cb26a658724aea8d
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1027,6 +1048,21 @@ definitions:
             label: Sentinel TLS base port
             section: Network
             order: 21
+        dataRoot:
+          kind: MANAGED
+          roleVariable: platform_redis_data_root
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Корневой каталог данных
+            section: Хранение
+            order: 30
+            description: Абсолютный путь на сервере. Данные участников размещаются в отдельных подкаталогах.
+              Существующие данные автоматически не переносятся.
         redisCredential:
           kind: MANAGED
           roleVariable: platform_redis_credential
@@ -1119,7 +1155,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/redis/compatibility.yml
-    x-definitionDigest: sha256:4f2b89e328ae36dc958a2e2585db644214ee8da262b6e8f39a5bcf685651ab4f
+    x-definitionDigest: sha256:b833332935ce9a93822e535d002114e8ea47c2f86b1287984412bcbe01b30432
     x-sourceManifest: services/redis/service.yml
   vault:
     apiVersion: platform.installer/service-manifest/v1alpha1

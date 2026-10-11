@@ -3,9 +3,16 @@
   ansible.builtin.assert:
     that:
       - platform_clickhouse_config_root is match('^/etc/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
-      - platform_clickhouse_data_root is match('^/var/lib/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
+      - platform_clickhouse_data_root is string
       - platform_clickhouse_log_root is match('^/var/log/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
     fail_msg: CLICKHOUSE_MANAGED_ROOT_UNSAFE
+
+- name: Guard ClickHouse data root ancestry before mutation
+  ansible.builtin.include_role:
+    name: platform.core.managed_data_path_guard
+  vars:
+    platform_managed_data_path: "{{ platform_clickhouse_data_root }}"
+    platform_managed_data_owner: "{{ platform_clickhouse_user }}"
 
 - name: Inspect managed ClickHouse root and deployment ancestors without following links
   ansible.builtin.stat:

@@ -53,6 +53,7 @@ configuration:
     interserverPort: {kind: MANAGED, roleVariable: platform_clickhouse_interserver_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Interserver HTTPS base port, section: Network, order: 22}}
     keeperClientPort: {kind: MANAGED, roleVariable: platform_clickhouse_keeper_client_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Keeper secure client base port, section: Network, order: 23}}
     keeperRaftPort: {kind: MANAGED, roleVariable: platform_clickhouse_keeper_raft_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Keeper Raft base port, section: Network, order: 24}}
+    dataRoot: {kind: MANAGED, roleVariable: platform_clickhouse_data_root, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 255}, ui: {label: Корневой каталог данных, section: Хранение, order: 30, description: Абсолютный путь на сервере. Данные участников размещаются в отдельных подкаталогах. Существующие данные автоматически не переносятся.}}
     defaultCredential:
       kind: MANAGED
       roleVariable: platform_clickhouse_default_credential

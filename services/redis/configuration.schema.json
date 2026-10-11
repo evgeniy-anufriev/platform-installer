@@ -7,6 +7,11 @@
       "additionalProperties": true,
       "type": "object"
     },
+    "dataRoot": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
     "redisCredential": {
       "additionalProperties": false,
       "properties": {

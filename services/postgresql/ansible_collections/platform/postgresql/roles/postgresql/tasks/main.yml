@@ -1,4 +1,11 @@
 ---
+- name: Guard PostgreSQL data path before mutation
+  ansible.builtin.include_role:
+    name: platform.core.managed_data_path_guard
+  vars:
+    platform_managed_data_path: "{{ platform_postgresql_data_directory }}"
+    platform_managed_data_owner: "{{ platform_postgresql_user }}"
+
 - name: Resolve the exact PostgreSQL PKI consumer plan before mutation
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_postgresql_tls_profile | length > 0
