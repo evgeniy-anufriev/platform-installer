@@ -1,61 +1,4 @@
 ---
-- name: Require only the current default ACL user over authenticated TLS
-  ansible.builtin.command:
-    argv:
-      - redis-cli
-      - --raw
-      - --tls
-      - --cacert
-      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
-      - --cert
-      - "{{ redis_member.config_directory }}/pki/certificate.pem"
-      - --key
-      - "{{ redis_member.config_directory }}/pki/private-key.pem"
-      - -h
-      - "{{ redis_member.address }}"
-      - -p
-      - "{{ (redis_member.redis_port if item == 'redis' else redis_member.sentinel_port) | string }}"
-      - --user
-      - default
-      - ACL
-      - USERS
-  environment:
-    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) }}"
-  loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
-  register: _platform_redis_acl_users
-  changed_when: false
-  failed_when: _platform_redis_acl_users.rc != 0 or _platform_redis_acl_users.stdout | trim != 'default'
-  no_log: true
-
-- name: Require the running ACL file to match the owned configuration path
-  ansible.builtin.command:
-    argv:
-      - redis-cli
-      - --raw
-      - --tls
-      - --cacert
-      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
-      - --cert
-      - "{{ redis_member.config_directory }}/pki/certificate.pem"
-      - --key
-      - "{{ redis_member.config_directory }}/pki/private-key.pem"
-      - -h
-      - "{{ redis_member.address }}"
-      - -p
-      - "{{ (redis_member.redis_port if item == 'redis' else redis_member.sentinel_port) | string }}"
-      - --user
-      - default
-      - CONFIG
-      - GET
-      - aclfile
-  environment:
-    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) }}"
-  loop: [redis]
-  register: _platform_redis_acl_active_path
-  changed_when: false
-  failed_when: _platform_redis_acl_active_path.rc != 0 or _platform_redis_acl_active_path.stdout_lines != ['aclfile', redis_member.config_directory ~ '/' ~ item ~ '.users.acl']
-  no_log: true
-
 - name: Read Sentinel ACL configuration without exposing replication credentials
   ansible.builtin.slurp:
     src: "{{ redis_member.config_directory }}/sentinel.conf"
@@ -71,72 +14,15 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Inspect saved Redis and Sentinel ACL file protection
-  ansible.builtin.stat:
-    path: "{{ redis_member.config_directory }}/{{ item }}.users.acl"
-    follow: false
-    get_checksum: false
-    get_mime: false
-    get_attributes: false
+- name: Check and persist all ACL users under the shared member lock
+  platform.redis.acl_file:
+    directory: "{{ redis_member.config_directory }}"
+    listener: "{{ item }}"
+    phase: "{{ 'verify' if platform_redis_verify_only | bool else 'save' }}"
+    address: "{{ redis_member.address }}"
+    port: "{{ redis_member.redis_port if item == 'redis' else redis_member.sentinel_port }}"
+    password: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef], rstrip=false) }}"
+  become: true
+  become_user: "{{ platform_redis_user }}"
   loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
-  register: _platform_redis_saved_acl_paths
-
-- name: Require protected owned ACL files
-  ansible.builtin.assert:
-    that:
-      - item.stat.exists
-      - item.stat.isreg and not item.stat.islnk
-      - item.stat.pw_name == platform_redis_user
-      - item.stat.mode == '0600'
-    fail_msg: REDIS_ACL_FILE_INVALID
-  loop: "{{ _platform_redis_saved_acl_paths.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-
-- name: Save the effective default-user ACL to the configured file
-  ansible.builtin.command:
-    argv:
-      - redis-cli
-      - --raw
-      - --tls
-      - --cacert
-      - "{{ redis_member.config_directory }}/pki/ca-chain.pem"
-      - --cert
-      - "{{ redis_member.config_directory }}/pki/certificate.pem"
-      - --key
-      - "{{ redis_member.config_directory }}/pki/private-key.pem"
-      - -h
-      - "{{ redis_member.address }}"
-      - -p
-      - "{{ (redis_member.redis_port if item == 'redis' else redis_member.sentinel_port) | string }}"
-      - --user
-      - default
-      - ACL
-      - SAVE
-  environment:
-    REDISCLI_AUTH: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) }}"
-  loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
-  register: _platform_redis_acl_saved
-  changed_when: false
-  failed_when: _platform_redis_acl_saved.rc != 0 or _platform_redis_acl_saved.stdout | trim != 'OK'
-  when: not (platform_redis_verify_only | bool)
-  no_log: true
-
-- name: Read saved ACL files without exposing hashes
-  ansible.builtin.slurp:
-    src: "{{ redis_member.config_directory }}/{{ item }}.users.acl"
-  loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
-  register: _platform_redis_saved_acls
-  no_log: true
-
-- name: Require the saved default password hash and no plaintext password
-  ansible.builtin.assert:
-    that:
-      - (item.content | b64decode | trim) is match('^user default on ')
-      - (item.content | b64decode | trim).split('\n') | length == 1
-      - (item.content | b64decode | regex_findall('#[0-9a-f]{64}')) == ['#' ~ (lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item.item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256'))]
-      - "'nopass' not in (item.content | b64decode).split()"
-      - "'>' not in (item.content | b64decode)"
-    fail_msg: REDIS_ACL_CONTENT_INVALID
-  loop: "{{ _platform_redis_saved_acls.results }}"
   no_log: true

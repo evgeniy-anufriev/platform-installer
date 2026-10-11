@@ -22,7 +22,7 @@
 - name: Write public trust CA into protected runtime workspace
   ansible.builtin.copy:
     content: "{{ application_vault_ca.content | b64decode }}"
-    dest: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
+    dest: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
     mode: '0600'
   no_log: true
 
@@ -30,7 +30,7 @@
   ansible.builtin.uri:
     url: "{{ platform_vault_application_provider.url }}/v1/{{ item }}"
     headers: {X-Vault-Token: "{{ application_vault_admin.token }}"}
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10

@@ -1,0 +1,10 @@
+---
+platform_clickhouse_application_job: {}
+platform_clickhouse_application_phase: preflight
+platform_clickhouse_application_lock_timeout: 15
+platform_clickhouse_application_query_timeout: 60
+platform_clickhouse_config_root: /etc/platform-clickhouse
+platform_clickhouse_user: platform-clickhouse
+platform_application_secret_root: ''
+platform_clickhouse_secret_files: {}
+platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret_files | combine(platform_application_secret_files | default({})) | combine(platform_application_credential_files | default({})) }}"

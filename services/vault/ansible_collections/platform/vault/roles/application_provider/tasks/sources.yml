@@ -13,7 +13,7 @@
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ application_vault_source.mount }}/data/{{ application_vault_source.document }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ application_vault_source.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ application_vault_source.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10
@@ -36,13 +36,13 @@
 - name: Materialize provider login input only in protected runtime custody
   ansible.builtin.copy:
     content: "{{ application_vault_source_value.json.data.data[application_vault_source.field] }}"
-    dest: "{{ platform_postgresql_application_secret_root }}/{{ application_vault_source.passwordRef }}"
+    dest: "{{ platform_application_secret_root }}/{{ application_vault_source.passwordRef }}"
     mode: '0600'
   when: application_vault_source.passwordRef is defined
   no_log: true
 
 - name: Bind derived private input without replacing desired source
   ansible.builtin.set_fact:
-    platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({application_vault_source.passwordRef: platform_postgresql_application_secret_root ~ '/' ~ application_vault_source.passwordRef}) }}"
+    platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({application_vault_source.passwordRef: platform_application_secret_root ~ '/' ~ application_vault_source.passwordRef}) }}"
   when: application_vault_source.passwordRef is defined
   no_log: true

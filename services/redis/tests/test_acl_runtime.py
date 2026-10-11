@@ -5,6 +5,7 @@ import hashlib
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -18,17 +19,34 @@ ROLE = Path(__file__).resolve().parents[1] / 'ansible_collections/platform/redis
 
 class RedisACLRuntimeTests(unittest.TestCase):
     def test_default_acl_save_repeat_and_read_only_verify_on_redis_and_sentinel(self):
-        if not all(shutil.which(name) for name in ['redis-server', 'redis-cli', 'ansible-playbook']):
+        if not all(shutil.which(name) for name in ['redis-server', 'redis-cli', 'ansible-playbook', 'openssl']):
             self.skipTest('Redis and Ansible runtime required')
         with tempfile.TemporaryDirectory(prefix='platform-redis-acl-') as directory:
             root = Path(directory)
+            pki = root / 'pki'
+            pki.mkdir(mode=0o700)
+            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+                            '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1',
+                            '-keyout', str(pki / 'private-key.pem'), '-out', str(pki / 'certificate.pem')],
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            shutil.copyfile(pki / 'certificate.pem', pki / 'ca-chain.pem')
+            ports = []
+            reservations = []
+            for _ in range(2):
+                reservation = socket.socket()
+                reservation.bind(('127.0.0.1', 0))
+                ports.append(reservation.getsockname()[1])
+                reservations.append(reservation)
+            for reservation in reservations:
+                reservation.close()
             secrets = {}
             for kind in ['redis', 'sentinel']:
                 path = root / (kind + '.secret')
                 path.write_text('fixture-' + kind + '-password', encoding='utf-8')
                 path.chmod(0o600)
                 secrets[kind] = str(path)
-            variables = {'redis_member': {'config_directory': str(root), 'roles': ['redis', 'sentinel']},
+            variables = {'redis_member': {'config_directory': str(root), 'roles': ['redis', 'sentinel'],
+                         'address': '127.0.0.1', 'redis_port': ports[0], 'sentinel_port': ports[1]},
                          'platform_redis_user': getpass.getuser(),
                          'platform_redis_group': grp.getgrgid(os.getgid()).gr_name,
                          'platform_redis_credential': {'passwordSecretRef': 'redis'},
@@ -53,24 +71,28 @@ class RedisACLRuntimeTests(unittest.TestCase):
             run(prepare)
             processes = []
             try:
-                for kind in ['redis', 'sentinel']:
-                    socket = root / (kind + '.sock')
+                for index, kind in enumerate(['redis', 'sentinel']):
+                    unix_socket = root / (kind + '.sock')
                     config = root / (kind + '.conf')
-                    config.write_text('port 0\nunixsocket ' + str(socket) + '\nunixsocketperm 700\n'
+                    config.write_text('port 0\nbind 127.0.0.1\ntls-port ' + str(ports[index]) + '\n'
+                                      'tls-cert-file ' + str(pki / 'certificate.pem') + '\n'
+                                      'tls-key-file ' + str(pki / 'private-key.pem') + '\n'
+                                      'tls-ca-cert-file ' + str(pki / 'ca-chain.pem') + '\n'
+                                      'tls-auth-clients yes\nunixsocket ' + str(unix_socket) + '\nunixsocketperm 700\n'
                                       'aclfile ' + str(root / (kind + '.users.acl')) + '\n'
                                       'dir ' + str(root) + '\n', encoding='utf-8')
                     process = subprocess.Popen(['redis-server', str(config)] + (['--sentinel'] if kind == 'sentinel' else []),
                                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, umask=0o077)
                     processes.append(process)
                     for _ in range(100):
-                        if socket.exists():
+                        if unix_socket.exists():
                             break
                         if process.poll() is not None:
                             diagnostic = process.communicate()[0]
                             diagnostic = re.sub(r'#[0-9a-f]{64}|fixture-\S+', '[redacted]', diagnostic)
                             self.fail(kind + ' failed to load ACL: ' + diagnostic[-1500:])
                         time.sleep(0.05)
-                    self.assertTrue(socket.exists())
+                    self.assertTrue(unix_socket.exists())
                 fixture_runtime = copy.deepcopy(runtime)
                 for task in fixture_runtime:
                     if 'ansible.builtin.command' in task:
@@ -79,6 +101,30 @@ class RedisACLRuntimeTests(unittest.TestCase):
                         task['ansible.builtin.command']['argv'] = ['redis-cli', '--raw', '-s',
                             str(root) + '/{{ item }}.sock', '--user', 'default'] + operation
                 run(fixture_runtime)
+                app_secret = root / 'app.secret'
+                app_secret.write_text(__import__('secrets').token_urlsafe(24), encoding='utf-8')
+                app_secret.chmod(0o600)
+                provider_job = {'serviceType': 'redis', 'providerId': 'redis-qa', 'mode': 'sentinel-ha', 'accounts': []}
+                for index, alias in enumerate(['redis', 'sentinel']):
+                    provider_job['accounts'].append({
+                        'name': 'app-qa', 'mode': 'managed', 'listener': 'client' if alias == 'redis' else 'sentinel',
+                        'passwordRef': 'app-password', 'adminPasswordRef': alias,
+                        'marker': 'platform.application/v1:qa:redis-qa:lib:account:app-qa/' + alias,
+                        'grants': {'commands': ['ping']} if alias == 'sentinel' else {'commands': ['ping', 'get'], 'keys': ['qa:*'], 'channels': []},
+                        'candidates': [{'hostId': 'localhost', 'memberId': root.name, 'address': '127.0.0.1', 'port': ports[index]}]})
+                provider_vars = dict(variables, platform_redis_application_job=provider_job,
+                                     platform_redis_config_root=str(root.parent), platform_application_secret_root=str(root),
+                                     platform_redis_application_credential_files=dict(secrets, **{'app-password': str(app_secret)}))
+                def provider_tasks(stage):
+                    return [{'ansible.builtin.include_role': {'name': 'platform.redis.application_provider', 'tasks_from': stage}}]
+                self.assertIn('changed=0', run(provider_tasks('preflight'), provider_vars))
+                run(provider_tasks('accounts'), provider_vars)
+                self.assertIn('changed=0', run(provider_tasks('accounts'), provider_vars))
+                self.assertIn('changed=0', run(provider_tasks('verify'), provider_vars))
+                run(prepare)
+                run(fixture_runtime)
+                for alias in ['redis', 'sentinel']:
+                    self.assertIn('user app-qa ', (root / (alias + '.users.acl')).read_text())
                 for kind in ['redis', 'sentinel']:
                     acl = root / (kind + '.users.acl')
                     content = acl.read_text(encoding='utf-8')
@@ -124,7 +170,11 @@ class RedisACLRuntimeTests(unittest.TestCase):
                         process.stdout.close()
             acl = root / 'redis.users.acl'
             original = acl.read_text(encoding='utf-8')
-            for content in [original + 'user foreign on nopass ~* +@all\n',
+            retained = original + 'user foreign off -@all\n'
+            acl.write_text(retained, encoding='utf-8')
+            self.assertIn('changed=0', run(prepare))
+            self.assertIn('user foreign off', acl.read_text(encoding='utf-8'))
+            for content in [original + 'user default on nopass ~* +@all\n',
                             original.replace(' +@all', ' >fixture-plaintext +@all')]:
                 acl.write_text(content, encoding='utf-8')
                 run(prepare, expected=2)

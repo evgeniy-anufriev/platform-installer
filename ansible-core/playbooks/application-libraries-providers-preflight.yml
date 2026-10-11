@@ -13,20 +13,34 @@
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: discover
-      loop: "{{ application_provider_inputs.jobs }}"
+      loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
+    - name: Preflight Redis and Sentinel logical instances
+      ansible.builtin.include_role:
+        name: platform.redis.application_provider
+        tasks_from: preflight
+      loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+      loop_control:
+        loop_var: platform_redis_application_job
+    - name: Preflight ClickHouse library and logical instance scopes
+      ansible.builtin.include_role:
+        name: platform.clickhouse.application_provider
+        tasks_from: preflight
+      loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+      loop_control:
+        loop_var: platform_clickhouse_application_job
     - name: Preflight library resources separately
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: preflight
-      loop: "{{ application_provider_inputs.libraryJobs }}"
+      loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
     - name: Preflight each logical application instance separately
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: preflight
-      loop: "{{ application_provider_inputs.instanceJobs }}"
+      loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job

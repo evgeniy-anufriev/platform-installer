@@ -1,4 +1,5 @@
 ---
+- import_playbook: application-libraries-credential-root.yml
 - name: Resolve and validate the complete standalone application scope
   hosts: localhost
   connection: local
@@ -18,7 +19,7 @@
       ansible.builtin.assert:
         that: application_snapshot.snapshot.validation.status == 'PASS'
         fail_msg: "{{ application_snapshot.snapshot.findings | map(attribute='code') | unique | list }}"
-    - name: Resolve Vault and PostgreSQL hooks from the same snapshot
+    - name: Resolve Vault hooks from the same snapshot
       platform.core.prepare_application_vault:
         snapshot_result: "{{ application_snapshot }}"
       register: application_vault_inputs
@@ -27,7 +28,7 @@
       ansible.builtin.assert:
         that: application_vault_inputs.status == 'PASS'
         fail_msg: "{{ application_vault_inputs.code | default('APPLICATION_VAULT_INPUT_INVALID') }}"
-    - name: Resolve PostgreSQL hooks from the same snapshot
+    - name: Resolve infrastructure account and resource hooks from the same snapshot
       platform.core.prepare_application_providers:
         snapshot_result: "{{ application_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
@@ -46,5 +47,7 @@
       no_log: true
     - name: Require successful standalone authority preparation
       ansible.builtin.assert:
-        that: application_runtime_inputs.status == 'PASS'
+        that:
+          - application_runtime_inputs.status == 'PASS'
+          - application_provider_inputs.status == 'PASS'
         fail_msg: "{{ application_runtime_inputs.code | default('APPLICATION_RUNTIME_INPUT_INVALID') }}"

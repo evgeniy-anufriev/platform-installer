@@ -1,49 +1,4 @@
 ---
-- name: Inspect Redis and Sentinel ACL file paths without following links
-  ansible.builtin.stat:
-    path: "{{ redis_member.config_directory }}/{{ item }}.users.acl"
-    follow: false
-    get_checksum: false
-    get_mime: false
-    get_attributes: false
-  loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
-  register: _platform_redis_acl_paths
-
-- name: Require owned regular ACL files
-  ansible.builtin.assert:
-    that: >-
-      not item.stat.exists or
-      (item.stat.isreg and not item.stat.islnk and item.stat.pw_name == platform_redis_user)
-    fail_msg: REDIS_ACL_PATH_UNSAFE
-  loop: "{{ _platform_redis_acl_paths.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-
-- name: Read existing ACL files without exposing password hashes
-  ansible.builtin.slurp:
-    src: "{{ item.stat.path }}"
-  loop: "{{ _platform_redis_acl_paths.results }}"
-  when: item.stat.exists
-  register: _platform_redis_existing_acls
-  no_log: true
-
-- name: Preserve only compatible default-user ACL files
-  ansible.builtin.assert:
-    that:
-      - (item.content | b64decode | trim) is match('^user default on ')
-      - (item.content | b64decode | trim).split('\n') | length == 1
-      - (item.content | b64decode | regex_findall('#[0-9a-f]{64}') | length) == 1
-      - >-
-        _platform_redis_acl_overwrite_allowed | default(false) | bool
-        or (item.content | b64decode | regex_findall('#[0-9a-f]{64}'))
-        == ['#' ~ (lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item.item.item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256'))]
-      - "'nopass' not in (item.content | b64decode).split()"
-      - "'>' not in (item.content | b64decode)"
-    fail_msg: REDIS_ACL_STATE_MIGRATION_REQUIRED
-  loop: "{{ _platform_redis_existing_acls.results }}"
-  when: not (item.skipped | default(false))
-  no_log: true
-
 - name: Read retained member configurations before attaching ACL files
   ansible.builtin.slurp:
     src: "{{ redis_member.config_directory }}/{{ item }}.conf"
@@ -84,15 +39,15 @@
     - item.content | b64decode is search('(?m)^[ \t]*user[ \t]+default[ \t]+')
   no_log: true
 
-- name: Write the current default-user ACL for the owned Redis deployment
-  ansible.builtin.copy:
-    dest: "{{ redis_member.config_directory }}/{{ item }}.users.acl"
-    content: |
-      user default on #{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef]) | hash('sha256') }} ~* &* +@all
-    force: "{{ _platform_redis_acl_overwrite_allowed | default(false) | bool }}"
-    owner: "{{ platform_redis_user }}"
-    group: "{{ platform_redis_group }}"
-    mode: '0600'
+- name: Preserve named users and prepare the default ACL under the member lock
+  platform.redis.acl_file:
+    directory: "{{ redis_member.config_directory }}"
+    listener: "{{ item }}"
+    phase: prepare
+    password: "{{ lookup('ansible.builtin.file', platform_redis_secret_files[(platform_redis_credential if item == 'redis' else platform_redis_sentinel_credential).passwordSecretRef], rstrip=false) }}"
+    overwrite_default: "{{ _platform_redis_acl_overwrite_allowed | default(false) | bool }}"
+  become: true
+  become_user: "{{ platform_redis_user }}"
   loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
   register: _platform_redis_acl_file
   no_log: true

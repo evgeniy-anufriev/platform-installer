@@ -251,7 +251,19 @@ create/retry; нет takeover по username и неявного удаления
 **Выход:** read isolation, missing credential failure, повтор без смены паролей,
 restart/re-auth и согласованность keystore/password; admin secrets не доступны app.
 
-### A5. Остальные providers по тому же образцу
+### A5. Остальные providers по тому же образцу — текущий scope выполнен
+
+Подробная последовательность, defaults/overrides и QA:
+[технический план A5](a5-technical-plan.md). Для текущего согласуемого scope
+учтено ранее выбранное Kafka SSL-подключение без аутентификации; полная
+SASL/principal/ACL часть строки A5.3 ниже требует отдельного security расширения
+и не считается выполненной SSL protocol probe.
+
+Текущий Redis/Sentinel, ClickHouse и Kafka SSL-only scope реализован и прошёл
+обязательный review/QA; см. [FULL DIFF и targeted recheck](a5-diff-review.md)
+и [журнал](a5-test-journal.md). C02 Keeper production access/retention proof
+остаётся неблокирующим ограничением. Kafka SASL/principal/ACL по-прежнему требует
+отдельного security scope.
 
 Выполнять отдельными ограниченными частями:
 

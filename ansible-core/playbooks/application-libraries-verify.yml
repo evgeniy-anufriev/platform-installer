@@ -25,3 +25,5 @@
       loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_verify_input
+
+- import_playbook: application-libraries-provider-verify-stage.yml

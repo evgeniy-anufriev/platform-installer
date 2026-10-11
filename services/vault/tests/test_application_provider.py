@@ -71,8 +71,8 @@ class ApplicationProviderTest(unittest.TestCase):
     def credential(self, root, auth, inputs=None, files=None, **standalone):
         action=object.__new__(credentials.ActionModule)
         action._task=SimpleNamespace(args={'provider_id':'vault','single_provider':True,'auth':auth})
-        return action.run(task_vars={'platform_postgresql_application_secret_root':root,
-            'platform_runtime_secret_inputs':inputs or [],'platform_postgresql_secret_files':files or {}, **standalone})
+        return action.run(task_vars={'platform_application_secret_root':root,
+            'platform_runtime_secret_inputs':inputs or [],'platform_application_secret_files':files or {}, **standalone})
 
     def test_typed_token_precedes_standalone_source(self):
         with tempfile.TemporaryDirectory() as root:

@@ -1,0 +1,9 @@
+---
+platform_redis_application_job: {}
+platform_redis_application_phase: preflight
+platform_redis_application_lock_timeout: 15
+platform_redis_config_root: /etc/platform-redis
+platform_redis_user: redis
+platform_redis_secret_files: {}
+platform_application_secret_root: ''
+platform_redis_application_credential_files: "{{ platform_redis_secret_files | combine(platform_application_secret_files | default({})) | combine(platform_application_credential_files | default({})) }}"

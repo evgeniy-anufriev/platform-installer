@@ -10,13 +10,34 @@
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: resources
-      loop: "{{ application_provider_inputs.libraryJobs }}"
+      loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
+    - name: Ensure each ClickHouse library database scope before application accounts
+      ansible.builtin.include_role:
+        name: platform.clickhouse.application_provider
+        tasks_from: resources
+      loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+      loop_control:
+        loop_var: platform_clickhouse_application_job
     - name: Ensure each application instance accounts grants and authenticated access
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: accounts
-      loop: "{{ application_provider_inputs.instanceJobs }}"
+      loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
+    - name: Ensure each Redis and Sentinel logical instance scope
+      ansible.builtin.include_role:
+        name: platform.redis.application_provider
+        tasks_from: accounts
+      loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+      loop_control:
+        loop_var: platform_redis_application_job
+    - name: Ensure each ClickHouse logical instance account and grant scope
+      ansible.builtin.include_role:
+        name: platform.clickhouse.application_provider
+        tasks_from: accounts
+      loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+      loop_control:
+        loop_var: platform_clickhouse_application_job

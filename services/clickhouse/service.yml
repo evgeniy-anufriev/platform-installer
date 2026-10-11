@@ -41,7 +41,7 @@ listeners:
 endpoint: {}
 x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 x-backendClientListener: {listener: client, allocation: {kind: HOST_LOCAL_ORDINAL, stride: 1}}
-capabilities: [service.clickhouse.https, service.clickhouse.keeper]
+capabilities: [service.clickhouse.https, service.clickhouse.keeper, service.clickhouse.database, service.clickhouse.account]
 dependencies: []
 configurationSchema: {$ref: configuration.schema.json}
 configuration:

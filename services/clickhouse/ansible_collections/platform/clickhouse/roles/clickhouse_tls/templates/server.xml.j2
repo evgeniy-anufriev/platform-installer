@@ -4,6 +4,13 @@
     <log>{{ clickhouse_member.log_directory | e }}/server.log</log>
     <errorlog>{{ clickhouse_member.log_directory | e }}/server.err.log</errorlog>
   </logger>
+  <query_masking_rules>
+    <rule>
+      <name>application-password-verifier</name>
+      <regexp>(?i)sha256_hash\s+BY\s+'[^']*'</regexp>
+      <replace>sha256_hash BY '[redacted]'</replace>
+    </rule>
+  </query_masking_rules>
   <listen_host>0.0.0.0</listen_host>
   <https_port>{{ clickhouse_member.https_port }}</https_port>
   <tcp_port_secure>{{ clickhouse_member.native_port }}</tcp_port_secure>
@@ -46,6 +53,7 @@
       </shard>
     </default>
   </remote_servers>
+  <distributed_ddl><path>/clickhouse/task_queue/ddl</path></distributed_ddl>
   <zookeeper>
 {% for keeper in _platform_clickhouse_instances %}
     <node><host>{{ keeper.address | e }}</host><port>{{ keeper.keeper_client_port }}</port><secure>1</secure></node>

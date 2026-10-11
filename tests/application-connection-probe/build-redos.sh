@@ -36,9 +36,10 @@ cp /etc/nsswitch.conf rootfs/etc/nsswitch.conf
 test -f /etc/ssl/certs/ca-bundle.crt && cp /etc/ssl/certs/ca-bundle.crt rootfs/etc/ssl/certs/ca-certificates.crt
 
 docker_uid="$(id -u platform-docker)"
+probe_image_tag="${PROBE_IMAGE_TAG:-platform-application-connection-probe:qa}"
 sudo -n -u platform-docker env XDG_RUNTIME_DIR="/run/user/$docker_uid" \
   DOCKER_HOST="unix:///run/user/$docker_uid/docker.sock" \
-  docker build --pull=false -t platform-application-connection-probe:qa -f Dockerfile .
+  docker build --pull=false -t "$probe_image_tag" -f Dockerfile .
 sudo -n -u platform-docker env XDG_RUNTIME_DIR="/run/user/$docker_uid" \
   DOCKER_HOST="unix:///run/user/$docker_uid/docker.sock" \
-  docker image inspect platform-application-connection-probe:qa --format '{{.Id}}'
+  docker image inspect "$probe_image_tag" --format '{{.Id}}'

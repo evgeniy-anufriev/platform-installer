@@ -46,7 +46,7 @@
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
     body_format: json
     body: {policy: "{{ platform_vault_application_job.policy }}"}
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10
@@ -64,7 +64,7 @@
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
     body_format: json
     body: "{{ application_vault_role }}"
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10
@@ -79,7 +79,7 @@
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/auth/approle/role/{{ platform_vault_application_job.identity }}/role-id"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    ca_path: "{{ platform_postgresql_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
     timeout: 10
