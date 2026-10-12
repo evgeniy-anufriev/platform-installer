@@ -275,6 +275,7 @@
         },
         "validation": { "type": "object" },
         "schema": { "type": "object" },
+        "x-memberInputOnly": { "type": "boolean", "description": "Keep member values in ordinary member input; do not flatten them into host-wide execution variables." },
         "ui": {
           "type": "object",
           "properties": {

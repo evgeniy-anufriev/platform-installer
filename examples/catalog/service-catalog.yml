@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:928f45a27c8f81999b02c0922d2d20837c4d9b7b0b5452ce3cef8643fbbd2a3d
+digest: sha256:0821c2624196e04d9ccd28ee7ed4788152caf55f8b83afd20294f68779773db6
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -447,7 +447,7 @@ definitions:
     kind: ServiceManifest
     metadata:
       id: kafka
-      version: 1.0.0-alpha.1
+      version: 1.0.0-alpha.2
       displayName: Apache Kafka
       description: Apache Kafka using KRaft metadata management
       category: messaging
@@ -507,6 +507,62 @@ definitions:
     configuration:
       additionalProperties: false
       settings:
+        schemaRegistryEnabled:
+          kind: MANAGED
+          roleVariable: platform_kafka_schema_registry_enabled
+          type: boolean
+          scopes:
+          - deployment
+          validation: {}
+          ui:
+            label: Установить Schema Registry
+            section: Schema Registry
+            order: 50
+            description: Один экземпляр рядом с каждым broker. Controller-only участники исключены.
+        schemaRegistryKafkaListener:
+          kind: MANAGED
+          roleVariable: platform_kafka_schema_registry_kafka_listener
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+            maxLength: 128
+          ui:
+            label: Kafka listener для Schema Registry
+            section: Schema Registry
+            order: 51
+            description: Имя listener на brokers; по умолчанию SSL. Controller listener запрещён.
+        schemaRegistryHttpPort:
+          kind: MANAGED
+          roleVariable: platform_kafka_schema_registry_http_port
+          type: integer
+          scopes:
+          - deployment
+          - member
+          validation:
+            minimum: 1
+            maximum: 65535
+          x-memberInputOnly: true
+          ui:
+            label: HTTP-порт Schema Registry
+            section: Schema Registry
+            order: 52
+        schemaRegistryHttpsPort:
+          kind: MANAGED
+          roleVariable: platform_kafka_schema_registry_https_port
+          type: integer
+          scopes:
+          - deployment
+          - member
+          validation:
+            minimum: 1
+            maximum: 65535
+          x-memberInputOnly: true
+          ui:
+            label: HTTPS-порт Schema Registry
+            section: Schema Registry
+            order: 53
         quorumMode:
           kind: MANAGED
           roleVariable: platform_kafka_quorum_mode
@@ -688,6 +744,15 @@ definitions:
         fqcn: platform.kafka.kafka_kraft
         variablesPrefix: platform_kafka_
     artifacts:
+    - id: schema-registry-binary
+      name: confluent-schema-registry
+      version: 8.3.2
+      os: redos
+      architecture: noarch
+      digest: sha256:dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81
+      requiredOffline: true
+      x-enabledBy: schemaRegistryEnabled
+      x-memberRole: broker
     - id: kafka-binary
       name: kafka
       version: 4.3.1
@@ -707,7 +772,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:8491615d10a211d97d1a1d06456010de4608fb822e997ca9b7b82522c96148be
+    x-definitionDigest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1

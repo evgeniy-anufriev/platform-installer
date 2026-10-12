@@ -1,0 +1,20 @@
+{{ registry_instance.ownership_marker }}
+[Unit]
+Description=Schema Registry for Kafka {{ registry_instance.deployment_id }}/{{ registry_instance.id }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ platform_kafka_schema_registry_user }}
+Group={{ platform_kafka_schema_registry_group }}
+Environment=LOG_DIR={{ registry_instance.log_directory }}
+Environment="SCHEMA_REGISTRY_HEAP_OPTS=-Xms256m -Xmx512m"
+ExecStart={{ _platform_kafka_registry_launcher }} {{ registry_instance.config_directory }}/schema-registry.properties
+Restart=on-failure
+RestartSec=5
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

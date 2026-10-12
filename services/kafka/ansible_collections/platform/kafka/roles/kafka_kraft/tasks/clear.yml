@@ -48,6 +48,9 @@
     label: "{{ item.id }}"
 
 - name: Stop selected Kafka member units before clear
+  ansible.builtin.include_tasks: schema_registry_clear.yml
+
+- name: Stop selected Kafka member units after Registry cleanup
   ansible.builtin.systemd:
     name: "{{ item.systemd_unit_name }}"
     state: stopped

@@ -38,6 +38,13 @@
       {{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
           | selectattr('value.serviceType', 'equalto', 'kafka') | list | first) }}
 
+- name: Select the exact approved Kafka deployment when executing a plan
+  ansible.builtin.set_fact:
+    _platform_kafka_managed_deployment:
+      key: "{{ platform_execution_service_deployment }}"
+      value: "{{ hostvars['localhost']._platform_kafka_project_state.serviceDeployments[platform_execution_service_deployment] }}"
+  when: platform_execution_service_deployment is defined
+
 - name: Select machine-owned Kafka deployment state
   ansible.builtin.set_fact:
     _platform_kafka_generated_deployment_state: >-
@@ -57,9 +64,18 @@
   when: "'quorumMode' in (_platform_kafka_managed_deployment.value.configuration | default({}))"
 
 - name: Project each Kafka deployment
+  ansible.builtin.set_fact:
+    platform_kafka_schema_registry_enabled: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryEnabled | default(platform_kafka_schema_registry_enabled) }}"
+    platform_kafka_schema_registry_kafka_listener: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryKafkaListener | default(platform_kafka_schema_registry_kafka_listener) }}"
+    platform_kafka_schema_registry_http_port: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryHttpPort | default(platform_kafka_schema_registry_http_port) }}"
+    platform_kafka_schema_registry_https_port: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryHttpsPort | default(platform_kafka_schema_registry_https_port) }}"
+
+- name: Project each Kafka deployment with Registry settings
   ansible.builtin.include_tasks: project_deployment.yml
   loop: "{{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | default({}) | dict2items) }}"
   loop_control:
     loop_var: _platform_kafka_project_deployment
     label: "{{ _platform_kafka_project_deployment.key }}"
-  when: _platform_kafka_project_deployment.value.serviceType | default('') == 'kafka'
+  when:
+    - _platform_kafka_project_deployment.value.serviceType | default('') == 'kafka'
+    - platform_execution_service_deployment is not defined or _platform_kafka_project_deployment.key == platform_execution_service_deployment

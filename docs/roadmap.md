@@ -8,6 +8,10 @@ The roadmap is dependency-based, not a calendar promise. A milestone is complete
 
 ## Phase A — Architecture baseline
 
+Kafka Schema Registry follows its [component implementation contract](work/kafka-schema-registry/implementation.md).
+Its exit gates include native broker placement, conditional artifact source selection,
+protected TLS, read-only Verify, repeat changed=0, owned clear and real Installer lifecycle.
+
 Application libraries follow the separate [implementation plan](work/application-libraries/implementation-plan.md):
 A1 standalone schemas/read-only Ansible+Core resolution, then rendering/image
 delivery/provider hooks and execution integration, then Go and UI. Infrastructure

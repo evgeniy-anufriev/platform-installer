@@ -1,0 +1,244 @@
+{
+  "flow": "React→Wails→Go→Execution Node Core/Ansible",
+  "project": "C:/Users/AnufrievEV/Codex/platform-installer-v2/.runtime/qa/schema-registry-wails-20261012",
+  "chooserSubstitutionOnly": true,
+  "stages": [
+    {
+      "stage": "OPEN",
+      "status": "OPEN",
+      "catalog": "READY"
+    },
+    {
+      "stage": "CREDENTIAL",
+      "status": "PRESENT"
+    },
+    {
+      "stage": "HOST_TRUST",
+      "fingerprint": "SHA256:uDcLVl6IpDpjZgkWobS/ZrtO1tsSdhaLABHmwF0s7LY"
+    },
+    {
+      "stage": "NODE_CHECK",
+      "status": "UPDATE_REQUIRED",
+      "selectedHostId": "node2"
+    },
+    {
+      "stage": "NODE_READY",
+      "status": "READY",
+      "runtimeDigest": "sha256:f0d9b5a4f8a6c563c1e198c8b80bf5e5b20f51e1bd0f15daf93f369ca26b3408"
+    },
+    {
+      "stage": "TARGET_TRUST",
+      "status": "APPROVED",
+      "fingerprint": "SHA256:uDcLVl6IpDpjZgkWobS/ZrtO1tsSdhaLABHmwF0s7LY"
+    },
+    {
+      "stage": "PKI_PASSWORD",
+      "status": "PRESENT"
+    },
+    {
+      "stage": "SETTINGS_VISIBLE",
+      "enabled": true,
+      "listener": "SSL"
+    },
+    {
+      "stage": "SETTINGS_ALREADY_SAVED",
+      "httpPort": 48881,
+      "httpsPort": 48882
+    },
+    {
+      "stage": "BEFORE_PLAN_1",
+      "status": "READY_TO_PLAN",
+      "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf"
+    },
+    {
+      "stage": "PLAN_1",
+      "status": "PLAN_REVIEW",
+      "planId": "plan-7aa4f2a76ef8de6d3302ce23",
+      "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf",
+      "bundle": "sha256:f0d9b5a4f8a6c563c1e198c8b80bf5e5b20f51e1bd0f15daf93f369ca26b3408",
+      "pkiRequired": true,
+      "outputRequired": false,
+      "phases": [
+        {
+          "id": "pki",
+          "actions": [
+            {
+              "id": "pki:apply",
+              "type": "PKI_APPLY",
+              "targets": [
+                "node2"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "services",
+          "actions": [
+            {
+              "id": "apply:qa-sr-wails",
+              "type": "SERVICE_APPLY",
+              "serviceDeployment": "qa-sr-wails",
+              "targets": [
+                "node2"
+              ]
+            },
+            {
+              "id": "verify:qa-sr-wails",
+              "type": "SERVICE_VERIFY",
+              "serviceDeployment": "qa-sr-wails",
+              "targets": [
+                "node2"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": "APPROVED_1",
+      "planId": "plan-7aa4f2a76ef8de6d3302ce23"
+    },
+    {
+      "stage": "START_1",
+      "status": "STARTED",
+      "runId": "installer-c7df766deadf5e431d4ed188738cc422"
+    },
+    {
+      "stage": "RUN_STATE_1",
+      "runId": "installer-c7df766deadf5e431d4ed188738cc422",
+      "state": "RUNNING",
+      "sequence": 55
+    },
+    {
+      "stage": "RUN_STATE_1",
+      "runId": "installer-c7df766deadf5e431d4ed188738cc422",
+      "state": "SUCCEEDED",
+      "sequence": 1576
+    },
+    {
+      "stage": "TERMINAL_1",
+      "runId": "installer-c7df766deadf5e431d4ed188738cc422",
+      "state": "SUCCEEDED",
+      "sequence": 1576
+    },
+    {
+      "stage": "RESULT_1",
+      "visible": 0,
+      "status": "SUCCEEDED"
+    },
+    {
+      "stage": "BEFORE_PLAN_2",
+      "status": "READY_TO_PLAN",
+      "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf"
+    },
+    {
+      "stage": "PLAN_2",
+      "status": "PLAN_REVIEW",
+      "planId": "plan-7aa4f2a76ef8de6d3302ce23",
+      "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf",
+      "bundle": "sha256:f0d9b5a4f8a6c563c1e198c8b80bf5e5b20f51e1bd0f15daf93f369ca26b3408",
+      "pkiRequired": true,
+      "outputRequired": false,
+      "phases": [
+        {
+          "id": "pki",
+          "actions": [
+            {
+              "id": "pki:apply",
+              "type": "PKI_APPLY",
+              "targets": [
+                "node2"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "services",
+          "actions": [
+            {
+              "id": "apply:qa-sr-wails",
+              "type": "SERVICE_APPLY",
+              "serviceDeployment": "qa-sr-wails",
+              "targets": [
+                "node2"
+              ]
+            },
+            {
+              "id": "verify:qa-sr-wails",
+              "type": "SERVICE_VERIFY",
+              "serviceDeployment": "qa-sr-wails",
+              "targets": [
+                "node2"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": "APPROVED_2",
+      "planId": "plan-7aa4f2a76ef8de6d3302ce23"
+    },
+    {
+      "stage": "START_2",
+      "status": "STARTED",
+      "runId": "installer-a7a152ab6a3f11d6110aa7adcfb29d9a"
+    },
+    {
+      "stage": "RUN_STATE_2",
+      "runId": "installer-a7a152ab6a3f11d6110aa7adcfb29d9a",
+      "state": "RUNNING",
+      "sequence": 61
+    },
+    {
+      "stage": "RUN_STATE_2",
+      "runId": "installer-a7a152ab6a3f11d6110aa7adcfb29d9a",
+      "state": "SUCCEEDED",
+      "sequence": 1576
+    },
+    {
+      "stage": "TERMINAL_2",
+      "runId": "installer-a7a152ab6a3f11d6110aa7adcfb29d9a",
+      "state": "SUCCEEDED",
+      "sequence": 1576
+    },
+    {
+      "stage": "RESULT_2",
+      "visible": 0,
+      "status": "SUCCEEDED"
+    },
+    {
+      "stage": "ACCEPTANCE_COMPLETE",
+      "bootstrapWarnings": 1,
+      "runs": [
+        {
+          "runId": "installer-c7df766deadf5e431d4ed188738cc422",
+          "planId": "plan-7aa4f2a76ef8de6d3302ce23",
+          "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf",
+          "state": "SUCCEEDED"
+        },
+        {
+          "runId": "installer-a7a152ab6a3f11d6110aa7adcfb29d9a",
+          "planId": "plan-7aa4f2a76ef8de6d3302ce23",
+          "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf",
+          "state": "SUCCEEDED"
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "runId": "installer-c7df766deadf5e431d4ed188738cc422",
+      "planId": "plan-7aa4f2a76ef8de6d3302ce23",
+      "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf",
+      "state": "SUCCEEDED"
+    },
+    {
+      "runId": "installer-a7a152ab6a3f11d6110aa7adcfb29d9a",
+      "planId": "plan-7aa4f2a76ef8de6d3302ce23",
+      "projectRevision": "sha256:7dfaf161fd46f4201ab3c32a60e36441038a81971863aea1f6bf3d53877506cf",
+      "state": "SUCCEEDED"
+    }
+  ],
+  "status": "PASSED"
+}

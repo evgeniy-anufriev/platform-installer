@@ -112,6 +112,9 @@
       _platform_kafka_local_instances | length
     fail_msg: KAFKA_DATA_DIRECTORY_COLLISION
 
+- name: Validate Schema Registry resources before Kafka mutation
+  ansible.builtin.include_tasks: schema_registry_validate.yml
+
 - name: Guard local Kafka data paths before mutation
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
@@ -138,7 +141,7 @@
         platform_kafka_service_name ~ '-standalone.service'] }}
   register: _platform_kafka_legacy_unit_files
   when:
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - _platform_kafka_local_instances | length > 0
 
 - name: Refuse automatic adoption of legacy Kafka unit names
@@ -149,7 +152,7 @@
   loop_control:
     label: "{{ item.item }}"
   when:
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - _platform_kafka_local_instances | length > 0
 
 - name: Check that prior Kafka member units are not still active
@@ -159,7 +162,7 @@
   register: _platform_kafka_legacy_unit_states
   changed_when: false
   failed_when: false
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Refuse active prior Kafka member units
   ansible.builtin.assert:
@@ -168,7 +171,7 @@
   loop: "{{ _platform_kafka_legacy_unit_states.results | default([]) }}"
   loop_control:
     label: "{{ item.item.legacy_systemd_unit_name }}"
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Inspect exact Kafka member unit paths before rendering
   ansible.builtin.stat:
@@ -178,7 +181,7 @@
     get_attributes: false
   register: _platform_kafka_unit_path_stats
   loop: "{{ _platform_kafka_local_instances }}"
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Reject unsafe existing Kafka member unit paths
   ansible.builtin.assert:
@@ -189,7 +192,7 @@
   loop: "{{ _platform_kafka_unit_path_stats.results | default([]) }}"
   loop_control:
     label: "{{ item.item.id }}"
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Read ownership headers from existing Kafka member units
   ansible.builtin.slurp:
@@ -197,7 +200,7 @@
   register: _platform_kafka_existing_unit_headers
   loop: "{{ _platform_kafka_unit_path_stats.results | default([]) }}"
   when:
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - item.stat.exists
   loop_control:
     label: "{{ item.item.id }}"
@@ -210,7 +213,7 @@
   loop_control:
     label: "{{ item.item.item.id }}"
   when:
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - not (item.skipped | default(false))
 
 - name: Validate role-aware Kafka member inputs
@@ -300,7 +303,7 @@
       - {id: kafka-binary, name: kafka}
   when:
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Deliver selected Kafka offline artifacts
   ansible.builtin.include_role:
@@ -311,16 +314,16 @@
       - {id: kafka-binary, name: kafka}
   when:
     - platform_resolved_artifact_sources is defined
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Select delivered Kafka archive for offline installation
   ansible.builtin.set_fact:
     platform_kafka_artifact_path: "{{ platform_offline_artifact_paths['kafka-binary'][0] }}"
     platform_kafka_artifact_checksum: "{{ platform_resolved_artifact_sources['kafka-binary'].artifacts[0].sha256 }}"
   when:
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - platform_resolved_artifact_sources is defined
     - platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE'
-    - not (platform_kafka_verify_only | bool)
 
 - name: Require approved offline Kafka artifact
   ansible.builtin.assert:
@@ -333,7 +336,7 @@
       - platform_kafka_version == '4.3.1'
       - platform_kafka_archive_directory == 'kafka_2.13-4.3.1'
     fail_msg: Kafka 4.3.1 offline artifact path and checksum are required
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Check approved Kafka artifact on controller
   ansible.builtin.stat:
@@ -344,7 +347,7 @@
   delegate_to: localhost
   become: false
   register: platform_kafka_artifact_stat
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Reject missing or mismatched Kafka artifact
   ansible.builtin.assert:
@@ -352,7 +355,7 @@
       - platform_kafka_artifact_stat.stat.exists
       - ('sha256:' ~ platform_kafka_artifact_stat.stat.checksum) == platform_kafka_artifact_checksum
     fail_msg: Kafka artifact is missing or its SHA-256 does not match the approved offline contract
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Build deterministic controller-only quorum projections
   ansible.builtin.set_fact:
@@ -366,14 +369,14 @@
 - name: Clear selected Kafka deployment explicitly when requested
   ansible.builtin.include_tasks: clear.yml
   when:
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - platform_kafka_clean_install | bool
     - _platform_kafka_local_instances | length > 0
 
 - name: Prepare Kafka host prerequisites once
   ansible.builtin.include_tasks: prepare_host.yml
   when:
-    - not (platform_kafka_verify_only | bool)
+    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - _platform_kafka_local_instances | length > 0
 
 - name: Apply local Kafka members in deterministic node order
@@ -382,7 +385,7 @@
   loop_control:
     loop_var: kafka_member
     label: "{{ kafka_member.id }}"
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Wait for all local Kafka member listeners after member startup
   ansible.builtin.wait_for:
@@ -393,8 +396,15 @@
   loop: "{{ _platform_kafka_local_instances | subelements('listener_ports', skip_missing=True) }}"
   loop_control:
     label: "{{ item.0.id }}:{{ item.1 }}"
-  when: not (platform_kafka_verify_only | bool)
+  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Verify local Kafka members and cluster
   ansible.builtin.include_tasks: verify.yml
   when: platform_kafka_verify_only | bool
+
+- name: Apply or verify the optional Schema Registry component
+  ansible.builtin.include_tasks: schema_registry.yml
+  when:
+    - platform_kafka_schema_registry_enabled
+    - _platform_kafka_registry_local | length > 0
+    - platform_kafka_phase in ['full', 'schema_registry'] or platform_kafka_verify_only

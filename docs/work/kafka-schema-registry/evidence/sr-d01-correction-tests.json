@@ -1,0 +1,32 @@
+[
+  {
+    "case": "foreign-absent",
+    "verdict": "PASS",
+    "neighbor": "PRESERVED"
+  },
+  {
+    "case": "foreign-owned",
+    "verdict": "PASS",
+    "neighbor": "PRESERVED"
+  },
+  {
+    "case": "fresh-owned-clear",
+    "verdict": "PASS",
+    "neighbor": "PRESERVED"
+  },
+  {
+    "case": "logs-symlink",
+    "verdict": "PASS",
+    "neighbor": "PRESERVED"
+  },
+  {
+    "case": "marker-symlink",
+    "verdict": "PASS",
+    "neighbor": "PRESERVED"
+  },
+  {
+    "case": "wrong-marker",
+    "verdict": "PASS",
+    "neighbor": "PRESERVED"
+  }
+]

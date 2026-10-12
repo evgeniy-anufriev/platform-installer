@@ -9,6 +9,10 @@
       'node_id': (item.value.configuration.nodeId),
       'directory_id': (((platform_generated_state | default({})).get('serviceDeployments', {})).get(_platform_kafka_project_deployment.key, {}).get('members', {}).get(item.key, {}).get('identity', {}).get('directoryId', item.value.identity.directoryId | default(omit))),
       'roles': (item.value.roles | sort),
+      'schema_registry': {
+        'http_port': (item.value.configuration.schemaRegistryHttpPort | default(_platform_kafka_project_deployment.value.configuration.schemaRegistryHttpPort | default(platform_kafka_schema_registry_http_port))),
+        'https_port': (item.value.configuration.schemaRegistryHttpsPort | default(_platform_kafka_project_deployment.value.configuration.schemaRegistryHttpsPort | default(platform_kafka_schema_registry_https_port)))
+      },
       'listeners': (item.value.configuration.listeners | default(_platform_kafka_project_deployment.value.configuration.listeners | default(platform_kafka_listeners))),
       'tls_profile': (item.value.configuration.tlsProfile | default(_platform_kafka_project_deployment.value.configuration.tlsProfile | default(platform_kafka_tls_profile))),
       'data_directory': (item.value.configuration.dataDirectory | default((_platform_kafka_project_deployment.value.configuration.dataDirectory | default(platform_kafka_data_directory)) ~ ('/' ~ item.key if ((hostvars[_platform_kafka_project_member_host].platform_deployments | default({})).get(_platform_kafka_project_deployment.key, {}).get('members', {}) | length > 1) else ''))),

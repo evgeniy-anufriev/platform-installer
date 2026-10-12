@@ -9,9 +9,11 @@ import re
 try:
     from .project_validation import canonical_digest
     from .service_configuration_contract import canonical_settings, validate_settings
+    from .kafka_schema_registry import configuration_registry_findings
 except ImportError:
     from project_validation import canonical_digest
     from service_configuration_contract import canonical_settings, validate_settings
+    from kafka_schema_registry import configuration_registry_findings
 
 
 API_VERSION = "platform.installer/resolved-service-configuration/v1alpha1"
@@ -610,6 +612,10 @@ def resolve_service_configuration(
         service["inputs"] = {
             key: value for key, value in service["inputs"].items() if value is not None
         }
+    findings.extend(
+        _finding(item["code"], item["field"], item["message"])
+        for item in configuration_registry_findings(services, resolved_topology)
+    )
     findings.sort(key=lambda item: (item["field"], item["code"]))
     fingerprint_input = {
         "services": {

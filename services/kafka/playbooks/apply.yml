@@ -60,3 +60,13 @@
   roles:
     - role: platform.kafka.kafka_kraft
       platform_kafka_verify_only: false
+      platform_kafka_phase: kafka
+
+- name: Apply Schema Registry after all Kafka members have started
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  roles:
+    - role: platform.kafka.kafka_kraft
+      platform_kafka_verify_only: false
+      platform_kafka_phase: schema_registry

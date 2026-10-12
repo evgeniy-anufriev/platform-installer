@@ -1,6 +1,13 @@
 apiVersion: platform.installer/artifacts/v1alpha1
 service: kafka
 artifacts:
+  - id: schema-registry-binary
+    version: "8.3.2"
+    filename: confluent-community-8.3.2.tar.gz
+    mediaType: application/gzip
+    sha256: dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81
+    source: https://packages.confluent.io/archive/8.3/confluent-community-8.3.2.tar.gz
+    offlineRequired: true
   - id: kafka-binary
     version: "4.3.1"
     filename: kafka_2.13-4.3.1.tgz
