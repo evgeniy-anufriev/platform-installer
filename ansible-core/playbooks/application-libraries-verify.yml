@@ -27,3 +27,7 @@
         loop_var: application_verify_input
 
 - import_playbook: application-libraries-provider-verify-stage.yml
+
+- import_playbook: application-libraries-endpoint-stage.yml
+  vars:
+    platform_endpoint_verify_only: true

@@ -57,7 +57,8 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         if not executable:
             self.skipTest("ansible-playbook is required")
         tasks = yaml.safe_load((ROLE / "tasks/prepare.yml").read_text(encoding="utf-8"))
-        names = {"Select complete managed application backend file model",
+        names = {"Select exact filenames owned by the partial endpoint source",
+                 "Select complete managed application backend file model",
                  "Retain exact proven backend inventory in base mode",
                  "Select only this source deployment backend for partial integration"}
         selected = [task for task in tasks if task.get("name") in names]
@@ -69,6 +70,8 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
                 expected = [backend["configFileName"]] if host != "node3" else []
                 if partial:
                     expected.append("30-backend-other-public.cfg")
+                    # An old group absent from the exact current mapping needs full reconcile.
+                    expected.append("30-backend-app-old.cfg")
                 variables = {
                     "inventory_hostname": host, "platform_deployments": {"proxy": {}},
                     "platform_haproxy_full_reconcile": not partial,

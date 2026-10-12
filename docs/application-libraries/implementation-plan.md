@@ -363,7 +363,7 @@ capabilities и порядок providers, не заменять проверки
 готовность обоих targets и один общий endpoint.
 
 В QA использовать уже собранный
-[тестовый образ подключений](../../tests/application-connection-probe/README.md)
+[тестовый образ подключений](../../docker/application-connection-probe/README.md)
 как проверяемое приложение библиотеки. Его `/status` должен подтвердить
 PostgreSQL, Redis, Sentinel и ClickHouse под УЗ экземпляра, получение секретов
 через Vault Agent с AppRole, PKCS12 truststore/keystore и подключение к клиентскому
@@ -371,7 +371,7 @@ Kafka SSL listener без аутентификации. Для Kafka это пр
 не проверка ACL или прав на топики. На A4 проверять доставку секретов и PKCS12,
 на A5 — соответствующие подключения, на A6 — публикацию `/status` через endpoint,
 на A9 — полный standalone путь. Проверять образ по зафиксированному digest;
-предыдущий [результат на RED OS](../../tests/application-connection-probe/qa-result.md)
+предыдущий [результат на RED OS](../../docker/application-connection-probe/qa-result.md)
 подтверждает только ручной QA-запуск на node1, а не прохождение будущего Ansible/Core
 или UI-сценария.
 

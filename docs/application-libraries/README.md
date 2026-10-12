@@ -29,6 +29,8 @@ review черновика не считаются review этого расшир
 | [Технический план A3](a3-technical-plan.md) | Общий PostgreSQL hook: ресурсы библиотеки, accounts/grants, ownership/retry и минимальная стоимость выполнения |
 | [Технический план A4](a4-technical-plan.md) | Vault endpoint/client port, KV v2, AppRole, shared PKI secrets, private Agent delivery и standalone QA |
 | [Технический план A5](a5-technical-plan.md) | Redis/Sentinel ACL, ClickHouse resources/accounts/grants и выбранный Kafka SSL-only scope; реализация и текущие проверки завершены |
+| [Технический план A6](a6-technical-plan.md) | Application endpoints: defaults/overrides, multi-host targets, существующие HAProxy/DNS hooks, HTTPS Verify и частичные сбои |
+| [PLAN review A6](a6-plan-review.md) | FULL PLAN BLOCK: точное source matching и неоднозначный Host routing; решение владельца ожидается |
 | [PLAN review A5](a5-plan-review.md) | APPROVE_WITH_CHANGES, ноль blockers; уточнены shared locks, Sentinel roles и optional bindings |
 | [Cluster revision review A5](a5-cluster-plan-review.md) | Исторический BLOCK A5-C01; риск принят владельцем, специальная обработка исключена |
 | [DIFF review A5](a5-diff-review.md) | Initial FULL BLOCK по D01/D02; единственный owner-approved targeted recheck APPROVE, оба finding закрыты |

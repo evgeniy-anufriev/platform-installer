@@ -1,0 +1,28 @@
+---
+- name: Resolve native application inputs once when endpoint sources are not prepared
+  ansible.builtin.include_role:
+    name: platform.core.resolve_application_libraries
+    apply:
+      delegate_to: localhost
+  when:
+    - hostvars['localhost'].platform_endpoint_sources is not defined
+    - platform_desired_state.applicationLibraryDeployments | default({}) | length > 0
+  run_once: true
+
+- name: Normalize additional sources through the existing Core endpoint boundary
+  platform.core.prepare_application_endpoints:
+    service_catalog_path: "{{ platform_service_catalog_path }}"
+  register: _platform_endpoint_source_input
+  when: hostvars['localhost'].platform_endpoint_sources is not defined
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Share normalized endpoint sources for partial and full provider reconcile
+  ansible.builtin.set_fact:
+    platform_endpoint_sources: "{{ _platform_endpoint_source_input.sources }}"
+  failed_when: _platform_endpoint_source_input.status != 'PASS'
+  when: hostvars['localhost'].platform_endpoint_sources is not defined
+  run_once: true
+  delegate_to: localhost
+  delegate_facts: true

@@ -29,7 +29,7 @@ def haproxy_provider_hosts(desired_state, inventory_deployments, source):
 
 
 def service_integration_relations(desired_state, source_service_types=None, source_deployment_id=None,
-                                  inventory_deployments=None):
+                                  inventory_deployments=None, endpoint_sources=None):
     """Return deterministic source-to-provider relations from canonical state."""
     desired_state = desired_state if isinstance(desired_state, dict) else {}
     deployments = desired_state.get("serviceDeployments", {})
@@ -39,7 +39,9 @@ def service_integration_relations(desired_state, source_service_types=None, sour
     source_service_types = set(source_service_types or [])
     relations = []
 
-    for source_id, source in sorted(deployments.items()):
+    sources = dict(deployments)
+    sources.update(endpoint_sources or {})
+    for source_id, source in sorted(sources.items()):
         if source_deployment_id is not None and source_id != source_deployment_id:
             continue
         if not isinstance(source, dict) or source.get("serviceType") not in source_service_types:
@@ -70,7 +72,7 @@ def service_integration_relations(desired_state, source_service_types=None, sour
 
 
 def resolve_service_integrations(desired_state, source_service_types=None, source_deployment_id=None,
-                                 inventory_deployments=None):
+                                 inventory_deployments=None, endpoint_sources=None):
     """Resolve provider deployments implied by successful source lifecycles.
 
     This intentionally returns only provider deployment identifiers. Providers
@@ -79,8 +81,10 @@ def resolve_service_integrations(desired_state, source_service_types=None, sourc
     desired_state = desired_state if isinstance(desired_state, dict) else {}
     deployments = desired_state.get("serviceDeployments", {})
     deployments = deployments if isinstance(deployments, dict) else {}
+    sources = dict(deployments)
+    sources.update(endpoint_sources or {})
     findings = []
-    if source_deployment_id is not None and source_deployment_id not in deployments:
+    if source_deployment_id is not None and source_deployment_id not in sources:
         findings.append({
             "apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
             "code": "SERVICE_INTEGRATION_SOURCE_NOT_FOUND", "status": "BLOCKED",
@@ -88,7 +92,7 @@ def resolve_service_integrations(desired_state, source_service_types=None, sourc
             "safeMessage": "Selected source service deployment does not exist",
         })
     relations = service_integration_relations(desired_state, source_service_types, source_deployment_id,
-                                             inventory_deployments)
+                                             inventory_deployments, endpoint_sources)
     dns_deployments = set()
     haproxy_deployments = set()
     for relation in relations:
@@ -103,7 +107,7 @@ def resolve_service_integrations(desired_state, source_service_types=None, sourc
                                 for hosts in relation["haproxyHostsByDeployment"].values() for host in hosts}),
         "missingHAProxySources": sorted(relation["sourceDeploymentId"] for relation in relations
                                         if relation["endpointGroupId"] and not relation["haproxyDeploymentIds"]
-                                        and deployments[relation["sourceDeploymentId"]].get("serviceType") != "haproxy"),
+                                        and sources[relation["sourceDeploymentId"]].get("serviceType") != "haproxy"),
     }
     result["fingerprint"] = canonical_digest(result)
     return {

@@ -53,7 +53,7 @@ $sourceDirectories = @('ansible-core', 'services', 'examples', 'contracts', 'con
 $sourceFiles = @()
 $goEmbedDirectory = $null
 if ($IncludeApplicationProbe) {
-    $sourceDirectories += 'tests'
+    $sourceDirectories += 'docker'
 }
 if ($IncludeGo) {
     $sourceDirectories += @('cmd', 'internal')

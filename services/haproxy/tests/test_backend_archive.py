@@ -63,6 +63,17 @@ class BackendArchiveTests(unittest.TestCase):
         self.assertFalse(result["changed"])
         self.assertFalse((self.root / ".backend-archive").exists())
 
+    def test_prefix_neighbor_is_not_stale_when_exact_candidate_preserves_it(self):
+        (self.root / 'haproxy.cfg').write_bytes(b'global\n')
+        selected = '30-backend-apigateway-sdku-apps.cfg'
+        neighbor = '30-backend-apigateway-sdku-test-apps.cfg'
+        self.write(selected, self.owned(selected))
+        path = self.write(neighbor, self.owned(neighbor))
+        before = path.read_bytes()
+        result = archive_module.archive(str(self.root), [selected, neighbor], True, self.prior_proof())
+        self.assertEqual([], result['archived'])
+        self.assertEqual(before, path.read_bytes())
+
     def test_owned_stale_is_moved_with_bytes_and_snapshot(self):
         (self.root / "haproxy.cfg").write_bytes(b"global\n")
         old = "30-backend-old-main.cfg"

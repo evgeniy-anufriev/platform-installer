@@ -8,24 +8,33 @@
   register: _platform_integration_endpoint_dns
   changed_when: false
   failed_when: false
+  no_log: true
 
 - name: Require every source endpoint hostname to resolve
   ansible.builtin.assert:
     that:
       - item.rc == 0
       - item.stdout | length > 0
+      - expected_addresses | length > 0
+      - actual_addresses == expected_addresses
     fail_msg: SERVICE_ENDPOINT_DNS_UNRESOLVED
   loop: "{{ _platform_integration_endpoint_dns.results }}"
   loop_control:
     label: "{{ item.item }}"
+  vars:
+    expected_addresses: "{{ platform_endpoint_probe_expected_addresses | default([]) | unique | sort }}"
+    actual_addresses: "{{ item.stdout_lines | map('regex_replace', '^([^ ]+).*$', '\\1') | unique | sort }}"
 
 - name: Probe each source endpoint through the public HAProxy HTTPS listener
   ansible.builtin.uri:
     url: >-
       https://{{ item }}{{ ':' ~ _platform_integration_probe_port_override
-        if _platform_integration_probe_port_override is defined else '' }}/
+        if _platform_integration_probe_port_override is defined else '' }}{{ (_platform_integration_probe | default({})).get('path', '/') }}
     method: GET
-    validate_certs: false
+    validate_certs: "{{ (_platform_integration_probe | default({})).get('validate_certs', false) }}"
+    ca_path: "{{ platform_endpoint_ca_path | default(omit) }}"
+    timeout: "{{ (_platform_integration_probe | default({})).get('timeout', 10) }}"
+    status_code: "{{ [(_platform_integration_probe | default({})).expected_status] if (_platform_integration_probe | default({})).expected_status is defined else range(100, 600) | list }}"
     follow_redirects: none
     return_content: false
   loop: "{{ _platform_integration_source_fqdns }}"
@@ -34,15 +43,16 @@
   register: _platform_integration_endpoint_http
   changed_when: false
   failed_when: false
+  no_log: true
 
 - name: Require a routed HTTP response other than HAProxy unavailable statuses
   ansible.builtin.assert:
     that:
-      - item.status is defined
-      - item.status | int >= 100
-      - item.status | int <= 599
-      - item.status | int not in [502, 503]
+      - statuses | length == _platform_integration_source_fqdns | length
+      - statuses | select('lt', 100) | list | length == 0
+      - statuses | select('gt', 599) | list | length == 0
+      - statuses | intersect([502, 503]) | length == 0
+      - (_platform_integration_probe | default({})).expected_status is not defined or statuses | unique | list == [_platform_integration_probe.expected_status | int]
     fail_msg: SERVICE_ENDPOINT_UNAVAILABLE
-  loop: "{{ _platform_integration_endpoint_http.results }}"
-  loop_control:
-    label: "{{ item.item }}"
+  vars:
+    statuses: "{{ _platform_integration_endpoint_http.results | selectattr('status', 'defined') | map(attribute='status') | map('int') | list }}"

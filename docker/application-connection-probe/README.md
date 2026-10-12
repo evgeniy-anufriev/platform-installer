@@ -45,11 +45,32 @@ existing foreign fixture table whose SELECT must be denied. Never enable fixture
 for production Verify; these options are solely for this test application.
 Names are a QA contract, not final application package defaults.
 
-Transfer `main.go`, Dockerfile and `build-redos.sh` to a unique temporary
-directory on the owner-selected RED OS node, run `build-redos.sh`
+The canonical build sources are in `docker/application-connection-probe`.
+Transfer this directory with `scripts/qa-sync.ps1 -IncludeApplicationProbe`
+to the owner-selected RED OS node, then run `bash build-redos.sh`
 there, and preserve the returned immutable image ID. The script uses the
 installed Go, Vault, psql and OpenSSL binaries, and builds with the existing
 `platform-docker` rootless daemon. It never pulls a base image.
+
+Build on RED OS from the transferred directory:
+
+```bash
+PROBE_IMAGE_TAG=platform-application-connection-probe:qa bash build-redos.sh
+```
+
+To retain the image independently of Docker's storage, save it to an operator-owned
+archive directory outside the source tree:
+
+```bash
+sudo -n -u platform-docker env XDG_RUNTIME_DIR=/run/user/$(id -u platform-docker) \
+  DOCKER_HOST=unix:///run/user/$(id -u platform-docker)/docker.sock \
+  docker save platform-application-connection-probe:qa > /path/to/archive/probe.tar
+sha256sum /path/to/archive/probe.tar > /path/to/archive/probe.tar.sha256
+```
+
+Restore with the same rootless environment and `docker load -i /path/to/archive/probe.tar`.
+Generated binary, rootfs and archives are ignored by Git. Real Agent configuration,
+RoleID, passwords and PKCS stores are runtime inputs and must never enter this folder.
 
 The Compose runtime must mount `/etc/probe/agent.hcl` and truststore read-only,
 mount `/run/probe` as tmpfs, restrict listener exposure to the QA network,

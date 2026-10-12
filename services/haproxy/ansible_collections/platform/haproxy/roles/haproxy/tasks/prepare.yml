@@ -82,6 +82,14 @@
   loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
   changed_when: false
 
+- name: Select exact filenames owned by the partial endpoint source
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_source_files: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         map(attribute='value') | flatten |
+         selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id | default('')) |
+         map(attribute='configFileName') | unique | list }}
+
 - name: Stage proven existing application backends for base provider update
   ansible.builtin.copy:
     src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
@@ -95,7 +103,7 @@
     - not (platform_haproxy_full_reconcile | bool)
     - >-
       platform_haproxy_partial_deployment_id is not defined or
-      not item.name.startswith('30-backend-' ~ platform_haproxy_partial_deployment_id ~ '-')
+      item.name not in _platform_haproxy_partial_source_files
   changed_when: false
 
 - name: Build HAProxy PEM bundle atomically without logging key data
@@ -150,7 +158,7 @@
          sort(attribute='configFileName') }}
     platform_haproxy_managed_application_backend_files: >-
       {{ (((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
-           reject('match', '^30-backend-' ~ (platform_haproxy_partial_deployment_id | regex_escape) ~ '-')) | list) +
+           reject('in', _platform_haproxy_partial_source_files)) | list) +
          (platform_haproxy_runtime_projection.backends.backends | dict2items |
           selectattr('key', 'in', platform_deployments) | map(attribute='value') |
           flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
@@ -160,39 +168,8 @@
     - not (platform_haproxy_full_reconcile | bool)
     - platform_haproxy_partial_deployment_id is defined
 
-- name: Probe actual backend TLS identities before HAProxy candidate activation
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/timeout
-      - '12s'
-      - /usr/bin/openssl
-      - s_client
-      - -connect
-      - "{{ item.1.address }}:{{ item.1.port }}"
-      - -servername
-      - "{{ item.0.expectedServerName }}"
-      - -verify_hostname
-      - "{{ item.0.expectedServerName }}"
-      - -CAfile
-      - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
-      - -verify_return_error
-      - -brief
-    # s_client otherwise waits for the HTTPS peer to close its keep-alive
-    # connection and hits timeout after a successful certificate handshake.
-    stdin: 'Q'
-  loop: "{{ platform_haproxy_application_backends | selectattr('expectedServerName', 'defined') | subelements('targets') }}"
-  loop_control:
-    label: "{{ item.0.targetDeploymentId }}/{{ item.1.memberId }}"
-  register: _platform_haproxy_backend_tls_probes
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Require every actual backend TLS identity to match the Core projection
-  ansible.builtin.assert:
-    that:
-      - _platform_haproxy_backend_tls_probes.results | default([]) | selectattr('rc', 'ne', 0) | list | length == 0
-    fail_msg: HAPROXY_BACKEND_TLS_IDENTITY_UNVERIFIED
+- name: Check the projected targets before candidate publication
+  ansible.builtin.include_tasks: check_targets.yml
 
 - name: Render full Platform HAProxy candidate
   ansible.builtin.template:
@@ -220,6 +197,16 @@
     - {src: "{{ platform_haproxy_conf_directory }}/10-public.cfg", dest: conf.d/10-public.cfg}
     - {src: "{{ platform_haproxy_conf_directory }}/20-local-stats.cfg", dest: conf.d/20-local-stats.cfg}
     - {src: "{{ platform_haproxy_conf_directory }}/90-stats-backends.cfg", dest: conf.d/90-stats-backends.cfg}
+  changed_when: false
+  when: platform_haproxy_partial_deployment_id is defined
+
+- name: Update domain precedence in the existing public frontend candidate
+  ansible.builtin.template:
+    src: 10-public.cfg.j2
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/10-public.cfg"
+    owner: root
+    group: root
+    mode: '0640'
   changed_when: false
   when: platform_haproxy_partial_deployment_id is defined
 

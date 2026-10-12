@@ -35,3 +35,5 @@
           become_user: "{{ item.account }}"
           loop: "{{ application_held_locks }}"
           changed_when: false
+
+- import_playbook: application-libraries-endpoint-stage.yml

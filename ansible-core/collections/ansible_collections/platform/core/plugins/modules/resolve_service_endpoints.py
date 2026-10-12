@@ -8,6 +8,7 @@ from ansible_collections.platform.core.plugins.module_utils.service_endpoint_res
 def main():
     module = AnsibleModule(
         argument_spec={
+            "endpoint_sources": {"type": "dict", "default": {}},
             "desired_state": {"type": "dict", "required": True},
             "service_catalog": {"type": "dict", "required": True},
             "inventory_deployments": {"type": "dict", "required": False, "default": {}},
@@ -20,6 +21,7 @@ def main():
         module.params["service_catalog"],
         inventory_deployments=module.params["inventory_deployments"],
         deployment_ids=module.params.get("deployment_ids"),
+        endpoint_sources=module.params['endpoint_sources'],
     )
     if result["status"] != "PASS":
         module.fail_json(

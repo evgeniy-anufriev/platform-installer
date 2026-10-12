@@ -36,7 +36,7 @@ def _definitions(catalog):
     return values if isinstance(values, dict) else {}
 
 
-def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None, inventory_deployments=None, deployment_ids=None):
+def resolve_service_endpoints(topology, service_catalog, resolved_service_configuration=None, inventory_deployments=None, deployment_ids=None, endpoint_sources=None):
     """Derive generic client endpoint identity from desired topology.
 
     Transport ports and routing are deliberately deferred to NET-03. This function
@@ -49,6 +49,34 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
     findings, endpoints, host_endpoints = [], {}, {}
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
     selected_ids = set(deployment_ids) if isinstance(deployment_ids, list) else None
+
+    domains = {}
+    for group_id, group in sorted(groups.items()):
+        domain = (group.get('address') or {}).get('domain', '') if isinstance(group, dict) else ''
+        normalized = domain.lower().rstrip('.') if isinstance(domain, str) else ''
+        if normalized in domains:
+            findings.append(_finding('ENDPOINT_GROUP_DOMAIN_DUPLICATE', 'endpointGroups.' + group_id,
+                                     'Endpoint groups must have distinct domains'))
+        elif normalized:
+            domains[normalized] = group_id
+
+    for source_id, source in sorted((endpoint_sources or {}).items()):
+        if selected_ids is not None and source_id not in selected_ids:
+            continue
+        record = source.get('endpoint', {})
+        if source_id in deployments or not DNS_LABEL.fullmatch(source_id):
+            findings.append(_finding('ENDPOINT_SOURCE_ID_COLLISION', 'endpointSources.' + source_id,
+                                     'Endpoint source identity is invalid or already used'))
+            continue
+        group_id = record.get('endpointGroupId')
+        domain = (groups.get(group_id, {}).get('address') or {}).get('domain')
+        if (not isinstance(domain, str) or not DNS_DOMAIN.fullmatch(domain) or
+                record.get('fqdn') != source_id + '.' + domain or
+                record.get('serviceDeploymentId') != source_id or record.get('scope') != 'deployment'):
+            findings.append(_finding('ENDPOINT_SOURCE_INVALID', 'endpointSources.' + source_id,
+                                     'Endpoint source must reference a valid group and DNS identity'))
+            continue
+        endpoints[source_id] = dict(record, endpointFingerprint=canonical_digest(record))
 
     for deployment_id, deployment in sorted(deployments.items()):
         if selected_ids is not None and deployment_id not in selected_ids:
@@ -119,9 +147,14 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
             host_record["endpointFingerprint"] = canonical_digest(host_record)
             host_endpoints[key] = host_record
 
-    fqdn_owner = {}
+    fqdn_owner, backend_owner = {}, {}
     for deployment_id, endpoint in sorted(endpoints.items()):
         fqdn = endpoint["fqdn"]
+        backend_name = deployment_id + '-' + endpoint['endpointGroupId']
+        if backend_name in backend_owner:
+            findings.append(_finding('ENDPOINT_BACKEND_NAME_COLLISION', 'endpointSources.' + deployment_id,
+                                     'Endpoint backend and filename identity collides'))
+        backend_owner[backend_name] = deployment_id
         if fqdn in fqdn_owner:
             findings.append(_finding("ENDPOINT_FQDN_COLLISION", "serviceDeployments.%s.endpointGroup" % deployment_id, "Resolved endpoint FQDN collides with another service deployment", {"fqdn": fqdn, "otherDeploymentId": fqdn_owner[fqdn]}))
         else:

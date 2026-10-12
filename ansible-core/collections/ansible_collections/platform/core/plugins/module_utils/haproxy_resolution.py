@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import re
+import ipaddress
 
 try:
     from .project_validation import canonical_digest
@@ -12,7 +13,8 @@ except ImportError:
     from service_integration_resolution import haproxy_provider_hosts
 
 
-BACKEND_FIELDS = set(("balance", "check", "fall", "rise", "ssl", "sslVerify"))
+BACKEND_FIELDS = set(("balance", "check", "fall", "rise", "ssl", "sslVerify",
+                      "checkInterval", "httpCheck", "maxconn", "timeoutConnect", "timeoutServer"))
 
 
 def _finding(code, field, message):
@@ -39,6 +41,17 @@ def _catalog_default_port(definition):
 
 def _valid_port(value):
     return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535
+
+
+def _valid_endpoint_target(target):
+    if not isinstance(target, dict) or not _valid_port(target.get('port')):
+        return False
+    try:
+        return (ipaddress.ip_address(target.get('address')).version == 4 and
+                isinstance(target.get('serverName'), str) and
+                re.fullmatch(r'[a-zA-Z0-9_.-]{1,128}', target['serverName']) is not None)
+    except (ValueError, TypeError):
+        return False
 
 
 def _member_client_allocation(definition):
@@ -140,12 +153,29 @@ def normalize_backend_settings(defaults, override, field):
                 findings.append(_finding("HAPROXY_BACKEND_%s_REQUIRED" % key.upper(), field, "Health checks require %s between 1 and 20" % key))
     if effective.get("check") is False and ("fall" in effective or "rise" in effective):
         findings.append(_finding("HAPROXY_BACKEND_CHECK_DEPENDENCY_FORBIDDEN", field, "fall and rise are valid only when check is true"))
+    for key in ('checkInterval', 'timeoutConnect', 'timeoutServer'):
+        if key in effective:
+            value = effective[key]
+            match = re.fullmatch(r'([1-9][0-9]*)(ms|s)', value) if isinstance(value, str) else None
+            millis = int(match[1]) * (1000 if match[2] == 's' else 1) if match else 0
+            if not 100 <= millis <= (60000 if key == 'checkInterval' else 300000):
+                findings.append(_finding('HAPROXY_BACKEND_DURATION_INVALID', field + '.' + key, 'Invalid bounded duration'))
+    if 'maxconn' in effective and (type(effective['maxconn']) is not int or not 1 <= effective['maxconn'] <= 100000):
+        findings.append(_finding('HAPROXY_BACKEND_MAXCONN_INVALID', field, 'Invalid maxconn'))
+    if 'httpCheck' in effective:
+        check = effective['httpCheck']
+        if (not isinstance(check, dict) or set(check) != {'method', 'path', 'expectedStatus'} or
+                check.get('method') not in {'GET', 'HEAD'} or
+                not isinstance(check.get('path'), str) or not re.fullmatch(r'/[^\s\x00-\x1f\x7f]{0,2047}', check['path']) or
+                type(check.get('expectedStatus')) is not int or not 100 <= check['expectedStatus'] <= 599 or
+                effective.get('check') is not True):
+            findings.append(_finding('HAPROXY_BACKEND_HTTP_CHECK_INVALID', field, 'Invalid HTTP health check'))
     return effective, findings
 
 
 def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments,
                              resolved_endpoints, backend_defaults=None, resolved_configuration=None,
-                             pki_requests=None, target_deployment_ids=None):
+                             pki_requests=None, target_deployment_ids=None, endpoint_sources=None):
     topology = topology if isinstance(topology, dict) else {}
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology.get("serviceDeployments"), dict) else {}
     definitions = _definitions(service_catalog)
@@ -282,6 +312,32 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
             provider_record = dict(record, providerHostIds=provider_hosts)
             provider_record["fingerprint"] = canonical_digest(provider_record)
             resolved.setdefault(haproxy_id, []).append(provider_record)
+    for source_id, source in sorted((endpoint_sources or {}).items()):
+        if selected_ids is not None and source_id not in selected_ids:
+            continue
+        endpoint = endpoint_map.get(source_id, {})
+        group_id = endpoint.get('endpointGroupId')
+        proxy_hosts = haproxy_provider_hosts(topology, inventory_deployments, {'endpointGroup': group_id})
+        effective, errors = normalize_backend_settings({}, source.get('settings', {}), 'endpointSources.' + source_id)
+        findings.extend(errors)
+        targets = source.get('targets', [])
+        if not targets or not isinstance(targets, list) or any(not _valid_endpoint_target(t) for t in targets):
+            findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', 'endpointSources.' + source_id, 'Invalid endpoint targets'))
+        if not endpoint:
+            findings.append(_finding('HAPROXY_TARGET_ENDPOINT_UNSUPPORTED', 'endpointSources.' + source_id, 'Endpoint source is unresolved'))
+        record = {'targetDeploymentId': source_id, 'backendName': source_id + '-' + str(group_id),
+                  'configFileName': '30-backend-' + source_id + '-' + str(group_id) + '.cfg',
+                  'endpoint': endpoint, 'settings': effective, 'targets': targets}
+        if source.get('probe'):
+            record['probe'] = source['probe']
+        if effective.get('ssl'):
+            if effective.get('sslVerify') != 'required':
+                findings.append(_finding('HAPROXY_BACKEND_SSL_VERIFY_REQUIRED', 'endpointSources.' + source_id, 'Endpoint TLS requires verified identity'))
+            record['expectedServerName'] = endpoint.get('fqdn')
+        for provider_id, provider_hosts in sorted(proxy_hosts.items()):
+            value = dict(record, providerHostIds=provider_hosts)
+            value['fingerprint'] = canonical_digest(value)
+            resolved.setdefault(provider_id, []).append(value)
     if findings:
         resolved = {}
     return {"apiVersion": "platform.installer/resolved-haproxy-backend/v1alpha1", "kind": "ResolvedHAProxyBackends",

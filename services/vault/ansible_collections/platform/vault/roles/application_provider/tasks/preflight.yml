@@ -35,17 +35,6 @@
   when: not application_vault_identity_only | default(false)
   no_log: true
 
-- name: Prove exact PKCS12 password before shared publication
-  ansible.builtin.command:
-    argv: [openssl, pkcs12, -in, "{{ item.0.targetDirectory }}/{{ item.1 }}", -noout, -passin, stdin]
-    stdin: "{{ lookup('ansible.builtin.file', platform_application_secret_files[item.0.storePasswordSecretRef], rstrip=false) }}"
-  when: not application_vault_identity_only | default(false)
-  delegate_to: "{{ item.0.hostId }}"
-  become: true
-  loop: "{{ platform_vault_application_job.documents | map(attribute='fields') | map('dict2items') | flatten | map(attribute='value') | selectattr('pkiPlans', 'defined') | map(attribute='pkiPlans') | flatten | product(['keystore.p12', 'truststore.p12']) | list }}"
-  changed_when: false
-  no_log: true
-
 - name: Read current policy and role before any Vault mutation
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item }}"

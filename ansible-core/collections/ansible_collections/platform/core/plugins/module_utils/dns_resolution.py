@@ -76,7 +76,7 @@ def _provider_addresses(deployments, definitions, endpoint_group, findings):
 
 def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory_deployments,
                       include_service_endpoints=True, source_deployment_ids=None,
-                      include_group_wildcards=True):
+                      include_group_wildcards=True, endpoint_sources=None):
     """Return deterministic BIND zones for all declared BIND deployments."""
     desired_state = desired_state if isinstance(desired_state, dict) else {}
     deployments = desired_state.get("serviceDeployments", {})
@@ -105,6 +105,7 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
         endpoint_projection = resolve_service_endpoints(
             desired_state, service_catalog, inventory_deployments=inventory_deployments,
             deployment_ids=source_deployment_ids,
+            endpoint_sources=endpoint_sources,
         )
         findings.extend(endpoint_projection.get("findings", []))
         if endpoint_projection.get("status") == "PASS":
