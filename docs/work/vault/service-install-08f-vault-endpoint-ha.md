@@ -1,8 +1,12 @@
 # SI08-F — Vault endpoint with shared HA providers
 
-Status: technical acceptance DONE (2026-09-29). SI08-E Vault 1/1, 3/1 and
-3/3 acceptance is complete; SI09 all-services execution remains separate and
-is not started here.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08f-vault-endpoint-ha-checkpoint-002).
+
+
 
 ## Goal and owner decisions
 
@@ -229,60 +233,4 @@ started automatically.
 
 ## Acceptance evidence (2026-09-29)
 
-- Fresh managed project `project-e74f53b99dd648d4`, canonical revision
-  `sha256:5e9c6fc52f0c760a15083b797831f4122ca87d17426f14c277dea07f0a65e6cb`,
-  remained byte-revision-identical after both runs. Pinned immutable release
-  `sha256:9b0beb40e91b1a1beb20d14096ecd6a45c09274053b6f0bdf412a8424e7a6e3c`
-  was still active on the Execution Node after acceptance. Catalog digest
-  `sha256:3e92c57ff09461262be6a75d40a21713e7499eb8a984167498a885bd9787385d`.
-- Real nonvisual React/Wails flow opened the managed project, selected the
-  READY Execution Node, imported encrypted Vault admin-token/unseal-share
-  inputs through the service Secrets dialog, built plan
-  `plan-7ef0fd3def229115d95c955f`, approved it, supplied the runtime output
-  encryption password, started and observed the authoritative run. No mock
-  binding or test-only Start path substituted for the Wails Go method.
-- Fresh run `installer-56f9aa6637457b0bcf119b6b3abfa0f4` SUCCEEDED
-  10:11:52–10:47:47 UTC (35m55s), terminal sequence 3095. PKI apply, four
-  service apply actions and four verify actions all SUCCESS. Task results:
-  1552 SUCCESS, 421 SKIPPED, 18 CHANGED, 0 FAILED.
-- Its independent DNS audit found a cross-project serial collision: new
-  project-generated BIND serial 1 matched the serial already served by the
-  prior QA zone, so secondaries did not transfer the changed zone. The
-  explicit `recover_dns_lifecycle` contract requires the audited historical
-  fingerprint and observed SOA serials for exactly all current participants;
-  it cannot safely infer those from the new project. Supplying that evidence
-  through a temporary runtime-only recovery input advanced the new project's
-  persistent state to serial 2. All three authoritative DNS nodes then
-  returned `vault-endpoint-ha.asutp.scada.local` → `192.168.56.121` with SOA
-  serial 2. No zone file was edited by hand.
-- Strict repeat via the same real React/Wails flow, same plan/revision:
-  `installer-06510ac6068d9b7a695599d14850d32e` SUCCEEDED
-  11:04:50–11:45:44 UTC (40m54s), terminal sequence 3095. All nine actions
-  SUCCESS; 1564 task SUCCESS, 427 SKIPPED, **0 CHANGED**, 0 FAILED, no
-  sequence gaps or degraded-observability diagnostics. Both run journals
-  contained zero forbidden secret-bearing event fields.
-- Three exact current Vault units remained active; file audit, KV v2,
-  userpass and three Raft voters were confirmed through authenticated API.
-  All three HAProxy nodes passed `haproxy -c` and had byte-identical backend
-  fragments (SHA-256 `9e1dcd689b115e35ce672100f7674fe3011d95c8be88328b76aff8f833eb93c0`)
-  with precisely three `:8200` Vault member targets and `ssl verify required`
-  plus `verifyhost vault-endpoint-ha.asutp.scada.local`. `named`, `haproxy`
-  and `keepalived` were active on all three; the VIP remained reachable.
-- Authenticated KV marker write/read succeeded directly and through DNS/VIP
-  from all three nodes. Vault's `/sys/health` can return HTTP 429 when the
-  load balancer selects a healthy standby; this did not break authenticated
-  client KV traffic. Leader `step-down` moved active status from node1 to
-  node2 (HTTP 204); the VIP still served the marker. Stopping only the exact
-  node2 Vault unit caused node1 to become leader, and VIP marker read again
-  returned HTTP 200. The node2 unit was restarted and explicitly unsealed
-  with two protected shares; all three ended initialized/unsealed, one active
-  and two standby, with three voters and the marker still accessible.
-- Final gates: RED OS Core 416 OK (19 skips, 440.563s); focused PKI 10 OK;
-  BIND 11 OK, HAProxy 17 OK (9 skips), Vault 28 OK; catalog/schema
-  reproducibility PASS; Windows `go test ./...`, `go vet ./...`, fresh
-  executionnode/secretfiles/root Go tests PASS; RED OS race executionnode,
-  runtimesecret and secretfiles PASS; frontend lint/67 tests/build PASS;
-  Wails production build PASS; `git diff --check` PASS. Six exact remote
-  temporary QA workspaces were removed. Source and QA changes were recorded
-  in focused commits `f23fb9a`, `d1c0612`, `d1df02d`, `c6f066b`,
-  `2b67ed8` and `9773413`; this document records the final acceptance.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08f-vault-endpoint-ha-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

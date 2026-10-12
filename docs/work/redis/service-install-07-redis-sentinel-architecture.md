@@ -1,6 +1,12 @@
 # SERVICE-INSTALL-07 — Redis и Redis Sentinel с TLS
 
-Статус: **реализация начата; acceptance на targets ещё не проводился**.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-07-redis-sentinel-architecture-checkpoint-001).
+
+
 
 ## 1. Цель и граница этапа
 

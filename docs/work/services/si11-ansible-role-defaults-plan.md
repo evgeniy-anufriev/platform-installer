@@ -1,6 +1,12 @@
 # SI11 — effective service defaults at execution
 
-Status: owner-directed correction before the next SI11 full-plan run.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#si11-ansible-role-defaults-plan-checkpoint-001).
+
+
 
 ## Decision and boundary
 

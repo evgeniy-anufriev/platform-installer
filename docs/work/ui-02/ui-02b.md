@@ -1,6 +1,10 @@
 # UI-02B — fresh plan and approval
 
-Status: **DONE**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02b-checkpoint-002).
 
 ## Scope and ownership
 
@@ -51,12 +55,4 @@ Execution and Result tabs remain non-mutating placeholders until UI‑02D.
 
 ## Evidence
 
-- Focused Go tests cover executable and blocked plans, exact acknowledgement
-  equality, stale revision rejection, current-plan ownership and the invariant
-  that UI‑02B never calls Start.
-- Runtime-protocol tests cover bounded typed phase/action/acknowledgement
-  decoding and malformed action rejection.
-- Windows Go/Wails and frontend gates pass; the full frontend suite contains
-  60 tests.
-- RED OS QA runs `go test -race . ./internal/executionnode` and `go vet` on a
-  freshly synchronized worktree. The temporary QA workspace is removed.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02b-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

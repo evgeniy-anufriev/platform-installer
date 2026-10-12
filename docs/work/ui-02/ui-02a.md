@@ -1,6 +1,10 @@
 # UI-02A — read-only Installation state
 
-Status: **DONE**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02a-checkpoint-002).
 
 ## Scope
 
@@ -38,11 +42,4 @@ broker.
 
 ## Evidence
 
-- Focused Go tests prove local-only prerequisite projection, saved revision
-  binding, draft gating, trusted-binding gating and safe unreadable-revision
-  handling.
-- Frontend tests cover the safe prerequisite display, Servers hand-off and all
-  four read-only stages; the full frontend suite passes 59 tests.
-- `go test ./...`, `go vet ./...`, frontend lint/build, Wails Windows build and
-  `git diff --check` pass. No Core, Execution Node or target operation is
-  called by this slice.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02a-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

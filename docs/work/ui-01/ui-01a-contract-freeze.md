@@ -1,7 +1,10 @@
 # UI-01A — frozen UI contracts and ownership
 
-Status: ACCEPTED by UI-01A, 2026-09-05. This is an architecture contract, not
-an implementation. Normative words MUST, MUST NOT and MAY constrain UI-01B+.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01a-contract-freeze-checkpoint-002).
 
 > **Normative owner supersession, 2026-09-15:** ADR-027 and
 > [Save / Project Verify / DeploymentPlan](../ui-lifecycle/ui-save-verify-architecture.md)
@@ -612,16 +615,7 @@ origin under the same snapshot contract:
 
 ### Historical UI-01D remote acceptance before ADR-027
 
-UI-01D was required to add the fixed remote snapshot operation and a standalone acceptance
-test for the generated project-local `ansible.cfg`. On RED OS that test changes
-to the exported project root, unsets `ANSIBLE_CONFIG`, asserts through
-`ansible-config --version` that the active file is that root's `ansible.cfg`,
-checks `ansible-config dump --only-changed` and `ansible-inventory --list`, then
-runs the target-free Core validation under `sudo unshare -n`. It must prove the
-configured inventory and merge policy without relying on the current adapter's
-working directory or explicit `-i`. UI-01F owns the provenance bug fix and its
-managed/user-owned/inline fixtures; the editor remains disabled for member
-values until that evidence passes.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01a-contract-freeze-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## 6. Negative-scenario ownership
 

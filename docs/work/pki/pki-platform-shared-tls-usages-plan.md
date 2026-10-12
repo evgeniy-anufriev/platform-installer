@@ -1,8 +1,12 @@
 # PKI platform-wide TLS certificate usages — implementation plan
 
-Status: owner-approved implementation direction; PKI-PLAN-01 passed the
-targeted recheck. The owner accepted the exact lock correction for the
-remaining PKI-PLAN-02 after the review budget was exhausted.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#pki-platform-shared-tls-usages-plan-checkpoint-001).
+
+
 
 ## Goal
 

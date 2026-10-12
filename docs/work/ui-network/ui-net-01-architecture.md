@@ -1,6 +1,12 @@
 # UI-NET-01 — Endpoint provider and virtual address editor architecture
 
-Status: **DONE**. Acceptance evidence: `docs/work/ui-network/ui-net-01.md`.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-net-01-architecture-checkpoint-001).
+
+
 
 Owner decision: UI-NET-01 precedes UI-01G because Core may include provider
 virtual addresses in certificate SAN when `sanPolicy.includeEndpointVip=true`.
@@ -316,7 +322,9 @@ material remains usable after a VIP change.
 
 ## 11. Milestone slices
 
-### UI-NET-01A — contract and managed provider model — DONE
+<a id="ui-net-01a--contract-and-managed-provider-model--done"></a>
+
+### UI-NET-01A — contract and managed provider model
 
 - additive v1alpha6 schema/decoder;
 - typed provider command value;
@@ -325,25 +333,33 @@ material remains usable after a VIP change.
   `EDIT_OPERATION_UNAVAILABLE`; a published decoder must never permit a silent
   no-op Save.
 
-### UI-NET-01B — reducer and guarded local Save — DONE
+<a id="ui-net-01b--reducer-and-guarded-local-save--done"></a>
+
+### UI-NET-01B — reducer and guarded local Save
 
 - reconcile/clear final-state reducer;
 - catalog-dependent reconcile and catalog-independent clear;
 - generic reference guard, preservation and transaction tests.
 
-### UI-NET-01C — Entry points provider editor — DONE
+<a id="ui-net-01c--entry-points-provider-editor--done"></a>
+
+### UI-NET-01C — Entry points provider editor
 
 - catalog-driven eligible provider list;
 - provider modal/panel and shared draft integration;
 - unavailable catalog/read-only and clear behavior.
 
-### UI-NET-01D — preview and PKI-impact UX — DONE
+<a id="ui-net-01d--preview-and-pki-impact-ux--done"></a>
+
+### UI-NET-01D — preview and PKI-impact UX
 
 - reuse `EndpointPreviewProvider` freshness states;
 - draft-vs-verified presentation;
 - neutral provider-change state with PKI impact reserved for Core evidence.
 
-### UI-NET-01E — acceptance and regression — DONE
+<a id="ui-net-01e--acceptance-and-regression--done"></a>
+
+### UI-NET-01E — acceptance and regression
 
 - built Windows desktop flow;
 - RED OS target-free Core and affected race tests;

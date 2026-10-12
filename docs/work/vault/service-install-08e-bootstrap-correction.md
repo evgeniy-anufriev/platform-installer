@@ -1,8 +1,12 @@
 # SI08-E — bootstrap correction plan, revision 2
 
-Status: owner accepted the revision-1 review correction; implementation and QA
-reset are not performed by this document. Review scope is only
-`SI08-E-PLAN-01`; `SI08-E-PLAN-02` remains a prerequisite for a separate reset.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08e-bootstrap-correction-checkpoint-001).
+
+
 
 ## Boundary and evidence
 

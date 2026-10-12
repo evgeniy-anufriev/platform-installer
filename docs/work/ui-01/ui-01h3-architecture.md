@@ -1,6 +1,10 @@
 # UI-01H3 — Member configuration and TLS-profile selection
 
-Status: **DONE**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01h3-architecture-checkpoint-002).
 
 ## Goal and scope
 
@@ -182,18 +186,4 @@ SAN/VIP computation, generic schema evaluation, secret input and H4 work.
 
 ## Implementation evidence
 
-The independent FULL PLAN review approved this bounded design with zero
-blocking and overengineering findings. H3 extends only the existing frontend
-adapter and shared App-owned session: it adds the already-published member
-configuration projection, exact MEMBER-scoped v1alpha8 Set/Remove intents,
-the trusted TLS-profile ID selector and the application-local
-Certificates-to-Services return context. No Go, Core, catalog, schema, writer,
-Execution Node, PKI or target behavior changed.
-
-Focused component acceptance covers exact composite Set and Remove targets,
-independent member selection, TLS selection from direct managed IDs and the
-contextual Certificates round-trip without creating a session. Windows
-frontend lint, 55 tests, production build, Wails build, `go test ./...`,
-`go vet ./...` and `git diff --check` passed. The local Windows workstation
-does not provide Python; catalog generation was unchanged by this frontend-only
-slice and is deferred to H4's RED OS acceptance gate. UI-01H4 remains next.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01h3-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

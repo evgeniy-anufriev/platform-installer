@@ -1,6 +1,10 @@
 # ENDPOINT-HAPROXY-PLACEMENT-01 — черновик
 
-Статус: исходный DRAFT, 2026-10-09. Актуальный разрешённый объём реализации
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Область исходного черновика: исходный DRAFT, 2026-10-09. Актуальный разрешённый объём реализации
 зафиксирован в [узком плане](endpoint-haproxy-placement-plan.md).
 Владелец исключил новые транзакции/хранилища прежних целей; требования ниже
 сохраняются как история обсуждения, а не расширяют текущий scope. Узкий

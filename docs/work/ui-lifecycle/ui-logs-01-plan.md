@@ -1,6 +1,12 @@
 # UI-LOGS-01 — implementation plan
 
-Status: owner-revised scope; targeted architecture recheck APPROVE_WITH_CHANGES (no blockers)
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-logs-01-plan-checkpoint-001).
+
+
 
 ## Goal and owner decision
 

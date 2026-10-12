@@ -1,9 +1,10 @@
 # UI-01F3 — Deployment UI architecture
 
-Status: **DRAFT FOR OWNER APPROVAL; IMPLEMENTATION NOT STARTED**  
-Parent milestone: `UI-01F — topology editor`  
-Approved implementation baseline: `836653d4def69467e017c50df96d8069acf0698b`  
-Contract baseline: `platform.installer/edit-command/v1alpha5`
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f3-architecture-checkpoint-002).
 
 ## 1. Goal
 
@@ -510,25 +511,4 @@ UI-01F3 may be marked DONE only when:
 
 ## 15. Implementation evidence
 
-Status: **DONE**, 2026-09-16. UI-01F4 is **NEXT** and remains a separate owner
-gate.
-
-- the Wails executable created two Kafka deployments without an Execution
-  Node, preserved the shared draft across Servers and Topology, committed once
-  through the common Review/Save flow and restored both deployments after a
-  native-dialog close/reopen;
-- focused frontend coverage proves Add/Delete, stable selection, duplicate-ID
-  presentation validation, the shared 16-command limit, conflict recovery and
-  `COMMITTED_REFRESH_FAILED` invalidation/reopen behavior;
-- the acceptance run exposed and fixed one pre-existing F1 contract defect:
-  the catalog reader now accepts the exact published service-manifest
-  identifier grammar, including `pg_auto_failover`;
-- frontend tests (33), lint, typecheck, production build, `go test ./...`,
-  `go vet ./...`, Wails production build, changed-scope secret audit and
-  `git diff --check` passed;
-- generated catalog/schema inputs were unchanged; the narrow Go grammar fix
-  additionally passed `CGO_ENABLED=1 go test -race
-  ./internal/projectlifecycle` on RED OS in an isolated workspace, which was
-  removed and its absence verified;
-- no Core operation, Execution Node or target host was contacted during the
-  Windows Save/reopen acceptance.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f3-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

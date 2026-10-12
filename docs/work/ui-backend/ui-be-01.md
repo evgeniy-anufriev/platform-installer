@@ -1,6 +1,12 @@
 # UI-BE-01 — Installer UI / Backend boundary
 
-Status: **DONE**. This milestone defines architecture and semantic contracts
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-be-01-checkpoint-001).
+
+This milestone defines architecture and semantic contracts
 only. It does not implement a Go backend, Wails transport, React pages, project
 mutation, execution streaming, or another desired-state store.
 

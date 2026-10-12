@@ -1,8 +1,10 @@
 # UI-01A — contract preflight для редактора проекта
 
-Статус: DONE, 2026-09-05 (documentation/contract only). Реализация UI и новых
-production-контрактов не входила. Результат — набор принятых решений, а не
-scaffold Wails/React.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01a-checkpoint-001).
 
 Accepted artifacts: [contract freeze](ui-01a-contract-freeze.md),
 [toolchain](ui-01a-toolchain.md), [mockup reconciliation](evidence/ui-01a-mockup-reconciliation.md),

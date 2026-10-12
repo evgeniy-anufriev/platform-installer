@@ -1,6 +1,10 @@
 # UI-01H2 — Services navigation and supported managed forms
 
-Status: **DONE**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01h2-architecture-checkpoint-002).
 
 ## Goal and scope
 
@@ -123,20 +127,4 @@ catalog fallback, Core Verify change, execution lifecycle or H3/H4 work.
 
 ## Implementation evidence
 
-The approved full PLAN review found four bounded issues (separate list/detail
-views, direct configuration projection, exact managed/admitted gating and
-focus behavior). The owner accepted the corrections and one targeted recheck
-passed all four; no further architecture review was needed.
-
-H2 implements the single Services route, application-local list/detail state
-and the Topology hand-off. It uses only H1's direct managed configuration
-projection and v1alpha8 Set/Remove intents through the existing shared
-EditSession. The unavailable-catalog path exposes only setting identity and
-override presence, never a raw value. No Go/Core/schema/catalog/writer,
-Execution Node, PKI or target behavior changed.
-
-Focused frontend acceptance covers both entry paths, focus return, one shared
-session/intended v1alpha8 command, the acknowledgement lock and safe
-unavailable-catalog display. Windows gates passed: frontend lint, 52 tests,
-production build and `wails build -nopackage -clean`; `go test ./...`,
-`go vet ./...` and `git diff --check` also passed. H3 remains next.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01h2-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

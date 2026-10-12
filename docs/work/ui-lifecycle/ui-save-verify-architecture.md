@@ -1,7 +1,12 @@
 # UI owner change — Save, Project Verify and DeploymentPlan
 
-Status: **IMPLEMENTED PRE-UI-01E5 (2026-09-15)**. Milestone statuses are
-unchanged: UI-01E5 remains not started and NEXT.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-save-verify-architecture-checkpoint-001).
+
+
 
 The implementation adds the closed `project-save/v1alpha1` and
 `project-verification/v1alpha1` contracts, local owned-field server projection,

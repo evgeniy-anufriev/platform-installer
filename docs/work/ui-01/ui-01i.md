@@ -1,6 +1,10 @@
 # UI-01I — portable export and reopening
 
-Status: **DONE** (2026-09-21).
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01i-checkpoint-002).
 
 UI-01I publishes only a saved full Installer-managed configuration into a new,
 empty native directory. It has no archive/template/import mode and never
@@ -40,28 +44,4 @@ this evidence-only update.
 
 ## Acceptance evidence
 
-- Windows focused export backend tests: `go test ./internal/installer -run
-  TestProjectExport -count=1` — PASS.
-- Frontend export/reopen component test: `npm test -- --run App.test.tsx` —
-  PASS, 30 tests. It proves Preview → Commit via opaque plan digest → explicit
-  `OpenProject(exportedRoot)`.
-- Frontend lint and production build — PASS.
-- `go test ./...` and `go vet ./...` — PASS.
-- `wails build -nopackage -clean` — PASS.
-- RED OS isolated workspace: `CGO_ENABLED=1 go test -race
-  ./internal/installer -run TestProjectExport -count=1` — PASS. The workspace
-  was removed after the test.
-- RED OS catalog and schema reproducibility checks — PASS:
-  `build_fixture_catalog.py --check` and
-  `build_service_configuration_schema.py --check`.
-- Existing I3 acceptance remains valid: the built Windows Wails application
-  opened the native folder picker; a real temporary export had byte-identical
-  portable documents, excluded runtime/generated files, target-free RED OS
-  Core validation, and equal source/export snapshot fingerprint
-  `sha256:fbb68160f0799444205c2e07c5b1a9ec80e1d5d4938cbf1448507ccd388ffbe9`.
-- Changed-scope secret audit found no newly introduced plaintext secret or
-  credential value. `git diff --check` passed.
-
-No Core, Execution Node, target host, service deployment, or canonical source
-project mutation is part of export. UI-01J is the next milestone; UI-01 overall
-remains not done.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01i-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

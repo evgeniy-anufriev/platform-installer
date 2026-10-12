@@ -1,9 +1,12 @@
 # Local browser mode plan
 
-Status: owner-approved local scope and decisions; implementation is in
-progress. Scope is limited to one interactive user on the same computer as the
-Installer process. The approved targeted plan recheck resolved BROWSER-LOCAL-01
-and BROWSER-LOCAL-03; implementation acceptance remains pending.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#browser-mode-local-plan-checkpoint-001).
+
+
 
 ## Goal
 

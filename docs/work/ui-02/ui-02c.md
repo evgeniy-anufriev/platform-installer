@@ -1,6 +1,10 @@
 # UI-02C — target credential lease and idempotent Start correlation
 
-Status: **DONE**.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02c-checkpoint-001).
 
 UI-02C adds the closed node-side `PutRuntimeSecretLease/v1alpha1` protocol,
 `ExecutionCapabilities/v1alpha2` gate and the one approved

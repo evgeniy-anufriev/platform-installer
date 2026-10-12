@@ -1,15 +1,18 @@
 # Execution Order 01 — Service priorities and apply/verify sequencing
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Status
 
-Implementation in progress. On 2026-10-07
+Historical implementation checkpoint: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#execution-order-01-plan-checkpoint-001). On 2026-10-07
 the owner clarified equal-priority ordering and decided that base HAProxy and
 BIND Apply must not consume endpoints belonging to later services. Endpoint
 integration and its health proof belong to the source service's own Apply.
 This is a prerequisite
 change to the current Ansible/Core lifecycle, not permission to remove a Core
-dependency before the role behavior is changed and tested. No execution-order
-production change is currently in effect.
+dependency before the role behavior is changed and tested. Recorded implementation boundary: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#execution-order-01-plan-checkpoint-002).
 
 ## Design review (2026-10-07)
 

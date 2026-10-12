@@ -1,15 +1,12 @@
 # UI-02F — bounded runtime service-secret transport
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Status
 
-**PLAN — owner-approved direction; implementation has not started.**
-
-UI-02F closes the execution prerequisite exposed by SERVICE-INSTALL-06:
-the existing credentialed Start transports the target login, optional sudo
-password, and the one PKI store password, but cannot transport PostgreSQL
-`pg_auto_failover` runtime passwords.  It is a narrow extension of the
-existing lease; it is not a vault, secret registry, desired-state store,
-workstation-to-target path, or generic file upload API.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02f-runtime-service-secret-transport-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## Scope and non-goals
 

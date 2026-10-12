@@ -1,6 +1,10 @@
 # UI-02D — credentialed Start and bounded execution observation
 
-Status: **DONE**.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02d-checkpoint-001).
 
 UI-02D wires the existing runtime-only credential broker into the one
 `ExecutionService` credentialed Start path. The Wails facade starts only an

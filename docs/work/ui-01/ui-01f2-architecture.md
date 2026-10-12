@@ -1,6 +1,10 @@
 # UI-01F2 — Topology command contract, reducer and managed writer
 
-Status: **DONE (2026-09-16)**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f2-architecture-checkpoint-001).
 
 Milestone: **UI-01F2**
 

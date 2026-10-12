@@ -1,6 +1,12 @@
 # SERVICE-INSTALL-06 — PostgreSQL / pg_auto_failover
 
-Status: **DONE (2026-09-24)**.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-06-postgresql-checkpoint-002).
+
+
 
 ## Goal
 
@@ -54,24 +60,4 @@ cumulative all-services project.
 
 ## Acceptance evidence
 
-The production-shaped Go lifecycle acceptance passed on 2026-09-24 against
-three distinct RED OS targets: node1 (`192.168.56.101`) as monitor, node2
-(`192.168.56.102`) and node3 (`192.168.56.103`) as database members.
-
-| Cycle | Run ID | Terminal result | Duration | Apply changes |
-| --- | --- | --- | --- | --- |
-| First | `installer-45943379628ebee4a28716d85b571916` | `SUCCEEDED` | 17m45s | 65 |
-| Repeat | `installer-4fcc0cd5afc8689509aea2e2a49935e6` | `SUCCEEDED` | 17m9s | 0 |
-
-Both cycles completed PKI apply, PostgreSQL/pg_auto_failover apply and
-PostgreSQL verify successfully. The opt-in Go test
-`TestServiceInstall06PostgreSQLLifecycle` passed in 2094.93s. Its operator
-event mirrors are retained under the corresponding Git-ignored
-`.runtime/executions/<run-id>/events.jsonl` directories.
-
-During acceptance, a valid topology without an explicit monitor member port
-exposed a templating defect in the TLS credential probe. The role now consumes
-the already-resolved defaultable monitor port; the focused RED OS contract,
-deployment-plan, lifecycle, PKI-apply and configuration-resolution suite ran
-111 tests successfully. No secret value was written to the project, events,
-journal or evidence.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-06-postgresql-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

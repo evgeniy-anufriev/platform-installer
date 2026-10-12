@@ -1,6 +1,12 @@
 # UI-01E1 — Server model / CRUD integration architecture
 
-Status: **DONE** (2026-09-14). This document defines the backend and contract
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e1-architecture-checkpoint-002).
+
+This document defines the backend and contract
 integration for server CRUD. UI-01E2 owns the production Servers page and its
 Add/Edit/Delete dialogs.
 
@@ -502,22 +508,7 @@ credentials, target preparation and end-to-end UI regressions belong to E2-E6.
 
 ### Historical implementation evidence (2026-09-14, before ADR-027)
 
-- New sessions emit the deliberately server-CRUD-only
-  `project-edit/v1alpha4`; v1alpha2/v1alpha3 tests remain compatible.
-- The existing first-save compatibility form now requires desired hostname and
-  reached the then-current Core-backed Review → Commit lifecycle; it is not a Servers
-  page or a direct writer.
-- Core projects `desiredHostname`, normalized `ansiblePort`, and generic host
-  reference records. The Go reducer owns no service-specific delete rules.
-- Local gates passed: focused Go tests, `go test ./...`, `go vet ./...`,
-  frontend Vitest (7 tests), lint, production build, and
-  `wails build -nopackage -clean`.
-- A fresh RED OS QA workspace passed 242 Core tests (4 skipped), fixture-catalog
-  and configuration-schema reproducibility, and
-  `go test -race ./internal/installer ./internal/coreadapter`; the temporary
-  workspace was removed. The checks are target-free.
-- Added-line secret audit and `git diff --check` passed. Per owner direction,
-  no additional reviewer loop was run for this milestone.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e1-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## 15. Non-goals
 

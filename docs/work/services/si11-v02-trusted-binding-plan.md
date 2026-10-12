@@ -1,5 +1,9 @@
 # SI11-V02 — trusted Execution Node binding from the Servers UI (PLAN)
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Status (2026-10-01): implementation in progress. The owner authorized the
 session-only PEM and host-key scope and the bounded DIFF corrections. One FULL
 DIFF review found D01/D02; the one authorized TARGETED_RECHECK passed both with
@@ -77,20 +81,4 @@ This is architecture evidence, not a claim that WebView Project Verify passed.
 
 ## Реальная приёмка V02 (01.10.2026)
 
-После S11-00 первый WebView Verify был заблокирован отдельным Go staging-дефектом:
-фиксированный родитель `/var/tmp/platform-installer/execution-plan` отсутствовал.
-По разрешению владельца `stageProjectArchive` теперь готовит только этот
-фиксированный каталог с проверкой типа/владельца и режимом `0700`, сохраняя
-исключительное `mkdir` для run-каталога. Регрессионный тест, полный `go test
-./...`, `go vet ./...`, Wails build и `git diff --check` прошли. Нового
-архитектурного review не было: бюджет D01/D02 исчерпан, исправление не меняет
-утверждённую границу.
-
-Реальный `.exe` без аргументов (SHA-256
-`5C0AFEEF51A39A8F57C7BB07E89B1BD43F8FA6C9F55F7868D35D0F094A9345E5`)
-через Windows UI Automation открыл сохранённый проект, принял сеансовый PEM,
-показал ранее независимо сверенный SSH-отпечаток node1, получил явное
-подтверждение, показал READY и завершил Project Verify состоянием «Проверено».
-Файлы проекта не изменились; staging-каталог на Execution Node после операции
-пуст. Сервисы и план установки не запускались. V02 — ПРОЙДЕН; весь SI11 этим
-не завершён.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#si11-v02-trusted-binding-plan-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

@@ -89,7 +89,7 @@ of scope. The owner states that the naming check will happen during the next
 full-service S11 run on the QA nodes after the bounded S11-00 cleanup.
 
 S11-00 means the recorded Installer-free QA baseline in
-[`service-install-11-cleanup.md`](../service-install-11/service-install-11-cleanup.md), not a
+[`service-install-11-cleanup.md`](../services/service-install-11-cleanup.md), not a
 pristine operating system image. It removes only the enumerated prior
 Installer/QA service runtime and preserves OS-owned and other shared resources.
 That cleanup is the precondition for this naming acceptance; it is not

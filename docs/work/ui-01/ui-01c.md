@@ -1,6 +1,10 @@
 # UI-01C — metadata-only managed project creation
 
-Status: DONE, 2026-09-05.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01c-checkpoint-001).
 
 UI-01C implements local project creation and empty-project reopening. The
 operation verifies the trusted local immutable bundle on every create call,

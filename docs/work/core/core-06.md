@@ -1,6 +1,10 @@
 # CORE-06 — Canonical project state and runtime projection
 
-Status: DONE.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#core-06-checkpoint-001).
 
 CORE-06 establishes one portable desired-state model while preserving ordinary
 standalone Ansible role use. Derived Kafka runtime input is disposable and is

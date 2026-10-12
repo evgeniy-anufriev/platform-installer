@@ -1,6 +1,12 @@
 # UI-01G — Certificates: managed PKI intent editor architecture
 
-Status: **UI-01G DONE**. This document remains the governing
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01g-architecture-checkpoint-001).
+
+This document remains the governing
 architecture for the remaining slices. UI-01G1 added only the additive command
 contract, bounded local desired-state projection, final-state references and
 guarded local Save; it did not authorize certificate issuance, reissue,

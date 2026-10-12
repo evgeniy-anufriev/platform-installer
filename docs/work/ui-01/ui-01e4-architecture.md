@@ -1,6 +1,10 @@
 # UI-01E4 — Execution Node panel and one-time selection
 
-Status: **DRAFT — awaiting architecture review and owner approval**.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e4-architecture-checkpoint-001).
 
 ## 1. Goal and owner decisions
 

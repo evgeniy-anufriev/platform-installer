@@ -1,6 +1,12 @@
 # PKI-STORE-01 — Recoverable PKCS#12 password rotation
 
-Status: owner-approved; implementation IN PROGRESS; real React/Wails/Core acceptance pending.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#pki-store-password-recovery-01-checkpoint-001).
+
+
 
 ## Goal
 

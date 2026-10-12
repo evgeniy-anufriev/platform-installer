@@ -1,6 +1,10 @@
 # UI-01F — Catalog-backed deployments, topology and relations
 
-Status: **DRAFT ARCHITECTURE PLAN**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f-architecture-checkpoint-001).
 
 Milestone: **UI-01F**
 
@@ -414,7 +418,7 @@ slices:
 
 ### UI-01F1 — catalog and local read model
 
-Status: **DONE**.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f-architecture-checkpoint-002).
 
 - lock-bound verified catalog resolver and `ProjectCatalogView`;
 - extend `ManagedProjectView` with direct deployments, endpoint groups and
@@ -424,8 +428,7 @@ Status: **DONE**.
 
 ### UI-01F2 — contract and local reducer/writer
 
-Status: **DONE**. Detailed architecture and evidence:
-`docs/work/ui-01/ui-01f2-architecture.md` and `docs/work/ui-01/reviews/ui-01f2-architecture-review.md`.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f-architecture-checkpoint-003).
 
 - immutable `project-edit/v1alpha5` schema;
 - normalize v1alpha5 into existing `EditCommand`;
@@ -438,7 +441,7 @@ Status: **DONE**. Detailed architecture and evidence:
 
 ### UI-01F3 — deployment UI
 
-Status: **DONE**. Evidence: `docs/work/ui-01/ui-01f3-architecture.md`.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f-architecture-checkpoint-004).
 
 - Topology navigation and catalog-driven Add/Delete deployment;
 - By services view and stable selection;
@@ -446,7 +449,7 @@ Status: **DONE**. Evidence: `docs/work/ui-01/ui-01f3-architecture.md`.
 
 ### UI-01F4 — placement UI
 
-Status: **DONE**. Evidence: `docs/work/ui-01/ui-01f4-architecture.md`.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f-architecture-checkpoint-005).
 
 - catalog-driven `MEMBER_SCOPED` members/roles form;
 - catalog-driven `HOST_SCOPED` direct hosts/optional roles form;
@@ -457,7 +460,7 @@ Status: **DONE**. Evidence: `docs/work/ui-01/ui-01f4-architecture.md`.
 
 ### UI-01F5 — endpoint groups and projections
 
-Status: **NEXT**; separate owner gate. Plan: `docs/work/ui-01/ui-01f5-architecture.md`.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f-architecture-checkpoint-006).
 
 - Entry points view, endpoint-group CRUD and assignment;
 - generic consumer/delete UX;
@@ -469,7 +472,9 @@ Status: **NEXT**; separate owner gate. Plan: `docs/work/ui-01/ui-01f5-architectu
 - revision-bound Core preview and honest stale/unavailable states;
 - service editor and its navigation remain outside F5.
 
-### UI-01F6 — acceptance and regression — DONE
+<a id="ui-01f6--acceptance-and-regression--done"></a>
+
+### UI-01F6 — acceptance and regression
 
 - Windows desktop end-to-end acceptance;
 - RED OS target-free Core verification and affected race tests;

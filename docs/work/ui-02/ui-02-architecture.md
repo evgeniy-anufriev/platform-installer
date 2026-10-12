@@ -1,15 +1,10 @@
 # UI-02 — Installation workflow architecture
 
-Status: **UI-02A through UI-02E DONE; UI-02 overall DONE**. UI-02C uses one
-`ExecutionService`-owned v1alpha2 Start path: plan-time staging is private and
-is never an authoritative run, and the Execution Node commits the node-owned
-run binding, attempt mapping and lease attachment before controller launch.
-`UI02-PLAN-001` is
-**RESOLVED BY OWNER DECISION**: credentialed Start uses versioned
-`StartExecution/v1alpha2` before capability negotiation through
-`ExecutionCapabilities/v1alpha2`. The initial PLAN review and its permitted
-targeted recheck are complete; no further architecture review is run for this
-exact owner-authorized correction.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02-architecture-checkpoint-001).
 
 UI-02 adds the operational Installation experience after UI-01's editor has saved a portable project. It is not a second desired-state model, planner, Ansible-output viewer, or workstation-to-target execution path.  The owner-approved, pending-review UI-02E correction for one PKI runtime store password is specified in [UI-02E PKI runtime-secret transport](ui-02e-pki-runtime-secret-transport.md); it keeps the published credential payload v1alpha1 immutable.
 

@@ -1,6 +1,10 @@
 # UI-01F5 — Endpoint groups and Entry points architecture
 
-Status: **PLAN / NOT STARTED**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f5-architecture-checkpoint-001).
 
 Milestone: **UI-01F5**
 

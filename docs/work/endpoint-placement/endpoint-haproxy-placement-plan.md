@@ -1,10 +1,12 @@
 # ENDPOINT-HAPROXY-PLACEMENT-01 — узкий план реализации
 
-Статус: source реализован, FULL DIFF APPROVE, 2026-10-09; реальная acceptance
-и перевыпуск bundle остаются отдельными этапами. Владелец явно разрешил реализацию
-с изменением только механизма привязки, без новых транзакций/хранилищ.
-Предыдущий FULL PLAN BLOCK относился к расширению гарантий и evidence,
-которое владелец исключил из объёма. Новый review проверяет этот объём.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#endpoint-haproxy-placement-plan-checkpoint-001).
+
+
 
 ## Требования
 

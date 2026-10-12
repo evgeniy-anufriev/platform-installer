@@ -1,6 +1,10 @@
 # UI-02E — PKI runtime store-password transport
 
-Status: **DONE (2026-09-22).**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02e-pki-runtime-secret-transport-checkpoint-002).
 
 UI-02E acceptance exposed a real boundary: a TLS profile may require a
 runtime-only PKCS12 store password, while the published
@@ -220,48 +224,4 @@ and changes to target credential transport semantics beyond payload v1alpha2.
 
 ## 8. Completion evidence
 
-The immutable QA runtime release
-`sha256:6d85afb53c6994f2f1b152e29b39a329ed35a9af7ed3e9c802be0e888993dca0`
-(`qa-ui-02e-20260922-15`) was published and activated through the existing
-Execution Node activation path.  Its capability handshake was READY and
-advertised the compatible closed lease/start contract before the test staged
-the runtime-only store password.
-
-The production-shaped one-host/three-member Kafka acceptance passed with:
-
-```text
-go test ./internal/executionnode \
-  -run '^TestUI02EProductionSingleHostKafkaLifecycle$' \
-  -v -count=1 -timeout 40m
-
-cycle 1: installer-a21c3eed1d053ac7ef073e13214349a6
-         SUCCEEDED, 12m16s, 1,260 events, changed=0
-cycle 2: installer-a3a4bba6fb97f41b21080ae22c00bcbb
-         SUCCEEDED, 12m42s, 1,260 events, changed=0
-total:    PASS, 24m58s
-```
-
-Both cycles used the generic `CreatePlan -> ApprovePlan -> Start` path.  PKI
-apply/verify and Kafka apply/verify completed through the selected Execution
-Node.  The second cycle proved repeat apply `changed=0`; it was not accepted
-merely from event logs.  The authoritative RunObserver terminal sync also
-clears the local active-run binding, so a completed run cannot block the next
-plan as `ACTIVE_RUN_EXISTS`.
-
-The isolated QA deployment units remained active after the test:
-
-```text
-kafka@kafka-ui02e-1.service  active
-kafka@kafka-ui02e-2.service  active
-kafka@kafka-ui02e-3.service  active
-```
-
-Final regression passed: local `go test ./...`, `go vet ./...`, frontend lint,
-62 frontend tests, frontend production build, Wails production build, RED OS
-Core suite (280 passed, 4 skipped), fixture-catalog and service-schema
-reproducibility, Kafka apply syntax-check, and RED OS
-`CGO_ENABLED=1 go test -race ./internal/executionnode ./internal/runtimesecret`.
-The remote QA workspace was removed through `scripts/qa-sync.ps1 -Cleanup`.
-Changed-scope secret inspection found no production plaintext material;
-`git diff --check` passed after the generated Wails binding was normalized with
-the new narrow `npm run format:bindings` command.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-02e-pki-runtime-secret-transport-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

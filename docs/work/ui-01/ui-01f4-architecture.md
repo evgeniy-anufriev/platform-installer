@@ -1,6 +1,10 @@
 # UI-01F4 — Placement UI architecture
 
-Status: **DONE** (2026-09-16)
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f4-architecture-checkpoint-002).
 
 Milestone: **UI-01F4**
 
@@ -612,8 +616,4 @@ UI-01F4 may be marked DONE only when:
 
 ## 19. Completion evidence
 
-Completed on 2026-09-16. The bounded plan review finished with zero blocking
-findings. The F4 implementation contains no new persistence, Core semantics or
-service-specific branch. Focused and full frontend tests, typecheck, lint,
-production build, `go test ./...`, `go vet ./...`, Windows Wails build and
-`git diff --check` passed. UI-01F5 is **NEXT** and has not started.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01f4-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

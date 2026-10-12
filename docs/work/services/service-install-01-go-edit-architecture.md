@@ -1,5 +1,9 @@
 # SERVICE-INSTALL-01A — typed host placement priority
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Goal
 
 Close the single missing Installer edit capability exposed by the
@@ -112,34 +116,7 @@ DTO.
 
 ## SERVICE-INSTALL-01 acceptance update
 
-The Keepalived acceptance fixture will be constructed as follows:
-
-1. the Wails placement dialog is exercised against the public EditSession
-   backend: it rejects an incomplete priority, accepts explicit values, and
-   saves/reopens the same direct-owned placement through Review/Save;
-2. the public Wails `CreateProject` flow creates the controlled, Git-ignored
-   cumulative QA root from the fixed immutable bundle source; Go reopens and
-   accepts only its `EMPTY_MANAGED_PROJECT` state;
-3. one v1alpha9 Go `EditSession` with three `CreateServer` intents, one
-   `CreateServiceDeployment`, one `CreateEndpointGroup`, one
-   `ReconcileHostScopedDeploymentPlacement` with priorities 150/120/100, and
-   one `ReconcileEndpointProvider` for VRID 61 / VIP `192.168.56.121`;
-4. `ReviewStructural` and the existing guarded local Commit;
-5. reopen and assert the owned servers, placement priorities and provider
-   tuple without Core or target contact;
-6. run the existing Go `CreatePlan → ApprovePlan → Start → observe → Sync`
-   lifecycle twice against the three RED OS targets, retaining the resulting
-   canonical project as the sole input to SERVICE-INSTALL-02.
-
-The first milestone fails closed when the cumulative root already exists;
-replacement is a separate, reviewed cleanup operation and is never an
-implicit local reset. Each later milestone must open the same root, verify its
-saved revision before appending its own commands, and prove its additions do
-not rewrite previous service state. The final milestone builds one fresh plan
-from that same accumulated revision. The test retains the existing
-deployment-scoped cleanup/isolation rule. It must not reset hosts or touch
-active Kafka units. Core remains responsible for the final target-free project
-validation, deployment plan, apply and verify.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-01-go-edit-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## Bounds, compatibility and non-goals
 

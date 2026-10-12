@@ -11,6 +11,7 @@ review и журналах описывают проверенную верси�
 | --- | --- |
 | Понять устройство проекта | [Архитектура](architecture.md), [решения ADR](architecture-decisions.md), [roadmap](roadmap.md) |
 | Разобраться в переносимом проекте и Core | [Контракт проекта](project-contract.md), [Ansible Core](ansible-core.md) |
+| Найти подробные правила и их version scope | [Контракты](contracts/README.md) |
 | Работать с Go backend и UI | [Границы backend/UI](backend-and-ui.md), [дизайн](design/ui-design-01.md), [mockups](design/ui-design-01-mockups.html) |
 | Пользоваться установщиком | [Руководство инженера](guides/installer-engineer-guide.md), [диагностика исполнения](guides/execution-failure-diagnostics.md) |
 | Работать с application libraries | [Тематическая навигация](work/application-libraries/README.md); архитектурные предложения, планы подэтапов и evidence различаются внутри раздела |
@@ -28,7 +29,7 @@ review и журналах описывают проверенную верси�
 | --- | --- |
 | Архитектурное планирование, классификация риска и review | [Review](agent-procedures/review.md) |
 | Core/service QA и реальные React/Wails проверки | [QA](agent-procedures/qa.md) |
-| Подготовка и приёмка SI11 | [SI11](agent-procedures/si11.md), [UI test cases](work/service-install-11/service-install-11-ui-test-cases.md), [журнал](work/service-install-11/evidence/service-install-11-test-journal.md) |
+| Приёмка установки сервисов | [Общие условия](agent-procedures/service-acceptance.md), [сервисные материалы](work/services/README.md); для сценариев SI11 сохраняется [процедура](agent-procedures/si11.md) |
 | Получение артефактов, сборка, публикация и использование runtime bundle | [Runtime bundle](agent-procedures/runtime-bundle.md) |
 
 ## Как читать документы
@@ -54,6 +55,7 @@ UI-дизайн — в `design/`. В существующих документа
 - [Vault](history/vault-state-20261008.md)
 - [Workflow](history/workflow-state-20261008.md)
 - [Ранние milestones](history/milestones-state-20261008.md)
+- [Записи из прежнего roadmap](history/roadmap-checkpoints-20261012.md): статусы и результаты исходного снимка
 
 ## Поддержание документации
 

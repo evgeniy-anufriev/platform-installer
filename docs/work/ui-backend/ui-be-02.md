@@ -1,6 +1,12 @@
 # UI-BE-02 — Read-only ProjectSnapshot
 
-Status: **DONE**. This milestone implements the first real Installer read path.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-be-02-checkpoint-002).
+
+This milestone implements the first real Installer read path.
 It adds no writer, Wails/React application, SQLite desired-state copy, runtime
 observation, apply, or verify behavior.
 
@@ -91,22 +97,7 @@ runtime observations deferred to UI-BE-04.
 
 ## Acceptance evidence
 
-The representative `examples/valid/ui-project-snapshot` project has three
-unreachable-by-design inventory hosts and exercises Kafka, PostgreSQL HA,
-Keepalived, BIND, dns-client, HAProxy, endpoint publication, provider
-relations, and shared host-scoped PKI identities.
-
-On RED OS:
-
-- 168 Core unit tests passed;
-- catalog and configuration-schema reproducibility checks passed;
-- two repeated queries were logically identical and all snapshot assertions
-  passed with `changed=0` and only `localhost` in the play recap;
-- the same acceptance play passed under `sudo -n unshare -n`;
-- one standalone query, including Ansible startup and serialization, took
-  0.87 seconds and produced a 70,853-byte JSON snapshot.
-
-No service runtime acceptance is required by this milestone.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-be-02-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## UI-BE-03 handoff
 

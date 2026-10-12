@@ -1,5 +1,9 @@
 # UI-01E2 — Servers page + Add/Edit/Delete architecture
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 > **Owner supersession, 2026-09-15:** ADR-027 and
 > [Save / Project Verify / DeploymentPlan](../ui-lifecycle/ui-save-verify-architecture.md)
 > replace every statement below that requires READY/Core candidate PASS before
@@ -9,7 +13,9 @@
 > generic-reference behavior otherwise remains. Historical Core-backed
 > acceptance evidence is retained as evidence for the old implementation only.
 
-Status: **DONE (2026-09-14)**. This milestone implements the
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e2-architecture-checkpoint-003).
+
+This milestone implements the
 production Servers editor surface over the accepted UI-01D lifecycle and the
 UI-01E1 server CRUD contract. It does not implement runtime credentials,
 connection discovery, Execution Node management or readiness.
@@ -526,49 +532,7 @@ Automated and native tests must prove:
 
 ### Historical native acceptance before ADR-027
 
-The following records the completed Core-backed E2 acceptance and is not the
-acceptance contract for new local Save.
-
-Native Windows acceptance used temporary QA projects and the existing READY
-Execution Node only for target-free candidate proof. It covers:
-
-```text
-metadata-only project
-→ Add two servers
-→ Review
-→ Commit
-→ Edit one server and exercise explicit/clear port
-→ Review
-→ Commit
-→ reopen and compare authoritative rows
-→ attempt referenced delete and observe BLOCKED with zero mutation
-→ delete an unreferenced server and commit
-```
-
-QA must compare project digests around append, blocked review and commit, prove
-remote candidate staging cleanup and avoid Kafka/service apply or any target
-host contact.
-
-Required gates:
-
-```text
-affected Go and Wails tests
-go test ./...
-go vet ./...
-frontend test
-frontend lint
-frontend production build
-wails build -nopackage -clean
-affected RED OS race tests
-target-free RED OS candidate acceptance on temporary projects
-secret audit
-git diff --check
-```
-
-Core full-suite and catalog/schema reproducibility are required only if a real
-E2 defect forces changes to those boundaries; otherwise exhaustive combined
-regression remains E6. All E2 QA workspaces are removed after evidence is
-captured.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e2-architecture-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## 16. Non-goals
 
@@ -599,34 +563,4 @@ layer would duplicate or expand the existing lifecycle and are excluded.
 
 ## 18. Historical final acceptance evidence (before ADR-027)
 
-The Windows Wails production build passed with Go 1.25.0 and Wails 2.15.0.
-Focused frontend coverage passed 11/11 tests, lint, TypeScript and Vite
-production build. `go test ./...`, `go vet ./...` and the RED OS
-`go test -race ./internal/installer` gate passed; the isolated RED OS QA
-workspace was removed.
-
-The opt-in Wails-bound remote acceptance used the active immutable runtime
-`qa-ui-01e2-20260914-02`
-(`sha256:dcdd5ea9bec9cc6bf842ae3a15f5f7ff9e71f144fadafc2ac8be79b37cd49ad8`)
-on the READY QA Execution Node:
-
-```text
-metadata-only project
-→ CreateServer node1 (explicit port 22)
-→ Review → Commit
-→ CreateServer node2 (explicit port 22)
-→ Review → Commit
-→ UpdateServer node1 (new address, clearSSHPort)
-→ Review → Commit
-→ DeleteServer node2
-→ Review → Commit
-```
-
-`TestUI01E2RemoteServerCRUDAcceptance` passed in 56.90 seconds. Every
-candidate snapshot returned `PASS`; the final authoritative state contained
-only `node1` at `192.0.2.12`, with no Installer-owned `ansible_port` override.
-The test uses TEST-NET addresses and performs only target-free snapshot proof.
-No service playbook or Kafka deployment was invoked. Remote inspection after
-the test confirmed the active release digest, advertised
-`BuildProjectSnapshot` capability and zero residual candidate staging
-directories. `git diff --check` passed.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e2-architecture-checkpoint-002). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

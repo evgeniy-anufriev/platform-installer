@@ -1,6 +1,10 @@
 # BROWSER-REMOTE — Linux backend with browser workstation
 
-Status: DEV-ONLY over HTTP; production/security acceptance deferred until v1.0
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Security boundary: DEV-ONLY over HTTP; production/security acceptance deferred until v1.0
 HTTPS. Linux remote startup requires the explicit
 `-browser-allow-insecure-dev-http` flag. The source-IP restriction does not
 provide confidentiality or integrity for credentials and runtime-secret

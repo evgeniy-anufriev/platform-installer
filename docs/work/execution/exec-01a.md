@@ -1,5 +1,9 @@
 # EXEC-01A: pre-Core Execution Node bootstrap
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Boundary
 
 EXEC-01A prepares a selected Linux Execution Node before Platform Core can run.
@@ -148,27 +152,7 @@ Keepalived.
 
 ## Final acceptance evidence
 
-- The published runtime uses `ansible-core/`, so service playbook relative
-  imports resolve inside the immutable bundle. Activation capability checks
-  passed; repeated Prepare returned `READY`, `Changed:false`.
-- Kafka production E2E: the real target probe returned `NOT_FOUND` for Kafka,
-  the resolver selected the verified Kafka 4.3.1 artifact from the published
-  bundle, automatic runtime projection and shared gate ran,
-  target SHA-256 verification passed, apply and verify passed, and repeat apply
-  returned `changed=0 failed=0`. No Internet download or manual SCP was used.
-- Keepalived production E2E: all three actual targets returned
-  `AVAILABLE_COMPATIBLE` for 2.4.3, the resolver selected `REPOSITORY`, apply
-  and verify passed, repeat apply returned `changed=0 failed=0`, and
-  `artifact_delivery` was not invoked.
-- BLOCKED acceptance: unsuitable repository plus absent compatible bundle
-  stopped the production entrypoint before runtime (`artifact_delivery=0`,
-  service mutations=0). The shared Ansible gate independently rejected a
-  `BLOCKED` projection before a mutation sentinel.
-- Fresh RED OS regression: 177 Core tests and 84 service tests passed; catalog
-  and configuration schemas were reproducible; real `validate.yml` passed
-  normally and under `sudo unshare -n`; `go test -race ./...` passed with the
-  QA-only `golang` toolchain. Windows required only Go and OpenSSH for product
-  orchestration and never executed Python/Core.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#exec-01a-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## Lifecycle
 

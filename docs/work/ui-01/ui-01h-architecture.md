@@ -1,6 +1,10 @@
 # UI-01H — Service settings and PKI profile assignments architecture
 
-Status: **H1–H4 IMPLEMENTED; UI-01H DONE**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01h-architecture-checkpoint-001).
 
 Milestone: **UI-01H**
 

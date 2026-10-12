@@ -1,10 +1,12 @@
 # PKI single-pass execution: retained per-process resolution
 
-Status: IMPLEMENTED; focused QA and targeted review PASS; real SI08-F acceptance
-and measured timing remain pending. Owner accepted the integrity correction on
-2026-09-29: retain lightweight PKI resolution in service playbooks and avoid
-repeated materialization/deployment after successful PKI in the same run.
-This is a bounded prerequisite to the next SI08-F acceptance attempt.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#pki-single-pass-checkpoint-002).
+
+
 
 ## Evidence and problem
 
@@ -152,18 +154,4 @@ no automatic review loop. Implementation requires the concrete plan disposition.
 
 ## Implementation evidence — 2026-09-29
 
-Targeted review `PKI-SP-PLAN-01`: APPROVE, resolved, zero blocking findings;
-see [review record](reviews/pki-single-pass-review.md). RED OS four isolated
-controller/integrity tests PASS in 194.912s. The broader SI08-F working tree
-also passes eight separate-process resolution/consumer tests in 73.150s;
-that integration test depends on the pending SI08-F consumer-selection/Redis
-files and is retained with that change set, not the isolated optimization commit.
-Those tests observe production activation expressions, not live daemon reloads.
-
-Full current-working-tree Core: 414 tests, OK, 19 skips, 447.935s.
-Affected service suites: Kafka 28, Redis 10, Vault 28, PostgreSQL 23 and
-HAProxy 17 PASS. Go full suite/vet, catalog/configuration-schema
-reproducibility, all five service apply syntax checks and scoped whitespace
-check PASS. Guard results remain no_log; no secret values are added to events
-or documents. Broader pre-existing generated Wails whitespace is outside this
-scoped commit. No runtime publication or installation PASS is implied here.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#pki-single-pass-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

@@ -1,10 +1,10 @@
 # UI-01E3 — Shared runtime session credentials architecture
 
-Status: **OWNER-APPROVED PLAN; ADDITIONAL REVIEW WAIVED (2026-09-14)**. This
-milestone adds one write-only, runtime-only technical credential for all target
-servers in the currently open project. It does not contact targets, prepare an
-Execution Node, change project files or implement execution-time secret
-transport.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01e3-architecture-checkpoint-001).
 
 ## 1. Goal
 

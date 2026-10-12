@@ -1,6 +1,12 @@
 # DEVX-01: Codex engineering harness
 
-Status: **DONE**. This harness records the accepted engineering workflow; it
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#devx-01-checkpoint-001).
+
+This harness records the accepted engineering workflow; it
 does not add product behavior, UI-BE-04 execution, Wails/React code or service
 semantics.
 

@@ -1,5 +1,9 @@
 # SI08-D — workstation secret files and protected output delivery
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Implementation is in the current shared worktree. Initial FULL DIFF review
 returned BLOCK with six blockers; owner accepted the bounded corrections below.
 The targeted recheck resolved DIFF-01–05 and returned BLOCK on DIFF-06.
@@ -114,22 +118,4 @@ entry names match the trusted `admin-token` / `unseal-shares` IDs;
 
 ## Evidence so far
 
-- `go test ./...` and `go vet ./...`: PASS.
-- Frontend typecheck/lint/build: PASS; 67 tests PASS.
-- Windows `wails build -nopackage -clean`: PASS.
-- RED OS race tests: installer, secretoutputwire, secretfiles, runtimesecret,
-  executionnode PASS. Final source checks also PASS for installer/executionnode
-  output tests and the root application secret tests (`-race`, 56.546s).
-- RED OS output protocol tests: 15 PASS; Vault role contract: 15 PASS.
-- Focused filesystem tests cover the exact default path, no overwrite,
-  receipt/ciphertext readback, rejection of a substituted secrets directory,
-  unchanged project revision and omission from local Core staging.
-- Full Core: 342 cases completed, 4 skipped, PASS. Contracts: 31 PASS.
-- Catalog/configuration schema reproducibility: PASS.
-- `git diff --check` (dependency content excluded): PASS.
-- Historical independent FULL DIFF: BLOCK; targeted recheck: DIFF-01–05
-  RESOLVED, DIFF-06 OPEN. Zero new overengineering findings. DIFF-06 is now
-  resolved by the owner's exact correction and the final evidence above;
-  no additional architecture review was run.
-
-This is implementation evidence, not real Vault service acceptance.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08d-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

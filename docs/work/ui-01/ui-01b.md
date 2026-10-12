@@ -1,6 +1,10 @@
 # UI-01B — Wails shell and read-only existing-project opening
 
-Status: DONE (2026-09-05).
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01b-checkpoint-002).
 
 UI-01B creates the first native desktop surface without creating a second
 desired-state store. The Wails process is a Go transport and React renderer;
@@ -65,32 +69,4 @@ inputs, never project settings or frontend-visible secrets.
 
 ## Acceptance evidence
 
-The controlled QA publication produced immutable release
-`sha256:4ae17a7b79c5fcbbcdacc6537dd9138a72bfe0bbfca2c42be45c6a3a64b98fe6`
-(`qa-ui-01b-20260905-01`). Supported `prepare` activation returned `READY`,
-`Changed:true`; the previous `3260257b...` release directory and its manifest
-checksum were still present and unchanged. `GetCapabilities` advertised the
-fixed `BuildProjectSnapshot` operation.
-
-The Windows production build (`wails build -nopackage -clean`) opened its
-native directory dialog and rendered the returned read-only Core snapshot.
-The opt-in production-path acceptance test exercised
-`App.OpenProject -> OpenSSHTransport -> BuildProjectSnapshot` against the
-tracked `examples/valid/ui-project-snapshot` project in 3.18 seconds and
-returned `OPEN` with snapshot `PASS`. The seven canonical project-file hashes
-were identical before and after; the Execution Node's pre-existing lifecycle
-journal directory set was identical too, proving request staging cleanup.
-
-After activation, the node inspection and capability handshake were `READY`/
-PASS. Canonical Kafka units remained active without a Kafka execution:
-`kafka@kafka-kafka-1` on node1, `kafka@kafka-kafka-2` on node2 and
-`kafka@kafka-kafka-3` on node3.
-
-Final local gates passed: `go test ./...`, `go vet ./...`, frontend lint/test/
-build and Wails production build. RED OS affected race tests passed for
-`./internal/coreadapter`, `./internal/executionnode` and
-`./cmd/platform-installer`; catalog and configuration-schema reproducibility
-passed. The established full Core suite evidence is `222 passed, 4 skipped`;
-the Core tree was unchanged after that run, while the final QA node did not
-have `pytest`, so no package was installed merely to repeat it. Review findings
-are recorded in [UI-01B review](reviews/ui-01b-review.md): 0 blocking.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01b-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

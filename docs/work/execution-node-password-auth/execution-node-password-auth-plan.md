@@ -1,5 +1,9 @@
 # EXECUTION-NODE-PASSWORD-AUTH-01
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Owner scope
 
 2026-10-08: owner explicitly requires SSH password authentication for the Execution Node as well as target servers. Extend the existing session credential selector and common SSH/SCP transport, including information, readiness, preparation, planning, Start, polling/recovery and output delivery. Keep the existing PEM path. No new installation, target password change, sudo policy change or bundle activation is authorized by this request. Core/Ansible stays on the Execution Node.
@@ -35,8 +39,9 @@ EP-02: QA must record exact packaged Installer and SSH/SCP versions on Windows a
 
 EP-03: ASKPASS response is one nonempty password byte sequence, at most the broker password limit, followed by one framing LF. Reject password values containing LF, CR or NUL before launch with a safe code and no content. Preserve original supported bytes, wipe buffers, do not retain strings. Include malformed/oversized/replay/cancel tests.
 
-Status: owner approved, implemented; FULL DIFF pending. Real React/Wails password information checks passed on node2 and Execution Node node1; readiness returned PREPARATION_REQUIRED, not READY. New installation/preparation was not performed.
-Implementation evidence: Windows OpenSSH_for_Windows_9.5p2 (LibreSSL 3.8.2); packaged Windows helper PASS, Linux browser helper PASS on RED OS with OpenSSH_9.9p1 (OpenSSL 3.5.5). Go tests/vet and 74 focused frontend tests/build/lint PASS. Active-run lease-expiry and callback/release wiping covered at broker and App transport boundaries; ordinary/stale scope rejected without revoking active transport. Native race checker unavailable on Windows (CGO_ENABLED=0, no C compiler). Actual password SCP and full preparation/Start require a separately authorized QA flow and are not claimed accepted. OpenSSH ASKPASS behavior: https://man.openbsd.org/ssh.1#ENVIRONMENT.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#execution-node-password-auth-plan-checkpoint-003).
+
+
 
 ## Preparation failure correction (2026-10-08)
 
@@ -58,15 +63,8 @@ Remove privileged staging claim entirely: create a fresh private directory direc
 QA: actual sudo/cache-parent behavior and preserved protocol stdin on RED OS; injected format/error/expiry/wipe tests; exclusive mkdir, symlink/existing-directory refusal and no cross-path mutation; real password-only pinned SCP upload/download small nonsecret fixture with cleanup, no runtime activation. Real React/Wails information/readiness must use the entered SSH and sudo credentials. If real UI session is unavailable, ask only to enter credentials in UI, never chat. New sudo transport is architecture-sensitive; obtain independent plan assessment before coding and include it in the owner-approved targeted review boundary.
 ## Targeted recheck outcome (2026-10-08)
 
-Owner authorized EP-D01/EP-D02 corrections and the sudo-password extension, then confirmed the correction works and explicitly requested the recheck. Independent TARGETED_RECHECK BLOCK: EP-D01, EP-D02, EP-D03, EP-S01, EP-S02, EP-S03 resolved; only EP-S04 remains. See [review](reviews/execution-node-password-auth-review.md). Actual Windows/RED OS SCP upload/download and negative password/pin checks passed. RED OS sudo evidence used NOPASSWD, so password-required sudo positive/negative acceptance remains open. No further automatic review cycle; owner decision needed for remaining evidence.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#execution-node-password-auth-plan-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Owner-authorized EP-S04 evidence recheck — APPROVE
 
-2026-10-08. Owner explicitly requested the reviewer again. Independent read-only evidence-only TARGETED_RECHECK: APPROVE; EP-S04 RESOLVED; zero unresolved blocking findings. Supplemental manifest SHA256 30E48D0EDC8AA308023FD02D417C3ABAECFEFCF72B8C119BCC22279163B6BD3E. Relevant production code unchanged from the preceding review.
-
-Owner-observed real UI results:
-
-- Wrong sudo password: «Проверен: Ошибка узла».
-- Correct sudo password: «Проверен: Подготовлен».
-- Selected sudo-password requirement and empty value: «Сохранить в сеансе» is blocked.
-
-Reviewer independently checked the snapshot, credential form and immediate implementation, and accepted these precise owner observations as the missing password-required sudo evidence. Reviewer did not operate the UI. Exact timestamps/session IDs were not provided. Previously resolved staging/SCP/cleanup/hold findings remain RESOLVED. No new mechanisms or overengineering findings; this update changes evidence only. Full installation/Start/activation acceptance is not asserted. No further review required for the unchanged scope.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#execution-node-password-auth-plan-checkpoint-002). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

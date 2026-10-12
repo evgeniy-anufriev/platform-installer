@@ -1,5 +1,9 @@
 # SI08-B — standalone Vault role — DONE
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Owner authorized the next milestone on 2026-09-26 after SI08-A commit
 `c154bc0`. Authority: service-install-08-vault-architecture.md §3–9.
 
@@ -64,32 +68,4 @@ Vault-specific source policy or alternate source model is introduced.
 
 ## Current implementation and evidence
 
-Implemented: closed primitive/member validation, deterministic normalization,
-PKI materialization, isolated unit/config/data paths, protected standalone
-bootstrap output, one-time init recovery, sequential seed/follower unseal,
-audit/KV v2/userpass configuration and read-only verification. Target-free
-standalone 1/1, three members on one host, and three members on three hosts
-validation fixtures pass under `sudo unshare -n`, changed=0. The focused lock
-playbook passed on RED OS: only one contending unit reached READY, and the
-lock was reacquired after both normal stop and holder-process failure. Seven
-no-follow path-boundary cases (config deployment/member/PKI, data
-deployment/member, log deployment/member) were rejected before the test's
-outside-write sentinel; the outside sentinel remained unchanged. Vault role
-contract tests: 14 PASS. Read-only preflight and apply/verify syntax checks
-passed. Full Core suite: 322 PASS, 4 skipped; catalog and service-schema
-reproducibility passed. No Vault package, Vault unit or Vault data was
-installed or changed.
-
-Audit rotation is per exact Vault unit: daily, maxsize 100 MiB, fourteen
-rotations, mode 0600, and HUP only to that unit's main process. Preflight
-requires at least 1,600,000 KiB free on the `/var/log` filesystem, enough for
-the current file plus the configured rotation bound. The initial targeted
-review lacked the lock/path execution evidence; after that evidence was
-recorded, the owner-authorized targeted recheck passed DIFF-01 and DIFF-03.
-DIFF-02 passed under the owner-approved existing-service source policy. All
-three findings are resolved with zero blocking and zero overengineering
-findings. SI08-B is DONE. No real Vault deployment is part of B; it remains
-SI08-E work.
-
-The QA host has active disk/zram swap. Raft preflight requires swap already
-disabled and never changes host swap policy automatically.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08b-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

@@ -1,6 +1,12 @@
 # SERVICE-02A - Kafka named listeners and SSL consumer prerequisites
 
-Status: DONE.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-02a-checkpoint-001).
+
+
 
 SERVICE-02A extends the Kafka service package with a named listener contract.
 The supported protocols are `PLAINTEXT` and `SSL`; SASL is out of scope.

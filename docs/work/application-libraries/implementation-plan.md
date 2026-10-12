@@ -3,7 +3,7 @@
 Документ для обсуждения последовательности работ. Подготовка этого плана не
 означает начала реализации, запуска QA на targets или разрешения нового milestone.
 Обсуждение завершено; по указанию владельца действует стандартная процедура ревью.
-Результат FULL PLAN: [APPROVE_WITH_CHANGES](reviews/plan-review.md), ноль блокирующих замечаний.
+Reviewed revision and limitations: [review report](reviews/plan-review.md).
 Текущий статус и разрешённый scope
 ведутся только в [CURRENT_STATE](../../../CURRENT_STATE.md), результаты будущих проверок —
 в отдельном журнале. Здесь нет параллельного списка DONE/NEXT.
@@ -251,7 +251,9 @@ create/retry; нет takeover по username и неявного удаления
 **Выход:** read isolation, missing credential failure, повтор без смены паролей,
 restart/re-auth и согласованность keystore/password; admin secrets не доступны app.
 
-### A5. Остальные providers по тому же образцу — текущий scope выполнен
+<a id="a5-остальные-providers-по-тому-же-образцу--текущий-scope-выполнен"></a>
+
+### A5. Остальные providers по тому же образцу
 
 Подробная последовательность, defaults/overrides и QA:
 [технический план A5](milestones/a5/a5-technical-plan.md). Для текущего согласуемого scope
@@ -259,11 +261,10 @@ restart/re-auth и согласованность keystore/password; admin secre
 SASL/principal/ACL часть строки A5.3 ниже требует отдельного security расширения
 и не считается выполненной SSL protocol probe.
 
-Текущий Redis/Sentinel, ClickHouse и Kafka SSL-only scope реализован и прошёл
-обязательный review/QA; см. [FULL DIFF и targeted recheck](milestones/a5/reviews/a5-diff-review.md)
-и [журнал](milestones/a5/evidence/a5-test-journal.md). C02 Keeper production access/retention proof
-остаётся неблокирующим ограничением. Kafka SASL/principal/ACL по-прежнему требует
-отдельного security scope.
+Реализованный scope и результаты: [журнал A5](milestones/a5/evidence/a5-test-journal.md)
+и [review A5](milestones/a5/reviews/a5-diff-review.md). Текущий статус и ограничения
+определяются CURRENT_STATE; таблица ниже сохраняет план отдельно согласуемого
+Kafka security расширения и не означает его реализации.
 
 Выполнять отдельными ограниченными частями:
 

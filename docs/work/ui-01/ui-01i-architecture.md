@@ -1,6 +1,10 @@
 # UI-01I — Portable native project export and reopening architecture
 
-Status: **PLAN — owner-revised after FULL review; targeted recheck pending**
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01i-architecture-checkpoint-001).
 
 Milestone: **UI-01I**
 

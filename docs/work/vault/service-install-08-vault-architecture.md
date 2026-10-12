@@ -1,9 +1,12 @@
 # SERVICE-INSTALL-08 — HashiCorp Vault: TLS, Raft, audit, KV и userpass
 
-Статус: SI08-A ACTIVE по разрешению владельца; Vault deployment не выполнялся.
-Запрос владельца: следующий сервис HashiCorp Vault, TLS cluster, TLS API,
-audit logs on, KV on, userpass on; обязательные размещения 1/1, 3/1, 3/3.
-Документ не подтверждает завершение Redis и не запускает Vault на targets.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08-vault-architecture-checkpoint-001).
+
+
 
 ## 1. Объём и место в последовательности
 

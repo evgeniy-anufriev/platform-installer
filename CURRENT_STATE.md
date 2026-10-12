@@ -18,13 +18,13 @@ new destructive operation still requires explicit owner authorization.
 | APPLICATION-LIBRARIES-A3 | Standalone implementation and focused acceptance PASS; TARGETED_RECHECK APPROVE, zero blockers | [Plan](docs/work/application-libraries/milestones/a3/a3-technical-plan.md), [PLAN review](docs/work/application-libraries/milestones/a3/reviews/a3-plan-review.md), [DIFF review](docs/work/application-libraries/milestones/a3/reviews/a3-diff-review.md). A3-D01/D02 RESOLVED by owner-approved TARGETED_RECHECK; full standalone and native primary/standby functional PASS. Owner-approved additive explicit grants; resource batch per library, account batch per instance; benchmark cancelled. Implementation is maintained on codex/application-libraries. Isolated RED OS only; no Vault/Go/UI/master authorization. D01–D04 corrections implemented. [QA journal](docs/work/application-libraries/milestones/a3/evidence/a3-test-journal.md): 528 Core cases (509 PASS/19 skip), 16 unchanged native PKI recovery cases excluded; native full entrypoint, account login and writable primary/standby PASS. All A3 source copies cleaned; no second FULL review. |
 | APPLICATION-LIBRARIES-A2 | COMPLETE: standalone baseline PASS; no Go/UI acceptance implied | [Plan](docs/work/application-libraries/milestones/a2/a2-technical-plan.md), [DIFF review](docs/work/application-libraries/milestones/a2/reviews/a2-diff-review.md), [journal](docs/work/application-libraries/milestones/a2/evidence/a2-test-journal.md). D01/D02 resolved by owner-approved TARGETED_RECHECK: APPROVE_WITH_CHANGES, zero blockers; D03/D04 nonblocking limits remain. Focused/offline 32 PASS; six real public-image runtime cases PASS across node1/node2, including distinct images and healthcheck. Broad regression plus five PKI timeout-repair cases PASS; test-only limit 600s, production PKI unchanged. Cleanup verified. No A3, release publication or Go/UI authorization. |
 | APPLICATION-LIBRARIES-A1 | DONE for standalone contracts/read-only resolution; acceptance PASS on 2026-10-10 | Implementation branch codex/application-libraries. Independent recheck closed A1-D01–03; A1-D04 corrected and tested. RED OS: 15 focused + 14 standalone PASS. Core broad run: 517 cases, 19 root/isolated-acceptance skips; six PKI timeout errors and one stale Redis fixture failure corrected in tests, all seven failed cases then PASS. Combined regression evidence: 498 passed/19 skipped; original FAILED run retained, no claim of a second full run. QA copies verified and cleaned. See [review](docs/work/application-libraries/milestones/a1/reviews/a1-diff-review.md), [journal](docs/work/application-libraries/milestones/a1/evidence/a1-test-journal.md) for exact source identity and execution prerequisites. A1 review budget consumed; A2 separately authorized, Go/UI not authorized. |
-| SERVICE-INSTALL-11 | IN PROGRESS; overall acceptance remains open | I05 PASSED by explicit owner confirmation on 2026-10-08. Close remaining cases and strict repeat evidence separately; see [journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md). |
-| ENDPOINT-HAPROXY-PLACEMENT-01 | Source implemented; FULL DIFF APPROVE; focused/standalone QA PASS, real acceptance pending | Owner approved narrow binding replacement and package backend defaults on 2026-10-09. Full Core 497-case run had one stale test assertion; corrected five-consumer test passed isolated recheck. Existing backend publication/reconcile reused; no new target store or transaction guarantee. Partial move/delete cannot discover former excluded hosts; explicit full reconcile remains necessary. See [plan](docs/work/endpoint-placement/endpoint-haproxy-placement-plan.md), [review](docs/work/endpoint-placement/reviews/endpoint-haproxy-placement-plan-review.md), [journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md), ADR-033. No bundle release or real installation acceptance yet. |
+| SERVICE-INSTALL-11 | IN PROGRESS; overall acceptance remains open | I05 PASSED by explicit owner confirmation on 2026-10-08. Close remaining cases and strict repeat evidence separately; see [journal](docs/work/services/evidence/service-install-11-test-journal.md). |
+| ENDPOINT-HAPROXY-PLACEMENT-01 | Source implemented; FULL DIFF APPROVE; focused/standalone QA PASS, real acceptance pending | Owner approved narrow binding replacement and package backend defaults on 2026-10-09. Full Core 497-case run had one stale test assertion; corrected five-consumer test passed isolated recheck. Existing backend publication/reconcile reused; no new target store or transaction guarantee. Partial move/delete cannot discover former excluded hosts; explicit full reconcile remains necessary. See [plan](docs/work/endpoint-placement/endpoint-haproxy-placement-plan.md), [review](docs/work/endpoint-placement/reviews/endpoint-haproxy-placement-plan-review.md), [journal](docs/work/services/evidence/service-install-11-test-journal.md), ADR-033. No bundle release or real installation acceptance yet. |
 | SERVER-INFORMATION-CHECK-01 | Implemented; real informational flow and targeted review passed | [Plan](docs/work/server-information/server-information-check-plan.md). One explicit SSH key confirmation supplies information and installation trust. Real React/Wails target and Execution Node checks, cancellation and changed-credential rejection passed; no installation started. |
 | EXECUTION-NODE-PASSWORD-AUTH-01 | Implemented; targeted review APPROVE, sudo UI checks owner-confirmed | [Plan](docs/work/execution-node-password-auth/execution-node-password-auth-plan.md). Real React/Wails password checks passed for target node2 and Exec node1. Password hold survives lease expiry only for the exact active Start/run. Real Windows/RED OS password SCP passed; staging/cleanup and scoped sudo corrections reviewed. Owner confirmed the sudo correction works. Owner-confirmed correct/wrong/empty sudo cases accepted by independent EP-S04 recheck; zero remaining blockers. Full installation/Start with password remains separate. |
 | PROJECT-VERIFY-PASSWORD-FIX-01 | Implemented; owner confirms Verify completes, FULL DIFF APPROVE | [Plan](docs/work/project-lifecycle/project-verification-password-fix-plan.md). Password archive transfer no longer requires PEM; ordinary Verify uses a private temporary directory. Transfer failures show unavailable with their own reason. Go checks and 64 App tests/build/lint pass; exact owner terminal status/revision not supplied. |
-| PROJECT-SAVE-NODE-READINESS-FIX-01 | Implemented; FULL DIFF APPROVE_WITH_CHANGES, owner UI repeat pending | [Journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md). Saving placement retains prepared node only for unchanged project/selected SSH endpoint/runtime bundle/catalog. Verification and installation approval still become stale. Go tests/vet pass; credential/pin guards unchanged. No blocking findings; actual Commit/Verify and expired-credential acceptance remain open. |
-| PROJECT-EXPORT-SIBLING-FIX-01 | Implemented; FULL DIFF APPROVE, UI repeat pending | [Journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md). Export overlap guard checks final destination rather than its parent; sibling export passes, same-root/nested destinations remain blocked. Go tests/vet and packaged export-fix build pass; zero review findings. |
+| PROJECT-SAVE-NODE-READINESS-FIX-01 | Implemented; FULL DIFF APPROVE_WITH_CHANGES, owner UI repeat pending | [Journal](docs/work/services/evidence/service-install-11-test-journal.md). Saving placement retains prepared node only for unchanged project/selected SSH endpoint/runtime bundle/catalog. Verification and installation approval still become stale. Go tests/vet pass; credential/pin guards unchanged. No blocking findings; actual Commit/Verify and expired-credential acceptance remain open. |
+| PROJECT-EXPORT-SIBLING-FIX-01 | Implemented; FULL DIFF APPROVE, UI repeat pending | [Journal](docs/work/services/evidence/service-install-11-test-journal.md). Export overlap guard checks final destination rather than its parent; sibling export passes, same-root/nested destinations remain blocked. Go tests/vet and packaged export-fix build pass; zero review findings. |
 | PROJECT-EXPORT-DISPLAY-NAME-01 | Implemented; FULL DIFF APPROVE, real UI repeat pending | [Plan](docs/work/project-lifecycle/project-export-display-name-plan.md). Export name updates only copied project.yml metadata.name; source and project ID remain unchanged. Original source revision and output digests/sizes are separate. Go checks and 65 App tests/build/lint pass; packaged export-name EXE rebuilt. No blocking findings. |
 | SERVICE-UNIT-NAMING-01 | Implementation and focused QA complete; real naming acceptance pending | [Plan](docs/work/service-unit-naming/service-unit-naming-plan.md). Requires separately approved S11-00 baseline and real full-service UI naming checks. Prior I05 success does not prove new names. |
 | SESSION-RUN-CREDENTIAL-01 | Implemented; real expiry-boundary acceptance pending | [Plan](docs/work/execution/session-active-run-credential-plan.md). Go tests/vet passed; exercise the real React/Wails flow at the lease-expiry boundary. Owner declined another review. |
@@ -62,8 +62,8 @@ The current journal records:
 - I05-R1 retains its historical Redis failure. The later owner-confirmed
   successful full plan is recorded in I05; do not replace either evidence.
 
-The [UI test cases](docs/work/service-install-11/service-install-11-ui-test-cases.md) and
-[test journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md) define detailed coverage.
+The [UI test cases](docs/work/services/service-install-11-ui-test-cases.md) and
+[test journal](docs/work/services/evidence/service-install-11-test-journal.md) define detailed coverage.
 The journal is evidence, not permission to perform a new run or reset.
 S11-00 cleanup was repeated on 2026-10-11, then the `full-services` project was
 installed again. On the latest target audit, only Redis/Sentinel deployment
@@ -71,7 +71,7 @@ installed again. On the latest target audit, only Redis/Sentinel deployment
 service configs/ACLs and per-member TLS copies, logs, custom units, Redis RPM,
 and dedicated Redis user/group/home were deleted. Shared PKI and other services
 were retained. See the historical
-[cleanup record](docs/work/service-install-11/service-install-11-cleanup.md) for S11-00; the latest
+[cleanup record](docs/work/services/service-install-11-cleanup.md) for S11-00; the latest
 bundle and target state are recorded below. This targeted removal does not close
 SI11 or authorize another installation run.
 
@@ -102,7 +102,7 @@ configs now set the existing default ACL user and Sentinel runtime password;
 password-bearing tasks use no_log and changed config restarts Sentinel.
 RED OS Redis suite 15 tests PASS; Apply/Verify syntax PASS. Bundle -16 is
 validated/published and matches the project import; real Apply/Verify
-acceptance remains pending. Evidence: [SI11 journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md).
+acceptance remains pending. Evidence: [SI11 journal](docs/work/services/evidence/service-install-11-test-journal.md).
 
 Vault AppRole addition (2026-10-09), delivered in bundle -13: owner requested enabling
 AppRole at approle/. Configure enables only absent mount, rejects a conflicting
@@ -120,7 +120,7 @@ accepts the template without accepting another deployment/member. RED OS
 26 tests PASS, including seven production-task ownership scenarios;
 independent FULL DIFF review APPROVE, zero findings. Bundle
 -11 predates this fix; -12 validated/published, real repeat acceptance pending.
-Evidence: [SI11 journal](docs/work/service-install-11/evidence/service-install-11-test-journal.md).
+Evidence: [SI11 journal](docs/work/services/evidence/service-install-11-test-journal.md).
 
 Service runtime optimization (2026-10-09), delivered in bundle -11: source gates limited to
 mutation preparation, batched BIND packages/ClickHouse RPM/Kafka systemd reads,
@@ -295,7 +295,7 @@ real two-hour-boundary UI acceptance remains pending. Plan expiry is unchanged.
   prove a clean-node bootstrap or close overall SI11 acceptance.
 - Service settings use ordinary Ansible defaults/desired overrides. UI/Core
   previews are derived; PostgreSQL TLS usages retain the explicit PKI plan
-  boundary. See [defaults plan](docs/work/service-install-11/si11-ansible-role-defaults-plan.md).
+  boundary. See [defaults plan](docs/work/services/si11-ansible-role-defaults-plan.md).
 - Managed Kafka/PKI projections are runtime-only. Local structural Save is
   node-free; Project Verify is revision/runtime-bound, target-free and does
   not authorize execution. Every execution needs a fresh authoritative plan.

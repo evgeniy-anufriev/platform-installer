@@ -1,6 +1,10 @@
 # UI-01J — final UI-01 acceptance
 
-Status: **DONE** (2026-09-21). UI-01 overall is **DONE**.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01j-checkpoint-001).
 
 UI-01J adds no infrastructure, Core, catalog, service, PKI or execution
 behavior. It closes the UI-01 editor only after cross-platform regression,

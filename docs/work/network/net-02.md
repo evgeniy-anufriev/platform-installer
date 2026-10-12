@@ -1,5 +1,9 @@
 # NET-02: Keepalived / VRRP / Stable VIP Ownership
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Each Keepalived `serviceDeployment` is exactly one unicast VRRP instance. It
 owns `endpointGroupRef`, `virtualRouterId` and one-or-more
 `virtualAddresses`; all listed addresses have one runtime owner and move
@@ -22,9 +26,4 @@ adds explicit opt-in HAProxy-triggered failover behavior.
 
 ## Acceptance
 
-Three RED OS nodes were accepted with one VRID and two virtual addresses on a
-common interface. Native candidate validation passed on all nodes. Initial and
-repeat apply, separate verify, post-rejoin verify and post-rejoin repeat all
-returned `changed=0 failed=0`. Both addresses moved together through automatic
-failover; restored higher-priority nodes rejoined without failback. An
-additional bounded sequence proved the third participant could become owner.
+See [historical checkpoint](evidence/documentation-additional-checkpoints-20261012.md#net-02-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

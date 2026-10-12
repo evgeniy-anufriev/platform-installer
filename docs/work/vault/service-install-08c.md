@@ -1,5 +1,9 @@
 # SI08-C — Core and Execution Node secret-input path
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 SI08-C implements the target-free Core descriptors and plan/private-manifest
 projection, plus the Execution Node capability, typed lease admission, Start
 binding and operation-scoped Ansible forwarding. It does not implement the
@@ -28,25 +32,4 @@ inactive.
 
 ## Verification
 
-RED OS QA, current working tree:
-
-- focused input/lease/Core/Vault tests: 71 passed;
-- full Ansible Core suite: 337 passed, 4 skipped;
-- contract tests: 31 passed;
-- Vault role tests: 15 passed;
-- catalog reproducibility: PASS, `sha256:a460d77a38b7134f9a1639871eeb925a3ce8d673df3bfa5dcc1a40a22ada86d3`;
-- configuration schema reproducibility: PASS;
-- Vault apply playbook syntax-check: PASS (no target execution);
-- `git diff --check`: PASS.
-
-Secret-scope regression proves Apply receives manifest-bound shares and Verify
-receives none. Schema and decoder tests reject Verify in the shares operation
-list. The contract correction was owner-authorized before any immutable
-runtime release advertised these versions; previously published capability,
-lease and payload versions were not changed.
-
-The initial full DIFF review found one blocking interruption-cleanup gap and
-one nonblocking over-broad Verify scope. The single authorized targeted
-recheck passed the cleanup finding. The owner then authorized the exact
-operation-scope correction; its Core, lease, schema and service tests pass.
-No further review cycle was run. No Vault target or QA server was mutated.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08c-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).

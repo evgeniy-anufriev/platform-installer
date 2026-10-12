@@ -1,6 +1,12 @@
 # SI11 S06 — inherited service settings before and after READY
 
-Status: owner-approved behavior; architecture and implementation in progress.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#si11-s06-inherited-settings-plan-checkpoint-001).
+
+
 
 ## User-visible behavior
 

@@ -1,5 +1,9 @@
 # SERVER-INFORMATION-CHECK-01
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## Решение владельца и область
 
 Владелец 2026-10-08 разрешил прямую информационную SSH-проверку из Go на workstation как для target server, так и для Execution Node до подготовки Core. Установка, инфраструктурная семантика и Ansible остаются исключительно на Execution Node. V1 — справочник UX, его пакеты не копируются. Это новая узкая проверка, не Core discovery и не разрешение Plan/Start.
@@ -28,8 +32,9 @@
 
 Focused Go tests: timeout/output bounds/parser, binding mismatch, expired token, changed key, credential replacement, unknown host, SSH failure, secret-safe errors; frontend flow confirm/cancel/read-only facts/status invalidation; Go test/vet и frontend tests/typecheck/lint/build. Реальная React/Wails informational target+exec проверки с действующим PEM/trust и визуальная проверка обязательны; нет authorization новой установки/сброса/подготовки targets. Core tests не нужны при отсутствии Core изменений. Обновить architecture/ADR/roadmap/UI contract с narrow owner-approved exception до acceptance. Текущие uncommitted recovery/status/date изменения сохраняются.
 
-Статус: IMPLEMENTED; real React/Wails informational checks and targeted review passed. Installation acceptance remains separate.
-FULL PLAN review: APPROVE_WITH_CHANGES, no blockers. SC-04: reuse isolated OpenSSH builder and identity guard. SC-05: informational success remains independent of readiness failure. FULL DIFF initially BLOCKED on SC-D01/SC-D02; owner-approved corrections received APPROVE in the single TARGETED_RECHECK.
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#server-information-check-plan-checkpoint-002).
 
 
-Owner correction accepted: a single explicit key approval supplies existing installation trust. FULL DIFF findings SC-D01/SC-D02 corrections implemented; TARGETED_RECHECK requested after real React/Wails target+exec, cancel, changed-credential and visual evidence. StrictMode duplicate probe race fixed in UI and backend. TARGETED_RECHECK: APPROVE, SC-D01/SC-D02/SC-D03 RESOLVED. Informational UI acceptance passed; installation acceptance is outside this change.
+
+
+Owner-observed acceptance and reviewer outcome: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#server-information-check-plan-checkpoint-001).

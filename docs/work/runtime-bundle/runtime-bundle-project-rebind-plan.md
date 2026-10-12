@@ -1,7 +1,12 @@
 # RUNTIME-BUNDLE-UX-01A — привязка проверенного bundle из окна «Проект»
 
-Статус: реализация и локальная приёмка выполнены; фиксация milestone в Git ожидается. Владелец перенёс пользовательскую
-перепривязку проекта перед завершением SI11; общий цикл установки этим планом
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#runtime-bundle-project-rebind-plan-checkpoint-001).
+
+общий цикл установки этим планом
 не запускается.
 
 FULL DIFF review выявил `RB-DIFF-01` (ссылка App на удалённый старый cache

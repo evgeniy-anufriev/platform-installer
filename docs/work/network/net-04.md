@@ -1,6 +1,10 @@
 # NET-04: HAProxy HTTPS routing
 
-Status: DONE.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#net-04-checkpoint-002).
 
 NET-04 installs a host-scoped HAProxy deployment, terminates HTTPS on the
 fixed `public` frontend at `*:443`, and derives deployment and explicitly
@@ -307,26 +311,7 @@ security gates run before documentation is marked DONE or a commit is created.
 
 ## Accepted runtime evidence
 
-The three-node RED OS acceptance completed with Barrier A and Barrier B passing
-on every node, with each active graph equal to its candidate graph and native
-`haproxy -c` passing. The deployment endpoint and every enabled host endpoint
-passed TLS hostname verification and returned the expected stats route. Host
-normalization treated `Host` values with and without `:443` identically, while
-an unknown Host returned `503`.
-
-Runtime socket counters confirmed that bounded deployment-endpoint requests
-used all three healthy HAProxy backend participants. The configured VIP owner
-was determined semantically; stopping HAProxy only on a non-owner made only
-that host endpoint return `503`, without migrating the VIP or affecting the
-pooled and remaining host endpoints. Restoring the service recovered every
-endpoint. Separate verify, repeat apply, post-recovery verify and
-post-recovery repeat apply all returned `changed=0 failed=0` for localhost and
-all three targets.
-
-The deployment-scoped TLS identity covers the deployment, configured host
-endpoint names and `*.asutp.scada.local` on every HAProxy participant. The
-wildcard SAN was added using the explicit selected PKI reissue lifecycle; it
-is never an implicit ordinary NET-04 reconcile.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#net-04-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
 ## Deferred
 

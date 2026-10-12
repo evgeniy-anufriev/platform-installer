@@ -1,6 +1,12 @@
 # UI-01D — архитектура first-write и общей edit/review session
 
-Implementation status: **FINAL REVIEW**. Final evidence: [ui-01d.md](ui-01d.md).
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-additional-checkpoints-20261012.md#ui-01d-architecture-checkpoint-001).
+
+
 
 Статус документа: архитектурный план, не разрешение на реализацию.
 Revision binding: `UI-01D-ARCH-2026-09-05-EXECNODE-01`.

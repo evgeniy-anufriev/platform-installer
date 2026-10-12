@@ -1,7 +1,12 @@
 # SI08 — независимость запуска от доставки защищённых результатов
 
-Статус: согласованное владельцем поведение; план для точечной архитектурной
-проверки. Реализация и приёмка ещё не выполнены.
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#si08-output-run-delivery-decoupling-checkpoint-001).
+
+
 
 ## Решение владельца
 

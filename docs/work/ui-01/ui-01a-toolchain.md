@@ -1,6 +1,12 @@
 # UI-01A — Wails/React toolchain freeze
 
-Status: ACCEPTED for UI-01B bootstrap, audited 2026-09-05. UI-01A installs or
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Recorded status and review scope: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-01a-toolchain-checkpoint-001).
+
+UI-01A installs or
 scaffolds nothing. Exact application dependencies enter lockfiles only in
 UI-01B and must be checked again against security advisories then.
 

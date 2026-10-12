@@ -1,5 +1,9 @@
 # UI-NET-01 — Provider and virtual-address editor evidence
 
+Document scope: the original milestone contract/design. Historical status, review
+and QA checkpoints are collected separately; current status and authorization
+are recorded only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 UI-NET-01 is complete. It adds the provider side of the existing canonical
 endpoint model to **Topology → Entry points** without adding a local resolver,
 PKI workflow, target operation or second persistence path.
@@ -21,27 +25,4 @@ PKI workflow, target operation or second persistence path.
 
 ## Acceptance evidence
 
-- Windows: `wails build -nopackage -clean` built
-  `build/bin/platform-installer-ui.exe`; the launched desktop shell exposed the
-  Wails project/open UI and navigation. No project was opened or mutated.
-- Frontend: lint, production build and 41 tests passed, including typed
-  provider reconcile, catalog-unavailable Clear and neutral stale-preview UI.
-- Go: `go test ./...` and `go vet ./...` passed.
-- RED OS: in a fresh `scripts/qa-sync.ps1 -IncludeGo` workspace,
-  `CGO_ENABLED=1 go test -race ./internal/installer ./internal/coreadapter`
-  passed. Core regression passed: 244 tests, 4 skipped. Fixture catalog and
-  service configuration schemas were reproducible; catalog digest was
-  `sha256:e87acc790d389a67ea90da7b785562018cd3450181fa00f4dfa2b38fe9eaeccf`.
-- RED OS target-free `project_snapshot_acceptance.yml` passed on `localhost`
-  with `changed=0`, `failed=0`; its deliberate invalid-root case returned the
-  expected `PROJECT_SNAPSHOT_INPUT_INVALID` finding. No inventory target was
-  contacted.
-- The temporary RED OS workspace was removed and its absence confirmed.
-- The bounded full DIFF review and its owner-authorized targeted recheck for
-  UI-NET-01B had zero remaining blocking findings. No new architecture boundary
-  was introduced by the C/D presentation work.
-- Changed-file secret audit found no secret assignment/value. `git diff --check`
-  passed.
-
-UI-01G Certificates is next. UI-NET-01 itself does not issue, reissue,
-materialize or apply certificates.
+See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-net-01-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
