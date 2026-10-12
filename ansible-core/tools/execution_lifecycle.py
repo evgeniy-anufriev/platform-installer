@@ -184,8 +184,11 @@ class Journal(object):
     def cleanup_runtime_secret_inputs(self):
         """Remove only owned regular files created for typed Ansible inputs."""
         _assert_private_path(self.directory, directory=True)
+        application_projections = {'.runtime-projection-' + hashlib.sha256(value.encode()).hexdigest() + '.json'
+                                   for value in ('applications:apply', 'applications:verify')}
         for name in os.listdir(self.directory):
-            if RUNTIME_SECRET_INPUT_FILE.fullmatch(name) is None:
+            if (RUNTIME_SECRET_INPUT_FILE.fullmatch(name) is None and name not in application_projections and
+                    re.fullmatch(r'\.runtime-application-secret-[0-9a-f]{64}', name) is None):
                 continue
             path = os.path.join(self.directory, name)
             try:

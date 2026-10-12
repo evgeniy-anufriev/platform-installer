@@ -105,6 +105,17 @@ alias, and conflicting nonempty roots fail. See
 [runtime fixture](../examples/valid/application-runtime/README.md) and
 [A2 evidence](work/application-libraries/milestones/a2/evidence/a2-test-journal.md).
 
+A7 adds target-free application descriptions to the existing machine plan and
+runtime-secret descriptor entrypoints. Nonempty libraries use plan v1alpha4 and
+descriptor v1alpha3; empty libraries preserve the infrastructure versions.
+Requirements contain immutable image identities, policy and public secret refs;
+repository probes and concrete image source selection remain execution-time.
+Two closed application operation descriptors select the existing standalone
+Apply/Verify playbooks. Production application plans remain BLOCKED and emit no
+executable manifest until A8 supplies the all-infrastructure Verify barrier.
+See the [A7 technical plan](work/application-libraries/milestones/a7/a7-technical-plan.md)
+and [contract versions](../contracts/README.md).
+
 Production roles must also work with conventional manual inventory and variables:
 
 ```text

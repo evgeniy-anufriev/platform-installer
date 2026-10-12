@@ -15,9 +15,11 @@ except ImportError:
 try:
     from .project_validation import DIGEST_PATTERN, canonical_digest
     from .service_integration_resolution import haproxy_provider_hosts
+    from .application_plan import application_execution_model, application_operation, PLAN_VERSION as APPLICATION_PLAN_VERSION, MANIFEST_VERSION as APPLICATION_MANIFEST_VERSION
 except ImportError:
     from project_validation import DIGEST_PATTERN, canonical_digest
     from service_integration_resolution import haproxy_provider_hosts
+    from application_plan import application_execution_model, application_operation, PLAN_VERSION as APPLICATION_PLAN_VERSION, MANIFEST_VERSION as APPLICATION_MANIFEST_VERSION
 
 
 API_VERSION = "platform.installer/plan/v1alpha2"
@@ -453,9 +455,21 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
             any(len(item["hosts"]) > 256 for item in descriptors)):
         raise ValueError("RUNTIME_SECRET_DESCRIPTORS_BLOCKED")
     fields = ("requirementRef", "purpose", "serviceDeployment", "hosts", "requiredWhen", "operations")
-    return {"apiVersion": "BuildRuntimeSecretDescriptors/v1alpha2", "projectIdentity": identity,
+    result = {"apiVersion": "BuildRuntimeSecretDescriptors/v1alpha2", "projectIdentity": identity,
             "projectRevision": revision, "descriptors": descriptors,
             "descriptorSetFingerprint": canonical_digest([{key: item[key] for key in fields} for item in descriptors])}
+    if snapshot.get('apiVersion') == 'platform.installer/project-snapshot/v2alpha1':
+        model = application_execution_model(snapshot)
+        app_inputs = [dict({key: item[key] for key in ('requirementRef', 'purpose', 'providerDeployment',
+                                                     'applicationLibraries', 'hosts', 'operations')},
+                           sourceRef=item['runtimeReference'], displayLabel=item['runtimeReference'])
+                      for item in model['runtimeSecretRequirements']]
+        if len(app_inputs) + len(descriptors) > 16 or any(len(item['hosts']) > 256 for item in app_inputs):
+            raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
+        result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha3', applicationInputs=app_inputs)
+        result['descriptorSetFingerprint'] = canonical_digest(dict(
+            serviceInputs=[{key: item[key] for key in fields} for item in descriptors], applicationInputs=app_inputs))
+    return result
 
 
 def _execution_role_variables(deployment_id, definition, prefix, execution_configuration, targets,
@@ -610,11 +624,15 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
     return result
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None):
     """Return a public plan and private manifest from already resolved Core data."""
-    if isinstance(snapshot, dict) and snapshot.get("apiVersion") == "platform.installer/project-snapshot/v2alpha1":
-        raise ValueError("APPLICATION_LIBRARY_EXECUTION_NOT_IMPLEMENTED")
     snapshot = snapshot if isinstance(snapshot, dict) else {}
+    if snapshot.get('apiVersion') not in (None, 'platform.installer/project-snapshot/v1alpha1',
+                                         'platform.installer/project-snapshot/v2alpha1'):
+        raise ValueError('PROJECT_SNAPSHOT_VERSION_UNSUPPORTED')
+    application_aware = snapshot.get('apiVersion') == 'platform.installer/project-snapshot/v2alpha1'
+    application_model = application_execution_model(snapshot, application_image_lock) if application_aware else None
+    plan_version = APPLICATION_PLAN_VERSION if application_aware else API_VERSION
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
     release = _runtime_release(runtime_release)
@@ -624,12 +642,18 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     deployments = snapshot.get("serviceDeployments", {}) if isinstance(snapshot.get("serviceDeployments"), dict) else {}
     deployment_order = _validated_deployment_order(deployments, deployment_order)
     findings = _safe_findings(snapshot.get("findings"))
+    if application_aware:
+        findings.extend(application_model['findings'])
+        findings.append(_finding('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED', 'applicationLibraries',
+                                 'Application execution requires the A8 all-infrastructure Verify barrier'))
     if not explicit_identity or not isinstance(identity, str) or not identity:
         findings.append(_finding("PROJECT_IDENTITY_REQUIRED", "project.metadata.id", "Installer-managed execution requires project.yml metadata.id"))
     if snapshot.get("validation", {}).get("status") != "PASS":
         findings.append(_finding("PROJECT_VALIDATION_BLOCKED", "validation", "Authoritative project validation is blocked"))
     artifact_requirements = _artifact_requirements(deployments, definitions)
     source_authorities, source_findings = _artifact_source_authorities(artifact_requirements, _bundle_source_index(bundle_artifact_sources), release["bundleDigest"])
+    if application_model:
+        artifact_requirements.extend(application_model['artifactRequirements'])
     findings.extend(source_findings)
     pki_public, pki_private, pki_secret_findings = _pki_store_password_requirements(pki_materialization)
     service_public, service_private, service_secret_findings = _service_runtime_secret_requirements(deployments, definitions, sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else [])
@@ -641,6 +665,12 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         {key: item[key] for key in ("requirementRef", "purpose", "hosts")}
         for item in service_input_public
     ]
+    if application_model:
+        required_credentials.extend({key: item[key] for key in ('requirementRef', 'purpose', 'hosts')}
+                                    for item in application_model['runtimeSecretRequirements'])
+        if len(service_private) + len(application_model['runtimeSecretRequirements']) > 16:
+            findings.append(_finding('RUNTIME_SECRET_REQUIREMENTS_LIMIT', 'applicationLibraries',
+                                     'The current runtime secret lease admits at most 16 values'))
     runtime_secret_requirements = pki_private + service_private
     if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({item["runtimeReference"] for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
         service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
@@ -743,8 +773,10 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     if actions:
         phases.append({"id": "pki", "order": len(phases), "actions": actions})
     phases.append({"id": "services", "order": len(phases), "actions": service_actions})
+    if application_model and application_model['actions']:
+        phases.append(dict(id='applications', order=len(phases), actions=application_model['actions']))
     semantic = {
-        "apiVersion": API_VERSION,
+        "apiVersion": plan_version,
         "planningProtocol": release["planningProtocol"],
         "projectIdentity": identity if explicit_identity else None,
         "projectRevision": snapshot.get("projectRevision"),
@@ -757,9 +789,11 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         "acknowledgements": [],
         "status": "EXECUTABLE" if executable else "BLOCKED",
     }
+    if application_model:
+        semantic['applicationFingerprint'] = application_model['semanticFingerprint']
     plan_fingerprint = canonical_digest(semantic)
     plan = {
-        "apiVersion": API_VERSION,
+        "apiVersion": plan_version,
         "kind": "DeploymentPlan",
         "id": "plan-" + plan_fingerprint.split(":", 1)[1][:24],
         "createdAt": created_at,
@@ -844,4 +878,11 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                 for host_id in plan_target_ids
                 if host_id in execution_connections
             }
-    return {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}
+    result = {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}
+    if application_model:
+        # Private preparation data for A8, never registered as an executable manifest.
+        result['applicationExecution'] = dict(
+            apiVersion=APPLICATION_MANIFEST_VERSION,
+            operations=[application_operation(action, application_model) for action in application_model['actions']],
+            applicationSecretRequirements=application_model['runtimeSecretRequirements'])
+    return result

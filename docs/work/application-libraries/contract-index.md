@@ -13,10 +13,11 @@ versioned schemas, service packages или accepted substage scope.
 | A3 | PostgreSQL resources/accounts/grants | [План](milestones/a3/a3-technical-plan.md) · [review](milestones/a3/reviews/) · [журнал](milestones/a3/evidence/a3-test-journal.md) |
 | A4 | Vault provisioning, Agent и общие PKI-секреты | [План](milestones/a4/a4-technical-plan.md) · [review](milestones/a4/reviews/) · [журнал](milestones/a4/evidence/a4-test-journal.md) |
 | A5 | Redis/Sentinel, ClickHouse и выбранный Kafka SSL-only scope | [План](milestones/a5/a5-technical-plan.md) · [review](milestones/a5/reviews/) · [журнал](milestones/a5/evidence/a5-test-journal.md) |
-
 | A6 | Публикация endpoint через общие HAProxy/DNS hooks | [План](milestones/a6/a6-technical-plan.md) · [review](milestones/a6/reviews/) · [журнал](milestones/a6/evidence/a6-test-journal.md) |
 
-Последующие A7–A9, Go и UI описываются в [общем плане](implementation-plan.md).
+| A7 | Structured snapshot, validation, planning и execution contract | [План](milestones/a7/a7-technical-plan.md) · [DIFF review](milestones/a7/reviews/a7-diff-review.md) · [TARGETED_RECHECK](milestones/a7/reviews/a7-diff-targeted-recheck.md) · [журнал](milestones/a7/evidence/a7-test-journal.md) |
+
+Последующие A8–A9, Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
 не доказывает authenticated access.
 

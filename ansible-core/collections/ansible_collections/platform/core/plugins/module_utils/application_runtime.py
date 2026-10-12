@@ -34,6 +34,30 @@ def safe_relative(value):
             "\\" not in value and not any(x in ("", ".", "..") for x in value.split("/")))
 
 
+def image_requirement(instance_id, image_name, image):
+    """One locked image identity for standalone execution and target-free planning."""
+    if not isinstance(image_name, str) or not REFERENCE.fullmatch(image_name) or not isinstance(image, dict):
+        raise ValueError('APPLICATION_IMAGE_NOT_LOCKED')
+    reference = runtime_reference(image['imageId'])
+    platform = image.get('platform')
+    if (not isinstance(platform, dict) or set(platform) - {'os', 'architecture', 'variant'} or
+            platform.get('os') != 'linux' or platform.get('architecture') not in ('amd64', 'arm64') or
+            ('variant' in platform and (not isinstance(platform['variant'], str) or
+             re.fullmatch(r'[a-z0-9]+', platform['variant']) is None))):
+        raise ValueError('APPLICATION_IMAGE_PLATFORM_INVALID')
+    if image.get('localReference', reference) != reference:
+        raise ValueError('APPLICATION_IMAGE_REFERENCE_NOT_BOUND')
+    return dict(id=instance_id + ':image', name=image_name, artifactType='container-image',
+                imageId=image['imageId'], platform=image['platform'], localReference=reference)
+
+
+def resolve_image_lock(native_lock, manifest_lock):
+    """Existing standalone lock conflict rule, shared by snapshot and runtime."""
+    if native_lock is not None and manifest_lock is not None and native_lock != manifest_lock:
+        raise ValueError('APPLICATION_ARTIFACT_LOCK_CONFLICT')
+    return (native_lock or manifest_lock or {}).get('x-container-images', {})
+
+
 def bundle_archive(root, digest, record, loader):
     """Verify the locked manifest and selected component; no bundle mutation."""
     manifest_path = checked_file(root, "manifest.yaml")
@@ -190,8 +214,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
             if not safe_relative(offline["ref"]) or not offline["ref"].startswith("runtime/artifacts/"):
                 raise ValueError("APPLICATION_IMAGE_ARCHIVE_PATH_INVALID")
             offline = dict(offline, kind="OFFLINE_BUNDLE", type="archive", bundleDigest=lock["digest"])
-        requirement = {"id": app_id + ":image", "name": settings["image"], "artifactType": "container-image",
-                       "imageId": image["imageId"], "platform": image["platform"], "localReference": reference}
+        requirement = image_requirement(app_id, settings['image'], image)
         authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
         jobs.append(dict(row, placement=placement, account=account, configs=configs,
                          agentTemplate=checked_file(root, app['logicalPath']+'/'+agent_template) if agent_template else None,

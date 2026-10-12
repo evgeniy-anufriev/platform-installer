@@ -777,12 +777,12 @@ class ExecutionLifecycleTests(unittest.TestCase):
             finish_ansible = threading.Event()
             first_result = []
 
-            def wait_for_pki(_process, _stopped):
+            def wait_for_pki(_process, _stopped, _capture=False):
                 entered_ansible.set()
                 if threading.current_thread().name == "first-pki-apply":
                     if not finish_ansible.wait(5):
                         raise AssertionError("first PKI apply did not finish its simulated materialize+deploy interval")
-                return 0, ""
+                return 0, "", None
 
             def run_first():
                 try:
@@ -988,7 +988,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 self.assertEqual(0o600, stat.S_IMODE(credential_path.stat().st_mode))
                 return Completed()
 
-            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value={"ansible_password": "test", "ansible_become_password": "test"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value={"ansible_password": "test", "ansible_become_password": "test"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "", None)):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             self.assertEqual({"ansible_password": "test", "ansible_become_password": "test"}, captured["credentials"])
             self.assertFalse(Path(journal.directory, ".ansible-runtime-credentials.json").exists())
@@ -1005,7 +1005,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 captured["credentials"] = json.loads(credential_path.read_text(encoding="utf-8"))
                 self.assertEqual(0o600, stat.S_IMODE(credential_path.stat().st_mode))
                 return object()
-            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value={"privateKey": "synthetic-private-key"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+            with mock.patch.object(execution_controller, "_command", return_value=["ansible-playbook", "site.yml"]), mock.patch.object(execution_controller.execution_secret_lease, "ansible_connection_credentials_for_run", return_value={"privateKey": "synthetic-private-key"}), mock.patch.object(execution_controller.subprocess, "Popen", side_effect=opened), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "", None)):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             self.assertEqual({"privateKey": "synthetic-private-key"}, captured["credentials"])
             self.assertNotIn("IdentityFile=", captured["env"]["ANSIBLE_SSH_ARGS"])

@@ -289,6 +289,44 @@ def runtime_secret_values_for_run(state_root, run_id):
     return values
 
 
+def application_secret_values_for_operation(state_root, run_id, operation, requirements):
+    """Bounded application scope over the existing v1alpha3/v1alpha4 secret lease."""
+    allowed = ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']
+    if operation not in allowed or not isinstance(requirements, list) or len(requirements) > MAX_RUNTIME_SECRET_VALUES:
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    refs, names = set(), set()
+    for item in requirements:
+        fields = {'requirementRef', 'purpose', 'runtimeReference', 'providerDeployment',
+                  'applicationLibraries', 'hosts', 'operations'}
+        if not isinstance(item, dict) or set(item) != fields:
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        if (item['purpose'] not in ('APPLICATION_SECRET', 'APPLICATION_VAULT_ADMIN_TOKEN') or
+                item['operations'] != allowed or
+                not isinstance(item['requirementRef'], str) or
+                re.fullmatch(r'application-secret-[a-f0-9]{32}', item['requirementRef']) is None or
+                not isinstance(item['runtimeReference'], str) or
+                re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item['runtimeReference']) is None):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        for key in ('applicationLibraries', 'hosts'):
+            values = item[key]
+            pattern = r'[a-z0-9][a-z0-9-]{0,62}' if key == 'hosts' else r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*'
+            if (not isinstance(values, list) or not 1 <= len(values) <= 256 or
+                    any(not isinstance(value, str) or re.fullmatch(pattern, value) is None for value in values) or
+                    values != sorted(set(values))):
+                raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        provider = item['providerDeployment']
+        if ((item['purpose'] == 'APPLICATION_SECRET' and provider is not None) or
+                (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
+                 (not isinstance(provider, str) or item['runtimeReference'] != 'vault-admin-token-' + provider)) or
+                item['requirementRef'] in refs or item['runtimeReference'] in names):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        refs.add(item['requirementRef']); names.add(item['runtimeReference'])
+    values = runtime_secret_values_for_run(state_root, run_id) if requirements else {}
+    if not refs.issubset(values):
+        raise LifecycleError('RUNTIME_SECRET_VALUES_REQUIRED')
+    return {item['runtimeReference']: values[item['requirementRef']] for item in requirements}
+
+
 def _attached_payload_for_run(state_root, run_id):
     attached = _read(os.path.join(_root(state_root), "attached", run_id + ".json"))
     lease_id = attached.get("leaseId") if isinstance(attached, dict) else None

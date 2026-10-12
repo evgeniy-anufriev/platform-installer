@@ -19,11 +19,12 @@ class ActionModule(ActionBase):
             pki = self._task.args.get("pki_materialization")
             project = snapshot.get("project", {}) if isinstance(snapshot, dict) else {}
             reissue = []
-            if (isinstance(pki, dict) and pki.get("status") == "PASS" and
+            if (isinstance(snapshot, dict) and snapshot.get('apiVersion') != 'platform.installer/project-snapshot/v2alpha1' and
+                    isinstance(pki, dict) and pki.get("status") == "PASS" and
                     project.get("identitySource") == "PROJECT_MANIFEST" and
                     isinstance(snapshot.get("validation"), dict) and snapshot["validation"].get("status") == "PASS"):
                 reissue = inspect_reissue(self._task.args.get("pki_state_root"), project.get("id"), pki.get("requests", []))
-            result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue, self._task.args.get("deployment_order"))
+            result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue, self._task.args.get("deployment_order"), application_image_lock=self._task.args.get("application_image_lock"))
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
             if destination and manifest:
