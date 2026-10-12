@@ -55,6 +55,11 @@ class ServiceEndpointResolutionTests(unittest.TestCase):
         self.assertNotIn("address", endpoint)
         self.assertNotIn("sanIpAddresses", endpoint)
 
+    def test_certificate_wildcard_candidate_without_dns_wildcard(self):
+        result = self.resolve(topology(group="dmz"))
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual(["*.dmz.scada.local"], result["endpoints"]["postgres-main"]["wildcardDnsNames"])
+
     def test_domain_change_changes_endpoint_fingerprint(self):
         first = self.resolve()
         value = topology()

@@ -111,7 +111,8 @@ def resolve_service_endpoints(topology, service_catalog, resolved_service_config
             "endpointGroupId": group_id,
             "fqdn": fqdn,
             "sanDnsNames": [fqdn],
-            "wildcardDnsNames": (["*.%s" % domain] if address.get("wildcard") is True else []),
+            # Certificate SAN candidates; DNS wildcard publication is independent.
+            "wildcardDnsNames": ["*.%s" % domain],
         }
         record["endpointFingerprint"] = canonical_digest(record)
         endpoints[deployment_id] = record
