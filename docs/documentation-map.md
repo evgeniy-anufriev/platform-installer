@@ -531,3 +531,32 @@ Core, bundle и целевые хосты этим разбором не изм�
 без изменений; новые записи добавлены в существующие тематические файлы.
 `git diff --check` проходит. Proof-материалы:
 `.runtime/qa/documentation-mixed-20261012/`.
+
+## Сверка маршрута Save / Verify с backend — 2026-10-12
+
+ADR-027 и owner-change документ сверены с текущим backend без выполнения
+Core или установки. `ReviewStructuralEditSession` использует
+`ReviewStructural` → `PlanStructuralSave` и хранит план с `LocalOnly`;
+`CommitStructuralEditPlan` использует guarded transaction, а её local-only
+ветка завершается до Core snapshot. `VerifyProject` отдельно читает сохранённую
+ревизию и проверяет runtime evidence; fresh installation plan проверяется
+по project/runtime binding. Старый desktop `CommitEditPlan` возвращает
+`EDIT_CONTRACT_SUPERSEDED`.
+
+Уточнены точки входа в docs README, contracts README, agent-index и темах UI:
+для нового Save сначала читать ADR-027/owner-change, а UI-BE-03 и раннюю
+UI-01D архитектуру — в их исходном writer/compatibility scope. Исходные
+нормативные разделы не переписаны; новые DTO, правила и статусы не вводились.
+
+Точки проверки: [desktop App](../internal/desktop/app.go),
+[local Save](../internal/installer/local_save.go),
+[edit session](../internal/installer/session.go),
+[transaction](../internal/installer/transaction.go),
+[installation plan](../internal/desktop/installation_plan.go) и
+[Start](../internal/desktop/installation_execution.go). Это сверка исходников
+и маршрутов документации, не новая UI/Core acceptance или независимый review.
+
+Проверка пакета: 1527 локальных ссылок и якорей без ошибок; все 230
+выделенных фрагментов сохранены. Нормативные разделы UI-BE-03 совпадают
+с предыдущей версией; добавлена только scope-пометка. `git diff --check`
+проходит. Proof-снимки: `.runtime/qa/documentation-current-save-20261012/`.

@@ -4,6 +4,13 @@ Document scope: the original milestone contract and constraints. Historical
 results are linked separately; current status and authorization are recorded
 only in [CURRENT_STATE](../../../CURRENT_STATE.md).
 
+> **Lifecycle scope:** the Core-backed `PlanEdit` / `EditPlan` flow below
+> describes the original writer contract. New UI Save uses local structural
+> review and the guarded transaction under [ADR-027](../../architecture-decisions.md#adr-027-save-project-verify-and-deploymentplan-are-separate-operations)
+> and [Save / Project Verify / DeploymentPlan](../ui-lifecycle/ui-save-verify-architecture.md).
+> A remote Core Review is not required to authorize new Save. Writer ownership,
+> path guards and transaction requirements remain applicable.
+
 ## 1. Goal
 
 UI-BE-03 adds the smallest production Go backend needed to turn a bounded semantic edit into a reviewed, validated and crash-recoverable update of the same portable Ansible project consumed by Core. It adds neither UI nor validate/plan/apply runtime execution.

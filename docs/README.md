@@ -12,6 +12,7 @@ review и журналах описывают проверенную верси�
 | Понять устройство проекта | [Архитектура](architecture.md), [решения ADR](architecture-decisions.md), [roadmap](roadmap.md) |
 | Разобраться в переносимом проекте и Core | [Контракт проекта](project-contract.md), [Ansible Core](ansible-core.md) |
 | Найти подробные правила и их version scope | [Контракты](contracts/README.md) |
+| Разобраться в Save, Verify и разрешении установки | [Save / Project Verify / DeploymentPlan](work/ui-lifecycle/ui-save-verify-architecture.md), [ADR-027](architecture-decisions.md#adr-027-save-project-verify-and-deploymentplan-are-separate-operations) |
 | Работать с Go backend и UI | [Границы backend/UI](backend-and-ui.md), [дизайн](design/ui-design-01.md), [mockups](design/ui-design-01-mockups.html) |
 | Пользоваться установщиком | [Руководство инженера](guides/installer-engineer-guide.md), [диагностика исполнения](guides/execution-failure-diagnostics.md) |
 | Работать с application libraries | [Тематическая навигация](work/application-libraries/README.md); архитектурные предложения, планы подэтапов и evidence различаются внутри раздела |
