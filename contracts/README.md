@@ -189,3 +189,20 @@ payload generation; lease v1alpha1 remains unchanged and cannot authorize the
 typed-input path. Capability v1alpha4 is emitted only by a runtime that
 implements the corresponding descriptor, lease admission, manifest binding,
 and operation-scoped Ansible projection.
+
+## Application libraries preparation (A7)
+
+Nonempty application libraries use `plan/v1alpha4` and
+`runtime-secret-descriptors/v1alpha3`. Infrastructure-only plans and descriptors
+retain their existing versions. Application input descriptors contain public
+source refs and library/host scopes; credential values remain in the existing
+typed lease and private run custody. Unknown snapshot or image-lock versions fail
+closed. Registry availability and concrete source selection are execution state,
+never target-free plan identity.
+
+`execution-manifest/v1alpha2/application-operation.schema.json` is a closed
+preparation fragment for the two fixed existing application playbooks. A7 does
+not publish a full application execution manifest or advertise application Start
+capability. Application-aware production plans remain BLOCKED until the A8
+all-infrastructure Verify barrier. Existing infrastructure capability negotiation
+and Start protocols are unchanged.

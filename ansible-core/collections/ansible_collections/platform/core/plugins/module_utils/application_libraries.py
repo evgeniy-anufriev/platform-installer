@@ -414,14 +414,19 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
         if instance['agentRequired'] != agent_required or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
             findings.append(finding('APPLICATION_HOST_SECRET_BINDING_CONFLICT', field))
-        instance["imageRequirement"] = {"image": settings.get("image"), "delivery": "DEFERRED_TO_A2_1"}
+        instance["imageRequirement"] = {"image": settings.get("image"), "artifactType": "container-image",
+                                        "sourcePolicy": "REPOSITORY_THEN_OFFLINE"}
         instance["secretBindings"] = secret_bindings
         instance["runtimeSecretRequirements"] = sorted({source["ref"] for account in accounts.values()
                                                         for credential in account["credentials"].values()
                                                         for source in [credential["source"]] if source["kind"] == "runtime_secret_ref"})
-        instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "DEFERRED_TO_EXECUTION_PREFLIGHT"} if agent_required else None
+        instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
         # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
         instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
+                                          "imageRequirement": {"image": settings.get("image"), "artifactType": "container-image"},
+                                          "origin": {"resolution": "ANSIBLE", "precision": "RESOLUTION_SCOPE",
+                                                     "applicationPackage": row['applicationName'] + '@' + row['applicationVersion'],
+                                                     "libraryPackage": row['libraryRef'], "host": host},
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
                                           "containerName": "%s-%s-%s" % (project_id, app_id, host),

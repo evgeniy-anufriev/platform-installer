@@ -177,9 +177,14 @@ class ApplicationLibrariesTest(unittest.TestCase):
                 self.assertEqual("APPLICATION_COMPOSE_PROJECT_INVALID", result["findings"][0]["code"])
 
     def test_execution_not_silently_limited_to_infrastructure(self):
-        from deployment_plan import build_deployment_plan
-        with self.assertRaisesRegex(ValueError, "APPLICATION_LIBRARY_EXECUTION_NOT_IMPLEMENTED"):
-            build_deployment_plan({"apiVersion": "platform.installer/project-snapshot/v2alpha1"}, {}, {})
+        from test_deployment_plan import _build_deployment_plan, snapshot, catalog, runtime
+        value = snapshot()
+        value['apiVersion'] = 'platform.installer/project-snapshot/v2alpha1'
+        result = _build_deployment_plan(value, catalog(), runtime(), deployment_order=['provider', 'consumer'])
+        self.assertEqual('BLOCKED', result['deploymentPlan']['status'])
+        self.assertIsNone(result['executionManifest'])
+        self.assertIn('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED',
+                      [f['code'] for f in result['deploymentPlan']['findings']])
 
     def test_final_projection_boundary_preserves_refs_and_rejects_grants_secret(self):
         projection = {"libraries": {"sdku": {"resources": {}, "instances": {"apigateway-sdku": {

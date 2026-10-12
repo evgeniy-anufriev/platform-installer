@@ -333,7 +333,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             journal = _active_journal(root)
             journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
             operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
-            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_CompletedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "", None)):
                 self.assertEqual("SUCCEEDED", execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False]))
             events = journal.events()
             diagnostics = [event for event in events if event.get("error", {}).get("code") == "TASK_EVENT_STREAM_TRUNCATED"]
@@ -379,7 +379,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
                                    return_value=[{"requirementRef": requirements[0]["requirementRef"], "purpose": "SERVICE_ADMIN_TOKEN", "value": secret}]), \
                  mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), \
                  mock.patch.object(execution_controller.subprocess, "Popen", side_effect=launch), \
-                 mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "")):
+                 mock.patch.object(execution_controller, "_wait_for_operation", return_value=(0, "", None)):
                 state = execution_controller._dispatch("/runtime/release", journal,
                     {"operations": [operation], "runtimeSecretInputs": requirements}, [False])
 
@@ -397,7 +397,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             journal = _active_journal(root)
             journal.mark_task_observability_degraded("TASK_EVENT_LIMIT")
             operation = {"operationId": "apply:kafka-main", "phaseId": "apply", "operation": "SERVICE_APPLY", "serviceType": "kafka", "serviceDeployment": "kafka-main"}
-            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_FailedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(2, "KAFKA_IDENTITY_MATERIALIZATION_BLOCKED")):
+            with mock.patch.object(execution_controller, "_command", return_value=["trusted"]), mock.patch.object(execution_controller.execution_target_trust, "verify", return_value="/run/known_hosts"), mock.patch.object(execution_controller.subprocess, "Popen", return_value=_FailedProcess()), mock.patch.object(execution_controller, "_wait_for_operation", return_value=(2, "KAFKA_IDENTITY_MATERIALIZATION_BLOCKED", None)):
                 with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "EXECUTION_OPERATION_FAILED"):
                     execution_controller._dispatch("/runtime/release", journal, {"operations": [operation]}, [False])
             events = journal.events()

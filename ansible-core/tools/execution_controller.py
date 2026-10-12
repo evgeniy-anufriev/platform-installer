@@ -442,6 +442,24 @@ def _acquire_project_pki_apply_lock(journal):
 
 def _command(release, journal, operation):
     kind = operation.get("operation")
+    if kind in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
+        fields = {'operationId', 'phaseId', 'operation', 'targets', 'applicationLibraries', 'applicationSemanticFingerprint'}
+        action = 'apply' if kind == 'APPLICATION_LIBRARIES_APPLY' else 'verify'
+        libraries = operation.get('applicationLibraries')
+        if (set(operation) != fields or operation.get('operationId') != 'applications:' + action or
+                operation.get('phaseId') != 'applications' or not isinstance(libraries, list) or
+                not 1 <= len(libraries) <= 256 or any(not isinstance(item, str) or
+                    re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None for item in libraries) or
+                libraries != sorted(set(libraries)) or not isinstance(operation.get('applicationSemanticFingerprint'), str) or
+                re.fullmatch(r'sha256:[a-f0-9]{64}', operation['applicationSemanticFingerprint']) is None):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        targets = _service_targets(operation)
+        projection = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
+        if not os.path.isfile(projection) or os.path.islink(projection):
+            raise LifecycleError('EXECUTION_RUNTIME_PROJECTION_MISSING')
+        return ['ansible-playbook', '-i', os.path.join(journal.directory, 'project', 'inventory', 'hosts.yml'),
+                os.path.join(release, 'ansible-core', 'playbooks', 'application-libraries-' + action + '.yml'),
+                '-e', '@' + projection, '--limit', 'localhost:' + ':'.join(targets)]
     if kind in ("PKI_APPLY", "PKI_REISSUE"):
         projection = os.path.join(journal.directory, "runtime-projection.json")
         if not os.path.isfile(projection) or os.path.islink(projection):
@@ -512,7 +530,7 @@ def _environment(release, journal=None, operation=None, leased_private_key=False
 
 
 def _validate_runtime_projection(journal, metadata, manifest):
-    service = any(isinstance(operation, dict) and operation.get("operation") in ("SERVICE_APPLY", "SERVICE_VERIFY")
+    service = any(isinstance(operation, dict) and operation.get("operation") in ("SERVICE_APPLY", "SERVICE_VERIFY", 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')
                   for operation in manifest.get("operations", []))
     if not service:
         return
@@ -646,6 +664,8 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         scoped[requirement_id] = authority
     required_deployments = set()
     for requirement in requirements:
+        if isinstance(requirement, dict) and requirement.get('artifactType') == 'container-image':
+            continue  # Existing Ansible A2 authority resolves image candidates during execution.
         if not isinstance(requirement, dict) or not isinstance(requirement.get("serviceDeployment"), str):
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
         required_deployments.add(requirement["serviceDeployment"])
@@ -724,7 +744,40 @@ def _materialize_runtime_projection(journal, metadata, manifest):
             stream.flush(); os.fsync(stream.fileno())
         os.chmod(temporary, 0o600)
         os.replace(temporary, os.path.join(journal.directory, "runtime-projection.json"))
+        application_secret_files = {}
         for operation in operations:
+            if isinstance(operation, dict) and operation.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
+                app_requirements = manifest.get('applicationSecretRequirements', [])
+                values = execution_secret_lease.application_secret_values_for_operation(
+                    journal.root, journal.run_id, operation['operation'], app_requirements)
+                root = journal.directory  # Established private run custody; no second secret workspace.
+                files, inputs = dict(secret_files), []
+                for mapping in service_secret_files.values():
+                    files.update(mapping)
+                for item in app_requirements:
+                    if not set(item['applicationLibraries']).issubset(operation['applicationLibraries']):
+                        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+                    reference = item['runtimeReference']
+                    path = os.path.join(root, '.runtime-application-secret-' + hashlib.sha256(reference.encode()).hexdigest())
+                    if reference not in application_secret_files:
+                        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+                            stream.write(values[reference]); stream.flush(); os.fsync(stream.fileno())
+                        application_secret_files[reference] = path
+                    files[reference] = application_secret_files[reference]
+                    if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN':
+                        inputs.append(dict(requirementRef='si-' + hashlib.sha256(reference.encode()).hexdigest()[:40],
+                                           purpose='SERVICE_ADMIN_TOKEN', serviceDeployment=item['providerDeployment'],
+                                           value=values[reference]))
+                scoped = dict(payload, platform_application_secret_root=root, platform_application_secret_files=files,
+                              platform_runtime_secret_inputs=inputs,
+                              platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
+                              platform_application_expected_library_ids=operation['applicationLibraries'])
+                destination = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
+                descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                with os.fdopen(descriptor, 'w') as stream:
+                    json.dump(scoped, stream, ensure_ascii=True, sort_keys=True, separators=(',', ':'))
+                continue
             if not isinstance(operation, dict) or operation.get("operation") not in ("SERVICE_APPLY", "SERVICE_VERIFY"):
                 continue
             prefix = operation.get("roleVariablesPrefix")

@@ -13,6 +13,26 @@ SPEC.loader.exec_module(BUILDER)
 
 
 class ExecutionRuntimeBundleTests(unittest.TestCase):
+    def test_current_application_closure_is_copied_and_fingerprinted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for destination, source in BUILDER.SOURCE_ROOTS:
+                BUILDER.copy_tree(source, root / destination)
+            BUILDER.validate_catalog_layout(root)
+            indexed = {item['path']: item for item in BUILDER.components(root)}
+            required = [
+                'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py',
+                'ansible-core/playbooks/application-libraries-apply.yml',
+                'ansible-core/playbooks/application-libraries-verify.yml',
+                'contracts/plan/v1alpha4/schema.json',
+                'contracts/runtime-secret-descriptors/v1alpha3/schema.json',
+                'contracts/execution-manifest/v1alpha2/application-operation.schema.json',
+            ]
+            for relative in required:
+                self.assertIn(relative, indexed)
+                self.assertEqual(BUILDER.digest_file(root / relative), BUILDER.digest_file(BUILDER.REPOSITORY / relative))
+            self.assertFalse(any('.runtime' in Path(relative).parts or 'tests' in Path(relative).parts for relative in indexed))
+
     def test_bundle_preserves_repository_relative_core_layout(self):
         destinations = [destination for destination, _source in BUILDER.SOURCE_ROOTS]
         self.assertIn("ansible-core", destinations)

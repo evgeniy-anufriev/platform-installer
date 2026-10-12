@@ -27,6 +27,8 @@ from ansible_collections.platform.core.plugins.module_utils.application_librarie
     infrastructure_state, schema_version, prepare, validate_public_projection, project as project_application_libraries,
 )
 from ansible_collections.platform.core.plugins.module_utils.project_validation import canonical_digest
+from ansible_collections.platform.core.plugins.module_utils.application_runtime import resolve_image_lock
+from ansible_collections.platform.core.plugins.module_utils.application_plan import application_execution_model
 
 
 _CANONICAL_PORT = re.compile(r"^(0|[1-9][0-9]*)$")
@@ -452,7 +454,9 @@ class ActionModule(ActionBase):
             desired_state = task_vars.get("platform_desired_state", {})
             application_desired_state = desired_state
             desired_schema_version = schema_version(desired_state, task_vars.get("platform_desired_state_contract"))
-            applications_enabled = "applicationLibraryDeployments" in desired_state
+            applications_enabled = bool(desired_state.get('applicationLibraryDeployments'))
+            if task_vars.get('platform_application_expected_fingerprint') and not applications_enabled:
+                raise ValueError('APPLICATION_EXECUTION_MODEL_MISMATCH')
             if applications_enabled and "platform_application_rows" not in task_vars:
                 raise ValueError("Application resolve role must run before snapshot")
             desired_state = infrastructure_state(desired_state)
@@ -611,6 +615,13 @@ class ActionModule(ActionBase):
                     snapshot["readiness"]["status"] = "BLOCKED"
                 snapshot["apiVersion"] = "platform.installer/project-snapshot/v2alpha1"
                 snapshot["applicationLibraries"] = applications
+                private_image_lock = resolve_image_lock(task_vars.get('platform_artifact_lock'),
+                                                        (manifest or {}).get('artifactLock'))
+                if task_vars.get('platform_application_expected_fingerprint'):
+                    model = application_execution_model(snapshot, private_image_lock)
+                    if (model['semanticFingerprint'] != task_vars['platform_application_expected_fingerprint'] or
+                            model['libraryIds'] != task_vars.get('platform_application_expected_library_ids')):
+                        raise ValueError('APPLICATION_EXECUTION_MODEL_MISMATCH')
                 snapshot.pop("snapshotFingerprint", None)
                 snapshot["snapshotFingerprint"] = canonical_digest(snapshot)
             # This is controller-private Core plumbing for the immediately
@@ -621,6 +632,7 @@ class ActionModule(ActionBase):
             # the resolved configuration needed to build a digest-bound
             # execution manifest.
             return {"changed": False, "snapshot": snapshot, "pki_materialization": pki,
+                    "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,
                     "execution_connections": execution_connections}
         except (AnsibleError, KeyError, OSError, TypeError, ValueError):

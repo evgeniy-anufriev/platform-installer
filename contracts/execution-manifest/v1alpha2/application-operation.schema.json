@@ -1,0 +1,77 @@
+{
+  "oneOf": [
+    {
+      "properties": {
+        "operation": {
+          "const": "APPLICATION_LIBRARIES_APPLY"
+        },
+        "operationId": {
+          "const": "applications:apply"
+        }
+      }
+    },
+    {
+      "properties": {
+        "operation": {
+          "const": "APPLICATION_LIBRARIES_VERIFY"
+        },
+        "operationId": {
+          "const": "applications:verify"
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "$id": "https://platform-installer.local/contracts/execution-manifest/v1alpha2/application-operation.schema.json",
+  "properties": {
+    "applicationSemanticFingerprint": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "targets": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "maxItems": 256
+    },
+    "phaseId": {
+      "const": "applications"
+    },
+    "applicationLibraries": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 256
+    },
+    "operation": {
+      "enum": [
+        "APPLICATION_LIBRARIES_APPLY",
+        "APPLICATION_LIBRARIES_VERIFY"
+      ]
+    },
+    "operationId": {
+      "enum": [
+        "applications:apply",
+        "applications:verify"
+      ]
+    }
+  },
+  "type": "object",
+  "required": [
+    "operationId",
+    "phaseId",
+    "operation",
+    "targets",
+    "applicationLibraries",
+    "applicationSemanticFingerprint"
+  ]
+}

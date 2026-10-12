@@ -1,7 +1,7 @@
 """Standalone authority assembly without enabling the Installer planner."""
 import os
 from ansible.plugins.action import ActionBase
-from ansible_collections.platform.core.plugins.module_utils.application_runtime import prepare_runtime
+from ansible_collections.platform.core.plugins.module_utils.application_runtime import prepare_runtime, resolve_image_lock
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
 
@@ -17,8 +17,7 @@ class ActionModule(ActionBase):
             manifest = self._loader.load_from_file(manifest_path) if os.path.isfile(manifest_path) else {}
             native_lock = values.get("platform_artifact_lock")
             manifest_lock = (manifest or {}).get("artifactLock")
-            if native_lock is not None and manifest_lock is not None and native_lock != manifest_lock:
-                raise ValueError("APPLICATION_ARTIFACT_LOCK_CONFLICT")
+            resolve_image_lock(native_lock, manifest_lock)
             snapshot = args["snapshot"]
             jobs = prepare_runtime(root, snapshot, values["platform_application_rows"],
                                    values["platform_desired_state"], native_lock or manifest_lock or {},
