@@ -5,7 +5,7 @@
   changed_when: false
 
 - name: Verify BIND service is active
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     state: started
   check_mode: true

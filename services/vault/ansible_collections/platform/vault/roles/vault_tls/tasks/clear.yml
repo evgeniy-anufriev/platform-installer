@@ -12,7 +12,7 @@
     label: "{{ item.id }}"
 
 - name: Stop and disable only selected owned Vault units
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ item.instance_name }}.service"
     state: stopped
     enabled: false

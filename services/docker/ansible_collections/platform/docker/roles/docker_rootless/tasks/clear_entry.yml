@@ -64,7 +64,7 @@
     fail_msg: DOCKER_CLEAR_UNIT_NOT_OWNED
 
 - name: Stop and disable only the selected account's system bridge
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: stopped
     enabled: false

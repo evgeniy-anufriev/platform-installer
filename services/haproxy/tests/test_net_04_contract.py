@@ -62,12 +62,12 @@ class HAProxySystemdRuntimeDirectoryTests(unittest.TestCase):
         self.assertEqual("/run/haproxy/admin.sock", defaults["platform_haproxy_runtime_socket_path"])
         self.assertEqual(4, len(start_tasks))
         self.assertTrue(start_tasks[1]["ansible.builtin.template"]["src"].endswith("runtime-directory.conf.j2"))
-        service_task = start_tasks[2]["ansible.builtin.systemd_service"]
+        service_task = start_tasks[2]["ansible.builtin.systemd"]
         self.assertTrue(service_task["daemon_reload"])
         self.assertIn("_platform_haproxy_runtime_dropin.changed", service_task["state"])
         self.assertEqual("platform_haproxy_partial_deployment_id is not defined", start_tasks[2]["when"])
         partial_reload = start_tasks[3]
-        self.assertEqual("reloaded", partial_reload["ansible.builtin.systemd_service"]["state"])
+        self.assertEqual("reloaded", partial_reload["ansible.builtin.systemd"]["state"])
         self.assertIn("platform_haproxy_active_artifacts_changed | default(false) | bool", partial_reload["when"])
 
 

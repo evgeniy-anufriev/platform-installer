@@ -25,13 +25,13 @@
   register: _platform_dns_client_resolved_dropin
 
 - name: Ensure systemd-resolved is enabled and active
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: systemd-resolved.service
     enabled: true
     state: started
 
 - name: Restart systemd-resolved after changed Platform drop-in
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: systemd-resolved.service
     state: restarted
   when: _platform_dns_client_resolved_dropin.changed

@@ -557,7 +557,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     member = tasks(service, "member.yml")
                     selected = [named(member, "Materialize Redis member TLS files")]
                     restarts = [task for task in member
-                                if task.get("ansible.builtin.systemd_service", task.get("ansible.builtin.systemd", {})).get("state") == "restarted"]
+                                if task.get("ansible.builtin.systemd", {}).get("state") == "restarted"]
                     self.assertEqual(2, len(restarts))
                     observations = [{"ansible.builtin.set_fact": {"activation_" + str(index): True},
                                      "when": task["when"]} for index, task in enumerate(restarts)]
@@ -566,7 +566,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     selected = [named(provision, "Initialize this host's exact changed-member restart set"),
                                 named(provision, "Materialize the API certificate, private key and CA for each Vault unit"),
                                 named(provision, "Record members whose PKI files changed")]
-                    state = tasks(service, "bootstrap_follower.yml")[0]["ansible.builtin.systemd_service"]["state"]
+                    state = tasks(service, "bootstrap_follower.yml")[0]["ansible.builtin.systemd"]["state"]
                     observations = [{"ansible.builtin.set_fact": {"activation_state": state},
                                      "vars": {"vault_member": variables["_platform_vault_local_instances"][0]}}]
                 elif service == "postgresql":
@@ -585,7 +585,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     # Only test ownership differs from the production assemble task.
                     selected[0]["ansible.builtin.assemble"].update(
                         owner=self.variables["platform_pki_owner"], group=self.variables["platform_pki_group"])
-                    state = named(tasks(service, "start.yml"), "Start or reload validated HAProxy service")["ansible.builtin.systemd_service"]["state"]
+                    state = named(tasks(service, "start.yml"), "Start or reload validated HAProxy service")["ansible.builtin.systemd"]["state"]
                     observations = [{"ansible.builtin.set_fact": {"activation_state": state}}]
 
                 # Fresh processes exclude stale aggregate facts. Corrupt one

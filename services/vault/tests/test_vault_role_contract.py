@@ -215,7 +215,7 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertIn("--no-fork", lock_start)
         self.assertIn("/usr/bin/systemd-notify --ready", lock_start[-1])
         self.assertFalse(any("Type=simple" in str(task) for task in acquire))
-        self.assertTrue(any("systemd_service" in str(task) for task in release))
+        self.assertTrue(any("systemd" in str(task) for task in release))
         self.assertIn("always", next(task for task in main if task["name"].startswith("Serialize Vault apply")))
         lock = next(task["ansible.builtin.include_tasks"] for task in block if task["name"].startswith("Acquire"))
         self.assertTrue(lock["apply"]["run_once"])
@@ -230,7 +230,7 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertNotIn("failed_when", hold)
         self.assertIn("--nonblock", hold["ansible.builtin.command"]["argv"])
         self.assertIs(release[0]["changed_when"], False)
-        self.assertEqual(release[0]["ansible.builtin.systemd_service"]["state"], "stopped")
+        self.assertEqual(release[0]["ansible.builtin.systemd"]["state"], "stopped")
         lock_gate = next(task for task in acquire if task["name"].startswith("Require successful ownership"))
         self.assertEqual(lock_gate["ansible.builtin.assert"]["fail_msg"], "VAULT_DEPLOYMENT_BUSY")
         root = next(task for task in acquire if "ansible.builtin.file" in task)
@@ -238,7 +238,7 @@ class VaultRoleContractTests(unittest.TestCase):
         for filename in ("provision.yml", "configure.yml", "bootstrap.yml"):
             tasks = yaml.safe_load((ROLE / "tasks" / filename).read_text(encoding="utf-8"))
             for task in tasks:
-                if any(module in task for module in ("ansible.builtin.copy", "ansible.builtin.template", "ansible.builtin.file", "ansible.builtin.package", "ansible.builtin.systemd_service")):
+                if any(module in task for module in ("ansible.builtin.copy", "ansible.builtin.template", "ansible.builtin.file", "ansible.builtin.package", "ansible.builtin.systemd")):
                     self.assertNotIn("changed_when", task, task.get("name"))
 
     def test_config_keeps_api_tls_and_raft_join_pki_roles_distinct(self):
@@ -408,7 +408,7 @@ class VaultRoleContractTests(unittest.TestCase):
         package = next(task for task in provision if task["name"] == "Install the standard audit log rotation utility")
         timer = next(task for task in provision if task["name"] == "Enable and start the standard logrotate timer")
         self.assertEqual(package["ansible.builtin.package"], {"name": "logrotate", "state": "present"})
-        self.assertTrue(timer["ansible.builtin.systemd_service"]["enabled"])
+        self.assertTrue(timer["ansible.builtin.systemd"]["enabled"])
 
     def test_audit_free_space_gate_runs_during_preflight_before_provision(self):
         preflight = yaml.safe_load((ROLE / "tasks/preflight.yml").read_text(encoding="utf-8"))

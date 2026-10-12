@@ -32,7 +32,7 @@
     state: present
 
 - name: Enable and start the standard logrotate timer
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: logrotate.timer
     state: started
     enabled: true

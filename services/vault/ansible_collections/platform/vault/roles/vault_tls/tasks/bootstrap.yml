@@ -1,6 +1,6 @@
 ---
 - name: Start the canonical Vault seed before any Raft follower
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ (_platform_vault_instances | first).instance_name }}.service"
     state: "{{ 'restarted' if (_platform_vault_instances | first).instance_name in (hostvars[(_platform_vault_instances | first).host]._platform_vault_active_units | default([])) and (_platform_vault_instances | first).id in (hostvars[(_platform_vault_instances | first).host]._platform_vault_restart_member_ids | default([])) else 'started' }}"
     enabled: true

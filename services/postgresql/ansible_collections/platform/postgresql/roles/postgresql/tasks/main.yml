@@ -153,12 +153,22 @@
     - platform_postgresql_clean_install | bool
     - platform_postgresql_clear_only | bool
 
+- name: Resolve exact PostgreSQL repository packages before installation
+  ansible.builtin.include_tasks: resolve_packages.yml
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+
 - name: Install approved PostgreSQL packages from the configured system repository
   ansible.builtin.package:
-    name:
-      - "postgresql-{{ platform_postgresql_version }}"
-      - "postgresql-server-{{ platform_postgresql_version }}"
-      - "postgresql-contrib-{{ platform_postgresql_version }}"
+    name: >-
+      {{ _platform_postgresql_repository_packages
+         if ansible_facts.pkg_mgr | default('') == 'dnf'
+         else ['postgresql-' ~ platform_postgresql_version,
+               'postgresql-server-' ~ platform_postgresql_version,
+               'postgresql-contrib-' ~ platform_postgresql_version] }}
     state: present
   when: not (platform_postgresql_verify_only | bool)
     and (platform_resolved_artifact_sources is not defined or
@@ -166,7 +176,10 @@
 
 - name: Install approved pg_auto_failover package from the configured system repository
   ansible.builtin.package:
-    name: "pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}"
+    name: >-
+      {{ (_platform_postgresql_failover_repository_package
+          if ansible_facts.pkg_mgr | default('') == 'dnf'
+          else ['pg_auto_failover-' ~ platform_postgresql_pg_auto_failover_version]) }}
     state: present
   when:
     - not (platform_postgresql_verify_only | bool)
@@ -303,12 +316,12 @@
   notify: Restart PostgreSQL
 
 - name: Reload systemd after PostgreSQL unit projection
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     daemon_reload: true
   when: not (platform_postgresql_verify_only | bool)
 
 - name: Enable and start member-scoped PostgreSQL
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ _platform_postgresql_unit_name }}"
     enabled: true
     state: started

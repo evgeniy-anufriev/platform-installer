@@ -19,7 +19,7 @@
   when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Start or reload validated HAProxy service
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_haproxy_service_name }}"
     daemon_reload: true
     state: >-
@@ -30,7 +30,7 @@
   when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Reload existing HAProxy only after a changed partial backend graph
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_haproxy_service_name }}"
     state: reloaded
   when:

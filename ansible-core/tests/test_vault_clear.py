@@ -29,7 +29,7 @@ class VaultClearContractTests(unittest.TestCase):
         self.assertIn('platform_vault_confirm_destructive_reset', text)
         tasks = yaml.safe_load((COLLECTION / 'roles/vault_tls/tasks/clear.yml').read_text())
         self.assertTrue(tasks[0]['platform.vault.clear_member']['inspect_only'])
-        self.assertIn('ansible.builtin.systemd_service', tasks[1])
+        self.assertIn('ansible.builtin.systemd', tasks[1])
         self.assertIn('platform.vault.clear_member', tasks[2])
         self.assertFalse(any('ansible.builtin.file' in task for task in tasks))
         main = (COLLECTION / 'roles/vault_tls/tasks/main.yml').read_text()
