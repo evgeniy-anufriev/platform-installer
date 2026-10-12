@@ -24,6 +24,15 @@
         snapshot_result: "{{ application_snapshot }}"
       register: application_vault_inputs
       no_log: true
+    - name: Resolve common endpoint sources before any target mutation
+      platform.core.prepare_application_endpoints:
+        snapshot: "{{ application_snapshot.snapshot }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+      register: application_endpoint_inputs
+    - name: Require valid endpoint sources and publish shared hook input
+      ansible.builtin.set_fact:
+        platform_endpoint_sources: "{{ application_endpoint_inputs.sources }}"
+      failed_when: application_endpoint_inputs.status != 'PASS'
     - name: Require valid Vault projection before target contacts
       ansible.builtin.assert:
         that: application_vault_inputs.status == 'PASS'

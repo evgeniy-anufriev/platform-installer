@@ -3,6 +3,14 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
+- name: Include application sources before direct full DNS reconcile
+  ansible.builtin.include_role:
+    name: platform.core.resolve_endpoint_sources
+  when:
+    - platform_bind_full_reconcile | default(false) | bool
+    - platform_desired_state.applicationLibraryDeployments | default({}) | length > 0
+    - hostvars['localhost'].platform_endpoint_sources is not defined
+
 - name: Validate resolved BIND artifact sources before mutation
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
@@ -71,6 +79,7 @@
     inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
     include_service_endpoints: "{{ platform_bind_full_reconcile | default(false) | bool }}"
     include_group_wildcards: true
+    endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
   register: _platform_bind_resolution
   run_once: true
 

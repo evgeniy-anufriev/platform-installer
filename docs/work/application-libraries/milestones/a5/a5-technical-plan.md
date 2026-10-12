@@ -44,7 +44,7 @@ security capability блокирует выполнение; anonymous fallback 
 | Redis `normalize.yml` | Расчёт member slots, Redis/Sentinel ports и owned paths | Вынести только этот существующий расчёт в переиспользуемую service projection, без второй формулы в Core |
 | ClickHouse `users.xml.j2` | `default` имеет `access_management=1` и password verifier | Оставить XML admin user; создавать app users средствами SQL access storage |
 | ClickHouse `server.xml.j2` и tests | Private `access/`, HA cluster `default`, TLS native transport | Использовать существующий SQL storage и native client; не создавать второй users XML |
-| `tests/application-connection-probe/main.go` | Redis/Sentinel делают AUTH/PING; CH SELECT 1; Kafka ApiVersions | Добавить содержательные permissions/Sentinel discovery probes; текущие проверки недостаточны для grants |
+| `docker/application-connection-probe/main.go` | Redis/Sentinel делают AUTH/PING; CH SELECT 1; Kafka ApiVersions | Добавить содержательные permissions/Sentinel discovery probes; текущие проверки недостаточны для grants |
 
 Канонические источники: inventory, `group_vars`, `host_vars`, role defaults,
 service manifests, library/application packages. Native provider jobs — derived

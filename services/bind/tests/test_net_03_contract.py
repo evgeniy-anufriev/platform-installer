@@ -74,9 +74,11 @@ class Net03BindContractTests(unittest.TestCase):
 
     def test_a_record_update_is_exact_idempotent_and_primary_scoped(self):
         playbook = (ROOT / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
+        publication = (ROLE / "tasks" / "publish_source.yml").read_text(encoding="utf-8")
         tasks = (ROLE / "tasks" / "update_a_record.yml").read_text(encoding="utf-8")
-        self.assertIn("platform_deployments[item.bindDeploymentId].roles | default([]) == ['primary']", playbook)
-        self.assertIn("tasks_from: update_a_record.yml", playbook)
+        self.assertIn("tasks_from: publish_source", playbook)
+        self.assertIn("platform_deployments[item.bindDeploymentId].roles | default([]) == ['primary']", publication)
+        self.assertIn("tasks_from: update_a_record.yml", publication)
         self.assertIn("argv: [nsupdate, -l]", tasks)
         self.assertIn("_platform_bind_a_record_current_addresses != _platform_bind_a_record_desired_addresses", tasks)
         self.assertIn("update delete ", tasks)
@@ -111,11 +113,13 @@ class Net03BindContractTests(unittest.TestCase):
     def test_generic_source_hook_uses_core_selection_and_never_full_reconciles(self):
         integration = ROOT.parent / "integrations" / "playbooks" / "apply-endpoint.yml"
         content = integration.read_text(encoding="utf-8")
-        self.assertIn("platform.core.resolve_service_integrations", content)
-        self.assertIn("platform.core.resolve_service_endpoints", content)
-        self.assertIn("platform.core.resolve_dns_zones", content)
-        self.assertIn("include_group_wildcards: false", content)
-        self.assertIn("platform_execution_service_deployment", content)
+        self.assertIn("include_tasks: ../tasks/resolve-source.yml", content)
+        resolution = (ROOT.parent / "integrations" / "tasks" / "resolve-source.yml").read_text(encoding="utf-8")
+        self.assertIn("platform.core.resolve_service_integrations", resolution)
+        self.assertIn("platform.core.resolve_service_endpoints", resolution)
+        self.assertIn("platform.core.resolve_dns_zones", resolution)
+        self.assertIn("include_group_wildcards: false", resolution)
+        self.assertIn("platform_execution_service_deployment", resolution)
         self.assertIn("../../haproxy/playbooks/integrate.yml", content)
         self.assertIn("../../bind/playbooks/integrate.yml", content)
         self.assertNotIn("reconcile.yml", content)

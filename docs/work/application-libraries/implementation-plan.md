@@ -166,7 +166,9 @@ target QA без отдельного scope. Performance requirement не отк
 - Общие tasks формируют base Compose и несекретный `.env` библиотеки.
 - Template приложения получает identity и instance overrides, сохраняя extends.
 - Использовать выбранный существующий rootless Docker runtime; Docker installer
-  не переписывать. Проверить paths/ownership, Compose config и доступность image.
+  не переписывать. Проверять безопасные paths/ownership и доступность image;
+  из Compose сверять только значения, проецируемые Core, оставляя авторские
+  поля и literal host bind address на усмотрение пользователя.
 - Реализовать apply/verify через стандартные Ansible средства и имеющиеся
   зависимости. Если подходящий module уже доступен — переиспользовать; новый
   dependency вводить только с обоснованной необходимостью и offline closure.
@@ -364,7 +366,7 @@ capabilities и порядок providers, не заменять проверки
 готовность обоих targets и один общий endpoint.
 
 В QA использовать уже собранный
-[тестовый образ подключений](../../../tests/application-connection-probe/README.md)
+[тестовый образ подключений](../../../docker/application-connection-probe/README.md)
 как проверяемое приложение библиотеки. Его `/status` должен подтвердить
 PostgreSQL, Redis, Sentinel и ClickHouse под УЗ экземпляра, получение секретов
 через Vault Agent с AppRole, PKCS12 truststore/keystore и подключение к клиентскому
@@ -372,7 +374,7 @@ Kafka SSL listener без аутентификации. Для Kafka это пр
 не проверка ACL или прав на топики. На A4 проверять доставку секретов и PKCS12,
 на A5 — соответствующие подключения, на A6 — публикацию `/status` через endpoint,
 на A9 — полный standalone путь. Проверять образ по зафиксированному digest;
-предыдущий [результат на RED OS](../../../tests/application-connection-probe/qa-result.md)
+предыдущий [результат на RED OS](../../../docker/application-connection-probe/qa-result.md)
 подтверждает только ручной QA-запуск на node1, а не прохождение будущего Ansible/Core
 или UI-сценария.
 

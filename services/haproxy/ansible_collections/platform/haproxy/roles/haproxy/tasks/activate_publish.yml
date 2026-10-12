@@ -18,9 +18,8 @@
     owner: root
     group: root
     mode: '0640'
-  loop: [10-public.cfg, 20-local-stats.cfg, 90-stats-backends.cfg]
+  loop: "{{ ['10-public.cfg'] if platform_haproxy_partial_deployment_id is defined else ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg'] }}"
   register: _platform_haproxy_fragment_install
-  when: platform_haproxy_partial_deployment_id is not defined
 
 - name: Install exact validated managed HAProxy application backend fragments
   ansible.builtin.copy:

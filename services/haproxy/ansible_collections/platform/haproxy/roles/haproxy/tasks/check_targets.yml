@@ -1,0 +1,84 @@
+---
+- name: Probe actual backend TLS identities before HAProxy candidate activation
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/timeout
+      - '12s'
+      - /usr/bin/openssl
+      - s_client
+      - -connect
+      - "{{ item.1.address }}:{{ item.1.port }}"
+      - -servername
+      - "{{ item.0.expectedServerName }}"
+      - -verify_hostname
+      - "{{ item.0.expectedServerName }}"
+      - -CAfile
+      - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
+      - -verify_return_error
+      - -brief
+    # s_client otherwise waits for the HTTPS peer to close its keep-alive
+    # connection and hits timeout after a successful certificate handshake.
+    stdin: 'Q'
+  loop: "{{ platform_haproxy_application_backends | selectattr('expectedServerName', 'defined') | rejectattr('probe', 'defined') | subelements('targets') }}"
+  loop_control:
+    label: "{{ item.0.targetDeploymentId }}/{{ item.1.serverName }}"
+  register: _platform_haproxy_backend_tls_probes
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Require every actual backend TLS identity to match the Core projection
+  ansible.builtin.assert:
+    that:
+      - _platform_haproxy_backend_tls_probes.results | default([]) | selectattr('rc', 'ne', 0) | list | length == 0
+    fail_msg: HAPROXY_BACKEND_TLS_IDENTITY_UNVERIFIED
+
+- name: Require verified HTTPS responses from each specific backend target
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/curl
+      - --silent
+      - --show-error
+      - --noproxy
+      - '*'
+      - --max-time
+      - "{{ item.0.probe.timeout | string }}"
+      - --cacert
+      - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
+      - --resolve
+      - "{{ item.0.endpoint.fqdn }}:{{ item.1.port }}:{{ item.1.address }}"
+      - --output
+      - /dev/null
+      - --write-out
+      - '%{http_code}'
+      - "https://{{ item.0.endpoint.fqdn }}:{{ item.1.port }}{{ item.0.probe.path }}"
+  loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', true) | subelements('targets') }}"
+  register: _platform_haproxy_https_responses
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Require the expected status on the verified TLS connection
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout == item.item.0.probe.expected_status | string
+    fail_msg: HAPROXY_BACKEND_HTTPS_UNVERIFIED
+  loop: "{{ _platform_haproxy_https_responses.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.0.targetDeploymentId }}/{{ item.item.1.serverName }}"
+  no_log: true
+
+- name: Require reachable HTTP targets before candidate publication
+  ansible.builtin.uri:
+    url: "{{ 'https' if item.0.settings.ssl else 'http' }}://{{ item.1.address }}:{{ item.1.port }}{{ item.0.probe.path }}"
+    headers:
+      Host: "{{ item.0.endpoint.fqdn }}"
+    status_code: "{{ item.0.probe.expected_status }}"
+    timeout: "{{ item.0.probe.timeout }}"
+    validate_certs: true
+    follow_redirects: none
+    return_content: false
+  loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', false) | subelements('targets') }}"
+  changed_when: false
+  no_log: true

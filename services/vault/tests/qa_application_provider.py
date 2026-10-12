@@ -192,7 +192,8 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
     @classmethod
     def tearDownClass(cls):
         if cls.project:
-            cleanup_hosts=(('node1','192.168.56.101'),('node2','192.168.56.102')) if cls.external else (('node1','192.168.56.101'),)
+            cleanup_hosts=getattr(cls, 'application_cleanup_hosts',
+                (('node1','192.168.56.101'),('node2','192.168.56.102')) if cls.external else (('node1','192.168.56.101'),))
             for host,ip in cleanup_hosts:
                 container=cls.project.name+'-apigateway-sdku-'+host
                 docker=['sudo','-n','-u','platform-docker','env','HOME=/home/platform-docker','XDG_RUNTIME_DIR=/run/user/1002',
@@ -238,17 +239,17 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             capture_output=True,timeout=600)
         log=self.secret_root/'last-core.log'; log.write_bytes(result.stdout+result.stderr); log.chmod(0o600)
         if (result.returncode==0)!=success:
-            preserved=Path('/tmp/a4-core-last-protected.log')
+            preserved=Path(os.environ.get('A4_PROTECTED_LOG', self.secret_root/'a4-core-last-protected.log'))
             preserved.write_bytes(result.stdout+result.stderr);preserved.chmod(0o600)
-            raise AssertionError('A4_CORE_RESULT_UNEXPECTED protected log /tmp/a4-core-last-protected.log')
+            raise AssertionError('A4_CORE_RESULT_UNEXPECTED protected fixture log')
         for path in self.passwords.values():
             self.assertTrue(Path(path).read_bytes() not in result.stdout+result.stderr, 'A4_SECRET_OUTPUT_FORBIDDEN')
         self.assertTrue(self.token.encode() not in result.stdout+result.stderr, 'A4_TOKEN_OUTPUT_FORBIDDEN')
-        preserved=Path('/tmp/a4-core-last-protected.log')
+        preserved=Path(os.environ.get('A4_PROTECTED_LOG', self.secret_root/'a4-core-last-protected.log'))
         preserved.write_bytes(result.stdout+result.stderr);preserved.chmod(0o600)
         return result.stdout+result.stderr
 
-    def test_a4_full_apply_verify_repeat(self):
+    def prepare_application_fixture(self):
         self.__class__.project=self.runtime/('a4entry-'+secrets.token_hex(5))
         shutil.copytree(ROOT/'examples/valid/application-runtime',self.project)
         group_file=self.project/'inventory/group_vars/all/platform-installer.yml'
@@ -370,6 +371,8 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         if result.returncode:
             log=Path('/tmp/a4-core-last-protected.log');log.write_bytes(result.stdout+result.stderr);log.chmod(0o600)
             self.fail('A4_PKI_FIXTURE_FAILED protected log /tmp/a4-core-last-protected.log')
+    def test_a4_full_apply_verify_repeat(self):
+        self.prepare_application_fixture()
         self.play_core('application-libraries-apply.yml')
         self.play_core('application-libraries-verify.yml')
         document='secret/data/'+self.project.name+'/sdku/apigateway-sdku/accounts/postgres'

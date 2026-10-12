@@ -265,7 +265,7 @@ validation должна отличать требования структуры
 
 ## 8. Image/package trust до A2
 
-Использовать уже собранный [QA image](../../../../../tests/application-connection-probe/qa-result.md).
+Использовать уже собранный [QA image](../../../../../docker/application-connection-probe/qa-result.md).
 Его `sha256:acd94e424cb685723e768de1e1b0a7f98ffe5b491f4666a6a89888a31bf64ebb`
 — Docker image ID, не registry manifest digest и не checksum будущего tar.
 Fixture application может называться apigateway, но его command для QA image

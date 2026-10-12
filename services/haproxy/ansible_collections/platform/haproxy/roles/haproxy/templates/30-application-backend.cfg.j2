@@ -1,7 +1,18 @@
 # platform-installer-managed-backend/v1 {{ platform_haproxy_application_backend.configFileName }}
 backend {{ platform_haproxy_application_backend.backendName }}
     balance {{ platform_haproxy_application_backend.settings.balance }}
+{% if platform_haproxy_application_backend.settings.timeoutConnect is defined %}
+    timeout connect {{ platform_haproxy_application_backend.settings.timeoutConnect }}
+{% endif %}
+{% if platform_haproxy_application_backend.settings.timeoutServer is defined %}
+    timeout server {{ platform_haproxy_application_backend.settings.timeoutServer }}
+{% endif %}
+{% if platform_haproxy_application_backend.settings.httpCheck is defined %}
+    option httpchk
+    http-check send meth {{ platform_haproxy_application_backend.settings.httpCheck.method }} uri {{ platform_haproxy_application_backend.settings.httpCheck.path }}
+    http-check expect status {{ platform_haproxy_application_backend.settings.httpCheck.expectedStatus }}
+{% endif %}
     default-server{% if platform_haproxy_application_backend.settings.ssl %} ssl verify {{ platform_haproxy_application_backend.settings.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% if platform_haproxy_application_backend.expectedServerName is defined %} verifyhost {{ platform_haproxy_application_backend.expectedServerName }}{% endif %}{% endif %}{% if platform_haproxy_application_backend.settings.check %} check fall {{ platform_haproxy_application_backend.settings.fall }} rise {{ platform_haproxy_application_backend.settings.rise }}{% endif %}{{ '\n' }}
 {% for target in platform_haproxy_application_backend.targets %}
-    server {{ target.serverName }} {{ target.address }}:{{ target.port }}
+    server {{ target.serverName }} {{ target.address }}:{{ target.port }}{% if platform_haproxy_application_backend.settings.checkInterval is defined %} inter {{ platform_haproxy_application_backend.settings.checkInterval }}{% endif %}{% if platform_haproxy_application_backend.settings.maxconn is defined %} maxconn {{ platform_haproxy_application_backend.settings.maxconn }}{% endif %}{% if platform_haproxy_application_backend.expectedServerName is defined %} sni str({{ platform_haproxy_application_backend.expectedServerName }}){% endif %}{{ '\n' }}
 {% endfor %}

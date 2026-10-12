@@ -4,7 +4,11 @@ frontend public
     http-request set-var(txn.route_host) req.hdr(host),lower,regsub(:[0-9]+$,)
 {% set endpoint_groups = platform_desired_state.endpointGroups | default({}) %}
     acl platform_endpoint_domain var(txn.route_host) -m end -i{% for group in endpoint_groups.values() | map(attribute='address') | map(attribute='domain') | unique | sort %} .{{ group }}{% endfor %}{{ '\n' }}
+{% set ordered_groups = [] %}
 {% for group, settings in endpoint_groups | dictsort %}
+{% set _ = ordered_groups.append((settings.address.domain | length, group, settings)) %}
+{% endfor %}
+{% for length, group, settings in ordered_groups | sort(attribute='0', reverse=true) %}
     acl {{ group }} var(txn.route_host) -m end -i .{{ settings.address.domain }}
     use_backend %[var(txn.route_host),field(1,'.')]-{{ group }} if {{ group }}
 {% endfor %}

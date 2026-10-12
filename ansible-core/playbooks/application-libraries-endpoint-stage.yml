@@ -1,0 +1,12 @@
+---
+- name: Run common endpoint hooks in the original Ansible execution context
+  hosts: platform_targets
+  strategy: linear
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Publish each ready logical source with existing provider tasks
+      ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
+      loop: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) | sort }}"
+      loop_control:
+        loop_var: platform_endpoint_source_id

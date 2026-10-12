@@ -42,7 +42,7 @@ class BackendFileContractTests(unittest.TestCase):
         prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
         integrate = (ROLE.parents[4] / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
         self.assertIn("Select only this source deployment backend for partial integration", prepare)
-        self.assertIn("reject('match'", prepare)
+        self.assertIn("reject('in', _platform_haproxy_partial_source_files)", prepare)
         self.assertIn("platform_haproxy_partial_deployment_id", integrate)
         self.assertEqual(3, integrate.count("platform_haproxy_phase:"))
 
@@ -70,11 +70,11 @@ class BackendFileContractTests(unittest.TestCase):
         self.assertIn("backend_defaults: {}", resolve)
 
     def test_tls_probe_exits_after_verification_without_weakening_checks(self):
-        prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
-        self.assertIn("stdin: 'Q'", prepare)
-        self.assertIn("- -verify_hostname", prepare)
-        self.assertIn("- -verify_return_error", prepare)
-        self.assertIn("- -CAfile", prepare)
+        checks = (ROLE / "tasks" / "check_targets.yml").read_text(encoding="utf-8")
+        self.assertIn("stdin: 'Q'", checks)
+        self.assertIn("- -verify_hostname", checks)
+        self.assertIn("- -verify_return_error", checks)
+        self.assertIn("- -CAfile", checks)
 
 
 if __name__ == "__main__":

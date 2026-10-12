@@ -142,23 +142,21 @@ class DnsResolutionTests(unittest.TestCase):
         second = self.resolve(inventory_hosts=hosts(reverse=True), inventory_placement=dict(reversed(list(placement().items()))))
         self.assertEqual(first, second)
 
-    def test_same_domain_exact_endpoint_groups_use_their_own_providers(self):
+    def test_same_domain_exact_endpoint_groups_are_blocked_before_routing(self):
         state = desired(wildcard=False)
         state["endpointGroups"]["asutp-b"] = {"address": {"domain": "asutp.scada.local", "wildcard": False}}
         state["serviceDeployments"]["postgres-b"] = {"serviceType": "postgresql", "endpointGroup": "asutp-b"}
         state["serviceDeployments"]["keepalived-b"] = {"serviceType": "keepalived", "endpointGroupRef": "asutp-b", "virtualAddresses": [{"address": "192.0.2.113", "interface": "eth1"}]}
         result = self.resolve(state)
-        self.assertEqual("PASS", result["status"], result["findings"])
-        records = {item["owner"]: item["values"] for item in result["zones"]["dns-main"]["records"]}
-        self.assertEqual(["192.0.2.111", "192.0.2.112"], records["postgres-main.asutp.scada.local."])
-        self.assertEqual(["192.0.2.113"], records["postgres-b.asutp.scada.local."])
+        self.assertEqual("BLOCKED", result["status"])
+        self.assertIn("ENDPOINT_GROUP_DOMAIN_DUPLICATE", [item['code'] for item in result['findings']])
 
     def test_same_domain_conflicting_wildcards_are_blocked(self):
         state = desired(wildcard=True)
         state["endpointGroups"]["asutp-b"] = {"address": {"domain": "asutp.scada.local", "wildcard": True}}
         state["serviceDeployments"]["postgres-b"] = {"serviceType": "postgresql", "endpointGroup": "asutp-b"}
         state["serviceDeployments"]["keepalived-b"] = {"serviceType": "keepalived", "endpointGroupRef": "asutp-b", "virtualAddresses": [{"address": "192.0.2.113", "interface": "eth1"}]}
-        self.assertIn("DNS_RECORD_COLLISION", [item["code"] for item in self.resolve(state)["findings"]])
+        self.assertIn("ENDPOINT_GROUP_DOMAIN_DUPLICATE", [item["code"] for item in self.resolve(state)["findings"]])
 
     def test_removed_endpoint_is_absent_from_the_rebuilt_full_zone_model(self):
         state = desired(wildcard=False)

@@ -1,5 +1,12 @@
 # Standalone Ansible Core
 
+PKI wildcard SANs and endpoint wildcard DNS records have independent policies.
+`platform_pki_policy_defaults.sanPolicy.includeEndpointWildcard` defaults to
+`true`: certificates include `*.domain` for their resolved endpoint groups even
+when `endpointGroups.<id>.address.wildcard` is `false`. A certificate profile
+may explicitly set `sanPolicy.includeEndpointWildcard: false` to disable these
+SANs. The endpoint flag controls DNS wildcard publication only.
+
 ## Product contract
 
 Ansible Core must be installable and usable without Platform Installer. A Linux operator must be able to take a portable Ansible project and offline bundle and run the complete lifecycle with standard `ansible-playbook` commands.

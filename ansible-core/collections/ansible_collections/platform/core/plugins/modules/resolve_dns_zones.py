@@ -7,6 +7,7 @@ from ansible_collections.platform.core.plugins.module_utils.dns_resolution impor
 
 def main():
     module = AnsibleModule(argument_spec={
+        "endpoint_sources": {"type": "dict", "default": {}},
         "desired_state": {"type": "dict", "required": True},
         "service_catalog": {"type": "dict", "required": True},
         "inventory_hosts": {"type": "dict", "required": True},
@@ -20,6 +21,7 @@ def main():
         module.params["inventory_hosts"], module.params["inventory_deployments"],
         module.params["include_service_endpoints"], module.params["source_deployment_ids"],
         module.params["include_group_wildcards"],
+        endpoint_sources=module.params['endpoint_sources'],
     )
     if result["status"] != "PASS":
         module.fail_json(msg="DNS resolution is blocked", error_code="DNS_RESOLUTION_BLOCKED", findings=result["findings"])

@@ -1,0 +1,79 @@
+---
+- name: Resolve this source using the shared controller tasks
+  ansible.builtin.include_tasks:
+    file: resolve-source.yml
+    apply: {delegate_to: localhost, become: false}
+  run_once: true
+
+- name: Publish the resolved source projection once for every provider host
+  ansible.builtin.set_fact:
+    platform_service_integration_projection: "{{ platform_service_integration_projection }}"
+    platform_bind_source_dns_records: "{{ platform_bind_source_dns_records }}"
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Require the complete provider and placement scope before publication
+  ansible.builtin.assert:
+    that:
+      - hostvars['localhost'].platform_service_integration_projection.haproxyHosts | difference(ansible_play_hosts_all) | length == 0
+      - hostvars['localhost'].platform_endpoint_sources[platform_endpoint_source_id].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
+    fail_msg: APPLICATION_ENDPOINT_HOST_SCOPE_INCOMPLETE
+  run_once: true
+
+- name: Prepare source candidates before any provider activation
+  ansible.builtin.include_role:
+    name: platform.haproxy.haproxy
+    apply: {become: true}
+  vars:
+    platform_haproxy_phase: prepare
+    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+  when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
+
+- name: Activate source after all provider candidates passed validation
+  ansible.builtin.include_role:
+    name: platform.haproxy.haproxy
+    apply: {become: true}
+  vars:
+    platform_haproxy_phase: activate
+    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+  when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
+
+- name: Reload source after all providers passed activation
+  ansible.builtin.include_role:
+    name: platform.haproxy.haproxy
+    apply: {become: true}
+  vars:
+    platform_haproxy_phase: start
+    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+  when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
+
+- name: Verify source without provider mutation
+  ansible.builtin.include_role:
+    name: platform.haproxy.haproxy
+    tasks_from: endpoint_verify
+    apply: {become: true}
+  vars:
+    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+  when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and (platform_endpoint_verify_only | default(false) | bool)
+
+- name: Publish source records using the existing BIND hook
+  ansible.builtin.include_role:
+    name: platform.bind.bind
+    tasks_from: publish_source
+    apply: {become: true}
+  vars:
+    platform_bind_source_dns_records: "{{ hostvars['localhost'].platform_bind_source_dns_records }}"
+  when: hostvars['localhost'].platform_bind_source_dns_records | length > 0 and not (platform_endpoint_verify_only | default(false) | bool)
+
+- name: Require the resolved HAProxy provider before external verification
+  ansible.builtin.assert:
+    that: hostvars['localhost'].platform_service_integration_projection.haproxyDeployments | length > 0
+    fail_msg: APPLICATION_ENDPOINT_NOT_PUBLISHED
+  run_once: true
+
+- name: Verify DNS and HTTPS through the existing external probe
+  ansible.builtin.include_tasks:
+    file: probe-endpoint.yml
+    apply: {delegate_to: localhost, become: false}
+  run_once: true

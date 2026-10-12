@@ -6,6 +6,10 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Include normalized sources in explicit full DNS reconcile
+      ansible.builtin.include_role:
+        name: platform.core.resolve_endpoint_sources
+      when: platform_bind_full_reconcile | default(false) | bool
     - name: Resolve controller-safe BIND generated-state path
       ansible.builtin.set_fact:
         _platform_bind_generated_state_path: >-
@@ -56,7 +60,8 @@
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
-        ansible_desired_state: "{{ platform_desired_state | default({}) }}"
+        ansible_desired_state: "{{ platform_desired_state | default({}) | dict2items | rejectattr('key', 'equalto', 'applicationLibraryDeployments') | items2dict }}"
+        application_findings: "{{ platform_application_validation.snapshot.findings | default([]) }}"
         generated_state: "{{ _platform_bind_persisted_generated_state }}"
         project_id: "{{ _platform_bind_project_id }}"
         desired_hosts: "{{ platform_desired_hosts }}"
@@ -101,6 +106,7 @@
         inventory_deployments: "{{ _platform_bind_inventory_deployments }}"
         include_service_endpoints: true
         include_group_wildcards: true
+        endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
       register: platform_bind_resolution
 
     - name: Resolve base-only DNS content for ordinary BIND Apply
@@ -230,7 +236,8 @@
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
-        ansible_desired_state: "{{ platform_desired_state | default({}) }}"
+        ansible_desired_state: "{{ platform_desired_state | default({}) | dict2items | rejectattr('key', 'equalto', 'applicationLibraryDeployments') | items2dict }}"
+        application_findings: "{{ platform_application_validation.snapshot.findings | default([]) }}"
         generated_state: >-
           {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
              else _platform_bind_next_state }}

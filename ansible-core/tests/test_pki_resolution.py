@@ -177,6 +177,22 @@ class PkiResolutionTests(unittest.TestCase):
         self.assertEqual(1, len([plan for plan in out["materializationPlans"] if plan["requestId"] == "platform-tls--node1"]))
 
     def test_pki_wildcard_policy_is_independent_from_dns_wildcard_publication(self):
+        import copy
+        import service_endpoint_resolution
+        topology = self.topology("DEPLOYMENT")
+        topology["endpointGroups"] = {"asutp": {"address": {"domain": "asutp.scada.local", "wildcard": False}}}
+        endpoints = service_endpoint_resolution.resolve_service_endpoints(
+            topology, {"definitions": {"kafka": {"endpoint": {}}}})
+        self.assertEqual("PASS", endpoints["status"])
+        defaults = copy.deepcopy(self.defaults)
+        defaults["sanPolicy"]["includeEndpointWildcard"] = True
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}}, defaults, endpoints)
+        self.assertIn("*.asutp.scada.local", out["requests"][0]["dnsNames"])
+        topology["certificateProfiles"]["infrastructure"]["sanPolicy"]["includeEndpointWildcard"] = False
+        out = pki.resolve_certificate_requests("p", topology, {"node1": {}, "node2": {}}, defaults, endpoints)
+        self.assertNotIn("*.asutp.scada.local", out["requests"][0]["dnsNames"])
+
+    def test_explicit_pki_wildcard_candidates(self):
         topology = self.topology("DEPLOYMENT")
         topology["certificateProfiles"]["infrastructure"]["sanPolicy"] = {
             "includeHostDns": False,

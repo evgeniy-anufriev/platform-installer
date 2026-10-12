@@ -14,7 +14,9 @@ versioned schemas, service packages или accepted substage scope.
 | A4 | Vault provisioning, Agent и общие PKI-секреты | [План](milestones/a4/a4-technical-plan.md) · [review](milestones/a4/reviews/) · [журнал](milestones/a4/evidence/a4-test-journal.md) |
 | A5 | Redis/Sentinel, ClickHouse и выбранный Kafka SSL-only scope | [План](milestones/a5/a5-technical-plan.md) · [review](milestones/a5/reviews/) · [журнал](milestones/a5/evidence/a5-test-journal.md) |
 
-Последующие A6–A9, Go и UI описываются в [общем плане](implementation-plan.md).
+| A6 | Публикация endpoint через общие HAProxy/DNS hooks | [План](milestones/a6/a6-technical-plan.md) · [review](milestones/a6/reviews/) · [журнал](milestones/a6/evidence/a6-test-journal.md) |
+
+Последующие A7–A9, Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
 не доказывает authenticated access.
 
