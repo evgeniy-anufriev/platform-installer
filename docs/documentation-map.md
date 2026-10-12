@@ -13,7 +13,8 @@
 Классификация предварительная: основана на путях, назначении и заголовках;
 она не утверждает актуальность всех утверждений внутри каждого документа.
 Содержательный разбор выполняется пакетами; результаты приведены ниже.
-Полная актуализация контрактов и устранение содержательных дублей ещё не завершены.
+Организация документов и выделение исторических результатов выполнены пакетами ниже.
+Полная проверка старых версий контрактов по текущему коду не входит в реорганизацию.
 Текущий статус и разрешения остаются в [CURRENT_STATE.md](../CURRENT_STATE.md).
 
 ## Целевая организация
@@ -39,7 +40,7 @@
 Перенос в `work/` обозначает принадлежность к теме, а не отмену контракта:
 смешанные документы сохраняют содержание до отдельного разбора.
 
-## Случаи для отдельного разбора
+## Случаи, определённые при первоначальной инвентаризации
 
 | Материал | Что проверить до разделения или архивирования |
 | --- | --- |
@@ -49,9 +50,11 @@
 | [Application server types](work/application-config/application-config-server-types.md) | Planned contract, текущие правила и implementation/verification различить по подтверждённой версии |
 | [Application libraries](work/application-libraries/README.md) | Предложения будущих этапов отделять от реализованных контрактов подэтапов; актуальность проверять по текущему состоянию |
 | [Roadmap](roadmap.md) | Сохранить последовательность и критерии этапов; дубли текущих статусов и подробные runs заменить ссылками после сверки |
-| [Owner decisions](open-questions.md) | Разрешённые решения сверить с ADR; открытые вопросы не переносить в историю только по возрасту |
+| [Owner decisions](open-questions.md) | Контекст/evidence разделены |
 | [Endpoint draft](work/endpoint-placement/endpoint-haproxy-placement-draft.md) | Исторический draft; узкий scope в плане |
 | `core-*`, `net-*`, `ui-*`, `service-install-*` | Наличие milestone в имени не доказывает устаревание контракта; проверить нормативные разделы перед архивированием |
+
+Результаты разбора этих случаев приведены в последующих пакетах ниже.
 
 Никакие FAIL/BLOCK, review findings или владельческие решения не переписываются
 в успешные результаты. Решение владельца и вердикт reviewer сохраняются раздельно.
@@ -309,7 +312,7 @@ Review verdicts, owner exceptions и точные тестовые значен�
 | [net-04-1.md](work/network/net-04-1.md) | План / контракт / история реализации | `work/network/net-04-1.md` | Контекст/evidence разделены |
 | [net-04-2.md](work/network/net-04-2.md) | План / контракт / история реализации | `work/network/net-04-2.md` | Контекст/evidence разделены |
 | [net-04.md](work/network/net-04.md) | План / контракт / история реализации | `work/network/net-04.md` | Контекст/evidence разделены |
-| [open-questions.md](open-questions.md) | Канонический документ / навигация | `open-questions.md` | Сохранить |
+| [open-questions.md](open-questions.md) | Канонический документ / навигация | `open-questions.md` | Контекст/evidence разделены |
 | [pki-01.md](work/pki/pki-01.md) | План / контракт / история реализации | `work/pki/pki-01.md` | Контракт этапа; сохранён целиком |
 | [pki-platform-shared-tls-usages-plan.md](work/pki/pki-platform-shared-tls-usages-plan.md) | План | `work/pki/pki-platform-shared-tls-usages-plan.md` | Контекст/evidence разделены |
 | [pki-service-scope-optimization-plan.md](work/pki/pki-service-scope-optimization-plan.md) | План | `work/pki/pki-service-scope-optimization-plan.md` | Перенести |
@@ -333,14 +336,14 @@ Review verdicts, owner exceptions и точные тестовые значен�
 | [service-install-07-redis-sentinel-architecture.md](work/redis/service-install-07-redis-sentinel-architecture.md) | План / контракт / история реализации | `work/redis/service-install-07-redis-sentinel-architecture.md` | Контекст/evidence разделены |
 | [service-install-08-vault-architecture.md](work/vault/service-install-08-vault-architecture.md) | План / контракт / история реализации | `work/vault/service-install-08-vault-architecture.md` | Контекст/evidence разделены |
 | [service-install-08a-secret-contracts.md](work/vault/service-install-08a-secret-contracts.md) | План / контракт / история реализации | `work/vault/service-install-08a-secret-contracts.md` | Контракт этапа; сохранён целиком |
-| [service-install-08a.md](work/vault/service-install-08a.md) | План / контракт / история реализации | `work/vault/service-install-08a.md` | Проверить содержание |
+| [service-install-08a.md](work/vault/service-install-08a.md) | План / контракт / история реализации | `work/vault/service-install-08a.md` | Контекст/evidence разделены |
 | [service-install-08b.md](work/vault/service-install-08b.md) | План / контракт / история реализации | `work/vault/service-install-08b.md` | Контекст/evidence разделены |
 | [service-install-08c.md](work/vault/service-install-08c.md) | План / контракт / история реализации | `work/vault/service-install-08c.md` | Контекст/evidence разделены |
 | [service-install-08d-review.md](work/vault/reviews/service-install-08d-review.md) | Review | `work/vault/reviews/service-install-08d-review.md` | Перенести |
 | [service-install-08d.md](work/vault/service-install-08d.md) | План / контракт / история реализации | `work/vault/service-install-08d.md` | Контекст/evidence разделены |
 | [service-install-08e-bootstrap-correction.md](work/vault/service-install-08e-bootstrap-correction.md) | План / контракт / история реализации | `work/vault/service-install-08e-bootstrap-correction.md` | Контекст/evidence разделены |
 | [service-install-08e-clear-evidence.md](work/vault/evidence/service-install-08e-clear-evidence.md) | Evidence / журнал / аудит | `work/vault/evidence/service-install-08e-clear-evidence.md` | Перенести |
-| [service-install-08e-clear.md](work/vault/service-install-08e-clear.md) | План / контракт / история реализации | `work/vault/service-install-08e-clear.md` | Проверить содержание |
+| [service-install-08e-clear.md](work/vault/service-install-08e-clear.md) | План / контракт / история реализации | `work/vault/service-install-08e-clear.md` | Контекст/evidence разделены |
 | [service-install-08e-follower-unseal-fix.md](work/vault/service-install-08e-follower-unseal-fix.md) | План / контракт / история реализации | `work/vault/service-install-08e-follower-unseal-fix.md` | Контекст/evidence разделены |
 | [service-install-08e.md](work/vault/service-install-08e.md) | План / контракт / история реализации | `work/vault/service-install-08e.md` | Исторический журнал / аудит; сохранён целиком |
 | [service-install-08f-vault-endpoint-ha.md](work/vault/service-install-08f-vault-endpoint-ha.md) | План / контракт / история реализации | `work/vault/service-install-08f-vault-endpoint-ha.md` | Контекст/evidence разделены |
@@ -349,7 +352,7 @@ Review verdicts, owner exceptions и точные тестовые значен�
 | [service-install-11-test-journal.md](work/services/evidence/service-install-11-test-journal.md) | Evidence / журнал / аудит | `work/services/evidence/service-install-11-test-journal.md` | Перенести |
 | [service-install-11-ui-test-cases.md](work/services/service-install-11-ui-test-cases.md) | Критерии и сценарии приёмки | `work/services/service-install-11-ui-test-cases.md` | Перенести |
 | [service-install-acceptance.md](work/services/service-install-acceptance.md) | План; условия и evidence выделены | `work/services/service-install-acceptance.md` | Разделён |
-| [service-runtime-optimization.md](work/services/service-runtime-optimization.md) | План / контракт / история реализации | `work/services/service-runtime-optimization.md` | Проверить содержание |
+| [service-runtime-optimization.md](work/services/service-runtime-optimization.md) | План / контракт / история реализации | `work/services/service-runtime-optimization.md` | Контекст/evidence разделены |
 | [service-unit-naming-plan.md](work/service-unit-naming/service-unit-naming-plan.md) | План | `work/service-unit-naming/service-unit-naming-plan.md` | Перенести |
 | [session-active-run-credential-plan.md](work/execution/session-active-run-credential-plan.md) | План | `work/execution/session-active-run-credential-plan.md` | Перенести |
 | [si08-output-run-delivery-decoupling.md](work/vault/si08-output-run-delivery-decoupling.md) | План / контракт / история реализации | `work/vault/si08-output-run-delivery-decoupling.md` | Контекст/evidence разделены |
@@ -415,7 +418,7 @@ Review verdicts, owner exceptions и точные тестовые значен�
 | [ui-02f-runtime-service-secret-transport.md](work/ui-02/ui-02f-runtime-service-secret-transport.md) | План / контракт / история реализации | `work/ui-02/ui-02f-runtime-service-secret-transport.md` | Контекст/evidence разделены |
 | [ui-be-01.md](work/ui-backend/ui-be-01.md) | План / контракт / история реализации | `work/ui-backend/ui-be-01.md` | Контекст/evidence разделены |
 | [ui-be-02.md](work/ui-backend/ui-be-02.md) | План / контракт / история реализации | `work/ui-backend/ui-be-02.md` | Контекст/evidence разделены |
-| [ui-be-03.md](work/ui-backend/ui-be-03.md) | План / контракт / история реализации | `work/ui-backend/ui-be-03.md` | Проверить содержание |
+| [ui-be-03.md](work/ui-backend/ui-be-03.md) | План / контракт / история реализации | `work/ui-backend/ui-be-03.md` | Контекст/evidence разделены |
 | [ui-be-04.md](work/ui-backend/ui-be-04.md) | План; контракт и audit выделены | `work/ui-backend/ui-be-04.md` | Разделён |
 | [ui-design-01-mockups.html](design/ui-design-01-mockups.html) | UI-дизайн / предложение | `design/ui-design-01-mockups.html` | Перенести |
 | [ui-design-01.md](design/ui-design-01.md) | UI-дизайн / предложение | `design/ui-design-01.md` | Перенести |
@@ -466,7 +469,7 @@ QA NetworkManager fallback сохранены в исходных докумен
 предложений libraries со scope-index и цельных журналов. Отметка о сохранении
 контракта не является проверкой соответствия текущему коду.
 
-### Что остаётся для содержательной сверки
+### Остаточные пункты на момент предыдущего пакета
 
 - Смешанные исторические/нормативные разделы DEVX-01, SI08-A, Vault clear,
   service runtime optimization, UI-BE-03 и Save/Verify: извлечение возможно
@@ -491,3 +494,40 @@ Markdown-файлов и конечные пробелы в перенесённ
 Markdown hard breaks сохранены обратной косой чертой. Исходные фрагменты
 сохранены в локальных proof-снимках; итоговая проверка всех 219 фрагментов
 учитывает только эти изменения форматирования.
+
+## Завершение разбора смешанных разделов — 2026-10-12
+
+В DEVX-01, SI08-A, Vault clear, service runtime optimization, UI-BE-03
+и Save/Verify исторические результаты отделены от оставшихся ограничений.
+Исходные правила mount-защиты, protocol attestation, no-target-contact,
+nonroot QA identity, рамки SI08-A и лицензирования остаются в исходных
+документах. Review verdicts, digest и результаты QA сохранены без замены
+в существующих тематических файлах evidence.
+
+Повторяемые owner decisions в [open questions](open-questions.md) заменены
+на навигацию к ADR-011/012/013/014/018/019. Полный исходный текст сохранён в
+[снимке](history/owner-decisions-20261012.md). Deferred signature вопрос явно
+ограничен исходными Core milestones; актуальная trust boundary выбирается
+по последующим ADR и процедуре bundle, без объявления вопроса закрытым.
+
+### Итог и граница выполненного
+
+Реорганизация документации завершена: файлы разнесены по назначению,
+маршруты чтения доступны, контракты отделены от исторических статусов и
+результатов там, где это не разрывает их исходную границу. Цельные журналы
+и аудиты явно обозначены; каждый файл первоначального снимка учтён.
+В карте больше нет необработанных отметок «Проверить содержание».
+
+Дальнейшая актуализация старых DTO/контрактов по коду, проверка полноты
+текущих ADR и переоценка открытых product-policy вопросов — самостоятельные
+задачи, а не незавершённый перенос документации. Старые версии контрактов
+не объявлены автоматически действующей спецификацией. Код продукта,
+Core, bundle и целевые хосты этим разбором не изменялись.
+
+Проверка завершения: 1511 локальных ссылок и якорей без ошибок;
+сохранены 230 выделенных фрагментов, включая 11 новых. Обратное
+восстановление семи документов подтверждает учтённые изменения;
+242 прочих файла совпадают со снимком. Предыдущие evidence сохраняются
+без изменений; новые записи добавлены в существующие тематические файлы.
+`git diff --check` проходит. Proof-материалы:
+`.runtime/qa/documentation-mixed-20261012/`.

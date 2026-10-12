@@ -219,16 +219,8 @@ No empty Wails/React tree was created.
 
 ## 17. Validation evidence
 
-The current Codex session already discovers the repository's existing
-`.agents/skills` entries, proving the local location and frontmatter mechanism.
-The four new Skills use that same two-field frontmatter and have no external
-references. The session Skill registry is initialized at session start, so a
-fresh session will surface newly added names; local frontmatter validation is
-the current-session proof before that refresh. Root, Go and Core instruction paths were checked for additive
-hierarchy; Markdown headings/fences and UTF-8 text were validated locally.
-At original DEVX-01 acceptance, roles were documented templates. The later
-architecture-reviewer addition uses the supported project-scoped custom agent
-format documented in [Codex subagents](https://developers.openai.com/codex/subagents/).
+Recorded evidence: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#devx-01-reconciliation-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Live parent permission overrides may override sandbox defaults, so read-only
 instructions apply independently of the sandbox setting. After adding a role,
 use a fresh session if the current role registry has not refreshed. Example:

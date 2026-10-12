@@ -1,5 +1,9 @@
 # Vault explicit Ansible clear
 
+Document scope: the original milestone contract and constraints. Historical
+results are linked separately; current status and authorization are recorded
+only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Owner requested clear tasks analogous to Kafka/PostgreSQL. Scope is explicit
 destructive Raft reset, not uninstall, runtime promotion or automatic recovery.
 Normal apply/verify remain unchanged. No clear is executed during implementation.
@@ -88,12 +92,7 @@ apply to this narrowly scoped new destructive operation.
 
 ## PLAN review
 
-Independent architecture-reviewer: FULL PLAN APPROVE_WITH_CHANGES, zero
-blocking findings, reviewed SHA-256
-`2d3f3348ab73751658aaef43326746172aa53d1fe6db3152d0447cede3b41248`.
-Nonblocking SI08-CLEAR-PLAN-01/02 are incorporated above: full subtree/bind-mount
-boundary and fresh destructive-invocation validation plus partial-failure QA.
-No automatic re-review is required. Owner approval of this concrete new
-Vault-only destructive helper was subsequently granted. Implementation is in
-progress; no real clear has run. The PLAN review does not establish the
+Recorded evidence: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08e-clear-reconciliation-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+The PLAN review does not establish the
 implementation as safe or complete; independent DIFF and QA gates remain.

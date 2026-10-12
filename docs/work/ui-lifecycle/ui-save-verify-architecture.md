@@ -162,12 +162,14 @@ desired-state store is introduced.
 
 ### Blocker follow-up evidence
 
-The initial targeted recheck blocked only on AR-SV-001: `planningProtocol` had
-not yet been compared with attested runtime protocol. The owner authorized the
-bounded correction without a third architecture review. Verify now requires
+Recorded evidence: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-save-verify-architecture-reconciliation-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+Verify now requires
 `expected.planningProtocol == RuntimeEvidence.Protocol`; a mismatch or either
 missing value returns the typed unverified result and cannot publish
-`VERIFIED`. UI-01E5 remains not started.
+`VERIFIED`.
+
+
 
 - **UI-01D:** retains EditSession, candidate builder and guarded transaction;
   remote Core Review ceases to authorize new Save. Old contracts/evidence remain

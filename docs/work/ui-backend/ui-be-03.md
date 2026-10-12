@@ -1,5 +1,9 @@
 # UI-BE-03: safe Ansible-native project writer
 
+Document scope: the original milestone contract and constraints. Historical
+results are linked separately; current status and authorization are recorded
+only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 ## 1. Goal
 
 UI-BE-03 adds the smallest production Go backend needed to turn a bounded semantic edit into a reviewed, validated and crash-recoverable update of the same portable Ansible project consumed by Core. It adds neither UI nor validate/plan/apply runtime execution.
@@ -97,7 +101,9 @@ After a successful replacement the backend rebuilds `ProjectSnapshot` from the c
 
 ## 23. No-target-contact/offline proof
 
-The machine snapshot entrypoint runs only on `localhost`, with no apply, runtime workspace or target transport. The authoritative writer acceptance and UI-BE-02 regression pass on RED OS, including `sudo -n unshare -n` offline execution.
+The machine snapshot entrypoint runs only on `localhost`, with no apply, runtime workspace or target transport. Recorded evidence: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-be-03-reconciliation-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+
 
 ## 24. Performance
 

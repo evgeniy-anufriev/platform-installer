@@ -99,3 +99,19 @@ Source document: [service-02a.md](../service-02a.md).
 <a id="service-02a-checkpoint-001"></a>
 
 Status: DONE.
+
+## Mixed-section reconciliation: service-runtime-optimization.md
+
+Source: [service-runtime-optimization.md](../service-runtime-optimization.md). Extracted on 2026-10-12;
+original dates, scopes and reviewer verdicts are preserved. This is historical
+evidence, not current authorization.
+
+<a id="service-runtime-optimization-reconciliation-001"></a>
+
+## Evidence and remaining gates
+
+RED OS current-source: 20 public Apply/Verify syntax checks PASS. Service regressions: Redis13, ClickHouse1, Docker3, Kafka32, BIND15, Keepalived13, Vault29, PostgreSQL25 — 131 tests PASS. Production-task optimization fixtures: four tests PASS; real read-only RPM/systemctl fixture additionally PASS. Missing-source Apply rejection and Verify skip exercised for all eight source gates; BIND/Keepalived later-phase skip, mixed BIND source choices, Kafka inactive/no-PID, ClickHouse generation/Keeper/duplicate rejection covered.
+
+Docker guard fixture must run as nonroot platform-automation: running it as root makes its foreign-owner fixture root-owned; correct identity passed. Vault source-mode contract assertion updated for phase-specific gates. PKI repeat/repair separately: 16-test suite and expanded corrupt/missing/mode/fingerprint repair scenario PASS.
+
+Independent FULL DIFF APPROVE for 45-file security scope, SHA256 3B03B95F438663AF387A11EA4EB957F89861EFC5EBA7335E9E9B1B95CE955CBC, zero blockers. Additional Docker shell_environment stat metadata flags are a low-risk adjustment outside that snapshot; its runtime profile preservation/idempotence test passed. Bundle -11 released and placed in full-services/bundle, digest sha256:656a25e8db574a2095414c0483e8f12bd9ca9d6ff9eefd8c38113b87dde29f0d. Real React/Wails installation retry and measured before/after performance remain separate acceptance gates; no speedup percentage claimed.

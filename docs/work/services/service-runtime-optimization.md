@@ -1,5 +1,9 @@
 # Service runtime optimization — 2026-10-09
 
+Document scope: the original milestone contract and constraints. Historical
+results are linked separately; current status and authorization are recorded
+only in [CURRENT_STATE](../../../CURRENT_STATE.md).
+
 Owner authorized optimization of service apply/verify and Redis inspection. Existing Ansible roles remain authoritative; no new cache, module, resolver, persistent state, transport setting or secret lifetime is introduced.
 
 ## Observed baseline
@@ -36,8 +40,8 @@ Earlier HAProxy/PKI source optimizations retain per-service backend publication/
 
 ## Evidence and remaining gates
 
-RED OS current-source: 20 public Apply/Verify syntax checks PASS. Service regressions: Redis13, ClickHouse1, Docker3, Kafka32, BIND15, Keepalived13, Vault29, PostgreSQL25 — 131 tests PASS. Production-task optimization fixtures: four tests PASS; real read-only RPM/systemctl fixture additionally PASS. Missing-source Apply rejection and Verify skip exercised for all eight source gates; BIND/Keepalived later-phase skip, mixed BIND source choices, Kafka inactive/no-PID, ClickHouse generation/Keeper/duplicate rejection covered.
+Recorded evidence: [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-runtime-optimization-reconciliation-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
 
-Docker guard fixture must run as nonroot platform-automation: running it as root makes its foreign-owner fixture root-owned; correct identity passed. Vault source-mode contract assertion updated for phase-specific gates. PKI repeat/repair separately: 16-test suite and expanded corrupt/missing/mode/fingerprint repair scenario PASS.
+Docker guard fixture must run as nonroot platform-automation.
 
-Independent FULL DIFF APPROVE for 45-file security scope, SHA256 3B03B95F438663AF387A11EA4EB957F89861EFC5EBA7335E9E9B1B95CE955CBC, zero blockers. Additional Docker shell_environment stat metadata flags are a low-risk adjustment outside that snapshot; its runtime profile preservation/idempotence test passed. Bundle -11 released and placed in full-services/bundle, digest sha256:656a25e8db574a2095414c0483e8f12bd9ca9d6ff9eefd8c38113b87dde29f0d. Real React/Wails installation retry and measured before/after performance remain separate acceptance gates; no speedup percentage claimed.
+Real React/Wails installation retry and measured before/after performance remain separate acceptance gates; no speedup percentage claimed.

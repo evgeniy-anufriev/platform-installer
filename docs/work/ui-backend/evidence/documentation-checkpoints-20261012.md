@@ -68,3 +68,13 @@ members. RED OS Core/service/race, local Go, catalog/schema and safety gates
 passed.
 
 UI-BE-04 overall is DONE. UI-01 remains a separately gated future milestone.
+
+## Mixed-section reconciliation: ui-be-03.md
+
+Source: [ui-be-03.md](../ui-be-03.md). Extracted on 2026-10-12;
+original dates, scopes and reviewer verdicts are preserved. This is historical
+evidence, not current authorization.
+
+<a id="ui-be-03-reconciliation-001"></a>
+
+The authoritative writer acceptance and UI-BE-02 regression pass on RED OS, including `sudo -n unshare -n` offline execution.
