@@ -1214,7 +1214,7 @@ export namespace installer {
 
 }
 
-export namespace main {
+export namespace desktop {
 	
 	export class ProjectOpenError {
 	    code: string;

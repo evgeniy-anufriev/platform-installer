@@ -57,7 +57,7 @@ import {
   VerifyProject,
   ClearSessionCredential,
 } from "../wailsjs/go/main/App";
-import type { main } from "../wailsjs/go/models";
+import type { desktop } from "../wailsjs/go/models";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
@@ -148,13 +148,13 @@ export type ManagedProjectView = {
     scopes: Record<string, Record<string, unknown>>;
   };
 };
-export type OpenResult = main.ProjectOpenResult & {
+export type OpenResult = desktop.ProjectOpenResult & {
   managed?: ManagedProjectView;
   verification?: VerificationStatus;
 };
-export type RuntimeBundleUpdate = main.RuntimeBundleUpdateResult;
-export type OrphanRunRecovery = main.OrphanRunRecoveryResult;
-export type EditResult = Omit<main.EditOperationResult, "plan" | "commit"> & {
+export type RuntimeBundleUpdate = desktop.RuntimeBundleUpdateResult;
+export type OrphanRunRecovery = desktop.OrphanRunRecoveryResult;
+export type EditResult = Omit<desktop.EditOperationResult, "plan" | "commit"> & {
   plan?: {
     planId?: string;
     status: string;
@@ -174,7 +174,7 @@ export type EditResult = Omit<main.EditOperationResult, "plan" | "commit"> & {
   };
   current?: OpenResult;
 };
-export type ConfigResult = main.ApplicationConfigResult;
+export type ConfigResult = desktop.ApplicationConfigResult;
 export type SessionCredentialStatus = {
   status: string;
   username?: string;
@@ -270,12 +270,12 @@ export type InstallationPlanOperation = {
   plan?: InstallationPlanView;
   error?: { code: string; message: string; diagnosticCodes?: string[] };
 };
-export type InstallationRunView = main.InstallationRunView;
-export type InstallationResultView = main.InstallationResultView;
-export type InstallationRunOperation = main.InstallationRunOperation;
-export type InstallationEventView = main.InstallationEventView;
+export type InstallationRunView = desktop.InstallationRunView;
+export type InstallationResultView = desktop.InstallationResultView;
+export type InstallationRunOperation = desktop.InstallationRunOperation;
+export type InstallationEventView = desktop.InstallationEventView;
 export type InstallationSubscriptionResult =
-  main.InstallationSubscriptionResult;
+  desktop.InstallationSubscriptionResult;
 export type EndpointPreview = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
   endpoints?: Array<{ deploymentId: string; fqdn: string }>;

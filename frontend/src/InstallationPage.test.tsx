@@ -5,7 +5,7 @@ import {
   InstallationPage,
   deploymentOrderFromPriorities,
 } from "./InstallationPage";
-import { main } from "../wailsjs/go/models";
+import { desktop } from "../wailsjs/go/models";
 
 const state = {
   apiVersion: "platform.installer/installation-state/v1alpha1" as const,
@@ -329,7 +329,7 @@ describe("InstallationPage", () => {
         onStart={onStart}
         runPlan={plan.plan}
         run={
-          new main.InstallationRunOperation({
+          new desktop.InstallationRunOperation({
             status: "RUNNING",
             run: { runId: "run-1", state: "RUNNING", sequence: 3 },
           })
@@ -357,7 +357,7 @@ describe("InstallationPage", () => {
         onCreatePlan={vi.fn()}
         onApprovePlan={vi.fn()}
         run={
-          new main.InstallationRunOperation({
+          new desktop.InstallationRunOperation({
             status: "BLOCKED",
             error: {
               code: "START_PREREQUISITE_MISSING",
@@ -392,13 +392,13 @@ describe("InstallationPage", () => {
         onStart={vi.fn()}
         onRefreshSecretOutputs={onRefreshSecretOutputs}
         run={
-          new main.InstallationRunOperation({
+          new desktop.InstallationRunOperation({
             status: "READY",
             run: { runId: "run-output-busy", state: "FAILED", sequence: 2 },
           })
         }
         events={[
-          new main.InstallationEventView({
+          new desktop.InstallationEventView({
             runId: "run-output-busy",
             sequence: 2,
             eventType: "DIAGNOSTIC",
@@ -426,7 +426,7 @@ describe("InstallationPage", () => {
   });
 
   it("localizes a live run state and does not expose the protocol value", () => {
-    const run = new main.InstallationRunOperation({
+    const run = new desktop.InstallationRunOperation({
       status: "RUNNING",
       run: { runId: "run-safe", state: "RUNNING", sequence: 4 },
     });
@@ -452,7 +452,7 @@ describe("InstallationPage", () => {
           actionOutcomeSequences: { a: 2 },
         }}
         events={[
-          new main.InstallationEventView({
+          new desktop.InstallationEventView({
             runId: "run-safe",
             sequence: 3,
             eventType: "TASK_COMPLETED",
@@ -467,7 +467,7 @@ describe("InstallationPage", () => {
               uuid: "task-1",
             },
           }),
-          new main.InstallationEventView({
+          new desktop.InstallationEventView({
             runId: "run-safe",
             sequence: 4,
             eventType: "TASK_STARTED",
@@ -508,13 +508,13 @@ describe("InstallationPage", () => {
   });
 
   it("shows only the newest 512 execution events and follows the latest update", () => {
-    const run = new main.InstallationRunOperation({
+    const run = new desktop.InstallationRunOperation({
       status: "RUNNING",
       run: { runId: "run-window", state: "RUNNING", sequence: 600 },
     });
     const events = Array.from({ length: 600 }, (_, index) => {
       const sequence = index + 1;
-      return new main.InstallationEventView({
+      return new desktop.InstallationEventView({
         runId: "run-window",
         sequence,
         eventType: "TASK_COMPLETED",
@@ -559,7 +559,7 @@ describe("InstallationPage", () => {
         {...props}
         events={[
           ...events,
-          new main.InstallationEventView({
+          new desktop.InstallationEventView({
             ...events[599],
             sequence: 601,
             safeMessage: "Новейшее событие",
@@ -832,7 +832,7 @@ describe("InstallationPage", () => {
           status: "PLAN_REVIEW",
           error: {
             code: "INSTALLATION_SECRETS_MISSING",
-            message: "Задайте пароль сервиса postgres-main.",
+            message: "Задайте пароль сервиса postgres-desktop.",
           },
           plan: {
             id: "plan-1",
@@ -860,7 +860,7 @@ describe("InstallationPage", () => {
     const alert = screen.getByRole("alert");
     const output = screen.getByText(/Защищённые выходные файлы/);
     expect(within(alert).getByText("INSTALLATION_SECRETS_MISSING")).toBeTruthy();
-    expect(alert.textContent).toContain("Задайте пароль сервиса postgres-main.");
+    expect(alert.textContent).toContain("Задайте пароль сервиса postgres-desktop.");
     expect(heading.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(alert.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -1138,7 +1138,7 @@ describe("InstallationPage", () => {
   it("blocks fresh plan creation while a run is active without a plan snapshot", () => {
     render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()}
       onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()}
-      run={new main.InstallationRunOperation({ status: "RUNNING", run: { runId: "run-1", state: "RUNNING", sequence: 1 } })} />);
+      run={new desktop.InstallationRunOperation({ status: "RUNNING", run: { runId: "run-1", state: "RUNNING", sequence: 1 } })} />);
     expect(screen.getByRole("button", { name: "Сформировать свежий план" })).toHaveProperty("disabled", true);
   });
 

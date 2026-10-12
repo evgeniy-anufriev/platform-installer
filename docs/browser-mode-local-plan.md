@@ -44,8 +44,9 @@ component logic.
 - Go `App` methods currently use Wails dialogs to open a project, select
   create/export directories and choose a runtime-secret file. Installation
   progress is emitted through the Wails event bus in
-  `installation_execution.go`. Browser mode cannot call either Wails runtime
-  facility; both must be behind transport/platform interfaces.
+  `internal/desktop/installation_execution.go`. Browser mode cannot call
+  either Wails runtime facility; both must be behind transport/platform
+  interfaces.
 - Relevant mockup flows in `docs/ui-design-01-mockups.html` and
   `docs/ui-design-01.md`: open/create project, edit/review/save, project export,
   runtime-secret file selection, and live installation progress. Browser mode
