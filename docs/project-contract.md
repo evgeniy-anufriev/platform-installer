@@ -103,7 +103,7 @@ machine-owned persistent Execution Node data at
 `<execution-state-root>/projects/<projectIdentity>/generated/platform-state.yml`,
 not part of the portable project or its ephemeral run workspace. Standalone
 Ansible may continue to pass an explicit local generated-state path. See
-`docs/exec-generated-state.md`. `project.yml.desiredState` and legacy
+`docs/work/execution/exec-generated-state.md`. `project.yml.desiredState` and legacy
 `platform_project` are bounded readers for older projects: identical duplicate
 input is deprecated, conflicting input is blocked, and new writers emit only
 the Ansible-native shape.
@@ -235,7 +235,7 @@ rows. No project.yml is required. Infrastructure-only projects retain v2alpha1
 desired-state validation and v1alpha1 snapshots without application packages.
 Applications produce snapshot v2alpha1, explicitly rejected by the current
 execution planner until the application execution integration stage.
-See [A1 implementation notes](application-libraries/a1-test-journal.md).
+See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
 For standalone A2, the existing `platform_artifact_lock` carries the typed
 `x-container-images` extension described by artifact-source/v1alpha2. It is not
@@ -272,7 +272,7 @@ Execution Node selection, package or artifact-source selection.
 - Plans pin project, catalog, artifact and Core fingerprints.
 - Readers reject unknown major versions safely.
 - Migrations are explicit, deterministic and preserve an original backup.
-- Import/export round trips preserve supported fields and unknown extension fields according to a documented policy. Export names the copied project's `metadata.name` after the export directory name; source files and project ID remain unchanged. Only the copied optional `project.yml` may have normalized formatting, with unsupported YAML references/ambiguous documents rejected as described in [UI-01I](ui-01i-architecture.md).
+- Import/export round trips preserve supported fields and unknown extension fields according to a documented policy. Export names the copied project's `metadata.name` after the export directory name; source files and project ID remain unchanged. Only the copied optional `project.yml` may have normalized formatting, with unsupported YAML references/ambiguous documents rejected as described in [UI-01I](work/ui-01/ui-01i-architecture.md).
 - No silent semantic migration occurs during apply.
 
 ## Required invariants

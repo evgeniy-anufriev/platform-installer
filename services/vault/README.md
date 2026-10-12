@@ -32,7 +32,7 @@ pretend to prove cross-field runtime validity. Installer authoring and typed
 lease UI integration remain SI08-D; real deployment acceptance is SI08-E.
 No password, root token, unseal key or selected file path belongs in desired
 configuration. Secret inputs and encrypted outputs use the separate contracts
-in docs/service-install-08a.md and the parent architecture plan.
+in docs/work/vault/service-install-08a.md and the parent architecture plan.
 
 Filesystem permissions: fixed config/data/log roots are root-owned 0755.
 Deployment parents are root-owned with `platform_vault_group` and mode 0750:
@@ -87,4 +87,4 @@ changes; it does not acquire locks or stop services.
 
 Previous bootstrap tokens/shares are intentionally retained but become obsolete
 after reset. Use a fresh protected bootstrap output namespace for the new store;
-do not silently reuse old custody. See `docs/service-install-08e-clear.md`.
+do not silently reuse old custody. See `docs/work/vault/service-install-08e-clear.md`.

@@ -35,7 +35,7 @@ step-down, active-node loss, marker continuity and restored/unsealed 3/3
 cluster all PASS. Core full 416 OK (19 skips); affected BIND/HAProxy/Vault,
 Windows Go/vet/frontend/Wails, RED OS affected race, catalog/schema and
 secret-event audit PASS. Six exact remote QA workspaces removed. Full evidence:
-[SI08-F](../service-install-08f-vault-endpoint-ha.md). SI09 has NOT started.
+[SI08-F](../work/vault/service-install-08f-vault-endpoint-ha.md). SI09 has NOT started.
 The SI08-F source, runtime, Installer and QA changes are recorded in focused
 commits `f23fb9a`, `d1c0612`, `d1df02d`, `c6f066b`, `2b67ed8` and
 `9773413`. SI09 still requires a separate owner request.
@@ -145,7 +145,7 @@ or observability degradation. Single change starts previously unstarted follower
 Three HA units ACTIVE; TLS health initialized/unsealed, one leader/two standbys,
 same cluster identity. Standalone remains ACTIVE. No reset/reinit.
 Result READY/NO_NEW_PACKAGE. Correction evidence:
-docs/service-install-08e-follower-unseal-fix.md. Strict changed=0 repeat and
+docs/work/vault/service-install-08e-follower-unseal-fix.md. Strict changed=0 repeat and
 HA 3/3 still pending. Narrow correction committed as a3e58ab. Owned dev/harness
 stopped and temporary session RSA admission removed. Other existing worktree
 changes remain outside that focused commit; no overall clean/DONE claim.
@@ -542,7 +542,7 @@ output package was changed, and no new runtime or acceptance run was started.
 SI08-E remains BLOCKED pending an owner-approved bounded reset mechanism.
 
 Owner requested analogous Kafka/PostgreSQL Ansible clear tasks. Concrete plan:
-`docs/service-install-08e-clear.md`, explicit standalone playbook, exact
+`docs/work/vault/service-install-08e-clear.md`, explicit standalone playbook, exact
 deployment acknowledgement and existing flock; a narrow Vault-only held-fd
 reset preserves member root/marker, config, TLS, audit and controller custody.
 Independent FULL PLAN review APPROVE_WITH_CHANGES, zero blocking findings;
@@ -662,7 +662,7 @@ next actions are explicit dictionary indexing correction and owner-authorized
 reset of only the exact owned initialized QA member before repeat acceptance.
 QA source workspace/key and local automation cleaned; no other service mutation.
 Owner accepted the bootstrap plan correction. Revision 2 is in
-docs/service-install-08e-bootstrap-correction.md: immediate minimal recovery
+docs/work/vault/service-install-08e-bootstrap-correction.md: immediate minimal recovery
 copy, explicit readback/sync durability, strict validation and confirmed durable
 pair before recovery deletion. Independent single targeted recheck APPROVE:
 SI08-E-PLAN-01 RESOLVED (PLAN), zero blocking/overengineering findings.
@@ -681,10 +681,10 @@ No runtime promotion or real retry in this correction; no QA reset. Existing
 initialized seed without custody still blocks SI08-E acceptance. PLAN-02 exact
 ownership reconciliation, safe reset/quarantine mechanism and separate owner
 authorization remain required. Implementation uncommitted; SI08-E not DONE.
-See docs/qa-react-wails.md and SI08-E evidence. No mock substitute is used.
+See docs/guides/qa-react-wails.md and SI08-E evidence. No mock substitute is used.
 Vault Apply partially completed and seed init occurred as above; unseal, verify,
 protected delivery and repeat acceptance have not passed. See
-`docs/service-install-08e.md`. Earlier NOT STARTED statements below describe
+`docs/work/vault/service-install-08e.md`. Earlier NOT STARTED statements below describe
 the historical C/D gate, not the current E authorization.
 
 ## SERVICE-INSTALL-08 Vault implementation started (2026-09-26)
@@ -710,8 +710,8 @@ QA: lifecycle 38 PASS, storage 24 PASS, Core 351 PASS/4 opt-in skips,
 contracts 31 PASS, Vault role 15 PASS, catalog/schema checks PASS; affected
 Go race, Windows full Go/vet and frontend 67/lint/build PASS.
 SI08-C/D are recorded in a focused implementation commit; unrelated work remains
-outside it. No Vault execution occurred. See `docs/service-install-08d.md` and
-`docs/service-install-08d-review.md`. SI08-E remains NOT STARTED.
+outside it. No Vault execution occurred. See `docs/work/vault/service-install-08d.md` and
+`docs/work/vault/reviews/service-install-08d-review.md`. SI08-E remains NOT STARTED.
 
 SI08-B is DONE. SI08-C implementation and QA gates PASS in the current
 worktree and are recorded with SI08-D in a focused implementation commit.
@@ -726,7 +726,7 @@ integration, output delivery and generic Secrets/Plan UI in the worktree.
 The DIFF-06 reservation/recovery correction is implemented and tested; real
 Vault service acceptance remains SI08-E. The mockup shows the common Plan encryption
 password and fixed default output path. The SI08-C implementation and QA evidence are recorded in
-[`docs/service-install-08c.md`](../service-install-08c.md). It adds Core
+[`docs/service-install-08c.md`](../work/vault/service-install-08c.md). It adds Core
 typed-secret descriptors and manifest binding, Execution Node capability and
 lease admission, scoped Ansible forwarding, and interruption-safe cleanup of
 temporary typed-input files. Vault unseal shares are Apply-only; the admin token
@@ -756,7 +756,7 @@ been performed.
 Owner authorized implementation after the exact SI08-PLAN-02 terminal-evidence
 correction. SI08-A is DONE; pinned artifact acquisition blocker is resolved.
 The architecture is
-`docs/service-install-08-vault-architecture.md`: standalone and three-member
+`docs/work/vault/service-install-08-vault-architecture.md`: standalone and three-member
 Raft (1/1, 3/1, 3/3), API TLS and Vault cluster TLS, audit, KV v2, userpass
 enabled without managed accounts; configurable unseal defaults 2-of-3.
 Workstation encryption uses its session password; protected temporary
@@ -786,7 +786,7 @@ Redis completion must not be inferred from this entry.
 Artifact metadata license BUSL-1.1; intended distribution/license notices must
 be addressed before offline publication. No runtime release was published or
 activated. Exact artifact evidence and remaining A contract gates are recorded
-in `docs/service-install-08a.md`.
+in `docs/work/vault/service-install-08a.md`.
 
 Initial implementation DIFF review: BLOCK, one blocking finding. Canonical
 deployment IDs containing dots/underscores are rejected by output identity

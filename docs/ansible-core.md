@@ -94,9 +94,9 @@ batch per logical instance, followed by per-server result/login verification.
 Shared protected credential files use `platform_application_secret_root`; the
 old PostgreSQL root is accepted at standalone Core entrypoints as a compatibility
 alias, and conflicting nonempty roots fail. See
-[A5 plan/evidence](application-libraries/a5-test-journal.md),
+[A5 plan/evidence](work/application-libraries/milestones/a5/evidence/a5-test-journal.md),
 [runtime fixture](../examples/valid/application-runtime/README.md) and
-[A2 evidence](application-libraries/a2-test-journal.md).
+[A2 evidence](work/application-libraries/milestones/a2/evidence/a2-test-journal.md).
 
 Production roles must also work with conventional manual inventory and variables:
 
@@ -232,7 +232,7 @@ typed subscribers. Local mirror errors cannot change the remote run result.
 The existing runtime terminal artifact is `ExecutionResult` with state
 `SUCCEEDED`, `FAILED`, `CANCELLED`, `INTERRUPTED` or `CORRUPT_ORPHANED`; richer published result
 projections below remain distinct from this private lifecycle artifact.
-See [EXEC-OBS-01](exec-obs-01.md) for exact bounds, evidence and operator usage.
+See [EXEC-OBS-01](work/execution/exec-obs-01.md) for exact bounds, evidence and operator usage.
 
 Event identity includes:
 

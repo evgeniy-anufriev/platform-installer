@@ -19,7 +19,7 @@ blocked while the slot is occupied. Go tests and vet are passing; real
 nonvisual React/Wails expiry-boundary acceptance remains pending. No S11
 service plan or target host was changed for this work. The owner approved this
 simplified implementation and explicitly declined another review. See
-[`docs/session-active-run-credential-plan.md`](../session-active-run-credential-plan.md).
+[`docs/session-active-run-credential-plan.md`](../work/execution/session-active-run-credential-plan.md).
 
 ## Execution Order 01 implementation checkpoint (2026-10-07)
 

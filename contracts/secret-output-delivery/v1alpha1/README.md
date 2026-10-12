@@ -77,4 +77,4 @@ project; collections and byte limits both apply.
 This transport is Installer-only. Standalone Ansible uses protected files in
 `<project>/secrets/<deploymentId>` (or an explicit safe output directory), with
 no Go, UI, age or delivery ACK requirement. The architecture authority is
-`docs/service-install-08-vault-architecture.md`, especially sections 6.1–6.2.
+`docs/work/vault/service-install-08-vault-architecture.md`, especially sections 6.1–6.2.

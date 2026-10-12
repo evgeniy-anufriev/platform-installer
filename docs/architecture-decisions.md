@@ -369,7 +369,7 @@ Fresh `BuildDeploymentPlan` remains the mandatory execution gate for the exact
 current saved revision/runtime. Prior Project Verify never permits direct
 `StartExecution`, and Installation may request a fresh plan regardless of the
 optional verification badge. See
-[the binding owner-change architecture](ui-save-verify-architecture.md).
+[the binding owner-change architecture](work/ui-lifecycle/ui-save-verify-architecture.md).
 
 ## ADR-028: Remote browser access uses the environment network boundary
 
@@ -435,11 +435,11 @@ second persistence database. Standalone Ansible retains the same behavior.
 
 ## ADR-031: Go performs bounded informational server checks
 
-Accepted by owner 2026-10-08. A single Servers action confirms the current SSH host key and reads hostname, OS/version, architecture, CPU count, RAM and server time directly from the saved host using Go. The same information is available on the Execution Node before Core preparation. Current SSH password or PEM session, isolated pinned OpenSSH, bounded output/time and revision/identity revalidation are required. One explicit fingerprint confirmation supplies the same pinned key for informational SSH and existing installation target trust; a second confirmation is unnecessary. Changed keys or effective endpoints block installation. Trust and facts do not approve execution plans or change desired inventory. Existing Execution Node readiness runs separately after an informational check and cannot erase successfully collected facts. No generic command bridge or fact persistence is introduced. See [implementation plan](server-information-check-plan.md).
+Accepted by owner 2026-10-08. A single Servers action confirms the current SSH host key and reads hostname, OS/version, architecture, CPU count, RAM and server time directly from the saved host using Go. The same information is available on the Execution Node before Core preparation. Current SSH password or PEM session, isolated pinned OpenSSH, bounded output/time and revision/identity revalidation are required. One explicit fingerprint confirmation supplies the same pinned key for informational SSH and existing installation target trust; a second confirmation is unnecessary. Changed keys or effective endpoints block installation. Trust and facts do not approve execution plans or change desired inventory. Existing Execution Node readiness runs separately after an informational check and cannot erase successfully collected facts. No generic command bridge or fact persistence is introduced. See [implementation plan](work/server-information/server-information-check-plan.md).
 
 ## ADR-032: Execution Node supports session SSH passwords
 
-Owner-approved 2026-10-08. Password and PEM use the existing OpenSSH SSH/SCP transport and exact confirmed host-key pin. Password is broker-owned memory, supplied through standard ASKPASS using early helper dispatch in the current executable and a command-owned one-use loopback capability. No password argv/environment/file, new credential DTO or desired-state store is introduced. Only a matching STARTING plan/RUNNING run may use a retained password after ordinary lease expiry; new operations require a live lease. Copies are wiped on callback return and hold release. PEM file/digest guards remain. See [plan](execution-node-password-auth-plan.md); broader preparation/Start acceptance remains separately gated.
+Owner-approved 2026-10-08. Password and PEM use the existing OpenSSH SSH/SCP transport and exact confirmed host-key pin. Password is broker-owned memory, supplied through standard ASKPASS using early helper dispatch in the current executable and a command-owned one-use loopback capability. No password argv/environment/file, new credential DTO or desired-state store is introduced. Only a matching STARTING plan/RUNNING run may use a retained password after ordinary lease expiry; new operations require a live lease. Copies are wiped on callback return and hold release. PEM file/digest guards remain. See [plan](work/execution-node-password-auth/execution-node-password-auth-plan.md); broader preparation/Start acceptance remains separately gated.
 
 ## ADR-033: Endpoint placement selects HAProxy providers
 
@@ -456,7 +456,7 @@ the run. Runtime errors of selected providers remain fail-stop. Existing
 publication, archives and explicit full reconciliation are reused. Partial
 hooks do not discover previous excluded hosts after move/delete; no durable
 target store or new transaction guarantee is introduced. See the
-[narrow plan](endpoint-haproxy-placement-plan.md).
+[narrow plan](work/endpoint-placement/endpoint-haproxy-placement-plan.md).
 
 ## ADR-034: Application libraries use an additive Ansible-only resolve boundary
 
@@ -472,8 +472,8 @@ an explicit named client listener. Infrastructure-only behavior stays unchanged.
 Read-only library snapshots use v2alpha1; current execution refuses them until A7.
 No provider mutations, Agent rendering, image delivery or Go/UI work is part of A1.
 Provider allocation unavailable in existing read-only projections is fail-closed,
-never inferred from a manifest port. See [A1 plan](application-libraries/a1-technical-plan.md)
-and [evidence](application-libraries/a1-test-journal.md).
+never inferred from a manifest port. See [A1 plan](work/application-libraries/milestones/a1/a1-technical-plan.md)
+and [evidence](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
 A2 extends the same boundary with explicit standalone materialization/Apply/Verify,
 native Compose and typed image descriptors inside the existing artifact lock.
@@ -483,8 +483,8 @@ Image startup references derive from full image IDs, preventing different librar
 images from retagging one shared mutable name without a daemon-wide registry or
 new identity store. Config-digest labels provide interruption recovery with native
 Compose recreate. Infrastructure-only planning and the A7 execution guard remain.
-See [A2 plan](application-libraries/a2-technical-plan.md) and
-[DIFF review](application-libraries/a2-diff-review.md); these do not authorize
+See [A2 plan](work/application-libraries/milestones/a2/a2-technical-plan.md) and
+[DIFF review](work/application-libraries/milestones/a2/reviews/a2-diff-review.md); these do not authorize
 later provider, Go or UI stages.
 
 ## ADR-035: Managed PKI authorities enter the target OS trust store

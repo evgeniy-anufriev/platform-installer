@@ -8,7 +8,7 @@ Original section text is preserved; relative Markdown destinations are relocated
 ## SERVICE-INSTALL-10 Docker rootless + Compose DONE (2026-10-01)
 
 Owner reassigned SI10 to Docker rootless + Compose; the all-services single-plan
-cycle is SI11, now in progress. [SI10 architecture and evidence](../service-docker-rootless-architecture.md).
+cycle is SI11, now in progress. [SI10 architecture and evidence](../work/docker/service-docker-rootless-architecture.md).
 Autonomous RED OS Ansible existing-user/create-user apply, verify and strict
 repeat passed (`changed=0`). The two owner-approved DIFF blockers were
 corrected and the single targeted recheck passed with zero blockers. Docker's
@@ -36,7 +36,7 @@ Owner requested the next service: ClickHouse 1/1 standalone without Keeper,
 then 3/1 and 3/3 with one paired server+Keeper member per replica, TLS on all
 enabled protocols and an HTTPS endpoint. The all-services one-plan final
 acceptance was subsequently assigned to SI11. Architecture plan:
-[SI09](../service-install-09-clickhouse-architecture.md). The first FULL
+[SI09](../work/clickhouse/service-install-09-clickhouse-architecture.md). The first FULL
 PLAN review identified source-authenticity and HTTPS-authentication gaps; the
 owner approved signed upstream repository metadata plus exact RPM checksums,
 and the standard ClickHouse `default` password supplied through Installer
@@ -248,7 +248,7 @@ Original failure did not reproduce; removed temporary QA key was not reinstated.
 Controller now derives a closed coarse diagnostic class from the final ordinary
 Ansible failure record when no explicit Core error_code exists. Raw output stays
 bounded/in-memory; no_log/censored results stay opaque. No service/retry semantics
-or public protocol change. Details: docs/execution-failure-diagnostics.md.
+or public protocol change. Details: docs/guides/execution-failure-diagnostics.md.
 Current-source RED OS: 6 new tests PASS, observability 21 PASS / 4 opt-in SKIP,
 lifecycle 39 PASS. Full Go tests/vet and diff check PASS; qa-sync workspace cleaned.
 New runtime publication and real React/Wails acceptance remain pending; no full
@@ -270,7 +270,7 @@ OPEN -> RESOLVED, zero blocking/overengineering findings. Reviewed ordinal
 fingerprint `1f30018aa7b9db71f591dfe54b28117608b38e73bc50bb359163301a7baead5a`.
 QA source workspace was cleaned. Actual reset and SI08-E acceptance are still
 not claimed; subsequent reset requires fresh exact identity/no-active-run proof.
-Evidence: docs/service-install-08e-clear-evidence.md. Earlier unrelated
+Evidence: docs/work/vault/evidence/service-install-08e-clear-evidence.md. Earlier unrelated
 uncommitted work is preserved; clear is a separate focused implementation.
 
 ## Vault clear resumed FULL DIFF: two safety blockers (2026-09-27)
@@ -311,7 +311,7 @@ fingerprint matches reviewer exactly:
 `86df9179819d462aaa11813072c70ec9645be9a643a522b7e8e7ef3a872f37e3`.
 No automatic review rerun or destructive execution. The safety review is not
 complete; owner authorization is needed for review continuation/recheck with
-the corrected identity. Evidence: docs/service-install-08e-clear-evidence.md.
+the corrected identity. Evidence: docs/work/vault/evidence/service-install-08e-clear-evidence.md.
 No commit; unrelated existing worktree changes are preserved. SI08-E acceptance
 remains BLOCKED.
 
@@ -332,7 +332,7 @@ are preserved without backfill; unknown configured types produce only a
 nonblocking Installer diagnostic and do not alter Core status, validation or
 fingerprint. Type has no service, topology, placement, Execution Node or source
 selection semantics. UI-01E1 through UI-01E6 and UI-01F1 through UI-01F3 are
-DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01 is DONE (evidence: `docs/ui-net-01.md`), UI-01G1 through UI-01G4 are DONE (evidence: `docs/ui-01g1.md`, `docs/ui-01g2.md`, `docs/ui-01g3.md`, `docs/ui-01g4.md`), UI-01G overall is DONE, and UI-01H overall is DONE (evidence: `docs/ui-01h4.md`); UI-01I is DONE (evidence: `docs/ui-01i.md`); UI-01J is DONE (evidence: `docs/ui-01j.md`); UI-01 overall is DONE.
+DONE; UI-01F4, UI-01F5 and UI-01F6 are DONE. UI-01F overall is DONE; UI-NET-01 is DONE (evidence: `docs/work/ui-network/ui-net-01.md`), UI-01G1 through UI-01G4 are DONE (evidence: `docs/work/ui-01/ui-01g1.md`, `docs/work/ui-01/ui-01g2.md`, `docs/work/ui-01/ui-01g3.md`, `docs/work/ui-01/ui-01g4.md`), UI-01G overall is DONE, and UI-01H overall is DONE (evidence: `docs/work/ui-01/ui-01h4.md`); UI-01I is DONE (evidence: `docs/work/ui-01/ui-01i.md`); UI-01J is DONE (evidence: `docs/work/ui-01/ui-01j.md`); UI-01 overall is DONE.
 
 ## UI-01 implementation status (2026-09-07)
 
@@ -354,9 +354,9 @@ before execution. UI-01E5 is DONE: readiness/preparation and navigation gating
 use only the startup trusted binding, with explicit Prepare confirmation and
 fresh post-Prepare Verify evidence. UI-01E6 is DONE: real Wails creation,
 READY/navigation acceptance, target-free Core proof and RED OS regression
-passed without service or target mutation; see `docs/ui-01e6.md`.
+passed without service or target mutation; see `docs/work/ui-01/ui-01e6.md`.
 
-The 2026-09-05 accepted freeze is `docs/ui-01a-contract-freeze.md`; toolchain, mockup
+The 2026-09-05 accepted freeze is `docs/work/ui-01/ui-01a-contract-freeze.md`; toolchain, mockup
 reconciliation, reviews and QA are recorded in the adjacent `ui-01a-*`
 documents. It fixed the one-file empty project (`project.yml` only), exact lock
 provenance, first-save ownership, then-current complete-candidate Core proof,
@@ -365,7 +365,7 @@ runtime-only session credentials. ADR-027 supersedes only its Core-before-Save
 requirement; its ownership and transaction protections remain. Historical
 Core-contract and safety reviews reported 0 blocking findings.
 
-The implementation sequence remains `docs/ui-01.md` (UI-01B through UI-01J).
+The implementation sequence remains `docs/work/ui-01/ui-01.md` (UI-01B through UI-01J).
 Every milestone requires pre-start and acceptance mockup/contract checks.
 Editor order is Servers → Topology → Certificates (PKI intent) → Service
 settings. UI-02 execution/task-stream UI and target secret lease transport
@@ -401,10 +401,10 @@ descriptors, descriptor-bound session-only values, v1alpha3 lease admission
 and the generic Services-page Secrets dialog without secret persistence or
 projection. RED OS Core full suite (292 PASS, 4 skipped), lifecycle suite
 (31 PASS), Go/frontend/Wails gates and catalog reproducibility passed. UI-02
-overall is DONE. Evidence: `docs/ui-02a.md`,
-`docs/ui-02b.md`, `docs/ui-02c.md`, `docs/ui-02d.md`,
-`docs/ui-02e-pki-runtime-secret-transport.md` and
-`docs/ui-02-architecture.md`.
+overall is DONE. Evidence: `docs/work/ui-02/ui-02a.md`,
+`docs/work/ui-02/ui-02b.md`, `docs/work/ui-02/ui-02c.md`, `docs/work/ui-02/ui-02d.md`,
+`docs/work/ui-02/ui-02e-pki-runtime-secret-transport.md` and
+`docs/work/ui-02/ui-02-architecture.md`.
 
 ## Next acceptance sequence (2026-09-23)
 
@@ -433,7 +433,7 @@ Redis `standalone` on one host and Redis/Sentinel HA with three paired members
 on one host by default, with distributed three-host placement also required;
 both use mandatory TLS through standalone Ansible, Core, Go
 and Wails/React. Its plan is
-`docs/service-install-07-redis-sentinel-architecture.md`; implementation and
+`docs/work/redis/service-install-07-redis-sentinel-architecture.md`; implementation and
 acceptance are in progress. The standalone Go lifecycle passed twice:
 `installer-a641eec3e9ac20867bde45bccd36dec9` succeeded with 17 changes and
 `installer-679e49f37f791802b19fe3b1b07025ca` succeeded with `changed=0`.
@@ -460,7 +460,7 @@ and before/after isolation checks must preserve other QA deployments. Exact
 target addresses and resource ownership must be established before execution.
 Ordered milestones: SERVICE-INSTALL-01 Keepalived, 02 BIND, 03 dns-client,
 04 HAProxy, 05 Kafka (three targets), 06 PostgreSQL/pg_auto_failover DONE, 07
-Redis standalone plus Sentinel HA ACTIVE, 08 one plan for all seven NEXT. Conditions: `docs/service-install-acceptance.md` and
+Redis standalone plus Sentinel HA ACTIVE, 08 one plan for all seven NEXT. Conditions: `docs/work/services/service-install-acceptance.md` and
 `docs/roadmap.md`, "Post-UI-02 service installation acceptance".
 
 ## EXEC-OBS-01 completion (2026-09-05)
@@ -478,7 +478,7 @@ Kafka apply/verify, repeat changed=0, and 1,723 events each. Local mirror,
 typed subscriber and remote stream matched. Live client/CLI restart and
 Get-Content -Wait were proven. Real no_log/failure/degradation tests, Core,
 Kafka/PKI, Go/race/vet, reproducibility, offline validation and secret audits
-passed; both reviews have 0 blocking findings. See `docs/exec-obs-01.md` for
+passed; both reviews have 0 blocking findings. See `docs/work/execution/exec-obs-01.md` for
 exact commands, test counts, durations and performance measurement limits.
 
 UI-01A is the completed documentation freeze. UI-01B is DONE: its native
@@ -493,11 +493,11 @@ acceptance. UI-01E1 is DONE: new sessions use v1alpha4 server CRUD intents;
 Core projects desired hostname, normalized SSH port and generic host references;
 the staged Core-backed review/commit lifecycle is retained as historical
 acceptance evidence, while ADR-027 defines the new local Save target. UI-01E2
-Servers UI, UI-01E3 shared runtime session credentials, UI-01E4 Execution Node selection, UI-01E5 readiness/preparation and UI-01E6 cross-platform acceptance are DONE. UI-01F1 is DONE: lock-bound catalog and managed local topology reads passed. UI-01F2 is DONE: additive v1alpha5 topology intents, both placement forms, the final-state reducer and existing guarded local Save/reopen path passed Windows and RED OS gates with zero blocking review findings. UI-01F3 is DONE: the catalog-driven deployment editor, shared structural draft, local Review/Save and node-free reopen passed Windows and regression gates. UI-01F4 is DONE: shared member- and host-scoped placement editors use the existing session/review/local Save lifecycle; deterministic Wails frontend acceptance covers Save/reopen/clear without Core, Execution Node or target contact. UI-01F5 is DONE: Entry points reuses the five v1alpha5 endpoint intents; strict typed/bounded Go projection keeps raw Core endpoint/provider maps out of React, and INVALID exposes findings only. UI-01F6 is DONE: built Windows desktop, deterministic web-view, RED OS target-free/race and reproducibility acceptance passed. UI-01F overall is DONE; evidence is `docs/ui-01f6.md`. UI-NET-01 is DONE: v1alpha6 provider intent, guarded Save/reopen, Entry points editor and Core-preview freshness passed Windows/RED OS acceptance; evidence is `docs/ui-net-01.md`. UI-01G overall is DONE (evidence: `docs/ui-01g4.md`); UI-01H1 is DONE (evidence: `docs/ui-01h1.md`) and UI-01H2 is DONE (evidence: `docs/ui-01h2.md`); UI-01H3 is NEXT.
+Servers UI, UI-01E3 shared runtime session credentials, UI-01E4 Execution Node selection, UI-01E5 readiness/preparation and UI-01E6 cross-platform acceptance are DONE. UI-01F1 is DONE: lock-bound catalog and managed local topology reads passed. UI-01F2 is DONE: additive v1alpha5 topology intents, both placement forms, the final-state reducer and existing guarded local Save/reopen path passed Windows and RED OS gates with zero blocking review findings. UI-01F3 is DONE: the catalog-driven deployment editor, shared structural draft, local Review/Save and node-free reopen passed Windows and regression gates. UI-01F4 is DONE: shared member- and host-scoped placement editors use the existing session/review/local Save lifecycle; deterministic Wails frontend acceptance covers Save/reopen/clear without Core, Execution Node or target contact. UI-01F5 is DONE: Entry points reuses the five v1alpha5 endpoint intents; strict typed/bounded Go projection keeps raw Core endpoint/provider maps out of React, and INVALID exposes findings only. UI-01F6 is DONE: built Windows desktop, deterministic web-view, RED OS target-free/race and reproducibility acceptance passed. UI-01F overall is DONE; evidence is `docs/work/ui-01/ui-01f6.md`. UI-NET-01 is DONE: v1alpha6 provider intent, guarded Save/reopen, Entry points editor and Core-preview freshness passed Windows/RED OS acceptance; evidence is `docs/work/ui-network/ui-net-01.md`. UI-01G overall is DONE (evidence: `docs/work/ui-01/ui-01g4.md`); UI-01H1 is DONE (evidence: `docs/work/ui-01/ui-01h1.md`) and UI-01H2 is DONE (evidence: `docs/work/ui-01/ui-01h2.md`); UI-01H3 is NEXT.
 
 Status correction (2026-09-21): UI-01H overall is DONE; evidence is
-`docs/ui-01h4.md`. UI-01I is DONE; evidence is `docs/ui-01i.md`. UI-01J is
-DONE; evidence is `docs/ui-01j.md`. UI-01 overall is DONE. This supersedes the
+`docs/work/ui-01/ui-01h4.md`. UI-01I is DONE; evidence is `docs/work/ui-01/ui-01i.md`. UI-01J is
+DONE; evidence is `docs/work/ui-01/ui-01j.md`. UI-01 overall is DONE. This supersedes the
 preceding historical H3-next sentence.
 
 ## Phase
@@ -607,7 +607,7 @@ input and QA state.
 
 UI-BE-04A is DONE. The actual execution implementation and published
 plan/event/result contracts were audited without adding production execution
-code. `docs/ui-be-04.md` freezes Core ownership of deterministic
+code. `docs/work/ui-backend/ui-be-04.md` freezes Core ownership of deterministic
 `DeploymentPlan`, private `ExecutionManifest`, ordering and trusted execution
 semantics; EXEC-01A remains the source-resolution and delivery foundation.
 Future execution uses only fixed semantic Execution Node operations, a detached

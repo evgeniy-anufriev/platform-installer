@@ -160,7 +160,7 @@ Execution Node journal writer. Paginated GetEvents feeds Go RunObserver,
 which writes a derived local runtime mirror and delivers typed subscriptions.
 Future UI uses those subscriptions. Task-detail degradation and local mirror
 failure do not change deployment outcomes; critical lifecycle integrity
-retains its fail-closed policy. See [EXEC-OBS-01](exec-obs-01.md).
+retains its fail-closed policy. See [EXEC-OBS-01](work/execution/exec-obs-01.md).
 
 - Plaintext secrets are runtime-only.
 - Project data contains opaque secret references or required-secret declarations.
@@ -216,6 +216,6 @@ Do not carry forward:
 
 ### Informational server SSH exception
 
-Owner-approved SERVER-INFORMATION-CHECK-01 permits the Go workstation to contact a saved target or Execution Node directly for host-key confirmation and bounded read-only system information. This exception does not execute Core/Python/Ansible, mutate infrastructure, resolve Ansible inventory precedence or authorize installation. The address/port are those of the saved server card. The owner-approved explicit key confirmation supplies the same exact pin to existing installation target trust through the Execution Node. Installation rejects a changed key or endpoint and still requires fresh plan approval. Facts are session-only observations; see [plan](server-information-check-plan.md).
+Owner-approved SERVER-INFORMATION-CHECK-01 permits the Go workstation to contact a saved target or Execution Node directly for host-key confirmation and bounded read-only system information. This exception does not execute Core/Python/Ansible, mutate infrastructure, resolve Ansible inventory precedence or authorize installation. The address/port are those of the saved server card. The owner-approved explicit key confirmation supplies the same exact pin to existing installation target trust through the Execution Node. Installation rejects a changed key or endpoint and still requires fresh plan approval. Facts are session-only observations; see [plan](work/server-information/server-information-check-plan.md).
 
-Execution Node SSH authentication supports session passwords and PEM using the same pinned OpenSSH/SCP transport. Passwords stay in broker memory; a command-owned ASKPASS capability supplies one helper response. A retained password after lease expiry is available only for the exact active Start/run, never ordinary checks or another Start. See ADR-032 and [password plan](execution-node-password-auth-plan.md).
+Execution Node SSH authentication supports session passwords and PEM using the same pinned OpenSSH/SCP transport. Passwords stay in broker memory; a command-owned ASKPASS capability supplies one helper response. A retained password after lease expiry is available only for the exact active Start/run, never ordinary checks or another Start. See ADR-032 and [password plan](work/execution-node-password-auth/execution-node-password-auth-plan.md).

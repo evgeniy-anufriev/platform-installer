@@ -11,7 +11,7 @@ Browser transports.
 - [Agent instructions](AGENTS.md): mandatory boundaries and procedure routing.
 - [Current state](CURRENT_STATE.md): current status, blockers and authorized steps.
 - [Task index](docs/agent-index.md): recurring-task contracts, code and checks.
-- [Administrator guide](docs/installer-engineer-guide.md): operator workflows.
+- [Administrator guide](docs/guides/installer-engineer-guide.md): operator workflows.
 - [Architecture](docs/architecture.md), [project contract](docs/project-contract.md),
   [Core](docs/ansible-core.md), [ADRs](docs/architecture-decisions.md) and
   [roadmap](docs/roadmap.md): read the sections relevant to the task.

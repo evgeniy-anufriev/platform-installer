@@ -108,7 +108,7 @@ RunObserver consumes paginated GetEvents and feeds bounded typed subscribers
 and a derived Installer-side runtime mirror. Future Wails transports those
 subscriptions; React never reads the local file, parses Ansible output or
 implements redaction. EXEC-OBS-01 exposes no raw stdout/stderr API.
-See [EXEC-OBS-01](exec-obs-01.md) for CLI, replay and failure semantics.
+See [EXEC-OBS-01](work/execution/exec-obs-01.md) for CLI, replay and failure semantics.
 
 ## UI project editor
 
