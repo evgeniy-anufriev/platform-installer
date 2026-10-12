@@ -20,7 +20,7 @@
     _platform_kafka_normalized_unit_name: "{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
     _platform_kafka_normalized_unit_destination: "/etc/systemd/system/{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
     _platform_kafka_normalized_environment_pattern: "{{ _platform_kafka_normalized_compatibility_unit.environment_pattern | default(_platform_kafka_normalized_runtime_directory ~ '/systemd.env') }}"
-    _platform_kafka_normalized_description: "{{ _platform_kafka_normalized_compatibility_unit.description | default('Apache Kafka 4.3.1 KRaft member %i') }}"
+    _platform_kafka_normalized_description: "{{ _platform_kafka_normalized_compatibility_unit.description | default('Apache Kafka ' ~ platform_kafka_version ~ ' KRaft member %i') }}"
     _platform_kafka_normalized_listeners: "{{ kafka_input_member.listeners | default({}) }}"
     _platform_kafka_normalized_client_listener_port: "{{ kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'client') | map(attribute='value.port') | list | first | default(0, true) }}"
     _platform_kafka_normalized_controller_listener_port: "{{ kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | map(attribute='value.port') | list | first | default(0, true) }}"

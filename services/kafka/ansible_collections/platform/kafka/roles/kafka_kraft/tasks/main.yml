@@ -43,7 +43,7 @@
           destination: "/etc/systemd/system/{{ platform_kafka_service_name }}.service"
           environment_pattern: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name }}/systemd.env"
           runtime_directory: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name }}"
-          description: Apache Kafka 4.3.1 KRaft member
+          description: "Apache Kafka {{ platform_kafka_version }} KRaft member"
   when: platform_kafka_instances | length == 0
 
 - name: Validate common Kafka member inputs
@@ -333,9 +333,11 @@
       - platform_kafka_artifact_checksum is defined or
         (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'REPOSITORY')
       - platform_kafka_artifact_checksum is not defined or platform_kafka_artifact_checksum is match('^sha256:[0-9a-fA-F]{64}$')
-      - platform_kafka_version == '4.3.1'
-      - platform_kafka_archive_directory == 'kafka_2.13-4.3.1'
-    fail_msg: Kafka 4.3.1 offline artifact path and checksum are required
+      - platform_kafka_version is string
+      - platform_kafka_version | length > 0
+      - platform_kafka_archive_directory is string
+      - platform_kafka_archive_directory is match('^[A-Za-z0-9_.+-]+$')
+    fail_msg: Kafka offline artifact path, version, and checksum are required
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Check approved Kafka artifact on controller

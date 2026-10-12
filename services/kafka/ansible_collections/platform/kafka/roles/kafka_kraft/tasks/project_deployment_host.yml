@@ -23,7 +23,7 @@
         'destination': '/etc/systemd/system/kafka-standalone.service',
         'environment_pattern': '/etc/kafka/kafka-standalone/systemd.env',
         'runtime_directory': '/etc/kafka/kafka-standalone',
-        'description': 'Apache Kafka 4.3.1 KRaft member'
+        'description': 'Apache Kafka ' ~ platform_kafka_version ~ ' KRaft member'
       } if _platform_kafka_project_deployment.value.mode | default('') == 'kraft-standalone' else {})
     } ] }}"
   loop: "{{ (hostvars[_platform_kafka_project_member_host].platform_deployments | default({})).get(_platform_kafka_project_deployment.key, {}).get('members', {}) | dict2items }}"

@@ -97,7 +97,7 @@
     src: "{{ _platform_kafka_registry_archive }}"
     dest: /opt
     remote_src: "{{ _platform_kafka_registry_remote_archive }}"
-    creates: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-8.3.2.jar"
+    creates: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-{{ platform_kafka_schema_registry_version }}.jar"
   when:
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
@@ -115,7 +115,7 @@
 
 - name: Check the pinned Registry JAR exists for offline installations
   ansible.builtin.stat:
-    path: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-8.3.2.jar"
+    path: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-{{ platform_kafka_schema_registry_version }}.jar"
     follow: false
   register: _platform_kafka_registry_jar
   when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'

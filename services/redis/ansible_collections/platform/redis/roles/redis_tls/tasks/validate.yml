@@ -5,7 +5,8 @@
       - platform_redis_mode in ['standalone', 'sentinel-ha']
       - platform_redis_deployment_id is string
       - platform_redis_deployment_id is match('^[a-z0-9][a-z0-9-]*$')
-      - platform_redis_version == '8.6.4-1.red80'
+      - platform_redis_version is string
+      - platform_redis_version | length > 0
       - platform_redis_data_root is string
       - platform_redis_data_root | length <= 255
       - platform_redis_config_root == '/etc/' ~ platform_redis_name

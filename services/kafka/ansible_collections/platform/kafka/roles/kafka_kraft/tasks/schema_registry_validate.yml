@@ -4,9 +4,12 @@
     that:
       - platform_kafka_phase in ['full', 'kafka', 'schema_registry']
       - platform_kafka_schema_registry_enabled is boolean
-      - platform_kafka_schema_registry_version == '8.3.2'
-      - platform_kafka_schema_registry_archive_directory == 'confluent-8.3.2'
-      - platform_kafka_schema_registry_install_directory == '/opt/confluent-8.3.2'
+      - platform_kafka_schema_registry_version is string
+      - platform_kafka_schema_registry_version | length > 0
+      - platform_kafka_schema_registry_archive_directory is string
+      - platform_kafka_schema_registry_archive_directory | length > 0
+      - platform_kafka_schema_registry_install_directory is string
+      - platform_kafka_schema_registry_install_directory is match('^/opt/[A-Za-z0-9_.-]+$')
       - platform_kafka_schema_registry_name is match('^[A-Za-z0-9_-]+$')
     fail_msg: SCHEMA_REGISTRY_INPUT_INVALID
 
