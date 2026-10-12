@@ -56,7 +56,7 @@ Nginx читает файл при старте: после записи нов�
 | Источники | `artifact_source_resolution`, `artifact_source_gate`, `artifact-source` | Добавить контейнерную ветвь discovery; не применять `dnf repoquery` к образам |
 | Offline transfer | `artifact_delivery`, verified bundle metadata | Переиспользовать проверку SHA256/size и copy; `docker load` после проверки |
 | Render | `ansible.builtin.template`, `copy`, `file` | Одна общая application runtime role; package templates остаются в пакетах |
-| Compose | Уже установленный Docker Compose CLI plugin | `command: argv`, JSON config/inspect, без нового community.docker dependency |
+| Compose | Уже установленный Docker Compose CLI plugin | `command: argv`; Core сверяет только собственные projections, не пользовательские поля Compose |
 | Повторы | Compose reconciliation + Ansible registers | Сравнивать наблюдаемые ID/state до и после, не парсить человекочитаемый progress |
 | План/результат | Существующие structured Core границы | Только минимальные runtime descriptors, без нового scheduler/plan store |
 
@@ -278,22 +278,19 @@ materialize, image_delivery, compose_apply и verify. A1 resolve role переи
 standalone host scope; ни full library success, ни готовность исключённых хостов
 такой запуск не доказывает. Не скрывать выбор хостов через второй placement list.
 
-### Фаза 2. Материализация и проверка Compose
+### Фаза 2. Материализация Compose
 
 1. Создать/проверить managed directories, owner/group и режимы; разрешённый
    subtree проверять также по resolved real paths, включая существующие symlinks.
 2. Render library-host `.env` и base один раз, до действий экземпляров на хосте.
-3. Render instance config files и Compose из exact package templates.
-4. Выполнить `docker compose ... config --quiet`; JSON config использовать
-   только внутри no_log задачи для проверки image/service/ports/volumes/identity.
-5. Проверить отсутствие неожиданного build, privileged, host networking,
-   daemon socket mounts, внешних путей, дополнительных services/profiles,
-   секретов в environment и изменённых управляемых identities.
-
-Templates могут быть сложными, но A2 исполнитель принимает только проверенный
-простый профиль. Не игнорировать неподдерживаемые поля или запускать sidecars.
-Точный разрешённый профиль закрепить тестами; Compose limits не sandbox Jinja.
-Валидация должна предшествовать pull/load/up. Не выдавать весь config в events.
+3. Render instance config files и Compose из package templates. Core подставляет
+   предусмотренные template-переменные, включая published и container ports;
+   Compose-автор задаёт literal host bind address и прочие Compose-параметры.
+4. Разобрать Compose через CLI только для сверки значений, проецируемых Core:
+   instance/service identity, locked image, Core command/labels/environment,
+   published/container ports и обязательные Core mounts. Не ограничивать
+   произвольные пользовательские поля или literal host bind address.
+   `pull`/`up` используют обычный Compose CLI; Verify выполняет один `docker inspect`.
 
 ### Фаза 3. Доставка image
 
@@ -388,7 +385,7 @@ container_name либо небезопасный directory блокирует Ap
 | --- | --- | --- |
 | A2.0 | Application/library/package schemas, A1 loader/resolve row, соответствующий snapshot schema | Явные render/readiness/config descriptors; старый infra-only и A1 fixtures resolve прежним путём |
 | A2.1 | Existing artifact/lock/source authority и delivery, runtime bundle metadata validation | Registry/offline images строго pinned; target-local compatibility/identity; старые RPM tests PASS |
-| A2.2 | `application_runtime` preflight/materialize, два standalone playbooks, package templates | Один общий env/base, exact paths/ownership, Compose config validation до image mutation |
+| A2.2 | `application_runtime` preflight/materialize, два standalone playbooks, package templates | Один общий env/base, exact paths/ownership; сверяются только значения, проецируемые Core |
 | A2.3 | `application_runtime` image delivery/compose_apply/verify | Реальный rootless startup, readiness и честный repeat |
 | A2.4 | New representative simple-library fixtures, focused/standalone QA, docs | Две библиотеки и два hosts, isolation/failure/retry, весь acceptance scope доказан |
 

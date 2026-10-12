@@ -166,7 +166,9 @@ target QA без отдельного scope. Performance requirement не отк
 - Общие tasks формируют base Compose и несекретный `.env` библиотеки.
 - Template приложения получает identity и instance overrides, сохраняя extends.
 - Использовать выбранный существующий rootless Docker runtime; Docker installer
-  не переписывать. Проверить paths/ownership, Compose config и доступность image.
+  не переписывать. Проверять безопасные paths/ownership и доступность image;
+  из Compose сверять только значения, проецируемые Core, оставляя авторские
+  поля и literal host bind address на усмотрение пользователя.
 - Реализовать apply/verify через стандартные Ansible средства и имеющиеся
   зависимости. Если подходящий module уже доступен — переиспользовать; новый
   dependency вводить только с обоснованной необходимостью и offline closure.

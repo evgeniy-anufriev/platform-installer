@@ -98,6 +98,17 @@ Catalog check PASS:
 `sha256:4507a53a8984bfa7c0c284acb29b407cfce3130240450073c8f8b0f0accd8b5f`.
 Configuration-schema reproducibility PASS.
 Source workspace: /var/tmp/platform-installer-qa-3c460ee3d1e448d19fd888e0794fa4f0.
+
+## Owner clarification — Compose projection boundary (2026-10-10)
+
+The Compose template remains package-authored. The literal host bind address
+(for example `127.0.0.1` or `0.0.0.0`) and additional Compose fields are not
+Core policy. Core parses the effective Compose only to verify values it
+projects: instance identity, locked image, app/Vault Agent command, managed
+labels and environment, published/container port pairs, and required Core
+mounts. It does not constrain the literal bind address or close the set of
+Compose fields/networks/extra mounts. Verify remains one `docker inspect` for
+image, owner labels, Running and configured healthcheck.
 Public multi-host QA and broad regression source workspace:
 /var/tmp/platform-installer-qa-8e70e1a7bd564e1d8805dc5f382a56bc. That earlier copy
 precedes the final launch/shared-env hardening; do not present it as a full final
