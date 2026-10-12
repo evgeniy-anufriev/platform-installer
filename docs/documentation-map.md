@@ -560,3 +560,26 @@ UI-01D архитектуру — в их исходном writer/compatibility 
 выделенных фрагментов сохранены. Нормативные разделы UI-BE-03 совпадают
 с предыдущей версией; добавлена только scope-пометка. `git diff --check`
 проходит. Proof-снимки: `.runtime/qa/documentation-current-save-20261012/`.
+
+## Сверка версий execution-контрактов — 2026-10-12
+
+В [таблицу схем](../contracts/README.md) добавлены существующие, ранее
+пропущенные `plan/v1alpha3` и `execution-capabilities/v1alpha5/v1alpha6`.
+В [execution contract](contracts/execution-planning-and-events.md) добавлено
+различие между исходным планом эволюции v1alpha1 и стандартным Core output
+v1alpha2, отдельным selected-source schema v1alpha3 и credentialed Start v1alpha2.
+Схема не объявлена доказательством активного runtime или полной приёмки flow.
+
+Проверены исходники [Core planner](../ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py),
+[fixed protocol](../ansible-core/tools/execution_protocol.py),
+[Go ExecutionService](../internal/executionnode/execution_service.go) и
+[credentialed Start](../internal/executionnode/credential_lease.go).
+Approve требует EXECUTABLE и точных acknowledgements; Start проверяет approval,
+TTL и consumed state. В документации сохранены исходные normative sections,
+JSON schemas и production code не изменены. Это source/schema сверка,
+не real UI/Core acceptance и не независимый architecture review.
+
+Проверка: 1540 локальных ссылок/якорей без ошибок, 45 путей опубликованных
+схем существуют и содержат корректный JSON; 230 выделенных фрагментов
+сохранены. Исходные execution sections не изменены; `git diff --check`
+проходит. Proof-снимки: `.runtime/qa/documentation-execution-versions-20261012/`.

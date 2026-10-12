@@ -6,6 +6,13 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 
 ## Published versions
 
+Versions have distinct scopes and can coexist. A listed schema does not prove
+an activated runtime supports it or that its application flow passed acceptance.
+The standard Core deployment planner emits `plan/v1alpha2`; `plan/v1alpha3`
+adds `selectedSourceDeployment` and `targetScope` in its separate schema.
+Use the exact runtime capability/binding for execution compatibility, not the
+highest version number in this directory.
+
 | Contract | Version | Schema |
 | --- | --- | --- |
 | Project manifest (`project.yml`) | `v2alpha1` | `project/v2alpha1/project-manifest.schema.json` |
@@ -30,6 +37,7 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Resolved service configuration | `v1alpha1` | `resolved-service-configuration/v1alpha1/schema.json` |
 | Resolved plan | `v1alpha1` | `plan/v1alpha1/schema.json` |
 | Target-free deployment plan | `v1alpha2` | `plan/v1alpha2/schema.json` |
+| Selected-source deployment plan with explicit target scope (schema) | `v1alpha3` | `plan/v1alpha3/schema.json` |
 | Normalized execution event | `v1alpha1` | `event/v1alpha1/schema.json` |
 | Execution result | `v1alpha1` | `result/v1alpha1/schema.json` |
 | Execution node selection | `v1alpha1` | `execution/v1alpha1/schema.json` |
@@ -45,6 +53,8 @@ not depend on Go, Wails, SQLite or a proprietary launcher.
 | Secret output discovery metadata | `v1alpha1` | `secret-output-delivery/v1alpha1/metadata.schema.json` |
 | Trusted secret output declaration | `v1alpha1` | `secret-output-delivery/v1alpha1/declaration.schema.json` |
 | Typed input capability | `v1alpha4` | `execution-capabilities/v1alpha4/schema.json` |
+| Service-configuration-preview capability | `v1alpha5` | `execution-capabilities/v1alpha5/schema.json` |
+| Ordered deployment-planning capability | `v1alpha6` | `execution-capabilities/v1alpha6/schema.json` |
 | Typed safe input descriptors | `v1alpha2` | `runtime-secret-descriptors/v1alpha2/schema.json` |
 | Typed credential payload | `v1alpha4` | `target-credential-payload/v1alpha4/schema.json` |
 | Typed input lease request | `v1alpha2` | `runtime-secret-lease/v1alpha2/request.schema.json` |

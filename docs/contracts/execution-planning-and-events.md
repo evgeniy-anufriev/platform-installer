@@ -4,6 +4,19 @@ Contract sections extracted verbatim from [UI-BE-04](../work/ui-backend/ui-be-04
 Current status and authorization remain in [CURRENT_STATE](../../CURRENT_STATE.md).
 Implementation audit and milestone gates are retained separately.
 
+> **Version scope:** the evolution from `plan/v1alpha1` below is the original
+> UI-BE-04 design. The standard Core planner emits
+> [DeploymentPlan v1alpha2](../../contracts/plan/v1alpha2/schema.json).
+> [Plan v1alpha3](../../contracts/plan/v1alpha3/schema.json) separately defines
+> selected-source and target scope; its schema alone does not establish runtime
+> support or acceptance. Credentialed Start uses the
+> [v1alpha2 request](../../contracts/execution-start/v1alpha2/request.schema.json),
+> including start attempt, revision, plan/manifest digests and runtime binding.
+> [ExecutionCapabilities v1alpha6](../../contracts/execution-capabilities/v1alpha6/schema.json)
+> advertises ordered planning request versions;
+> [events remain v1alpha1](../../contracts/event/v1alpha1/schema.json).
+> See [published schema scopes](../../contracts/README.md).
+
 ## Authoritative ownership
 
 ### Go Installer
