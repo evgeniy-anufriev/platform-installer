@@ -1,0 +1,58 @@
+name: Update portable source snapshot
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: portable-source-master
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out master
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Generate, verify and publish snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for attempt in 1 2 3; do
+            git fetch --no-tags origin master
+            git checkout --detach origin/master
+            source_revision=$(git rev-parse HEAD)
+            python3 scripts/update_portable_source.py
+            git add -- portable-source/manifest.json portable-source/portable_source.py
+            git add -A -- 'portable-source/source-*.txt'
+            if git diff --cached --quiet; then
+              echo 'Portable source snapshot is current.'
+              exit 0
+            fi
+            git commit -m "chore: refresh portable sources for $source_revision"
+            git fetch --no-tags origin master
+            if [ "$(git rev-parse origin/master)" != "$source_revision" ]; then
+              echo 'Master advanced; regenerate from the new source revision.'
+              continue
+            fi
+            if git push origin HEAD:refs/heads/master; then
+              exit 0
+            fi
+            git fetch --no-tags origin master
+            if [ "$(git rev-parse origin/master)" = "$source_revision" ]; then
+              echo 'Push denied without a concurrent source change; check branch permissions.' >&2
+              exit 1
+            fi
+          done
+          echo 'Master kept changing during generation; rerun this workflow.' >&2
+          exit 1
