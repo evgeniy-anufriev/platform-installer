@@ -63,6 +63,7 @@ func hostKeyProbeFailure(code string) HostKeyProbeResult {
 // binding, even if run-monitor bookkeeping is temporarily unavailable.
 func (a *App) activeInstallationTrustLocked() bool {
 	return a.startInFlight ||
+		a.recoveredRunActiveLocked() ||
 		(a.installationRuns != nil && a.installationRuns.hasActiveRun()) ||
 		(a.secrets != nil && a.secrets.HasAnyRunExecutionIdentityHold())
 }
@@ -96,14 +97,18 @@ func (a *App) selectedSavedExecutionServerLocked() (string, string, uint16, erro
 func (a *App) ProbeExecutionNodeHostKey() HostKeyProbeResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	if a.activeInstallationTrustLocked() {
+	if a.activeInstallationTrustLocked() && !a.canRenewRecoveredConnectionLocked() {
 		return hostKeyProbeFailure("INSTALLATION_RUN_ACTIVE")
 	}
+	a.pauseRecoveredObservationLocked()
 	a.pendingHostKey = nil
 	a.invalidateDynamicBindingLocked()
 	id, address, port, err := a.selectedSavedExecutionServerLocked()
 	if err != nil {
 		return hostKeyProbeFailure(projectErrorCode(err))
+	}
+	if a.recoveredRunActiveLocked() && (id != a.recoveredRun.NodeID || address != a.recoveredRun.NodeAddress || port != a.recoveredRun.NodePort) {
+		return hostKeyProbeFailure("ORPHAN_RUN_IDENTITY_UNVERIFIED")
 	}
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
@@ -121,6 +126,9 @@ func (a *App) ProbeExecutionNodeHostKey() HostKeyProbeResult {
 	keyType, publicKey, fingerprint, err := probeExecutionHostKey(ctx, address, port)
 	if err != nil {
 		return hostKeyProbeFailure("EXECUTION_NODE_HOST_KEY_PROBE_FAILED")
+	}
+	if a.recoveredRunActiveLocked() && (identity.Username != a.recoveredRun.NodeUser || fingerprint != a.recoveredRun.HostKeyFingerprint) {
+		return hostKeyProbeFailure("ORPHAN_RUN_IDENTITY_UNVERIFIED")
 	}
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
@@ -145,7 +153,7 @@ func (a *App) DeclineExecutionNodeHostKey() HostKeyProbeResult {
 func (a *App) ApproveExecutionNodeHostKey(probeID string) HostKeyProbeResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	if a.activeInstallationTrustLocked() {
+	if a.activeInstallationTrustLocked() && !a.canRenewRecoveredConnectionLocked() {
 		return hostKeyProbeFailure("INSTALLATION_RUN_ACTIVE")
 	}
 	pending := a.pendingHostKey
@@ -167,6 +175,9 @@ func (a *App) ApproveExecutionNodeHostKey(probeID string) HostKeyProbeResult {
 	}
 	if !executionUsername.MatchString(identity.Username) {
 		return hostKeyProbeFailure("EXECUTION_NODE_USER_INVALID")
+	}
+	if a.recoveredRunActiveLocked() && (id != a.recoveredRun.NodeID || address != a.recoveredRun.NodeAddress || port != a.recoveredRun.NodePort || identity.Username != a.recoveredRun.NodeUser || pending.fingerprint != a.recoveredRun.HostKeyFingerprint) {
+		return hostKeyProbeFailure("ORPHAN_RUN_IDENTITY_UNVERIFIED")
 	}
 	verified, bundleErr := a.verifySelectedBundleLocked()
 	knownHosts, fileInfo, directory, directoryInfo, digest, err := createSessionKnownHosts(address, port, pending.keyType, pending.publicKey)

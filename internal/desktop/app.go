@@ -231,37 +231,39 @@ type App struct {
 	reader           interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	projectRevision          func(string) (string, error)
-	lifecycle                projectLifecycle
-	current                  ProjectOpenResult
-	sessions                 *installer.EditSessionStore
-	editor                   *installer.Backend
-	activeSession            string
-	editMu                   sync.Mutex
-	config                   appconfig.Config
-	configErr                error
-	secrets                  *runtimesecret.Broker
-	execution                *executionNodeContextStore
-	binding                  *executionNodeBinding
-	availableBundleRoot      string
-	bundleCacheRoot          string
-	bundlePublisher          func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
-	localRunRecordRoot       string
-	bundlePreview            *runtimeBundlePreview
-	orphanRecovery           *orphanRunRecovery
-	pendingServerInformation *serverInformationProbe
-	pendingHostKey           *pendingExecutionHostKey
-	pendingTargetHostKey     *pendingTargetHostKey
-	approvedTargetHostKeys   map[string]approvedTargetHostKey
-	continuation             *verificationContinuation
-	export                   *installer.ProjectExport
-	installationPlanID       string
-	installationRuns         *installationRunRegistry
-	installationGeneration   uint64
-	startInFlight            bool
-	startOutcomeUnknown      bool
-	runtimeUpdateInFlight    bool
-	runtimeSecretEvidence    *runtimeSecretDescriptorEvidence
+	projectRevision            func(string) (string, error)
+	lifecycle                  projectLifecycle
+	current                    ProjectOpenResult
+	sessions                   *installer.EditSessionStore
+	editor                     *installer.Backend
+	activeSession              string
+	editMu                     sync.Mutex
+	config                     appconfig.Config
+	configErr                  error
+	secrets                    *runtimesecret.Broker
+	execution                  *executionNodeContextStore
+	binding                    *executionNodeBinding
+	availableBundleRoot        string
+	bundleCacheRoot            string
+	bundlePublisher            func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
+	localRunRecordRoot         string
+	bundlePreview              *runtimeBundlePreview
+	orphanRecovery             *orphanRunRecovery
+	recoveredRun               *localRunRecord
+	recoveredCancelUnconfirmed bool
+	pendingServerInformation   *serverInformationProbe
+	pendingHostKey             *pendingExecutionHostKey
+	pendingTargetHostKey       *pendingTargetHostKey
+	approvedTargetHostKeys     map[string]approvedTargetHostKey
+	continuation               *verificationContinuation
+	export                     *installer.ProjectExport
+	installationPlanID         string
+	installationRuns           *installationRunRegistry
+	installationGeneration     uint64
+	startInFlight              bool
+	startOutcomeUnknown        bool
+	runtimeUpdateInFlight      bool
+	runtimeSecretEvidence      *runtimeSecretDescriptorEvidence
 }
 
 type AppOption func(*App)
@@ -721,8 +723,11 @@ func boundedFindingString(raw any, limit int) string {
 func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Status, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	if a.startInFlight || a.installationRuns.hasActiveRun() || a.secrets.HasAnyRunExecutionIdentityHold() {
+	if a.startInFlight || (a.installationRuns.hasActiveRun() && a.recoveredRun == nil) || a.secrets.HasAnyRunExecutionIdentityHold() {
 		return runtimesecret.Status{}, errors.New("INSTALLATION_RUN_ACTIVE")
+	}
+	if a.recoveredRunActiveLocked() && input.Username != a.recoveredRun.NodeUser {
+		return runtimesecret.Status{}, errors.New("ORPHAN_RUN_IDENTITY_UNVERIFIED")
 	}
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
@@ -730,6 +735,7 @@ func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Sta
 	}
 	status, err := a.secrets.Set(binding, input)
 	if err == nil {
+		a.pauseRecoveredObservationLocked()
 		a.pendingHostKey = nil
 		a.invalidateDynamicBindingLocked()
 	}
@@ -1331,6 +1337,9 @@ func (a *App) SelectExecutionNode(hostID string) (ExecutionNodeContext, error) {
 	a.reconcileEditSessionLocked()
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
+	}
+	if a.recoveredRunActiveLocked() && hostID != a.recoveredRun.NodeID {
+		return ExecutionNodeContext{}, errors.New("INSTALLATION_RUN_ACTIVE")
 	}
 	before := a.execution.context
 	if err := a.execution.selectProjectServer(hostID); err != nil {

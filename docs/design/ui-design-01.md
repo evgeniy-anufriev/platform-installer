@@ -358,8 +358,12 @@ single horizontal desktop row. Its status is shown inline with the explanation;
 at narrow widths the fields wrap into a responsive grid. Only long server lists
 scroll independently, while the page header and Execution Node remain visible.
 
-Previous-run inspection belongs to a single outline button inside the Execution
-Node panel on Servers, without a separate card or explanatory text. When bundle detection on Project is blocked by an
+Previous-run inspection belongs to an outline button inside the Execution
+Node panel on Servers. After inspection, show one previous run ID, its original
+revision and authoritative state, with **Подключиться** for an active run.
+Attach restores Installation / Execution through the existing reconnect,
+subscription and Cancel methods; it never repeats Start. No history/status list
+or separate recovery page is added. When bundle detection on Project is blocked by an
 unconfirmed run, show a Russian explanation and a link to Servers: restore SSH
 credentials and host-key trust there, then choose **Проверить прежний запуск**.
 Do not show `INSTALLATION_RUN_ACTIVE` as the operator-facing explanation.

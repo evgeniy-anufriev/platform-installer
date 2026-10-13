@@ -264,6 +264,7 @@ export const browserBackend: ProjectBackend = {
   confirmRuntimeBundleUpdate: (previewId) =>
     invoke("confirmRuntimeBundleUpdate", [previewId]),
   inspectOrphanRun: () => invoke("inspectOrphanRun"),
+  attachOrphanRun: (recoveryId) => invoke("attachOrphanRun", [recoveryId]),
   cancelOrphanRun: (recoveryId) => invoke("cancelOrphanRun", [recoveryId]),
   getApplicationConfig: () => invoke("getApplicationConfig"),
   chooseProject: async () => {
@@ -318,8 +319,10 @@ export const browserBackend: ProjectBackend = {
     invoke("approveExecutionNodeHostKey", [probeId]),
   declineExecutionNodeHostKey: () => invoke("declineExecutionNodeHostKey"),
   probeTargetHostKey: (hostId) => invoke("probeTargetHostKey", [hostId]),
-  probeServerInformation: (hostId) => invoke("probeServerInformation", [hostId]),
-  checkServerInformation: (probeId) => invoke("checkServerInformation", [probeId]),
+  probeServerInformation: (hostId) =>
+    invoke("probeServerInformation", [hostId]),
+  checkServerInformation: (probeId) =>
+    invoke("checkServerInformation", [probeId]),
   approveTargetHostKey: (probeId) => invoke("approveTargetHostKey", [probeId]),
   declineTargetHostKey: () => invoke("declineTargetHostKey"),
   getInstallationState: () => invoke("getInstallationState"),

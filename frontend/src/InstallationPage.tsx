@@ -1156,8 +1156,15 @@ function ExecutionStage({
             <p>
               Запуск: {run.run.runId} · {runStatusLabel(run.run.state)}
             </p>
+            {run.reconnected && (
+              <p>
+                Переподключено к прежнему запуску. Ревизия:{" "}
+                {run.projectRevision}
+              </p>
+            )}
           </div>
-          {["STARTING", "RUNNING", "CANCELLING"].includes(run.run.state) && (
+          {(["STARTING", "RUNNING", "CANCELLING"].includes(run.run.state) ||
+            run.cancelUnconfirmed) && (
             <button
               className="outline"
               disabled={busy}

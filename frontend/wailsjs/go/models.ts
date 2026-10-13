@@ -2053,6 +2053,9 @@ export namespace desktop {
 	    }
 	}
 	export class InstallationRunOperation {
+	    reconnected?: boolean;
+	    cancelUnconfirmed?: boolean;
+	    projectRevision?: string;
 	    status: string;
 	    run?: InstallationRunView;
 	    result?: InstallationResultView;
@@ -2064,6 +2067,9 @@ export namespace desktop {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.reconnected = source["reconnected"] ;
+	        this.cancelUnconfirmed = source["cancelUnconfirmed"] ;
+	        this.projectRevision = source["projectRevision"] ;
 	        this.status = source["status"];
 	        this.run = this.convertValues(source["run"], InstallationRunView);
 	        this.result = this.convertValues(source["result"], InstallationResultView);
@@ -2204,6 +2210,7 @@ export namespace desktop {
 	}
 	
 	export class OrphanRunRecoveryResult {
+	    projectRevision?: string;
 	    status: string;
 	    recoveryId?: string;
 	    runId?: string;
@@ -2216,6 +2223,7 @@ export namespace desktop {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projectRevision = source["projectRevision"] ;
 	        this.status = source["status"];
 	        this.recoveryId = source["recoveryId"];
 	        this.runId = source["runId"];

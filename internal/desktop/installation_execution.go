@@ -37,10 +37,13 @@ type InstallationRunView struct {
 }
 
 type InstallationRunOperation struct {
-	Status string                  `json:"status"`
-	Run    *InstallationRunView    `json:"run,omitempty"`
-	Result *InstallationResultView `json:"result,omitempty"`
-	Error  *ProjectOpenError       `json:"error,omitempty"`
+	Reconnected       bool                    `json:"reconnected,omitempty"`
+	CancelUnconfirmed bool                    `json:"cancelUnconfirmed,omitempty"`
+	ProjectRevision   string                  `json:"projectRevision,omitempty"`
+	Status            string                  `json:"status"`
+	Run               *InstallationRunView    `json:"run,omitempty"`
+	Result            *InstallationResultView `json:"result,omitempty"`
+	Error             *ProjectOpenError       `json:"error,omitempty"`
 }
 
 // InstallationResultView is terminal lifecycle evidence only. It is not a
@@ -117,6 +120,8 @@ func newInstallationRunRegistry() *installationRunRegistry {
 // project/trusted-node context changes. It cancels app-owned monitors and
 // releases their in-memory SSH identity metadata together.
 func (a *App) clearInstallationRunsLocked() {
+	a.recoveredRun = nil
+	a.recoveredCancelUnconfirmed = false
 	if a.installationRuns != nil {
 		a.installationRuns.clear()
 	}
@@ -372,6 +377,12 @@ func installationObserverDiagnostic(err error) string {
 
 func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation {
 	a.editMu.Lock()
+	if a.recoveredRunActiveLocked() {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_RUN_ACTIVE", Message: "Прежний запуск ещё выполняется на узле исполнения"}}
+	}
+	// A later ordinary Start uses its original credential and trust guards.
+	a.recoveredRun, a.recoveredCancelUnconfirmed = nil, false
 	if a.startInFlight || a.runtimeUpdateInFlight {
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_OPERATION_IN_PROGRESS", Message: "Другая операция запуска или обновления набора установки ещё выполняется"}}
@@ -616,9 +627,9 @@ func (a *App) GetInstallationRun(runID string) InstallationRunOperation {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_RUN_NOT_FOUND", Message: "Выполнение не известно текущему сеансу"}}
 	}
 	if run, ok := a.installationRuns.terminalRun(runID); ok {
-		return InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
+		return a.observedInstallationRunLocked(run)
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: runID})
+	binding, err := a.resolveInstallationObservationLocked(runID)
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
 	}
@@ -632,7 +643,7 @@ func (a *App) GetInstallationRun(runID string) InstallationRunOperation {
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 	}
-	if run.RunID == runID && run.ProjectIdentity == a.current.Project.ID && rebindTerminalRun(run.State) {
+	if run.RunID == runID && run.ProjectIdentity == a.current.Project.ID && rebindTerminalRun(run.State) && !a.recoveredCancelUnconfirmed {
 		record, readErr := readLocalRunRecord(a.localRunRecordRoot, a.current.Root, a.current.Project.ID)
 		if readErr == nil && record != nil && record.RunID == runID && run.ProjectIdentity == record.ProjectID {
 			record.State, record.TerminalState = "TERMINAL", run.State
@@ -642,7 +653,10 @@ func (a *App) GetInstallationRun(runID string) InstallationRunOperation {
 			}
 		}
 	}
-	return InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
+	if run.RunID != runID || a.current.Project == nil || run.ProjectIdentity != a.current.Project.ID {
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "ORPHAN_RUN_IDENTITY_UNVERIFIED", Message: "Принадлежность запуска проекту не подтверждена"}}
+	}
+	return a.observedInstallationRunLocked(run)
 }
 
 // monitorInstallationRun owns an internal RunObserver subscription independent
@@ -702,6 +716,13 @@ func (a *App) monitorInstallationRun(ctx context.Context, binding *executionNode
 		cancel()
 		if checkErr == nil && run.RunID == runID && run.ProjectIdentity == captured.projectID && rebindTerminalRun(run.State) {
 			a.editMu.Lock()
+			if a.recoveredCancelUnconfirmed && a.recoveredRun != nil && a.recoveredRun.RunID == runID {
+				a.editMu.Unlock()
+				if !waitInstallationRunMonitor(ctx, time.Second) {
+					return
+				}
+				continue
+			}
 			contextCurrent := a.installationGeneration == captured.generation && a.current.Root == captured.root && a.current.Project != nil && a.current.Project.ID == captured.projectID
 			terminalSaved := false
 			if contextCurrent {
@@ -713,6 +734,9 @@ func (a *App) monitorInstallationRun(ctx context.Context, binding *executionNode
 				}
 			}
 			if contextCurrent && terminalSaved {
+				if a.recoveredRun != nil && a.recoveredRun.RunID == runID {
+					a.recoveredRun.State, a.recoveredRun.TerminalState = "TERMINAL", run.State
+				}
 				a.installationRuns.finishMonitor(runID, &run)
 				a.secrets.ReleaseExecutionIdentityForRun(runID)
 			}
@@ -743,7 +767,7 @@ func (a *App) SubscribeInstallationRun(runID string, afterSequence int) Installa
 		return InstallationSubscriptionResult{Status: "BLOCKED", Error: &ProjectOpenError{Code: "INSTALLATION_RUN_NOT_FOUND", Message: "Выполнение не известно текущему сеансу"}}
 	}
 	a.editMu.Lock()
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: runID})
+	binding, err := a.resolveInstallationObservationLocked(runID)
 	root := a.current.Root
 	ctx := a.ctx
 	generation := a.installationGeneration
@@ -844,15 +868,34 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 	if run, ok := a.installationRuns.terminalRun(runID); ok {
 		return InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked(sshpassword.Scope{RunID: runID})
+	binding, err := a.resolveInstallationObservationLocked(runID)
 	if err != nil || binding.plans == nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
 	}
 	ctx, cancel := a.operationContext(30 * time.Second)
 	defer cancel()
+	var cancelView *InstallationRunView
+	if a.recoveredRun != nil && a.recoveredRun.RunID == runID {
+		client, ok := binding.reader.transport.(executionnode.ExecutionClient)
+		if !ok {
+			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "EXECUTION_NODE_BINDING_REQUIRED", Message: projectErrorMessage("EXECUTION_NODE_BINDING_REQUIRED")}}
+		}
+		current, getErr := client.GetExecution(ctx, binding.node, runID)
+		if getErr != nil || current.RunID != runID || current.ProjectIdentity != a.recoveredRun.ProjectID || a.revalidateTrustedConnectionLocked(binding) != nil {
+			return InstallationRunOperation{Status: "BLOCKED", Reconnected: true, Error: &ProjectOpenError{Code: "ORPHAN_RUN_IDENTITY_UNVERIFIED", Message: projectErrorMessage("ORPHAN_RUN_IDENTITY_UNVERIFIED")}}
+		}
+		cancelView = ptrInstallationRun(installationRunView(current))
+	}
 	run, err := binding.plans.Cancel(ctx, binding.node, runID)
 	if err != nil {
+		if a.recoveredRun != nil && a.recoveredRun.RunID == runID {
+			a.recoveredCancelUnconfirmed = true
+			return InstallationRunOperation{Status: "BLOCKED", Reconnected: true, CancelUnconfirmed: true, ProjectRevision: a.recoveredRun.ProjectRevision, Run: cancelView, Error: &ProjectOpenError{Code: "ORPHAN_RUN_CANCEL_UNCONFIRMED", Message: "Остановка не подтверждена. Повторите запрос отмены; запуск не разблокирован."}}
+		}
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 	}
-	return InstallationRunOperation{Status: "CANCELLING", Run: ptrInstallationRun(installationRunView(run))}
+	a.recoveredCancelUnconfirmed = false
+	result := a.observedInstallationRunLocked(run)
+	result.Status = "CANCELLING"
+	return result
 }

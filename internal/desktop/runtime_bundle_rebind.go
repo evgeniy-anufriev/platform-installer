@@ -176,6 +176,9 @@ func (a *App) switchPublishedBundleLocked(root string) {
 }
 
 func (a *App) knownRunsTerminalLocked() bool {
+	if a.recoveredCancelUnconfirmed && a.recoveredRun != nil {
+		return false
+	}
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return false
 	}

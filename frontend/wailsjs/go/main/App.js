@@ -22,6 +22,10 @@ export function ApproveTargetHostKey(arg1) {
   return window['go']['main']['App']['ApproveTargetHostKey'](arg1);
 }
 
+export function AttachOrphanRun(arg1) {
+  return window['go']['main']['App']['AttachOrphanRun'](arg1);
+}
+
 export function CancelInstallationRun(arg1) {
   return window['go']['main']['App']['CancelInstallationRun'](arg1);
 }

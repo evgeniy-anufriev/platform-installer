@@ -42,6 +42,7 @@ import {
   ChooseRuntimeBundleUpdate,
   ConfirmRuntimeBundleUpdate,
   InspectOrphanRun,
+  AttachOrphanRun,
   CancelOrphanRun,
   PlanExecutionNodePreparation,
   PlanProjectExport,
@@ -61,7 +62,13 @@ import type { desktop } from "../wailsjs/go/models";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
-  status: "UNVERIFIED" | "VERIFYING" | "VERIFIED" | "INVALID" | "STALE" | "UNAVAILABLE";
+  status:
+    | "UNVERIFIED"
+    | "VERIFYING"
+    | "VERIFIED"
+    | "INVALID"
+    | "STALE"
+    | "UNAVAILABLE";
   projectRevision?: string;
   executionNodeId?: string;
   runtime?: {
@@ -153,8 +160,14 @@ export type OpenResult = desktop.ProjectOpenResult & {
   verification?: VerificationStatus;
 };
 export type RuntimeBundleUpdate = desktop.RuntimeBundleUpdateResult;
-export type OrphanRunRecovery = desktop.OrphanRunRecoveryResult;
-export type EditResult = Omit<desktop.EditOperationResult, "plan" | "commit"> & {
+export type OrphanRunRecovery = Omit<
+  desktop.OrphanRunRecoveryResult,
+  "convertValues"
+>;
+export type EditResult = Omit<
+  desktop.EditOperationResult,
+  "plan" | "commit"
+> & {
   plan?: {
     planId?: string;
     status: string;
@@ -329,8 +342,14 @@ export type ServerInformationResult = {
   status: string;
   hostId?: string;
   information?: {
-    hostname: string; os: string; osVersion: string; architecture: string;
-    cpuCount: number; memoryBytes: number; serverTime: string; checkedAt: string;
+    hostname: string;
+    os: string;
+    osVersion: string;
+    architecture: string;
+    cpuCount: number;
+    memoryBytes: number;
+    serverTime: string;
+    checkedAt: string;
   };
   error?: { code: string; message: string };
 };
@@ -384,7 +403,6 @@ export type RuntimeSecretDescriptor = {
   hosts: string[];
 };
 export type RuntimeSecretDescriptorOperation = {
-
   secretsInstalled?: boolean;
   status: "READY" | "UNAVAILABLE";
   projectRevision?: string;
@@ -478,14 +496,17 @@ export function secretOutputDeliveryUnavailable(): SecretOutputDeliveryOperation
 }
 export interface ProjectBackend {
   exitApplication?(): Promise<{ status: "EXITING" | "EXIT_AFTER_RUN" }>;
-  subscribeInstallationRunEvents?(handler: (value: {
-    subscriptionId?: string;
-    event?: InstallationEventView;
-    errorCode?: string;
-  }) => void): () => void;
+  subscribeInstallationRunEvents?(
+    handler: (value: {
+      subscriptionId?: string;
+      event?: InstallationEventView;
+      errorCode?: string;
+    }) => void,
+  ): () => void;
   chooseRuntimeBundleUpdate?(): Promise<RuntimeBundleUpdate>;
   confirmRuntimeBundleUpdate?(previewId: string): Promise<RuntimeBundleUpdate>;
   inspectOrphanRun?(): Promise<OrphanRunRecovery>;
+  attachOrphanRun?(recoveryId: string): Promise<InstallationRunOperation>;
   cancelOrphanRun?(recoveryId: string): Promise<OrphanRunRecovery>;
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
@@ -552,7 +573,9 @@ export interface ProjectBackend {
   approveTargetHostKey?(probeId: string): Promise<HostKeyProbeResult>;
   declineTargetHostKey?(): Promise<HostKeyProbeResult>;
   getInstallationState?(): Promise<InstallationState>;
-  createInstallationPlan?(deploymentOrder: string[]): Promise<InstallationPlanOperation>;
+  createInstallationPlan?(
+    deploymentOrder: string[],
+  ): Promise<InstallationPlanOperation>;
   getInstallationPlan?(planId: string): Promise<InstallationPlanOperation>;
   approveInstallationPlan?(
     planId: string,
@@ -588,6 +611,7 @@ export const backend: ProjectBackend = {
   chooseRuntimeBundleUpdate: ChooseRuntimeBundleUpdate,
   confirmRuntimeBundleUpdate: ConfirmRuntimeBundleUpdate,
   inspectOrphanRun: InspectOrphanRun,
+  attachOrphanRun: AttachOrphanRun,
   cancelOrphanRun: CancelOrphanRun,
   getApplicationConfig: GetApplicationConfig,
   chooseProject: () => ChooseProject() as unknown as Promise<OpenResult>,
@@ -658,8 +682,12 @@ export const backend: ProjectBackend = {
     DeclineExecutionNodeHostKey() as unknown as Promise<HostKeyProbeResult>,
   probeTargetHostKey: (hostId) =>
     ProbeTargetHostKey(hostId) as unknown as Promise<HostKeyProbeResult>,
-  probeServerInformation: (hostId) => ProbeServerInformation(hostId) as unknown as Promise<HostKeyProbeResult>,
-  checkServerInformation: (probeId) => CheckServerInformation(probeId) as unknown as Promise<ServerInformationResult>,
+  probeServerInformation: (hostId) =>
+    ProbeServerInformation(hostId) as unknown as Promise<HostKeyProbeResult>,
+  checkServerInformation: (probeId) =>
+    CheckServerInformation(
+      probeId,
+    ) as unknown as Promise<ServerInformationResult>,
   approveTargetHostKey: (probeId) =>
     ApproveTargetHostKey(probeId) as unknown as Promise<HostKeyProbeResult>,
   declineTargetHostKey: () =>
@@ -667,7 +695,9 @@ export const backend: ProjectBackend = {
   getInstallationState: () =>
     GetInstallationState() as unknown as Promise<InstallationState>,
   createInstallationPlan: (deploymentOrder) =>
-    CreateInstallationPlan(deploymentOrder) as unknown as Promise<InstallationPlanOperation>,
+    CreateInstallationPlan(
+      deploymentOrder,
+    ) as unknown as Promise<InstallationPlanOperation>,
   getInstallationPlan: (planId) =>
     GetInstallationPlan(
       planId,

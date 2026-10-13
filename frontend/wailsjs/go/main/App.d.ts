@@ -16,6 +16,8 @@ export function ApproveInstallationPlan(arg1:string,arg2:Array<string>):Promise<
 
 export function ApproveTargetHostKey(arg1:string):Promise<desktop.HostKeyProbeResult>;
 
+export function AttachOrphanRun(arg1:string):Promise<desktop.InstallationRunOperation>;
+
 export function CancelInstallationRun(arg1:string):Promise<desktop.InstallationRunOperation>;
 
 export function CancelOrphanRun(arg1:string):Promise<desktop.OrphanRunRecoveryResult>;

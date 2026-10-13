@@ -65,7 +65,11 @@ type Page =
   | "about"
   | "settings";
 type StructuralIntent =
-  | { operation: "SetProjectSetting"; setting: "platform_data_root_directory" | "platform_name_prefix"; value: string }
+  | {
+      operation: "SetProjectSetting";
+      setting: "platform_data_root_directory" | "platform_name_prefix";
+      value: string;
+    }
   | ServerIntent
   | DeploymentIntent
   | PlacementIntent
@@ -77,10 +81,13 @@ type ProjectSettingDraftValues = Partial<
   Record<"platform_data_root_directory" | "platform_name_prefix", string>
 >;
 
-function projectSettingValuesFromDraft(intents: StructuralIntent[]): ProjectSettingDraftValues {
+function projectSettingValuesFromDraft(
+  intents: StructuralIntent[],
+): ProjectSettingDraftValues {
   const values: ProjectSettingDraftValues = {};
   for (const intent of intents) {
-    if (intent.operation === "SetProjectSetting") values[intent.setting] = intent.value;
+    if (intent.operation === "SetProjectSetting")
+      values[intent.setting] = intent.value;
   }
   return values;
 }
@@ -811,6 +818,51 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     const next = await api.getInstallationState();
     setInstallationState(next);
   };
+  const attachOrphanRun = async () => {
+    if (!api.attachOrphanRun || !orphanRun?.recoveryId) return;
+    setBundleBusy(true);
+    try {
+      const operation = await api.attachOrphanRun(orphanRun.recoveryId);
+      if (operation.status !== "READY" || !operation.run) {
+        setOrphanRun({
+          ...orphanRun,
+          status: "BLOCKED",
+          error: operation.error,
+        });
+        return;
+      }
+      if (
+        installationSubscriptionRef.current &&
+        api.unsubscribeInstallationRun
+      ) {
+        await api.unsubscribeInstallationRun(
+          installationSubscriptionRef.current,
+        );
+      }
+      installationSubscriptionRef.current = "";
+      setInstallationSubscription("");
+      setInstallationRun(operation);
+      setInstallationEvents([]);
+      setRunPlan(undefined);
+      activeRunIdRef.current = operation.run.runId;
+      lastRecoveryCursorRef.current.delete(operation.run.runId);
+      runProgressRef.current = beginRunProgress(operation.run.runId);
+      setRunProgress(runProgressRef.current);
+      setPage("installation");
+      setInstallationTab(operation.result ? "result" : "execution");
+      setOrphanRun(null);
+      if (api.subscribeInstallationRun) {
+        const subscription = await api.subscribeInstallationRun(
+          operation.run.runId,
+          0,
+        );
+        installationSubscriptionRef.current = subscription.subscriptionId || "";
+        setInstallationSubscription(installationSubscriptionRef.current);
+      }
+    } finally {
+      setBundleBusy(false);
+    }
+  };
   const createInstallationPlan = async (deploymentOrder: string[]) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -903,7 +955,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationBusy(true);
     try {
       const operation = await api.cancelInstallationRun(runId);
-      setInstallationRun(operation);
+      setInstallationRun({
+        ...operation,
+        run: operation.run ?? installationRun?.run,
+      } as InstallationRunOperation);
       if (operation.status !== "BLOCKED") {
         setInstallationPlan(undefined);
         await refreshInstallationState();
@@ -1099,13 +1154,19 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           ) &&
           api.getInstallationRun
         ) {
-          api
+          void api
             .getInstallationRun(value.event.runId)
-            .then(setInstallationRun)
+            .then((next) => {
+              setInstallationRun(next);
+              if (next.reconnected) {
+                if (next.result) setInstallationTab("result");
+              } else {
+                void collectAndDeliverSecretOutputs(value.event!.runId).catch(
+                  () => setOutputDelivery(secretOutputDeliveryUnavailable()),
+                );
+              }
+            })
             .catch(() => {});
-          void collectAndDeliverSecretOutputs(value.event.runId).catch(() =>
-            setOutputDelivery(secretOutputDeliveryUnavailable()),
-          );
         }
       },
     );
@@ -1126,6 +1187,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   );
   useEffect(() => {
     if (
+      installationRun?.cancelUnconfirmed ||
       !api.unsubscribeInstallationRun ||
       !["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(
         installationRun?.run?.state || "",
@@ -1177,9 +1239,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (
       !runId ||
       !api.getInstallationRun ||
-      !["STARTING", "RUNNING", "CANCELLING"].includes(
-        installationRun?.run?.state || "",
-      )
+      (!installationRun?.cancelUnconfirmed &&
+        !["STARTING", "RUNNING", "CANCELLING"].includes(
+          installationRun?.run?.state || "",
+        ))
     )
       return;
     let disposed = false;
@@ -1190,13 +1253,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         if (!disposed && next.status === "READY" && next.run?.runId === runId) {
           setInstallationRun(next);
           if (
+            !next.cancelUnconfirmed &&
             ["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(
               next.run.state,
             )
           ) {
-            void collectAndDeliverSecretOutputs(runId).catch(() =>
-              setOutputDelivery(secretOutputDeliveryUnavailable()),
-            );
+            if (next.reconnected) setInstallationTab("result");
+            if (!next.reconnected) {
+              void collectAndDeliverSecretOutputs(runId).catch(() =>
+                setOutputDelivery(secretOutputDeliveryUnavailable()),
+              );
+            }
             return;
           }
         }
@@ -1214,6 +1281,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     api,
     installationRun?.run?.runId,
     installationRun?.run?.state,
+    installationRun?.cancelUnconfirmed,
     collectAndDeliverSecretOutputs,
   ]);
   const chooseExportParent = async () => {
@@ -2047,8 +2115,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onDeclineTargetHostKey={declineTargetHostKey}
               onPlanExecutionNodePreparation={planExecutionNodePreparation}
               runRecoveryPanel={
-                (bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" ||
-                  (orphanRun && orphanRun.status !== "NONE")) && (
+                <>
                   <button
                     className="outline"
                     onClick={inspectOrphanRun}
@@ -2056,7 +2123,42 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   >
                     Проверить прежний запуск
                   </button>
-                )
+                  {orphanRun?.runId && (
+                    <div className="row" role="status">
+                      <span>Запуск: {orphanRun.runId}</span>
+                      {orphanRun.projectRevision && (
+                        <span>Ревизия: {orphanRun.projectRevision}</span>
+                      )}
+                      <span>{orphanRun.runState}</span>
+                      {orphanRun.status === "FOUND" && (
+                        <button
+                          className="outline"
+                          disabled={bundleBusy}
+                          onClick={attachOrphanRun}
+                        >
+                          Подключиться
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {orphanRun?.status === "NONE" && (
+                    <p role="status">Прежний активный запуск не найден.</p>
+                  )}
+                  {orphanRun?.status === "UNAVAILABLE" && (
+                    <p role="status">
+                      Запуск недоступен. Проверьте SSH-доступ и исходный узел
+                      исполнения.
+                    </p>
+                  )}
+                  {orphanRun?.status === "UNKNOWN" && (
+                    <p role="status">
+                      Состояние прежнего запуска не подтверждено.
+                    </p>
+                  )}
+                  {orphanRun?.error && (
+                    <p role="alert">{orphanRun.error.message}</p>
+                  )}
+                </>
               }
               onPrepareExecutionNode={prepareExecutionNode}
             />
@@ -2794,7 +2896,10 @@ function ProjectExportDialog({
 
 function reviewFindingMessage(code: string, fallback: string): string {
   if (code === "REFERENCE_IN_USE") {
-    if (fallback.startsWith("Нельзя удалить экземпляр:") || fallback.startsWith("Нельзя удалить группу endpoint:"))
+    if (
+      fallback.startsWith("Нельзя удалить экземпляр:") ||
+      fallback.startsWith("Нельзя удалить группу endpoint:")
+    )
       return fallback;
     return "Объект используется. Сначала удалите связанные ссылки.";
   }

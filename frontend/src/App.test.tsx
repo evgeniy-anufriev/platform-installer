@@ -425,6 +425,68 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
   } as unknown as MockApi;
 }
 
+it("attaches the previous run and reuses execution, events and cancellation without another Start", async () => {
+  const runId = "installer-prior-run";
+  const inspectOrphanRun = vi
+    .fn()
+    .mockResolvedValue({
+      status: "FOUND",
+      recoveryId: "recovery-token",
+      runId,
+      runState: "RUNNING",
+      projectRevision: "sha256:previous-revision",
+    });
+  const attachOrphanRun = vi
+    .fn()
+    .mockResolvedValue({
+      status: "READY",
+      reconnected: true,
+      projectRevision: "sha256:previous-revision",
+      run: { runId, state: "RUNNING", sequence: 0 },
+    });
+  const subscribeInstallationRun = vi
+    .fn()
+    .mockResolvedValue({
+      status: "SUBSCRIBED",
+      subscriptionId: "recovered-sub",
+    });
+  const cancelInstallationRun = vi
+    .fn()
+    .mockResolvedValue({
+      status: "CANCELLING",
+      reconnected: true,
+      run: { runId, state: "CANCELLING", sequence: 0 },
+    });
+  const startApprovedInstallation = vi.fn();
+  const value = api({
+    inspectOrphanRun,
+    attachOrphanRun,
+    subscribeInstallationRun,
+    cancelInstallationRun,
+    startApprovedInstallation,
+  });
+  await openServers(value);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Проверить прежний запуск" }),
+  );
+  expect(await screen.findByText(/sha256:previous-revision/)).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Подключиться" }));
+  await waitFor(() =>
+    expect(subscribeInstallationRun).toHaveBeenCalledWith(runId, 0),
+  );
+  expect(attachOrphanRun).toHaveBeenCalledWith("recovery-token");
+  expect(
+    await screen.findByText(/Переподключено к прежнему запуску/),
+  ).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Отменить выполнение" }),
+  );
+  await waitFor(() =>
+    expect(cancelInstallationRun).toHaveBeenCalledWith(runId),
+  );
+  expect(startApprovedInstallation).not.toHaveBeenCalled();
+});
+
 async function openServers(
   value: MockApi,
   open: OpenResult = project as unknown as OpenResult,
@@ -502,26 +564,37 @@ it("highlights project settings staged in the shared draft and keeps them visibl
   value.chooseProject.mockResolvedValue(project as unknown as OpenResult);
   render(<App api={value} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
   await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
-  const dataRoot = screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" });
+  const dataRoot = screen.getByRole("textbox", {
+    name: "Корневой каталог данных сервисов",
+  });
   await userEvent.clear(dataRoot);
   await userEvent.type(dataRoot, "/data");
-  await userEvent.click(screen.getByRole("button", { name: "Добавить каталог в черновик" }));
-
-  const draftStatus = () => screen.findByText((_, element) =>
-    Boolean(
-      element?.classList.contains("project-setting-draft-status") &&
-      element.textContent?.includes("/data"),
-    ),
+  await userEvent.click(
+    screen.getByRole("button", { name: "Добавить каталог в черновик" }),
   );
+
+  const draftStatus = () =>
+    screen.findByText((_, element) =>
+      Boolean(
+        element?.classList.contains("project-setting-draft-status") &&
+        element.textContent?.includes("/data"),
+      ),
+    );
   expect(await draftStatus()).toBeTruthy();
   expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
-  expect(dataRoot.closest(".project-setting-field")?.className).toContain("project-setting-field--changed");
+  expect(dataRoot.closest(".project-setting-field")?.className).toContain(
+    "project-setting-field--changed",
+  );
 
   await userEvent.click(screen.getByRole("button", { name: "Проект" }));
   await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
-  expect(screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" })).toHaveProperty("value", "/data");
+  expect(
+    screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" }),
+  ).toHaveProperty("value", "/data");
   expect(await draftStatus()).toBeTruthy();
 });
 
@@ -537,12 +610,18 @@ it("shows the error when adding the first project setting to the shared draft fa
   });
   render(<App api={value} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
   await userEvent.click(screen.getByRole("button", { name: "Настройки" }));
-  const dataRoot = screen.getByRole("textbox", { name: "Корневой каталог данных сервисов" });
+  const dataRoot = screen.getByRole("textbox", {
+    name: "Корневой каталог данных сервисов",
+  });
   await userEvent.clear(dataRoot);
   await userEvent.type(dataRoot, "/data");
-  await userEvent.click(screen.getByRole("button", { name: "Добавить каталог в черновик" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Добавить каталог в черновик" }),
+  );
 
   const error = await screen.findByRole("alert");
   expect(error.textContent).toContain("EDIT_OPERATION_NOT_AVAILABLE");
@@ -701,23 +780,19 @@ it("replays late failure events before closing a terminal subscription", async (
     runtime: {},
     expiresAt: "2099-01-01T00:00:00Z",
   };
-  const getRun = vi
-    .fn()
-    .mockResolvedValue({
-      status: "READY",
-      run: { runId: "run-tail", state: "RUNNING", sequence: 1 },
-    });
+  const getRun = vi.fn().mockResolvedValue({
+    status: "READY",
+    run: { runId: "run-tail", state: "RUNNING", sequence: 1 },
+  });
   const value = api({
     getInstallationState: vi.fn().mockResolvedValue(state),
     createInstallationPlan: vi
       .fn()
       .mockResolvedValue({ status: "PLAN_APPROVED", plan }),
-    startApprovedInstallation: vi
-      .fn()
-      .mockResolvedValue({
-        status: "READY",
-        run: { runId: "run-tail", state: "RUNNING", sequence: 0 },
-      }),
+    startApprovedInstallation: vi.fn().mockResolvedValue({
+      status: "READY",
+      run: { runId: "run-tail", state: "RUNNING", sequence: 0 },
+    }),
     subscribeInstallationRun: subscribe,
     unsubscribeInstallationRun: unsubscribe,
     getInstallationRun: getRun,
@@ -3115,9 +3190,7 @@ it("shows the specific blocking references for REFERENCE_IN_USE in Review", asyn
   await userEvent.click(
     screen.getByRole("button", { name: "Просмотреть изменения" }),
   );
-  expect(
-    await screen.findByText(safeMessage),
-  ).toBeTruthy();
+  expect(await screen.findByText(safeMessage)).toBeTruthy();
 });
 
 it("shows the endpoint consumer blocking group deletion in Review", async () => {
@@ -3134,8 +3207,12 @@ it("shows the endpoint consumer blocking group deletion in Review", async () => 
   });
   await openServers(value);
   await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
-  await userEvent.click(screen.getAllByRole("button", { name: "Удалить" }).at(-1)!);
-  await userEvent.click(screen.getByRole("button", { name: "Просмотреть изменения" }));
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "Удалить" }).at(-1)!,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Просмотреть изменения" }),
+  );
   expect(await screen.findByText(safeMessage)).toBeTruthy();
 });
 

@@ -111,6 +111,7 @@ func browserOperations() map[string]browserOperation {
 		"chooseRuntimeBundleUpdate":  noBrowserArgs((*App).ChooseRuntimeBundleUpdate),
 		"confirmRuntimeBundleUpdate": oneBrowserArg((*App).ConfirmRuntimeBundleUpdate),
 		"inspectOrphanRun":           noBrowserArgs((*App).InspectOrphanRun),
+		"attachOrphanRun":            oneBrowserArg((*App).AttachOrphanRun),
 		"cancelOrphanRun":            oneBrowserArg((*App).CancelOrphanRun),
 		"getApplicationConfig":       noBrowserArgs((*App).GetApplicationConfig),
 		"currentProject":             noBrowserArgs((*App).CurrentProject),
