@@ -12,6 +12,12 @@ Execution Node. Используйте `pki-apply.yml`, read-only `pki-verify.ym
 нельзя. `platform_pki_secret_files` содержит только mapping SecretRef →
 runtime-only file, а не значения секретов.
 
+Перед материализацией PKCS12 role проверяет наличие `keytool` на Execution
+Node. Если его нет, устанавливается Java-пакет из
+`platform_pki_keytool_package` (по умолчанию `java-21-openjdk-headless`), затем
+наличие `keytool` проверяется повторно. Переопределите пакет для дистрибутива,
+в котором он называется иначе.
+
 Installer удерживает project-scoped advisory lock на Execution Node на всём
 интервале `pki-apply.yml` или `pki-reissue.yml`, включая target deployment.
 Для параллельного ручного запуска того же проекта оператор должен обернуть

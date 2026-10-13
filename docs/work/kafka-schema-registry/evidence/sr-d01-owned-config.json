@@ -1,0 +1,1 @@
+{"case": "owned-config", "preflight": "PASSED_FOREIGN_LOGS", "applyTask": "CHANGED_FOREIGN_OWNER_AND_MODE", "clearTasks": "DELETED_FOREIGN_FILE", "neighbor": "PRESERVED"}

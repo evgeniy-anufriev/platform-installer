@@ -23,9 +23,8 @@
 - name: Require the expected mode-specific Keeper process state
   ansible.builtin.assert:
     that: >-
-      (_platform_clickhouse_keeper_status.stdout == 'active')
-      if platform_clickhouse_mode == 'raft-ha'
-      else (_platform_clickhouse_keeper_status.stdout != 'active')
+      (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
+      (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
     fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
 
 - name: Query ClickHouse HTTPS as default with exact runtime-only password and trusted CA

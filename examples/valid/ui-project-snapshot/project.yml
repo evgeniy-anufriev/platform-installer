@@ -9,11 +9,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:928f45a27c8f81999b02c0922d2d20837c4d9b7b0b5452ce3cef8643fbbd2a3d
+  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
   services:
     bind:
-      definitionVersion: 1.0.0-alpha.1
-      digest: sha256:e7a9f94c42c5af24e601e819b2e764b8b7e57231cd0882ed24a40533b02ff8e0
+      definitionVersion: 1.0.0-alpha.2
+      digest: sha256:bc994da16bf24fc347607d58f03c286af9c9885f4f55fdfb02674e98e221bc94
     dns-client:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:716d24621f57a17be8658cf4b7b846706dcfa2115b1b9393837e14e2c680b162
@@ -21,8 +21,8 @@ catalogLock:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e
     kafka:
-      definitionVersion: 1.0.0-alpha.1
-      digest: sha256:8491615d10a211d97d1a1d06456010de4608fb822e997ca9b7b82522c96148be
+      definitionVersion: 1.0.0-alpha.2
+      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
     keepalived:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444

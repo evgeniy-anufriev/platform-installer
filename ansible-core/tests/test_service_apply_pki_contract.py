@@ -6,6 +6,27 @@ ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 
 
 class ServiceApplyPkiContractTests(unittest.TestCase):
+    def test_pki_ensures_keytool_before_materializing_pkcs12_stores(self):
+        role_root = os.path.join(
+            ROOT,
+            "ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize",
+        )
+        with open(os.path.join(role_root, "tasks/main.yml"), encoding="utf-8") as handle:
+            tasks = handle.read()
+        with open(os.path.join(role_root, "tasks/stores.yml"), encoding="utf-8") as handle:
+            stores = handle.read()
+        with open(os.path.join(role_root, "defaults/main.yml"), encoding="utf-8") as handle:
+            defaults = handle.read()
+
+        self.assertIn("Check for keytool before PKCS12 store materialization", tasks)
+        self.assertIn("Install Java runtime providing keytool when it is missing", tasks)
+        self.assertIn("Recheck keytool after ensuring the Java runtime", tasks)
+        self.assertIn("PKI_KEYTOOL_UNAVAILABLE", tasks)
+        self.assertIn("platform_pki_keytool_package: java-21-openjdk-headless", defaults)
+        self.assertLess(tasks.index("Require keytool before PKCS12 store materialization"),
+                        tasks.index("Materialize resolved PKI certificate requests"))
+        self.assertIn("keytool", stores)
+
     def test_pki_resolution_reloads_portable_manifest_for_stable_project_identity(self):
         resolve_tasks = os.path.join(
             ROOT,
@@ -141,7 +162,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         consumers = {
             "postgresql": "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/resolve_tls.yml",
             "redis": "services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/resolve_tls.yml",
-            "haproxy": "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml",
+            "haproxy": "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml",
         }
         for service, relative_path in consumers.items():
             with open(os.path.join(ROOT, relative_path), encoding="utf-8") as handle:
@@ -167,12 +188,15 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             postgresql_tasks.index("Deliver selected PostgreSQL offline artifacts"),
         )
 
-        haproxy_main = os.path.join(
+        haproxy_lifecycle = os.path.join(
             ROOT,
-            "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml",
+            "services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml",
         )
-        with open(haproxy_main, encoding="utf-8") as handle:
+        with open(haproxy_lifecycle, encoding="utf-8") as handle:
             haproxy_tasks = handle.read()
+        self.assertIn('platform_pki_consumer_tls_profile_id: "{{ platform_haproxy_tls_profile }}"', haproxy_tasks)
+        self.assertIn('platform_execution_service_deployment: "{{ _platform_haproxy_local_deployments[0].key }}"', haproxy_tasks)
+        self.assertIn("platform_haproxy_phase == 'prepare'", haproxy_tasks)
         self.assertLess(
             haproxy_tasks.index("Select the exact PKI consumer plan before HAProxy mutation"),
             haproxy_tasks.index("Deliver selected HAProxy offline artifacts"),
@@ -222,18 +246,26 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             ROOT,
             "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml",
         )
+        reconcile = os.path.join(
+            ROOT,
+            "services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/reconcile.yml",
+        )
         with open(lifecycle, encoding="utf-8") as handle:
             lifecycle_tasks = handle.read()
         with open(main, encoding="utf-8") as handle:
             main_tasks = handle.read()
+        with open(reconcile, encoding="utf-8") as handle:
+            reconcile_tasks = handle.read()
 
+        self.assertIn('"postgres://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}/pg_auto_failover"', lifecycle_tasks)
         self.assertIn("_platform_postgresql_monitor.address", lifecycle_tasks)
         self.assertIn("_platform_postgresql_member.address", lifecycle_tasks)
         self.assertIn("- --hostname\n      - \"{{ _platform_postgresql_member.address }}\"", lifecycle_tasks)
         self.assertNotIn("_platform_postgresql_monitor.hostname", lifecycle_tasks)
         self.assertNotIn("_platform_postgresql_member.hostname", lifecycle_tasks)
-        self.assertIn("_platform_postgresql_monitor.address", main_tasks)
-        self.assertIn("_platform_postgresql_member.address", main_tasks)
+        self.assertIn("file: reconcile.yml", main_tasks)
+        self.assertIn("_platform_postgresql_monitor.address", reconcile_tasks)
+        self.assertIn("_platform_postgresql_member.address", reconcile_tasks)
 
 
 if __name__ == "__main__":

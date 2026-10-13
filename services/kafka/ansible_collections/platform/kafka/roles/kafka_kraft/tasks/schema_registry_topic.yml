@@ -1,0 +1,76 @@
+---
+- name: Describe the schema topic without modification
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - --bootstrap-server
+      - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
+      - --command-config
+      - "{{ registry_instance.config_directory }}/kafka-client.properties"
+      - --describe
+      - --if-exists
+      - --topic
+      - _schemas
+  changed_when: false
+  register: _platform_kafka_registry_topic_before
+  no_log: true
+
+- name: Refuse incompatible existing schema topic before Registry startup
+  ansible.builtin.assert:
+    that:
+      - "_platform_kafka_registry_topic_before.stdout | regex_search('PartitionCount: *1(?:\\s|$)') is not none"
+      - "_platform_kafka_registry_topic_before.stdout | regex_search('ReplicationFactor: *' ~ registry_instance.replication_factor ~ '(?:\\s|$)') is not none"
+      - "_platform_kafka_registry_topic_before.stdout | regex_search('cleanup[.]policy=compact(?:,(?=[A-Za-z0-9_.-]+=)|\\s|$)') is not none"
+      - "_platform_kafka_registry_topic_before.stdout | regex_search('min[.]insync[.]replicas=' ~ registry_instance.min_insync_replicas ~ '(?:,|\\s|$)') is not none"
+    fail_msg: SCHEMA_REGISTRY_TOPIC_MIGRATION_REQUIRED
+  when: _platform_kafka_registry_topic_before.stdout | trim | length > 0
+  no_log: true
+
+- name: Create the missing topic on one deterministic broker only
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - --bootstrap-server
+      - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
+      - --command-config
+      - "{{ registry_instance.config_directory }}/kafka-client.properties"
+      - --create
+      - --if-not-exists
+      - --topic
+      - _schemas
+      - --partitions
+      - '1'
+      - --replication-factor
+      - "{{ registry_instance.replication_factor }}"
+      - --config
+      - cleanup.policy=compact
+      - --config
+      - "min.insync.replicas={{ registry_instance.min_insync_replicas }}"
+  when:
+    - not platform_kafka_verify_only
+    - _platform_kafka_registry_topic_before.stdout | trim | length == 0
+    - registry_instance.id == (_platform_kafka_registry_projection.instances | selectattr('deployment_id', 'equalto', registry_instance.deployment_id) | first).id
+  no_log: true
+
+- name: Wait for the exact schema topic policy without changing it
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - --bootstrap-server
+      - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
+      - --command-config
+      - "{{ registry_instance.config_directory }}/kafka-client.properties"
+      - --describe
+      - --topic
+      - _schemas
+  changed_when: false
+  register: _platform_kafka_registry_topic_after
+  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
+  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
+  until: >-
+    _platform_kafka_registry_topic_after.rc == 0 and
+    (_platform_kafka_registry_topic_after.stdout | regex_search('PartitionCount: *1(?:\s|$)')) is not none and
+    (_platform_kafka_registry_topic_after.stdout | regex_search('ReplicationFactor: *' ~ registry_instance.replication_factor ~ '(?:\s|$)')) is not none and
+    (_platform_kafka_registry_topic_after.stdout | regex_search('cleanup[.]policy=compact(?:,(?=[A-Za-z0-9_.-]+=)|\s|$)')) is not none and
+    (_platform_kafka_registry_topic_after.stdout | regex_search('min[.]insync[.]replicas=' ~ registry_instance.min_insync_replicas ~ '(?:,|\s|$)')) is not none
+  no_log: true

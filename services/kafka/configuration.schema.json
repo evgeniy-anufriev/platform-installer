@@ -83,6 +83,24 @@
       "minLength": 1,
       "type": "string"
     },
+    "schemaRegistryEnabled": {
+      "type": "boolean"
+    },
+    "schemaRegistryHttpPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schemaRegistryHttpsPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schemaRegistryKafkaListener": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
     "tlsProfile": {
       "minLength": 1,
       "type": "string"

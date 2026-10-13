@@ -3,13 +3,16 @@
   hosts: localhost
   connection: local
   become: true
-  gather_facts: false
+  gather_facts: true
   vars:
     clickhouse_qa_root: "{{ lookup('ansible.builtin.env', 'PLATFORM_CLICKHOUSE_QA_ROOT') }}"
     platform_clickhouse_mode: standalone
     platform_clickhouse_deployment_id: clickhouse-qa-standalone
     platform_clickhouse_instances:
-      - {id: clickhouse-1, host: localhost, address: 192.168.56.101, roles: [server]}
+      - id: clickhouse-1
+        host: localhost
+        address: "{{ ansible_default_ipv4.address }}"
+        roles: [server]
     platform_clickhouse_tls_directory: "{{ clickhouse_qa_root }}/pki"
     platform_clickhouse_default_credential:
       passwordSecretRef: runtime:clickhouse-default-password

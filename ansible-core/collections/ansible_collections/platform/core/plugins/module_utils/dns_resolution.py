@@ -153,9 +153,7 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
         secondaries = [item for item in participants if item["role"] == "secondary"]
         if len(primaries) != 1:
             findings.append(_finding("DNS_PRIMARY_COUNT_INVALID", prefix, "BIND deployment requires exactly one primary participant", {"actual": len(primaries)}))
-        if not secondaries:
-            findings.append(_finding("DNS_SECONDARY_REQUIRED", prefix, "BIND deployment requires at least one secondary participant"))
-        if len(primaries) != 1 or not secondaries:
+        if len(primaries) != 1:
             continue
 
         records, owners = [], {}

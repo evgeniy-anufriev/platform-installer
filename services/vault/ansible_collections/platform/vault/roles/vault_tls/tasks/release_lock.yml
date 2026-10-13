@@ -1,6 +1,6 @@
 ---
 - name: Stop only this invocation's transient lock holder
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ _platform_vault_lock_unit }}.service"
     state: stopped
   register: _platform_vault_lock_stop

@@ -38,3 +38,6 @@ platform_pki_state_root: "{{ platform_execution_state_root | default('/var/lib/p
 platform_pki_runtime_root: "{{ platform_execution_private_workspace | default('/var/tmp/platform-installer/private') }}/pki"
 platform_pki_owner: "{{ platform_execution_technical_user | default('root', true) }}"
 platform_pki_group: "{{ platform_execution_technical_group | default(platform_pki_owner, true) }}"
+# PKCS12 materialization uses keytool on the Execution Node. Keep the
+# installable runtime package configurable for distributions with another name.
+platform_pki_keytool_package: java-21-openjdk-headless

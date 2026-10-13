@@ -13,6 +13,7 @@ ROLE = (
 class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def setUp(self):
         self.main = (ROLE / "tasks/main.yml").read_text(encoding="utf-8")
+        self.resolve_packages = (ROLE / "tasks/resolve_packages.yml").read_text(encoding="utf-8")
         self.failover = (ROLE / "tasks/pg_auto_failover.yml").read_text(
             encoding="utf-8"
         )
@@ -46,8 +47,48 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
             self.main.index("Install approved PostgreSQL packages") :
             self.main.index("Ensure PostgreSQL service account exists")
         ]
-        self.assertNotIn("pg_auto_failover-", package.split("Install approved pg_auto_failover package")[0])
         self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", package)
+        tasks = yaml.safe_load(self.main)
+        failover_package_tasks = [task for task in tasks
+                                  if "pg_auto_failover" in task.get("name", "")]
+        self.assertTrue(failover_package_tasks)
+        for task in failover_package_tasks:
+            self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", str(task["when"]))
+
+    def test_repository_package_selection_probes_exact_version_masks(self):
+        tasks = yaml.safe_load(self.resolve_packages)
+        legacy_probe = next(task for task in tasks
+                            if task.get("name") == "Probe legacy PostgreSQL package names by exact-version masks")
+        major_probe = next(task for task in tasks
+                           if task.get("name") == "Probe major-scoped PostgreSQL package names by exact-version masks")
+        legacy_argv = legacy_probe["ansible.builtin.command"]["argv"]
+        major_argv = major_probe["ansible.builtin.command"]["argv"]
+        self.assertIn("--latest-limit=1", legacy_argv)
+        self.assertIn("postgresql-{{ platform_postgresql_version }}-*.x86_64", legacy_argv)
+        self.assertIn("postgresql-server-{{ platform_postgresql_version }}-*.x86_64", legacy_argv)
+        self.assertIn("postgresql-contrib-{{ platform_postgresql_version }}-*.x86_64", legacy_argv)
+        self.assertTrue(any("postgresql{{ platform_postgresql_version.split('.')[0] }}-" in item
+                            for item in major_argv))
+        install = next(task for task in yaml.safe_load(self.main)
+                       if task.get("name") == "Install approved PostgreSQL packages from the configured system repository")
+        self.assertIn("_platform_postgresql_repository_packages", str(install["ansible.builtin.package"]["name"]))
+        self.assertIn("POSTGRES_PACKAGE_FAMILY_UNAVAILABLE", str(tasks))
+
+    def test_pg_auto_failover_package_selection_supports_major_scoped_names(self):
+        tasks = yaml.safe_load(self.resolve_packages)
+        major_probe = next(task for task in tasks
+                           if task.get("name") == "Probe major-scoped pg_auto_failover package name by version mask")
+        legacy_probe = next(task for task in tasks
+                            if task.get("name") == "Probe legacy pg_auto_failover package name by version mask")
+        self.assertIn("pg_auto_failover-{{ platform_postgresql_version.split('.')[0] }}-",
+                      str(major_probe["ansible.builtin.command"]["argv"]))
+        self.assertIn("pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}-*.x86_64",
+                      legacy_probe["ansible.builtin.command"]["argv"])
+        install = next(task for task in yaml.safe_load(self.main)
+                       if task.get("name") == "Install approved pg_auto_failover package from the configured system repository")
+        self.assertIn("_platform_postgresql_failover_repository_package",
+                      str(install["ansible.builtin.package"]["name"]))
+        self.assertIn("POSTGRES_FAILOVER_PACKAGE_UNAVAILABLE", str(tasks))
 
     def test_ha_data_members_do_not_run_platform_initdb(self):
         initdb = next(task for task in yaml.safe_load(self.main)

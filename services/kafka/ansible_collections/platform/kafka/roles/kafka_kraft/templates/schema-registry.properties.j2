@@ -1,0 +1,27 @@
+# Managed runtime properties. This entire file is protected secret material.
+listeners=http://0.0.0.0:{{ registry_instance.http_port }},https://0.0.0.0:{{ registry_instance.https_port }}
+host.name={{ registry_instance.advertised_host }}
+inter.instance.protocol=https
+schema.registry.group.id={{ registry_instance.deployment_id }}-schema-registry
+kafkastore.bootstrap.servers={{ registry_instance.bootstrap_servers }}
+kafkastore.security.protocol={{ registry_instance.security_protocol }}
+kafkastore.topic=_schemas
+kafkastore.topic.replication.factor={{ registry_instance.replication_factor }}
+kafkastore.ssl.endpoint.identification.algorithm=https
+{% if registry_instance.security_protocol == 'SSL' %}
+kafkastore.ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
+kafkastore.ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
+kafkastore.ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+kafkastore.ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+kafkastore.ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+kafkastore.ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+kafkastore.ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+{% endif %}
+ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
+ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
+ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+ssl.client.authentication=NONE

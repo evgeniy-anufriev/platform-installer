@@ -7,7 +7,7 @@
   register: _platform_bind_service_active
 
 - name: Reload active BIND after changed active artifacts
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     state: reloaded
   when:
@@ -15,7 +15,7 @@
     - platform_bind_active_artifacts_changed | default(false) | bool
 
 - name: Enable and start inactive BIND after cluster-wide active validation
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     enabled: true
     state: started

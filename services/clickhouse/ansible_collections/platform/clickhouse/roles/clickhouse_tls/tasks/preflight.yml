@@ -14,9 +14,10 @@
     that:
       - _platform_clickhouse_package_lines | length <= 1
       - >-
-        (_platform_clickhouse_package_lines | length == 0) if item == 'clickhouse-keeper'
-        else (_platform_clickhouse_package_lines | length == 0 or
-              _platform_clickhouse_package_lines == [item ~ '\t' ~ platform_clickhouse_package_version ~ '-1.x86_64'])
+        (item == 'clickhouse-keeper' and _platform_clickhouse_package_lines | length == 0) or
+        (item != 'clickhouse-keeper' and
+         (_platform_clickhouse_package_lines | length == 0 or
+          _platform_clickhouse_package_lines == [item ~ '\t' ~ platform_clickhouse_package_version ~ '-1.x86_64']))
     fail_msg: CLICKHOUSE_PACKAGE_VERSION_CONFLICT
   vars:
     _platform_clickhouse_package_lines: "{{ _platform_clickhouse_installed_packages.stdout_lines | select('match', '^' ~ item ~ '\\t') | list }}"

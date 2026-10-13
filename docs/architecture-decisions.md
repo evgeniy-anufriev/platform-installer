@@ -533,6 +533,16 @@ change. Redis retains its existing directory consistency check. Adding Vault
 and changing defaults can likewise select a new empty data directory on a
 reapply unless the operator migrates existing data first.
 
+## ADR-038: Broker-bound Kafka Schema Registry
+
+Schema Registry is a component of the selected Kafka deployment, derived for each
+broker member, including combined members. Controller-only hosts are excluded.
+The canonical service package declares settings and a pinned conditional artifact;
+the existing source gate retains node-scoped acquisition authority. Core and the
+role share a pure projection. No placement or desired-state persistence is added.
+Member-only port overrides stay in canonical member inputs rather than becoming
+host-wide role variables. See the [implementation contract](work/kafka-schema-registry/implementation.md).
+
 ## ADR-037: Portable service data root and target resource prefix
 
 The portable project carries `platform_data_root_directory` and

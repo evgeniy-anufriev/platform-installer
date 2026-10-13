@@ -1,0 +1,16 @@
+---
+- name: Prepare and validate BIND candidates without activation
+  ansible.builtin.include_tasks: prepare.yml
+  when: platform_bind_phase == 'prepare'
+
+- name: Activate previously validated BIND candidates
+  ansible.builtin.include_tasks: activate.yml
+  when: platform_bind_phase == 'activate'
+
+- name: Verify BIND runtime read-only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_bind_phase == 'verify'
+
+- name: Start BIND after active validation barrier
+  ansible.builtin.include_tasks: start.yml
+  when: platform_bind_phase == 'start'

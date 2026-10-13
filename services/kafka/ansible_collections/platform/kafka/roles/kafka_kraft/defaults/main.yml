@@ -1,5 +1,20 @@
 ---
 platform_kafka_version: "4.3.1"
+platform_kafka_phase: full
+platform_kafka_schema_registry_enabled: true
+platform_kafka_schema_registry_kafka_listener: SSL
+platform_kafka_schema_registry_http_port: 8081
+platform_kafka_schema_registry_https_port: 8082
+platform_kafka_schema_registry_version: "8.3.2"
+platform_kafka_schema_registry_archive_directory: "confluent-{{ platform_kafka_schema_registry_version }}"
+platform_kafka_schema_registry_install_directory: "/opt/confluent-{{ platform_kafka_schema_registry_version }}"
+platform_kafka_schema_registry_user: schema-registry
+platform_kafka_schema_registry_group: schema-registry
+platform_kafka_schema_registry_config_directory: /etc/schema-registry
+platform_kafka_schema_registry_log_directory: /var/log/schema-registry
+platform_kafka_schema_registry_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}schema-registry"
+platform_kafka_schema_registry_readiness_retries: 60
+platform_kafka_schema_registry_readiness_delay: 2
 platform_kafka_archive_directory: kafka_2.13-4.3.1
 platform_kafka_install_directory: /opt/kafka
 platform_kafka_config_directory: /etc/kafka

@@ -1,6 +1,6 @@
 # `platform.bind.bind`
 
-Управляет authoritative BIND primary-secondary. Role выводит project-host,
+Управляет authoritative BIND primary с необязательными secondary. Для standalone достаточно одного primary; role выводит project-host,
 endpoint и wildcard records, валидирует complete candidates на всех участниках
 и активирует их только после cluster barrier. Secondary получает зону native
 transfer, не Ansible copy.

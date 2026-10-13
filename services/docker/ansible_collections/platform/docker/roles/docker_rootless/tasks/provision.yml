@@ -1,5 +1,5 @@
 ---
-- name: Install exact approved RED OS Docker rootless package closure
+- name: Install configured RED OS Docker rootless packages
   ansible.builtin.dnf:
     name: "{{ platform_docker_packages }}"
     state: present
@@ -304,7 +304,7 @@
   register: _platform_docker_lxc_dnsmasq_reference_change
 
 - name: Restart LXC network only when its managed DHCP configuration changes
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: lxc-net.service
     state: restarted
   when: >-
@@ -312,7 +312,7 @@
     _platform_docker_lxc_dnsmasq_reference_change is changed
 
 - name: Ensure LXC network is enabled and active before Docker
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: lxc-net.service
     enabled: true
     state: started
@@ -460,11 +460,11 @@
   notify: Restart rootless Docker bridge
 
 - name: Reload system unit graph
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     daemon_reload: true
 
 - name: Ensure selected account's user manager is active
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "user@{{ _platform_docker_uid }}.service"
     state: started
 
@@ -490,13 +490,13 @@
   changed_when: "'Removed' in _platform_docker_user_disable.stdout or 'Removed' in _platform_docker_user_disable.stderr"
 
 - name: Enable and activate target from every LXC network start
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-lxc-ready.target"
     enabled: true
     state: started
 
 - name: Enable and activate selected-account bridge after target
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     enabled: true
     state: started

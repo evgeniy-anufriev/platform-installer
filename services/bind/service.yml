@@ -2,16 +2,16 @@ apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
 metadata:
   id: bind
-  version: "1.0.0-alpha.1"
+  version: "1.0.0-alpha.2"
   displayName: BIND
-  description: Authoritative primary-secondary DNS for one Platform-managed forward zone
+  description: Authoritative BIND primary with optional secondary DNS participants for one Platform-managed forward zone
   category: network
 modes:
   authoritative-primary-secondary:
     displayName: Authoritative primary-secondary
-    description: One primary and one or more secondary BIND participants placed directly on inventory hosts
+    description: One primary and zero or more secondary BIND participants placed directly on inventory hosts
     memberRoles: [primary, secondary]
-    placement: {explicit: true, hostScoped: true, minMembers: 2, distinctHosts: true}
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
     x-maturity: implemented-net-03
 capabilities: [service.bind.authoritative-dns]
 dependencies: []

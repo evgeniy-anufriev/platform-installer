@@ -1,0 +1,52 @@
+---
+- name: Resolve HAProxy runtime projection from canonical state
+  ansible.builtin.include_tasks: resolve.yml
+  when: platform_haproxy_partial_deployment_id is not defined or platform_haproxy_phase == 'prepare'
+
+- name: Select the exact PKI consumer plan before HAProxy mutation
+  ansible.builtin.include_role:
+    name: platform.core.pki_materialize
+    tasks_from: select_consumer_plan.yml
+  vars:
+    platform_pki_consumer_tls_profile_id: "{{ platform_haproxy_tls_profile }}"
+    platform_execution_service_deployment: "{{ _platform_haproxy_local_deployments[0].key }}"
+  when:
+    - platform_haproxy_partial_deployment_id is not defined
+    - platform_haproxy_phase == 'prepare'
+
+- name: Validate resolved HAProxy artifact sources before mutation
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: haproxy, name: haproxy}
+  when:
+    - platform_haproxy_partial_deployment_id is not defined
+    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+
+- name: Deliver selected HAProxy offline artifacts
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: haproxy, name: haproxy}
+  when:
+    - platform_haproxy_partial_deployment_id is not defined
+    - platform_resolved_artifact_sources is defined
+    - platform_haproxy_phase == 'prepare'
+
+- name: Prepare and validate complete HAProxy candidate
+  ansible.builtin.include_tasks: prepare.yml
+  when: platform_haproxy_phase == 'prepare'
+
+- name: Activate exact validated HAProxy candidate
+  ansible.builtin.include_tasks: activate.yml
+  when: platform_haproxy_phase == 'activate'
+
+- name: Start HAProxy after the active-validation barrier
+  ansible.builtin.include_tasks: start.yml
+  when: platform_haproxy_phase == 'start'
+
+- name: Verify HAProxy read-only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_haproxy_phase == 'verify'

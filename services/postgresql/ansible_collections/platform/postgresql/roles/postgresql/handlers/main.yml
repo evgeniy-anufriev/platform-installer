@@ -1,11 +1,11 @@
 ---
 - name: Reload PostgreSQL TLS material
   ansible.builtin.command:
-    argv: [pg_ctl, reload, -D, "{{ platform_postgresql_data_directory }}"]
+    argv: ["{{ platform_postgresql_binary_directory }}/pg_ctl", reload, -D, "{{ platform_postgresql_data_directory }}"]
   become_user: "{{ platform_postgresql_user }}"
   changed_when: true
 
 - name: Restart PostgreSQL
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: "{{ _platform_postgresql_unit_name }}"
     state: restarted

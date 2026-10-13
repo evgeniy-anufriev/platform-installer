@@ -13,6 +13,7 @@ from warnings import warn
 import contextlib
 import json
 import reprlib
+import sys
 import typing
 import warnings
 
@@ -103,11 +104,34 @@ def _id_of(schema):
 
 def _store_schema_list():
     if not _VOCABULARIES:
-        package = _utils.resources.files(__package__)
-        for version in package.joinpath("schemas", "vocabularies").iterdir():
-            for path in version.iterdir():
-                vocabulary = json.loads(path.read_text())
-                _VOCABULARIES.append((vocabulary["$id"], vocabulary))
+        if sys.version_info >= (3, 9):  # pragma: no cover
+            package = _utils.resources.files(__package__)
+            resources = (
+                path
+                for version in package.joinpath("schemas", "vocabularies").iterdir()
+                for path in version.iterdir()
+            )
+            vocabulary_documents = (json.loads(path.read_text()) for path in resources)
+        else:
+            # Python 3.8's importlib.resources cannot enumerate non-package
+            # directories. Keep the vendored vocabulary resource set explicit
+            # and read it through pkgutil so this also works from Ansible's
+            # zipped module_utils payload.
+            resource_names = (
+                "draft2019-09/applicator", "draft2019-09/content",
+                "draft2019-09/core", "draft2019-09/meta-data",
+                "draft2019-09/validation", "draft2020-12/applicator",
+                "draft2020-12/content", "draft2020-12/core",
+                "draft2020-12/format", "draft2020-12/format-annotation",
+                "draft2020-12/format-assertion", "draft2020-12/meta-data",
+                "draft2020-12/unevaluated", "draft2020-12/validation",
+            )
+            vocabulary_documents = (
+                json.loads(_utils.read_resource_text("schemas/vocabularies/%s" % name))
+                for name in resource_names
+            )
+        for vocabulary in vocabulary_documents:
+            _VOCABULARIES.append((vocabulary["$id"], vocabulary))
     return [
         (id, validator.META_SCHEMA) for id, validator in _META_SCHEMAS.items()
     ] + _VOCABULARIES

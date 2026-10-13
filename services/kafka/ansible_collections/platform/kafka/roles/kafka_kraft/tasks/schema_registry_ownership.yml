@@ -1,0 +1,44 @@
+---
+- name: Inspect Registry paths before mutation or removal
+  ansible.builtin.stat:
+    path: "{{ item.1 }}"
+    follow: false
+    get_checksum: false
+  loop: "{{ _platform_kafka_registry_local | subelements('guard_paths') }}"
+  loop_control:
+    label: "{{ item.1 }}"
+  register: _platform_kafka_registry_path_stats
+
+- name: Reject unsafe Registry paths
+  ansible.builtin.assert:
+    that: not item.stat.exists or (not (item.stat.islnk | default(false)) and (item.stat.isdir | default(false)))
+    fail_msg: SCHEMA_REGISTRY_PATH_UNSAFE
+  loop: "{{ _platform_kafka_registry_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item.1 }}"
+
+- name: Inspect independent ownership markers for existing Registry roots
+  ansible.builtin.stat:
+    path: "{{ item.1 }}/ownership-marker"
+    follow: false
+    checksum_algorithm: sha256
+  loop: "{{ _platform_kafka_registry_local | subelements('ownership_paths') }}"
+  loop_control:
+    label: "{{ item.1 }}"
+  register: _platform_kafka_registry_root_markers
+  when: (_platform_kafka_registry_path_stats.results | selectattr('item.1', 'equalto', item.1) | first).stat.exists
+
+- name: Require ownership of each existing Registry root before mutation or removal
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - not (item.stat.islnk | default(false))
+      - item.stat.uid | default(-1) == 0
+      - item.stat.mode | default('') == '0644'
+      - item.stat.checksum | default('') == ((item.item.0.ownership_marker ~ '\n') | hash('sha256'))
+      - platform_kafka_schema_registry_enabled or platform_kafka_clean_install
+    fail_msg: SCHEMA_REGISTRY_DIRECTORY_OWNERSHIP_UNKNOWN_OR_REMOVAL_REQUIRED
+  loop: "{{ _platform_kafka_registry_root_markers.results }}"
+  loop_control:
+    label: "{{ item.item.1 }}"
+  when: not (item.skipped | default(false))

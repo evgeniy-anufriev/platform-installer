@@ -41,6 +41,10 @@ FEATURE_SCHEMA = {
 
 
 class Draft202012EngineTests(unittest.TestCase):
+    def test_vendored_2020_12_meta_schema_loads_from_package_resources(self):
+        schema = ENGINE._jsonschema_utils.load_schema("draft2020-12")
+        self.assertEqual("https://json-schema.org/draft/2020-12/schema", schema["$schema"])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

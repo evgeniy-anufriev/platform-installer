@@ -38,7 +38,7 @@
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
 
 - name: Disable the inactive RPM-provided stock ClickHouse server unit
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: clickhouse-server.service
     enabled: false
 

@@ -1,0 +1,7 @@
+platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
+platform_desired_state:
+  serviceDeployments:
+    bind-main:
+      serviceType: bind
+      mode: authoritative-primary-secondary
+      configuration: {zone: example.test, defaultTtl: 300}

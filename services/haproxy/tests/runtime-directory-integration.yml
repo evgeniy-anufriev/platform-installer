@@ -9,7 +9,7 @@
     platform_haproxy_tls_material_changed: false
   tasks:
     - name: Stop HAProxy before simulating a fresh volatile runtime directory
-      ansible.builtin.systemd_service:
+      ansible.builtin.systemd:
         name: haproxy
         state: stopped
 

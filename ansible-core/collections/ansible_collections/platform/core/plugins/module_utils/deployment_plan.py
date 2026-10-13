@@ -78,12 +78,23 @@ def _runtime_release(value):
     return result
 
 
-def _artifact_requirements(deployments, definitions):
+def _artifact_requirements(deployments, definitions, execution_configuration=None):
     requirements = []
     for deployment_id, deployment in sorted(deployments.items()):
         service_type = deployment.get("serviceType") if isinstance(deployment, dict) else None
         definition = definitions.get(service_type, {}) if isinstance(definitions, dict) else {}
         for artifact in definition.get("artifacts", []) if isinstance(definition, dict) else []:
+            enabled_by = artifact.get("x-enabledBy") if isinstance(artifact, dict) else None
+            if enabled_by:
+                entry = definition.get("configuration", {}).get("settings", {}).get(enabled_by, {})
+                if entry.get("type") != "boolean" or entry.get("scopes") != ["deployment"]:
+                    raise ValueError("ARTIFACT_ACTIVATION_CONTRACT_INVALID")
+                resolved = ((execution_configuration or {}).get("services", {}).get(deployment_id, {})
+                            .get("configuration", {}).get(enabled_by))
+                if not isinstance(resolved, dict) or resolved.get("state") != "RESOLVED" or not isinstance(resolved.get("value"), bool):
+                    raise ValueError("ARTIFACT_ACTIVATION_UNRESOLVED")
+                if not resolved["value"]:
+                    continue
             if isinstance(artifact, dict) and all(isinstance(artifact.get(key), str) and artifact[key] for key in ("id", "version", "digest")):
                 requirements.append({
                     "id": "%s:%s" % (deployment_id, artifact["id"]),
@@ -520,6 +531,10 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
             if member_scope and role_variable == member_data_variable:
                 continue
+            if member_scope and entry.get("x-memberInputOnly") is True:
+                # The ordinary role projects these values from the exact member input.
+                # Never let the last co-located member overwrite deployment defaults.
+                continue
             if not isinstance(resolved, dict):
                 raise ValueError("EXECUTION_CONFIGURATION_INVALID")
             # A read-only Core projection of a role default is not an override.
@@ -662,7 +677,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         findings.append(_finding("PROJECT_IDENTITY_REQUIRED", "project.metadata.id", "Installer-managed execution requires project.yml metadata.id"))
     if snapshot.get("validation", {}).get("status") != "PASS":
         findings.append(_finding("PROJECT_VALIDATION_BLOCKED", "validation", "Authoritative project validation is blocked"))
-    artifact_requirements = _artifact_requirements(deployments, definitions)
+    artifact_requirements = _artifact_requirements(deployments, definitions, execution_configuration)
     source_authorities, source_findings = _artifact_source_authorities(artifact_requirements, _bundle_source_index(bundle_artifact_sources), release["bundleDigest"])
     if application_model:
         artifact_requirements.extend(application_model['artifactRequirements'])

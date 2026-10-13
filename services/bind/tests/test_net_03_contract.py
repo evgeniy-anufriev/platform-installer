@@ -72,6 +72,19 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertNotIn("allow-update", primary)
         self.assertNotIn("update-policy", secondary)
 
+    def test_single_primary_omits_empty_secondary_transfer_directives(self):
+        template = Template((ROLE / "templates" / "platform-installer.conf.j2").read_text(encoding="utf-8"))
+        rendered = template.render(
+            platform_bind_zone_projection={"zone": "example.test", "secondaries": []},
+            platform_bind_deployment={"key": "bind-main"},
+            platform_deployments={"bind-main": {"roles": ["primary"]}},
+            platform_bind_zone_file="/var/named/example.test.zone",
+        )
+        self.assertIn("type primary;", rendered)
+        self.assertIn("update-policy local;", rendered)
+        self.assertNotIn("allow-transfer", rendered)
+        self.assertNotIn("also-notify", rendered)
+
     def test_a_record_update_is_exact_idempotent_and_primary_scoped(self):
         playbook = (ROOT / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
         publication = (ROLE / "tasks" / "publish_source.yml").read_text(encoding="utf-8")

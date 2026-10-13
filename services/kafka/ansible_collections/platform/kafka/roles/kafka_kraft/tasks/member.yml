@@ -105,6 +105,18 @@
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
+         'offsets.topic.replication.factor': _platform_kafka_member_advanced_config.get(
+           'offsets.topic.replication.factor', ([3, _platform_kafka_broker_instances | length] | min))
+      }) }}
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - platform_kafka_schema_registry_enabled
+    - "'broker' in kafka_member.roles"
+
+- name: Add the requested dynamic quorum projection
+  ansible.builtin.set_fact:
+    kafka_effective_config: >-
+      {{ kafka_effective_config | combine({
            'controller.quorum.bootstrap.servers': _platform_kafka_controller_bootstrap_servers | trim
          }) }}
   when:

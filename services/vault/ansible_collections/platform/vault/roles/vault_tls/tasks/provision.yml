@@ -20,9 +20,9 @@
       - {id: vault-runtime, name: vault}
   when: platform_resolved_artifact_sources is defined
 
-- name: Install pinned Vault from the configured repository when selected
+- name: Install Vault from the configured repository when selected
   ansible.builtin.package:
-    name: vault-1.21.2-1.red80
+    name: vault
     state: present
   when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['vault-runtime'].source == 'REPOSITORY'
 
@@ -32,7 +32,7 @@
     state: present
 
 - name: Enable and start the standard logrotate timer
-  ansible.builtin.systemd_service:
+  ansible.builtin.systemd:
     name: logrotate.timer
     state: started
     enabled: true

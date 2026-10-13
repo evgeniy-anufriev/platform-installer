@@ -123,13 +123,14 @@ class Net02KeepalivedContractTests(unittest.TestCase):
         self.assertIn("KEEPALIVED_ACTIVE_CONFIG_CHECKSUM_MISMATCH", activate)
         self.assertIn("--config-test", activate)
         self.assertIn("platform_keepalived_active_validation_rc", activate)
-        self.assertIn("systemd_service", reconcile)
+        self.assertEqual(2, reconcile.count("ansible.builtin.systemd:"))
+        self.assertEqual(2, reconcile.count('name: "{{ platform_keepalived_service_name }}"'))
 
     def test_prepare_collects_native_failure_without_service_action(self):
         prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
         self.assertIn("failed_when: false", prepare)
         self.assertIn("platform_keepalived_candidate_validation_rc", prepare)
-        self.assertNotIn("systemd_service", prepare)
+        self.assertNotIn("ansible.builtin.systemd:", prepare)
 
     def test_activation_reuses_checksum_without_rerendering(self):
         activate = (ROLE / "tasks" / "activate.yml").read_text(encoding="utf-8")

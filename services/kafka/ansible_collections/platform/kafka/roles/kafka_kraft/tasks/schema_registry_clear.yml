@@ -1,0 +1,36 @@
+---
+- name: Recheck Registry directory ownership immediately before cleanup
+  ansible.builtin.include_tasks: schema_registry_ownership.yml
+
+- name: Stop only deployment-owned Registry units before Kafka cleanup
+  ansible.builtin.systemd:
+    name: "{{ item.registry_instance.unit_name }}"
+    state: stopped
+    enabled: false
+  loop: "{{ _platform_kafka_registry_unit_stats.results }}"
+  loop_control:
+    label: "{{ item.registry_instance.id }}"
+  when: item.stat.exists
+
+- name: Remove Registry unit files with verified ownership
+  ansible.builtin.file:
+    path: "{{ item.registry_instance.unit_path }}"
+    state: absent
+  loop: "{{ _platform_kafka_registry_unit_stats.results }}"
+  loop_control:
+    label: "{{ item.registry_instance.id }}"
+  when: item.stat.exists
+  register: _platform_kafka_registry_clear_units
+
+- name: Remove isolated Registry config and logs
+  ansible.builtin.file:
+    path: "{{ item.1 }}"
+    state: absent
+  loop: "{{ _platform_kafka_registry_local | subelements('managed_paths') }}"
+  loop_control:
+    label: "{{ item.1 }}"
+
+- name: Reload systemd after Registry unit cleanup
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: _platform_kafka_registry_clear_units.changed

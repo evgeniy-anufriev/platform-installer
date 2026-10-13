@@ -1,0 +1,131 @@
+- name: Probe legacy PostgreSQL package names by exact-version masks
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - -q
+      - repoquery
+      - --available
+      - --latest-limit=1
+      - --queryformat
+      - "%{name}-%{version}-%{release}.%{arch}"
+      - "postgresql-{{ platform_postgresql_version }}-*.x86_64"
+      - "postgresql-server-{{ platform_postgresql_version }}-*.x86_64"
+      - "postgresql-contrib-{{ platform_postgresql_version }}-*.x86_64"
+  register: _platform_postgresql_legacy_package_probe
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+
+- name: Probe major-scoped PostgreSQL package names by exact-version masks
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - -q
+      - repoquery
+      - --available
+      - --latest-limit=1
+      - --queryformat
+      - "%{name}-%{version}-%{release}.%{arch}"
+      - "postgresql{{ platform_postgresql_version.split('.')[0] }}-{{ platform_postgresql_version }}-*.x86_64"
+      - "postgresql{{ platform_postgresql_version.split('.')[0] }}-server-{{ platform_postgresql_version }}-*.x86_64"
+      - "postgresql{{ platform_postgresql_version.split('.')[0] }}-contrib-{{ platform_postgresql_version }}-*.x86_64"
+  register: _platform_postgresql_major_package_probe
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+
+- name: Select an available PostgreSQL package family without changing the requested version
+  ansible.builtin.set_fact:
+    _platform_postgresql_repository_packages: >-
+      {{ (_platform_postgresql_legacy_package_probe.stdout_lines | default([])
+          if (_platform_postgresql_legacy_package_probe.stdout_lines | default([]) | length == 3)
+          else _platform_postgresql_major_package_probe.stdout_lines | default([])) }}
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+
+- name: Require all requested PostgreSQL packages from one repository naming family
+  ansible.builtin.assert:
+    that: _platform_postgresql_repository_packages | length == 3
+    fail_msg: POSTGRES_PACKAGE_FAMILY_UNAVAILABLE
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+
+- name: Probe major-scoped pg_auto_failover package name by version mask
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - -q
+      - repoquery
+      - --available
+      - --latest-limit=1
+      - --queryformat
+      - "%{name}-%{version}-%{release}.%{arch}"
+      - "pg_auto_failover-{{ platform_postgresql_version.split('.')[0] }}-{{ platform_postgresql_pg_auto_failover_version }}-*.x86_64"
+  register: _platform_postgresql_major_failover_package_probe
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
+
+- name: Probe legacy pg_auto_failover package name by version mask
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - -q
+      - repoquery
+      - --available
+      - --latest-limit=1
+      - --queryformat
+      - "%{name}-%{version}-%{release}.%{arch}"
+      - "pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}-*.x86_64"
+  register: _platform_postgresql_legacy_failover_package_probe
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
+
+- name: Select an available pg_auto_failover package by PostgreSQL major version
+  ansible.builtin.set_fact:
+    _platform_postgresql_failover_repository_package: >-
+      {{ (_platform_postgresql_major_failover_package_probe.stdout_lines | default([])
+          if (_platform_postgresql_major_failover_package_probe.stdout_lines | default([]) | length == 1)
+          else _platform_postgresql_legacy_failover_package_probe.stdout_lines | default([])) }}
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
+
+- name: Require the requested pg_auto_failover package from a configured repository
+  ansible.builtin.assert:
+    that: _platform_postgresql_failover_repository_package | length == 1
+    fail_msg: POSTGRES_FAILOVER_PACKAGE_UNAVAILABLE
+  when:
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'

@@ -138,6 +138,15 @@ class Service01BContractTests(unittest.TestCase):
         self.assertNotIn("CONTROLLER", normalize)
         self.assertNotIn("9093", normalize)
 
+    def test_schema_registry_findings_are_serialized_for_ansible_assert_message(self):
+        with (ROLE / "tasks" / "schema_registry_validate.yml").open(encoding="utf-8") as stream:
+            tasks = yaml.safe_load(stream)
+        validation = next(task for task in tasks if task["name"] == "Reject invalid Registry topology and ports before mutation")
+        self.assertEqual(
+            "{{ _platform_kafka_registry_projection.findings | to_nice_yaml }}",
+            validation["ansible.builtin.assert"]["fail_msg"],
+        )
+
     def test_tls_handshake_keeps_hostname_verification_enabled(self):
         handshake = (ROLE / "tasks" / "verify_ssl_listener.yml").read_text(encoding="utf-8")
         self.assertIn("-verify_hostname", handshake)
