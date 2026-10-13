@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
@@ -55,17 +56,50 @@ class ExecutionRuntimeBundleTests(unittest.TestCase):
             if service == "kafka":
                 self.assertGreater(core_imports, 0)
 
-    def test_runtime_platforms_requires_python_and_package_closure(self):
+    def test_runtime_platforms_supports_empty_payload_and_existing_closure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            with self.assertRaisesRegex(ValueError, "packages/ and python"):
-                BUILDER.runtime_platforms(root)
+            explicit = {"os": "redos", "version": "8.0", "architecture": "x86_64"}
+            self.assertEqual([explicit], BUILDER.runtime_platforms(root, ["redos:8.0:x86_64"]))
             (root / "packages" / "redos" / "8.0" / "x86_64").mkdir(parents=True)
             (root / "python").mkdir()
-            with self.assertRaisesRegex(ValueError, "no package platform"):
-                BUILDER.runtime_platforms(root)
+            with patch.object(BUILDER, "host_platform", return_value=explicit):
+                self.assertEqual([explicit], BUILDER.runtime_platforms(root))
             (root / "packages" / "redos" / "8.0" / "x86_64" / "ansible-core.rpm").write_bytes(b"rpm")
             self.assertEqual([{"os": "redos", "version": "8.0", "architecture": "x86_64"}], BUILDER.runtime_platforms(root))
+
+    def test_os_release_identity_is_data_not_shell(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "os-release"
+            source.write_text('NAME="RED OS"\nID=redos\nVERSION_ID="8.0.3"\n', encoding="utf-8")
+            self.assertEqual({"os": "redos", "version": "8.0.3", "architecture": "x86_64"},
+                             BUILDER.host_platform(source, "x86_64"))
+            for content in ('ID=redos\n', 'ID="$(touch /tmp/never)"\nVERSION_ID=8\n', 'ID=redos\nID=other\nVERSION_ID=8\n'):
+                source.write_text(content, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "cannot infer"):
+                    BUILDER.host_platform(source, "x86_64")
+
+    def test_declared_platforms_are_validated_deduplicated_and_sorted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = BUILDER.runtime_platforms(Path(temporary), ["redos:8.0:x86_64", "redos:7.3:x86_64", "redos:8.0:x86_64"])
+            self.assertEqual(["7.3", "8.0"], [p["version"] for p in result])
+            for value in ("", "redos:8", "redos:../8:x86_64", "redos:..:x86_64", "redos:8:*"):
+                with self.assertRaisesRegex(ValueError, "platform must"):
+                    BUILDER.parse_platform(value)
+
+    def test_empty_runtime_build_has_fixed_layout_without_mutating_input(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / "input"
+            runtime.mkdir()
+            output = root / "bundle"
+            BUILDER.build(output, runtime, "empty-test", "0.1.0", ["redos:8.0:x86_64"])
+            self.assertTrue((output / "runtime/packages").is_dir())
+            self.assertTrue((output / "runtime/python").is_dir())
+            self.assertEqual([], list(runtime.iterdir()))
+            self.assertTrue((output / "ansible-core/tools/bootstrap_execution_runtime.sh").is_file())
+            with self.assertRaisesRegex(ValueError, "output already exists"):
+                BUILDER.build(output, runtime, "empty-test", "0.1.0", ["redos:8.0:x86_64"])
 
     def test_components_are_sorted_and_do_not_include_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:

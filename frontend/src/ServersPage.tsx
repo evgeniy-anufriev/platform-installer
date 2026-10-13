@@ -754,6 +754,13 @@ function ExecutionNodePanel({
         Выбор узла хранится только в приложении и не меняет проект. Подготовка —
         только после подтверждения.
       </p>
+      {preparation?.steps?.some((step) => step.id === "ensure-runtime-packages") && (
+        <p className="muted">
+          Уже установленные runtime-пакеты используются без повторной установки.
+          Недостающие пакеты берутся из набора установки; если их в нём нет — из
+          настроенных DNF-репозиториев узла.
+        </p>
+      )}
       {!onInformationCheck && onProbe && context?.selectionKind === "PROJECT_SERVER" && (
         <div className="execution-node-host-key">
           <p className="muted">
@@ -906,7 +913,7 @@ function ExecutionNodePanel({
                 if (!planId) return;
                 if (
                   !window.confirm(
-                    "Подготовить выбранный узел выполнения? Это может активировать проверенное окружение.",
+                    "Подготовить выбранный узел выполнения? Это может установить недостающие runtime-пакеты из набора установки или настроенных DNF-репозиториев и активировать проверенное окружение.",
                   )
                 )
                   return;

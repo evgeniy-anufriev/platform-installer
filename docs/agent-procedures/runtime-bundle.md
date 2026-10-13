@@ -4,6 +4,26 @@ Read before acquiring, building, validating, publishing, rebinding or activating
 These are mandatory procedures routed by [AGENTS.md](../../AGENTS.md).
 They do not authorize a new milestone or target mutation.
 
+EMPTY-PACKAGES-BOOTSTRAP-01 allows an existing empty `--runtime-input` directory.
+Compatibility then comes from repeatable `--platform OS:VERSION:ARCH`, or from
+the Linux build host's `/etc/os-release` and `uname -m`. The output retains the
+fixed runtime/packages and runtime/python directories; manifest platforms and
+component checksums remain mandatory. For a different target OS/version, supply
+its explicit identity rather than using the acquisition host's identity.
+
+Selected-node preparation uses installed prerequisites, then verified bundle
+RPMs, then existing configured approved DNF repositories for packages missing
+from both. It does not repair a corrupt RPM or incomplete offline closure by
+silently retrying online. This owner-approved fixed runtime prerequisite
+exception does not change service `requiredOffline` or deployment source policy.
+No repository is added/enabled, and the distributed bundle remains immutable.
+
+Owner clarification (2026-10-13, EMPTY-PACKAGES-BOOTSTRAP-01): DNF may update
+already installed dependencies while installing missing runtime prerequisites.
+When all prerequisites are installed, preparation performs no package transaction.
+Actual React/Wails Prepare/READY acceptance is outside this implementation stage;
+its absence does not constitute verified application-flow acceptance.
+
 ### S11 runtime-bundle acquisition host
 
 For SI11 bundle acquisition/builds, use the trusted RED OS acquisition host

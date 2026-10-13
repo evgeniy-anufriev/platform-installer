@@ -33,7 +33,7 @@ func TestBundleStageIsPrivateFreshAndArchiveInsideClaimedDirectory(t *testing.T)
 	if !strings.Contains(claim, "mkdir -m 0700") || !strings.Contains(claim, "stat -c %a /var/tmp") || strings.Contains(claim, "sudo") || strings.Contains(claim, "rm -rf") || strings.Contains(claim, "chmod") || strings.Contains(claim, "chown") {
 		t.Fatal("stage must claim a fresh private directory without changing shared permissions")
 	}
-	if runner.calls[1].name != "scp" || !strings.HasSuffix(runner.calls[1].args[len(runner.calls[1].args)-1], first+"/bundle.tar") {
+	if runner.calls[2].name != "scp" || !strings.HasSuffix(runner.calls[2].args[len(runner.calls[2].args)-1], first+"/bundle.tar") {
 		t.Fatal("archive written outside owned staging directory")
 	}
 }

@@ -300,6 +300,23 @@ func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bu
 	if err != nil {
 		return "", err
 	}
+	probe, err := t.ssh(ctx, node, "sh", []string{"-s"}, []byte("if command -v tar >/dev/null 2>&1; then printf 'TAR=1\\n'; else printf 'TAR=0\\n'; fi\n"))
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(string(probe)) == "TAR=0" {
+		if err := t.transferBundle(ctx, node, identity, stage, bundle.Root); err != nil {
+			return "", err
+		}
+		if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(remoteChecks(bundle))); err != nil {
+			return "", err
+		}
+		complete = true
+		return stage, nil
+	}
+	if strings.TrimSpace(string(probe)) != "TAR=1" {
+		return "", errors.New("EXECUTION_BUNDLE_TRANSFER_PREREQUISITE_INVALID")
+	}
 	archivePath, err := createBundleArchive(bundle)
 	if err != nil {
 		return "", err
@@ -310,7 +327,7 @@ func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bu
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
 		return "", err
 	}
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage\" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac\n[ \"$archive\" = \"$stage/bundle.tar\" ] || exit 64\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\n")); err != nil {
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage\" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac\n[ \"$archive\" = \"$stage/bundle.tar\" ] || exit 64\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\nmkdir -p -- \"$stage/runtime/packages\" \"$stage/runtime/python\"\n")); err != nil {
 		return "", err
 	}
 	script := remoteChecks(bundle)
@@ -409,20 +426,36 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 	if !validBundleStage(stage) {
 		return Runtime{}, errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
 	}
-	id := strings.TrimPrefix(bundle.Digest, "sha256:")
-	root := t.runtimeRoot()
-	release := path.Join(root, "releases", id)
-	candidate := stage
-	// Storage and detached controllers share the sudo effective UID. Existing
-	// foreign-owned storage fails closed; preparation never repairs it by chown.
-	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, root}, []byte(storageScript)); err != nil {
+	bootstrapScript, activationScript := runtimePreparationScripts(bundle)
+	platforms := make([]string, 0, len(bundle.Manifest.Platforms))
+	for _, platform := range bundle.Manifest.Platforms {
+		platforms = append(platforms, platform.OS+":"+platform.Version+":"+platform.Architecture)
+	}
+	bootstrap := "0"
+	for _, component := range bundle.Manifest.Components {
+		if component.Path == runtimeBootstrapComponent {
+			bootstrap = "1"
+		}
+	}
+	args := []string{"-n", "sh", "-s", "--", stage, t.runtimeRoot(), bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol, strings.Join(platforms, " "), bootstrap}
+	complete := false
+	defer func() {
+		if !complete {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			_, _ = t.ssh(cleanupCtx, node, "sudo", []string{"-n", "sh", "-s", "--", stage}, []byte(runtimeCandidateCleanupScript))
+		}
+	}()
+	if _, err := t.ssh(ctx, node, "sudo", args, []byte(bootstrapScript)); err != nil {
 		return Runtime{}, err
 	}
-	script := "set -eu\nstage=$1; release=$2; root=$3; bundle_digest=$4; bundle_version=$5; core_version=$6; protocol=$7\ncase \"$stage:$release:$root\" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime/releases/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\ncase \"$bundle_digest\" in sha256:*) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$root/releases\" \"$root/state\"\nsudo -n rm -rf -- \"$release\"\nsudo -n cp -a -- \"$stage\" \"$release\"\nsudo -n test -f \"$release/manifest.yaml\"\nsudo -n test -f \"$release/ansible-core/playbooks/execution-capabilities.yml\"\nsudo -n env ANSIBLE_CONFIG=\"$release/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$release/ansible-core/collections\" ansible-playbook -i localhost, \"$release/ansible-core/playbooks/execution-capabilities.yml\" -e \"platform_execution_runtime_root=$release\" -e \"platform_execution_bundle_digest=$bundle_digest\" >/dev/null\nsudo -n sh -c 'umask 077; printf \"BUNDLE_VERSION=%s\\nBUNDLE_DIGEST=%s\\nCORE_VERSION=%s\\nPROTOCOL=%s\\nANSIBLE=yes\\nCAPABILITIES=yes\\n\" \"$1\" \"$2\" \"$3\" \"$4\" > \"$5.new\"; mv -f -- \"$5.new\" \"$5\"' -- \"$bundle_version\" \"$bundle_digest\" \"$core_version\" \"$protocol\" \"$root/state/active\"\nsudo -n ln -sfn -- \"$release\" \"$root/current.new\"\nsudo -n mv -Tf -- \"$root/current.new\" \"$root/current\"\n"
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, release, root, bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol}, []byte(script)); err != nil {
+	if err := ctx.Err(); err != nil {
 		return Runtime{}, err
 	}
+	if _, err := t.ssh(ctx, node, "sudo", args, []byte(activationScript)); err != nil {
+		return Runtime{}, err
+	}
+	complete = true
 	return Runtime{BundleVersion: bundle.Manifest.BundleVersion, BundleDigest: bundle.Digest, CoreVersion: bundle.Manifest.CoreVersion, Protocol: bundle.Manifest.BootstrapProtocol, Ansible: true, Capabilities: true}, nil
 }
 func (t OpenSSHTransport) DiscardStagedRuntime(ctx context.Context, node Node, stage string) error {

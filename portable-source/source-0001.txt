@@ -33405,7 +33405,60 @@ artifactLock:
       run_once: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/build_execution_runtime_bundle.py","mode":420,"size":14166,"sha256":"c769d13968f7dac1e1545541567f84c9d2673adcf822fa16d87663c7479f7285","index":0,"count":1,"encoding":"utf-8","payloadBytes":14166}
+@@PORTABLE {"path":"ansible-core/tools/bootstrap_execution_runtime.sh","mode":420,"size":2743,"sha256":"a56043237772dd3794eb46a471083e4838a2188bb1d8128c0120ed40a3ead79d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2743}
+#!/bin/sh
+# Fixed pre-Python runtime bootstrap. Executed only from a verified root-owned bundle.
+set -eu
+release=$1
+platforms=$2
+fail() { printf '%s\n' "$1" >&2; exit 78; }
+[ "$(id -u)" = 0 ] || fail EXECUTION_BOOTSTRAP_NOT_ROOT
+[ -r /etc/os-release ] || fail EXECUTION_BOOTSTRAP_OS_RELEASE_MISSING
+. /etc/os-release
+architecture=$(uname -m)
+case "${ID-}:${VERSION_ID-}:$architecture" in *[!A-Za-z0-9._:-]*|::*|*:..:*|*:.:*) fail EXECUTION_BOOTSTRAP_PLATFORM_INVALID ;; esac
+case "${ID-}:$architecture" in redos:x86_64) ;; *) fail EXECUTION_BOOTSTRAP_OS_UNSUPPORTED ;; esac
+case " $platforms " in *" $ID:$VERSION_ID:$architecture "*) ;; *) fail EXECUTION_BOOTSTRAP_PLATFORM_MISMATCH ;; esac
+for tool in rpm dnf; do command -v "$tool" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_PACKAGE_TOOL_MISSING; done
+missing=''
+for package in python3 ansible-core openssl ca-certificates tar gzip; do
+    if rpm -q "$package" >/dev/null 2>&1; then
+        case "$package" in ansible-core) command=ansible-playbook ;; ca-certificates) command='' ;; *) command=$package ;; esac
+        if [ -n "$command" ]; then command -v "$command" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_INSTALLED_PACKAGE_BROKEN; fi
+    else
+        missing="$missing $package"
+    fi
+done
+if [ -z "$missing" ]; then printf '%s\n' BOOTSTRAP_SOURCE=INSTALLED; exit 0; fi
+directory=$release/runtime/packages/$ID/$VERSION_ID/$architecture
+local_names=''
+set --
+for artifact in "$directory"/*.rpm; do
+    if [ ! -e "$artifact" ] && [ ! -L "$artifact" ]; then continue; fi
+    [ -f "$artifact" ] && [ ! -L "$artifact" ] || fail EXECUTION_BOOTSTRAP_RPM_UNSAFE
+    name=$(rpm -qp --qf '%{NAME}' "$artifact" 2>/dev/null) || fail EXECUTION_BOOTSTRAP_RPM_INVALID
+    case "$name" in ''|-*|*[!A-Za-z0-9._+-]*) fail EXECUTION_BOOTSTRAP_RPM_INVALID ;; esac
+    case " $local_names " in *" $name "*) fail EXECUTION_BOOTSTRAP_RPM_AMBIGUOUS ;; esac
+    local_names="$local_names $name"
+    if ! rpm -q "$name" >/dev/null 2>&1; then set -- "$@" "$artifact"; fi
+done
+repository=''
+for package in $missing; do
+    case " $local_names " in *" $package "*) ;; *) repository="$repository $package" ;; esac
+done
+if [ -z "$repository" ]; then
+    dnf -q -y --disablerepo='*' --setopt=install_weak_deps=False install "$@" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_OFFLINE_INSTALL_FAILED
+    source=OFFLINE_BUNDLE
+else
+    for package in $repository; do set -- "$@" "$package"; done
+    dnf -q -y --setopt=install_weak_deps=False install "$@" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_REPOSITORY_INSTALL_FAILED
+    source=REPOSITORY_OR_MIXED
+fi
+for package in $missing; do rpm -q "$package" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_PACKAGE_NOT_INSTALLED; done
+printf 'BOOTSTRAP_SOURCE=%s\n' "$source"
+
+@@END
+@@PORTABLE {"path":"ansible-core/tools/build_execution_runtime_bundle.py","mode":420,"size":16061,"sha256":"b7fbd406b4b0ba8cc196a5316f90efa79f093eefe2a2d9bf37bf0b64937cab94","index":0,"count":1,"encoding":"utf-8","payloadBytes":16061}
 #!/usr/bin/env python3
 """Build a deterministic, versioned offline Execution Node runtime directory.
 
@@ -33418,6 +33471,8 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import shlex
 from pathlib import Path
 import shutil
 import sys
@@ -33572,25 +33627,50 @@ def schema_digest():
     return digest_bytes(json.dumps(entries, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
 
-def runtime_platforms(runtime_root):
+def parse_platform(value):
+    parts = value.split(":")
+    if len(parts) != 3 or any(part in {"", ".", ".."} or len(part) > 64 or
+                              re.fullmatch(r"[A-Za-z0-9._-]+", part) is None for part in parts):
+        raise ValueError("platform must be OS:VERSION:ARCH with safe nonempty tokens")
+    return dict(zip(("os", "version", "architecture"), parts))
+
+
+def host_platform(os_release=Path("/etc/os-release"), architecture=None):
+    if os.name != "posix":
+        raise ValueError("empty runtime packages require --platform OS:VERSION:ARCH or Linux os-release")
+    values = {}
+    try:
+        for line in os_release.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key in {"ID", "VERSION_ID"}:
+                parsed = shlex.split(value, comments=True)
+                if len(parsed) != 1 or key in values:
+                    raise ValueError("invalid os-release identity")
+                values[key] = parsed[0]
+        return parse_platform("{}:{}:{}".format(values["ID"], values["VERSION_ID"],
+                              architecture if architecture is not None else os.uname().machine))
+    except (OSError, KeyError, ValueError) as error:
+        raise ValueError("cannot infer Linux platform from os-release; specify --platform OS:VERSION:ARCH") from error
+
+
+def runtime_platforms(runtime_root, declared=None):
     platforms = []
     package_root = runtime_root / "packages"
-    python_root = runtime_root / "python"
-    if not package_root.is_dir() or not python_root.is_dir():
-        raise ValueError("runtime input must contain packages/ and python/")
-    for os_root in sorted(package_root.iterdir()):
+    for os_root in sorted(package_root.iterdir()) if package_root.is_dir() else []:
+        if not os_root.is_dir():
+            continue
         for version_root in sorted(os_root.iterdir()):
+            if not version_root.is_dir():
+                continue
             for architecture_root in sorted(version_root.iterdir()):
                 if not architecture_root.is_dir() or not any(architecture_root.iterdir()):
                     continue
-                platforms.append({
-                    "os": os_root.name,
-                    "version": version_root.name,
-                    "architecture": architecture_root.name,
-                })
+                platforms.append(parse_platform(":".join((os_root.name, version_root.name, architecture_root.name))))
+    platforms.extend(parse_platform(value) for value in (declared or []))
     if not platforms:
-        raise ValueError("runtime input contains no package platform")
-    return platforms
+        platforms.append(host_platform())
+    unique = {(p["os"], p["version"], p["architecture"]) for p in platforms}
+    return [dict(zip(("os", "version", "architecture"), item)) for item in sorted(unique)]
 
 
 def artifact_type(media_type):
@@ -33664,7 +33744,7 @@ def artifact_sources(root):
     return sorted(result, key=lambda item: (item["serviceType"], item["requirementId"], item["ref"]))
 
 
-def build(output, runtime, bundle_version, core_version):
+def build(output, runtime, bundle_version, core_version, platforms=None):
     output = output.resolve()
     if output.exists():
         raise ValueError("output already exists: %s" % output)
@@ -33676,6 +33756,8 @@ def build(output, runtime, bundle_version, core_version):
         for destination, source in SOURCE_ROOTS:
             copy_tree(source, temporary / destination)
         copy_tree(runtime, temporary / "runtime")
+        for directory in ("packages", "python"):
+            (temporary / "runtime" / directory).mkdir(parents=True, exist_ok=True)
         validate_catalog_layout(temporary)
         write_ui_static_defaults(temporary)
         manifest = {
@@ -33686,7 +33768,7 @@ def build(output, runtime, bundle_version, core_version):
             "coreVersion": core_version,
             "catalogDigest": catalog_digest(),
             "schemaDigest": schema_digest(),
-            "platforms": runtime_platforms(runtime),
+            "platforms": runtime_platforms(runtime, platforms),
             "artifactSources": artifact_sources(temporary),
             "components": components(temporary),
         }
@@ -33707,9 +33789,11 @@ def main():
     parser.add_argument("--runtime-input", type=Path, required=True)
     parser.add_argument("--bundle-version", required=True)
     parser.add_argument("--core-version", default="0.1.0")
+    parser.add_argument("--platform", action="append", default=[], metavar="OS:VERSION:ARCH",
+                        help="explicit platform; repeat for multiple targets, otherwise infer populated packages or Linux os-release")
     args = parser.parse_args()
     try:
-        build(args.output, args.runtime_input.resolve(), args.bundle_version, args.core_version)
+        build(args.output, args.runtime_input.resolve(), args.bundle_version, args.core_version, args.platform)
     except ValueError as error:
         print("execution runtime bundle blocked: %s" % error, file=sys.stderr)
         return 2
@@ -61265,7 +61349,7 @@ export function ServerInformationDialog({ hostId, onProbe, onCheck, onResult, on
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56133,"sha256":"3cd5d21c6c2513f0878644efb051ea9f5ae47c2b5fcce1724ba8492af5b0817a","index":0,"count":2,"encoding":"utf-8","payloadBytes":50919}
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56789,"sha256":"1f5cfb4328f56292e3e781c544a7164eee97dce2f34f351fb03a1e85159359a3","index":0,"count":2,"encoding":"utf-8","payloadBytes":51095}
 import { useEffect, useState, type ReactNode } from "react";
 import type {
   ExecutionNodeContext,
@@ -62022,6 +62106,13 @@ function ExecutionNodePanel({
         Выбор узла хранится только в приложении и не меняет проект. Подготовка —
         только после подтверждения.
       </p>
+      {preparation?.steps?.some((step) => step.id === "ensure-runtime-packages") && (
+        <p className="muted">
+          Уже установленные runtime-пакеты используются без повторной установки.
+          Недостающие пакеты берутся из набора установки; если их в нём нет — из
+          настроенных DNF-репозиториев узла.
+        </p>
+      )}
       {!onInformationCheck && onProbe && context?.selectionKind === "PROJECT_SERVER" && (
         <div className="execution-node-host-key">
           <p className="muted">
@@ -62174,7 +62265,7 @@ function ExecutionNodePanel({
                 if (!planId) return;
                 if (
                   !window.confirm(
-                    "Подготовить выбранный узел выполнения? Это может активировать проверенное окружение.",
+                    "Подготовить выбранный узел выполнения? Это может установить недостающие runtime-пакеты из набора установки или настроенных DNF-репозиториев и активировать проверенное окружение.",
                   )
                 )
                   return;
@@ -62680,7 +62771,10 @@ function ServerDialog({
     }
     await onAppend(intent);
   };
-  const typeDisabled = !!configError || (mode === "edit" && !!configError);
+  const typeDisabled = !!configError 
+@@END
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56789,"sha256":"1f5cfb4328f56292e3e781c544a7164eee97dce2f34f351fb03a1e85159359a3","index":1,"count":2,"encoding":"utf-8","payloadBytes":5694}
+|| (mode === "edit" && !!configError);
   return (
     <div className="modal" role="presentation">
       <form
@@ -62695,10 +62789,7 @@ function ServerDialog({
         </h1>
         <label>
           ID сервера
-    
-@@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56133,"sha256":"3cd5d21c6c2513f0878644efb051ea9f5ae47c2b5fcce1724ba8492af5b0817a","index":1,"count":2,"encoding":"utf-8","payloadBytes":5214}
-      <input
+          <input
             value={hostId}
             onChange={(event) => setHostId(event.target.value)}
             readOnly={mode === "edit"}
@@ -89508,7 +89599,7 @@ func newStartAttemptID() (string, error) {
 func NewRequestID() (string, error) { return newStartAttemptID() }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":44193,"sha256":"66bb8dfa30b269ad61a01436c1158a5bf80b6264d5921478f1d1c6a71af4addb","index":0,"count":1,"encoding":"utf-8","payloadBytes":44193}
+@@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":42548,"sha256":"3d069313874145c9bed6d0d9ed5705c398ed8752b0bc2e25c6ad7c465f50e78a","index":0,"count":1,"encoding":"utf-8","payloadBytes":42548}
 package executionnode
 
 // This adapter is deliberately semantic: all remote paths and shell programs
@@ -89811,6 +89902,23 @@ func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bu
 	if err != nil {
 		return "", err
 	}
+	probe, err := t.ssh(ctx, node, "sh", []string{"-s"}, []byte("if command -v tar >/dev/null 2>&1; then printf 'TAR=1\\n'; else printf 'TAR=0\\n'; fi\n"))
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(string(probe)) == "TAR=0" {
+		if err := t.transferBundle(ctx, node, identity, stage, bundle.Root); err != nil {
+			return "", err
+		}
+		if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(remoteChecks(bundle))); err != nil {
+			return "", err
+		}
+		complete = true
+		return stage, nil
+	}
+	if strings.TrimSpace(string(probe)) != "TAR=1" {
+		return "", errors.New("EXECUTION_BUNDLE_TRANSFER_PREREQUISITE_INVALID")
+	}
 	archivePath, err := createBundleArchive(bundle)
 	if err != nil {
 		return "", err
@@ -89821,7 +89929,7 @@ func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bu
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
 		return "", err
 	}
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage\" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac\n[ \"$archive\" = \"$stage/bundle.tar\" ] || exit 64\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\n")); err != nil {
+	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage\" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac\n[ \"$archive\" = \"$stage/bundle.tar\" ] || exit 64\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\nmkdir -p -- \"$stage/runtime/packages\" \"$stage/runtime/python\"\n")); err != nil {
 		return "", err
 	}
 	script := remoteChecks(bundle)
@@ -89920,20 +90028,36 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 	if !validBundleStage(stage) {
 		return Runtime{}, errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
 	}
-	id := strings.TrimPrefix(bundle.Digest, "sha256:")
-	root := t.runtimeRoot()
-	release := path.Join(root, "releases", id)
-	candidate := stage
-	// Storage and detached controllers share the sudo effective UID. Existing
-	// foreign-owned storage fails closed; preparation never repairs it by chown.
-	storageScript := "set -eu\ncase \"$1:$2\" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$2/releases\" \"$2/state\"\nsudo -n env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=\"$1/ansible-core/tools\" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec(\"with _directory(EXECUTION_STATE_ROOT, create=True):\\n    pass\")'\n"
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, root}, []byte(storageScript)); err != nil {
+	bootstrapScript, activationScript := runtimePreparationScripts(bundle)
+	platforms := make([]string, 0, len(bundle.Manifest.Platforms))
+	for _, platform := range bundle.Manifest.Platforms {
+		platforms = append(platforms, platform.OS+":"+platform.Version+":"+platform.Architecture)
+	}
+	bootstrap := "0"
+	for _, component := range bundle.Manifest.Components {
+		if component.Path == runtimeBootstrapComponent {
+			bootstrap = "1"
+		}
+	}
+	args := []string{"-n", "sh", "-s", "--", stage, t.runtimeRoot(), bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol, strings.Join(platforms, " "), bootstrap}
+	complete := false
+	defer func() {
+		if !complete {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			_, _ = t.ssh(cleanupCtx, node, "sudo", []string{"-n", "sh", "-s", "--", stage}, []byte(runtimeCandidateCleanupScript))
+		}
+	}()
+	if _, err := t.ssh(ctx, node, "sudo", args, []byte(bootstrapScript)); err != nil {
 		return Runtime{}, err
 	}
-	script := "set -eu\nstage=$1; release=$2; root=$3; bundle_digest=$4; bundle_version=$5; core_version=$6; protocol=$7\ncase \"$stage:$release:$root\" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime/releases/*:/var/lib/platform-installer/runtime) ;; *) exit 64;; esac\ncase \"$bundle_digest\" in sha256:*) ;; *) exit 64;; esac\nsudo -n install -d -m 0750 \"$root/releases\" \"$root/state\"\nsudo -n rm -rf -- \"$release\"\nsudo -n cp -a -- \"$stage\" \"$release\"\nsudo -n test -f \"$release/manifest.yaml\"\nsudo -n test -f \"$release/ansible-core/playbooks/execution-capabilities.yml\"\nsudo -n env ANSIBLE_CONFIG=\"$release/ansible-core/ansible.cfg\" ANSIBLE_COLLECTIONS_PATH=\"$release/ansible-core/collections\" ansible-playbook -i localhost, \"$release/ansible-core/playbooks/execution-capabilities.yml\" -e \"platform_execution_runtime_root=$release\" -e \"platform_execution_bundle_digest=$bundle_digest\" >/dev/null\nsudo -n sh -c 'umask 077; printf \"BUNDLE_VERSION=%s\\nBUNDLE_DIGEST=%s\\nCORE_VERSION=%s\\nPROTOCOL=%s\\nANSIBLE=yes\\nCAPABILITIES=yes\\n\" \"$1\" \"$2\" \"$3\" \"$4\" > \"$5.new\"; mv -f -- \"$5.new\" \"$5\"' -- \"$bundle_version\" \"$bundle_digest\" \"$core_version\" \"$protocol\" \"$root/state/active\"\nsudo -n ln -sfn -- \"$release\" \"$root/current.new\"\nsudo -n mv -Tf -- \"$root/current.new\" \"$root/current\"\n"
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", candidate, release, root, bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol}, []byte(script)); err != nil {
+	if err := ctx.Err(); err != nil {
 		return Runtime{}, err
 	}
+	if _, err := t.ssh(ctx, node, "sudo", args, []byte(activationScript)); err != nil {
+		return Runtime{}, err
+	}
+	complete = true
 	return Runtime{BundleVersion: bundle.Manifest.BundleVersion, BundleDigest: bundle.Digest, CoreVersion: bundle.Manifest.CoreVersion, Protocol: bundle.Manifest.BootstrapProtocol, Ansible: true, Capabilities: true}, nil
 }
 func (t OpenSSHTransport) DiscardStagedRuntime(ctx context.Context, node Node, stage string) error {
@@ -91527,6 +91651,168 @@ func waitObserver(ctx context.Context, duration time.Duration) bool {
 		return true
 	}
 }
+
+@@END
+@@PORTABLE {"path":"internal/executionnode/runtime_bootstrap.go","mode":420,"size":8160,"sha256":"53cdf6cd71fb054e7b8455c491fa8fd4fdbbc8270169a0e86eebeffcdafe6cfe","index":0,"count":1,"encoding":"utf-8","payloadBytes":8160}
+package executionnode
+
+import (
+	"fmt"
+	"strings"
+
+	"platform-installer/internal/executionbundle"
+)
+
+const runtimeBootstrapComponent = "ansible-core/tools/bootstrap_execution_runtime.sh"
+
+func shellLiteral(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
+
+// Both phases recheck immutable bytes under root ownership. Bootstrap has no
+// activation side effects: cancelling its SSH call cannot later switch current.
+func runtimePreparationScripts(bundle executionbundle.Verified) (string, string) {
+	var checks strings.Builder
+	fmt.Fprintf(&checks, "[ \"$actual_files\" = %d ]\n", len(bundle.Manifest.Components)+1)
+	fmt.Fprintf(&checks, "printf '%%s  %%s\\n' %s manifest.yaml | sha256sum -c - >/dev/null\n", shellLiteral(strings.TrimPrefix(bundle.Digest, "sha256:")))
+	for _, component := range bundle.Manifest.Components {
+		file := shellLiteral(component.Path)
+		fmt.Fprintf(&checks, "[ -f %s ] && [ ! -L %s ] && [ \"$(stat -c %%u -- %s)\" = 0 ]\n", file, file, file)
+		fmt.Fprintf(&checks, "[ \"$(wc -c < %s)\" = %d ]\nprintf '%%s  %%s\\n' %s %s | sha256sum -c - >/dev/null\n", file, component.Size, shellLiteral(strings.TrimPrefix(component.SHA256, "sha256:")), file)
+	}
+	common := strings.Replace(runtimePreparationCommon, "__COMPONENT_CHECKS__", checks.String(), 1)
+	return common + runtimeBootstrapPhase, common + runtimeActivationPhase
+}
+
+const runtimePreparationCommon = `set -eu
+stage=$1; root=$2; bundle_digest=$3; bundle_version=$4; core_version=$5; protocol=$6; platforms=$7; bootstrap=$8
+fail() { printf '%s\n' "$1" >&2; exit 78; }
+case "$stage:$root" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime) ;; *) fail EXECUTION_BUNDLE_STAGE_INVALID ;; esac
+nonce=${stage##*-}
+id=${bundle_digest#sha256:}
+case "$nonce:$id" in *[!0-9a-f:]*|:*) fail EXECUTION_BUNDLE_DIGEST_INVALID ;; esac
+[ "${#nonce}" = 32 ] && [ "${#id}" = 64 ] && [ "$bundle_digest" = "sha256:$id" ] || fail EXECUTION_BUNDLE_DIGEST_INVALID
+candidate=$root/releases/.prepare-$nonce
+release=$root/releases/$id
+[ "$(id -u)" = 0 ] || fail EXECUTION_BOOTSTRAP_NOT_ROOT
+for directory in /var/lib/platform-installer "$root" "$root/releases" "$root/state"; do
+    [ ! -L "$directory" ] || fail EXECUTION_RUNTIME_DIRECTORY_UNSAFE
+    if [ -e "$directory" ]; then
+        [ -d "$directory" ] && [ "$(stat -c %u "$directory")" = 0 ] || fail EXECUTION_RUNTIME_DIRECTORY_UNSAFE
+        mode=$(stat -c %a "$directory")
+        [ "$((0$mode & 022))" = 0 ] || fail EXECUTION_RUNTIME_DIRECTORY_UNSAFE
+    else
+        install -d -m 0750 "$directory"
+    fi
+done
+command -v flock >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_LOCK_TOOL_MISSING
+[ ! -L "$root/state/prepare.lock" ] || fail EXECUTION_RUNTIME_LOCK_UNSAFE
+if [ -e "$root/state/prepare.lock" ]; then
+    [ -f "$root/state/prepare.lock" ] && [ "$(stat -c %u "$root/state/prepare.lock")" = 0 ] && [ "$(stat -c %h "$root/state/prepare.lock")" = 1 ] || fail EXECUTION_RUNTIME_LOCK_UNSAFE
+    mode=$(stat -c %a "$root/state/prepare.lock")
+    [ "$((0$mode & 022))" = 0 ] || fail EXECUTION_RUNTIME_LOCK_UNSAFE
+fi
+umask 077
+exec 9>"$root/state/prepare.lock"
+flock -n 9 || fail EXECUTION_RUNTIME_PREPARATION_BUSY
+verify_bundle() (
+    directory=$1
+    allow_cache=${2-0}
+    [ -d "$directory" ] && [ ! -L "$directory" ] && [ "$(stat -c %u "$directory")" = 0 ] || exit 78
+    cd -- "$directory"
+    [ -z "$(find . -type l -o \( ! -type f -a ! -type d \) -print -quit)" ] || exit 78
+    [ -z "$(find . -perm /022 -print -quit)" ] || exit 78
+    [ -z "$(find . ! -uid 0 -print -quit)" ] || exit 78
+    if [ "$allow_cache" = 1 ]; then
+        actual_files=$(find . -type f ! -path '*/__pycache__/*.pyc' -printf . | wc -c)
+    else
+        actual_files=$(find . -type f -printf . | wc -c)
+    fi
+    __COMPONENT_CHECKS__
+)
+`
+
+const runtimeBootstrapPhase = `
+[ -d "$stage" ] && [ ! -L "$stage" ] || fail EXECUTION_BUNDLE_STAGE_INVALID
+[ ! -e "$candidate" ] && [ ! -L "$candidate" ] || fail EXECUTION_RUNTIME_CANDIDATE_EXISTS
+success=0
+cleanup() { if [ "$success" = 0 ]; then rm -rf -- "$candidate"; fi; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+install -d -m 0700 "$candidate"
+cp -R --no-dereference -- "$stage/." "$candidate/"
+[ -z "$(find "$candidate" -type l -o \( ! -type f -a ! -type d \) -print -quit)" ] || fail EXECUTION_RUNTIME_CANDIDATE_UNSAFE
+chown -R root:root -- "$candidate"
+find "$candidate" -type d -exec chmod 0750 {} +
+find "$candidate" -type f -exec chmod 0640 {} +
+verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
+if [ "$bootstrap" = 1 ]; then
+    sh "$candidate/ansible-core/tools/bootstrap_execution_runtime.sh" "$candidate" "$platforms"
+else
+    # Legacy bundles remain usable with manually installed prerequisites.
+    command -v python3 >/dev/null 2>&1 && command -v ansible-playbook >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_LEGACY_PREREQUISITES_MISSING
+fi
+success=1
+`
+
+const runtimeActivationPhase = `
+verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
+created=0; switching=0; success=0
+backup=$root/state/.prepare-$nonce
+[ ! -e "$backup" ] && [ ! -L "$backup" ] || fail EXECUTION_RUNTIME_BACKUP_EXISTS
+install -d -m 0700 "$backup"
+cleanup() {
+    if [ "$success" = 0 ] && [ "$switching" = 1 ]; then
+        if [ -L "$backup/current" ]; then mv -Tf -- "$backup/current" "$root/current"; else rm -f -- "$root/current"; fi
+        if [ -f "$backup/active" ]; then mv -f -- "$backup/active" "$root/state/active"; else rm -f -- "$root/state/active"; fi
+    fi
+    rm -rf -- "$candidate" "$backup"
+    if [ "$success" = 0 ] && [ "$created" = 1 ]; then rm -rf -- "$release"; fi
+}
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+if [ -e "$root/current" ] || [ -L "$root/current" ]; then
+    [ -L "$root/current" ] || fail EXECUTION_RUNTIME_CURRENT_UNSAFE
+    previous=$(readlink "$root/current")
+    case "$previous" in "$root/releases/"*) ;; *) fail EXECUTION_RUNTIME_CURRENT_UNSAFE ;; esac
+    cp -P -- "$root/current" "$backup/current"
+fi
+if [ -e "$root/state/active" ] || [ -L "$root/state/active" ]; then
+    [ -f "$root/state/active" ] && [ ! -L "$root/state/active" ] && [ "$(stat -c %u "$root/state/active")" = 0 ] || fail EXECUTION_RUNTIME_ACTIVE_UNSAFE
+    cp -p -- "$root/state/active" "$backup/active"
+fi
+if [ -e "$release" ] || [ -L "$release" ]; then
+    verify_bundle "$release" 1 || fail EXECUTION_RUNTIME_EXISTING_RELEASE_INVALID
+else
+    mv -- "$candidate" "$release"
+    created=1
+fi
+env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$release/ansible-core/tools" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec("with _directory(EXECUTION_STATE_ROOT, create=True):\n    pass\")'
+env PYTHONDONTWRITEBYTECODE=1 ANSIBLE_CONFIG="$release/ansible-core/ansible.cfg" ANSIBLE_COLLECTIONS_PATH="$release/ansible-core/collections" ansible-playbook -i localhost, "$release/ansible-core/playbooks/execution-capabilities.yml" -e "platform_execution_runtime_root=$release" -e "platform_execution_bundle_digest=$bundle_digest" >/dev/null
+printf 'BUNDLE_VERSION=%s\nBUNDLE_DIGEST=%s\nCORE_VERSION=%s\nPROTOCOL=%s\nANSIBLE=yes\nCAPABILITIES=yes\n' "$bundle_version" "$bundle_digest" "$core_version" "$protocol" > "$backup/new-active"
+ln -s -- "$release" "$backup/new-current"
+switching=1
+mv -Tf -- "$backup/new-current" "$root/current"
+mv -f -- "$backup/new-active" "$root/state/active"
+success=1
+`
+
+const runtimeCandidateCleanupScript = `set -eu
+stage=$1
+case "$stage" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64 ;; esac
+nonce=${stage##*-}
+case "$nonce" in ''|*[!0-9a-f]*) exit 64 ;; esac
+[ "${#nonce}" = 32 ] || exit 64
+root=/var/lib/platform-installer/runtime
+[ -d "$root/state" ] && [ ! -L "$root/state" ] && [ "$(stat -c %u "$root/state")" = 0 ] || exit 64
+[ -f "$root/state/prepare.lock" ] && [ ! -L "$root/state/prepare.lock" ] || exit 64
+exec 9>"$root/state/prepare.lock"
+flock -n 9 || exit 75
+candidate=$root/releases/.prepare-$nonce
+[ ! -L "$root/releases" ] && [ ! -L "$candidate" ] || exit 64
+if [ -e "$candidate" ]; then
+    [ -d "$candidate" ] && [ "$(stat -c %u "$candidate")" = 0 ] || exit 64
+    rm -rf -- "$candidate"
+fi
+`
 
 @@END
 @@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":60887,"sha256":"358298d27ce618bc402e703537eedc0f63f4b4948a3fab4b77e0c0b6f87098ae","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
@@ -93218,7 +93504,7 @@ func parseServerInformation(output []byte) (ServerInformation, error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/service.go","mode":420,"size":14502,"sha256":"3cc8a4c9d51a84a313137c6203405c86d393c169db60a68398235d4353d46353","index":0,"count":1,"encoding":"utf-8","payloadBytes":14502}
+@@PORTABLE {"path":"internal/executionnode/service.go","mode":420,"size":14193,"sha256":"8f6bee6dc845e8913e957b9edb26e13b6dd504e935e76cfbcf4ba2bda6a92989","index":0,"count":1,"encoding":"utf-8","payloadBytes":14193}
 // Package executionnode owns the narrow pre-Core readiness lifecycle.
 package executionnode
 
@@ -93562,7 +93848,7 @@ func preparationSteps(state State) []Step {
 	if state == Incompatible || state == Broken || state == Unreachable {
 		return []Step{{"blocked", "BLOCKED", false}}
 	}
-	return []Step{{"verify-bundle", "VERIFY", false}, {"reconcile-workspace", "RECONCILE", true}, {"stage-runtime", "TRANSFER", true}, {"activate-runtime", "ACTIVATE", true}, {"capability-handshake", "VERIFY", false}}
+	return []Step{{"verify-bundle", "VERIFY", false}, {"reconcile-workspace", "RECONCILE", true}, {"stage-runtime", "TRANSFER", true}, {"ensure-runtime-packages", "BOOTSTRAP", true}, {"activate-runtime", "ACTIVATE", true}, {"capability-handshake", "VERIFY", false}}
 }
 func planDigest(plan Plan) string {
 	plan.ID, plan.Digest, plan.ExpiresAt = "", "", time.Time{}
@@ -112963,481 +113249,5 @@ readme: README.md
 authors: [Platform Installer V2]
 description: Platform HAProxy HTTPS routing role
 license: [Apache-2.0]
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/modules/archive_managed_backends.py","mode":420,"size":15343,"sha256":"f353e6d01549239b38b58ad1b52c7bbb3dbfc508c4bda0a29b8d69dbe4cd68eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":15343}
-#!/usr/bin/python
-"""Preflight and archive only proven Platform-owned HAProxy backend fragments.
-
-This intentionally handles one fixed HAProxy layout, not arbitrary filesystem
-cleanup. The retained, exact prior Platform candidate proves the old inventory.
-"""
-
-from __future__ import absolute_import, division, print_function
-
-__metaclass__ = type
-
-import os
-import re
-import stat
-import uuid
-import hashlib
-
-from ansible.module_utils.basic import AnsibleModule
-
-
-DOCUMENTATION = r'''
----
-module: archive_managed_backends
-short_description: Guard and archive exact owned HAProxy backend fragments
-description:
-  - Rejects unowned reserved backend files and archives proven stale fragments before publication.
-options:
-  config_directory:
-    type: path
-    required: true
-    description: Fixed HAProxy configuration root.
-  candidate_files:
-    type: list
-    elements: str
-    required: true
-    description: Exact candidate backend fragment basenames.
-  activation_required:
-    type: bool
-    required: true
-    description: Whether the validated candidate differs from the active graph.
-  operation:
-    type: str
-    choices: [capture, archive]
-    default: archive
-  previous_inventory:
-    type: list
-    elements: dict
-    description: Exact name/SHA-256 proof from capture before candidate reset.
-'''
-
-NAME = re.compile(r"30-backend-[a-z][a-z0-9._-]*\.cfg\Z")
-MAX_FILE = 8 * 1024 * 1024
-MAX_FILES = 256
-MAX_TOTAL = 32 * 1024 * 1024
-OPEN_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-
-
-class ArchiveError(Exception):
-    pass
-
-
-def require(ok, code):
-    if not ok:
-        raise ArchiveError(code)
-
-
-def secure_directory(fd):
-    info = os.fstat(fd)
-    require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0, "HAPROXY_ARCHIVE_DIRECTORY_UNSAFE")
-    # A root-owned sticky ancestor such as /var/tmp cannot rename a root-owned
-    # child; every actual HAProxy/archival directory remains non-writable.
-    require(not (info.st_mode & 0o022) or bool(info.st_mode & stat.S_ISVTX),
-            "HAPROXY_ARCHIVE_DIRECTORY_UNSAFE")
-    return info
-
-
-def open_directory_path(path):
-    require(isinstance(path, str) and path.startswith("/") and
-            not any(part in (".", "..") for part in path.split("/")),
-            "HAPROXY_ARCHIVE_PATH_INVALID")
-    current = os.open("/", OPEN_DIR)
-    try:
-        secure_directory(current)
-        for part in (value for value in path.split("/") if value):
-            next_fd = os.open(part, OPEN_DIR, dir_fd=current)
-            secure_directory(next_fd)
-            os.close(current)
-            current = next_fd
-        return current
-    except BaseException:
-        os.close(current)
-        raise
-
-
-def child_directory(parent, name, create=False):
-    if create:
-        try:
-            os.mkdir(name, 0o700, dir_fd=parent)
-        except FileExistsError:
-            pass
-    fd = os.open(name, OPEN_DIR, dir_fd=parent)
-    info = secure_directory(fd)
-    require(not (info.st_mode & 0o077), "HAPROXY_ARCHIVE_DIRECTORY_UNSAFE")
-    require(info.st_dev == os.fstat(parent).st_dev, "HAPROXY_ARCHIVE_MOUNT_UNSAFE")
-    return fd
-
-
-def read_regular(parent, name):
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
-    try:
-        before = os.fstat(fd)
-        require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and
-                not (before.st_mode & 0o022) and before.st_nlink == 1 and
-                before.st_size <= MAX_FILE and before.st_dev == os.fstat(parent).st_dev,
-                "HAPROXY_ARCHIVE_FILE_UNSAFE")
-        data = bytearray()
-        while len(data) <= MAX_FILE:
-            block = os.read(fd, min(65536, MAX_FILE + 1 - len(data)))
-            if not block:
-                break
-            data.extend(block)
-        after = os.fstat(fd)
-        require(len(data) <= MAX_FILE and len(data) == before.st_size and
-                (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) ==
-                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns),
-                "HAPROXY_ARCHIVE_FILE_CHANGED")
-        return bytes(data), before
-    finally:
-        os.close(fd)
-
-
-def write_snapshot(parent, name, data, source):
-    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                 0o600, dir_fd=parent)
-    try:
-        with os.fdopen(fd, "wb", closefd=False) as output:
-            output.write(data)
-            output.flush()
-        os.fchown(fd, source.st_uid, source.st_gid)
-        os.fchmod(fd, stat.S_IMODE(source.st_mode))
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-
-
-def capture_prior_candidate(config_directory, name_prefix=''):
-    """Prove old active backends against the retained complete candidate graph."""
-    try:
-        config_fd = open_directory_path(config_directory)
-    except FileNotFoundError:
-        return []  # A fresh installation has no active backend inventory.
-    try:
-        try:
-            active_fd = os.open("conf.d", OPEN_DIR, dir_fd=config_fd)
-        except FileNotFoundError:
-            return []
-        try:
-            secure_directory(active_fd)
-            active_names = sorted(os.listdir(active_fd))
-            backend_names = [name for name in active_names if name.startswith("30-backend-")]
-            if not backend_names:
-                return []
-            require(len(active_names) <= MAX_FILES and
-                    all(isinstance(name, str) and "/" not in name for name in active_names),
-                    "HAPROXY_PRIOR_GRAPH_INVALID")
-            # Old releases retained their validated .platform-candidate. If it
-            # is missing or differs, no old file is automatically owned.
-            candidate_fd = os.open("." + (name_prefix + "-" if name_prefix else "") + "candidate", OPEN_DIR, dir_fd=config_fd)
-            try:
-                secure_directory(candidate_fd)
-                require(os.fstat(candidate_fd).st_dev == os.fstat(config_fd).st_dev,
-                        "HAPROXY_PRIOR_GRAPH_INVALID")
-                candidate_conf_fd = os.open("conf.d", OPEN_DIR, dir_fd=candidate_fd)
-                try:
-                    secure_directory(candidate_conf_fd)
-                    require(os.fstat(candidate_conf_fd).st_dev == os.fstat(active_fd).st_dev and
-                            sorted(os.listdir(candidate_conf_fd)) == active_names,
-                            "HAPROXY_PRIOR_GRAPH_INVALID")
-                    active_main, _ = read_regular(config_fd, "haproxy.cfg")
-                    candidate_main, _ = read_regular(candidate_fd, "haproxy.cfg")
-                    require(active_main == candidate_main, "HAPROXY_PRIOR_GRAPH_MISMATCH")
-                    total = len(active_main)
-                    inventory = []
-                    for name in active_names:
-                        active, _ = read_regular(active_fd, name)
-                        candidate, _ = read_regular(candidate_conf_fd, name)
-                        total += len(active)
-                        require(total <= MAX_TOTAL and active == candidate,
-                                "HAPROXY_PRIOR_GRAPH_MISMATCH")
-                        if name in backend_names:
-                            require(NAME.fullmatch(name), "HAPROXY_BACKEND_OWNERSHIP_UNPROVEN")
-                            inventory.append({"name": name, "sha256": hashlib.sha256(active).hexdigest()})
-                    return inventory
-                finally:
-                    os.close(candidate_conf_fd)
-            finally:
-                os.close(candidate_fd)
-        finally:
-            os.close(active_fd)
-    finally:
-        os.close(config_fd)
-
-
-def archive(config_directory, candidate_files, activation_required, previous_inventory=None, name_prefix=''):
-    if previous_inventory is None:
-        previous_inventory = []
-    require(isinstance(candidate_files, list) and len(candidate_files) <= MAX_FILES and
-            len(set(candidate_files)) == len(candidate_files) and
-            all(isinstance(name, str) and NAME.fullmatch(name) for name in candidate_files),
-            "HAPROXY_ARCHIVE_CANDIDATE_INVALID")
-    require(isinstance(previous_inventory, list) and len(previous_inventory) <= MAX_FILES and
-            all(isinstance(item, dict) and set(item) == {"name", "sha256"} and
-                isinstance(item["name"], str) and NAME.fullmatch(item["name"]) and
-                isinstance(item["sha256"], str) and
-                re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
-                for item in previous_inventory), "HAPROXY_PRIOR_INVENTORY_INVALID")
-    proof = {item["name"]: item["sha256"] for item in previous_inventory}
-    require(len(proof) == len(previous_inventory), "HAPROXY_PRIOR_INVENTORY_INVALID")
-    config_fd = open_directory_path(config_directory)
-    try:
-        conf_fd = os.open("conf.d", OPEN_DIR, dir_fd=config_fd)
-        try:
-            conf_info = secure_directory(conf_fd)
-            require(conf_info.st_dev == os.fstat(config_fd).st_dev,
-                    "HAPROXY_ARCHIVE_MOUNT_UNSAFE")
-            names = sorted(os.listdir(conf_fd))
-            backend_names = [name for name in names if name.startswith("30-backend-")]
-            owned_names = sorted(set(backend_names).union(
-                ("10-public.cfg", "20-local-stats.cfg", "90-stats-backends.cfg")).intersection(names))
-            require(len(owned_names) <= MAX_FILES, "HAPROXY_ARCHIVE_FILE_LIMIT")
-            previous = {}
-            total = 0
-            require(set(proof) == set(backend_names), "HAPROXY_BACKEND_OWNERSHIP_UNPROVEN")
-            for name in owned_names:
-                data, metadata = read_regular(conf_fd, name)
-                total += len(data)
-                require(total <= MAX_TOTAL, "HAPROXY_ARCHIVE_SIZE_LIMIT")
-                previous[name] = (data, metadata)
-                if name in backend_names:
-                    require(NAME.fullmatch(name) and
-                            hashlib.sha256(data).hexdigest() == proof[name],
-                            "HAPROXY_BACKEND_OWNERSHIP_UNPROVEN")
-            stale = sorted(set(backend_names).difference(candidate_files))
-            if not activation_required:
-                require(not stale, "HAPROXY_BACKEND_STALE_WITHOUT_ACTIVATION")
-                return {"changed": False, "archived": [], "archivePath": None}
-            try:
-                main = read_regular(config_fd, "haproxy.cfg")
-            except FileNotFoundError:
-                require(not previous, "HAPROXY_ARCHIVE_MAIN_MISSING")
-                main = None
-            if main is None:
-                return {"changed": False, "archived": [], "archivePath": None}
-            archive_name = "." + (name_prefix + "-" if name_prefix else "") + "backend-archive"
-            archive_fd = child_directory(config_fd, archive_name, create=True)
-            try:
-                token = "activation-" + uuid.uuid4().hex
-                session_fd = child_directory(archive_fd, token, create=True)
-                try:
-                    previous_fd = child_directory(session_fd, "previous", create=True)
-                    stale_fd = child_directory(session_fd, "stale", create=True)
-                    try:
-                        previous_conf_fd = child_directory(previous_fd, "conf.d", create=True)
-                        try:
-                            write_snapshot(previous_fd, "haproxy.cfg", *main)
-                            for name, (data, metadata) in previous.items():
-                                write_snapshot(previous_conf_fd, name, data, metadata)
-                            os.fsync(previous_conf_fd)
-                            os.fsync(previous_fd)
-                            moved = []
-                            try:
-                                for name in stale:
-                                    original = previous[name][1]
-                                    current = os.stat(name, dir_fd=conf_fd, follow_symlinks=False)
-                                    require((current.st_dev, current.st_ino, current.st_mtime_ns) ==
-                                            (original.st_dev, original.st_ino, original.st_mtime_ns),
-                                            "HAPROXY_ARCHIVE_FILE_CHANGED")
-                                    os.rename(name, name, src_dir_fd=conf_fd, dst_dir_fd=stale_fd)
-                                    moved.append(name)
-                                    archived = os.stat(name, dir_fd=stale_fd, follow_symlinks=False)
-                                    require(archived.st_ino == original.st_ino and archived.st_dev == original.st_dev,
-                                            "HAPROXY_ARCHIVE_IDENTITY_MISMATCH")
-                                os.fsync(stale_fd)
-                                os.fsync(conf_fd)
-                            except BaseException:
-                                for name in reversed(moved):
-                                    if name not in os.listdir(conf_fd):
-                                        os.rename(name, name, src_dir_fd=stale_fd, dst_dir_fd=conf_fd)
-                                raise
-                        finally:
-                            os.close(previous_conf_fd)
-                    finally:
-                        os.close(previous_fd)
-                        os.close(stale_fd)
-                    os.fsync(session_fd)
-                finally:
-                    os.close(session_fd)
-            finally:
-                os.close(archive_fd)
-            return {"changed": True, "archived": stale,
-                    "archivePath": os.path.join(config_directory, archive_name, token)}
-        finally:
-            os.close(conf_fd)
-    finally:
-        os.close(config_fd)
-
-
-def main():
-    module = AnsibleModule(argument_spec={
-        "config_directory": {"type": "path", "required": True},
-        "candidate_files": {"type": "list", "elements": "str", "default": []},
-        "activation_required": {"type": "bool", "default": False},
-        "operation": {"type": "str", "choices": ["capture", "archive"], "default": "archive"},
-        "previous_inventory": {"type": "list", "elements": "dict", "default": []},
-        "name_prefix": {"type": "str", "default": ""},
-    }, supports_check_mode=False)
-    try:
-        if module.params["name_prefix"] and not re.fullmatch(r"[a-z][a-z0-9_]{0,23}", module.params["name_prefix"]):
-            raise ValueError("HAPROXY_RESOURCE_PREFIX_INVALID")
-        if module.params["operation"] == "capture":
-            result = {"changed": False, "previousInventory": capture_prior_candidate(
-                module.params["config_directory"], module.params["name_prefix"])}
-        else:
-            result = archive(module.params["config_directory"], module.params["candidate_files"],
-                             module.params["activation_required"],
-                             module.params["previous_inventory"], module.params["name_prefix"])
-        module.exit_json(**result)
-    except (ArchiveError, OSError, ValueError) as error:
-        # The archive path and file contents are intentionally not included.
-        module.fail_json(msg=error.args[0] if isinstance(error, ArchiveError)
-                         else "HAPROXY_RESOURCE_PREFIX_INVALID" if isinstance(error, ValueError)
-                         else "HAPROXY_ARCHIVE_IO_FAILURE")
-
-
-if __name__ == "__main__":
-    main()
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/defaults/main.yml","mode":420,"size":1303,"sha256":"f25fe19f5bc1c910a4191b672c02742dc767dd8d472593c4259d1f77f5036773","index":0,"count":1,"encoding":"utf-8","payloadBytes":1303}
-platform_haproxy_package: haproxy
-platform_haproxy_service_name: haproxy
-platform_haproxy_binary: /usr/sbin/haproxy
-platform_haproxy_config_directory: /etc/haproxy
-platform_haproxy_main_config: /etc/haproxy/haproxy.cfg
-platform_haproxy_candidate_directory: "/etc/haproxy/.{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}candidate"
-platform_haproxy_conf_directory: /etc/haproxy/conf.d
-platform_haproxy_pki_directory: /etc/haproxy/pki
-platform_haproxy_tls_profile: platform-tls
-platform_haproxy_public_port: 443
-platform_haproxy_internal_stats_port: 8404
-platform_haproxy_runtime_socket_path: /run/haproxy/admin.sock
-platform_haproxy_systemd_dropin_directory: /etc/systemd/system/haproxy.service.d
-platform_haproxy_systemd_dropin_filename: "10-{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}runtime-directory.conf"
-platform_haproxy_global:
-  log:
-    - {address: 127.0.0.1, facility: local2}
-  maxconn: 4096
-platform_haproxy_defaults: {mode: http, timeout_connect: 5s, timeout_client: 30s, timeout_server: 30s}
-platform_haproxy_stats_backend_defaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
-platform_haproxy_phase: prepare
-platform_haproxy_full_reconcile: false
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate.yml","mode":420,"size":1885,"sha256":"9ffc7c43406bde2d2bb741688c333eb0f2a2e998d9de2e48bda90996a8dcf421","index":0,"count":1,"encoding":"utf-8","payloadBytes":1885}
----
-- name: Inspect active HAProxy main config before publication
-  ansible.builtin.stat:
-    path: "{{ platform_haproxy_main_config }}"
-    follow: false
-  register: _platform_haproxy_previous_main
-
-- name: Calculate previous active HAProxy graph digest when installed
-  ansible.builtin.shell: >-
-    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
-      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
-    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
-    sha256sum | awk '{print $1}'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: _platform_haproxy_previous_graph_digest
-  when: _platform_haproxy_previous_main.stat.isreg | default(false)
-
-- name: Prove backend ownership and archive only stale owned fragments
-  platform.haproxy.archive_managed_backends:
-    name_prefix: "{{ platform_name_prefix | default('', true) }}"
-    config_directory: "{{ platform_haproxy_config_directory }}"
-    candidate_files: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
-    previous_inventory: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
-    activation_required: >-
-      {{ not (_platform_haproxy_previous_main.stat.isreg | default(false)) or
-         _platform_haproxy_previous_graph_digest.stdout != _platform_haproxy_candidate_graph_digest.stdout }}
-  register: _platform_haproxy_backend_archive
-
-- name: Publish and verify exact validated HAProxy graph
-  block:
-    - name: Install and verify candidate graph
-      ansible.builtin.include_tasks: activate_publish.yml
-  rescue:
-    - name: Stop with recoverable HAProxy archive evidence
-      ansible.builtin.fail:
-        msg: >-
-          HAPROXY_ACTIVATION_RECOVERY_REQUIRED
-          archive={{ _platform_haproxy_backend_archive.archivePath | default('none', true) }}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_publish.yml","mode":420,"size":3019,"sha256":"5dea5454319749d7fc03757eb5fd1594a37c5d21232d48d3ba98616ea51425c0","index":0,"count":1,"encoding":"utf-8","payloadBytes":3019}
----
-- name: Install exact validated Platform main configuration atomically
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/haproxy.cfg"
-    dest: "{{ platform_haproxy_main_config }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  register: _platform_haproxy_main_config_install
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Install exact validated Platform HAProxy fragments atomically
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
-    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ ['10-public.cfg'] if platform_haproxy_partial_deployment_id is defined else ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg'] }}"
-  register: _platform_haproxy_fragment_install
-
-- name: Install exact validated managed HAProxy application backend fragments
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
-    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: >-
-    {{ (platform_haproxy_application_backends | map(attribute='configFileName') | list)
-       if platform_haproxy_partial_deployment_id is defined
-       else platform_haproxy_managed_application_backend_files | default([]) }}
-  register: _platform_haproxy_application_backend_install
-
-- name: Record whether the active HAProxy graph changed
-  ansible.builtin.set_fact:
-    platform_haproxy_active_artifacts_changed: >-
-      {{ (_platform_haproxy_main_config_install.changed | default(false)) or
-         (_platform_haproxy_fragment_install.results | default([]) | selectattr('changed') | list | length > 0) or
-         (_platform_haproxy_application_backend_install.results | default([]) | selectattr('changed') | list | length > 0) or
-         _platform_haproxy_backend_archive.changed }}
-
-- name: Calculate deterministic active HAProxy graph digest
-  ansible.builtin.shell: >-
-    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
-      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
-    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
-    sha256sum | awk '{print $1}'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: _platform_haproxy_active_graph_digest
-
-- name: Require exact candidate and active HAProxy graph equivalence
-  ansible.builtin.assert:
-    that:
-      - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
-    fail_msg: HAPROXY_CANDIDATE_ACTIVE_GRAPH_MISMATCH
-
-- name: Validate active HAProxy configuration before service lifecycle
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
-  changed_when: false
 
 @@END

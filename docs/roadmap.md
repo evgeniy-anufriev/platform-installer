@@ -223,6 +223,14 @@ Ready when:
 
 ### EXEC-01: Execution Node and target bootstrap
 
+EMPTY-PACKAGES-BOOTSTRAP-01 adds an owner-approved fixed-runtime prerequisite
+path: empty bundle payload with os-release/explicit platform identity, installed
+packages first, then supplied RPMs, then configured approved DNF repositories
+only when absent from both. Service source rules remain unchanged. See the
+[plan](work/runtime-bundle/empty-packages-bootstrap-plan.md) and
+[journal](work/runtime-bundle/empty-packages-bootstrap-journal.md); current
+implementation/acceptance status belongs only to CURRENT_STATE.
+
 Historical checkpoint: [source record](history/roadmap-checkpoints-20261012.md#exec-01-execution-node-and-target-bootstrap). Current status is in [CURRENT_STATE](../CURRENT_STATE.md).
 
 Ready when:

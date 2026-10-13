@@ -341,7 +341,7 @@ func preparationSteps(state State) []Step {
 	if state == Incompatible || state == Broken || state == Unreachable {
 		return []Step{{"blocked", "BLOCKED", false}}
 	}
-	return []Step{{"verify-bundle", "VERIFY", false}, {"reconcile-workspace", "RECONCILE", true}, {"stage-runtime", "TRANSFER", true}, {"activate-runtime", "ACTIVATE", true}, {"capability-handshake", "VERIFY", false}}
+	return []Step{{"verify-bundle", "VERIFY", false}, {"reconcile-workspace", "RECONCILE", true}, {"stage-runtime", "TRANSFER", true}, {"ensure-runtime-packages", "BOOTSTRAP", true}, {"activate-runtime", "ACTIVATE", true}, {"capability-handshake", "VERIFY", false}}
 }
 func planDigest(plan Plan) string {
 	plan.ID, plan.Digest, plan.ExpiresAt = "", "", time.Time{}
