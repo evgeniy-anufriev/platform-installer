@@ -143,6 +143,20 @@ The standalone distribution is a digest-locked offline bundle containing:
 - artifact manifest and signatures/trust metadata;
 - examples and operator documentation.
 
+Owner clarification (2026-10-13, EMPTY-PACKAGES-BOOTSTRAP-01): DNF may update
+already installed dependencies while installing missing runtime prerequisites.
+When all prerequisites are installed, preparation performs no package transaction.
+Actual React/Wails Prepare/READY acceptance is outside this implementation stage;
+its absence does not constitute verified application-flow acceptance.
+
+The explicit runtime prerequisite contract also supports an empty RPM payload:
+Linux build-host os-release or explicit platform metadata declares compatibility.
+Selected-node preparation consumes installed prerequisites first, then supplied
+verified RPMs, and installs prerequisites absent from both through the existing
+configured approved DNF repositories (ADR-021, EMPTY-PACKAGES-BOOTSTRAP-01).
+Such a bundle requires repository access on an unprovisioned node; service
+artifact closure requirements are unchanged.
+
 The execution node is a selectable logical execution role. It may be the
 supported local Linux Installer environment, an eligible project target, or an
 external Linux host. A dedicated Linux host is one supported topology, not a

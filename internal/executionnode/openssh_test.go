@@ -18,8 +18,11 @@ func TestActivationPreparesPrivateExecutionStorageBeforePublication(t *testing.T
 	if len(runner.calls) != 2 {
 		t.Fatalf("calls=%d", len(runner.calls))
 	}
-	script := runner.calls[0].input
-	for _, expected := range []string{"sudo -n", "PYTHONDONTWRITEBYTECODE=1", "_directory(EXECUTION_STATE_ROOT, create=True)"} {
+	if !strings.Contains(strings.Join(runner.calls[0].args, " "), "sudo -n sh") || !strings.Contains(strings.Join(runner.calls[1].args, " "), "sudo -n sh") {
+		t.Fatal("both preparation phases must use noninteractive sudo")
+	}
+	script := runner.calls[1].input
+	for _, expected := range []string{"PYTHONDONTWRITEBYTECODE=1", "_directory(EXECUTION_STATE_ROOT, create=True)", "verify_bundle", "flock -n"} {
 		if !strings.Contains(script, expected) {
 			t.Fatalf("missing %s", expected)
 		}
@@ -52,6 +55,9 @@ type recordingRunner struct{ calls []recordedCommand }
 
 func (r *recordingRunner) Run(_ context.Context, name string, args []string, input []byte) ([]byte, error) {
 	r.calls = append(r.calls, recordedCommand{name, append([]string(nil), args...), string(input)})
+	if strings.Contains(string(input), "TAR=1") {
+		return []byte("TAR=1\n"), nil
+	}
 	return []byte("OS=redos\nVERSION=8.0\nARCH=x86_64\nELEVATION=yes\nFREE=100\n"), nil
 }
 

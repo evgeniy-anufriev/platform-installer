@@ -28,6 +28,11 @@ V1 at `../platform-installer` is a reference only; do not copy its packages/mode
   compatible artifact in the immutable offline bundle is used; otherwise the
   operation is blocked. DEV may explicitly acquire required closure into a new
   bundle version; PROD never mutates the distributed bundle.
+- Owner-approved EMPTY-PACKAGES-BOOTSTRAP-01 limits a pre-Core exception to fixed
+  runtime prerequisites: installed packages first, verified bundle RPMs next,
+  then existing configured approved DNF repositories only when missing from
+  both. Never enable/add repositories or hide a corrupt/incomplete offline
+  closure behind an online retry. Service source selection is unchanged.
 - React/Wails owns rendering and transport only: it must not parse Ansible YAML
   or calculate topology, FQDN/VIP/provider, validation or service semantics.
 - Core owns derived `ProjectSnapshot`, endpoint/provider/PKI and deployment

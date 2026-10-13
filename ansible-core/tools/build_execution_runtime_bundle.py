@@ -10,6 +10,8 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import shlex
 from pathlib import Path
 import shutil
 import sys
@@ -164,25 +166,50 @@ def schema_digest():
     return digest_bytes(json.dumps(entries, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
 
-def runtime_platforms(runtime_root):
+def parse_platform(value):
+    parts = value.split(":")
+    if len(parts) != 3 or any(part in {"", ".", ".."} or len(part) > 64 or
+                              re.fullmatch(r"[A-Za-z0-9._-]+", part) is None for part in parts):
+        raise ValueError("platform must be OS:VERSION:ARCH with safe nonempty tokens")
+    return dict(zip(("os", "version", "architecture"), parts))
+
+
+def host_platform(os_release=Path("/etc/os-release"), architecture=None):
+    if os.name != "posix":
+        raise ValueError("empty runtime packages require --platform OS:VERSION:ARCH or Linux os-release")
+    values = {}
+    try:
+        for line in os_release.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key in {"ID", "VERSION_ID"}:
+                parsed = shlex.split(value, comments=True)
+                if len(parsed) != 1 or key in values:
+                    raise ValueError("invalid os-release identity")
+                values[key] = parsed[0]
+        return parse_platform("{}:{}:{}".format(values["ID"], values["VERSION_ID"],
+                              architecture if architecture is not None else os.uname().machine))
+    except (OSError, KeyError, ValueError) as error:
+        raise ValueError("cannot infer Linux platform from os-release; specify --platform OS:VERSION:ARCH") from error
+
+
+def runtime_platforms(runtime_root, declared=None):
     platforms = []
     package_root = runtime_root / "packages"
-    python_root = runtime_root / "python"
-    if not package_root.is_dir() or not python_root.is_dir():
-        raise ValueError("runtime input must contain packages/ and python/")
-    for os_root in sorted(package_root.iterdir()):
+    for os_root in sorted(package_root.iterdir()) if package_root.is_dir() else []:
+        if not os_root.is_dir():
+            continue
         for version_root in sorted(os_root.iterdir()):
+            if not version_root.is_dir():
+                continue
             for architecture_root in sorted(version_root.iterdir()):
                 if not architecture_root.is_dir() or not any(architecture_root.iterdir()):
                     continue
-                platforms.append({
-                    "os": os_root.name,
-                    "version": version_root.name,
-                    "architecture": architecture_root.name,
-                })
+                platforms.append(parse_platform(":".join((os_root.name, version_root.name, architecture_root.name))))
+    platforms.extend(parse_platform(value) for value in (declared or []))
     if not platforms:
-        raise ValueError("runtime input contains no package platform")
-    return platforms
+        platforms.append(host_platform())
+    unique = {(p["os"], p["version"], p["architecture"]) for p in platforms}
+    return [dict(zip(("os", "version", "architecture"), item)) for item in sorted(unique)]
 
 
 def artifact_type(media_type):
@@ -256,7 +283,7 @@ def artifact_sources(root):
     return sorted(result, key=lambda item: (item["serviceType"], item["requirementId"], item["ref"]))
 
 
-def build(output, runtime, bundle_version, core_version):
+def build(output, runtime, bundle_version, core_version, platforms=None):
     output = output.resolve()
     if output.exists():
         raise ValueError("output already exists: %s" % output)
@@ -268,6 +295,8 @@ def build(output, runtime, bundle_version, core_version):
         for destination, source in SOURCE_ROOTS:
             copy_tree(source, temporary / destination)
         copy_tree(runtime, temporary / "runtime")
+        for directory in ("packages", "python"):
+            (temporary / "runtime" / directory).mkdir(parents=True, exist_ok=True)
         validate_catalog_layout(temporary)
         write_ui_static_defaults(temporary)
         manifest = {
@@ -278,7 +307,7 @@ def build(output, runtime, bundle_version, core_version):
             "coreVersion": core_version,
             "catalogDigest": catalog_digest(),
             "schemaDigest": schema_digest(),
-            "platforms": runtime_platforms(runtime),
+            "platforms": runtime_platforms(runtime, platforms),
             "artifactSources": artifact_sources(temporary),
             "components": components(temporary),
         }
@@ -299,9 +328,11 @@ def main():
     parser.add_argument("--runtime-input", type=Path, required=True)
     parser.add_argument("--bundle-version", required=True)
     parser.add_argument("--core-version", default="0.1.0")
+    parser.add_argument("--platform", action="append", default=[], metavar="OS:VERSION:ARCH",
+                        help="explicit platform; repeat for multiple targets, otherwise infer populated packages or Linux os-release")
     args = parser.parse_args()
     try:
-        build(args.output, args.runtime_input.resolve(), args.bundle_version, args.core_version)
+        build(args.output, args.runtime_input.resolve(), args.bundle_version, args.core_version, args.platform)
     except ValueError as error:
         print("execution runtime bundle blocked: %s" % error, file=sys.stderr)
         return 2

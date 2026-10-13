@@ -187,8 +187,29 @@ Installer. Its manifest declares compatibility identity and SHA-256 for every
 component. Go validates that manifest and its root-contained regular files
 before transfer. A local package closure may be explicitly acquired from a
 trusted Execution Node's configured repositories, with per-file verification,
-then atomically published into the local offline bundle. Preparation itself
-never downloads packages or enables repositories.
+then atomically published into the local offline bundle.
+
+Owner-approved EMPTY-PACKAGES-BOOTSTRAP-01 (2026-10-13) permits a runtime bundle
+with empty packages. The builder discovers compatibility from populated payload
+directories, explicit `--platform OS:VERSION:ARCH`, or Linux `/etc/os-release`
+plus `uname -m`. Preparation uses installed runtime prerequisites first, then
+verified bundle RPMs. Only prerequisites absent from both may be obtained with
+DNF from the node's existing configured approved repositories; it never adds or
+enables repositories or substitutes a download after corrupt/incomplete offline
+input. This is a fixed pre-Core runtime exception, not a service source-policy
+change. A package-empty bundle is repository-dependent for an unprovisioned node.
+Owner clarification (2026-10-13, EMPTY-PACKAGES-BOOTSTRAP-01): DNF may update
+already installed dependencies while installing missing runtime prerequisites.
+When all prerequisites are installed, preparation performs no package transaction.
+Actual React/Wails Prepare/READY acceptance is outside this implementation stage;
+its absence does not constitute verified application-flow acceptance.
+
+Bootstrap is a fixed manifest-bound shell resource executed from root-owned,
+reverified content before Python/Ansible. Bootstrap and activation are separate
+SSH phases; cancellation cannot dispatch activation after interrupted bootstrap.
+Node-scoped flock and immutable same-digest release reuse protect concurrent
+preparations. Failed capabilities preserve the prior release/current/active
+metadata; OS package installation may remain after a later preparation failure.
 
 After activation, Core owns the first capability handshake and all later
 infrastructure lifecycle. The active runtime changes only after staged
