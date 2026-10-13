@@ -111,8 +111,9 @@ descriptor v1alpha3; empty libraries preserve the infrastructure versions.
 Requirements contain immutable image identities, policy and public secret refs;
 repository probes and concrete image source selection remain execution-time.
 Two closed application operation descriptors select the existing standalone
-Apply/Verify playbooks. Production application plans remain BLOCKED and emit no
-executable manifest until A8 supplies the all-infrastructure Verify barrier.
+Apply/Verify playbooks. A8 integrates them after every infrastructure Verify in
+one mixed executable manifest. Old planning-request consumers explicitly reject
+application-aware plans; the new request/capability versions are opt-in.
 See the [A7 technical plan](work/application-libraries/milestones/a7/a7-technical-plan.md)
 and [contract versions](../contracts/README.md).
 

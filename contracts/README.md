@@ -206,3 +206,18 @@ not publish a full application execution manifest or advertise application Start
 capability. Application-aware production plans remain BLOCKED until the A8
 all-infrastructure Verify barrier. Existing infrastructure capability negotiation
 and Start protocols are unchanged.
+
+A8 completes `execution-manifest/v1alpha2/schema.json` for one mixed run. The
+application suffix follows every infrastructure Apply/Verify. Plan v1alpha4
+includes all Verify dependencies. `execution-runtime/v1alpha3` Build requests
+carry a closed runtime-only `applicationVaultSources` map (provider to
+RUNTIME_INPUT or CURRENT_RUN_BOOTSTRAP); absent entries select RUNTIME_INPUT.
+This is execution-source metadata, not library desired state or a UI field.
+Old v1alpha2 Build consumers do not receive application plans silently.
+
+GetCapabilities with request v1alpha3 returns capability v1alpha7; established
+requests retain v1alpha6 and infrastructure behavior. Mixed Start remains
+StartExecution/v1alpha2 with the same typed lease and trust protocol. Bootstrap
+tokens are excluded from preexisting lease values and copied from exact current
+run/provider protected output only after the infrastructure barrier. Durable
+output delivery and temporary runtime input cleanup keep their existing rules.

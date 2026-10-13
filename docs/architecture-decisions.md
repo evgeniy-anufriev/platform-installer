@@ -460,6 +460,15 @@ target store or new transaction guarantee is introduced. See the
 
 ## ADR-034: Application libraries use an additive Ansible-only resolve boundary
 
+A8 extends this decision with one mixed execution manifest/run and the existing
+sequential fail-fast controller. Application Apply is a final suffix after all
+infrastructure Verify operations; no scheduler or separate approval is added.
+Digest-bound runtime source metadata distinguishes operator Vault input from
+bootstrap output of this run/provider. Application inputs depending on bootstrap
+are materialized after the barrier from existing protected Execution Node files.
+No new storage or desired-state source is introduced. The new closed manifest
+and request/capability versions are opt-in; Go/UI remain separate milestones.
+
 Owner authorized A1 implementation on 2026-10-10. Application/library packages
 remain local versioned portable inputs, not another catalog or persistence layer.
 Package metadata declares a bounded exact file closure; defaults stay in ordinary

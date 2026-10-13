@@ -6,7 +6,10 @@
   vars:
     platform_pki_consumer_tls_profile_id: "{{ platform_docker_tls_profile }}"
   when: >-
-    platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true) | length > 0
+    platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+    | selectattr('hostId', 'equalto', inventory_hostname)
+    | selectattr('tlsProfileId', 'equalto', platform_docker_tls_profile)
+    | list | length > 0
 
 - name: Resolve approved Docker TLS directory
   ansible.builtin.set_fact:

@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--release', required=True)
     parser.add_argument('--state', required=True)
     parser.add_argument('--key', required=True)
+    parser.add_argument('--target-host', choices=('node1', 'node2'), default='node1')
+    parser.add_argument('--public-key-file')
     args = parser.parse_args()
     release, state = Path(args.release), Path(args.state)
     state.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -53,17 +55,19 @@ def main():
         project.mkdir(parents=True, mode=0o700)
         inventory = project / 'inventory'
         (inventory / 'group_vars/all').mkdir(parents=True)
-        (inventory / 'host_vars/node1').mkdir(parents=True)
+        (inventory / 'host_vars' / args.target_host).mkdir(parents=True)
         desired = dict(serviceDeployments={'qa-docker': dict(serviceType='docker', mode='existing-user',
                                                              configuration=dict(accountName='platform-docker'))})
         variables = dict(platform_desired_state_contract='platform.installer/project-desired-state/v2alpha1',
                          platform_desired_state=desired, platform_name_prefix='', platform_data_root_directory='/data',
                          platform_artifact_lock=dict(apiVersion='platform.installer/artifacts/v1alpha1', digest=bundle_digest))
         (inventory / 'group_vars/all/platform-installer.yml').write_text(json.dumps(variables))
-        (inventory / 'hosts.yml').write_text(json.dumps(dict(all=dict(hosts=dict(localhost=dict(ansible_connection='local'),
-                    node1=dict(ansible_host='192.168.56.101', ansible_user='platform-automation')),
-                    children=dict(platform_targets=dict(hosts={'node1': {}}))))))
-        (inventory / 'host_vars/node1/platform-installer.yml').write_text(json.dumps(dict(
+        address = '192.168.56.102' if args.target_host == 'node2' else '192.168.56.101'
+        (inventory / 'hosts.yml').write_text(json.dumps(dict(all=dict(hosts={
+                    'localhost': dict(ansible_connection='local'),
+                    args.target_host: dict(ansible_host=address, ansible_user='platform-automation', ansible_pipelining=True, ansible_ssh_pipelining=True)},
+                    children=dict(platform_targets=dict(hosts={args.target_host: {}}))))))
+        (inventory / 'host_vars' / args.target_host / 'platform-installer.yml').write_text(json.dumps(dict(
             platform_deployments={'qa-docker': {}}, platform_docker_tls_directory='/home/platform-docker/.config/docker/pki')))
         (project / 'project.yml').write_text(json.dumps(dict(apiVersion='platform.installer/v2alpha1', kind='PlatformProject',
             metadata=dict(id='a7-infra-protocol', name='A7 bounded Docker regression'),
@@ -78,11 +82,11 @@ def main():
         private_manifest = json.loads((project.parent / 'manifest.json').read_text())
         if [op['operation'] for op in private_manifest['operations']] != ['SERVICE_APPLY', 'SERVICE_VERIFY']:
             raise RuntimeError('QA_UNEXPECTED_SCOPE')
-        public_key = Path('/etc/ssh/ssh_host_ed25519_key.pub').read_text().split()
+        public_key = Path(args.public_key_file or '/etc/ssh/ssh_host_ed25519_key.pub').read_text().split()
         trust = dict(stagingId=staging, projectIdentity=private_manifest['projectIdentity'],
                      projectRevision=private_manifest['projectRevision'], planFingerprint=private_manifest['planFingerprint'],
                      runtimeRelease=runtime, manifestDigest=planned['executionManifestDigest'],
-                     approvals=[dict(hostId='node1', address='192.168.56.101', port=22,
+                     approvals=[dict(hostId=args.target_host, address=address, port=22,
                                      keyType=public_key[0], publicKey=public_key[1])])
         call(trust, ['--stage-target-host-trust'])
         attempt = uuid.uuid4().hex

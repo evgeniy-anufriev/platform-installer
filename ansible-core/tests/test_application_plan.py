@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'ansible-core/tools'))
-from test_deployment_plan import snapshot, catalog, runtime, _build_deployment_plan, DIGEST
+from test_deployment_plan import snapshot, catalog, runtime, sources, _build_deployment_plan, DIGEST
 from application_plan import application_execution_model, application_operation, OPERATIONS
 from deployment_plan import build_runtime_secret_descriptors
 from schema_validation import SchemaValidator
@@ -42,20 +42,22 @@ class ApplicationPlanTests(unittest.TestCase):
     def build(self, value=None, lock=None):
         return _build_deployment_plan(value or application_snapshot(), catalog(), runtime(),
                                       application_image_lock=lock or image_lock(),
+                                      bundle_artifact_sources=sources(),
                                       deployment_order=['provider', 'consumer'])
 
-    def test_application_plan_is_structured_blocked_without_executable_manifest(self):
+    def test_application_plan_has_executable_manifest_and_all_infrastructure_barrier(self):
         result = self.build()
         plan = result['deploymentPlan']
         self.assertEqual('platform.installer/plan/v1alpha4', plan['apiVersion'])
-        self.assertEqual('BLOCKED', plan['status'])
-        self.assertIsNone(result['executionManifest'])
-        self.assertIsNone(result['executionManifestDigest'])
-        self.assertIn('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED', [f['code'] for f in plan['findings']])
+        self.assertEqual('EXECUTABLE', plan['status'])
+        self.assertIsNotNone(result['executionManifest'])
+        self.assertIsNotNone(result['executionManifestDigest'])
+        self.assertEqual(['verify:consumer', 'verify:provider'], plan['phases'][-1]['actions'][0]['dependsOn'])
         self.assertEqual(OPERATIONS, [a['type'] for a in plan['phases'][-1]['actions']])
         validator = SchemaValidator(str(REPO / 'contracts'))
         self.assertEqual([], validator.validate(plan, str(REPO / 'contracts/plan/v1alpha4/schema.json')))
-        for operation in result['applicationExecution']['operations']:
+        self.assertEqual([], validator.validate(result['executionManifest'], str(REPO / 'contracts/execution-manifest/v1alpha2/schema.json')))
+        for operation in result['executionManifest']['operations'][-2:]:
             self.assertEqual([], validator.validate(operation, str(REPO / 'contracts/execution-manifest/v1alpha2/application-operation.schema.json')))
 
     def test_no_network_probe_or_observation_in_plan(self):
@@ -64,7 +66,8 @@ class ApplicationPlanTests(unittest.TestCase):
             second = self.build()
         self.assertEqual(first, second)
         self.assertNotIn('packageSource', json.dumps(first))
-        self.assertNotIn('OFFLINE_BUNDLE', json.dumps(first))
+        images = [item for item in first['deploymentPlan']['artifactRequirements'] if item.get('artifactType') == 'container-image']
+        self.assertNotIn('OFFLINE_BUNDLE', json.dumps(images))
 
     def test_changed_placement_image_and_binding_change_fingerprint(self):
         original = self.build()['deploymentPlan']['fingerprints']['plan']
@@ -185,6 +188,8 @@ class ApplicationPlanTests(unittest.TestCase):
             with patch.object(LEASE, 'target_username_for_run', return_value=None), \
                  patch.object(LEASE, 'application_secret_values_for_operation', return_value={'shared-key': 'synthetic-value'}):
                 CONTROLLER._materialize_runtime_projection(journal, metadata, manifest)
+                self.assertFalse(list(Path(journal.directory).glob('.runtime-application-secret-*')))
+                CONTROLLER._materialize_application_projection(journal, manifest)
             import hashlib
             paths = []
             for operation in operations:

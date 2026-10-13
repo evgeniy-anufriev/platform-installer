@@ -177,14 +177,13 @@ class ApplicationLibrariesTest(unittest.TestCase):
                 self.assertEqual("APPLICATION_COMPOSE_PROJECT_INVALID", result["findings"][0]["code"])
 
     def test_execution_not_silently_limited_to_infrastructure(self):
-        from test_deployment_plan import _build_deployment_plan, snapshot, catalog, runtime
-        value = snapshot()
-        value['apiVersion'] = 'platform.installer/project-snapshot/v2alpha1'
-        result = _build_deployment_plan(value, catalog(), runtime(), deployment_order=['provider', 'consumer'])
-        self.assertEqual('BLOCKED', result['deploymentPlan']['status'])
-        self.assertIsNone(result['executionManifest'])
-        self.assertIn('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED',
-                      [f['code'] for f in result['deploymentPlan']['findings']])
+        from test_deployment_plan import _build_deployment_plan, catalog, runtime, sources
+        from test_application_plan import application_snapshot, image_lock
+        result = _build_deployment_plan(application_snapshot(), catalog(), runtime(),
+            deployment_order=['provider', 'consumer'], bundle_artifact_sources=sources(), application_image_lock=image_lock())
+        self.assertEqual('EXECUTABLE', result['deploymentPlan']['status'])
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                         [item['operation'] for item in result['executionManifest']['operations'][-2:]])
 
     def test_final_projection_boundary_preserves_refs_and_rejects_grants_secret(self):
         projection = {"libraries": {"sdku": {"resources": {}, "instances": {"apigateway-sdku": {

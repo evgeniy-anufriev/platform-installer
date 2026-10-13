@@ -27,6 +27,7 @@ import execution_target_trust
 
 OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildServiceConfigurationPreview", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
 DEPLOYMENT_PLAN_REQUEST_VERSION = "platform.installer/execution-runtime/v1alpha2"
+APPLICATION_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha3'
 MAX_DEPLOYMENT_ORDER = 256
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
@@ -118,14 +119,21 @@ def request():
         return value
     if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
-    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION):
+    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION):
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
     if value.get("operation") == "BuildDeploymentPlan":
-        if value.get("apiVersion") != DEPLOYMENT_PLAN_REQUEST_VERSION:
+        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
         expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
+        if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION:
+            expected.add('applicationVaultSources')
+            sources = value.get('applicationVaultSources')
+            if (not isinstance(sources, dict) or len(sources) > 16 or
+                    any(not isinstance(key, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', key) is None or
+                        kind not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for key, kind in sources.items())):
+                raise LifecycleError('APPLICATION_VAULT_SOURCE_INVALID')
         order = value.get("deploymentOrder")
         if (set(value) != expected or not isinstance(order, list) or len(order) > MAX_DEPLOYMENT_ORDER or
                 any(not isinstance(item, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", item) is None for item in order) or
@@ -144,6 +152,17 @@ def _capabilities_v4(args):
     if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in required) or not re.fullmatch(r"sha256:[0-9a-f]{64}", args.bundle_digest or ""):
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
     return {"apiVersion": "platform.installer/execution-capabilities/v1alpha6", "kind": "ExecutionCapabilities", "bootstrapProtocol": manifest["bootstrapProtocol"], "coreVersion": manifest["coreVersion"], "catalogDigest": manifest["catalogDigest"], "schemaDigest": manifest["schemaDigest"], "runtime": {"bundleVersion": manifest["bundleVersion"], "bundleDigest": args.bundle_digest}, "supportedOperations": list(OPERATIONS), "executionStart": {"protocol": "StartExecution/v1alpha2"}, "targetCredentialLease": {"protocol": execution_secret_lease.LEASE_PROTOCOL, "payloadVersions": [execution_secret_lease.TYPED_RUNTIME_SECRET_PAYLOAD_VERSION], "maxPayloadBytes": execution_secret_lease.MAX_PAYLOAD_BYTES, "requiredStartProtocol": "StartExecution/v1alpha2"}, "runtimeSecretDescriptors": {"protocol": "BuildRuntimeSecretDescriptors/v1alpha2", "maxDescriptors": 16, "maxHostsPerDescriptor": 256, "maxResponseBytes": 65536}, "serviceConfigurationPreview": {"protocol": "BuildServiceConfigurationPreview/v1alpha1", "maxResponseBytes": 1048576}, "deploymentPlanRequestVersions": [DEPLOYMENT_PLAN_REQUEST_VERSION], "projectSnapshotRequestVersions": [SNAPSHOT_REQUEST_VERSION]}
+
+
+def _application_capabilities(args):
+    result = _capabilities_v4(args)
+    result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha7'
+    result['deploymentPlanRequestVersions'] = [DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION]
+    result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha3'
+    result['applicationExecution'] = {'manifestContract': 'platform.installer/execution-manifest/v1alpha2',
+                                     'planContract': 'platform.installer/plan/v1alpha4',
+                                     'requiredPlanRequestVersion': APPLICATION_PLAN_REQUEST_VERSION}
+    return result
 
 
 def _v2_start_request(value):
@@ -184,6 +203,8 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
     if not isinstance(staging_id, str) or not os.path.isfile(manifest_path) or os.path.islink(manifest_path): raise LifecycleError("EXECUTION_MANIFEST_MISSING")
     with open(manifest_path, "r", encoding="utf-8") as stream: manifest = json.load(stream)
     if digest(manifest) != value["executionManifestDigest"] or manifest.get("projectIdentity") != value["projectIdentity"] or manifest.get("planFingerprint") != value["planFingerprint"] or manifest.get("runtimeRelease") != value["runtimeRelease"]: raise LifecycleError("EXECUTION_IDENTITY_MISMATCH")
+    from execution_controller import validate_application_manifest
+    validate_application_manifest(manifest)
     if execution_target_trust.required(manifest):
         execution_target_trust.verify(state_root, staging_id, manifest)
     requirements = manifest.get("runtimeSecretRequirements", [])
@@ -207,6 +228,8 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     if len(pki) > 1:
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
+    app_inputs = [item for item in manifest.get('applicationSecretRequirements', []) if item['source'] == 'RUNTIME_INPUT']
+    service.extend(app_inputs)
     if pki and not value.get("leaseId"):
         raise LifecycleError("PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED")
     if service and not value.get("leaseId"):
@@ -222,7 +245,19 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
                 allow_service_values=bool(service))
         if service:
             execution_secret_lease.validate_staged_runtime_secret_values(state_root, value["leaseId"], service)
-        execution_secret_lease.validate_staged_runtime_secret_inputs(state_root, value["leaseId"], typed_requirements)
+        provided = execution_secret_lease.validate_staged_runtime_secret_inputs(state_root, value["leaseId"], typed_requirements)
+        app_tokens = {item['providerDeployment']: item for item in manifest.get('applicationSecretRequirements', [])
+                      if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN'}
+        for item in provided:
+            requirement = app_tokens.get(item['serviceDeployment'])
+            if item['purpose'] == 'SERVICE_ADMIN_TOKEN' and requirement:
+                if requirement['source'] == 'CURRENT_RUN_BOOTSTRAP':
+                    raise LifecycleError('APPLICATION_VAULT_SOURCE_AMBIGUOUS')
+                payload_path = os.path.join(execution_secret_lease._lease_dir(
+                    execution_secret_lease._root(state_root), value['leaseId']), 'payload.json')
+                payload = execution_secret_lease._read(payload_path)
+                if item['value'] != payload['runtimeSecretValues'][requirement['requirementRef']]:
+                    raise LifecycleError('APPLICATION_VAULT_SOURCE_AMBIGUOUS')
     # The node, not planning or the caller, creates the authoritative run id.
     run_id = "installer-" + os.urandom(16).hex()
     run_dir = os.path.join(state_root, "runs", run_id)
@@ -552,12 +587,13 @@ def _fixed_ansible_environment(**values):
 
 
 def _candidate_ansible_environment(project, release, output_path):
+    from execution_controller import _collection_path
     candidate_config = os.path.join(project, "ansible.cfg")
     if os.path.islink(candidate_config) or not os.path.isfile(candidate_config) or Path(candidate_config).read_bytes() != APPROVED_CANDIDATE_ANSIBLE_CONFIG:
         raise LifecycleError("PROJECT_CANDIDATE_ANSIBLE_CONFIG_UNSAFE")
     return _fixed_ansible_environment(
         ANSIBLE_CONFIG=candidate_config,
-        ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"),
+        ANSIBLE_COLLECTIONS_PATH=_collection_path(release),
         ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json",
         PLATFORM_PROJECT_SNAPSHOT_OUTPUT=output_path,
     )
@@ -616,6 +652,7 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
 
 def core_operation(value, state_root, runtime_release, operation, runtime_identity=None):
     """Run one fixed Core playbook against already trusted run staging."""
+    from execution_controller import _collection_path
     journal = Journal(state_root, value["runId"])
     project = os.path.join(journal.directory, "project")
     if not os.path.isdir(project) or os.path.islink(project):
@@ -674,6 +711,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources, "platform_execution_state_root": state_root}
         if operation == "BuildDeploymentPlan":
             extra["platform_execution_deployment_order"] = value["deploymentOrder"]
+            extra['platform_execution_application_vault_sources'] = value.get('applicationVaultSources', {})
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
     else:
@@ -688,11 +726,11 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             if candidate:
                 environment = _candidate_ansible_environment(project, release, os.path.join(journal.directory, "project-snapshot.json"))
             else:
-                environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json", PLATFORM_PROJECT_SNAPSHOT_OUTPUT=os.path.join(journal.directory, "project-snapshot.json"))
+                environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json", PLATFORM_PROJECT_SNAPSHOT_OUTPUT=os.path.join(journal.directory, "project-snapshot.json"))
         elif operation == "BuildRuntimeSecretDescriptors":
-            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.runtime_secret_descriptors_json", PLATFORM_RUNTIME_SECRET_DESCRIPTORS_OUTPUT=os.path.join(journal.directory, "runtime-secret-descriptors.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
+            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.runtime_secret_descriptors_json", PLATFORM_RUNTIME_SECRET_DESCRIPTORS_OUTPUT=os.path.join(journal.directory, "runtime-secret-descriptors.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         else:
-            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=os.path.join(release, "ansible-core", "collections"), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
+            environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         command = ["ansible-playbook"]
         if operation != "BuildProjectSnapshot" or value.get("snapshotRequest") is None:
             command.extend(["-i", inventory])
@@ -758,10 +796,14 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             plan = json.load(stream)
         if plan.get("status") == "BLOCKED":
             return {"deploymentPlan": plan, "executionManifestDigest": None}
+        if plan.get('apiVersion') == 'platform.installer/plan/v1alpha4' and value.get('apiVersion') != APPLICATION_PLAN_REQUEST_VERSION:
+            raise LifecycleError('APPLICATION_PLAN_REQUEST_VERSION_REQUIRED')
         if plan.get("status") != "EXECUTABLE" or not os.path.isfile(os.path.join(journal.directory, "manifest.json")):
             raise LifecycleError("EXECUTION_MANIFEST_MISSING")
         with open(os.path.join(journal.directory, "manifest.json"), "r", encoding="utf-8") as stream:
             manifest = json.load(stream)
+        from execution_controller import validate_application_manifest
+        validate_application_manifest(manifest)
         manifest_digest = digest(manifest)
         execution_secret_lease.register_plan(state_root, journal.run_id, manifest_digest, manifest)
         return {"deploymentPlan": plan, "executionManifestDigest": manifest_digest}
@@ -925,7 +967,8 @@ def main():
     if value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2"):
         return reply(put_runtime_secret_lease(value, args.state_root))
     operation = value["operation"]
-    if operation == "GetCapabilities": return reply(_capabilities_v4(args))
+    if operation == "GetCapabilities":
+        return reply(_application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)

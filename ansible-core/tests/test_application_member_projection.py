@@ -57,7 +57,7 @@ class MemberProjectionTests(unittest.TestCase):
             'username': {'source': {'kind': 'literal', 'value': 'api-sdku'}},
             'password': {'source': {'kind': 'runtime_secret_ref', 'ref': 'app-password'}}},
             'grants': {'commands': ['ping']}}
-        row = {'libraryId': 'sdku', 'instanceId': 'api-sdku', 'hostId': 'h1', 'applicationName': 'api',
+        row = {'libraryId': 'sdku', 'instanceId': 'api-sdku', 'hostId': 'h1', 'applicationName': 'api', 'applicationVersion': '1.0.0',
                'slotId': 'api', 'resources': {}, 'sharedSecrets': {}, 'identityNames': [],
                'libraryRef': 'sdku@1.0.0', 'packageIdentity': {}, 'runtimeRef': 'docker',
                'settings': {'accounts': {'sentinel': account}, 'provisioner': {'type': 'vault-agent',

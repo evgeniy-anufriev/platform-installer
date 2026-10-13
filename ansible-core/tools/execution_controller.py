@@ -312,6 +312,7 @@ def _terminal(journal, state, code, summary):
         if not os.path.islink(secret) and os.path.isfile(secret):
             os.unlink(secret)
     journal.cleanup_runtime_connection_credentials()
+    journal.cleanup_runtime_secret_inputs()
     for name in os.listdir(journal.directory):
         if not name.startswith(".runtime-secret-"):
             continue
@@ -455,8 +456,7 @@ def _command(release, journal, operation):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         targets = _service_targets(operation)
         projection = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
-        if not os.path.isfile(projection) or os.path.islink(projection):
-            raise LifecycleError('EXECUTION_RUNTIME_PROJECTION_MISSING')
+        # Application projection is materialized only after the infrastructure barrier.
         return ['ansible-playbook', '-i', os.path.join(journal.directory, 'project', 'inventory', 'hosts.yml'),
                 os.path.join(release, 'ansible-core', 'playbooks', 'application-libraries-' + action + '.yml'),
                 '-e', '@' + projection, '--limit', 'localhost:' + ':'.join(targets)]
@@ -497,11 +497,15 @@ def _command(release, journal, operation):
     raise LifecycleError("EXECUTION_OPERATION_UNKNOWN")
 
 
-def _environment(release, journal=None, operation=None, leased_private_key=False):
+def _collection_path(release):
     collections = [os.path.join(release, "ansible-core", "collections")]
     service_root = os.path.join(release, "services")
     if os.path.isdir(service_root):
         collections.extend(os.path.join(service_root, name, "ansible_collections") for name in sorted(os.listdir(service_root)) if os.path.isdir(os.path.join(service_root, name, "ansible_collections")))
+    return os.pathsep.join(collections)
+
+
+def _environment(release, journal=None, operation=None, leased_private_key=False):
     environment = dict(os.environ)
     environment.pop("ANSIBLE_PRIVATE_KEY_FILE", None)
     for inherited in ("ANSIBLE_SSH_ARGS", "ANSIBLE_SSH_COMMON_ARGS", "ANSIBLE_SSH_EXTRA_ARGS",
@@ -515,7 +519,7 @@ def _environment(release, journal=None, operation=None, leased_private_key=False
         ssh_args = "-o IdentityFile=%s/identities/default/id_ed25519 %s" % (EXECUTION_STATE_ROOT, ssh_args)
     environment.update(
         ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
-        ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections),
+        ANSIBLE_COLLECTIONS_PATH=_collection_path(release),
         ANSIBLE_SSH_ARGS=ssh_args,
         ANSIBLE_HOST_KEY_CHECKING="True")
     if journal is not None and operation is not None:
@@ -730,7 +734,9 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         "platform_project_root": os.path.join(journal.directory, "project"),
         "platform_project_manifest_path": os.path.join(journal.directory, "project", "project.yml"),
         "platform_generated_state_path": _generated_state_path(journal.root, metadata["projectIdentity"]),
-        "platform_service_catalog_path": "/var/lib/platform-installer/runtime/current/catalog/service-catalog.yml",
+        "platform_service_catalog_path": os.path.abspath(os.path.join(os.path.dirname(__file__), '../../catalog/service-catalog.yml')),
+        "platform_execution_bundle_root": os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')),
+        "platform_contracts_root": os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts')),
         "platform_artifact_source_authorities_by_deployment": by_deployment,
         "platform_pki_materialization_plans": plans,
         "platform_pki_secret_files": secret_files,
@@ -744,40 +750,7 @@ def _materialize_runtime_projection(journal, metadata, manifest):
             stream.flush(); os.fsync(stream.fileno())
         os.chmod(temporary, 0o600)
         os.replace(temporary, os.path.join(journal.directory, "runtime-projection.json"))
-        application_secret_files = {}
         for operation in operations:
-            if isinstance(operation, dict) and operation.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
-                app_requirements = manifest.get('applicationSecretRequirements', [])
-                values = execution_secret_lease.application_secret_values_for_operation(
-                    journal.root, journal.run_id, operation['operation'], app_requirements)
-                root = journal.directory  # Established private run custody; no second secret workspace.
-                files, inputs = dict(secret_files), []
-                for mapping in service_secret_files.values():
-                    files.update(mapping)
-                for item in app_requirements:
-                    if not set(item['applicationLibraries']).issubset(operation['applicationLibraries']):
-                        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
-                    reference = item['runtimeReference']
-                    path = os.path.join(root, '.runtime-application-secret-' + hashlib.sha256(reference.encode()).hexdigest())
-                    if reference not in application_secret_files:
-                        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-                        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
-                            stream.write(values[reference]); stream.flush(); os.fsync(stream.fileno())
-                        application_secret_files[reference] = path
-                    files[reference] = application_secret_files[reference]
-                    if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN':
-                        inputs.append(dict(requirementRef='si-' + hashlib.sha256(reference.encode()).hexdigest()[:40],
-                                           purpose='SERVICE_ADMIN_TOKEN', serviceDeployment=item['providerDeployment'],
-                                           value=values[reference]))
-                scoped = dict(payload, platform_application_secret_root=root, platform_application_secret_files=files,
-                              platform_runtime_secret_inputs=inputs,
-                              platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
-                              platform_application_expected_library_ids=operation['applicationLibraries'])
-                destination = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
-                descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-                with os.fdopen(descriptor, 'w') as stream:
-                    json.dump(scoped, stream, ensure_ascii=True, sort_keys=True, separators=(',', ':'))
-                continue
             if not isinstance(operation, dict) or operation.get("operation") not in ("SERVICE_APPLY", "SERVICE_VERIFY"):
                 continue
             prefix = operation.get("roleVariablesPrefix")
@@ -805,6 +778,117 @@ def _materialize_runtime_projection(journal, metadata, manifest):
             os.unlink(temporary)
 
 
+def validate_application_manifest(manifest):
+    """Closed mixed manifest admission, used by Build, Start and the controller."""
+    if manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2':
+        if any(item.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')
+               for item in manifest.get('operations', [])):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        return
+    module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                  '../collections/ansible_collections/platform/core/plugins/module_utils'))
+    if module_utils not in sys.path:
+        sys.path.insert(0, module_utils)
+    from schema_validation import SchemaValidator
+    contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+    if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha2/schema.json')):
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    identifiers = [item['operationId'] for item in manifest['operations']]
+    if len(identifiers) != len(set(identifiers)):
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    declared = {item['serviceDeployment'] for item in _secret_output_declarations(manifest)}
+    vaults = {item.get('serviceDeployment') for item in manifest['operations']
+              if item.get('operation') == 'SERVICE_APPLY' and item.get('serviceType') == 'vault'}
+    refs, names = set(), set()
+    for item in manifest['applicationSecretRequirements']:
+        if (item['requirementRef'] in refs or item['runtimeReference'] in names or
+                not set(item['applicationLibraries']).issubset(manifest['operations'][-1].get('applicationLibraries', [])) or
+                not set(item['hosts']).issubset(manifest['operations'][-1].get('targets', []))):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        refs.add(item['requirementRef']); names.add(item['runtimeReference'])
+        if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN':
+            if (item['providerDeployment'] not in vaults or
+                    item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment']):
+                raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
+        elif item['providerDeployment'] is not None or item['source'] != 'RUNTIME_INPUT':
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        if item['source'] == 'CURRENT_RUN_BOOTSTRAP' and item['providerDeployment'] not in declared:
+            raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
+    _validate_application_barrier(manifest)
+
+
+def _validate_application_barrier(manifest):
+    """The fixed application suffix follows every service Verify, with no scheduler."""
+    operations = manifest.get('operations', [])
+    apps = [item for item in operations if item.get('operation') in
+            ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')]
+    if not apps:
+        return
+    if (manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2' or
+            operations[-2:] != apps or len(apps) != 2 or
+            [item['operation'] for item in apps] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
+            apps[0]['targets'] != apps[1]['targets'] or
+            apps[0]['applicationLibraries'] != apps[1]['applicationLibraries'] or
+            apps[0]['applicationSemanticFingerprint'] != apps[1]['applicationSemanticFingerprint']):
+        raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
+    services = [item for item in operations[:-2] if item.get('operation') in ('SERVICE_APPLY', 'SERVICE_VERIFY')]
+    applies, verifies = {}, {}
+    for index, item in enumerate(services):
+        (applies if item['operation'] == 'SERVICE_APPLY' else verifies)[item['serviceDeployment']] = index
+    if (not applies or set(applies) != set(verifies) or len(services) != len(applies) * 2 or
+            any(applies[key] >= verifies[key] for key in applies)):
+        raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
+
+
+def _materialize_application_projection(journal, manifest):
+    """Reuse run custody after all infrastructure has succeeded; token-only handoff."""
+    with open(os.path.join(journal.directory, 'runtime-projection.json'), encoding='utf-8') as stream:
+        payload = json.load(stream)
+    requirements = manifest.get('applicationSecretRequirements', [])
+    operations = manifest['operations'][-2:]
+    values = execution_secret_lease.application_secret_values_for_operation(
+        journal.root, journal.run_id, operations[0]['operation'], requirements)
+    declared = {item['serviceDeployment'] for item in _secret_output_declarations(manifest)}
+    for item in requirements:
+        if item.get('source') == 'CURRENT_RUN_BOOTSTRAP':
+            provider = item['providerDeployment']
+            if provider not in declared:
+                raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
+            try:
+                values[item['runtimeReference']] = execution_secret_output.current_run_admin_token(
+                    journal.root, journal.directory, manifest['projectIdentity'], provider, journal.run_id)
+            except (OSError, ValueError, execution_secret_output.OutputWireError):
+                raise LifecycleError('APPLICATION_BOOTSTRAP_OUTPUT_REQUIRED') from None
+    files = dict(payload['platform_pki_secret_files'])
+    for item in manifest.get('runtimeSecretRequirements', []):
+        if item.get('purpose') == 'SERVICE_PASSWORD':
+            files[item['runtimeReference']] = os.path.join(journal.directory, '.runtime-secret-' +
+                hashlib.sha256((item['serviceDeployment'] + '\0' + item['runtimeReference']).encode()).hexdigest())
+    inputs = []
+    for item in requirements:
+        if not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries']):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        reference = item['runtimeReference']
+        path = os.path.join(journal.directory, '.runtime-application-secret-' + hashlib.sha256(reference.encode()).hexdigest())
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+            stream.write(values[reference]); stream.flush(); os.fsync(stream.fileno())
+        files[reference] = path
+        if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN':
+            inputs.append(dict(requirementRef='si-' + hashlib.sha256(reference.encode()).hexdigest()[:40],
+                               purpose='SERVICE_ADMIN_TOKEN', serviceDeployment=item['providerDeployment'],
+                               value=values[reference]))
+    for operation in operations:
+        scoped = dict(payload, platform_application_secret_root=journal.directory,
+                      platform_application_secret_files=files, platform_runtime_secret_inputs=inputs,
+                      platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
+                      platform_application_expected_library_ids=operation['applicationLibraries'])
+        destination = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
+        descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(descriptor, 'w') as stream:
+            json.dump(scoped, stream, ensure_ascii=True, sort_keys=True, separators=(',', ':'))
+
+
 def _dispatch(release, journal, manifest, stopped):
     operations = manifest.get("operations")
     if not isinstance(operations, list) or not operations:
@@ -817,11 +901,19 @@ def _dispatch(release, journal, manifest, stopped):
     capture_raw_failure_output = _claim_raw_ansible_failure_capture(
         release, journal, manifest.get("projectIdentity"))
     commands = [(operation, _command(release, journal, operation)) for operation in operations]
+    validate_application_manifest(manifest)
     pki_applied_in_run = False
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
-        if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY"):
+        if operation.get('operation') == 'APPLICATION_LIBRARIES_APPLY':
+            try:
+                _materialize_application_projection(journal, manifest)
+            except (OSError, ValueError):
+                raise LifecycleError('APPLICATION_RUNTIME_PREPARATION_FAILED') from None
+            if stopped[0]:
+                return 'CANCELLED'
+        if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY", 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
             execution_target_trust.verify(journal.root, journal.run_id, manifest)
         if pki_applied_in_run and operation.get("operation") == "SERVICE_APPLY":
             command = command + ["--skip-tags", "platform_installer_pki_materialization"]

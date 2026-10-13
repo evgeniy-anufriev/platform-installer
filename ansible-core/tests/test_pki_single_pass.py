@@ -28,7 +28,8 @@ class DispatchTests(unittest.TestCase):
                  mock.patch.object(controller.execution_target_trust, 'verify', return_value='/run/known_hosts'), \
                  mock.patch.object(controller.execution_secret_lease, 'ansible_connection_credentials_for_run', return_value=None), \
                  mock.patch.object(controller.subprocess, 'Popen', side_effect=lambda cmd, **kw: commands.append(cmd)), \
-                 mock.patch.object(controller, '_wait_for_operation', side_effect=outcomes):
+                 mock.patch.object(controller, '_wait_for_operation', side_effect=[
+                     None if item is None else (item[0], item[1], None) for item in outcomes]):
                 return controller._dispatch('/release', journal, {'operations': operations}, stopped or [False])
 
     def test_success_is_local_to_dispatch_and_only_affects_later_apply(self):

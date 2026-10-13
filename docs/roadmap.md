@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+Application libraries follow the [chapter plan](work/application-libraries/implementation-plan.md).
+A8 integrates A1–A7 into one Core plan/run with all-infrastructure Verify before
+library mutation. Its gate covers mixed success/repeat, failure/cancel, protected
+same-run Vault token handoff and infrastructure-only compatibility. A9 remains
+the full standalone acceptance; Go and UI follow afterward.
+
 Current status and authorization live only in [CURRENT_STATE](../CURRENT_STATE.md).
 This document describes sequence, scope and exit criteria. Recorded implementation
 checkpoints are retained in [history](history/roadmap-checkpoints-20261012.md).

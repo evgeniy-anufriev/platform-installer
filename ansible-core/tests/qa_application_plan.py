@@ -13,6 +13,24 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class NativeApplicationPlanQA(unittest.TestCase):
+    def test_redis_provider_reuses_infrastructure_prefix_and_override_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            playbook = Path(directory) / 'roots.yml'
+            role = REPO / 'services/redis/ansible_collections/platform/redis/roles'
+            plays = []
+            for prefix in ('', 'platform', 'qa'):
+                plays.append(dict(hosts='localhost', connection='local', gather_facts=False,
+                    vars={'platform_name_prefix': prefix}, tasks=[
+                        {'ansible.builtin.include_vars': {'file': str(role / 'redis_tls/defaults/main.yml')}},
+                        {'ansible.builtin.set_fact': {'infrastructure_root': '{{ platform_redis_config_root }}'}},
+                        {'ansible.builtin.include_vars': {'file': str(role / 'application_provider/defaults/main.yml')}},
+                        {'ansible.builtin.assert': {'that': ['platform_redis_config_root == infrastructure_root']}}]))
+            playbook.write_text(yaml.safe_dump(plays))
+            for extra in ([], ['-e', 'platform_redis_config_root=/tmp/explicit-redis-root']):
+                result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(playbook)] + extra,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+                self.assertEqual(0, result.returncode, 'Native provider/infrastructure root policy mismatch')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='a7-native-')
         self.addCleanup(self.tmp.cleanup)
@@ -60,12 +78,11 @@ class NativeApplicationPlanQA(unittest.TestCase):
         self.assertTrue(output.is_file(), 'Missing structured callback output')
         return json.loads(output.read_text()), manifest
 
-    def test_native_application_plan_is_blocked_without_target_contact_or_manifest(self):
+    def test_native_application_plan_has_no_deferred_integration_blocker(self):
         plan, manifest = self.run_core('plan')
         self.assertEqual('platform.installer/plan/v1alpha4', plan['apiVersion'])
-        self.assertEqual('BLOCKED', plan['status'])
-        self.assertIn('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED', [f['code'] for f in plan['findings']])
-        self.assertFalse(manifest.exists())
+        self.assertNotIn('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED', [f['code'] for f in plan['findings']])
+        self.assertEqual(plan['status'] == 'EXECUTABLE', manifest.exists())
         self.assertTrue(any(r.get('artifactType') == 'container-image' for r in plan['artifactRequirements']))
 
     def test_native_snapshot_has_origins_and_current_image_requirement(self):

@@ -423,6 +423,16 @@ def prepare_retained_output_directory(state_root, journal_directory, project_id,
     return os.path.join(state_root, "secret-outputs", package_id)
 
 
+def current_run_admin_token(state_root, journal_directory, project_id, deployment_id, source_run_id):
+    """Read only this run's declared provider token through existing custody guards."""
+    package_id, _ = load_package_identity(journal_directory, project_id, deployment_id, source_run_id)
+    with _package(state_root, package_id) as package:
+        token = _read(package, 'admin-token', 4096).decode('utf-8', 'strict').strip()
+    if not token or '\n' in token or '\r' in token:
+        raise OutputWireError('OUTPUT_NOT_FOUND')
+    return token
+
+
 def publish_retained_outputs(state_root, journal_directory, project_id, deployment_id,
                              source_run_id, runtime_digest, validator, schema_path):
     package_id, generation = load_package_identity(

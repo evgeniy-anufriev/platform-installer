@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha7/schema.json",
+  "title": "Execution capabilities with ordered deployment planning",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "bootstrapProtocol",
+    "coreVersion",
+    "catalogDigest",
+    "schemaDigest",
+    "runtime",
+    "supportedOperations",
+    "executionStart",
+    "runtimeSecretDescriptors",
+    "targetCredentialLease",
+    "serviceConfigurationPreview",
+    "deploymentPlanRequestVersions",
+    "applicationExecution"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-capabilities/v1alpha7"
+    },
+    "kind": {
+      "const": "ExecutionCapabilities"
+    },
+    "bootstrapProtocol": {
+      "$ref": "../v1alpha5/schema.json#/properties/bootstrapProtocol"
+    },
+    "coreVersion": {
+      "$ref": "../v1alpha5/schema.json#/properties/coreVersion"
+    },
+    "catalogDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/catalogDigest"
+    },
+    "schemaDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/schemaDigest"
+    },
+    "runtime": {
+      "$ref": "../v1alpha5/schema.json#/properties/runtime"
+    },
+    "supportedOperations": {
+      "$ref": "../v1alpha5/schema.json#/properties/supportedOperations"
+    },
+    "projectSnapshotRequestVersions": {
+      "$ref": "../v1alpha5/schema.json#/properties/projectSnapshotRequestVersions"
+    },
+    "executionStart": {
+      "$ref": "../v1alpha5/schema.json#/properties/executionStart"
+    },
+    "targetCredentialLease": {
+      "$ref": "../v1alpha5/schema.json#/properties/targetCredentialLease"
+    },
+    "runtimeSecretDescriptors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "maxDescriptors",
+        "maxHostsPerDescriptor",
+        "maxResponseBytes"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "BuildRuntimeSecretDescriptors/v1alpha3"
+        },
+        "maxDescriptors": {
+          "const": 16
+        },
+        "maxHostsPerDescriptor": {
+          "const": 256
+        },
+        "maxResponseBytes": {
+          "const": 65536
+        }
+      }
+    },
+    "serviceConfigurationPreview": {
+      "$ref": "../v1alpha5/schema.json#/properties/serviceConfigurationPreview"
+    },
+    "deploymentPlanRequestVersions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "platform.installer/execution-runtime/v1alpha2",
+          "platform.installer/execution-runtime/v1alpha3"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "applicationExecution": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "manifestContract",
+        "planContract",
+        "requiredPlanRequestVersion"
+      ],
+      "properties": {
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha2"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha4"
+        }
+      }
+    }
+  }
+}

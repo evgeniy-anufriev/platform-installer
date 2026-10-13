@@ -624,7 +624,7 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
     return result
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None, application_vault_sources=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     if snapshot.get('apiVersion') not in (None, 'platform.installer/project-snapshot/v1alpha1',
@@ -644,8 +644,20 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     findings = _safe_findings(snapshot.get("findings"))
     if application_aware:
         findings.extend(application_model['findings'])
-        findings.append(_finding('APPLICATION_COMMON_PLAN_INTEGRATION_REQUIRED', 'applicationLibraries',
-                                 'Application execution requires the A8 all-infrastructure Verify barrier'))
+        sources = {} if application_vault_sources is None else application_vault_sources
+        vaults = {item['providerDeployment'] for item in application_model['runtimeSecretRequirements']
+                  if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN'}
+        if (not isinstance(sources, dict) or set(sources) - vaults or
+                any(value not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for value in sources.values())):
+            raise ValueError('APPLICATION_VAULT_SOURCE_INVALID')
+        for item in application_model['runtimeSecretRequirements']:
+            item['source'] = sources.get(item['providerDeployment'], 'RUNTIME_INPUT')
+            if item['source'] == 'CURRENT_RUN_BOOTSTRAP':
+                provider = item['providerDeployment']
+                definition = definitions.get(deployments.get(provider, {}).get('serviceType'), {})
+                if definition.get('x-secretOutputs') != {'protocol': 'SecretOutputDelivery/v1alpha1', 'entries': ['admin-token', 'unseal-shares']}:
+                    findings.append(_finding('APPLICATION_BOOTSTRAP_PROVIDER_INVALID', 'applicationLibraries',
+                                             'Bootstrap source must be a Vault deployment of this plan'))
     if not explicit_identity or not isinstance(identity, str) or not identity:
         findings.append(_finding("PROJECT_IDENTITY_REQUIRED", "project.metadata.id", "Installer-managed execution requires project.yml metadata.id"))
     if snapshot.get("validation", {}).get("status") != "PASS":
@@ -667,7 +679,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     ]
     if application_model:
         required_credentials.extend({key: item[key] for key in ('requirementRef', 'purpose', 'hosts')}
-                                    for item in application_model['runtimeSecretRequirements'])
+                                    for item in application_model['runtimeSecretRequirements'] if item['source'] == 'RUNTIME_INPUT')
         if len(service_private) + len(application_model['runtimeSecretRequirements']) > 16:
             findings.append(_finding('RUNTIME_SECRET_REQUIREMENTS_LIMIT', 'applicationLibraries',
                                      'The current runtime secret lease admits at most 16 values'))
@@ -774,6 +786,12 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         phases.append({"id": "pki", "order": len(phases), "actions": actions})
     phases.append({"id": "services", "order": len(phases), "actions": service_actions})
     if application_model and application_model['actions']:
+        application_model['actions'][0]['dependsOn'] = sorted(action['id'] for action in service_actions
+                                                             if action['type'] == 'SERVICE_VERIFY')
+        if not service_actions:
+            findings.append(_finding('APPLICATION_INFRASTRUCTURE_BARRIER_REQUIRED', 'applicationLibraries',
+                                     'A mixed plan requires infrastructure Apply and Verify'))
+            executable = False
         phases.append(dict(id='applications', order=len(phases), actions=application_model['actions']))
     semantic = {
         "apiVersion": plan_version,
@@ -791,6 +809,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     }
     if application_model:
         semantic['applicationFingerprint'] = application_model['semanticFingerprint']
+        semantic['applicationSecretRequirements'] = application_model['runtimeSecretRequirements']
     plan_fingerprint = canonical_digest(semantic)
     plan = {
         "apiVersion": plan_version,
@@ -816,6 +835,9 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         authority_deployments = set(item["requirement"]["serviceDeployment"] for item in source_authorities)
         for phase in phases:
             for action in phase["actions"]:
+                if action['type'] in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
+                    manifest_operations.append(application_operation(action, application_model))
+                    continue
                 deployment = deployments.get(action.get("serviceDeployment"), {})
                 definition = definitions.get(deployment.get("serviceType"), {}) if isinstance(deployment, dict) else {}
                 entrypoint = "apply" if action["type"] == "SERVICE_APPLY" else "verify"
@@ -861,6 +883,11 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             for item in runtime_secret_outputs
         ]
         manifest = {"apiVersion": MANIFEST_API_VERSION, "kind": "ExecutionManifest", "projectIdentity": identity, "projectRevision": snapshot.get("projectRevision"), "planFingerprint": plan_fingerprint, "runtimeRelease": release, "operations": manifest_operations, "artifactRequirements": artifact_requirements, "artifactSourceAuthorities": source_authorities, "requiredCredentials": required_credentials, "runtimeSecretRequirements": runtime_secret_requirements, "runtimeSecretInputs": service_input_private, "runtimeSecretOutputs": runtime_secret_outputs, "runtimeSecretDescriptorSetFingerprint": canonical_digest(descriptor_set), "pkiMaterializationPlans": materialization_plans}
+        if application_model:
+            manifest['apiVersion'] = APPLICATION_MANIFEST_VERSION
+            manifest['applicationSecretRequirements'] = application_model['runtimeSecretRequirements']
+            manifest['runtimeSecretDescriptorSetFingerprint'] = canonical_digest(
+                dict(serviceDescriptors=descriptor_set, applicationDescriptors=application_model['runtimeSecretRequirements']))
         if execution_connections is not None:
             # Bind SSH trust only for hosts that an action in this exact plan
             # can contact. The target-free snapshot contains every inventory
@@ -879,7 +906,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                 if host_id in execution_connections
             }
     result = {"deploymentPlan": plan, "executionManifest": manifest, "executionManifestDigest": canonical_digest(manifest) if manifest else None}
-    if application_model:
+    if application_model and not manifest:
         # Private preparation data for A8, never registered as an executable manifest.
         result['applicationExecution'] = dict(
             apiVersion=APPLICATION_MANIFEST_VERSION,

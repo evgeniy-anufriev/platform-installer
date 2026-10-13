@@ -24,6 +24,7 @@
     content: "{{ application_vault_ca.content | b64decode }}"
     dest: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_provider.providerId }}-ca.pem"
     mode: '0600'
+  changed_when: false
   no_log: true
 
 - name: Check Vault mounts through the selected endpoint without redirect

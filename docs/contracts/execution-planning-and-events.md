@@ -1,6 +1,29 @@
 # Execution planning, protocol and events
 
 Contract sections extracted verbatim from [UI-BE-04](../work/ui-backend/ui-be-04.md).
+
+## A8 mixed Core execution extension
+
+The accepted [A8 plan](../work/application-libraries/milestones/a8/a8-technical-plan.md)
+extends standalone Core with one mixed run, not a second lifecycle. Infrastructure
+Apply/Verify operations keep their existing order. The final applications phase
+contains fixed APPLICATION_LIBRARIES_APPLY/VERIFY operations; its Apply depends
+on every infrastructure Verify, including unrelated providers. A failure or
+cancel prevents transition. No barrier play or scheduler is introduced.
+
+Mixed Build uses execution-runtime/v1alpha3 and produces plan/v1alpha4 plus the
+closed execution-manifest/v1alpha2. Source metadata applicationVaultSources is
+runtime-only and fingerprint-bound. Established v1alpha2 Build and v1alpha6
+capabilities remain infrastructure-compatible; v1alpha3 capability requests
+advertise mixed execution as v1alpha7. Go/UI support remains later work.
+
+After the Verify barrier, the controller materializes application inputs from
+the operator lease or exact current-run/provider Vault bootstrap output. Only
+admin-token crosses that handoff; unseal shares remain service-only. Temporary
+inputs follow existing cleanup; durable bootstrap outputs retain delivery policy.
+The service and application scopes use the same approved SSH trust and protected
+run identity. Existing events carry applications phaseId/actionId without a
+fictional serviceDeployment. Repeats require fresh Build/approval/run.
 Current status and authorization remain in [CURRENT_STATE](../../CURRENT_STATE.md).
 Implementation audit and milestone gates are retained separately.
 

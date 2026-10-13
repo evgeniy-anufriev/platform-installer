@@ -298,7 +298,11 @@ def application_secret_values_for_operation(state_root, run_id, operation, requi
     for item in requirements:
         fields = {'requirementRef', 'purpose', 'runtimeReference', 'providerDeployment',
                   'applicationLibraries', 'hosts', 'operations'}
-        if not isinstance(item, dict) or set(item) != fields:
+        if not isinstance(item, dict) or set(item) not in (fields, fields | {'source'}):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        if item.get('source', 'RUNTIME_INPUT') not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP'):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        if item.get('source') == 'CURRENT_RUN_BOOTSTRAP' and item.get('purpose') != 'APPLICATION_VAULT_ADMIN_TOKEN':
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         if (item['purpose'] not in ('APPLICATION_SECRET', 'APPLICATION_VAULT_ADMIN_TOKEN') or
                 item['operations'] != allowed or
@@ -321,10 +325,12 @@ def application_secret_values_for_operation(state_root, run_id, operation, requi
                 item['requirementRef'] in refs or item['runtimeReference'] in names):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         refs.add(item['requirementRef']); names.add(item['runtimeReference'])
-    values = runtime_secret_values_for_run(state_root, run_id) if requirements else {}
+    inputs = [item for item in requirements if item.get('source', 'RUNTIME_INPUT') == 'RUNTIME_INPUT']
+    refs = {item['requirementRef'] for item in inputs}
+    values = runtime_secret_values_for_run(state_root, run_id) if inputs else {}
     if not refs.issubset(values):
         raise LifecycleError('RUNTIME_SECRET_VALUES_REQUIRED')
-    return {item['runtimeReference']: values[item['requirementRef']] for item in requirements}
+    return {item['runtimeReference']: values[item['requirementRef']] for item in inputs}
 
 
 def _attached_payload_for_run(state_root, run_id):

@@ -74,10 +74,21 @@ def application_execution_model(snapshot, image_lock=None):
             secret(value['source'], library_id, library_hosts,
                    'applicationLibraryDeployments.' + library_id + '.sharedSecrets.' + name)
     actions = []
+    targets = set()
+    # Reuse resolved deployment hosts: provider hooks can discover any member.
+    for library in libraries.values():
+        for instance in library.get('instances', {}).values():
+            targets.update(instance.get('placements', {}))
+            for connection in instance.get('connections', {}).values():
+                for target in connection.get('targets', []):
+                    targets.add(target['hostId'])
+    # Shared endpoint reconcile contacts its infrastructure placements too.
+    targets.update(host for host, placements in snapshot.get('topology', {}).get('placementsByHost', {}).items()
+                   if placements)
     if libraries:
         for index, action in enumerate(('apply', 'verify')):
             actions.append(dict(id='applications:' + action, type=OPERATIONS[index],
-                                targets=sorted(snapshot.get('hosts', {})),
+                                targets=sorted(targets),
                                 dependsOn=['applications:apply'] if index else [],
                                 mutating=index == 0, reboot='NONE',
                                 summary=action.capitalize() + ' application libraries'))

@@ -1,0 +1,708 @@
+[
+  {
+    "runId": "installer-2228562d2607b10db684811d795f461a",
+    "state": "SUCCEEDED",
+    "metadata": {
+      "manifestDigest": "sha256:943581461ac7cc76476549f151223a4855dfd9e9828f31eda0c31a2d775d1947",
+      "planFingerprint": "sha256:a59adfe87882ec0cdaed2de97f7019f5683fc6c5f14d53c00ed3c80f42c408bf",
+      "projectIdentity": "a8-vault-protocol-final",
+      "runId": "installer-2228562d2607b10db684811d795f461a",
+      "runtimeRelease": "sha256:cecd124d968c33cd6cb8ba6108603772484f565ff05727f9bb208331537b469e",
+      "unit": "platform-installer-run-installer-2228562d2607b10db684811d795f461a.service"
+    },
+    "projectRevision": "sha256:2d50195863d425df93181cd3237af7b7ff5cb5cffb865abe568f350a9e8d3853",
+    "adminSources": [
+      "CURRENT_RUN_BOOTSTRAP"
+    ],
+    "cleanup": "PASS",
+    "eventCount": 2957,
+    "changedTasks": 22,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:05:46Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "pki:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:05:46Z"
+      },
+      {
+        "sequence": 449,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "pki:apply",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:09:25Z"
+      },
+      {
+        "sequence": 450,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:09:25Z"
+      },
+      {
+        "sequence": 830,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:13:12Z"
+      },
+      {
+        "sequence": 831,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:13:12Z"
+      },
+      {
+        "sequence": 972,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:13:48Z"
+      },
+      {
+        "sequence": 973,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:a8-vault-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:13:48Z"
+      },
+      {
+        "sequence": 1594,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:a8-vault-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:16:57Z"
+      },
+      {
+        "sequence": 1595,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:a8-vault-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:16:57Z"
+      },
+      {
+        "sequence": 1844,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:a8-vault-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:17:41Z"
+      },
+      {
+        "sequence": 1845,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:a8-redis-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:17:41Z"
+      },
+      {
+        "sequence": 2304,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:a8-redis-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:20:08Z"
+      },
+      {
+        "sequence": 2305,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:a8-redis-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:20:08Z"
+      },
+      {
+        "sequence": 2500,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:a8-redis-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:20:42Z"
+      },
+      {
+        "sequence": 2501,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:20:42Z"
+      },
+      {
+        "sequence": 2861,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "applications:apply",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:23:03Z"
+      },
+      {
+        "sequence": 2862,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:verify",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:23:03Z"
+      },
+      {
+        "sequence": 2956,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "applications:verify",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:23:34Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-88004bcb1d378dbe0402be4332fc1d4c",
+    "state": "SUCCEEDED",
+    "metadata": {
+      "manifestDigest": "sha256:3fdc7d6870d7671550e8dc060bee28ff783c1274517ece43a523d7fda38e60ff",
+      "planFingerprint": "sha256:d245a44089f91dddec43e8bd01bd4e6936dd1c7a60f7222722151e8f18fb7f69",
+      "projectIdentity": "a8-vault-protocol-final",
+      "runId": "installer-88004bcb1d378dbe0402be4332fc1d4c",
+      "runtimeRelease": "sha256:cecd124d968c33cd6cb8ba6108603772484f565ff05727f9bb208331537b469e",
+      "unit": "platform-installer-run-installer-88004bcb1d378dbe0402be4332fc1d4c.service"
+    },
+    "projectRevision": "sha256:2d50195863d425df93181cd3237af7b7ff5cb5cffb865abe568f350a9e8d3853",
+    "adminSources": [
+      "RUNTIME_INPUT"
+    ],
+    "cleanup": "PASS",
+    "eventCount": 2939,
+    "changedTasks": 1,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:42:09Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "pki:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:42:09Z"
+      },
+      {
+        "sequence": 449,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "pki:apply",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:45:27Z"
+      },
+      {
+        "sequence": 450,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:45:27Z"
+      },
+      {
+        "sequence": 830,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:49:03Z"
+      },
+      {
+        "sequence": 831,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:49:03Z"
+      },
+      {
+        "sequence": 972,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:49:43Z"
+      },
+      {
+        "sequence": 973,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:a8-vault-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:49:43Z"
+      },
+      {
+        "sequence": 1594,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:a8-vault-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:52:09Z"
+      },
+      {
+        "sequence": 1595,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:a8-vault-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:52:09Z"
+      },
+      {
+        "sequence": 1826,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:a8-vault-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:52:48Z"
+      },
+      {
+        "sequence": 1827,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:a8-redis-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:52:48Z"
+      },
+      {
+        "sequence": 2286,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:a8-redis-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:55:21Z"
+      },
+      {
+        "sequence": 2287,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:a8-redis-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:55:21Z"
+      },
+      {
+        "sequence": 2482,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:a8-redis-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:55:54Z"
+      },
+      {
+        "sequence": 2483,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:55:54Z"
+      },
+      {
+        "sequence": 2843,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "applications:apply",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:58:19Z"
+      },
+      {
+        "sequence": 2844,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:verify",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:58:19Z"
+      },
+      {
+        "sequence": 2938,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "applications:verify",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T11:59:04Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-23853d0cdcfb9f5cdafd34f1d61974d9",
+    "state": "CANCELLED",
+    "metadata": {
+      "manifestDigest": "sha256:3fdc7d6870d7671550e8dc060bee28ff783c1274517ece43a523d7fda38e60ff",
+      "planFingerprint": "sha256:d245a44089f91dddec43e8bd01bd4e6936dd1c7a60f7222722151e8f18fb7f69",
+      "projectIdentity": "a8-vault-protocol-final",
+      "runId": "installer-23853d0cdcfb9f5cdafd34f1d61974d9",
+      "runtimeRelease": "sha256:cecd124d968c33cd6cb8ba6108603772484f565ff05727f9bb208331537b469e",
+      "unit": "platform-installer-run-installer-23853d0cdcfb9f5cdafd34f1d61974d9.service"
+    },
+    "projectRevision": "sha256:2d50195863d425df93181cd3237af7b7ff5cb5cffb865abe568f350a9e8d3853",
+    "adminSources": [
+      "RUNTIME_INPUT"
+    ],
+    "cleanup": "PASS",
+    "eventCount": 325,
+    "changedTasks": 0,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:59:11Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "pki:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T11:59:11Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-3ff5b77087826a2ec184b23af6649176",
+    "state": "SUCCEEDED",
+    "metadata": {
+      "manifestDigest": "sha256:edd401cd07110f618ef791bc4a09dc9283be329e20daac250e984ddd66256a87",
+      "planFingerprint": "sha256:1099751ea399d8b020f132935dd96e4e932f5694adf7d38be26a648d1844e322",
+      "projectIdentity": "a8-vault-protocol-final",
+      "runId": "installer-3ff5b77087826a2ec184b23af6649176",
+      "runtimeRelease": "sha256:ab00d55efbb059711d7ef4e53b0f9e6ed97e209736d8ba8b7f0f5ac503ead2c9",
+      "unit": "platform-installer-run-installer-3ff5b77087826a2ec184b23af6649176.service"
+    },
+    "projectRevision": "sha256:5e616ca1201627a708e7e1e02efdb95040483803267e631708286896a23c7810",
+    "adminSources": [
+      "RUNTIME_INPUT"
+    ],
+    "cleanup": "PASS",
+    "eventCount": 2939,
+    "changedTasks": 0,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:08:28Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "pki:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:08:28Z"
+      },
+      {
+        "sequence": 449,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "pki:apply",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:12:01Z"
+      },
+      {
+        "sequence": 450,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:12:01Z"
+      },
+      {
+        "sequence": 830,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:15:20Z"
+      },
+      {
+        "sequence": 831,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:15:20Z"
+      },
+      {
+        "sequence": 972,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:15:58Z"
+      },
+      {
+        "sequence": 973,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:a8-vault-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:15:58Z"
+      },
+      {
+        "sequence": 1594,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:a8-vault-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:18:38Z"
+      },
+      {
+        "sequence": 1595,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:a8-vault-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:18:38Z"
+      },
+      {
+        "sequence": 1826,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:a8-vault-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:19:19Z"
+      },
+      {
+        "sequence": 1827,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:a8-redis-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:19:19Z"
+      },
+      {
+        "sequence": 2286,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:a8-redis-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:21:31Z"
+      },
+      {
+        "sequence": 2287,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:a8-redis-final",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:21:31Z"
+      },
+      {
+        "sequence": 2482,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:a8-redis-final",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:22:12Z"
+      },
+      {
+        "sequence": 2483,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:22:12Z"
+      },
+      {
+        "sequence": 2843,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "applications:apply",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:24:34Z"
+      },
+      {
+        "sequence": 2844,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:verify",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:24:34Z"
+      },
+      {
+        "sequence": 2938,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "applications:verify",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:25:12Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-9d25df499c5361b8b1d00585ec8f9d62",
+    "state": "SUCCEEDED",
+    "metadata": {
+      "manifestDigest": "sha256:2f4dc2f540e4db847218688fba76fc801b18a661d9edea29f3a5ff928587ac0b",
+      "planFingerprint": "sha256:157ac368d41b9b4364b45f5ed0b4ace1b7409cdf7a79ade6e87259a454c751b0",
+      "projectIdentity": "a7-infra-protocol",
+      "runId": "installer-9d25df499c5361b8b1d00585ec8f9d62",
+      "runtimeRelease": "sha256:cecd124d968c33cd6cb8ba6108603772484f565ff05727f9bb208331537b469e",
+      "unit": "platform-installer-run-installer-9d25df499c5361b8b1d00585ec8f9d62.service"
+    },
+    "projectRevision": "sha256:baf86c2d7d6f835db888974c985349c325d0dcf4638f0a689423797b3f3f2a1c",
+    "adminSources": [],
+    "cleanup": "PASS",
+    "eventCount": 483,
+    "changedTasks": 0,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T10:49:43Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T10:49:43Z"
+      },
+      {
+        "sequence": 350,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T10:58:20Z"
+      },
+      {
+        "sequence": 351,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T10:58:20Z"
+      },
+      {
+        "sequence": 482,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T10:59:28Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-6335a661f4e666d515ff48a3f2f25475",
+    "state": "CANCELLED",
+    "metadata": {
+      "manifestDigest": "sha256:2f4dc2f540e4db847218688fba76fc801b18a661d9edea29f3a5ff928587ac0b",
+      "planFingerprint": "sha256:157ac368d41b9b4364b45f5ed0b4ace1b7409cdf7a79ade6e87259a454c751b0",
+      "projectIdentity": "a7-infra-protocol",
+      "runId": "installer-6335a661f4e666d515ff48a3f2f25475",
+      "runtimeRelease": "sha256:cecd124d968c33cd6cb8ba6108603772484f565ff05727f9bb208331537b469e",
+      "unit": "platform-installer-run-installer-6335a661f4e666d515ff48a3f2f25475.service"
+    },
+    "projectRevision": "sha256:baf86c2d7d6f835db888974c985349c325d0dcf4638f0a689423797b3f3f2a1c",
+    "adminSources": [],
+    "cleanup": "PASS",
+    "eventCount": 11,
+    "changedTasks": 0,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T10:59:40Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T10:59:40Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-a74389a1748da387df9b12266cbb2897",
+    "state": "CANCELLED",
+    "metadata": {
+      "manifestDigest": "sha256:277a3b4425a5c39231d60a0bf556abc242f3f6b91ee0e8063a9d0c3eecca4e36",
+      "planFingerprint": "sha256:37ca181f6a26db6ac74e97c9ae34d17438443ee3e92dc11ab4ed112131185385",
+      "projectIdentity": "a8-mixed-protocol",
+      "runId": "installer-a74389a1748da387df9b12266cbb2897",
+      "runtimeRelease": "sha256:ab00d55efbb059711d7ef4e53b0f9e6ed97e209736d8ba8b7f0f5ac503ead2c9",
+      "unit": "platform-installer-run-installer-a74389a1748da387df9b12266cbb2897.service"
+    },
+    "projectRevision": "sha256:a38a76d8e47d7102f09e4338d5f0c3ec5f7a09b2369c703ceaaebf897683c2b3",
+    "adminSources": [],
+    "cleanup": "PASS",
+    "eventCount": 509,
+    "changedTasks": 0,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:25:55Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:25:56Z"
+      },
+      {
+        "sequence": 366,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:29:01Z"
+      },
+      {
+        "sequence": 367,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:29:01Z"
+      },
+      {
+        "sequence": 498,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:29:34Z"
+      },
+      {
+        "sequence": 499,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:29:34Z"
+      }
+    ]
+  },
+  {
+    "runId": "installer-0ada1c83011e9683a6cfa65f6d81afd7",
+    "state": "FAILED",
+    "metadata": {
+      "manifestDigest": "sha256:6f145f104a50361de009418215afe2bcdf710849f6d0ee2788d1ca5fb83504a8",
+      "planFingerprint": "sha256:62891bf75c69079c84bf579b028c34dcbb638b41a2fc3d0dbf30a6812921284b",
+      "projectIdentity": "a8-mixed-protocol",
+      "runId": "installer-0ada1c83011e9683a6cfa65f6d81afd7",
+      "runtimeRelease": "sha256:ab00d55efbb059711d7ef4e53b0f9e6ed97e209736d8ba8b7f0f5ac503ead2c9",
+      "unit": "platform-installer-run-installer-0ada1c83011e9683a6cfa65f6d81afd7.service"
+    },
+    "projectRevision": "sha256:39a34d1367f67c41f2e5185ee7d37cab1f0ec3e54388f628a0674bdc885b6f42",
+    "adminSources": [],
+    "cleanup": "PASS",
+    "eventCount": 741,
+    "changedTasks": 1,
+    "actions": [
+      {
+        "sequence": 3,
+        "eventType": "RUN_STARTED",
+        "actionId": null,
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:29:46Z"
+      },
+      {
+        "sequence": 4,
+        "eventType": "ACTION_STARTED",
+        "actionId": "apply:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:29:46Z"
+      },
+      {
+        "sequence": 366,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "apply:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:32:46Z"
+      },
+      {
+        "sequence": 367,
+        "eventType": "ACTION_STARTED",
+        "actionId": "verify:qa-docker",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:32:46Z"
+      },
+      {
+        "sequence": 498,
+        "eventType": "ACTION_COMPLETED",
+        "actionId": "verify:qa-docker",
+        "status": "SUCCESS",
+        "timestamp": "2026-10-13T12:33:21Z"
+      },
+      {
+        "sequence": 499,
+        "eventType": "ACTION_STARTED",
+        "actionId": "applications:apply",
+        "status": "RUNNING",
+        "timestamp": "2026-10-13T12:33:21Z"
+      }
+    ]
+  }
+]

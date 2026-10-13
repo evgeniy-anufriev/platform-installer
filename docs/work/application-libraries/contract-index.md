@@ -17,7 +17,9 @@ versioned schemas, service packages или accepted substage scope.
 
 | A7 | Structured snapshot, validation, planning и execution contract | [План](milestones/a7/a7-technical-plan.md) · [DIFF review](milestones/a7/reviews/a7-diff-review.md) · [TARGETED_RECHECK](milestones/a7/reviews/a7-diff-targeted-recheck.md) · [журнал](milestones/a7/evidence/a7-test-journal.md) |
 
-Последующие A8–A9, Go и UI описываются в [общем плане](implementation-plan.md).
+| A8 | Общий infrastructure + libraries план, Verify barrier и единый run | [Технический план](milestones/a8/a8-technical-plan.md) · [PLAN review](milestones/a8/reviews/a8-plan-review.md) · [TARGETED_RECHECK](milestones/a8/reviews/a8-targeted-recheck.md) |
+
+Последующие A9, Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
 не доказывает authenticated access.
 
