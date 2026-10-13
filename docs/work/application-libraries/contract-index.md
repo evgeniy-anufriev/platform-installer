@@ -19,7 +19,9 @@ versioned schemas, service packages или accepted substage scope.
 
 | A8 | Общий infrastructure + libraries план, Verify barrier и единый run | [Технический план](milestones/a8/a8-technical-plan.md) · [PLAN review](milestones/a8/reviews/a8-plan-review.md) · [TARGETED_RECHECK](milestones/a8/reviews/a8-targeted-recheck.md) |
 
-Последующие A9, Go и UI описываются в [общем плане](implementation-plan.md).
+| A9 | Полная standalone Ansible + Core приёмка | [Технический план](milestones/a9/a9-technical-plan.md) |
+
+Последующие Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
 не доказывает authenticated access.
 

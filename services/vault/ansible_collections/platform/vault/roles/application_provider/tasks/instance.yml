@@ -27,11 +27,19 @@
   register: application_vault_routes
   changed_when: false
 
+- name: Read the LXC bridge IPv4 subnet on each Docker placement
+  ansible.builtin.command:
+    argv: [ip, -json, -4, address, show, dev, "{{ hostvars[item].platform_docker_lxc_bridge | default('lxcbr0') }}"]
+  delegate_to: "{{ item }}"
+  loop: "{{ platform_vault_application_job.hosts }}"
+  register: application_vault_lxc_addresses
+  changed_when: false
+
 - name: Bind the accepted subnet policy and own AppRole settings
   ansible.builtin.set_fact:
     application_vault_role:
       bind_secret_id: false
-      token_bound_cidrs: "{{ application_vault_routes.results | map(attribute='stdout') | map('from_json') | list | platform.vault.application_vault_cidrs }}"
+      token_bound_cidrs: "{{ application_vault_routes.results | map(attribute='stdout') | map('from_json') | list | platform.vault.application_vault_cidrs(application_vault_lxc_addresses.results | map(attribute='stdout') | map('from_json') | list) }}"
       token_policies: ["{{ platform_vault_application_job.identity }}"]
       token_no_default_policy: true
       token_type: service

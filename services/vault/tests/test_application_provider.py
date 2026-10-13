@@ -62,6 +62,19 @@ class ApplicationProviderTest(unittest.TestCase):
             changed=copy.deepcopy(response);changed['json']['data'][key]=value
             self.assertTrue(provider.role_changed(changed,desired))
 
+    def test_lxc_subnets_use_actual_prefix_and_union_all_placements(self):
+        bridges = [[{'addr_info':[{'family':'inet','scope':'global','local':address,'prefixlen':prefix}]}]
+                   for address,prefix in [('10.0.3.1',24),('10.22.0.1',20),('10.0.3.1',24)]]
+        self.assertEqual(provider.cidrs([[{'prefsrc':'192.168.56.101'}]], bridges),
+                         ['10.0.3.0/24','10.22.0.0/20','127.0.0.1/32','192.168.56.0/24'])
+
+    def test_missing_or_unrestricted_lxc_subnet_blocks(self):
+        for bridge in ([],[{'addr_info':[]}],
+                       [{'addr_info':[{'family':'inet','scope':'global','local':'10.0.3.1','prefixlen':0}]}]):
+            with self.subTest(bridge=bridge):
+                with self.assertRaisesRegex(Exception,'ROUTE_INVALID'):
+                    provider.cidrs([[{'prefsrc':'192.168.56.101'}]], [bridge])
+
     def test_required_field_missing_is_not_a_successful_verify(self):
         response={'item':'secret/data/app','json':{'data':{'data':{'password':'value'}}}}
         self.assertTrue(provider.verify_fields([response],{'secret/data/app':['password']}))

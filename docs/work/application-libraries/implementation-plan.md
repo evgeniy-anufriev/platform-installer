@@ -359,6 +359,9 @@ capabilities и порядок providers, не заменять проверки
 
 ### A9. Полная standalone Ansible + Core приёмка
 
+Подробная последовательность, окружение и матрица:
+[технический план A9](milestones/a9/a9-technical-plan.md).
+
 Пройти сценарий: inventory/vars → ресурсы библиотеки → общие secrets → УЗ/apps
 → Agent → connections → endpoint/verify. СДКУ и ЦСПА используют один пакет приложения
 с разными ID и bindings. При возможности использовать предоставленные реальные
