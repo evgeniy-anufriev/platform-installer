@@ -39,13 +39,16 @@ class Net031DnsClientContractTests(unittest.TestCase):
         self.assertNotIn("endpointRecord", role_verify)
         self.assertNotIn("wildcardRecord", role_verify)
 
-    def test_backend_selection_prefers_resolved_by_unit_existence(self):
+    def test_backend_selection_requires_loaded_and_active_service(self):
         discovery = (ROLE / "tasks" / "discover.yml").read_text(encoding="utf-8")
         self.assertIn("systemd-resolved.service", discovery)
         self.assertIn("NetworkManager.service", discovery)
-        self.assertIn("'systemd-resolved' if", discovery)
+        self.assertIn("systemctl, is-active, systemd-resolved.service", discovery)
+        self.assertIn("systemctl, is-active, NetworkManager.service", discovery)
+        self.assertGreaterEqual(discovery.count("| trim == 'loaded'"), 2)
+        self.assertGreaterEqual(discovery.count("| trim == 'active'"), 2)
+        self.assertIn("'systemd-resolved'", discovery)
         self.assertIn("DNS_CLIENT_BACKEND_UNSUPPORTED", discovery)
-        self.assertNotIn("ActiveState", discovery)
 
     def test_resolv_conf_conflicts_are_blocked_without_replacement(self):
         discovery = (ROLE / "tasks" / "discover.yml").read_text(encoding="utf-8")

@@ -1,0 +1,39 @@
+---
+- name: Remember whether PostgreSQL binary directory was explicitly configured
+  ansible.builtin.set_fact:
+    _platform_postgresql_binary_directory_override: "{{ platform_postgresql_binary_directory | length > 0 }}"
+  when: _platform_postgresql_binary_directory_override is not defined
+
+- name: Build PostgreSQL binary directory candidates
+  ansible.builtin.set_fact:
+    _platform_postgresql_binary_directory_candidates: >-
+      {{ [platform_postgresql_binary_directory]
+         if _platform_postgresql_binary_directory_override | bool
+         else ['/usr/bin', '/usr/pgsql-' ~ platform_postgresql_version.split('.')[0] ~ '/bin'] }}
+
+- name: Inspect PostgreSQL control binary candidates
+  ansible.builtin.stat:
+    path: "{{ item }}/pg_ctl"
+    follow: true
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  loop: "{{ _platform_postgresql_binary_directory_candidates }}"
+  register: _platform_postgresql_binary_candidate_stats
+
+- name: Select the installed PostgreSQL binary directory
+  ansible.builtin.set_fact:
+    platform_postgresql_binary_directory: >-
+      {{ (_platform_postgresql_binary_candidate_stats.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='item') | list | first)
+         | default('/usr/pgsql-' ~ platform_postgresql_version.split('.')[0] ~ '/bin'
+                   if ansible_distribution_major_version | default('8') | int < 8 else '/usr/bin') }}
+  when: not (_platform_postgresql_binary_directory_override | bool)
+
+- name: Require PostgreSQL control binary in the selected directory
+  ansible.builtin.assert:
+    that:
+      - _platform_postgresql_binary_candidate_stats.results | selectattr('stat.exists', 'equalto', true) | list | length >= 1
+    fail_msg: POSTGRES_BINARY_DIRECTORY_NOT_FOUND
+  when: platform_postgresql_require_binary_directory | default(false) | bool

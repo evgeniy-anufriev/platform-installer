@@ -1,5 +1,15 @@
 # RED OS 7.3 support
 
+## Completion decision — 2026-10-13
+
+The owner closes `REDOS73-SUPPORT-01` for its Ansible Core and service-role
+scope. The tested package, standalone and multi-host configurations are recorded
+in the [test journal](evidence/test-journal.md). This completion does not claim
+that every service version or topology is supported; combinations without
+explicit evidence remain unverified. The owner determined that Go/Wails
+acceptance is not required because this work made no changes in those layers.
+This is direct Core/Ansible acceptance, not Installer UI acceptance.
+
 ## Scope
 
 Add a portable Core runtime bundle for RED OS 7.3 and verify the current
@@ -30,50 +40,44 @@ service installation acceptance through the Installer.
 
 ## Service test results
 
-These are Python/Ansible role contract and fixture tests run on the RED OS 7.3
-VM from the synchronized current working tree. They do not install the named
-service packages on the VM.
+Contract and fixture test outcomes are listed in the [test journal](evidence/test-journal.md).
+On RED OS 7.3, direct Core/Ansible Apply, Verify and repeat evidence covers
+standalone configurations for ClickHouse, PostgreSQL, Redis, Vault, Docker
+Rootless, HAProxy, BIND and Kafka. Three-host evidence covers BIND primary and
+secondary, DNS-client with the configured `systemd-resolved` backend, Keepalived
+VRRP, PostgreSQL `pg_auto_failover`, Redis Sentinel, Vault Raft, HAProxy, Docker
+Rootless, ClickHouse Keeper/replication, and Kafka KRaft with Schema Registry.
+Where documented, Verify and repeat Apply completed with `changed=0`.
 
-See [test journal](evidence/test-journal.md) for per-service results and
-remaining failures. Several failures reproduce issues in already-dirty
-Kafka, PostgreSQL, Redis and service-role work; the run is not a clean
-comparison against the previous RED OS 8 baseline.
-
-## Remaining service compatibility gates
-
-- RED OS 7.3 repositories provide `postgresql16` through 16.15 and
-  `pg_auto_failover-16` 2.2-1. The PostgreSQL role now probes both legacy and
-  major-scoped package families using exact-version masks, then installs the
-  selected exact NEVRA. Read-only package resolution passed on 7.3. The
-  service-level Apply/Verify/repeat remains untested, and the artifact metadata
-  still describes the previously accepted Red OS 8 package combination.
-- ClickHouse 26.8.14.3 RPMs (client, common-static and server) are present in
-  the offline bundle and use the same artifact set as the Red OS 8 bundle.
-  They can be used for a 7.3 Core Apply test; package compatibility still
-  requires the isolated Apply/Verify/repeat evidence.
-- Existing service metadata/defaults still pin several RED OS 8 package
-  builds. Repository candidates observed on 7.3 include Keepalived 2.3.4,
-  PostgreSQL 12.22, Redis 8.10.1, Vault 2.0.4 and Docker Compose 5.0.2.
-  These candidates have not been proven with their roles and must not be
-  recorded as accepted service combinations yet.
-- Direct service install, verify and idempotent-repeat runs remain open for all
-  ten services. The bundle proves the Ansible/Python bootstrap and Core
-  capability boundary only.
+The journal preserves the individual runs, package versions, important setup
+conditions and earlier failures. Some early aggregate unit suites were not
+clean, and not every service mode/version combination was exercised. Those
+unverified combinations are not accepted as supported by this work item.
+RED OS 8 `/usr/bin` PostgreSQL was not retested in the portability correction;
+that check is assigned to its separate stage. The active cache was not updated
+with the QA bundle.
 
 ## Environment cleanup
 
-The temporary QA SSH key was removed from the VM and local secret storage; its
-temporary SSH config alias was removed. QA source workspaces, downloaded
-runtime closure and remote bundle-build workspace were removed. The explicitly
-requested Ansible packages remain installed on the VM.
+The temporary QA SSH key was removed from the VM's `authorized_keys`, local
+secret storage, and SSH config. Both temporary synchronized source workspaces
+were removed. The seven tested service deployments remain on the VM for
+inspection. Vault bootstrap token and unseal custody remain in
+`/home/admin/.runtime/secrets/redos73-vault-qa` with private file/directory
+modes because Vault remains initialized. SELinux is configured `disabled` and
+was observed `Disabled` during QA, as requested. The explicitly requested
+Ansible packages also remain installed.
 
 ## Independent review
 
-The required FULL DIFF review returned **BLOCK**. `REDOS73-DIFF-01` is open
-because the submitted worktree fingerprint did not match the reviewer's
-recomputed fingerprint (`sha256:050425437295146d503dff0351ce7f13952af4138a3388af6435c10d3f6fa4b4`).
-`REDOS73-QA-01` is open because isolated service install, Verify and repeat
-checks were not completed. `REDOS73-DIFF-02` is a non-blocking test-quality
-finding: strengthen the Keepalived contract test to assert the exact systemd
-module key. The bundle/Core bootstrap evidence is complete, but the milestone
-remains IN PROGRESS and does not establish service support.
+The historical FULL DIFF review returned **BLOCK** after a fingerprint
+mismatch. The authorized TARGETED_RECHECK was **APPROVE**, with zero unresolved
+blockers, for `REDOS73-DIFF-01` and `REDOS73-DIFF-02` at reviewed fingerprint
+`sha256:fdee91010b78d766a712dba0523f4eb78ba78092609130555f39b832dd962201`.
+Its reproducible manifest is in
+[redos73-diff-fingerprint.txt](evidence/redos73-diff-fingerprint.txt).
+The PostgreSQL monitor address and HAProxy exact PKI selector were confirmed;
+both corrected RED OS 7.3.7 contract suites passed (13 tests each). The earlier
+`REDOS73-QA-01` partial-coverage finding is closed by the owner-directed scope
+decision recorded above; unverified combinations remain explicitly outside the
+support claims. No further review cycle was run.

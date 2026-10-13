@@ -98,24 +98,6 @@
   loop_control:
     label: "{{ item.key }}"
 
-- name: End BIND role on hosts without BIND participation
-  ansible.builtin.meta: end_role
-  when: >-
-    (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') |
-     selectattr('key', 'in', platform_deployments) | list | length) == 0
-
-- name: Prepare and validate BIND candidates without activation
-  ansible.builtin.include_tasks: prepare.yml
-  when: platform_bind_phase == 'prepare'
-
-- name: Activate previously validated BIND candidates
-  ansible.builtin.include_tasks: activate.yml
-  when: platform_bind_phase == 'activate'
-
-- name: Verify BIND runtime read-only
-  ansible.builtin.include_tasks: verify.yml
-  when: platform_bind_phase == 'verify'
-
-- name: Start BIND after active validation barrier
-  ansible.builtin.include_tasks: start.yml
-  when: platform_bind_phase == 'start'
+- name: Run BIND lifecycle only on participating hosts
+  ansible.builtin.include_tasks: lifecycle.yml
+  when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list | length) > 0

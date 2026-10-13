@@ -1,15 +1,29 @@
 ---
-- name: Inspect systemd-resolved unit existence
+- name: Inspect systemd-resolved unit load state
   ansible.builtin.command:
     argv: [systemctl, show, systemd-resolved.service, --property=LoadState, --value]
   register: _platform_dns_client_resolved_unit
   changed_when: false
   failed_when: false
 
-- name: Inspect NetworkManager unit existence
+- name: Inspect NetworkManager unit load state
   ansible.builtin.command:
     argv: [systemctl, show, NetworkManager.service, --property=LoadState, --value]
   register: _platform_dns_client_nm_unit
+  changed_when: false
+  failed_when: false
+
+- name: Inspect whether systemd-resolved is running
+  ansible.builtin.command:
+    argv: [systemctl, is-active, systemd-resolved.service]
+  register: _platform_dns_client_resolved_active
+  changed_when: false
+  failed_when: false
+
+- name: Inspect whether NetworkManager is running
+  ansible.builtin.command:
+    argv: [systemctl, is-active, NetworkManager.service]
+  register: _platform_dns_client_nm_active
   changed_when: false
   failed_when: false
 
@@ -30,8 +44,13 @@
 - name: Select deterministic DNS client backend
   ansible.builtin.set_fact:
     platform_dns_client_backend: >-
-      {{ 'systemd-resolved' if _platform_dns_client_resolved_unit.stdout | trim == 'loaded'
-         else ('NetworkManager' if _platform_dns_client_nm_unit.stdout | trim == 'loaded' else '') }}
+      {{ 'systemd-resolved'
+         if _platform_dns_client_resolved_unit.stdout | trim == 'loaded'
+         and _platform_dns_client_resolved_active.stdout | trim == 'active'
+         else ('NetworkManager'
+               if _platform_dns_client_nm_unit.stdout | trim == 'loaded'
+               and _platform_dns_client_nm_active.stdout | trim == 'active'
+               else '') }}
 
 - name: Require a supported DNS client backend
   ansible.builtin.assert:

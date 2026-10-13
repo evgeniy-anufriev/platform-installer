@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:0821c2624196e04d9ccd28ee7ed4788152caf55f8b83afd20294f68779773db6
+digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -1650,14 +1650,15 @@ definitions:
     kind: ServiceManifest
     metadata:
       id: bind
-      version: 1.0.0-alpha.1
+      version: 1.0.0-alpha.2
       displayName: BIND
-      description: Authoritative primary-secondary DNS for one Platform-managed forward zone
+      description: Authoritative BIND primary with optional secondary DNS participants for one Platform-managed
+        forward zone
       category: network
     modes:
       authoritative-primary-secondary:
         displayName: Authoritative primary-secondary
-        description: One primary and one or more secondary BIND participants placed directly on inventory
+        description: One primary and zero or more secondary BIND participants placed directly on inventory
           hosts
         memberRoles:
         - primary
@@ -1665,7 +1666,7 @@ definitions:
         placement:
           explicit: true
           hostScoped: true
-          minMembers: 2
+          minMembers: 1
           distinctHosts: true
         x-maturity: implemented-net-03
     capabilities:
@@ -1747,7 +1748,7 @@ definitions:
         variablesPrefix: platform_bind_
     artifacts: []
     compatibilityRef: ../../services/bind/compatibility.yml
-    x-definitionDigest: sha256:e7a9f94c42c5af24e601e819b2e764b8b7e57231cd0882ed24a40533b02ff8e0
+    x-definitionDigest: sha256:bc994da16bf24fc347607d58f03c286af9c9885f4f55fdfb02674e98e221bc94
     x-sourceManifest: services/bind/service.yml
   dns-client:
     apiVersion: platform.installer/service-manifest/v1alpha1

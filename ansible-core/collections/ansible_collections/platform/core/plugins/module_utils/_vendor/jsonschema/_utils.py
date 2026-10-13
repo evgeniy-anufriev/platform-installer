@@ -2,14 +2,26 @@ from collections.abc import Mapping, MutableMapping, Sequence
 from urllib.parse import urlsplit
 import itertools
 import json
+import pkgutil
 import re
 import sys
 
 # The files() API was added in Python 3.9.
 if sys.version_info >= (3, 9):  # pragma: no cover
     from importlib import resources
-else:  # pragma: no cover
-    import importlib_resources as resources  # type: ignore
+
+
+def read_resource_text(resource_name):
+    if sys.version_info >= (3, 9):
+        return resources.files(__package__).joinpath(resource_name).read_text(encoding="utf-8")
+
+    # Python 3.8 on supported RED OS releases has no importlib.resources.files
+    # and the Core runtime must not depend on an extra package just to read its
+    # vendored JSON schemas.
+    data = pkgutil.get_data(__package__, resource_name)
+    if data is None:
+        raise FileNotFoundError("Vendored JSON schema resource not found: %s" % resource_name)
+    return data.decode("utf-8")
 
 
 class URIDict(MutableMapping):
@@ -57,9 +69,7 @@ def load_schema(name):
     Load a schema from ./schemas/``name``.json and return it.
     """
 
-    path = resources.files(__package__).joinpath(f"schemas/{name}.json")
-    data = path.read_text(encoding="utf-8")
-    return json.loads(data)
+    return json.loads(read_resource_text("schemas/%s.json" % name))
 
 
 def format_as_index(container, indices):

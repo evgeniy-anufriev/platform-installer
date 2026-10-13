@@ -1,6 +1,6 @@
 apiVersion: platform.installer/service-compatibility/v1alpha1
 kind: ServiceCompatibility
-metadata: {id: bind, version: "1.0.0-alpha.1"}
+metadata: {id: bind, version: "1.0.0-alpha.2"}
 platforms:
   redos:
     packages: [bind, bind-utils]

@@ -25,6 +25,47 @@
   when: "'platform_installer_pki_materialization' in ansible_skip_tags"
   no_log: true
 
+- name: Check for keytool before PKCS12 store materialization
+  ansible.builtin.shell: command -v keytool
+  args:
+    executable: /bin/sh
+  register: _platform_pki_keytool_probe
+  changed_when: false
+  failed_when: false
+  when: >-
+    (platform_pki_materialization_plans | selectattr('formats', 'defined') |
+     map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
+
+- name: Install Java runtime providing keytool when it is missing
+  ansible.builtin.package:
+    name: "{{ platform_pki_keytool_package }}"
+    state: present
+  become: true
+  register: _platform_pki_keytool_install
+  when:
+    - _platform_pki_keytool_probe is not skipped
+    - _platform_pki_keytool_probe.rc != 0
+
+- name: Recheck keytool after ensuring the Java runtime
+  ansible.builtin.shell: command -v keytool
+  args:
+    executable: /bin/sh
+  register: _platform_pki_keytool_ready
+  changed_when: false
+  failed_when: false
+  when: >-
+    (platform_pki_materialization_plans | selectattr('formats', 'defined') |
+     map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
+
+- name: Require keytool before PKCS12 store materialization
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_keytool_ready.rc == 0
+    fail_msg: PKI_KEYTOOL_UNAVAILABLE
+  when: >-
+    (platform_pki_materialization_plans | selectattr('formats', 'defined') |
+     map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
+
 - name: Prepare protected PKI execution roots
   ansible.builtin.file:
     path: "{{ item }}"

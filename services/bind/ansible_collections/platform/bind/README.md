@@ -1,3 +1,3 @@
 # Platform BIND
 
-Authoritative primary-secondary BIND role for Platform Installer V2 NET-03.
+Authoritative BIND primary role with optional secondaries for Platform Installer V2 NET-03.

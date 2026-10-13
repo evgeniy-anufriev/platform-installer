@@ -1,5 +1,5 @@
 ---
-- name: Install exact approved RED OS Docker rootless package closure
+- name: Install configured RED OS Docker rootless packages
   ansible.builtin.dnf:
     name: "{{ platform_docker_packages }}"
     state: present

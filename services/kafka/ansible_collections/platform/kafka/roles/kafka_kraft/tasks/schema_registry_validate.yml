@@ -28,7 +28,7 @@
 - name: Reject invalid Registry topology and ports before mutation
   ansible.builtin.assert:
     that: _platform_kafka_registry_projection.findings | length == 0
-    fail_msg: "{{ _platform_kafka_registry_projection.findings }}"
+    fail_msg: "{{ _platform_kafka_registry_projection.findings | to_nice_yaml }}"
 
 - name: Select local Registry instances
   ansible.builtin.assert:

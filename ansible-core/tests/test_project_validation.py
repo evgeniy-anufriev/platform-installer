@@ -93,7 +93,7 @@ class ProjectValidationTests(unittest.TestCase):
                 "zone": {"kind": "MANAGED", "roleVariable": "platform_bind_zone", "type": "string", "scopes": ["deployment"], "validation": {"minLength": 3}},
                 "defaultTtl": {"kind": "MANAGED", "roleVariable": "platform_bind_ttl", "type": "integer", "scopes": ["deployment"], "validation": {"minimum": 1}},
             }},
-            "modes": {"authoritative-primary-secondary": {"placement": {"hostScoped": True, "minMembers": 2, "distinctHosts": True}}},
+            "modes": {"authoritative-primary-secondary": {"placement": {"hostScoped": True, "minMembers": 1, "distinctHosts": True}}},
         }
         client = {
             "metadata": {"id": "dns-client", "version": "1"},
@@ -122,7 +122,7 @@ class ProjectValidationTests(unittest.TestCase):
             "dns-clients": {"serviceType": "dns-client", "mode": "host-resolver", "configuration": {"dnsServerRef": "dns-main"}},
         }}
         placement = {
-            "dns-main": {"node1": {"roles": ["primary"]}, "node2": {"roles": ["secondary"]}},
+            "dns-main": {"node1": {"roles": ["primary"]}},
             "dns-clients": {"node1": {}, "node2": {}},
         }
         addresses = {"node1": {"ansible_host": "192.0.2.1"}, "node2": {"ansible_host": "192.0.2.2"}}

@@ -67,6 +67,15 @@ class DnsResolutionTests(unittest.TestCase):
         self.assertEqual(["192.0.2.111", "192.0.2.112"], records[("postgres-main.asutp.scada.local.", "A")])
         self.assertEqual(["192.0.2.111", "192.0.2.112"], records[("*.asutp.scada.local.", "A")])
 
+    def test_single_primary_resolves_zone_without_secondary_participants(self):
+        inventory = {"node1": {"dns-main": {"roles": ["primary"]}}}
+        result = self.resolve(inventory_placement=inventory)
+        self.assertEqual("PASS", result["status"], result["findings"])
+        zone = result["zones"]["dns-main"]
+        self.assertEqual([], zone["secondaries"])
+        self.assertEqual(["node1.scada.local"], zone["nameservers"])
+        self.assertEqual("node1.scada.local", zone["mname"])
+
     def test_base_provider_projection_has_group_wildcard_but_no_service_records(self):
         result = DNS.resolve_dns_zones(
             desired(), catalog(), hosts(), placement(), include_service_endpoints=False)

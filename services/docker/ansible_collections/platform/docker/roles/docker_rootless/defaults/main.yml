@@ -15,9 +15,10 @@ platform_docker_lxc_bridge: lxcbr0
 platform_docker_lxc_veth_limit: 10
 platform_docker_lxc_dns_server: ''
 platform_docker_packages:
-  - docker-ce-29.7.2-1.red80
-  - docker-ce-cli-29.7.2-1.red80
-  - docker-ce-rootless-extras-29.7.2-1.red80
-  - docker-compose-5.3.1-1.red80
-  - lxc-7.0.0-1.red80
-  - fuse-overlayfs-1.7.1-4.red80
+  - docker-ce
+  - docker-ce-cli
+  - docker-ce-rootless-extras
+  - docker-compose
+  - lxc
+  - dnsmasq
+  - fuse-overlayfs

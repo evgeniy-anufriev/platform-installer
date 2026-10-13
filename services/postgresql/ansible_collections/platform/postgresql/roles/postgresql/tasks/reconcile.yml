@@ -1,0 +1,481 @@
+---
+- name: Resolve exact PostgreSQL repository packages before installation
+  ansible.builtin.include_tasks: resolve_packages.yml
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - ansible_facts.pkg_mgr | default('') == 'dnf'
+    - platform_resolved_artifact_sources is not defined or
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+
+- name: Install approved PostgreSQL packages from the configured system repository
+  ansible.builtin.package:
+    name: >-
+      {{ _platform_postgresql_repository_packages
+         if ansible_facts.pkg_mgr | default('') == 'dnf'
+         else ['postgresql-' ~ platform_postgresql_version,
+               'postgresql-server-' ~ platform_postgresql_version,
+               'postgresql-contrib-' ~ platform_postgresql_version] }}
+    state: present
+  when: not (platform_postgresql_verify_only | bool)
+    and (platform_resolved_artifact_sources is not defined or
+         platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY')
+
+- name: Install approved pg_auto_failover package from the configured system repository
+  ansible.builtin.package:
+    name: >-
+      {{ (_platform_postgresql_failover_repository_package
+          if ansible_facts.pkg_mgr | default('') == 'dnf'
+          else ['pg_auto_failover-' ~ platform_postgresql_pg_auto_failover_version]) }}
+    state: present
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
+
+- name: Resolve PostgreSQL binary directory after package installation
+  ansible.builtin.include_tasks: resolve_binary_directory.yml
+  vars:
+    platform_postgresql_require_binary_directory: true
+
+- name: Ensure PostgreSQL service account exists
+  ansible.builtin.user:
+    name: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    system: true
+    create_home: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Create deployment and member PostgreSQL directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0700'
+  loop:
+    - "{{ platform_postgresql_data_directory }}"
+    - "{{ platform_postgresql_config_directory }}"
+    - "{{ platform_postgresql_log_directory }}"
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Install PostgreSQL-owned TLS material after account and base directories exist
+  ansible.builtin.include_tasks: install_tls.yml
+  when: platform_postgresql_tls_profile | length > 0
+
+- name: Discover PostgreSQL initialization state
+  ansible.builtin.stat:
+    path: "{{ platform_postgresql_data_directory }}/PG_VERSION"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  register: platform_postgresql_pg_version_file
+
+- name: Discover PostgreSQL data path type
+  ansible.builtin.stat:
+    path: "{{ platform_postgresql_data_directory }}"
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  register: platform_postgresql_data_path
+
+- name: Block partial PostgreSQL data directory
+  ansible.builtin.assert:
+    that:
+      - not platform_postgresql_data_path.stat.exists or platform_postgresql_data_path.stat.isdir
+    fail_msg: 'POSTGRES_DATA_STATE_UNKNOWN: data directory is partial or cannot be safely classified'
+
+- name: Initialize PostgreSQL exactly once
+  ansible.builtin.command:
+    argv:
+      - initdb
+      - --pgdata={{ platform_postgresql_data_directory }}
+      - --username={{ platform_postgresql_user }}
+      - --encoding=UTF8
+  become_user: "{{ platform_postgresql_user }}"
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'standalone'
+    - not platform_postgresql_pg_version_file.stat.exists
+  register: platform_postgresql_initdb
+  changed_when: true
+
+- name: Render PostgreSQL configuration
+  ansible.builtin.template:
+    src: postgresql-platform.conf.j2
+    dest: "{{ platform_postgresql_config_directory }}/postgresql-platform.conf"
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0600'
+  when: not (platform_postgresql_verify_only | bool)
+  notify: Reload PostgreSQL TLS material
+
+- name: Render PostgreSQL host authentication configuration
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "{{ platform_postgresql_config_directory }}/pg_hba.conf"
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0600'
+  when: not (platform_postgresql_verify_only | bool)
+  notify: Reload PostgreSQL TLS material
+
+- name: Configure pg_auto_failover lifecycle
+  ansible.builtin.include_tasks: pg_auto_failover.yml
+  when:
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - not (platform_postgresql_verify_only | bool)
+
+- name: Include Platform PostgreSQL fragment from the initdb-owned configuration
+  ansible.builtin.lineinfile:
+    path: "{{ platform_postgresql_data_directory }}/postgresql.conf"
+    line: "include = '{{ platform_postgresql_config_directory }}/postgresql-platform.conf'"
+    regexp: "^include = '.*postgresql-platform[.]conf'$"
+    insertafter: EOF
+    owner: "{{ platform_postgresql_user }}"
+    group: "{{ platform_postgresql_group }}"
+    mode: '0600'
+    state: present
+  when: not (platform_postgresql_verify_only | bool)
+  notify: Restart PostgreSQL
+
+- name: Count Platform PostgreSQL includes in the initdb-owned configuration
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Ec
+      - "^include = '.*postgresql-platform[.]conf'$"
+      - "{{ platform_postgresql_data_directory }}/postgresql.conf"
+  register: platform_postgresql_include_count
+  changed_when: false
+  failed_when: false
+
+- name: Assert exactly one Platform PostgreSQL include is present
+  ansible.builtin.assert:
+    that:
+      - platform_postgresql_include_count.rc == 0
+      - platform_postgresql_include_count.stdout | trim == '1'
+    fail_msg: POSTGRES_PLATFORM_INCLUDE_INVALID
+
+- name: Install the member-scoped PostgreSQL systemd unit
+  ansible.builtin.template:
+    src: postgresql.service.j2
+    dest: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: not (platform_postgresql_verify_only | bool)
+  notify: Restart PostgreSQL
+
+- name: Reload systemd after PostgreSQL unit projection
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Enable and start member-scoped PostgreSQL
+  ansible.builtin.systemd:
+    name: "{{ _platform_postgresql_unit_name }}"
+    enabled: true
+    state: started
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Apply changed PostgreSQL TLS material before TLS credential probes
+  ansible.builtin.include_tasks: flush_handlers.yml
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Derive materialized PostgreSQL TLS leaf fingerprint
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_postgresql_tls_directory }}/certificate.pem", -noout, -fingerprint, -sha256]
+  register: _platform_postgresql_materialized_leaf
+  changed_when: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Derive PostgreSQL network listener leaf fingerprint
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
+    openssl x509 -noout -fingerprint -sha256
+  args:
+    executable: /bin/bash
+  register: _platform_postgresql_serving_leaf_before_reload
+  changed_when: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Reload managed PostgreSQL child only when the serving TLS leaf is stale
+  ansible.builtin.command:
+    argv: [pg_ctl, reload, -D, "{{ platform_postgresql_data_directory }}"]
+  become_user: "{{ platform_postgresql_user }}"
+  register: _platform_postgresql_serving_leaf_reload
+  changed_when: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - _platform_postgresql_materialized_leaf.stdout | trim != _platform_postgresql_serving_leaf_before_reload.stdout | trim
+
+- name: Wait for PostgreSQL after serving TLS leaf reload
+  ansible.builtin.command:
+    argv: [pg_isready, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}"]
+  register: _platform_postgresql_serving_leaf_ready
+  changed_when: false
+  retries: 20
+  delay: 1
+  until: _platform_postgresql_serving_leaf_ready.rc == 0
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - _platform_postgresql_serving_leaf_reload is defined
+    - _platform_postgresql_serving_leaf_reload.changed | default(false)
+
+- name: Recheck PostgreSQL network listener leaf after corrective reload
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
+    openssl x509 -noout -fingerprint -sha256
+  args:
+    executable: /bin/bash
+  register: _platform_postgresql_serving_leaf_after_reload
+  changed_when: false
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Require PostgreSQL network listener to serve materialized TLS leaf
+  ansible.builtin.assert:
+    that: >-
+      _platform_postgresql_materialized_leaf.stdout | trim ==
+      _platform_postgresql_serving_leaf_after_reload.stdout | default(_platform_postgresql_serving_leaf_before_reload.stdout, true) | trim
+    fail_msg: POSTGRES_TLS_SERVING_CERTIFICATE_MISMATCH
+  when: not (platform_postgresql_verify_only | bool)
+
+- name: Discover whether a pg_auto_failover data member is writable before credential reconciliation
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -Atqc, 'SELECT CASE WHEN pg_is_in_recovery() THEN ''standby'' ELSE ''primary'' END']
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_data_write_state
+  changed_when: false
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+
+- name: Probe data-to-monitor credential over TLS
+  ansible.builtin.command:
+    argv:
+      - psql
+      - "postgresql://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor_port }}/pg_auto_failover?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - -Atqc
+      - SELECT 1
+  environment:
+    PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_monitor_credential_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in _platform_postgresql_member.roles"
+
+- name: Block monitor credential reconciliation when TLS verification fails
+  ansible.builtin.assert:
+    that: "'certificate verify failed' not in (platform_postgresql_monitor_credential_login.stderr | default('') | lower)"
+    fail_msg: POSTGRES_MONITOR_CREDENTIAL_TLS_PREREQUISITE_FAILED
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in _platform_postgresql_member.roles"
+    - platform_postgresql_monitor_credential_login.rc | default(0) != 0
+
+- name: Inspect pg_auto_failover monitor credential privileges
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -Atqc, "SELECT CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ platform_postgresql_monitor_credential.username }}' AND rolcanlogin) THEN 'safe' ELSE 'unsafe' END"]
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_monitor_credential_role
+  changed_when: false
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in _platform_postgresql_member.roles"
+
+- name: Reconcile monitor credential after pg_autoctl monitor initialization
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
+    stdin: |
+      \set platform_password '{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_monitor_credential.passwordSecretRef]) | trim }}'
+      ALTER ROLE {{ platform_postgresql_monitor_credential.username }} PASSWORD :'platform_password';
+  become_user: "{{ platform_postgresql_user }}"
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in _platform_postgresql_member.roles"
+    - >-
+      platform_postgresql_monitor_credential_login.rc | default(1) != 0
+      or platform_postgresql_monitor_credential_role.stdout | trim != 'safe'
+
+- name: Discover whether a pg_auto_failover data member is writable
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -Atqc, 'SELECT CASE WHEN pg_is_in_recovery() THEN ''standby'' ELSE ''primary'' END']
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_data_write_state
+  changed_when: false
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+
+- name: Probe replication credential over TLS on the writable data member
+  ansible.builtin.command:
+    argv:
+      - psql
+      - "postgresql://{{ platform_postgresql_replication_credential.username }}@{{ _platform_postgresql_member.address }}:{{ _platform_postgresql_effective_port }}/postgres?sslmode=verify-full&sslrootcert={{ _platform_postgresql_tls_directory }}/ca-chain.pem"
+      - -Atqc
+      - SELECT 1
+  environment:
+    PGPASSFILE: "{{ platform_postgresql_pgpass_file }}"
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_replication_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+
+- name: Block replication credential reconciliation when TLS verification fails
+  ansible.builtin.assert:
+    that: "'certificate verify failed' not in (platform_postgresql_replication_login.stderr | default('') | lower)"
+    fail_msg: POSTGRES_REPLICATION_CREDENTIAL_TLS_PREREQUISITE_FAILED
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+    - platform_postgresql_replication_login.rc | default(0) != 0
+
+- name: Reconcile pg_auto_failover replication credential on the writable data member
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
+    stdin: |
+      \set platform_password '{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_replication_credential.passwordSecretRef]) | trim }}'
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ platform_postgresql_replication_credential.username }}') THEN
+          CREATE ROLE {{ platform_postgresql_replication_credential.username }} LOGIN REPLICATION;
+        ELSE
+          ALTER ROLE {{ platform_postgresql_replication_credential.username }} WITH LOGIN REPLICATION;
+        END IF;
+      END $$;
+      ALTER ROLE {{ platform_postgresql_replication_credential.username }} PASSWORD :'platform_password';
+  become_user: "{{ platform_postgresql_user }}"
+  no_log: true
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+    - platform_postgresql_replication_login.rc | default(1) != 0
+
+- name: Inspect pg_auto_failover healthcheck probe role
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -h
+      - /var/run/postgresql
+      - -p
+      - "{{ _platform_postgresql_effective_port }}"
+      - -U
+      - "{{ platform_postgresql_user }}"
+      - -d
+      - postgres
+      - -Atqc
+      - "SELECT CASE WHEN EXISTS (SELECT FROM pg_authid WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin AND NOT rolsuper AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND rolpassword IS NULL) THEN 'safe' ELSE 'unsafe' END"
+  become_user: "{{ platform_postgresql_user }}"
+  register: platform_postgresql_healthcheck_role
+  changed_when: false
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+
+- name: Reconcile pg_auto_failover healthcheck probe role without a password
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
+    stdin: |
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor') THEN
+          CREATE ROLE pgautofailover_monitor LOGIN;
+        END IF;
+      END $$;
+      ALTER ROLE pgautofailover_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD NULL;
+  become_user: "{{ platform_postgresql_user }}"
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'database' in _platform_postgresql_member.roles"
+    - platform_postgresql_data_write_state.stdout | trim == 'primary'
+    - >-
+      platform_postgresql_healthcheck_role.stdout | trim != 'safe'
+
+- name: Wait for PostgreSQL client endpoint
+  ansible.builtin.command:
+    argv: [pg_isready, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}"]
+  register: platform_postgresql_ready
+  changed_when: false
+  retries: 20
+  delay: 2
+  until: platform_postgresql_ready.rc == 0
+
+- name: Verify PostgreSQL systemd state read-only
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ _platform_postgresql_unit_name }}"]
+  register: platform_postgresql_service_state
+  changed_when: false
+  when: platform_postgresql_verify_only | bool
+
+- name: Assert PostgreSQL service is active
+  ansible.builtin.assert:
+    that: platform_postgresql_service_state.stdout == 'active'
+    fail_msg: POSTGRES_SERVICE_NOT_ACTIVE
+  when: platform_postgresql_verify_only | bool
+
+- name: Check configured administrator login without exposing the password
+  ansible.builtin.command:
+    argv: [psql, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_admin_superuser.username }}", -d, postgres, -Atqc, 'SELECT 1']
+  environment:
+    PGPASSWORD: "{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_admin_superuser.passwordSecretRef]) | trim }}"
+  register: platform_postgresql_admin_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: platform_postgresql_admin_superuser.passwordSecretRef | length > 0
+
+- name: Ensure configured administrator exists with a runtime password
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -c, "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ platform_postgresql_admin_superuser.username }}') THEN CREATE ROLE {{ platform_postgresql_admin_superuser.username }} LOGIN SUPERUSER; ELSE ALTER ROLE {{ platform_postgresql_admin_superuser.username }} WITH LOGIN SUPERUSER; END IF; END $$;"]
+  become_user: "{{ platform_postgresql_user }}"
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_admin_login.rc | default(1) != 0
+  no_log: true
+
+- name: Set administrator password only when login does not already work
+  ansible.builtin.command:
+    argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
+    stdin: |
+      \set platform_password '{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_admin_superuser.passwordSecretRef]) | trim }}'
+      ALTER ROLE {{ platform_postgresql_admin_superuser.username }} PASSWORD :'platform_password';
+  become_user: "{{ platform_postgresql_user }}"
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_admin_login.rc | default(1) != 0
+  no_log: true
+
+- name: Verify PostgreSQL service read-only
+  ansible.builtin.command:
+    argv: [psql, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_admin_superuser.username }}", -d, postgres, -Atqc, 'SELECT version()']
+  environment:
+    PGPASSWORD: "{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_admin_superuser.passwordSecretRef]) | trim }}"
+  changed_when: false
+  no_log: true
+  when: platform_postgresql_verify_only | bool

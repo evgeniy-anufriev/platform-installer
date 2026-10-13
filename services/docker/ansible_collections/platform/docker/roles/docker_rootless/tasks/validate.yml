@@ -28,11 +28,10 @@
   register: _platform_docker_architecture
   changed_when: false
 
-- name: Require supported RED OS target
+- name: Require supported RED OS architecture
   ansible.builtin.assert:
     that:
       - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
-      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^VERSION_ID=\"?8\\.0(?:\\.[0-9]+)?\"?$')
       - _platform_docker_architecture.stdout == 'x86_64'
     fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
 

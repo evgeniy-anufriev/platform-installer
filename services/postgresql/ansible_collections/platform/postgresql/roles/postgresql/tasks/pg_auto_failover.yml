@@ -108,7 +108,7 @@
       - create
       - monitor
       - --pgctl
-      - /usr/bin/pg_ctl
+      - "{{ platform_postgresql_binary_directory }}/pg_ctl"
       - --pgdata
       - "{{ platform_postgresql_data_directory }}"
       - --pgport
@@ -140,7 +140,7 @@
       - create
       - postgres
       - --pgctl
-      - /usr/bin/pg_ctl
+      - "{{ platform_postgresql_binary_directory }}/pg_ctl"
       - --pgdata
       - "{{ platform_postgresql_data_directory }}"
       - --pgport
