@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Platform Installer
+Comment=Platform Installer desktop application
+Exec=platform-installer-ui
+Icon=platform-installer-ui
+Terminal=false
+Categories=System;Utility;
+StartupNotify=true
