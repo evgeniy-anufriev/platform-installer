@@ -5,9 +5,9 @@ README.md рядом с этим файлом.
 
 Ветка: portable. Базовый commit: 8c9255d28141fe7a202c60831124db2cc7fef841.
 Формат: platform-installer-portable-source-v2.
-Комплект: 2310 файлов, 6 частей source-0001.txt ... source-0006.txt.
-Лимит каждой части: 5000000 байт. Максимальная часть: 4996803 байт.
-2297 файлов хранятся читаемым UTF-8 текстом; 13 двоичных ресурсов — в Base64.
+Все части source-*.txt указаны в manifest.json вместе с размерами и SHA-256.
+Лимит каждой части: 5000000 байт.
+Текстовые файлы хранятся читаемым UTF-8 текстом; двоичные ресурсы — в Base64.
 
 Формат записи:
   @@PORTABLE {JSON с путём, encoding, payloadBytes, индексом блока, SHA-256 и размером файла}
@@ -21,13 +21,14 @@ README.md рядом с этим файлом.
 manifest.json содержит порядок, размеры и SHA-256 частей.
 
 Включены Go/React, Ansible Core, vendor, конфигурации, схемы, service packages,
-Wails bindings, лицензии зависимостей и ресурсы сборки Windows/Linux.
+Wails bindings, лицензии зависимостей и ресурсы сборки Windows/Linux,
+исходники Wails v2.15.0 в third_party/wails и зависимости CLI в его vendor.
 Исключены тесты, документация, QA-скрипты, frontend/dist, node_modules,
 runtime/cache/bundle, секреты, RPM и бинарные пакеты Core.
 Обязательные ресурсы go:embed в vendor сохранены, включая двоичные файлы Wails.
 
 Требования восстановления: Python 3.8+, только стандартная библиотека.
-Переносите все 6 частей, manifest.json и portable_source.py вместе.
+Переносите все части, manifest.json и portable_source.py вместе.
 Команды ниже выполняются из папки portable-source.
 
 Проверка комплекта:
@@ -52,7 +53,11 @@ runtime/cache/bundle, секреты, RPM и бинарные пакеты Core.
   sh build/linux/build.sh --webkit 4.1
   sh build/linux/build.sh --webkit 4.0
 
-Нужны Go (go.mod: 1.25+), Node >=24.19 и <25, npm 11.17.0, Wails CLI v2.15.0.
+Нужны Go (go.mod: 1.25+), Node >=24.19 и <25, npm 11.17.0.
+Устанавливать Wails CLI не нужно: build сначала собирает ее из исходников
+в .runtime/tools/wails.exe (Windows) или .runtime/tools/wails (Linux).
+Отдельная сборка CLI: python scripts/portable_source.py build-wails .
+В Linux используйте python3. Эта команда выполняется из корня проекта.
 На Linux также нужны C-компилятор, pkg-config, GTK3 и WebKit2GTK dev-библиотеки.
 Скрипт проверяет pkg-config и предпочитает ABI 4.1, добавляя -tags webkit2_41;
 если доступен только ABI 4.0, используется стандартная сборка Wails.
@@ -67,7 +72,8 @@ runtime/cache/bundle, секреты, RPM и бинарные пакеты Core.
 для установки нужно разместить бинарный файл в PATH, ярлык в каталоге
 applications, а иконку — в стандартном каталоге иконок. Скрипт их не устанавливает.
 
-Сборка запускает npm ci, frontend build и wails build с GOFLAGS=-mod=vendor,
+Сборка запускает локальную сборку Wails CLI, npm ci, frontend build и Wails
+production build с GOFLAGS=-mod=vendor и отключенными GOPROXY/GOSUMDB,
 без go mod tidy/синхронизации go.mod и без перегенерации Go bindings.
 npm ci требует доступных npm-пакетов: сеть либо подготовленный кэш.
 Это исходники, а не автономный комплект инструментов или runtime bundle.
@@ -79,7 +85,9 @@ Core/Python/Ansible скрипт build не запускает.
   python portable_source.py pack C:\path\platform-installer-v2 C:\work\new-package
   python3 portable_source.py pack /home/user/project /home/user/new-package
 Упаковка берет текущие байты отслеживаемых файлов и дополнительно включает
-scripts/portable_source.py и семь Wails build-ресурсов Windows/Linux.
+scripts/portable_source.py, семь Wails build-ресурсов Windows/Linux и дерево
+third_party/wails с CLI-зависимостями. Обязательные README внутри go:embed
+шаблонов Wails сохранены как ресурсы CLI.
 Выходная папка должна быть новой. Для упаковки нужен Git; для восстановления — нет.
 Другие неотслеживаемые файлы автоматически не включаются.
 
@@ -89,6 +97,8 @@ scripts/portable_source.py и семь Wails build-ресурсов Windows/Linu
 - Unicode, CRLF, маркеры внутри текста, пустые файлы и двоичные ресурсы восстановлены;
 - поврежденный комплект и существующая папка назначения отклоняются;
 - Windows frontend/Wails production build из восстановленных файлов PASS;
+- сборка Windows проверена без глобальной Wails CLI в PATH;
+- Wails CLI кросс-сборка Linux amd64 без Go proxy PASS;
 - ресурсы Linux восстановлены; сборка на Linux не запускалась.
 Wails при сборке обновляет свои генерируемые frontend/wailsjs/runtime файлы
 даже с -skipbindings; после сборки они могут отличаться от исходного комплекта.

@@ -107354,7 +107354,7 @@ func main() {
 }
 
 @@END
-@@PORTABLE {"path":"scripts/portable_source.py","mode":420,"size":15868,"sha256":"0892e9b15b7c930df41900c1b483f68a020136aa0f651c6b93713f8aac7539d3","index":0,"count":1,"encoding":"utf-8","payloadBytes":15868}
+@@PORTABLE {"path":"scripts/portable_source.py","mode":420,"size":18794,"sha256":"07fabd0b7a7df954e89d0ef415b3989b3b92c119d52b06e43f4f4300b9339c20","index":0,"count":1,"encoding":"utf-8","payloadBytes":18794}
 #!/usr/bin/env python3
 """Pack/restore application and Core sources in text parts of at most 5,000,000 bytes."""
 import argparse
@@ -107379,6 +107379,12 @@ SCRIPT = "scripts/portable_source.py"
 RESOURCES = ["build/appicon.png", "build/windows/icon.ico", "build/windows/info.json",
              "build/windows/wails.exe.manifest", "build/linux/build.sh",
              "build/linux/platform-installer-ui.desktop", "build/linux/icon.png"]
+WAILS_SOURCE = "third_party/wails"
+WAILS_VERSION = "v2.15.0"
+# CLI templates are compile-time go:embed resources, including their README files.
+WAILS_EMBED_TREES = ("pkg/templates/templates/", "pkg/templates/ides/",
+                     "pkg/templates/generate/assets/", "pkg/buildassets/build/",
+                     "cmd/wails/internal/template/base/")
 EXCLUDED_DIRS = {".git", ".runtime", ".agents", ".codex", "docs", "tests", "test",
                  "testdata", "__tests__", "e2e", "node_modules", "__pycache__",
                  ".pytest_cache", "dist", "cache", "bundle", "runs", "secrets",
@@ -107406,6 +107412,21 @@ def safe_path(name):
 
 
 def included(name):
+    if name.startswith(WAILS_SOURCE + "/"):
+        relative = name[len(WAILS_SOURCE) + 1:]
+        if "/" not in relative and relative not in {"go.mod", "go.sum", "wails.go", "LICENSE", "SOURCE.json"}:
+            return False
+        if relative.startswith(WAILS_EMBED_TREES):
+            return True
+        # Vendored CLI dependencies already omit tests; preserve compile-time resources.
+        if relative.startswith("vendor/"):
+            return not relative.endswith("_test.go")
+        if relative.split("/")[0] in {"test", "tests", "tools"}:
+            return False
+        if relative.endswith(".exe") and relative != "internal/webview2runtime/MicrosoftEdgeWebview2Setup.exe":
+            return False
+        if relative == "internal/webview2runtime/MicrosoftEdgeWebview2Setup.exe":
+            return True
     parts = name.lower().split("/")
     leaf = parts[-1]
     if set(parts) & EXCLUDED_DIRS:
@@ -107449,6 +107470,15 @@ def source_files(root):
             modes[decoded] = 0o755 if mode == b"100755" else 0o644
     for name in [SCRIPT, *RESOURCES]:
         modes[name] = 0o755 if name.endswith(".sh") else 0o644
+    wails_root = root / WAILS_SOURCE
+    require((wails_root / "vendor/modules.txt").is_file(), "Missing vendored Wails CLI sources")
+    for directory, directories, filenames in os.walk(str(wails_root), followlinks=False):
+        directories[:] = [name for name in directories if name not in {".git", "node_modules", "__pycache__"}]
+        for filename in filenames:
+            target = Path(directory) / filename
+            name = target.relative_to(root).as_posix()
+            if included(name):
+                modes.setdefault(name, 0o755 if name.endswith(".sh") else 0o644)
     files = []
     seen = set()
     for name in sorted(modes):
@@ -107634,13 +107664,30 @@ def linux_build_tags(webkit):
     return ["-tags", "webkit2_41"] if abi == "4.1" else []
 
 
+def build_wails(root):
+    source = root / WAILS_SOURCE
+    require((source / "go.mod").is_file() and (source / "vendor/modules.txt").is_file(),
+            "Missing Wails v2.15.0 sources/vendor")
+    require((source / "cmd/wails/internal/version.txt").read_text(encoding="utf-8").strip() == WAILS_VERSION,
+            "Unexpected Wails source version")
+    require(shutil.which("go"), "Building Wails requires Go")
+    output = root / ".runtime/tools" / ("wails.exe" if os.name == "nt" else "wails")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    environment = dict(os.environ, GOFLAGS="-mod=vendor", GOPROXY="off", GOSUMDB="off", GOWORK="off", GOTOOLCHAIN="local")
+    command = ["go", "build", "-mod=vendor", "-trimpath", "-o", str(output), "./cmd/wails"]
+    print("+ " + " ".join(command), flush=True)
+    subprocess.run(command, cwd=str(source), env=environment, check=True)
+    subprocess.run([str(output), "version"], cwd=str(root), env=environment, check=True)
+    return output
+
+
 def build(root, webkit="auto"):
     require((root / "vendor/modules.txt").is_file(), "Missing Go vendor")
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
-    wails = shutil.which("wails")
-    require(npm and wails and shutil.which("go"), "Build requires Node/npm, Go and Wails CLI")
+    require(npm and shutil.which("go"), "Build requires Node/npm and Go")
     tags = linux_build_tags(webkit) if sys.platform.startswith("linux") else []
-    environment = dict(os.environ, GOFLAGS="-mod=vendor")
+    wails = str(build_wails(root))
+    environment = dict(os.environ, GOFLAGS="-mod=vendor", GOPROXY="off", GOSUMDB="off", GOWORK="off", GOTOOLCHAIN="local")
     for command, cwd in [([npm, "ci"], root / "frontend"),
                          ([npm, "run", "build"], root / "frontend"),
                          ([wails, "build", "-nopackage", "-clean", "-m", "-nosyncgomod", "-skipbindings", "-s", *tags], root)]:
@@ -107659,7 +107706,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     for name, first, second in [("pack", "root", "output"), ("unpack", "source", "destination"),
-                                ("verify", "source", "root"), ("build", "root", None)]:
+                                ("verify", "source", "root"), ("build", "root", None), ("build-wails", "root", None)]:
         command = commands.add_parser(name)
         command.add_argument(first, type=Path)
         if name == "build":
@@ -107675,6 +107722,8 @@ def main():
             unpack(args.source.resolve(), args.destination.resolve())
         elif args.command == "verify":
             verify(args.source.resolve(), args.root.resolve() if args.root else None)
+        elif args.command == "build-wails":
+            build_wails(args.root.resolve())
         else:
             build(args.root.resolve(), args.webkit)
         return 0

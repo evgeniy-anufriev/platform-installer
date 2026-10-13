@@ -1,0 +1,12 @@
+{
+  "Path": "github.com/wailsapp/wails/v2",
+  "Version": "v2.15.0",
+  "Sum": "h1:u7cHK+UesZOlYxyJxfYLteaCPhws6UsZoDdqUejuX6Q=",
+  "GoModSum": "h1:scxrgwfsv6yR6fE6cCF+Flfl+JeU+SR87T9x4kILJ6M=",
+  "Origin": {
+    "VCS": "git",
+    "URL": "https://github.com/wailsapp/wails",
+    "Hash": "713dc89694c789ee0a45355c2886cef1986e9a01",
+    "Ref": "refs/tags/v2.15.0"
+  }
+}

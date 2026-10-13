@@ -1,7 +1,8 @@
 # Platform Installer: восстановление, сборка и runtime bundle
 
 Этот комплект содержит исходники приложения, Ansible Core, Go `vendor` и ресурсы
-Wails для Windows/Linux. Он состоит из `source-0001.txt` … `source-0006.txt`,
+Wails для Windows/Linux, исходники Wails v2.15.0 и зависимости его CLI.
+Он состоит из всех частей `source-*.txt`,
 `manifest.json` и `portable_source.py`. Каждая текстовая часть не превышает
 5 000 000 байт. Текстовые исходники читаемы; двоичные ресурсы используют Base64.
 Тесты, документация, кэши, секреты, RPM и бинарные пакеты Core исключены.
@@ -36,19 +37,20 @@ python3 portable_source.py verify . "$HOME/installer-restored"
 ## 2. Собрать приложение для Linux
 
 Сборка выполняется непосредственно в Linux. Установленные инструменты должны
-включать Go, Node.js, npm, Wails CLI, C-компилятор и `pkg-config`. Требования
-исходников: Go 1.25+, Node.js >=24.19 и <25, npm 11.17.0, Wails CLI v2.15.0.
+включать Go, Node.js, npm, C-компилятор и `pkg-config`. Требования
+исходников: Go 1.25+, Node.js >=24.19 и <25, npm 11.17.0.
 Нужны development-библиотеки GTK3 и WebKit2GTK с ABI 4.0 или 4.1.
 Названия системных пакетов зависят от дистрибутива; смотрите
 [требования Wails v2](https://wails.io/docs/gettingstarted/installation/).
 
-Если Wails CLI ещё не установлен, в разрешённой среде разработки с доступом
-к зависимостям установите именно версию проекта:
+Wails CLI заранее устанавливать не требуется: Python build сначала собирает
+v2.15.0 из `third_party/wails` в `.runtime/tools/wails`, затем использует именно
+этот бинарный файл. Для отдельной сборки CLI и проверки окружения:
 
 ```sh
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
-export PATH="$(go env GOPATH)/bin:$PATH"
-wails doctor
+cd "$HOME/installer-restored"
+python3 scripts/portable_source.py build-wails .
+.runtime/tools/wails doctor
 ```
 
 Соберите восстановленный проект:
@@ -81,16 +83,16 @@ python3 scripts/portable_source.py build . --webkit 4.1
 
 ## 3. Собрать приложение для Windows
 
-Нужны Go 1.25+, Node.js >=24.19 и <25, npm 11.17.0, Wails CLI v2.15.0
+Нужны Go 1.25+, Node.js >=24.19 и <25, npm 11.17.0
 и штатная Windows-среда Wails. Для запуска приложения требуется WebView2 Runtime.
-Проверьте среду через `wails doctor`.
+Предварительная установка Wails CLI не требуется.
 
-При необходимости установите Wails CLI в разрешённой среде разработки:
+Для отдельной сборки Wails CLI и проверки среды:
 
 ```powershell
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
-$env:Path = "$(go env GOPATH)\bin;$env:Path"
-wails doctor
+Set-Location C:\work\installer-restored
+python scripts/portable_source.py build-wails .
+& .\.runtime\tools\wails.exe doctor
 ```
 
 Сборка:
@@ -102,13 +104,19 @@ python scripts/portable_source.py build .
 
 Результат: `build\bin\platform-installer-ui.exe`.
 
-Для обеих платформ `build` запускает `npm ci`, сборку frontend и Wails
-production build. Go-зависимости берутся из `vendor` с `GOFLAGS=-mod=vendor`;
+Для обеих платформ `build` сначала собирает локальную Wails CLI, затем запускает
+`npm ci`, сборку frontend и Wails production build. Зависимости CLI берутся
+из `third_party/wails/vendor`, зависимости приложения — из корневого `vendor`.
+Обе Go-сборки используют `-mod=vendor`, `GOPROXY=off`, `GOSUMDB=off`,
+`GOWORK=off` и `GOTOOLCHAIN=local`: скачивание Go-модулей и toolchain не выполняется.
 `go mod tidy` и синхронизация `go.mod` отключены. `npm ci` требует сети или
-заранее подготовленного npm-кэша. Wails CLI и системные development-библиотеки
+заранее подготовленного npm-кэша. Go, Node.js и системные development-библиотеки
 в текстовый комплект не входят. Wails может обновить генерируемые
 `frontend/wailsjs/runtime` при сборке, поэтому сравнивайте восстановленные
-исходники с комплектом до сборки.
+исходники с комплектом до сборки. В `third_party/wails/SOURCE.json` зафиксированы
+версия, upstream commit и Go module checksums. Сохранены MIT-лицензия Wails,
+лицензии зависимостей и обязательные встроенные шаблоны. README-файлы внутри
+шаблонов CLI являются ресурсами `go:embed`, а не отдельной документацией проекта.
 
 ## 4. Подготовить входы для runtime bundle
 
@@ -240,6 +248,9 @@ bundle через разрешённый канал. В существующем
 
 Точное восстановление исходников и ресурсов проверено по SHA-256. Windows
 frontend/Wails production build из восстановленных файлов прошёл.
+Проверка проведена с удалённой из PATH глобальной Wails CLI: локальная CLI
+v2.15.0 собрана из исходников и использована для production build приложения.
+CLI также кросс-собрана для Linux amd64 с отключённым Go proxy.
 Linux-ресурсы включены и восстановлены; Linux Wails-сборка не запускалась.
 Runtime bundle в рамках подготовки этого README не собирался и не публиковался:
 здесь описаны команды и обязательные входы, сверенные с текущими исходниками.
