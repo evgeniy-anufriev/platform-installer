@@ -1,3 +1,2109 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/module/pseudo.go","mode":420,"size":8630,"sha256":"55f36593e394a3595a52f636028442f6be9ed010a6a7e0403dac980b545a374d","index":0,"count":1,"encoding":"utf-8","payloadBytes":8630}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Pseudo-versions
+//
+// Code authors are expected to tag the revisions they want users to use,
+// including prereleases. However, not all authors tag versions at all,
+// and not all commits a user might want to try will have tags.
+// A pseudo-version is a version with a special form that allows us to
+// address an untagged commit and order that version with respect to
+// other versions we might encounter.
+//
+// A pseudo-version takes one of the general forms:
+//
+//	(1) vX.0.0-yyyymmddhhmmss-abcdef123456
+//	(2) vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdef123456
+//	(3) vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdef123456+incompatible
+//	(4) vX.Y.Z-pre.0.yyyymmddhhmmss-abcdef123456
+//	(5) vX.Y.Z-pre.0.yyyymmddhhmmss-abcdef123456+incompatible
+//
+// If there is no recently tagged version with the right major version vX,
+// then form (1) is used, creating a space of pseudo-versions at the bottom
+// of the vX version range, less than any tagged version, including the unlikely v0.0.0.
+//
+// If the most recent tagged version before the target commit is vX.Y.Z or vX.Y.Z+incompatible,
+// then the pseudo-version uses form (2) or (3), making it a prerelease for the next
+// possible semantic version after vX.Y.Z. The leading 0 segment in the prerelease string
+// ensures that the pseudo-version compares less than possible future explicit prereleases
+// like vX.Y.(Z+1)-rc1 or vX.Y.(Z+1)-1.
+//
+// If the most recent tagged version before the target commit is vX.Y.Z-pre or vX.Y.Z-pre+incompatible,
+// then the pseudo-version uses form (4) or (5), making it a slightly later prerelease.
+
+package module
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"golang.org/x/mod/internal/lazyregexp"
+	"golang.org/x/mod/semver"
+)
+
+var pseudoVersionRE = lazyregexp.New(`^v[0-9]+\.(0\.0-|\d+\.\d+-([^+]*\.)?0\.)\d{14}-[A-Za-z0-9]+(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+
+const PseudoVersionTimestampFormat = "20060102150405"
+
+// PseudoVersion returns a pseudo-version for the given major version ("v1")
+// preexisting older tagged version ("" or "v1.2.3" or "v1.2.3-pre"), revision time,
+// and revision identifier (usually a 12-byte commit hash prefix).
+func PseudoVersion(major, older string, t time.Time, rev string) string {
+	if major == "" {
+		major = "v0"
+	}
+	segment := fmt.Sprintf("%s-%s", t.UTC().Format(PseudoVersionTimestampFormat), rev)
+	build := semver.Build(older)
+	older = semver.Canonical(older)
+	if older == "" {
+		return major + ".0.0-" + segment // form (1)
+	}
+	if semver.Prerelease(older) != "" {
+		return older + ".0." + segment + build // form (4), (5)
+	}
+
+	// Form (2), (3).
+	// Extract patch from vMAJOR.MINOR.PATCH
+	i := strings.LastIndex(older, ".") + 1
+	v, patch := older[:i], older[i:]
+
+	// Reassemble.
+	return v + incDecimal(patch) + "-0." + segment + build
+}
+
+// ZeroPseudoVersion returns a pseudo-version with a zero timestamp and
+// revision, which may be used as a placeholder.
+func ZeroPseudoVersion(major string) string {
+	return PseudoVersion(major, "", time.Time{}, "000000000000")
+}
+
+// incDecimal returns the decimal string incremented by 1.
+func incDecimal(decimal string) string {
+	// Scan right to left turning 9s to 0s until you find a digit to increment.
+	digits := []byte(decimal)
+	i := len(digits) - 1
+	for ; i >= 0 && digits[i] == '9'; i-- {
+		digits[i] = '0'
+	}
+	if i >= 0 {
+		digits[i]++
+	} else {
+		// digits is all zeros
+		digits[0] = '1'
+		digits = append(digits, '0')
+	}
+	return string(digits)
+}
+
+// decDecimal returns the decimal string decremented by 1, or the empty string
+// if the decimal is all zeroes.
+func decDecimal(decimal string) string {
+	// Scan right to left turning 0s to 9s until you find a digit to decrement.
+	digits := []byte(decimal)
+	i := len(digits) - 1
+	for ; i >= 0 && digits[i] == '0'; i-- {
+		digits[i] = '9'
+	}
+	if i < 0 {
+		// decimal is all zeros
+		return ""
+	}
+	if i == 0 && digits[i] == '1' && len(digits) > 1 {
+		digits = digits[1:]
+	} else {
+		digits[i]--
+	}
+	return string(digits)
+}
+
+// IsPseudoVersion reports whether v is a pseudo-version.
+func IsPseudoVersion(v string) bool {
+	return strings.Count(v, "-") >= 2 && semver.IsValid(v) && pseudoVersionRE.MatchString(v)
+}
+
+// IsZeroPseudoVersion returns whether v is a pseudo-version with a zero base,
+// timestamp, and revision, as returned by [ZeroPseudoVersion].
+func IsZeroPseudoVersion(v string) bool {
+	return v == ZeroPseudoVersion(semver.Major(v))
+}
+
+// PseudoVersionTime returns the time stamp of the pseudo-version v.
+// It returns an error if v is not a pseudo-version or if the time stamp
+// embedded in the pseudo-version is not a valid time.
+func PseudoVersionTime(v string) (time.Time, error) {
+	_, timestamp, _, _, err := parsePseudoVersion(v)
+	if err != nil {
+		return time.Time{}, err
+	}
+	t, err := time.Parse("20060102150405", timestamp)
+	if err != nil {
+		return time.Time{}, &InvalidVersionError{
+			Version: v,
+			Pseudo:  true,
+			Err:     fmt.Errorf("malformed time %q", timestamp),
+		}
+	}
+	return t, nil
+}
+
+// PseudoVersionRev returns the revision identifier of the pseudo-version v.
+// It returns an error if v is not a pseudo-version.
+func PseudoVersionRev(v string) (rev string, err error) {
+	_, _, rev, _, err = parsePseudoVersion(v)
+	return
+}
+
+// PseudoVersionBase returns the canonical parent version, if any, upon which
+// the pseudo-version v is based.
+//
+// If v has no parent version (that is, if it is "vX.0.0-[…]"),
+// PseudoVersionBase returns the empty string and a nil error.
+func PseudoVersionBase(v string) (string, error) {
+	base, _, _, build, err := parsePseudoVersion(v)
+	if err != nil {
+		return "", err
+	}
+
+	switch pre := semver.Prerelease(base); pre {
+	case "":
+		// vX.0.0-yyyymmddhhmmss-abcdef123456 → ""
+		if build != "" {
+			// Pseudo-versions of the form vX.0.0-yyyymmddhhmmss-abcdef123456+incompatible
+			// are nonsensical: the "vX.0.0-" prefix implies that there is no parent tag,
+			// but the "+incompatible" suffix implies that the major version of
+			// the parent tag is not compatible with the module's import path.
+			//
+			// There are a few such entries in the index generated by proxy.golang.org,
+			// but we believe those entries were generated by the proxy itself.
+			return "", &InvalidVersionError{
+				Version: v,
+				Pseudo:  true,
+				Err:     fmt.Errorf("lacks base version, but has build metadata %q", build),
+			}
+		}
+		return "", nil
+
+	case "-0":
+		// vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdef123456 → vX.Y.Z
+		// vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdef123456+incompatible → vX.Y.Z+incompatible
+		base = strings.TrimSuffix(base, pre)
+		i := strings.LastIndexByte(base, '.')
+		if i < 0 {
+			panic("base from parsePseudoVersion missing patch number: " + base)
+		}
+		patch := decDecimal(base[i+1:])
+		if patch == "" {
+			// vX.0.0-0 is invalid, but has been observed in the wild in the index
+			// generated by requests to proxy.golang.org.
+			//
+			// NOTE(bcmills): I cannot find a historical bug that accounts for
+			// pseudo-versions of this form, nor have I seen such versions in any
+			// actual go.mod files. If we find actual examples of this form and a
+			// reasonable theory of how they came into existence, it seems fine to
+			// treat them as equivalent to vX.0.0 (especially since the invalid
+			// pseudo-versions have lower precedence than the real ones). For now, we
+			// reject them.
+			return "", &InvalidVersionError{
+				Version: v,
+				Pseudo:  true,
+				Err:     fmt.Errorf("version before %s would have negative patch number", base),
+			}
+		}
+		return base[:i+1] + patch + build, nil
+
+	default:
+		// vX.Y.Z-pre.0.yyyymmddhhmmss-abcdef123456 → vX.Y.Z-pre
+		// vX.Y.Z-pre.0.yyyymmddhhmmss-abcdef123456+incompatible → vX.Y.Z-pre+incompatible
+		if !strings.HasSuffix(base, ".0") {
+			panic(`base from parsePseudoVersion missing ".0" before date: ` + base)
+		}
+		return strings.TrimSuffix(base, ".0") + build, nil
+	}
+}
+
+var errPseudoSyntax = errors.New("syntax error")
+
+func parsePseudoVersion(v string) (base, timestamp, rev, build string, err error) {
+	if !IsPseudoVersion(v) {
+		return "", "", "", "", &InvalidVersionError{
+			Version: v,
+			Pseudo:  true,
+			Err:     errPseudoSyntax,
+		}
+	}
+	build = semver.Build(v)
+	v = strings.TrimSuffix(v, build)
+	j := strings.LastIndex(v, "-")
+	v, rev = v[:j], v[j+1:]
+	i := strings.LastIndex(v, "-")
+	if j := strings.LastIndex(v, "."); j > i {
+		base = v[:j] // "vX.Y.Z-pre.0" or "vX.Y.(Z+1)-0"
+		timestamp = v[j+1:]
+	} else {
+		base = v[:i] // "vX.0.0"
+		timestamp = v[i+1:]
+	}
+	return base, timestamp, rev, build, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/semver/semver.go","mode":420,"size":9260,"sha256":"58528919e1a4a35f2bf95c7dbe2124c8aa8d151ca8f5dbe87f70058f7bb35a0d","index":0,"count":1,"encoding":"utf-8","payloadBytes":9260}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package semver implements comparison of semantic version strings.
+// In this package, semantic version strings must begin with a leading "v",
+// as in "v1.0.0".
+//
+// The general form of a semantic version string accepted by this package is
+//
+//	vMAJOR[.MINOR[.PATCH[-PRERELEASE][+BUILD]]]
+//
+// where square brackets indicate optional parts of the syntax;
+// MAJOR, MINOR, and PATCH are decimal integers without extra leading zeros;
+// PRERELEASE and BUILD are each a series of non-empty dot-separated identifiers
+// using only alphanumeric characters and hyphens; and
+// all-numeric PRERELEASE identifiers must not have leading zeros.
+//
+// This package follows Semantic Versioning 2.0.0 (see semver.org)
+// with two exceptions. First, it requires the "v" prefix. Second, it recognizes
+// vMAJOR and vMAJOR.MINOR (with no prerelease or build suffixes)
+// as shorthands for vMAJOR.0.0 and vMAJOR.MINOR.0.
+package semver
+
+import (
+	"slices"
+	"strings"
+)
+
+// parsed returns the parsed form of a semantic version string.
+type parsed struct {
+	major      string
+	minor      string
+	patch      string
+	short      string
+	prerelease string
+	build      string
+}
+
+// IsValid reports whether v is a valid semantic version string.
+func IsValid(v string) bool {
+	_, ok := parse(v)
+	return ok
+}
+
+// Canonical returns the canonical formatting of the semantic version v.
+// It fills in any missing .MINOR or .PATCH and discards build metadata.
+// Two semantic versions compare equal only if their canonical formatting
+// is an identical string.
+// The canonical invalid semantic version is the empty string.
+func Canonical(v string) string {
+	p, ok := parse(v)
+	if !ok {
+		return ""
+	}
+	if p.build != "" {
+		return v[:len(v)-len(p.build)]
+	}
+	if p.short != "" {
+		return v + p.short
+	}
+	return v
+}
+
+// Major returns the major version prefix of the semantic version v.
+// For example, Major("v2.1.0") == "v2".
+// If v is an invalid semantic version string, Major returns the empty string.
+func Major(v string) string {
+	pv, ok := parse(v)
+	if !ok {
+		return ""
+	}
+	return v[:1+len(pv.major)]
+}
+
+// MajorMinor returns the major.minor version prefix of the semantic version v.
+// For example, MajorMinor("v2.1.0") == "v2.1".
+// If v is an invalid semantic version string, MajorMinor returns the empty string.
+func MajorMinor(v string) string {
+	pv, ok := parse(v)
+	if !ok {
+		return ""
+	}
+	i := 1 + len(pv.major)
+	if j := i + 1 + len(pv.minor); j <= len(v) && v[i] == '.' && v[i+1:j] == pv.minor {
+		return v[:j]
+	}
+	return v[:i] + "." + pv.minor
+}
+
+// Prerelease returns the prerelease suffix of the semantic version v.
+// For example, Prerelease("v2.1.0-pre+meta") == "-pre".
+// If v is an invalid semantic version string, Prerelease returns the empty string.
+func Prerelease(v string) string {
+	pv, ok := parse(v)
+	if !ok {
+		return ""
+	}
+	return pv.prerelease
+}
+
+// Build returns the build suffix of the semantic version v.
+// For example, Build("v2.1.0+meta") == "+meta".
+// If v is an invalid semantic version string, Build returns the empty string.
+func Build(v string) string {
+	pv, ok := parse(v)
+	if !ok {
+		return ""
+	}
+	return pv.build
+}
+
+// Compare returns an integer comparing two versions according to
+// semantic version precedence.
+// The result will be 0 if v == w, -1 if v < w, or +1 if v > w.
+//
+// An invalid semantic version string is considered less than a valid one.
+// All invalid semantic version strings compare equal to each other.
+func Compare(v, w string) int {
+	pv, ok1 := parse(v)
+	pw, ok2 := parse(w)
+	if !ok1 && !ok2 {
+		return 0
+	}
+	if !ok1 {
+		return -1
+	}
+	if !ok2 {
+		return +1
+	}
+	if c := compareInt(pv.major, pw.major); c != 0 {
+		return c
+	}
+	if c := compareInt(pv.minor, pw.minor); c != 0 {
+		return c
+	}
+	if c := compareInt(pv.patch, pw.patch); c != 0 {
+		return c
+	}
+	return comparePrerelease(pv.prerelease, pw.prerelease)
+}
+
+// Max canonicalizes its arguments and then returns the version string
+// that compares greater.
+//
+// Deprecated: use [Compare] instead. In most cases, returning a canonicalized
+// version is not expected or desired.
+func Max(v, w string) string {
+	v = Canonical(v)
+	w = Canonical(w)
+	if Compare(v, w) > 0 {
+		return v
+	}
+	return w
+}
+
+// ByVersion implements [sort.Interface] for sorting semantic version strings.
+type ByVersion []string
+
+func (vs ByVersion) Len() int           { return len(vs) }
+func (vs ByVersion) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
+func (vs ByVersion) Less(i, j int) bool { return compareVersion(vs[i], vs[j]) < 0 }
+
+// Sort sorts a list of semantic version strings using [Compare] and falls back
+// to use [strings.Compare] if both versions are considered equal.
+func Sort(list []string) {
+	slices.SortFunc(list, compareVersion)
+}
+
+func compareVersion(a, b string) int {
+	cmp := Compare(a, b)
+	if cmp != 0 {
+		return cmp
+	}
+	return strings.Compare(a, b)
+}
+
+func parse(v string) (p parsed, ok bool) {
+	if v == "" || v[0] != 'v' {
+		return
+	}
+	p.major, v, ok = parseInt(v[1:])
+	if !ok {
+		return
+	}
+	if v == "" {
+		p.minor = "0"
+		p.patch = "0"
+		p.short = ".0.0"
+		return
+	}
+	if v[0] != '.' {
+		ok = false
+		return
+	}
+	p.minor, v, ok = parseInt(v[1:])
+	if !ok {
+		return
+	}
+	if v == "" {
+		p.patch = "0"
+		p.short = ".0"
+		return
+	}
+	if v[0] != '.' {
+		ok = false
+		return
+	}
+	p.patch, v, ok = parseInt(v[1:])
+	if !ok {
+		return
+	}
+	if len(v) > 0 && v[0] == '-' {
+		p.prerelease, v, ok = parsePrerelease(v)
+		if !ok {
+			return
+		}
+	}
+	if len(v) > 0 && v[0] == '+' {
+		p.build, v, ok = parseBuild(v)
+		if !ok {
+			return
+		}
+	}
+	if v != "" {
+		ok = false
+		return
+	}
+	ok = true
+	return
+}
+
+func parseInt(v string) (t, rest string, ok bool) {
+	if v == "" {
+		return
+	}
+	if v[0] < '0' || '9' < v[0] {
+		return
+	}
+	i := 1
+	for i < len(v) && '0' <= v[i] && v[i] <= '9' {
+		i++
+	}
+	if v[0] == '0' && i != 1 {
+		return
+	}
+	return v[:i], v[i:], true
+}
+
+func parsePrerelease(v string) (t, rest string, ok bool) {
+	// "A pre-release version MAY be denoted by appending a hyphen and
+	// a series of dot separated identifiers immediately following the patch version.
+	// Identifiers MUST comprise only ASCII alphanumerics and hyphen [0-9A-Za-z-].
+	// Identifiers MUST NOT be empty. Numeric identifiers MUST NOT include leading zeroes."
+	if v == "" || v[0] != '-' {
+		return
+	}
+	i := 1
+	start := 1
+	for i < len(v) && v[i] != '+' {
+		if !isIdentChar(v[i]) && v[i] != '.' {
+			return
+		}
+		if v[i] == '.' {
+			if start == i || isBadNum(v[start:i]) {
+				return
+			}
+			start = i + 1
+		}
+		i++
+	}
+	if start == i || isBadNum(v[start:i]) {
+		return
+	}
+	return v[:i], v[i:], true
+}
+
+func parseBuild(v string) (t, rest string, ok bool) {
+	if v == "" || v[0] != '+' {
+		return
+	}
+	i := 1
+	start := 1
+	for i < len(v) {
+		if !isIdentChar(v[i]) && v[i] != '.' {
+			return
+		}
+		if v[i] == '.' {
+			if start == i {
+				return
+			}
+			start = i + 1
+		}
+		i++
+	}
+	if start == i {
+		return
+	}
+	return v[:i], v[i:], true
+}
+
+func isIdentChar(c byte) bool {
+	return 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' || '0' <= c && c <= '9' || c == '-'
+}
+
+func isBadNum(v string) bool {
+	i := 0
+	for i < len(v) && '0' <= v[i] && v[i] <= '9' {
+		i++
+	}
+	return i == len(v) && i > 1 && v[0] == '0'
+}
+
+func isNum(v string) bool {
+	i := 0
+	for i < len(v) && '0' <= v[i] && v[i] <= '9' {
+		i++
+	}
+	return i == len(v)
+}
+
+func compareInt(x, y string) int {
+	if x == y {
+		return 0
+	}
+	if len(x) < len(y) {
+		return -1
+	}
+	if len(x) > len(y) {
+		return +1
+	}
+	if x < y {
+		return -1
+	} else {
+		return +1
+	}
+}
+
+func comparePrerelease(x, y string) int {
+	// "When major, minor, and patch are equal, a pre-release version has
+	// lower precedence than a normal version.
+	// Example: 1.0.0-alpha < 1.0.0.
+	// Precedence for two pre-release versions with the same major, minor,
+	// and patch version MUST be determined by comparing each dot separated
+	// identifier from left to right until a difference is found as follows:
+	// identifiers consisting of only digits are compared numerically and
+	// identifiers with letters or hyphens are compared lexically in ASCII
+	// sort order. Numeric identifiers always have lower precedence than
+	// non-numeric identifiers. A larger set of pre-release fields has a
+	// higher precedence than a smaller set, if all of the preceding
+	// identifiers are equal.
+	// Example: 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta <
+	// 1.0.0-beta < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0."
+	if x == y {
+		return 0
+	}
+	if x == "" {
+		return +1
+	}
+	if y == "" {
+		return -1
+	}
+	for x != "" && y != "" {
+		x = x[1:] // skip - or .
+		y = y[1:] // skip - or .
+		var dx, dy string
+		dx, x = nextIdent(x)
+		dy, y = nextIdent(y)
+		if dx != dy {
+			ix := isNum(dx)
+			iy := isNum(dy)
+			if ix != iy {
+				if ix {
+					return -1
+				} else {
+					return +1
+				}
+			}
+			if ix {
+				if len(dx) < len(dy) {
+					return -1
+				}
+				if len(dx) > len(dy) {
+					return +1
+				}
+			}
+			if dx < dy {
+				return -1
+			} else {
+				return +1
+			}
+		}
+	}
+	if x == "" {
+		return -1
+	} else {
+		return +1
+	}
+}
+
+func nextIdent(x string) (dx, rest string) {
+	i := 0
+	for i < len(x) && x[i] != '.' {
+		i++
+	}
+	return x[:i], x[i:]
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/LICENSE","mode":420,"size":1453,"sha256":"911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad","index":0,"count":1,"encoding":"utf-8","payloadBytes":1453}
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/PATENTS","mode":420,"size":1303,"sha256":"96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1303}
+Additional IP Rights Grant (Patents)
+
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/context/context.go","mode":420,"size":4694,"sha256":"2a2580e3cf015a5cf9263ee2229a55da433bffbbae7095494beb29db566cbcc3","index":0,"count":1,"encoding":"utf-8","payloadBytes":4694}
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package context has been superseded by the standard library [context] package.
+//
+// Deprecated: Use the standard library context package instead.
+package context
+
+import (
+	"context" // standard library's context, as of Go 1.7
+	"time"
+)
+
+// A Context carries a deadline, a cancellation signal, and other values across
+// API boundaries.
+//
+// Context's methods may be called by multiple goroutines simultaneously.
+//
+//go:fix inline
+type Context = context.Context
+
+// Canceled is the error returned by [Context.Err] when the context is canceled
+// for some reason other than its deadline passing.
+//
+//go:fix inline
+var Canceled = context.Canceled
+
+// DeadlineExceeded is the error returned by [Context.Err] when the context is canceled
+// due to its deadline passing.
+//
+//go:fix inline
+var DeadlineExceeded = context.DeadlineExceeded
+
+// Background returns a non-nil, empty Context. It is never canceled, has no
+// values, and has no deadline. It is typically used by the main function,
+// initialization, and tests, and as the top-level Context for incoming
+// requests.
+//
+//go:fix inline
+func Background() Context { return context.Background() }
+
+// TODO returns a non-nil, empty Context. Code should use context.TODO when
+// it's unclear which Context to use or it is not yet available (because the
+// surrounding function has not yet been extended to accept a Context
+// parameter).
+//
+//go:fix inline
+func TODO() Context { return context.TODO() }
+
+// A CancelFunc tells an operation to abandon its work.
+// A CancelFunc does not wait for the work to stop.
+// A CancelFunc may be called by multiple goroutines simultaneously.
+// After the first call, subsequent calls to a CancelFunc do nothing.
+type CancelFunc = context.CancelFunc
+
+// WithCancel returns a derived context that points to the parent context
+// but has a new Done channel. The returned context's Done channel is closed
+// when the returned cancel function is called or when the parent context's
+// Done channel is closed, whichever happens first.
+//
+// Canceling this context releases resources associated with it, so code should
+// call cancel as soon as the operations running in this [Context] complete.
+//
+//go:fix inline
+func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
+	return context.WithCancel(parent)
+}
+
+// WithDeadline returns a derived context that points to the parent context
+// but has the deadline adjusted to be no later than d. If the parent's
+// deadline is already earlier than d, WithDeadline(parent, d) is semantically
+// equivalent to parent. The returned [Context.Done] channel is closed when
+// the deadline expires, when the returned cancel function is called,
+// or when the parent context's Done channel is closed, whichever happens first.
+//
+// Canceling this context releases resources associated with it, so code should
+// call cancel as soon as the operations running in this [Context] complete.
+//
+//go:fix inline
+func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
+	return context.WithDeadline(parent, d)
+}
+
+// WithTimeout returns WithDeadline(parent, time.Now().Add(timeout)).
+//
+// Canceling this context releases resources associated with it, so code should
+// call cancel as soon as the operations running in this [Context] complete:
+//
+//	func slowOperationWithTimeout(ctx context.Context) (Result, error) {
+//		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+//		defer cancel()  // releases resources if slowOperation completes before timeout elapses
+//		return slowOperation(ctx)
+//	}
+//
+//go:fix inline
+func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
+	return context.WithTimeout(parent, timeout)
+}
+
+// WithValue returns a derived context that points to the parent Context.
+// In the derived context, the value associated with key is val.
+//
+// Use context Values only for request-scoped data that transits processes and
+// APIs, not for passing optional parameters to functions.
+//
+// The provided key must be comparable and should not be of type
+// string or any other built-in type to avoid collisions between
+// packages using context. Users of WithValue should define their own
+// types for keys. To avoid allocating when assigning to an
+// interface{}, context keys often have concrete type
+// struct{}. Alternatively, exported context key variables' static
+// type should be a pointer or interface.
+//
+//go:fix inline
+func WithValue(parent Context, key, val interface{}) Context {
+	return context.WithValue(parent, key, val)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/html/atom/atom.go","mode":420,"size":2321,"sha256":"86490b2027af4443dacfe96c313a6c632c03ea1acdf85f7f61c4fdde32bc2f3d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2321}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package atom provides integer codes (also known as atoms) for a fixed set of
+// frequently occurring HTML strings: tag names and attribute keys such as "p"
+// and "id".
+//
+// Sharing an atom's name between all elements with the same tag can result in
+// fewer string allocations when tokenizing and parsing HTML. Integer
+// comparisons are also generally faster than string comparisons.
+//
+// The value of an atom's particular code is not guaranteed to stay the same
+// between versions of this package. Neither is any ordering guaranteed:
+// whether atom.H1 < atom.H2 may also change. The codes are not guaranteed to
+// be dense. The only guarantees are that e.g. looking up "div" will yield
+// atom.Div, calling atom.Div.String will return "div", and atom.Div != 0.
+package atom // import "golang.org/x/net/html/atom"
+
+// Atom is an integer code for a string. The zero value maps to "".
+type Atom uint32
+
+// String returns the atom's name.
+func (a Atom) String() string {
+	start := uint32(a >> 8)
+	n := uint32(a & 0xff)
+	if start+n > uint32(len(atomText)) {
+		return ""
+	}
+	return atomText[start : start+n]
+}
+
+func (a Atom) string() string {
+	return atomText[a>>8 : a>>8+a&0xff]
+}
+
+// fnv computes the FNV hash with an arbitrary starting value h.
+func fnv(h uint32, s []byte) uint32 {
+	for i := range s {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
+}
+
+func match(s string, t []byte) bool {
+	for i, c := range t {
+		if s[i] != c {
+			return false
+		}
+	}
+	return true
+}
+
+// Lookup returns the atom whose name is s. It returns zero if there is no
+// such atom. The lookup is case sensitive.
+func Lookup(s []byte) Atom {
+	if len(s) == 0 || len(s) > maxAtomLen {
+		return 0
+	}
+	h := fnv(hash0, s)
+	if a := table[h&uint32(len(table)-1)]; int(a&0xff) == len(s) && match(a.string(), s) {
+		return a
+	}
+	if a := table[(h>>16)&uint32(len(table)-1)]; int(a&0xff) == len(s) && match(a.string(), s) {
+		return a
+	}
+	return 0
+}
+
+// String returns a string whose contents are equal to s. In that sense, it is
+// equivalent to string(s) but may be more efficient.
+func String(s []byte) string {
+	if a := Lookup(s); a != 0 {
+		return a.String()
+	}
+	return string(s)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/html/atom/table.go","mode":420,"size":27896,"sha256":"d7c4d0795fbc8dbec36504efcae14330b08e9a4bd8041e946f4b48ee45797e1d","index":0,"count":1,"encoding":"utf-8","payloadBytes":27896}
+// Code generated by go generate gen.go; DO NOT EDIT.
+
+//go:generate go run gen.go
+
+package atom
+
+const (
+	A                         Atom = 0x1
+	Abbr                      Atom = 0x4
+	Accept                    Atom = 0x1a06
+	AcceptCharset             Atom = 0x1a0e
+	Accesskey                 Atom = 0x2c09
+	Acronym                   Atom = 0xaa07
+	Action                    Atom = 0x26506
+	Address                   Atom = 0x6f107
+	Align                     Atom = 0xb105
+	Allowfullscreen           Atom = 0x3280f
+	Allowpaymentrequest       Atom = 0xc113
+	Allowusermedia            Atom = 0xdd0e
+	Alt                       Atom = 0xf303
+	Annotation                Atom = 0x1c90a
+	AnnotationXml             Atom = 0x1c90e
+	Applet                    Atom = 0x30806
+	Area                      Atom = 0x35004
+	Article                   Atom = 0x3f607
+	As                        Atom = 0x3c02
+	Aside                     Atom = 0x10705
+	Async                     Atom = 0xff05
+	Audio                     Atom = 0x11505
+	Autocomplete              Atom = 0x26b0c
+	Autofocus                 Atom = 0x12109
+	Autoplay                  Atom = 0x13c08
+	B                         Atom = 0x101
+	Base                      Atom = 0x3b04
+	Basefont                  Atom = 0x3b08
+	Bdi                       Atom = 0xba03
+	Bdo                       Atom = 0x14b03
+	Bgsound                   Atom = 0x15e07
+	Big                       Atom = 0x17003
+	Blink                     Atom = 0x17305
+	Blockquote                Atom = 0x1870a
+	Body                      Atom = 0x2804
+	Br                        Atom = 0x202
+	Button                    Atom = 0x19106
+	Canvas                    Atom = 0x10306
+	Caption                   Atom = 0x22407
+	Center                    Atom = 0x21306
+	Challenge                 Atom = 0x28e09
+	Charset                   Atom = 0x2107
+	Checked                   Atom = 0x5b507
+	Cite                      Atom = 0x19c04
+	Class                     Atom = 0x55805
+	Code                      Atom = 0x5ee04
+	Col                       Atom = 0x1ab03
+	Colgroup                  Atom = 0x1ab08
+	Color                     Atom = 0x1bf05
+	Cols                      Atom = 0x1c404
+	Colspan                   Atom = 0x1c407
+	Command                   Atom = 0x1d707
+	Content                   Atom = 0x57b07
+	Contenteditable           Atom = 0x57b0f
+	Contextmenu               Atom = 0x37a0b
+	Controls                  Atom = 0x1de08
+	Coords                    Atom = 0x1f006
+	Crossorigin               Atom = 0x1fa0b
+	Data                      Atom = 0x49904
+	Datalist                  Atom = 0x49908
+	Datetime                  Atom = 0x2ab08
+	Dd                        Atom = 0x2bf02
+	Default                   Atom = 0x10a07
+	Defer                     Atom = 0x5f005
+	Del                       Atom = 0x44c03
+	Desc                      Atom = 0x55504
+	Details                   Atom = 0x7207
+	Dfn                       Atom = 0x8703
+	Dialog                    Atom = 0xbb06
+	Dir                       Atom = 0x9303
+	Dirname                   Atom = 0x9307
+	Disabled                  Atom = 0x16408
+	Div                       Atom = 0x16b03
+	Dl                        Atom = 0x5d602
+	Download                  Atom = 0x45d08
+	Draggable                 Atom = 0x17a09
+	Dropzone                  Atom = 0x3ff08
+	Dt                        Atom = 0x64002
+	Em                        Atom = 0x6e02
+	Embed                     Atom = 0x6e05
+	Enctype                   Atom = 0x28007
+	Face                      Atom = 0x21104
+	Fieldset                  Atom = 0x21908
+	Figcaption                Atom = 0x2210a
+	Figure                    Atom = 0x23b06
+	Font                      Atom = 0x3f04
+	Footer                    Atom = 0xf606
+	For                       Atom = 0x24703
+	ForeignObject             Atom = 0x2470d
+	Foreignobject             Atom = 0x2540d
+	Form                      Atom = 0x26104
+	Formaction                Atom = 0x2610a
+	Formenctype               Atom = 0x27c0b
+	Formmethod                Atom = 0x2970a
+	Formnovalidate            Atom = 0x2a10e
+	Formtarget                Atom = 0x2b30a
+	Frame                     Atom = 0x8b05
+	Frameset                  Atom = 0x8b08
+	H1                        Atom = 0x15c02
+	H2                        Atom = 0x56102
+	H3                        Atom = 0x2cd02
+	H4                        Atom = 0x2fc02
+	H5                        Atom = 0x33f02
+	H6                        Atom = 0x34902
+	Head                      Atom = 0x32004
+	Header                    Atom = 0x32006
+	Headers                   Atom = 0x32007
+	Height                    Atom = 0x5206
+	Hgroup                    Atom = 0x64206
+	Hidden                    Atom = 0x2bd06
+	High                      Atom = 0x2ca04
+	Hr                        Atom = 0x15702
+	Href                      Atom = 0x2cf04
+	Hreflang                  Atom = 0x2cf08
+	Html                      Atom = 0x5604
+	HttpEquiv                 Atom = 0x2d70a
+	I                         Atom = 0x601
+	Icon                      Atom = 0x57a04
+	Id                        Atom = 0x10902
+	Iframe                    Atom = 0x2eb06
+	Image                     Atom = 0x2f105
+	Img                       Atom = 0x2f603
+	Input                     Atom = 0x44505
+	Inputmode                 Atom = 0x44509
+	Ins                       Atom = 0x20303
+	Integrity                 Atom = 0x23209
+	Is                        Atom = 0x16502
+	Isindex                   Atom = 0x2fe07
+	Ismap                     Atom = 0x30505
+	Itemid                    Atom = 0x38506
+	Itemprop                  Atom = 0x19d08
+	Itemref                   Atom = 0x3c707
+	Itemscope                 Atom = 0x66f09
+	Itemtype                  Atom = 0x30e08
+	Kbd                       Atom = 0xb903
+	Keygen                    Atom = 0x3206
+	Keytype                   Atom = 0xd607
+	Kind                      Atom = 0x17704
+	Label                     Atom = 0x5905
+	Lang                      Atom = 0x2d304
+	Legend                    Atom = 0x18106
+	Li                        Atom = 0xb202
+	Link                      Atom = 0x17404
+	List                      Atom = 0x49d04
+	Listing                   Atom = 0x49d07
+	Loop                      Atom = 0x5d04
+	Low                       Atom = 0xc303
+	Main                      Atom = 0x1004
+	Malignmark                Atom = 0xb00a
+	Manifest                  Atom = 0x6d508
+	Map                       Atom = 0x30703
+	Mark                      Atom = 0xb604
+	Marquee                   Atom = 0x31607
+	Math                      Atom = 0x31d04
+	Max                       Atom = 0x33703
+	Maxlength                 Atom = 0x33709
+	Media                     Atom = 0xe605
+	Mediagroup                Atom = 0xe60a
+	Menu                      Atom = 0x38104
+	Menuitem                  Atom = 0x38108
+	Meta                      Atom = 0x4ac04
+	Meter                     Atom = 0x9805
+	Method                    Atom = 0x29b06
+	Mglyph                    Atom = 0x2f706
+	Mi                        Atom = 0x34102
+	Min                       Atom = 0x34103
+	Minlength                 Atom = 0x34109
+	Mn                        Atom = 0x2a402
+	Mo                        Atom = 0xa402
+	Ms                        Atom = 0x67202
+	Mtext                     Atom = 0x34b05
+	Multiple                  Atom = 0x35908
+	Muted                     Atom = 0x36105
+	Name                      Atom = 0x9604
+	Nav                       Atom = 0x1303
+	Nobr                      Atom = 0x3704
+	Noembed                   Atom = 0x6c07
+	Noframes                  Atom = 0x8908
+	Nomodule                  Atom = 0xa208
+	Nonce                     Atom = 0x1a605
+	Noscript                  Atom = 0x2c208
+	Novalidate                Atom = 0x2a50a
+	Object                    Atom = 0x25b06
+	Ol                        Atom = 0x13702
+	Onabort                   Atom = 0x19507
+	Onafterprint              Atom = 0x2290c
+	Onautocomplete            Atom = 0x2690e
+	Onautocompleteerror       Atom = 0x26913
+	Onauxclick                Atom = 0x6140a
+	Onbeforeprint             Atom = 0x69c0d
+	Onbeforeunload            Atom = 0x6e50e
+	Onblur                    Atom = 0x1ea06
+	Oncancel                  Atom = 0x11908
+	Oncanplay                 Atom = 0x14d09
+	Oncanplaythrough          Atom = 0x14d10
+	Onchange                  Atom = 0x41508
+	Onclick                   Atom = 0x2e407
+	Onclose                   Atom = 0x36607
+	Oncontextmenu             Atom = 0x3780d
+	Oncopy                    Atom = 0x38b06
+	Oncuechange               Atom = 0x3910b
+	Oncut                     Atom = 0x39c05
+	Ondblclick                Atom = 0x3a10a
+	Ondrag                    Atom = 0x3ab06
+	Ondragend                 Atom = 0x3ab09
+	Ondragenter               Atom = 0x3b40b
+	Ondragexit                Atom = 0x3bf0a
+	Ondragleave               Atom = 0x3d90b
+	Ondragover                Atom = 0x3e40a
+	Ondragstart               Atom = 0x3ee0b
+	Ondrop                    Atom = 0x3fd06
+	Ondurationchange          Atom = 0x40d10
+	Onemptied                 Atom = 0x40409
+	Onended                   Atom = 0x41d07
+	Onerror                   Atom = 0x42407
+	Onfocus                   Atom = 0x42b07
+	Onhashchange              Atom = 0x4370c
+	Oninput                   Atom = 0x44307
+	Oninvalid                 Atom = 0x44f09
+	Onkeydown                 Atom = 0x45809
+	Onkeypress                Atom = 0x4650a
+	Onkeyup                   Atom = 0x47407
+	Onlanguagechange          Atom = 0x48110
+	Onload                    Atom = 0x49106
+	Onloadeddata              Atom = 0x4910c
+	Onloadedmetadata          Atom = 0x4a410
+	Onloadend                 Atom = 0x4ba09
+	Onloadstart               Atom = 0x4c30b
+	Onmessage                 Atom = 0x4ce09
+	Onmessageerror            Atom = 0x4ce0e
+	Onmousedown               Atom = 0x4dc0b
+	Onmouseenter              Atom = 0x4e70c
+	Onmouseleave              Atom = 0x4f30c
+	Onmousemove               Atom = 0x4ff0b
+	Onmouseout                Atom = 0x50a0a
+	Onmouseover               Atom = 0x5170b
+	Onmouseup                 Atom = 0x52209
+	Onmousewheel              Atom = 0x5300c
+	Onoffline                 Atom = 0x53c09
+	Ononline                  Atom = 0x54508
+	Onpagehide                Atom = 0x54d0a
+	Onpageshow                Atom = 0x5630a
+	Onpaste                   Atom = 0x56f07
+	Onpause                   Atom = 0x58a07
+	Onplay                    Atom = 0x59406
+	Onplaying                 Atom = 0x59409
+	Onpopstate                Atom = 0x59d0a
+	Onprogress                Atom = 0x5a70a
+	Onratechange              Atom = 0x5bc0c
+	Onrejectionhandled        Atom = 0x5c812
+	Onreset                   Atom = 0x5da07
+	Onresize                  Atom = 0x5e108
+	Onscroll                  Atom = 0x5f508
+	Onsecuritypolicyviolation Atom = 0x5fd19
+	Onseeked                  Atom = 0x61e08
+	Onseeking                 Atom = 0x62609
+	Onselect                  Atom = 0x62f08
+	Onshow                    Atom = 0x63906
+	Onsort                    Atom = 0x64d06
+	Onstalled                 Atom = 0x65709
+	Onstorage                 Atom = 0x66009
+	Onsubmit                  Atom = 0x66908
+	Onsuspend                 Atom = 0x67909
+	Ontimeupdate              Atom = 0x400c
+	Ontoggle                  Atom = 0x68208
+	Onunhandledrejection      Atom = 0x68a14
+	Onunload                  Atom = 0x6a908
+	Onvolumechange            Atom = 0x6b10e
+	Onwaiting                 Atom = 0x6bf09
+	Onwheel                   Atom = 0x6c807
+	Open                      Atom = 0x1a304
+	Optgroup                  Atom = 0x5f08
+	Optimum                   Atom = 0x6cf07
+	Option                    Atom = 0x6e106
+	Output                    Atom = 0x51106
+	P                         Atom = 0xc01
+	Param                     Atom = 0xc05
+	Pattern                   Atom = 0x6607
+	Picture                   Atom = 0x7b07
+	Ping                      Atom = 0xef04
+	Placeholder               Atom = 0x1310b
+	Plaintext                 Atom = 0x1b209
+	Playsinline               Atom = 0x1400b
+	Poster                    Atom = 0x64706
+	Pre                       Atom = 0x46a03
+	Preload                   Atom = 0x47a07
+	Progress                  Atom = 0x5a908
+	Prompt                    Atom = 0x52a06
+	Public                    Atom = 0x57606
+	Q                         Atom = 0xcf01
+	Radiogroup                Atom = 0x30a
+	Rb                        Atom = 0x3a02
+	Readonly                  Atom = 0x35108
+	Referrerpolicy            Atom = 0x3cb0e
+	Rel                       Atom = 0x47b03
+	Required                  Atom = 0x23f08
+	Reversed                  Atom = 0x8008
+	Rows                      Atom = 0x9c04
+	Rowspan                   Atom = 0x9c07
+	Rp                        Atom = 0x22f02
+	Rt                        Atom = 0x19a02
+	Rtc                       Atom = 0x19a03
+	Ruby                      Atom = 0xfb04
+	S                         Atom = 0x2501
+	Samp                      Atom = 0x7804
+	Sandbox                   Atom = 0x12907
+	Scope                     Atom = 0x67305
+	Scoped                    Atom = 0x67306
+	Script                    Atom = 0x2c406
+	Seamless                  Atom = 0x36b08
+	Search                    Atom = 0x55c06
+	Section                   Atom = 0x1e507
+	Select                    Atom = 0x63106
+	Selected                  Atom = 0x63108
+	Shape                     Atom = 0x1f505
+	Size                      Atom = 0x5e504
+	Sizes                     Atom = 0x5e505
+	Slot                      Atom = 0x20504
+	Small                     Atom = 0x32605
+	Sortable                  Atom = 0x64f08
+	Sorted                    Atom = 0x37206
+	Source                    Atom = 0x43106
+	Spacer                    Atom = 0x46e06
+	Span                      Atom = 0x9f04
+	Spellcheck                Atom = 0x5b00a
+	Src                       Atom = 0x5e903
+	Srcdoc                    Atom = 0x5e906
+	Srclang                   Atom = 0x6f707
+	Srcset                    Atom = 0x6fe06
+	Start                     Atom = 0x3f405
+	Step                      Atom = 0x57304
+	Strike                    Atom = 0xd206
+	Strong                    Atom = 0x6db06
+	Style                     Atom = 0x70405
+	Sub                       Atom = 0x66b03
+	Summary                   Atom = 0x70907
+	Sup                       Atom = 0x71003
+	Svg                       Atom = 0x71303
+	System                    Atom = 0x71606
+	Tabindex                  Atom = 0x4b208
+	Table                     Atom = 0x58505
+	Target                    Atom = 0x2b706
+	Tbody                     Atom = 0x2705
+	Td                        Atom = 0x9202
+	Template                  Atom = 0x71908
+	Textarea                  Atom = 0x34c08
+	Tfoot                     Atom = 0xf505
+	Th                        Atom = 0x15602
+	Thead                     Atom = 0x31f05
+	Time                      Atom = 0x4204
+	Title                     Atom = 0x11005
+	Tr                        Atom = 0xcc02
+	Track                     Atom = 0x1ba05
+	Translate                 Atom = 0x20809
+	Tt                        Atom = 0x6802
+	Type                      Atom = 0xd904
+	Typemustmatch             Atom = 0x2830d
+	U                         Atom = 0xb01
+	Ul                        Atom = 0xa702
+	Updateviacache            Atom = 0x460e
+	Usemap                    Atom = 0x58e06
+	Value                     Atom = 0x1505
+	Var                       Atom = 0x16d03
+	Video                     Atom = 0x2e005
+	Wbr                       Atom = 0x56c03
+	Width                     Atom = 0x63e05
+	Workertype                Atom = 0x7210a
+	Wrap                      Atom = 0x72b04
+	Xmp                       Atom = 0x12f03
+)
+
+const hash0 = 0x84f70e16
+
+const maxAtomLen = 25
+
+var table = [1 << 9]Atom{
+	0x1:   0x3ff08, // dropzone
+	0x2:   0x3b08,  // basefont
+	0x3:   0x23209, // integrity
+	0x4:   0x43106, // source
+	0x5:   0x2c09,  // accesskey
+	0x6:   0x1a06,  // accept
+	0x7:   0x6c807, // onwheel
+	0xb:   0x47407, // onkeyup
+	0xc:   0x32007, // headers
+	0xd:   0x67306, // scoped
+	0xe:   0x67909, // onsuspend
+	0xf:   0x8908,  // noframes
+	0x10:  0x1fa0b, // crossorigin
+	0x11:  0x2e407, // onclick
+	0x12:  0x3f405, // start
+	0x13:  0x37a0b, // contextmenu
+	0x14:  0x5e903, // src
+	0x15:  0x1c404, // cols
+	0x16:  0xbb06,  // dialog
+	0x17:  0x47a07, // preload
+	0x18:  0x3c707, // itemref
+	0x1b:  0x2f105, // image
+	0x1d:  0x4ba09, // onloadend
+	0x1e:  0x45d08, // download
+	0x1f:  0x46a03, // pre
+	0x23:  0x2970a, // formmethod
+	0x24:  0x71303, // svg
+	0x25:  0xcf01,  // q
+	0x26:  0x64002, // dt
+	0x27:  0x1de08, // controls
+	0x2a:  0x2804,  // body
+	0x2b:  0xd206,  // strike
+	0x2c:  0x3910b, // oncuechange
+	0x2d:  0x4c30b, // onloadstart
+	0x2e:  0x2fe07, // isindex
+	0x2f:  0xb202,  // li
+	0x30:  0x1400b, // playsinline
+	0x31:  0x34102, // mi
+	0x32:  0x30806, // applet
+	0x33:  0x4ce09, // onmessage
+	0x35:  0x13702, // ol
+	0x36:  0x1a304, // open
+	0x39:  0x14d09, // oncanplay
+	0x3a:  0x6bf09, // onwaiting
+	0x3b:  0x11908, // oncancel
+	0x3c:  0x6a908, // onunload
+	0x3e:  0x53c09, // onoffline
+	0x3f:  0x1a0e,  // accept-charset
+	0x40:  0x32004, // head
+	0x42:  0x3ab09, // ondragend
+	0x43:  0x1310b, // placeholder
+	0x44:  0x2b30a, // formtarget
+	0x45:  0x2540d, // foreignobject
+	0x47:  0x400c,  // ontimeupdate
+	0x48:  0xdd0e,  // allowusermedia
+	0x4a:  0x69c0d, // onbeforeprint
+	0x4b:  0x5604,  // html
+	0x4c:  0x9f04,  // span
+	0x4d:  0x64206, // hgroup
+	0x4e:  0x16408, // disabled
+	0x4f:  0x4204,  // time
+	0x51:  0x42b07, // onfocus
+	0x53:  0xb00a,  // malignmark
+	0x55:  0x4650a, // onkeypress
+	0x56:  0x55805, // class
+	0x57:  0x1ab08, // colgroup
+	0x58:  0x33709, // maxlength
+	0x59:  0x5a908, // progress
+	0x5b:  0x70405, // style
+	0x5c:  0x2a10e, // formnovalidate
+	0x5e:  0x38b06, // oncopy
+	0x60:  0x26104, // form
+	0x61:  0xf606,  // footer
+	0x64:  0x30a,   // radiogroup
+	0x66:  0xfb04,  // ruby
+	0x67:  0x4ff0b, // onmousemove
+	0x68:  0x19d08, // itemprop
+	0x69:  0x2d70a, // http-equiv
+	0x6a:  0x15602, // th
+	0x6c:  0x6e02,  // em
+	0x6d:  0x38108, // menuitem
+	0x6e:  0x63106, // select
+	0x6f:  0x48110, // onlanguagechange
+	0x70:  0x31f05, // thead
+	0x71:  0x15c02, // h1
+	0x72:  0x5e906, // srcdoc
+	0x75:  0x9604,  // name
+	0x76:  0x19106, // button
+	0x77:  0x55504, // desc
+	0x78:  0x17704, // kind
+	0x79:  0x1bf05, // color
+	0x7c:  0x58e06, // usemap
+	0x7d:  0x30e08, // itemtype
+	0x7f:  0x6d508, // manifest
+	0x81:  0x5300c, // onmousewheel
+	0x82:  0x4dc0b, // onmousedown
+	0x84:  0xc05,   // param
+	0x85:  0x2e005, // video
+	0x86:  0x4910c, // onloadeddata
+	0x87:  0x6f107, // address
+	0x8c:  0xef04,  // ping
+	0x8d:  0x24703, // for
+	0x8f:  0x62f08, // onselect
+	0x90:  0x30703, // map
+	0x92:  0xc01,   // p
+	0x93:  0x8008,  // reversed
+	0x94:  0x54d0a, // onpagehide
+	0x95:  0x3206,  // keygen
+	0x96:  0x34109, // minlength
+	0x97:  0x3e40a, // ondragover
+	0x98:  0x42407, // onerror
+	0x9a:  0x2107,  // charset
+	0x9b:  0x29b06, // method
+	0x9c:  0x101,   // b
+	0x9d:  0x68208, // ontoggle
+	0x9e:  0x2bd06, // hidden
+	0xa0:  0x3f607, // article
+	0xa2:  0x63906, // onshow
+	0xa3:  0x64d06, // onsort
+	0xa5:  0x57b0f, // contenteditable
+	0xa6:  0x66908, // onsubmit
+	0xa8:  0x44f09, // oninvalid
+	0xaa:  0x202,   // br
+	0xab:  0x10902, // id
+	0xac:  0x5d04,  // loop
+	0xad:  0x5630a, // onpageshow
+	0xb0:  0x2cf04, // href
+	0xb2:  0x2210a, // figcaption
+	0xb3:  0x2690e, // onautocomplete
+	0xb4:  0x49106, // onload
+	0xb6:  0x9c04,  // rows
+	0xb7:  0x1a605, // nonce
+	0xb8:  0x68a14, // onunhandledrejection
+	0xbb:  0x21306, // center
+	0xbc:  0x59406, // onplay
+	0xbd:  0x33f02, // h5
+	0xbe:  0x49d07, // listing
+	0xbf:  0x57606, // public
+	0xc2:  0x23b06, // figure
+	0xc3:  0x57a04, // icon
+	0xc4:  0x1ab03, // col
+	0xc5:  0x47b03, // rel
+	0xc6:  0xe605,  // media
+	0xc7:  0x12109, // autofocus
+	0xc8:  0x19a02, // rt
+	0xca:  0x2d304, // lang
+	0xcc:  0x49908, // datalist
+	0xce:  0x2eb06, // iframe
+	0xcf:  0x36105, // muted
+	0xd0:  0x6140a, // onauxclick
+	0xd2:  0x3c02,  // as
+	0xd6:  0x3fd06, // ondrop
+	0xd7:  0x1c90a, // annotation
+	0xd8:  0x21908, // fieldset
+	0xdb:  0x2cf08, // hreflang
+	0xdc:  0x4e70c, // onmouseenter
+	0xdd:  0x2a402, // mn
+	0xde:  0xe60a,  // mediagroup
+	0xdf:  0x9805,  // meter
+	0xe0:  0x56c03, // wbr
+	0xe2:  0x63e05, // width
+	0xe3:  0x2290c, // onafterprint
+	0xe4:  0x30505, // ismap
+	0xe5:  0x1505,  // value
+	0xe7:  0x1303,  // nav
+	0xe8:  0x54508, // ononline
+	0xe9:  0xb604,  // mark
+	0xea:  0xc303,  // low
+	0xeb:  0x3ee0b, // ondragstart
+	0xef:  0x12f03, // xmp
+	0xf0:  0x22407, // caption
+	0xf1:  0xd904,  // type
+	0xf2:  0x70907, // summary
+	0xf3:  0x6802,  // tt
+	0xf4:  0x20809, // translate
+	0xf5:  0x1870a, // blockquote
+	0xf8:  0x15702, // hr
+	0xfa:  0x2705,  // tbody
+	0xfc:  0x7b07,  // picture
+	0xfd:  0x5206,  // height
+	0xfe:  0x19c04, // cite
+	0xff:  0x2501,  // s
+	0x101: 0xff05,  // async
+	0x102: 0x56f07, // onpaste
+	0x103: 0x19507, // onabort
+	0x104: 0x2b706, // target
+	0x105: 0x14b03, // bdo
+	0x106: 0x1f006, // coords
+	0x107: 0x5e108, // onresize
+	0x108: 0x71908, // template
+	0x10a: 0x3a02,  // rb
+	0x10b: 0x2a50a, // novalidate
+	0x10c: 0x460e,  // updateviacache
+	0x10d: 0x71003, // sup
+	0x10e: 0x6c07,  // noembed
+	0x10f: 0x16b03, // div
+	0x110: 0x6f707, // srclang
+	0x111: 0x17a09, // draggable
+	0x112: 0x67305, // scope
+	0x113: 0x5905,  // label
+	0x114: 0x22f02, // rp
+	0x115: 0x23f08, // required
+	0x116: 0x3780d, // oncontextmenu
+	0x117: 0x5e504, // size
+	0x118: 0x5b00a, // spellcheck
+	0x119: 0x3f04,  // font
+	0x11a: 0x9c07,  // rowspan
+	0x11b: 0x10a07, // default
+	0x11d: 0x44307, // oninput
+	0x11e: 0x38506, // itemid
+	0x11f: 0x5ee04, // code
+	0x120: 0xaa07,  // acronym
+	0x121: 0x3b04,  // base
+	0x125: 0x2470d, // foreignObject
+	0x126: 0x2ca04, // high
+	0x127: 0x3cb0e, // referrerpolicy
+	0x128: 0x33703, // max
+	0x129: 0x59d0a, // onpopstate
+	0x12a: 0x2fc02, // h4
+	0x12b: 0x4ac04, // meta
+	0x12c: 0x17305, // blink
+	0x12e: 0x5f508, // onscroll
+	0x12f: 0x59409, // onplaying
+	0x130: 0xc113,  // allowpaymentrequest
+	0x131: 0x19a03, // rtc
+	0x132: 0x72b04, // wrap
+	0x134: 0x8b08,  // frameset
+	0x135: 0x32605, // small
+	0x137: 0x32006, // header
+	0x138: 0x40409, // onemptied
+	0x139: 0x34902, // h6
+	0x13a: 0x35908, // multiple
+	0x13c: 0x52a06, // prompt
+	0x13f: 0x28e09, // challenge
+	0x141: 0x4370c, // onhashchange
+	0x142: 0x57b07, // content
+	0x143: 0x1c90e, // annotation-xml
+	0x144: 0x36607, // onclose
+	0x145: 0x14d10, // oncanplaythrough
+	0x148: 0x5170b, // onmouseover
+	0x149: 0x64f08, // sortable
+	0x14a: 0xa402,  // mo
+	0x14b: 0x2cd02, // h3
+	0x14c: 0x2c406, // script
+	0x14d: 0x41d07, // onended
+	0x14f: 0x64706, // poster
+	0x150: 0x7210a, // workertype
+	0x153: 0x1f505, // shape
+	0x154: 0x4,     // abbr
+	0x155: 0x1,     // a
+	0x156: 0x2bf02, // dd
+	0x157: 0x71606, // system
+	0x158: 0x4ce0e, // onmessageerror
+	0x159: 0x36b08, // seamless
+	0x15a: 0x2610a, // formaction
+	0x15b: 0x6e106, // option
+	0x15c: 0x31d04, // math
+	0x15d: 0x62609, // onseeking
+	0x15e: 0x39c05, // oncut
+	0x15f: 0x44c03, // del
+	0x160: 0x11005, // title
+	0x161: 0x11505, // audio
+	0x162: 0x63108, // selected
+	0x165: 0x3b40b, // ondragenter
+	0x166: 0x46e06, // spacer
+	0x167: 0x4a410, // onloadedmetadata
+	0x168: 0x44505, // input
+	0x16a: 0x58505, // table
+	0x16b: 0x41508, // onchange
+	0x16e: 0x5f005, // defer
+	0x171: 0x50a0a, // onmouseout
+	0x172: 0x20504, // slot
+	0x175: 0x3704,  // nobr
+	0x177: 0x1d707, // command
+	0x17a: 0x7207,  // details
+	0x17b: 0x38104, // menu
+	0x17c: 0xb903,  // kbd
+	0x17d: 0x57304, // step
+	0x17e: 0x20303, // ins
+	0x17f: 0x13c08, // autoplay
+	0x182: 0x34103, // min
+	0x183: 0x17404, // link
+	0x185: 0x40d10, // ondurationchange
+	0x186: 0x9202,  // td
+	0x187: 0x8b05,  // frame
+	0x18a: 0x2ab08, // datetime
+	0x18b: 0x44509, // inputmode
+	0x18c: 0x35108, // readonly
+	0x18d: 0x21104, // face
+	0x18f: 0x5e505, // sizes
+	0x191: 0x4b208, // tabindex
+	0x192: 0x6db06, // strong
+	0x193: 0xba03,  // bdi
+	0x194: 0x6fe06, // srcset
+	0x196: 0x67202, // ms
+	0x197: 0x5b507, // checked
+	0x198: 0xb105,  // align
+	0x199: 0x1e507, // section
+	0x19b: 0x6e05,  // embed
+	0x19d: 0x15e07, // bgsound
+	0x1a2: 0x49d04, // list
+	0x1a3: 0x61e08, // onseeked
+	0x1a4: 0x66009, // onstorage
+	0x1a5: 0x2f603, // img
+	0x1a6: 0xf505,  // tfoot
+	0x1a9: 0x26913, // onautocompleteerror
+	0x1aa: 0x5fd19, // onsecuritypolicyviolation
+	0x1ad: 0x9303,  // dir
+	0x1ae: 0x9307,  // dirname
+	0x1b0: 0x5a70a, // onprogress
+	0x1b2: 0x65709, // onstalled
+	0x1b5: 0x66f09, // itemscope
+	0x1b6: 0x49904, // data
+	0x1b7: 0x3d90b, // ondragleave
+	0x1b8: 0x56102, // h2
+	0x1b9: 0x2f706, // mglyph
+	0x1ba: 0x16502, // is
+	0x1bb: 0x6e50e, // onbeforeunload
+	0x1bc: 0x2830d, // typemustmatch
+	0x1bd: 0x3ab06, // ondrag
+	0x1be: 0x5da07, // onreset
+	0x1c0: 0x51106, // output
+	0x1c1: 0x12907, // sandbox
+	0x1c2: 0x1b209, // plaintext
+	0x1c4: 0x34c08, // textarea
+	0x1c7: 0xd607,  // keytype
+	0x1c8: 0x34b05, // mtext
+	0x1c9: 0x6b10e, // onvolumechange
+	0x1ca: 0x1ea06, // onblur
+	0x1cb: 0x58a07, // onpause
+	0x1cd: 0x5bc0c, // onratechange
+	0x1ce: 0x10705, // aside
+	0x1cf: 0x6cf07, // optimum
+	0x1d1: 0x45809, // onkeydown
+	0x1d2: 0x1c407, // colspan
+	0x1d3: 0x1004,  // main
+	0x1d4: 0x66b03, // sub
+	0x1d5: 0x25b06, // object
+	0x1d6: 0x55c06, // search
+	0x1d7: 0x37206, // sorted
+	0x1d8: 0x17003, // big
+	0x1d9: 0xb01,   // u
+	0x1db: 0x26b0c, // autocomplete
+	0x1dc: 0xcc02,  // tr
+	0x1dd: 0xf303,  // alt
+	0x1df: 0x7804,  // samp
+	0x1e0: 0x5c812, // onrejectionhandled
+	0x1e1: 0x4f30c, // onmouseleave
+	0x1e2: 0x28007, // enctype
+	0x1e3: 0xa208,  // nomodule
+	0x1e5: 0x3280f, // allowfullscreen
+	0x1e6: 0x5f08,  // optgroup
+	0x1e8: 0x27c0b, // formenctype
+	0x1e9: 0x18106, // legend
+	0x1ea: 0x10306, // canvas
+	0x1eb: 0x6607,  // pattern
+	0x1ec: 0x2c208, // noscript
+	0x1ed: 0x601,   // i
+	0x1ee: 0x5d602, // dl
+	0x1ef: 0xa702,  // ul
+	0x1f2: 0x52209, // onmouseup
+	0x1f4: 0x1ba05, // track
+	0x1f7: 0x3a10a, // ondblclick
+	0x1f8: 0x3bf0a, // ondragexit
+	0x1fa: 0x8703,  // dfn
+	0x1fc: 0x26506, // action
+	0x1fd: 0x35004, // area
+	0x1fe: 0x31607, // marquee
+	0x1ff: 0x16d03, // var
+}
+
+const atomText = "abbradiogrouparamainavalueaccept-charsetbodyaccesskeygenobrb" +
+	"asefontimeupdateviacacheightmlabelooptgroupatternoembedetail" +
+	"sampictureversedfnoframesetdirnameterowspanomoduleacronymali" +
+	"gnmarkbdialogallowpaymentrequestrikeytypeallowusermediagroup" +
+	"ingaltfooterubyasyncanvasidefaultitleaudioncancelautofocusan" +
+	"dboxmplaceholderautoplaysinlinebdoncanplaythrough1bgsoundisa" +
+	"bledivarbigblinkindraggablegendblockquotebuttonabortcitempro" +
+	"penoncecolgrouplaintextrackcolorcolspannotation-xmlcommandco" +
+	"ntrolsectionblurcoordshapecrossoriginslotranslatefacenterfie" +
+	"ldsetfigcaptionafterprintegrityfigurequiredforeignObjectfore" +
+	"ignobjectformactionautocompleteerrorformenctypemustmatchalle" +
+	"ngeformmethodformnovalidatetimeformtargethiddenoscripthigh3h" +
+	"reflanghttp-equivideonclickiframeimageimglyph4isindexismappl" +
+	"etitemtypemarqueematheadersmallowfullscreenmaxlength5minleng" +
+	"th6mtextareadonlymultiplemutedoncloseamlessortedoncontextmen" +
+	"uitemidoncopyoncuechangeoncutondblclickondragendondragentero" +
+	"ndragexitemreferrerpolicyondragleaveondragoverondragstarticl" +
+	"eondropzonemptiedondurationchangeonendedonerroronfocusourceo" +
+	"nhashchangeoninputmodeloninvalidonkeydownloadonkeypresspacer" +
+	"onkeyupreloadonlanguagechangeonloadeddatalistingonloadedmeta" +
+	"databindexonloadendonloadstartonmessageerroronmousedownonmou" +
+	"seenteronmouseleaveonmousemoveonmouseoutputonmouseoveronmous" +
+	"eupromptonmousewheelonofflineononlineonpagehidesclassearch2o" +
+	"npageshowbronpastepublicontenteditableonpausemaponplayingonp" +
+	"opstateonprogresspellcheckedonratechangeonrejectionhandledon" +
+	"resetonresizesrcdocodeferonscrollonsecuritypolicyviolationau" +
+	"xclickonseekedonseekingonselectedonshowidthgrouposteronsorta" +
+	"bleonstalledonstorageonsubmitemscopedonsuspendontoggleonunha" +
+	"ndledrejectionbeforeprintonunloadonvolumechangeonwaitingonwh" +
+	"eeloptimumanifestrongoptionbeforeunloaddressrclangsrcsetstyl" +
+	"esummarysupsvgsystemplateworkertypewrap"
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/html/const.go","mode":420,"size":2604,"sha256":"44c814afac4b0206a4f2af92607f93a72b93919ec2c3884d372edcdc24507584","index":0,"count":1,"encoding":"utf-8","payloadBytes":2604}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package html
+
+// Section 12.2.4.2 of the HTML5 specification says "The following elements
+// have varying levels of special parsing rules".
+// https://html.spec.whatwg.org/multipage/syntax.html#the-stack-of-open-elements
+var isSpecialElementMap = map[string]bool{
+	"address":    true,
+	"applet":     true,
+	"area":       true,
+	"article":    true,
+	"aside":      true,
+	"base":       true,
+	"basefont":   true,
+	"bgsound":    true,
+	"blockquote": true,
+	"body":       true,
+	"br":         true,
+	"button":     true,
+	"caption":    true,
+	"center":     true,
+	"col":        true,
+	"colgroup":   true,
+	"dd":         true,
+	"details":    true,
+	"dir":        true,
+	"div":        true,
+	"dl":         true,
+	"dt":         true,
+	"embed":      true,
+	"fieldset":   true,
+	"figcaption": true,
+	"figure":     true,
+	"footer":     true,
+	"form":       true,
+	"frame":      true,
+	"frameset":   true,
+	"h1":         true,
+	"h2":         true,
+	"h3":         true,
+	"h4":         true,
+	"h5":         true,
+	"h6":         true,
+	"head":       true,
+	"header":     true,
+	"hgroup":     true,
+	"hr":         true,
+	"html":       true,
+	"iframe":     true,
+	"img":        true,
+	"input":      true,
+	"keygen":     true, // "keygen" has been removed from the spec, but are kept here for backwards compatibility.
+	"li":         true,
+	"link":       true,
+	"listing":    true,
+	"main":       true,
+	"marquee":    true,
+	"menu":       true,
+	"meta":       true,
+	"nav":        true,
+	"noembed":    true,
+	"noframes":   true,
+	"noscript":   true,
+	"object":     true,
+	"ol":         true,
+	"p":          true,
+	"param":      true,
+	"plaintext":  true,
+	"pre":        true,
+	"script":     true,
+	"section":    true,
+	"select":     true,
+	"source":     true,
+	"style":      true,
+	"summary":    true,
+	"table":      true,
+	"tbody":      true,
+	"td":         true,
+	"template":   true,
+	"textarea":   true,
+	"tfoot":      true,
+	"th":         true,
+	"thead":      true,
+	"title":      true,
+	"tr":         true,
+	"track":      true,
+	"ul":         true,
+	"wbr":        true,
+	"xmp":        true,
+}
+
+func isSpecialElement(element *Node) bool {
+	switch element.Namespace {
+	case "", "html":
+		return isSpecialElementMap[element.Data]
+	case "math":
+		switch element.Data {
+		case "mi", "mo", "mn", "ms", "mtext", "annotation-xml":
+			return true
+		}
+	case "svg":
+		switch element.Data {
+		case "foreignObject", "desc", "title":
+			return true
+		}
+	}
+	return false
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/html/doc.go","mode":420,"size":4431,"sha256":"e5d486a3b703d17efdf30cc9b3af6649b262c89e74cd4de285e0f079797b3c6f","index":0,"count":1,"encoding":"utf-8","payloadBytes":4431}
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+/*
+Package html implements an HTML5-compliant tokenizer and parser.
+
+Tokenization is done by creating a Tokenizer for an io.Reader r. It is the
+caller's responsibility to ensure that r provides UTF-8 encoded HTML.
+
+	z := html.NewTokenizer(r)
+
+Given a Tokenizer z, the HTML is tokenized by repeatedly calling z.Next(),
+which parses the next token and returns its type, or an error:
+
+	for {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			// ...
+			return ...
+		}
+		// Process the current token.
+	}
+
+There are two APIs for retrieving the current token. The high-level API is to
+call Token; the low-level API is to call Text or TagName / TagAttr. Both APIs
+allow optionally calling Raw after Next but before Token, Text, TagName, or
+TagAttr. In EBNF notation, the valid call sequence per token is:
+
+	Next {Raw} [ Token | Text | TagName {TagAttr} ]
+
+Token returns an independent data structure that completely describes a token.
+Entities (such as "&lt;") are unescaped, tag names and attribute keys are
+lower-cased, and attributes are collected into a []Attribute. For example:
+
+	for {
+		if z.Next() == html.ErrorToken {
+			// Returning io.EOF indicates success.
+			return z.Err()
+		}
+		emitToken(z.Token())
+	}
+
+The low-level API performs fewer allocations and copies, but the contents of
+the []byte values returned by Text, TagName and TagAttr may change on the next
+call to Next. For example, to extract an HTML page's anchor text:
+
+	depth := 0
+	for {
+		tt := z.Next()
+		switch tt {
+		case html.ErrorToken:
+			return z.Err()
+		case html.TextToken:
+			if depth > 0 {
+				// emitBytes should copy the []byte it receives,
+				// if it doesn't process it immediately.
+				emitBytes(z.Text())
+			}
+		case html.StartTagToken, html.EndTagToken:
+			tn, _ := z.TagName()
+			if len(tn) == 1 && tn[0] == 'a' {
+				if tt == html.StartTagToken {
+					depth++
+				} else {
+					depth--
+				}
+			}
+		}
+	}
+
+Parsing is done by calling Parse with an io.Reader, which returns the root of
+the parse tree (the document element) as a *Node. It is the caller's
+responsibility to ensure that the Reader provides UTF-8 encoded HTML. For
+example, to process each anchor node in depth-first order:
+
+	doc, err := html.Parse(r)
+	if err != nil {
+		// ...
+	}
+	for n := range doc.Descendants() {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			// Do something with n...
+		}
+	}
+
+The relevant specifications include:
+https://html.spec.whatwg.org/multipage/syntax.html and
+https://html.spec.whatwg.org/multipage/syntax.html#tokenization
+
+# Security Considerations
+
+Care should be taken when parsing and interpreting HTML, whether full documents
+or fragments, within the framework of the HTML specification, especially with
+regard to untrusted inputs.
+
+This package provides both a tokenizer and a parser, which implement the
+tokenization, and tokenization and tree construction stages of the WHATWG HTML
+parsing specification respectively. While the tokenizer parses and normalizes
+individual HTML tokens, only the parser constructs the DOM tree from the
+tokenized HTML, as described in the tree construction stage of the
+specification, dynamically modifying or extending the document's DOM tree.
+
+If your use case requires semantically well-formed HTML documents, as defined by
+the WHATWG specification, the parser should be used rather than the tokenizer.
+
+In security contexts, if trust decisions are being made using the tokenized or
+parsed content, the input must be re-serialized (for instance by using Render or
+Token.String) in order for those trust decisions to hold, as the process of
+tokenization or parsing may alter the content.
+*/
+package html // import "golang.org/x/net/html"
+
+// The tokenization algorithm implemented by this package is not a line-by-line
+// transliteration of the relatively verbose state-machine in the WHATWG
+// specification. A more direct approach is used instead, where the program
+// counter implies the state, such as whether it is tokenizing a tag or a text
+// node. Specification compliance is verified by checking expected and actual
+// outputs over a test suite rather than aiming for algorithmic fidelity.
+
+// TODO(nigeltao): Does a DOM API belong in this package or a separate one?
+// TODO(nigeltao): How does parsing interact with a JavaScript engine?
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/html/doctype.go","mode":420,"size":4925,"sha256":"b629b17ed04bcab8d832d8caaee00f458c180fd31b6838e318a439a4bf87fffe","index":0,"count":1,"encoding":"utf-8","payloadBytes":4925}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package html
+
+import (
+	"strings"
+)
+
+// parseDoctype parses the data from a DoctypeToken into a name,
+// public identifier, and system identifier. It returns a Node whose Type
+// is DoctypeNode, whose Data is the name, and which has attributes
+// named "system" and "public" for the two identifiers if they were present.
+// quirks is whether the document should be parsed in "quirks mode".
+func parseDoctype(s string) (n *Node, quirks bool) {
+	n = &Node{Type: DoctypeNode}
+
+	// Find the name.
+	space := strings.IndexAny(s, whitespace)
+	if space == -1 {
+		space = len(s)
+	}
+	n.Data = s[:space]
+	// The comparison to "html" is case-sensitive.
+	if n.Data != "html" {
+		quirks = true
+	}
+	n.Data = strings.ToLower(n.Data)
+	s = strings.TrimLeft(s[space:], whitespace)
+
+	if len(s) < 6 {
+		// It can't start with "PUBLIC" or "SYSTEM".
+		// Ignore the rest of the string.
+		return n, quirks || s != ""
+	}
+
+	key := strings.ToLower(s[:6])
+	s = s[6:]
+	for key == "public" || key == "system" {
+		s = strings.TrimLeft(s, whitespace)
+		if s == "" {
+			break
+		}
+		quote := s[0]
+		if quote != '"' && quote != '\'' {
+			break
+		}
+		s = s[1:]
+		q := strings.IndexRune(s, rune(quote))
+		var id string
+		if q == -1 {
+			id = s
+			s = ""
+		} else {
+			id = s[:q]
+			s = s[q+1:]
+		}
+		n.Attr = append(n.Attr, Attribute{Key: key, Val: id})
+		if key == "public" {
+			key = "system"
+		} else {
+			key = ""
+		}
+	}
+
+	if key != "" || s != "" {
+		quirks = true
+	} else if len(n.Attr) > 0 {
+		if n.Attr[0].Key == "public" {
+			public := strings.ToLower(n.Attr[0].Val)
+			switch public {
+			case "-//w3o//dtd w3 html strict 3.0//en//", "-/w3d/dtd html 4.0 transitional/en", "html":
+				quirks = true
+			default:
+				for _, q := range quirkyIDs {
+					if strings.HasPrefix(public, q) {
+						quirks = true
+						break
+					}
+				}
+			}
+			// The following two public IDs only cause quirks mode if there is no system ID.
+			if len(n.Attr) == 1 && (strings.HasPrefix(public, "-//w3c//dtd html 4.01 frameset//") ||
+				strings.HasPrefix(public, "-//w3c//dtd html 4.01 transitional//")) {
+				quirks = true
+			}
+		}
+		if lastAttr := n.Attr[len(n.Attr)-1]; lastAttr.Key == "system" &&
+			strings.EqualFold(lastAttr.Val, "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd") {
+			quirks = true
+		}
+	}
+
+	return n, quirks
+}
+
+// quirkyIDs is a list of public doctype identifiers that cause a document
+// to be interpreted in quirks mode. The identifiers should be in lower case.
+var quirkyIDs = []string{
+	"+//silmaril//dtd html pro v0r11 19970101//",
+	"-//advasoft ltd//dtd html 3.0 aswedit + extensions//",
+	"-//as//dtd html 3.0 aswedit + extensions//",
+	"-//ietf//dtd html 2.0 level 1//",
+	"-//ietf//dtd html 2.0 level 2//",
+	"-//ietf//dtd html 2.0 strict level 1//",
+	"-//ietf//dtd html 2.0 strict level 2//",
+	"-//ietf//dtd html 2.0 strict//",
+	"-//ietf//dtd html 2.0//",
+	"-//ietf//dtd html 2.1e//",
+	"-//ietf//dtd html 3.0//",
+	"-//ietf//dtd html 3.2 final//",
+	"-//ietf//dtd html 3.2//",
+	"-//ietf//dtd html 3//",
+	"-//ietf//dtd html level 0//",
+	"-//ietf//dtd html level 1//",
+	"-//ietf//dtd html level 2//",
+	"-//ietf//dtd html level 3//",
+	"-//ietf//dtd html strict level 0//",
+	"-//ietf//dtd html strict level 1//",
+	"-//ietf//dtd html strict level 2//",
+	"-//ietf//dtd html strict level 3//",
+	"-//ietf//dtd html strict//",
+	"-//ietf//dtd html//",
+	"-//metrius//dtd metrius presentational//",
+	"-//microsoft//dtd internet explorer 2.0 html strict//",
+	"-//microsoft//dtd internet explorer 2.0 html//",
+	"-//microsoft//dtd internet explorer 2.0 tables//",
+	"-//microsoft//dtd internet explorer 3.0 html strict//",
+	"-//microsoft//dtd internet explorer 3.0 html//",
+	"-//microsoft//dtd internet explorer 3.0 tables//",
+	"-//netscape comm. corp.//dtd html//",
+	"-//netscape comm. corp.//dtd strict html//",
+	"-//o'reilly and associates//dtd html 2.0//",
+	"-//o'reilly and associates//dtd html extended 1.0//",
+	"-//o'reilly and associates//dtd html extended relaxed 1.0//",
+	"-//softquad software//dtd hotmetal pro 6.0::19990601::extensions to html 4.0//",
+	"-//softquad//dtd hotmetal pro 4.0::19971010::extensions to html 4.0//",
+	"-//spyglass//dtd html 2.0 extended//",
+	"-//sq//dtd html 2.0 hotmetal + extensions//",
+	"-//sun microsystems corp.//dtd hotjava html//",
+	"-//sun microsystems corp.//dtd hotjava strict html//",
+	"-//w3c//dtd html 3 1995-03-24//",
+	"-//w3c//dtd html 3.2 draft//",
+	"-//w3c//dtd html 3.2 final//",
+	"-//w3c//dtd html 3.2//",
+	"-//w3c//dtd html 3.2s draft//",
+	"-//w3c//dtd html 4.0 frameset//",
+	"-//w3c//dtd html 4.0 transitional//",
+	"-//w3c//dtd html experimental 19960712//",
+	"-//w3c//dtd html experimental 970421//",
+	"-//w3c//dtd w3 html//",
+	"-//w3o//dtd w3 html 3.0//",
+	"-//webtechs//dtd mozilla html 2.0//",
+	"-//webtechs//dtd mozilla html//",
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/html/entity.go","mode":420,"size":114515,"sha256":"680a9bb55e7eca9bc0cbee59755591ab9f97abf3fe39490211eb088cc2cd62c2","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -126609,2620 +128715,6 @@ func mmap(addr uintptr, length uintptr, prot int, flags int, fd int, offset int6
 	if uintptr(r0) == ^uintptr(0) && er != nil {
 		err = er
 	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_aix_ppc64.go","mode":420,"size":30758,"sha256":"d66e0f51215071990de1968d52e80be0d57c2d49b3ad0ca9cd9448859d04fff8","index":0,"count":1,"encoding":"utf-8","payloadBytes":30758}
-// go run mksyscall_aix_ppc64.go -aix -tags aix,ppc64 syscall_aix.go syscall_aix_ppc64.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build aix && ppc64
-
-package unix
-
-import (
-	"unsafe"
-)
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimes(path string, times *[2]Timeval) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callutimes(uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(times)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimensat(dirfd int, path string, times *[2]Timespec, flag int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callutimensat(dirfd, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(times)), flag)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getcwd(buf []byte) (err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	_, e1 := callgetcwd(uintptr(unsafe.Pointer(_p0)), len(buf))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
-	r0, e1 := callaccept(s, uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getdirent(fd int, buf []byte) (n int, err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	r0, e1 := callgetdirent(fd, uintptr(unsafe.Pointer(_p0)), len(buf))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func wait4(pid Pid_t, status *_C_int, options int, rusage *Rusage) (wpid Pid_t, err error) {
-	r0, e1 := callwait4(int(pid), uintptr(unsafe.Pointer(status)), options, uintptr(unsafe.Pointer(rusage)))
-	wpid = Pid_t(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctl(fd int, req int, arg uintptr) (err error) {
-	_, e1 := callioctl(fd, req, arg)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctlPtr(fd int, req int, arg unsafe.Pointer) (err error) {
-	_, e1 := callioctl_ptr(fd, req, arg)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func FcntlInt(fd uintptr, cmd int, arg int) (r int, err error) {
-	r0, e1 := callfcntl(fd, cmd, uintptr(arg))
-	r = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func FcntlFlock(fd uintptr, cmd int, lk *Flock_t) (err error) {
-	_, e1 := callfcntl(fd, cmd, uintptr(unsafe.Pointer(lk)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fcntl(fd int, cmd int, arg int) (val int, err error) {
-	r0, e1 := callfcntl(uintptr(fd), cmd, uintptr(arg))
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fsyncRange(fd int, how int, start int64, length int64) (err error) {
-	_, e1 := callfsync_range(fd, how, start, length)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Acct(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callacct(uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callchdir(uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chroot(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callchroot(uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Close(fd int) (err error) {
-	_, e1 := callclose(fd)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup(oldfd int) (fd int, err error) {
-	r0, e1 := calldup(oldfd)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Exit(code int) {
-	callexit(code)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callfaccessat(dirfd, uintptr(unsafe.Pointer(_p0)), mode, flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchdir(fd int) (err error) {
-	_, e1 := callfchdir(fd)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmod(fd int, mode uint32) (err error) {
-	_, e1 := callfchmod(fd, mode)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callfchmodat(dirfd, uintptr(unsafe.Pointer(_p0)), mode, flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callfchownat(dirfd, uintptr(unsafe.Pointer(_p0)), uid, gid, flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fdatasync(fd int) (err error) {
-	_, e1 := callfdatasync(fd)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgid(pid int) (pgid int, err error) {
-	r0, e1 := callgetpgid(pid)
-	pgid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgrp() (pid int) {
-	r0, _ := callgetpgrp()
-	pid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpid() (pid int) {
-	r0, _ := callgetpid()
-	pid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getppid() (ppid int) {
-	r0, _ := callgetppid()
-	ppid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpriority(which int, who int) (prio int, err error) {
-	r0, e1 := callgetpriority(which, who)
-	prio = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrusage(who int, rusage *Rusage) (err error) {
-	_, e1 := callgetrusage(who, uintptr(unsafe.Pointer(rusage)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsid(pid int) (sid int, err error) {
-	r0, e1 := callgetsid(pid)
-	sid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kill(pid int, sig Signal) (err error) {
-	_, e1 := callkill(pid, int(sig))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Klogctl(typ int, buf []byte) (n int, err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	r0, e1 := callsyslog(typ, uintptr(unsafe.Pointer(_p0)), len(buf))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdir(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callmkdir(dirfd, uintptr(unsafe.Pointer(_p0)), mode)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdirat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callmkdirat(dirfd, uintptr(unsafe.Pointer(_p0)), mode)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifo(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callmkfifo(uintptr(unsafe.Pointer(_p0)), mode)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknod(path string, mode uint32, dev int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callmknod(uintptr(unsafe.Pointer(_p0)), mode, dev)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknodat(dirfd int, path string, mode uint32, dev int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callmknodat(dirfd, uintptr(unsafe.Pointer(_p0)), mode, dev)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
-	_, e1 := callnanosleep(uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(leftover)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Open(path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, e1 := callopen64(uintptr(unsafe.Pointer(_p0)), mode, perm)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Openat(dirfd int, path string, flags int, mode uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, e1 := callopenat(dirfd, uintptr(unsafe.Pointer(_p0)), flags, mode)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func read(fd int, p []byte) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	r0, e1 := callread(fd, uintptr(unsafe.Pointer(_p0)), len(p))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlink(path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	if len(buf) > 0 {
-		_p1 = &buf[0]
-	}
-	r0, e1 := callreadlink(uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), len(buf))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Renameat(olddirfd int, oldpath string, newdirfd int, newpath string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(oldpath)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(newpath)
-	if err != nil {
-		return
-	}
-	_, e1 := callrenameat(olddirfd, uintptr(unsafe.Pointer(_p0)), newdirfd, uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setdomainname(p []byte) (err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	_, e1 := callsetdomainname(uintptr(unsafe.Pointer(_p0)), len(p))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sethostname(p []byte) (err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	_, e1 := callsethostname(uintptr(unsafe.Pointer(_p0)), len(p))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpgid(pid int, pgid int) (err error) {
-	_, e1 := callsetpgid(pid, pgid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setsid() (pid int, err error) {
-	r0, e1 := callsetsid()
-	pid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Settimeofday(tv *Timeval) (err error) {
-	_, e1 := callsettimeofday(uintptr(unsafe.Pointer(tv)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setuid(uid int) (err error) {
-	_, e1 := callsetuid(uid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setgid(uid int) (err error) {
-	_, e1 := callsetgid(uid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpriority(which int, who int, prio int) (err error) {
-	_, e1 := callsetpriority(which, who, prio)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statx(dirfd int, path string, flags int, mask int, stat *Statx_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callstatx(dirfd, uintptr(unsafe.Pointer(_p0)), flags, mask, uintptr(unsafe.Pointer(stat)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sync() {
-	callsync()
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Times(tms *Tms) (ticks uintptr, err error) {
-	r0, e1 := calltimes(uintptr(unsafe.Pointer(tms)))
-	ticks = uintptr(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Umask(mask int) (oldmask int) {
-	r0, _ := callumask(mask)
-	oldmask = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Uname(buf *Utsname) (err error) {
-	_, e1 := calluname(uintptr(unsafe.Pointer(buf)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlink(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callunlink(uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlinkat(dirfd int, path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callunlinkat(dirfd, uintptr(unsafe.Pointer(_p0)), flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ustat(dev int, ubuf *Ustat_t) (err error) {
-	_, e1 := callustat(dev, uintptr(unsafe.Pointer(ubuf)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func write(fd int, p []byte) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	r0, e1 := callwrite(fd, uintptr(unsafe.Pointer(_p0)), len(p))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup2(oldfd int, newfd int) (err error) {
-	_, e1 := calldup2(oldfd, newfd)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fadvise(fd int, offset int64, length int64, advice int) (err error) {
-	_, e1 := callposix_fadvise64(fd, offset, length, advice)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchown(fd int, uid int, gid int) (err error) {
-	_, e1 := callfchown(fd, uid, gid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fstat(fd int, stat *Stat_t) (err error) {
-	_, e1 := callfstat(fd, uintptr(unsafe.Pointer(stat)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fstatat(dirfd int, path string, stat *Stat_t, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callfstatat(dirfd, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatfs(fd int, buf *Statfs_t) (err error) {
-	_, e1 := callfstatfs(fd, uintptr(unsafe.Pointer(buf)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ftruncate(fd int, length int64) (err error) {
-	_, e1 := callftruncate(fd, length)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getegid() (egid int) {
-	r0, _ := callgetegid()
-	egid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Geteuid() (euid int) {
-	r0, _ := callgeteuid()
-	euid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getgid() (gid int) {
-	r0, _ := callgetgid()
-	gid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getuid() (uid int) {
-	r0, _ := callgetuid()
-	uid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lchown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := calllchown(uintptr(unsafe.Pointer(_p0)), uid, gid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Listen(s int, n int) (err error) {
-	_, e1 := calllisten(s, n)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func lstat(path string, stat *Stat_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := calllstat(uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pause() (err error) {
-	_, e1 := callpause()
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pread(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	r0, e1 := callpread64(fd, uintptr(unsafe.Pointer(_p0)), len(p), offset)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	r0, e1 := callpwrite64(fd, uintptr(unsafe.Pointer(_p0)), len(p), offset)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
-	r0, e1 := callselect(nfd, uintptr(unsafe.Pointer(r)), uintptr(unsafe.Pointer(w)), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(timeout)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pselect(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timespec, sigmask *Sigset_t) (n int, err error) {
-	r0, e1 := callpselect(nfd, uintptr(unsafe.Pointer(r)), uintptr(unsafe.Pointer(w)), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(timeout)), uintptr(unsafe.Pointer(sigmask)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setregid(rgid int, egid int) (err error) {
-	_, e1 := callsetregid(rgid, egid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setreuid(ruid int, euid int) (err error) {
-	_, e1 := callsetreuid(ruid, euid)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Shutdown(fd int, how int) (err error) {
-	_, e1 := callshutdown(fd, how)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Splice(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int64, err error) {
-	r0, e1 := callsplice(rfd, uintptr(unsafe.Pointer(roff)), wfd, uintptr(unsafe.Pointer(woff)), len, flags)
-	n = int64(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func stat(path string, statptr *Stat_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callstat(uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(statptr)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statfs(path string, buf *Statfs_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callstatfs(uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(buf)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Truncate(path string, length int64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := calltruncate(uintptr(unsafe.Pointer(_p0)), length)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, e1 := callbind(s, uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, e1 := callconnect(s, uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getgroups(n int, list *_Gid_t) (nn int, err error) {
-	r0, e1 := callgetgroups(n, uintptr(unsafe.Pointer(list)))
-	nn = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setgroups(n int, list *_Gid_t) (err error) {
-	_, e1 := callsetgroups(n, uintptr(unsafe.Pointer(list)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
-	_, e1 := callgetsockopt(s, level, name, uintptr(val), uintptr(unsafe.Pointer(vallen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
-	_, e1 := callsetsockopt(s, level, name, uintptr(val), vallen)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socket(domain int, typ int, proto int) (fd int, err error) {
-	r0, e1 := callsocket(domain, typ, proto)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
-	_, e1 := callsocketpair(domain, typ, proto, uintptr(unsafe.Pointer(fd)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, e1 := callgetpeername(fd, uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, e1 := callgetsockname(fd, uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	r0, e1 := callrecvfrom(fd, uintptr(unsafe.Pointer(_p0)), len(p), flags, uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	_, e1 := callsendto(s, uintptr(unsafe.Pointer(_p0)), len(buf), flags, uintptr(to), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, e1 := callnrecvmsg(s, uintptr(unsafe.Pointer(msg)), flags)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, e1 := callnsendmsg(s, uintptr(unsafe.Pointer(msg)), flags)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func munmap(addr uintptr, length uintptr) (err error) {
-	_, e1 := callmunmap(addr, length)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Madvise(b []byte, advice int) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	_, e1 := callmadvise(uintptr(unsafe.Pointer(_p0)), len(b), advice)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mprotect(b []byte, prot int) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	_, e1 := callmprotect(uintptr(unsafe.Pointer(_p0)), len(b), prot)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlock(b []byte) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	_, e1 := callmlock(uintptr(unsafe.Pointer(_p0)), len(b))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlockall(flags int) (err error) {
-	_, e1 := callmlockall(flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Msync(b []byte, flags int) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	_, e1 := callmsync(uintptr(unsafe.Pointer(_p0)), len(b), flags)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlock(b []byte) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	_, e1 := callmunlock(uintptr(unsafe.Pointer(_p0)), len(b))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlockall() (err error) {
-	_, e1 := callmunlockall()
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pipe(p *[2]_C_int) (err error) {
-	_, e1 := callpipe(uintptr(unsafe.Pointer(p)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
-	r0, e1 := callpoll(uintptr(unsafe.Pointer(fds)), nfds, timeout)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func gettimeofday(tv *Timeval, tzp *Timezone) (err error) {
-	_, e1 := callgettimeofday(uintptr(unsafe.Pointer(tv)), uintptr(unsafe.Pointer(tzp)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Time(t *Time_t) (tt Time_t, err error) {
-	r0, e1 := calltime(uintptr(unsafe.Pointer(t)))
-	tt = Time_t(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Utime(path string, buf *Utimbuf) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, e1 := callutime(uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(buf)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsystemcfg(label int) (n uint64) {
-	r0, _ := callgetsystemcfg(label)
-	n = uint64(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func umount(target string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(target)
-	if err != nil {
-		return
-	}
-	_, e1 := callumount(uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrlimit(resource int, rlim *Rlimit) (err error) {
-	_, e1 := callgetrlimit(resource, uintptr(unsafe.Pointer(rlim)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seek(fd int, offset int64, whence int) (off int64, err error) {
-	r0, e1 := calllseek(fd, offset, whence)
-	off = int64(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func mmap(addr uintptr, length uintptr, prot int, flags int, fd int, offset int64) (xaddr uintptr, err error) {
-	r0, e1 := callmmap64(addr, length, prot, flags, fd, offset)
-	xaddr = uintptr(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_aix_ppc64_gc.go","mode":420,"size":43453,"sha256":"5a806c7a1368edba0adb4f7c029c8b4e1c7f4ce3e2053608f8546bb358fd8282","index":0,"count":1,"encoding":"utf-8","payloadBytes":43453}
-// go run mksyscall_aix_ppc64.go -aix -tags aix,ppc64 syscall_aix.go syscall_aix_ppc64.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build aix && ppc64 && gc
-
-package unix
-
-import (
-	"unsafe"
-)
-
-//go:cgo_import_dynamic libc_utimes utimes "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_utimensat utimensat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getcwd getcwd "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_accept accept "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getdirent getdirent "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_wait4 wait4 "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_ioctl ioctl "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fcntl fcntl "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fsync_range fsync_range "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_acct acct "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_chdir chdir "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_chroot chroot "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_close close "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_dup dup "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_exit exit "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_faccessat faccessat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fchdir fchdir "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fchmod fchmod "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fchmodat fchmodat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fchownat fchownat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fdatasync fdatasync "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getpgid getpgid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getpgrp getpgrp "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getpid getpid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getppid getppid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getpriority getpriority "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getrusage getrusage "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getsid getsid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_kill kill "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_syslog syslog "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mkdir mkdir "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mkdirat mkdirat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mkfifo mkfifo "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mknod mknod "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mknodat mknodat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_nanosleep nanosleep "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_open64 open64 "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_openat openat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_read read "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_readlink readlink "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_renameat renameat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setdomainname setdomainname "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_sethostname sethostname "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setpgid setpgid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setsid setsid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_settimeofday settimeofday "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setuid setuid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setgid setgid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setpriority setpriority "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_statx statx "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_sync sync "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_times times "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_umask umask "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_uname uname "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_unlink unlink "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_unlinkat unlinkat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_ustat ustat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_write write "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_dup2 dup2 "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_posix_fadvise64 posix_fadvise64 "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fchown fchown "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fstat fstat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fstatat fstatat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_fstatfs fstatfs "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_ftruncate ftruncate "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getegid getegid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_geteuid geteuid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getgid getgid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getuid getuid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_lchown lchown "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_listen listen "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_lstat lstat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_pause pause "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_pread64 pread64 "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_pwrite64 pwrite64 "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_select select "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_pselect pselect "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setregid setregid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setreuid setreuid "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_shutdown shutdown "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_splice splice "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_stat stat "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_statfs statfs "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_truncate truncate "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_bind bind "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_connect connect "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getgroups getgroups "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setgroups setgroups "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getsockopt getsockopt "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_setsockopt setsockopt "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_socket socket "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_socketpair socketpair "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getpeername getpeername "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getsockname getsockname "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_recvfrom recvfrom "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_sendto sendto "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_nrecvmsg nrecvmsg "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_nsendmsg nsendmsg "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_munmap munmap "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_madvise madvise "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mprotect mprotect "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mlock mlock "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mlockall mlockall "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_msync msync "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_munlock munlock "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_munlockall munlockall "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_pipe pipe "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_poll poll "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_gettimeofday gettimeofday "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_time time "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_utime utime "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getsystemcfg getsystemcfg "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_umount umount "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_getrlimit getrlimit "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_lseek lseek "libc.a/shr_64.o"
-//go:cgo_import_dynamic libc_mmap64 mmap64 "libc.a/shr_64.o"
-
-//go:linkname libc_utimes libc_utimes
-//go:linkname libc_utimensat libc_utimensat
-//go:linkname libc_getcwd libc_getcwd
-//go:linkname libc_accept libc_accept
-//go:linkname libc_getdirent libc_getdirent
-//go:linkname libc_wait4 libc_wait4
-//go:linkname libc_ioctl libc_ioctl
-//go:linkname libc_fcntl libc_fcntl
-//go:linkname libc_fsync_range libc_fsync_range
-//go:linkname libc_acct libc_acct
-//go:linkname libc_chdir libc_chdir
-//go:linkname libc_chroot libc_chroot
-//go:linkname libc_close libc_close
-//go:linkname libc_dup libc_dup
-//go:linkname libc_exit libc_exit
-//go:linkname libc_faccessat libc_faccessat
-//go:linkname libc_fchdir libc_fchdir
-//go:linkname libc_fchmod libc_fchmod
-//go:linkname libc_fchmodat libc_fchmodat
-//go:linkname libc_fchownat libc_fchownat
-//go:linkname libc_fdatasync libc_fdatasync
-//go:linkname libc_getpgid libc_getpgid
-//go:linkname libc_getpgrp libc_getpgrp
-//go:linkname libc_getpid libc_getpid
-//go:linkname libc_getppid libc_getppid
-//go:linkname libc_getpriority libc_getpriority
-//go:linkname libc_getrusage libc_getrusage
-//go:linkname libc_getsid libc_getsid
-//go:linkname libc_kill libc_kill
-//go:linkname libc_syslog libc_syslog
-//go:linkname libc_mkdir libc_mkdir
-//go:linkname libc_mkdirat libc_mkdirat
-//go:linkname libc_mkfifo libc_mkfifo
-//go:linkname libc_mknod libc_mknod
-//go:linkname libc_mknodat libc_mknodat
-//go:linkname libc_nanosleep libc_nanosleep
-//go:linkname libc_open64 libc_open64
-//go:linkname libc_openat libc_openat
-//go:linkname libc_read libc_read
-//go:linkname libc_readlink libc_readlink
-//go:linkname libc_renameat libc_renameat
-//go:linkname libc_setdomainname libc_setdomainname
-//go:linkname libc_sethostname libc_sethostname
-//go:linkname libc_setpgid libc_setpgid
-//go:linkname libc_setsid libc_setsid
-//go:linkname libc_settimeofday libc_settimeofday
-//go:linkname libc_setuid libc_setuid
-//go:linkname libc_setgid libc_setgid
-//go:linkname libc_setpriority libc_setpriority
-//go:linkname libc_statx libc_statx
-//go:linkname libc_sync libc_sync
-//go:linkname libc_times libc_times
-//go:linkname libc_umask libc_umask
-//go:linkname libc_uname libc_uname
-//go:linkname libc_unlink libc_unlink
-//go:linkname libc_unlinkat libc_unlinkat
-//go:linkname libc_ustat libc_ustat
-//go:linkname libc_write libc_write
-//go:linkname libc_dup2 libc_dup2
-//go:linkname libc_posix_fadvise64 libc_posix_fadvise64
-//go:linkname libc_fchown libc_fchown
-//go:linkname libc_fstat libc_fstat
-//go:linkname libc_fstatat libc_fstatat
-//go:linkname libc_fstatfs libc_fstatfs
-//go:linkname libc_ftruncate libc_ftruncate
-//go:linkname libc_getegid libc_getegid
-//go:linkname libc_geteuid libc_geteuid
-//go:linkname libc_getgid libc_getgid
-//go:linkname libc_getuid libc_getuid
-//go:linkname libc_lchown libc_lchown
-//go:linkname libc_listen libc_listen
-//go:linkname libc_lstat libc_lstat
-//go:linkname libc_pause libc_pause
-//go:linkname libc_pread64 libc_pread64
-//go:linkname libc_pwrite64 libc_pwrite64
-//go:linkname libc_select libc_select
-//go:linkname libc_pselect libc_pselect
-//go:linkname libc_setregid libc_setregid
-//go:linkname libc_setreuid libc_setreuid
-//go:linkname libc_shutdown libc_shutdown
-//go:linkname libc_splice libc_splice
-//go:linkname libc_stat libc_stat
-//go:linkname libc_statfs libc_statfs
-//go:linkname libc_truncate libc_truncate
-//go:linkname libc_bind libc_bind
-//go:linkname libc_connect libc_connect
-//go:linkname libc_getgroups libc_getgroups
-//go:linkname libc_setgroups libc_setgroups
-//go:linkname libc_getsockopt libc_getsockopt
-//go:linkname libc_setsockopt libc_setsockopt
-//go:linkname libc_socket libc_socket
-//go:linkname libc_socketpair libc_socketpair
-//go:linkname libc_getpeername libc_getpeername
-//go:linkname libc_getsockname libc_getsockname
-//go:linkname libc_recvfrom libc_recvfrom
-//go:linkname libc_sendto libc_sendto
-//go:linkname libc_nrecvmsg libc_nrecvmsg
-//go:linkname libc_nsendmsg libc_nsendmsg
-//go:linkname libc_munmap libc_munmap
-//go:linkname libc_madvise libc_madvise
-//go:linkname libc_mprotect libc_mprotect
-//go:linkname libc_mlock libc_mlock
-//go:linkname libc_mlockall libc_mlockall
-//go:linkname libc_msync libc_msync
-//go:linkname libc_munlock libc_munlock
-//go:linkname libc_munlockall libc_munlockall
-//go:linkname libc_pipe libc_pipe
-//go:linkname libc_poll libc_poll
-//go:linkname libc_gettimeofday libc_gettimeofday
-//go:linkname libc_time libc_time
-//go:linkname libc_utime libc_utime
-//go:linkname libc_getsystemcfg libc_getsystemcfg
-//go:linkname libc_umount libc_umount
-//go:linkname libc_getrlimit libc_getrlimit
-//go:linkname libc_lseek libc_lseek
-//go:linkname libc_mmap64 libc_mmap64
-
-type syscallFunc uintptr
-
-var (
-	libc_utimes,
-	libc_utimensat,
-	libc_getcwd,
-	libc_accept,
-	libc_getdirent,
-	libc_wait4,
-	libc_ioctl,
-	libc_fcntl,
-	libc_fsync_range,
-	libc_acct,
-	libc_chdir,
-	libc_chroot,
-	libc_close,
-	libc_dup,
-	libc_exit,
-	libc_faccessat,
-	libc_fchdir,
-	libc_fchmod,
-	libc_fchmodat,
-	libc_fchownat,
-	libc_fdatasync,
-	libc_getpgid,
-	libc_getpgrp,
-	libc_getpid,
-	libc_getppid,
-	libc_getpriority,
-	libc_getrusage,
-	libc_getsid,
-	libc_kill,
-	libc_syslog,
-	libc_mkdir,
-	libc_mkdirat,
-	libc_mkfifo,
-	libc_mknod,
-	libc_mknodat,
-	libc_nanosleep,
-	libc_open64,
-	libc_openat,
-	libc_read,
-	libc_readlink,
-	libc_renameat,
-	libc_setdomainname,
-	libc_sethostname,
-	libc_setpgid,
-	libc_setsid,
-	libc_settimeofday,
-	libc_setuid,
-	libc_setgid,
-	libc_setpriority,
-	libc_statx,
-	libc_sync,
-	libc_times,
-	libc_umask,
-	libc_uname,
-	libc_unlink,
-	libc_unlinkat,
-	libc_ustat,
-	libc_write,
-	libc_dup2,
-	libc_posix_fadvise64,
-	libc_fchown,
-	libc_fstat,
-	libc_fstatat,
-	libc_fstatfs,
-	libc_ftruncate,
-	libc_getegid,
-	libc_geteuid,
-	libc_getgid,
-	libc_getuid,
-	libc_lchown,
-	libc_listen,
-	libc_lstat,
-	libc_pause,
-	libc_pread64,
-	libc_pwrite64,
-	libc_select,
-	libc_pselect,
-	libc_setregid,
-	libc_setreuid,
-	libc_shutdown,
-	libc_splice,
-	libc_stat,
-	libc_statfs,
-	libc_truncate,
-	libc_bind,
-	libc_connect,
-	libc_getgroups,
-	libc_setgroups,
-	libc_getsockopt,
-	libc_setsockopt,
-	libc_socket,
-	libc_socketpair,
-	libc_getpeername,
-	libc_getsockname,
-	libc_recvfrom,
-	libc_sendto,
-	libc_nrecvmsg,
-	libc_nsendmsg,
-	libc_munmap,
-	libc_madvise,
-	libc_mprotect,
-	libc_mlock,
-	libc_mlockall,
-	libc_msync,
-	libc_munlock,
-	libc_munlockall,
-	libc_pipe,
-	libc_poll,
-	libc_gettimeofday,
-	libc_time,
-	libc_utime,
-	libc_getsystemcfg,
-	libc_umount,
-	libc_getrlimit,
-	libc_lseek,
-	libc_mmap64 syscallFunc
-)
-
-// Implemented in runtime/syscall_aix.go.
-func rawSyscall6(trap, nargs, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno)
-func syscall6(trap, nargs, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno)
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callutimes(_p0 uintptr, times uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_utimes)), 2, _p0, times, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callutimensat(dirfd int, _p0 uintptr, times uintptr, flag int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_utimensat)), 4, uintptr(dirfd), _p0, times, uintptr(flag), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetcwd(_p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_getcwd)), 2, _p0, uintptr(_lenp0), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callaccept(s int, rsa uintptr, addrlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_accept)), 3, uintptr(s), rsa, addrlen, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetdirent(fd int, _p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_getdirent)), 3, uintptr(fd), _p0, uintptr(_lenp0), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callwait4(pid int, status uintptr, options int, rusage uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_wait4)), 4, uintptr(pid), status, uintptr(options), rusage, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callioctl(fd int, req int, arg uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_ioctl)), 3, uintptr(fd), uintptr(req), arg, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callioctl_ptr(fd int, req int, arg unsafe.Pointer) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_ioctl)), 3, uintptr(fd), uintptr(req), uintptr(arg), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfcntl(fd uintptr, cmd int, arg uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fcntl)), 3, fd, uintptr(cmd), arg, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfsync_range(fd int, how int, start int64, length int64) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fsync_range)), 4, uintptr(fd), uintptr(how), uintptr(start), uintptr(length), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callacct(_p0 uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_acct)), 1, _p0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callchdir(_p0 uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_chdir)), 1, _p0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callchroot(_p0 uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_chroot)), 1, _p0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callclose(fd int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_close)), 1, uintptr(fd), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calldup(oldfd int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_dup)), 1, uintptr(oldfd), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callexit(code int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_exit)), 1, uintptr(code), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfaccessat(dirfd int, _p0 uintptr, mode uint32, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_faccessat)), 4, uintptr(dirfd), _p0, uintptr(mode), uintptr(flags), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfchdir(fd int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fchdir)), 1, uintptr(fd), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfchmod(fd int, mode uint32) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fchmod)), 2, uintptr(fd), uintptr(mode), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfchmodat(dirfd int, _p0 uintptr, mode uint32, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fchmodat)), 4, uintptr(dirfd), _p0, uintptr(mode), uintptr(flags), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfchownat(dirfd int, _p0 uintptr, uid int, gid int, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fchownat)), 5, uintptr(dirfd), _p0, uintptr(uid), uintptr(gid), uintptr(flags), 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfdatasync(fd int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fdatasync)), 1, uintptr(fd), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetpgid(pid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getpgid)), 1, uintptr(pid), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetpgrp() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_getpgrp)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetpid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getpid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetppid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getppid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetpriority(which int, who int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_getpriority)), 2, uintptr(which), uintptr(who), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetrusage(who int, rusage uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getrusage)), 2, uintptr(who), rusage, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetsid(pid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getsid)), 1, uintptr(pid), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callkill(pid int, sig int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_kill)), 2, uintptr(pid), uintptr(sig), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsyslog(typ int, _p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_syslog)), 3, uintptr(typ), _p0, uintptr(_lenp0), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmkdir(dirfd int, _p0 uintptr, mode uint32) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mkdir)), 3, uintptr(dirfd), _p0, uintptr(mode), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmkdirat(dirfd int, _p0 uintptr, mode uint32) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mkdirat)), 3, uintptr(dirfd), _p0, uintptr(mode), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmkfifo(_p0 uintptr, mode uint32) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mkfifo)), 2, _p0, uintptr(mode), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmknod(_p0 uintptr, mode uint32, dev int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mknod)), 3, _p0, uintptr(mode), uintptr(dev), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmknodat(dirfd int, _p0 uintptr, mode uint32, dev int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mknodat)), 4, uintptr(dirfd), _p0, uintptr(mode), uintptr(dev), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callnanosleep(time uintptr, leftover uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_nanosleep)), 2, time, leftover, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callopen64(_p0 uintptr, mode int, perm uint32) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_open64)), 3, _p0, uintptr(mode), uintptr(perm), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callopenat(dirfd int, _p0 uintptr, flags int, mode uint32) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_openat)), 4, uintptr(dirfd), _p0, uintptr(flags), uintptr(mode), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callread(fd int, _p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_read)), 3, uintptr(fd), _p0, uintptr(_lenp0), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callreadlink(_p0 uintptr, _p1 uintptr, _lenp1 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_readlink)), 3, _p0, _p1, uintptr(_lenp1), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callrenameat(olddirfd int, _p0 uintptr, newdirfd int, _p1 uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_renameat)), 4, uintptr(olddirfd), _p0, uintptr(newdirfd), _p1, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetdomainname(_p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_setdomainname)), 2, _p0, uintptr(_lenp0), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsethostname(_p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_sethostname)), 2, _p0, uintptr(_lenp0), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetpgid(pid int, pgid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_setpgid)), 2, uintptr(pid), uintptr(pgid), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetsid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_setsid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsettimeofday(tv uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_settimeofday)), 1, tv, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetuid(uid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_setuid)), 1, uintptr(uid), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetgid(uid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_setgid)), 1, uintptr(uid), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetpriority(which int, who int, prio int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_setpriority)), 3, uintptr(which), uintptr(who), uintptr(prio), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callstatx(dirfd int, _p0 uintptr, flags int, mask int, stat uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_statx)), 5, uintptr(dirfd), _p0, uintptr(flags), uintptr(mask), stat, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsync() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_sync)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calltimes(tms uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_times)), 1, tms, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callumask(mask int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_umask)), 1, uintptr(mask), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calluname(buf uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_uname)), 1, buf, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callunlink(_p0 uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_unlink)), 1, _p0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callunlinkat(dirfd int, _p0 uintptr, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_unlinkat)), 3, uintptr(dirfd), _p0, uintptr(flags), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callustat(dev int, ubuf uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_ustat)), 2, uintptr(dev), ubuf, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callwrite(fd int, _p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_write)), 3, uintptr(fd), _p0, uintptr(_lenp0), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calldup2(oldfd int, newfd int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_dup2)), 2, uintptr(oldfd), uintptr(newfd), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callposix_fadvise64(fd int, offset int64, length int64, advice int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_posix_fadvise64)), 4, uintptr(fd), uintptr(offset), uintptr(length), uintptr(advice), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfchown(fd int, uid int, gid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fchown)), 3, uintptr(fd), uintptr(uid), uintptr(gid), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfstat(fd int, stat uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fstat)), 2, uintptr(fd), stat, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfstatat(dirfd int, _p0 uintptr, stat uintptr, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fstatat)), 4, uintptr(dirfd), _p0, stat, uintptr(flags), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callfstatfs(fd int, buf uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_fstatfs)), 2, uintptr(fd), buf, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callftruncate(fd int, length int64) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_ftruncate)), 2, uintptr(fd), uintptr(length), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetegid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getegid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgeteuid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_geteuid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetgid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getgid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetuid() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getuid)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calllchown(_p0 uintptr, uid int, gid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_lchown)), 3, _p0, uintptr(uid), uintptr(gid), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calllisten(s int, n int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_listen)), 2, uintptr(s), uintptr(n), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calllstat(_p0 uintptr, stat uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_lstat)), 2, _p0, stat, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callpause() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_pause)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callpread64(fd int, _p0 uintptr, _lenp0 int, offset int64) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_pread64)), 4, uintptr(fd), _p0, uintptr(_lenp0), uintptr(offset), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callpwrite64(fd int, _p0 uintptr, _lenp0 int, offset int64) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_pwrite64)), 4, uintptr(fd), _p0, uintptr(_lenp0), uintptr(offset), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callselect(nfd int, r uintptr, w uintptr, e uintptr, timeout uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_select)), 5, uintptr(nfd), r, w, e, timeout, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callpselect(nfd int, r uintptr, w uintptr, e uintptr, timeout uintptr, sigmask uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_pselect)), 6, uintptr(nfd), r, w, e, timeout, sigmask)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetregid(rgid int, egid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_setregid)), 2, uintptr(rgid), uintptr(egid), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetreuid(ruid int, euid int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_setreuid)), 2, uintptr(ruid), uintptr(euid), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callshutdown(fd int, how int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_shutdown)), 2, uintptr(fd), uintptr(how), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsplice(rfd int, roff uintptr, wfd int, woff uintptr, len int, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_splice)), 6, uintptr(rfd), roff, uintptr(wfd), woff, uintptr(len), uintptr(flags))
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callstat(_p0 uintptr, statptr uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_stat)), 2, _p0, statptr, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callstatfs(_p0 uintptr, buf uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_statfs)), 2, _p0, buf, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calltruncate(_p0 uintptr, length int64) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_truncate)), 2, _p0, uintptr(length), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callbind(s int, addr uintptr, addrlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_bind)), 3, uintptr(s), addr, addrlen, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callconnect(s int, addr uintptr, addrlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_connect)), 3, uintptr(s), addr, addrlen, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetgroups(n int, list uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getgroups)), 2, uintptr(n), list, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetgroups(n int, list uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_setgroups)), 2, uintptr(n), list, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetsockopt(s int, level int, name int, val uintptr, vallen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_getsockopt)), 5, uintptr(s), uintptr(level), uintptr(name), val, vallen, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsetsockopt(s int, level int, name int, val uintptr, vallen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_setsockopt)), 5, uintptr(s), uintptr(level), uintptr(name), val, vallen, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsocket(domain int, typ int, proto int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_socket)), 3, uintptr(domain), uintptr(typ), uintptr(proto), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsocketpair(domain int, typ int, proto int, fd uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_socketpair)), 4, uintptr(domain), uintptr(typ), uintptr(proto), fd, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetpeername(fd int, rsa uintptr, addrlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getpeername)), 3, uintptr(fd), rsa, addrlen, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetsockname(fd int, rsa uintptr, addrlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getsockname)), 3, uintptr(fd), rsa, addrlen, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callrecvfrom(fd int, _p0 uintptr, _lenp0 int, flags int, from uintptr, fromlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_recvfrom)), 6, uintptr(fd), _p0, uintptr(_lenp0), uintptr(flags), from, fromlen)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callsendto(s int, _p0 uintptr, _lenp0 int, flags int, to uintptr, addrlen uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_sendto)), 6, uintptr(s), _p0, uintptr(_lenp0), uintptr(flags), to, addrlen)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callnrecvmsg(s int, msg uintptr, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_nrecvmsg)), 3, uintptr(s), msg, uintptr(flags), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callnsendmsg(s int, msg uintptr, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_nsendmsg)), 3, uintptr(s), msg, uintptr(flags), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmunmap(addr uintptr, length uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_munmap)), 2, addr, length, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmadvise(_p0 uintptr, _lenp0 int, advice int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_madvise)), 3, _p0, uintptr(_lenp0), uintptr(advice), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmprotect(_p0 uintptr, _lenp0 int, prot int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mprotect)), 3, _p0, uintptr(_lenp0), uintptr(prot), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmlock(_p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mlock)), 2, _p0, uintptr(_lenp0), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmlockall(flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mlockall)), 1, uintptr(flags), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmsync(_p0 uintptr, _lenp0 int, flags int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_msync)), 3, _p0, uintptr(_lenp0), uintptr(flags), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmunlock(_p0 uintptr, _lenp0 int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_munlock)), 2, _p0, uintptr(_lenp0), 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmunlockall() (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_munlockall)), 0, 0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callpipe(p uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_pipe)), 1, p, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callpoll(fds uintptr, nfds int, timeout int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_poll)), 3, fds, uintptr(nfds), uintptr(timeout), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgettimeofday(tv uintptr, tzp uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_gettimeofday)), 2, tv, tzp, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calltime(t uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_time)), 1, t, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callutime(_p0 uintptr, buf uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_utime)), 2, _p0, buf, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetsystemcfg(label int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_getsystemcfg)), 1, uintptr(label), 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callumount(_p0 uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_umount)), 1, _p0, 0, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callgetrlimit(resource int, rlim uintptr) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = rawSyscall6(uintptr(unsafe.Pointer(&libc_getrlimit)), 2, uintptr(resource), rlim, 0, 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func calllseek(fd int, offset int64, whence int) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_lseek)), 3, uintptr(fd), uintptr(offset), uintptr(whence), 0, 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func callmmap64(addr uintptr, length uintptr, prot int, flags int, fd int, offset int64) (r1 uintptr, e1 Errno) {
-	r1, _, e1 = syscall6(uintptr(unsafe.Pointer(&libc_mmap64)), 6, addr, length, uintptr(prot), uintptr(flags), uintptr(fd), uintptr(offset))
 	return
 }
 

@@ -1,3 +1,4152 @@
+@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/router.go","mode":420,"size":21728,"sha256":"06a7b5d4f1fcc6962e62d259ba558abec4fe56c2a6735f236ac4a8d8f23643a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":21728}
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
+
+package echo
+
+import (
+	"bytes"
+	"fmt"
+	"net/http"
+)
+
+// Router is the registry of all registered routes for an `Echo` instance for
+// request matching and URL path parameter parsing.
+type Router struct {
+	tree   *node
+	routes map[string]*Route
+	echo   *Echo
+}
+
+type node struct {
+	methods    *routeMethods
+	parent     *node
+	paramChild *node
+	anyChild   *node
+	// notFoundHandler is handler registered with RouteNotFound method and is executed for 404 cases
+	notFoundHandler *routeMethod
+	prefix          string
+	originalPath    string
+	staticChildren  children
+	paramsCount     int
+	label           byte
+	kind            kind
+	// isLeaf indicates that node does not have child routes
+	isLeaf bool
+	// isHandler indicates that node has at least one handler registered to it
+	isHandler bool
+}
+
+type kind uint8
+type children []*node
+
+type routeMethod struct {
+	handler HandlerFunc
+	ppath   string
+	pnames  []string
+}
+
+type routeMethods struct {
+	connect     *routeMethod
+	delete      *routeMethod
+	get         *routeMethod
+	head        *routeMethod
+	options     *routeMethod
+	patch       *routeMethod
+	post        *routeMethod
+	propfind    *routeMethod
+	put         *routeMethod
+	trace       *routeMethod
+	report      *routeMethod
+	anyOther    map[string]*routeMethod
+	allowHeader string
+}
+
+const (
+	staticKind kind = iota
+	paramKind
+	anyKind
+
+	paramLabel = byte(':')
+	anyLabel   = byte('*')
+)
+
+func (m *routeMethods) isHandler() bool {
+	return m.connect != nil ||
+		m.delete != nil ||
+		m.get != nil ||
+		m.head != nil ||
+		m.options != nil ||
+		m.patch != nil ||
+		m.post != nil ||
+		m.propfind != nil ||
+		m.put != nil ||
+		m.trace != nil ||
+		m.report != nil ||
+		len(m.anyOther) != 0
+	// RouteNotFound/404 is not considered as a handler
+}
+
+func (m *routeMethods) updateAllowHeader() {
+	buf := new(bytes.Buffer)
+	buf.WriteString(http.MethodOptions)
+
+	if m.connect != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodConnect)
+	}
+	if m.delete != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodDelete)
+	}
+	if m.get != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodGet)
+	}
+	if m.head != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodHead)
+	}
+	if m.patch != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodPatch)
+	}
+	if m.post != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodPost)
+	}
+	if m.propfind != nil {
+		buf.WriteString(", PROPFIND")
+	}
+	if m.put != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodPut)
+	}
+	if m.trace != nil {
+		buf.WriteString(", ")
+		buf.WriteString(http.MethodTrace)
+	}
+	if m.report != nil {
+		buf.WriteString(", REPORT")
+	}
+	for method := range m.anyOther { // for simplicity, we use map and therefore order is not deterministic here
+		buf.WriteString(", ")
+		buf.WriteString(method)
+	}
+	m.allowHeader = buf.String()
+}
+
+// NewRouter returns a new Router instance.
+func NewRouter(e *Echo) *Router {
+	return &Router{
+		tree: &node{
+			methods: new(routeMethods),
+		},
+		routes: map[string]*Route{},
+		echo:   e,
+	}
+}
+
+// Routes returns the registered routes.
+func (r *Router) Routes() []*Route {
+	routes := make([]*Route, 0, len(r.routes))
+	for _, v := range r.routes {
+		routes = append(routes, v)
+	}
+	return routes
+}
+
+// Reverse generates a URL from route name and provided parameters.
+func (r *Router) Reverse(name string, params ...interface{}) string {
+	uri := new(bytes.Buffer)
+	ln := len(params)
+	n := 0
+	for _, route := range r.routes {
+		if route.Name == name {
+			for i, l := 0, len(route.Path); i < l; i++ {
+				hasBackslash := route.Path[i] == '\\'
+				if hasBackslash && i+1 < l && route.Path[i+1] == ':' {
+					i++ // backslash before colon escapes that colon. in that case skip backslash
+				}
+				if n < ln && (route.Path[i] == '*' || (!hasBackslash && route.Path[i] == ':')) {
+					// in case of `*` wildcard or `:` (unescaped colon) param we replace everything till next slash or end of path
+					for ; i < l && route.Path[i] != '/'; i++ {
+					}
+					uri.WriteString(fmt.Sprintf("%v", params[n]))
+					n++
+				}
+				if i < l {
+					uri.WriteByte(route.Path[i])
+				}
+			}
+			break
+		}
+	}
+	return uri.String()
+}
+
+func normalizePathSlash(path string) string {
+	if path == "" {
+		path = "/"
+	} else if path[0] != '/' {
+		path = "/" + path
+	}
+	return path
+}
+
+func (r *Router) add(method, path, name string, h HandlerFunc) *Route {
+	path = normalizePathSlash(path)
+	r.insert(method, path, h)
+
+	route := &Route{
+		Method: method,
+		Path:   path,
+		Name:   name,
+	}
+	r.routes[method+path] = route
+	return route
+}
+
+// Add registers a new route for method and path with matching handler.
+func (r *Router) Add(method, path string, h HandlerFunc) {
+	r.insert(method, normalizePathSlash(path), h)
+}
+
+func (r *Router) insert(method, path string, h HandlerFunc) {
+	path = normalizePathSlash(path)
+	pnames := []string{} // Param names
+	ppath := path        // Pristine path
+
+	if h == nil && r.echo.Logger != nil {
+		// FIXME: in future we should return error
+		r.echo.Logger.Errorf("Adding route without handler function: %v:%v", method, path)
+	}
+
+	for i, lcpIndex := 0, len(path); i < lcpIndex; i++ {
+		if path[i] == ':' {
+			if i > 0 && path[i-1] == '\\' {
+				path = path[:i-1] + path[i:]
+				i--
+				lcpIndex--
+				continue
+			}
+			j := i + 1
+
+			r.insertNode(method, path[:i], staticKind, routeMethod{})
+			for ; i < lcpIndex && path[i] != '/'; i++ {
+			}
+
+			pnames = append(pnames, path[j:i])
+			path = path[:j] + path[i:]
+			i, lcpIndex = j, len(path)
+
+			if i == lcpIndex {
+				// path node is last fragment of route path. ie. `/users/:id`
+				r.insertNode(method, path[:i], paramKind, routeMethod{ppath: ppath, pnames: pnames, handler: h})
+			} else {
+				r.insertNode(method, path[:i], paramKind, routeMethod{})
+			}
+		} else if path[i] == '*' {
+			r.insertNode(method, path[:i], staticKind, routeMethod{})
+			pnames = append(pnames, "*")
+			r.insertNode(method, path[:i+1], anyKind, routeMethod{ppath: ppath, pnames: pnames, handler: h})
+		}
+	}
+
+	r.insertNode(method, path, staticKind, routeMethod{ppath: ppath, pnames: pnames, handler: h})
+}
+
+func (r *Router) insertNode(method, path string, t kind, rm routeMethod) {
+	// Adjust max param
+	paramLen := len(rm.pnames)
+	if *r.echo.maxParam < paramLen {
+		*r.echo.maxParam = paramLen
+	}
+
+	currentNode := r.tree // Current node as root
+	if currentNode == nil {
+		panic("echo: invalid method")
+	}
+	search := path
+
+	for {
+		searchLen := len(search)
+		prefixLen := len(currentNode.prefix)
+		lcpLen := 0
+
+		// LCP - Longest Common Prefix (https://en.wikipedia.org/wiki/LCP_array)
+		max := prefixLen
+		if searchLen < max {
+			max = searchLen
+		}
+		for ; lcpLen < max && search[lcpLen] == currentNode.prefix[lcpLen]; lcpLen++ {
+		}
+
+		if lcpLen == 0 {
+			// At root node
+			currentNode.label = search[0]
+			currentNode.prefix = search
+			if rm.handler != nil {
+				currentNode.kind = t
+				currentNode.addMethod(method, &rm)
+				currentNode.paramsCount = len(rm.pnames)
+				currentNode.originalPath = rm.ppath
+			}
+			currentNode.isLeaf = currentNode.staticChildren == nil && currentNode.paramChild == nil && currentNode.anyChild == nil
+		} else if lcpLen < prefixLen {
+			// Split node into two before we insert new node.
+			// This happens when we are inserting path that is submatch of any existing inserted paths.
+			// For example, we have node `/test` and now are about to insert `/te/*`. In that case
+			// 1. overlapping part is `/te` that is used as parent node
+			// 2. `st` is part from existing node that is not matching - it gets its own node (child to `/te`)
+			// 3. `/*` is the new part we are about to insert (child to `/te`)
+			n := newNode(
+				currentNode.kind,
+				currentNode.prefix[lcpLen:],
+				currentNode,
+				currentNode.staticChildren,
+				currentNode.originalPath,
+				currentNode.methods,
+				currentNode.paramsCount,
+				currentNode.paramChild,
+				currentNode.anyChild,
+				currentNode.notFoundHandler,
+			)
+			// Update parent path for all children to new node
+			for _, child := range currentNode.staticChildren {
+				child.parent = n
+			}
+			if currentNode.paramChild != nil {
+				currentNode.paramChild.parent = n
+			}
+			if currentNode.anyChild != nil {
+				currentNode.anyChild.parent = n
+			}
+
+			// Reset parent node
+			currentNode.kind = staticKind
+			currentNode.label = currentNode.prefix[0]
+			currentNode.prefix = currentNode.prefix[:lcpLen]
+			currentNode.staticChildren = nil
+			currentNode.originalPath = ""
+			currentNode.methods = new(routeMethods)
+			currentNode.paramsCount = 0
+			currentNode.paramChild = nil
+			currentNode.anyChild = nil
+			currentNode.isLeaf = false
+			currentNode.isHandler = false
+			currentNode.notFoundHandler = nil
+
+			// Only Static children could reach here
+			currentNode.addStaticChild(n)
+
+			if lcpLen == searchLen {
+				// At parent node
+				currentNode.kind = t
+				if rm.handler != nil {
+					currentNode.addMethod(method, &rm)
+					currentNode.paramsCount = len(rm.pnames)
+					currentNode.originalPath = rm.ppath
+				}
+			} else {
+				// Create child node
+				n = newNode(t, search[lcpLen:], currentNode, nil, "", new(routeMethods), 0, nil, nil, nil)
+				if rm.handler != nil {
+					n.addMethod(method, &rm)
+					n.paramsCount = len(rm.pnames)
+					n.originalPath = rm.ppath
+				}
+				// Only Static children could reach here
+				currentNode.addStaticChild(n)
+			}
+			currentNode.isLeaf = currentNode.staticChildren == nil && currentNode.paramChild == nil && currentNode.anyChild == nil
+		} else if lcpLen < searchLen {
+			search = search[lcpLen:]
+			c := currentNode.findChildWithLabel(search[0])
+			if c != nil {
+				// Go deeper
+				currentNode = c
+				continue
+			}
+			// Create child node
+			n := newNode(t, search, currentNode, nil, rm.ppath, new(routeMethods), 0, nil, nil, nil)
+			if rm.handler != nil {
+				n.addMethod(method, &rm)
+				n.paramsCount = len(rm.pnames)
+			}
+
+			switch t {
+			case staticKind:
+				currentNode.addStaticChild(n)
+			case paramKind:
+				currentNode.paramChild = n
+			case anyKind:
+				currentNode.anyChild = n
+			}
+			currentNode.isLeaf = currentNode.staticChildren == nil && currentNode.paramChild == nil && currentNode.anyChild == nil
+		} else {
+			// Node already exists
+			if rm.handler != nil {
+				currentNode.addMethod(method, &rm)
+				currentNode.paramsCount = len(rm.pnames)
+				currentNode.originalPath = rm.ppath
+			}
+		}
+		return
+	}
+}
+
+func newNode(
+	t kind,
+	pre string,
+	p *node,
+	sc children,
+	originalPath string,
+	methods *routeMethods,
+	paramsCount int,
+	paramChildren,
+	anyChildren *node,
+	notFoundHandler *routeMethod,
+) *node {
+	return &node{
+		kind:            t,
+		label:           pre[0],
+		prefix:          pre,
+		parent:          p,
+		staticChildren:  sc,
+		originalPath:    originalPath,
+		methods:         methods,
+		paramsCount:     paramsCount,
+		paramChild:      paramChildren,
+		anyChild:        anyChildren,
+		isLeaf:          sc == nil && paramChildren == nil && anyChildren == nil,
+		isHandler:       methods.isHandler(),
+		notFoundHandler: notFoundHandler,
+	}
+}
+
+func (n *node) addStaticChild(c *node) {
+	n.staticChildren = append(n.staticChildren, c)
+}
+
+func (n *node) findStaticChild(l byte) *node {
+	for _, c := range n.staticChildren {
+		if c.label == l {
+			return c
+		}
+	}
+	return nil
+}
+
+func (n *node) findChildWithLabel(l byte) *node {
+	if c := n.findStaticChild(l); c != nil {
+		return c
+	}
+	if l == paramLabel {
+		return n.paramChild
+	}
+	if l == anyLabel {
+		return n.anyChild
+	}
+	return nil
+}
+
+func (n *node) addMethod(method string, h *routeMethod) {
+	switch method {
+	case http.MethodConnect:
+		n.methods.connect = h
+	case http.MethodDelete:
+		n.methods.delete = h
+	case http.MethodGet:
+		n.methods.get = h
+	case http.MethodHead:
+		n.methods.head = h
+	case http.MethodOptions:
+		n.methods.options = h
+	case http.MethodPatch:
+		n.methods.patch = h
+	case http.MethodPost:
+		n.methods.post = h
+	case PROPFIND:
+		n.methods.propfind = h
+	case http.MethodPut:
+		n.methods.put = h
+	case http.MethodTrace:
+		n.methods.trace = h
+	case REPORT:
+		n.methods.report = h
+	case RouteNotFound:
+		n.notFoundHandler = h
+		return // RouteNotFound/404 is not considered as a handler so no further logic needs to be executed
+	default:
+		if n.methods.anyOther == nil {
+			n.methods.anyOther = make(map[string]*routeMethod)
+		}
+		if h.handler == nil {
+			delete(n.methods.anyOther, method)
+		} else {
+			n.methods.anyOther[method] = h
+		}
+	}
+
+	n.methods.updateAllowHeader()
+	n.isHandler = true
+}
+
+func (n *node) findMethod(method string) *routeMethod {
+	switch method {
+	case http.MethodConnect:
+		return n.methods.connect
+	case http.MethodDelete:
+		return n.methods.delete
+	case http.MethodGet:
+		return n.methods.get
+	case http.MethodHead:
+		return n.methods.head
+	case http.MethodOptions:
+		return n.methods.options
+	case http.MethodPatch:
+		return n.methods.patch
+	case http.MethodPost:
+		return n.methods.post
+	case PROPFIND:
+		return n.methods.propfind
+	case http.MethodPut:
+		return n.methods.put
+	case http.MethodTrace:
+		return n.methods.trace
+	case REPORT:
+		return n.methods.report
+	default: // RouteNotFound/404 is not considered as a handler
+		return n.methods.anyOther[method]
+	}
+}
+
+func optionsMethodHandler(allowMethods string) func(c Context) error {
+	return func(c Context) error {
+		// Note: we are not handling most of the CORS headers here. CORS is handled by CORS middleware
+		// 'OPTIONS' method RFC: https://httpwg.org/specs/rfc7231.html#OPTIONS
+		// 'Allow' header RFC: https://datatracker.ietf.org/doc/html/rfc7231#section-7.4.1
+		c.Response().Header().Add(HeaderAllow, allowMethods)
+		return c.NoContent(http.StatusNoContent)
+	}
+}
+
+// Find lookup a handler registered for method and path. It also parses URL for path
+// parameters and load them into context.
+//
+// For performance:
+//
+// - Get context from `Echo#AcquireContext()`
+// - Reset it `Context#Reset()`
+// - Return it `Echo#ReleaseContext()`.
+func (r *Router) Find(method, path string, c Context) {
+	ctx := c.(*context)
+	currentNode := r.tree // Current node as root
+
+	var (
+		previousBestMatchNode *node
+		matchedRouteMethod    *routeMethod
+		// search stores the remaining path to check for match. By each iteration we move from start of path to end of the path
+		// and search value gets shorter and shorter.
+		search      = path
+		searchIndex = 0
+		paramIndex  int           // Param counter
+		paramValues = ctx.pvalues // Use the internal slice so the interface can keep the illusion of a dynamic slice
+	)
+
+	// Backtracking is needed when a dead end (leaf node) is reached in the router tree.
+	// To backtrack the current node will be changed to the parent node and the next kind for the
+	// router logic will be returned based on fromKind or kind of the dead end node (static > param > any).
+	// For example if there is no static node match we should check parent next sibling by kind (param).
+	// Backtracking itself does not check if there is a next sibling, this is done by the router logic.
+	backtrackToNextNodeKind := func(fromKind kind) (nextNodeKind kind, valid bool) {
+		previous := currentNode
+		currentNode = previous.parent
+		valid = currentNode != nil
+
+		// Next node type by priority
+		if previous.kind == anyKind {
+			nextNodeKind = staticKind
+		} else {
+			nextNodeKind = previous.kind + 1
+		}
+
+		if fromKind == staticKind {
+			// when backtracking is done from static kind block we did not change search so nothing to restore
+			return
+		}
+
+		// restore search to value it was before we move to current node we are backtracking from.
+		if previous.kind == staticKind {
+			searchIndex -= len(previous.prefix)
+		} else {
+			paramIndex--
+			// for param/any node.prefix value is always `:` so we can not deduce searchIndex from that and must use pValue
+			// for that index as it would also contain part of path we cut off before moving into node we are backtracking from
+			searchIndex -= len(paramValues[paramIndex])
+			paramValues[paramIndex] = ""
+		}
+		search = path[searchIndex:]
+		return
+	}
+
+	// Router tree is implemented by longest common prefix array (LCP array) https://en.wikipedia.org/wiki/LCP_array
+	// Tree search is implemented as for loop where one loop iteration is divided into 3 separate blocks
+	// Each of these blocks checks specific kind of node (static/param/any). Order of blocks reflex their priority in routing.
+	// Search order/priority is: static > param > any.
+	//
+	// Note: backtracking in tree is implemented by replacing/switching currentNode to previous node
+	// and hoping to (goto statement) next block by priority to check if it is the match.
+	for {
+		prefixLen := 0 // Prefix length
+		lcpLen := 0    // LCP (longest common prefix) length
+
+		if currentNode.kind == staticKind {
+			searchLen := len(search)
+			prefixLen = len(currentNode.prefix)
+
+			// LCP - Longest Common Prefix (https://en.wikipedia.org/wiki/LCP_array)
+			max := prefixLen
+			if searchLen < max {
+				max = searchLen
+			}
+			for ; lcpLen < max && search[lcpLen] == currentNode.prefix[lcpLen]; lcpLen++ {
+			}
+		}
+
+		if lcpLen != prefixLen {
+			// No matching prefix, let's backtrack to the first possible alternative node of the decision path
+			nk, ok := backtrackToNextNodeKind(staticKind)
+			if !ok {
+				return // No other possibilities on the decision path, handler will be whatever context is reset to.
+			} else if nk == paramKind {
+				goto Param
+				// NOTE: this case (backtracking from static node to previous any node) can not happen by current any matching logic. Any node is end of search currently
+				//} else if nk == anyKind {
+				//	goto Any
+			} else {
+				// Not found (this should never be possible for static node we are looking currently)
+				break
+			}
+		}
+
+		// The full prefix has matched, remove the prefix from the remaining search
+		search = search[lcpLen:]
+		searchIndex = searchIndex + lcpLen
+
+		// Finish routing if is no request path remaining to search
+		if search == "" {
+			// in case of node that is handler we have exact method type match or something for 405 to use
+			if currentNode.isHandler {
+				// check if current node has handler registered for http method we are looking for. we store currentNode as
+				// best matching in case we do no find no more routes matching this path+method
+				if previousBestMatchNode == nil {
+					previousBestMatchNode = currentNode
+				}
+				if h := currentNode.findMethod(method); h != nil {
+					matchedRouteMethod = h
+					break
+				}
+			} else if currentNode.notFoundHandler != nil {
+				matchedRouteMethod = currentNode.notFoundHandler
+				break
+			}
+		}
+
+		// Static node
+		if search != "" {
+			if child := currentNode.findStaticChild(search[0]); child != nil {
+				currentNode = child
+				continue
+			}
+		}
+
+	Param:
+		// Param node
+		if child := currentNode.paramChild; search != "" && child != nil {
+			currentNode = child
+			i := 0
+			l := len(search)
+			if currentNode.isLeaf {
+				// when param node does not have any children (path param is last piece of route path) then param node should
+				// act similarly to any node - consider all remaining search as match
+				i = l
+			} else {
+				for ; i < l && search[i] != '/'; i++ {
+				}
+			}
+
+			paramValues[paramIndex] = search[:i]
+			paramIndex++
+			search = search[i:]
+			searchIndex = searchIndex + i
+			continue
+		}
+
+	Any:
+		// Any node
+		if child := currentNode.anyChild; child != nil {
+			// If any node is found, use remaining path for paramValues
+			currentNode = child
+			paramValues[currentNode.paramsCount-1] = search
+
+			// update indexes/search in case we need to backtrack when no handler match is found
+			paramIndex++
+			searchIndex += +len(search)
+			search = ""
+
+			if h := currentNode.findMethod(method); h != nil {
+				matchedRouteMethod = h
+				break
+			}
+			// we store currentNode as best matching in case we do not find more routes matching this path+method. Needed for 405
+			if previousBestMatchNode == nil {
+				previousBestMatchNode = currentNode
+			}
+			if currentNode.notFoundHandler != nil {
+				matchedRouteMethod = currentNode.notFoundHandler
+				break
+			}
+		}
+
+		// Let's backtrack to the first possible alternative node of the decision path
+		nk, ok := backtrackToNextNodeKind(anyKind)
+		if !ok {
+			break // No other possibilities on the decision path
+		} else if nk == paramKind {
+			goto Param
+		} else if nk == anyKind {
+			goto Any
+		} else {
+			// Not found
+			break
+		}
+	}
+
+	if currentNode == nil && previousBestMatchNode == nil {
+		return // nothing matched at all
+	}
+
+	// matchedHandler could be method+path handler that we matched or notFoundHandler from node with matching path
+	// user provided not found (404) handler has priority over generic method not found (405) handler or global 404 handler
+	var rPath string
+	var rPNames []string
+	if matchedRouteMethod != nil {
+		rPath = matchedRouteMethod.ppath
+		rPNames = matchedRouteMethod.pnames
+		ctx.handler = matchedRouteMethod.handler
+	} else {
+		// use previous match as basis. although we have no matching handler we have path match.
+		// so we can send http.StatusMethodNotAllowed (405) instead of http.StatusNotFound (404)
+		currentNode = previousBestMatchNode
+
+		rPath = currentNode.originalPath
+		rPNames = nil // no params here
+		ctx.handler = NotFoundHandler
+		if currentNode.notFoundHandler != nil {
+			rPath = currentNode.notFoundHandler.ppath
+			rPNames = currentNode.notFoundHandler.pnames
+			ctx.handler = currentNode.notFoundHandler.handler
+		} else if currentNode.isHandler {
+			ctx.Set(ContextKeyHeaderAllow, currentNode.methods.allowHeader)
+			ctx.handler = MethodNotAllowedHandler
+			if method == http.MethodOptions {
+				ctx.handler = optionsMethodHandler(currentNode.methods.allowHeader)
+			}
+		}
+	}
+	ctx.path = rPath
+	ctx.pnames = rPNames
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/gommon/LICENSE","mode":420,"size":1076,"sha256":"9d05703aa2718dfafeb7ba6bbac3c3ac87ac4ae29e62a23f3f1870eeba67c7e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":1076}
+The MIT License (MIT)
+
+Copyright (c) 2018 labstack
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/gommon/color/color.go","mode":420,"size":8904,"sha256":"876ecafcc75ff6bdfaa923e6fc1cda8197c32cf4a1c776558744f3d54cf67ad1","index":0,"count":1,"encoding":"utf-8","payloadBytes":8904}
+package color
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
+)
+
+type (
+	inner func(interface{}, []string, *Color) string
+)
+
+// Color styles
+const (
+	// Blk Black text style
+	Blk = "30"
+	// Rd red text style
+	Rd = "31"
+	// Grn green text style
+	Grn = "32"
+	// Yel yellow text style
+	Yel = "33"
+	// Blu blue text style
+	Blu = "34"
+	// Mgn magenta text style
+	Mgn = "35"
+	// Cyn cyan text style
+	Cyn = "36"
+	// Wht white text style
+	Wht = "37"
+	// Gry grey text style
+	Gry = "90"
+
+	// BlkBg black background style
+	BlkBg = "40"
+	// RdBg red background style
+	RdBg = "41"
+	// GrnBg green background style
+	GrnBg = "42"
+	// YelBg yellow background style
+	YelBg = "43"
+	// BluBg blue background style
+	BluBg = "44"
+	// MgnBg magenta background style
+	MgnBg = "45"
+	// CynBg cyan background style
+	CynBg = "46"
+	// WhtBg white background style
+	WhtBg = "47"
+
+	// R reset emphasis style
+	R = "0"
+	// B bold emphasis style
+	B = "1"
+	// D dim emphasis style
+	D = "2"
+	// I italic emphasis style
+	I = "3"
+	// U underline emphasis style
+	U = "4"
+	// In inverse emphasis style
+	In = "7"
+	// H hidden emphasis style
+	H = "8"
+	// S strikeout emphasis style
+	S = "9"
+)
+
+var (
+	black   = outer(Blk)
+	red     = outer(Rd)
+	green   = outer(Grn)
+	yellow  = outer(Yel)
+	blue    = outer(Blu)
+	magenta = outer(Mgn)
+	cyan    = outer(Cyn)
+	white   = outer(Wht)
+	grey    = outer(Gry)
+
+	blackBg   = outer(BlkBg)
+	redBg     = outer(RdBg)
+	greenBg   = outer(GrnBg)
+	yellowBg  = outer(YelBg)
+	blueBg    = outer(BluBg)
+	magentaBg = outer(MgnBg)
+	cyanBg    = outer(CynBg)
+	whiteBg   = outer(WhtBg)
+
+	reset     = outer(R)
+	bold      = outer(B)
+	dim       = outer(D)
+	italic    = outer(I)
+	underline = outer(U)
+	inverse   = outer(In)
+	hidden    = outer(H)
+	strikeout = outer(S)
+
+	global = New()
+)
+
+func outer(n string) inner {
+	return func(msg interface{}, styles []string, c *Color) string {
+		// TODO: Drop fmt to boost performance?
+		if c.disabled {
+			return fmt.Sprintf("%v", msg)
+		}
+
+		b := new(bytes.Buffer)
+		b.WriteString("\x1b[")
+		b.WriteString(n)
+		for _, s := range styles {
+			b.WriteString(";")
+			b.WriteString(s)
+		}
+		b.WriteString("m")
+		return fmt.Sprintf("%s%v\x1b[0m", b.String(), msg)
+	}
+}
+
+type (
+	Color struct {
+		output   io.Writer
+		disabled bool
+	}
+)
+
+// New creates a Color instance.
+func New() (c *Color) {
+	c = new(Color)
+	c.SetOutput(colorable.NewColorableStdout())
+	return
+}
+
+// Output returns the output.
+func (c *Color) Output() io.Writer {
+	return c.output
+}
+
+// SetOutput sets the output.
+func (c *Color) SetOutput(w io.Writer) {
+	c.output = w
+	if w, ok := w.(*os.File); !ok || !isatty.IsTerminal(w.Fd()) {
+		c.disabled = true
+	}
+}
+
+// Disable disables the colors and styles.
+func (c *Color) Disable() {
+	c.disabled = true
+}
+
+// Enable enables the colors and styles.
+func (c *Color) Enable() {
+	c.disabled = false
+}
+
+// Print is analogous to `fmt.Print` with termial detection.
+func (c *Color) Print(args ...interface{}) {
+	fmt.Fprint(c.output, args...)
+}
+
+// Println is analogous to `fmt.Println` with termial detection.
+func (c *Color) Println(args ...interface{}) {
+	fmt.Fprintln(c.output, args...)
+}
+
+// Printf is analogous to `fmt.Printf` with termial detection.
+func (c *Color) Printf(format string, args ...interface{}) {
+	fmt.Fprintf(c.output, format, args...)
+}
+
+func (c *Color) Black(msg interface{}, styles ...string) string {
+	return black(msg, styles, c)
+}
+
+func (c *Color) Red(msg interface{}, styles ...string) string {
+	return red(msg, styles, c)
+}
+
+func (c *Color) Green(msg interface{}, styles ...string) string {
+	return green(msg, styles, c)
+}
+
+func (c *Color) Yellow(msg interface{}, styles ...string) string {
+	return yellow(msg, styles, c)
+}
+
+func (c *Color) Blue(msg interface{}, styles ...string) string {
+	return blue(msg, styles, c)
+}
+
+func (c *Color) Magenta(msg interface{}, styles ...string) string {
+	return magenta(msg, styles, c)
+}
+
+func (c *Color) Cyan(msg interface{}, styles ...string) string {
+	return cyan(msg, styles, c)
+}
+
+func (c *Color) White(msg interface{}, styles ...string) string {
+	return white(msg, styles, c)
+}
+
+func (c *Color) Grey(msg interface{}, styles ...string) string {
+	return grey(msg, styles, c)
+}
+
+func (c *Color) BlackBg(msg interface{}, styles ...string) string {
+	return blackBg(msg, styles, c)
+}
+
+func (c *Color) RedBg(msg interface{}, styles ...string) string {
+	return redBg(msg, styles, c)
+}
+
+func (c *Color) GreenBg(msg interface{}, styles ...string) string {
+	return greenBg(msg, styles, c)
+}
+
+func (c *Color) YellowBg(msg interface{}, styles ...string) string {
+	return yellowBg(msg, styles, c)
+}
+
+func (c *Color) BlueBg(msg interface{}, styles ...string) string {
+	return blueBg(msg, styles, c)
+}
+
+func (c *Color) MagentaBg(msg interface{}, styles ...string) string {
+	return magentaBg(msg, styles, c)
+}
+
+func (c *Color) CyanBg(msg interface{}, styles ...string) string {
+	return cyanBg(msg, styles, c)
+}
+
+func (c *Color) WhiteBg(msg interface{}, styles ...string) string {
+	return whiteBg(msg, styles, c)
+}
+
+func (c *Color) Reset(msg interface{}, styles ...string) string {
+	return reset(msg, styles, c)
+}
+
+func (c *Color) Bold(msg interface{}, styles ...string) string {
+	return bold(msg, styles, c)
+}
+
+func (c *Color) Dim(msg interface{}, styles ...string) string {
+	return dim(msg, styles, c)
+}
+
+func (c *Color) Italic(msg interface{}, styles ...string) string {
+	return italic(msg, styles, c)
+}
+
+func (c *Color) Underline(msg interface{}, styles ...string) string {
+	return underline(msg, styles, c)
+}
+
+func (c *Color) Inverse(msg interface{}, styles ...string) string {
+	return inverse(msg, styles, c)
+}
+
+func (c *Color) Hidden(msg interface{}, styles ...string) string {
+	return hidden(msg, styles, c)
+}
+
+func (c *Color) Strikeout(msg interface{}, styles ...string) string {
+	return strikeout(msg, styles, c)
+}
+
+// Output returns the output.
+func Output() io.Writer {
+	return global.output
+}
+
+// SetOutput sets the output.
+func SetOutput(w io.Writer) {
+	global.SetOutput(w)
+}
+
+func Disable() {
+	global.Disable()
+}
+
+func Enable() {
+	global.Enable()
+}
+
+// Print is analogous to `fmt.Print` with termial detection.
+func Print(args ...interface{}) {
+	global.Print(args...)
+}
+
+// Println is analogous to `fmt.Println` with termial detection.
+func Println(args ...interface{}) {
+	global.Println(args...)
+}
+
+// Printf is analogous to `fmt.Printf` with termial detection.
+func Printf(format string, args ...interface{}) {
+	global.Printf(format, args...)
+}
+
+func Black(msg interface{}, styles ...string) string {
+	return global.Black(msg, styles...)
+}
+
+func Red(msg interface{}, styles ...string) string {
+	return global.Red(msg, styles...)
+}
+
+func Green(msg interface{}, styles ...string) string {
+	return global.Green(msg, styles...)
+}
+
+func Yellow(msg interface{}, styles ...string) string {
+	return global.Yellow(msg, styles...)
+}
+
+func Blue(msg interface{}, styles ...string) string {
+	return global.Blue(msg, styles...)
+}
+
+func Magenta(msg interface{}, styles ...string) string {
+	return global.Magenta(msg, styles...)
+}
+
+func Cyan(msg interface{}, styles ...string) string {
+	return global.Cyan(msg, styles...)
+}
+
+func White(msg interface{}, styles ...string) string {
+	return global.White(msg, styles...)
+}
+
+func Grey(msg interface{}, styles ...string) string {
+	return global.Grey(msg, styles...)
+}
+
+func BlackBg(msg interface{}, styles ...string) string {
+	return global.BlackBg(msg, styles...)
+}
+
+func RedBg(msg interface{}, styles ...string) string {
+	return global.RedBg(msg, styles...)
+}
+
+func GreenBg(msg interface{}, styles ...string) string {
+	return global.GreenBg(msg, styles...)
+}
+
+func YellowBg(msg interface{}, styles ...string) string {
+	return global.YellowBg(msg, styles...)
+}
+
+func BlueBg(msg interface{}, styles ...string) string {
+	return global.BlueBg(msg, styles...)
+}
+
+func MagentaBg(msg interface{}, styles ...string) string {
+	return global.MagentaBg(msg, styles...)
+}
+
+func CyanBg(msg interface{}, styles ...string) string {
+	return global.CyanBg(msg, styles...)
+}
+
+func WhiteBg(msg interface{}, styles ...string) string {
+	return global.WhiteBg(msg, styles...)
+}
+
+func Reset(msg interface{}, styles ...string) string {
+	return global.Reset(msg, styles...)
+}
+
+func Bold(msg interface{}, styles ...string) string {
+	return global.Bold(msg, styles...)
+}
+
+func Dim(msg interface{}, styles ...string) string {
+	return global.Dim(msg, styles...)
+}
+
+func Italic(msg interface{}, styles ...string) string {
+	return global.Italic(msg, styles...)
+}
+
+func Underline(msg interface{}, styles ...string) string {
+	return global.Underline(msg, styles...)
+}
+
+func Inverse(msg interface{}, styles ...string) string {
+	return global.Inverse(msg, styles...)
+}
+
+func Hidden(msg interface{}, styles ...string) string {
+	return global.Hidden(msg, styles...)
+}
+
+func Strikeout(msg interface{}, styles ...string) string {
+	return global.Strikeout(msg, styles...)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/gommon/log/color.go","mode":420,"size":154,"sha256":"f445226e1c9618eff775660724204080e2d89c97efcfc5d79368ff210d731410","index":0,"count":1,"encoding":"utf-8","payloadBytes":154}
+// +build !appengine
+
+package log
+
+import (
+	"io"
+
+	"github.com/mattn/go-colorable"
+)
+
+func output() io.Writer {
+	return colorable.NewColorableStdout()
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/gommon/log/log.go","mode":420,"size":7376,"sha256":"bfdc1ae2d00fc5601a74371d6d64d7ec1f750af151b9b9917420f62664b713f9","index":0,"count":1,"encoding":"utf-8","payloadBytes":7376}
+package log
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"runtime"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/mattn/go-isatty"
+	"github.com/valyala/fasttemplate"
+
+	"github.com/labstack/gommon/color"
+)
+
+type (
+	Logger struct {
+		prefix     string
+		level      uint32
+		skip       int
+		output     io.Writer
+		template   *fasttemplate.Template
+		levels     []string
+		color      *color.Color
+		bufferPool sync.Pool
+		mutex      sync.Mutex
+	}
+
+	Lvl uint8
+
+	JSON map[string]interface{}
+)
+
+const (
+	DEBUG Lvl = iota + 1
+	INFO
+	WARN
+	ERROR
+	OFF
+	panicLevel
+	fatalLevel
+)
+
+var (
+	global        = New("-")
+	defaultHeader = `{"time":"${time_rfc3339_nano}","level":"${level}","prefix":"${prefix}",` +
+		`"file":"${short_file}","line":"${line}"}`
+)
+
+func init() {
+	global.skip = 3
+}
+
+func New(prefix string) (l *Logger) {
+	l = &Logger{
+		level:    uint32(INFO),
+		skip:     2,
+		prefix:   prefix,
+		template: l.newTemplate(defaultHeader),
+		color:    color.New(),
+		bufferPool: sync.Pool{
+			New: func() interface{} {
+				return bytes.NewBuffer(make([]byte, 256))
+			},
+		},
+	}
+	l.initLevels()
+	l.SetOutput(output())
+	return
+}
+
+func (l *Logger) initLevels() {
+	l.levels = []string{
+		"-",
+		l.color.Blue("DEBUG"),
+		l.color.Green("INFO"),
+		l.color.Yellow("WARN"),
+		l.color.Red("ERROR"),
+		"",
+		l.color.Yellow("PANIC", color.U),
+		l.color.Red("FATAL", color.U),
+	}
+}
+
+func (l *Logger) newTemplate(format string) *fasttemplate.Template {
+	return fasttemplate.New(format, "${", "}")
+}
+
+func (l *Logger) DisableColor() {
+	l.color.Disable()
+	l.initLevels()
+}
+
+func (l *Logger) EnableColor() {
+	l.color.Enable()
+	l.initLevels()
+}
+
+func (l *Logger) Prefix() string {
+	return l.prefix
+}
+
+func (l *Logger) SetPrefix(p string) {
+	l.prefix = p
+}
+
+func (l *Logger) Level() Lvl {
+	return Lvl(atomic.LoadUint32(&l.level))
+}
+
+func (l *Logger) SetLevel(level Lvl) {
+	atomic.StoreUint32(&l.level, uint32(level))
+}
+
+func (l *Logger) Output() io.Writer {
+	return l.output
+}
+
+func (l *Logger) SetOutput(w io.Writer) {
+	l.output = w
+	if w, ok := w.(*os.File); !ok || !isatty.IsTerminal(w.Fd()) {
+		l.DisableColor()
+	}
+}
+
+func (l *Logger) Color() *color.Color {
+	return l.color
+}
+
+func (l *Logger) SetHeader(h string) {
+	l.template = l.newTemplate(h)
+}
+
+func (l *Logger) Print(i ...interface{}) {
+	l.log(0, "", i...)
+	// fmt.Fprintln(l.output, i...)
+}
+
+func (l *Logger) Printf(format string, args ...interface{}) {
+	l.log(0, format, args...)
+}
+
+func (l *Logger) Printj(j JSON) {
+	l.log(0, "json", j)
+}
+
+func (l *Logger) Debug(i ...interface{}) {
+	l.log(DEBUG, "", i...)
+}
+
+func (l *Logger) Debugf(format string, args ...interface{}) {
+	l.log(DEBUG, format, args...)
+}
+
+func (l *Logger) Debugj(j JSON) {
+	l.log(DEBUG, "json", j)
+}
+
+func (l *Logger) Info(i ...interface{}) {
+	l.log(INFO, "", i...)
+}
+
+func (l *Logger) Infof(format string, args ...interface{}) {
+	l.log(INFO, format, args...)
+}
+
+func (l *Logger) Infoj(j JSON) {
+	l.log(INFO, "json", j)
+}
+
+func (l *Logger) Warn(i ...interface{}) {
+	l.log(WARN, "", i...)
+}
+
+func (l *Logger) Warnf(format string, args ...interface{}) {
+	l.log(WARN, format, args...)
+}
+
+func (l *Logger) Warnj(j JSON) {
+	l.log(WARN, "json", j)
+}
+
+func (l *Logger) Error(i ...interface{}) {
+	l.log(ERROR, "", i...)
+}
+
+func (l *Logger) Errorf(format string, args ...interface{}) {
+	l.log(ERROR, format, args...)
+}
+
+func (l *Logger) Errorj(j JSON) {
+	l.log(ERROR, "json", j)
+}
+
+func (l *Logger) Fatal(i ...interface{}) {
+	l.log(fatalLevel, "", i...)
+	os.Exit(1)
+}
+
+func (l *Logger) Fatalf(format string, args ...interface{}) {
+	l.log(fatalLevel, format, args...)
+	os.Exit(1)
+}
+
+func (l *Logger) Fatalj(j JSON) {
+	l.log(fatalLevel, "json", j)
+	os.Exit(1)
+}
+
+func (l *Logger) Panic(i ...interface{}) {
+	l.log(panicLevel, "", i...)
+	panic(fmt.Sprint(i...))
+}
+
+func (l *Logger) Panicf(format string, args ...interface{}) {
+	l.log(panicLevel, format, args...)
+	panic(fmt.Sprintf(format, args...))
+}
+
+func (l *Logger) Panicj(j JSON) {
+	l.log(panicLevel, "json", j)
+	panic(j)
+}
+
+func DisableColor() {
+	global.DisableColor()
+}
+
+func EnableColor() {
+	global.EnableColor()
+}
+
+func Prefix() string {
+	return global.Prefix()
+}
+
+func SetPrefix(p string) {
+	global.SetPrefix(p)
+}
+
+func Level() Lvl {
+	return global.Level()
+}
+
+func SetLevel(level Lvl) {
+	global.SetLevel(level)
+}
+
+func Output() io.Writer {
+	return global.Output()
+}
+
+func SetOutput(w io.Writer) {
+	global.SetOutput(w)
+}
+
+func SetHeader(h string) {
+	global.SetHeader(h)
+}
+
+func Print(i ...interface{}) {
+	global.Print(i...)
+}
+
+func Printf(format string, args ...interface{}) {
+	global.Printf(format, args...)
+}
+
+func Printj(j JSON) {
+	global.Printj(j)
+}
+
+func Debug(i ...interface{}) {
+	global.Debug(i...)
+}
+
+func Debugf(format string, args ...interface{}) {
+	global.Debugf(format, args...)
+}
+
+func Debugj(j JSON) {
+	global.Debugj(j)
+}
+
+func Info(i ...interface{}) {
+	global.Info(i...)
+}
+
+func Infof(format string, args ...interface{}) {
+	global.Infof(format, args...)
+}
+
+func Infoj(j JSON) {
+	global.Infoj(j)
+}
+
+func Warn(i ...interface{}) {
+	global.Warn(i...)
+}
+
+func Warnf(format string, args ...interface{}) {
+	global.Warnf(format, args...)
+}
+
+func Warnj(j JSON) {
+	global.Warnj(j)
+}
+
+func Error(i ...interface{}) {
+	global.Error(i...)
+}
+
+func Errorf(format string, args ...interface{}) {
+	global.Errorf(format, args...)
+}
+
+func Errorj(j JSON) {
+	global.Errorj(j)
+}
+
+func Fatal(i ...interface{}) {
+	global.Fatal(i...)
+}
+
+func Fatalf(format string, args ...interface{}) {
+	global.Fatalf(format, args...)
+}
+
+func Fatalj(j JSON) {
+	global.Fatalj(j)
+}
+
+func Panic(i ...interface{}) {
+	global.Panic(i...)
+}
+
+func Panicf(format string, args ...interface{}) {
+	global.Panicf(format, args...)
+}
+
+func Panicj(j JSON) {
+	global.Panicj(j)
+}
+
+func (l *Logger) log(level Lvl, format string, args ...interface{}) {
+	if level >= l.Level() || level == 0 {
+		buf := l.bufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer l.bufferPool.Put(buf)
+		_, file, line, _ := runtime.Caller(l.skip)
+		message := ""
+
+		if format == "" {
+			message = fmt.Sprint(args...)
+		} else if format == "json" {
+			b, err := json.Marshal(args[0])
+			if err != nil {
+				panic(err)
+			}
+			message = string(b)
+		} else {
+			message = fmt.Sprintf(format, args...)
+		}
+
+		_, err := l.template.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
+			switch tag {
+			case "time_rfc3339":
+				return w.Write([]byte(time.Now().Format(time.RFC3339)))
+			case "time_rfc3339_nano":
+				return w.Write([]byte(time.Now().Format(time.RFC3339Nano)))
+			case "level":
+				return w.Write([]byte(l.levels[level]))
+			case "prefix":
+				return w.Write([]byte(l.prefix))
+			case "long_file":
+				return w.Write([]byte(file))
+			case "short_file":
+				return w.Write([]byte(path.Base(file)))
+			case "line":
+				return w.Write([]byte(strconv.Itoa(line)))
+			}
+			return 0, nil
+		})
+
+		if err == nil {
+			s := buf.String()
+			i := buf.Len() - 1
+			if i >= 0 && s[i] == '}' {
+				// JSON header
+				buf.Truncate(i)
+				buf.WriteByte(',')
+				if format == "json" {
+					buf.WriteString(message[1:])
+				} else {
+					buf.WriteString(`"message":`)
+					buf.WriteString(strconv.Quote(message))
+					buf.WriteString(`}`)
+				}
+			} else {
+				// Text header
+				if len(s) > 0 {
+					buf.WriteByte(' ')
+				}
+				buf.WriteString(message)
+			}
+			buf.WriteByte('\n')
+			l.mutex.Lock()
+			defer l.mutex.Unlock()
+			l.output.Write(buf.Bytes())
+		}
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/gommon/log/white.go","mode":420,"size":104,"sha256":"75cc18fc97985133aa22ac835967a00324537d13205192440c16ba0560154ffe","index":0,"count":1,"encoding":"utf-8","payloadBytes":104}
+// +build appengine
+
+package log
+
+import (
+	"io"
+	"os"
+)
+
+func output() io.Writer {
+	return os.Stdout
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/go-ansi-parser/LICENSE","mode":420,"size":1076,"sha256":"d0817a3112cb46c57b987f58db0d8c71ca99f26d448a351073e3d69b6702e541","index":0,"count":1,"encoding":"utf-8","payloadBytes":1076}
+MIT License
+
+Copyright (c) 2021-Present Lea Anthony
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/go-ansi-parser/ansi.go","mode":420,"size":14010,"sha256":"2461dc45a5fc2286a6ec241269e606c2aed9015de67813c144825a45eab30aef","index":0,"count":1,"encoding":"utf-8","payloadBytes":14010}
+package ansi
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/rivo/uniseg"
+)
+
+// TextStyle is a type representing the
+// ansi text styles
+type TextStyle int
+
+const (
+	// Bold Style
+	Bold TextStyle = 1 << 0
+	// Faint Style
+	Faint TextStyle = 1 << 1
+	// Italic Style
+	Italic TextStyle = 1 << 2
+	// Blinking Style
+	Blinking TextStyle = 1 << 3
+	// Inversed Style
+	Inversed TextStyle = 1 << 4
+	// Invisible Style
+	Invisible TextStyle = 1 << 5
+	// Underlined Style
+	Underlined TextStyle = 1 << 6
+	// Strikethrough Style
+	Strikethrough TextStyle = 1 << 7
+	// Bright Style
+	Bright TextStyle = 1 << 8
+)
+
+type ColourMode int
+
+const (
+	Default    ColourMode = 0
+	TwoFiveSix ColourMode = 1
+	TrueColour ColourMode = 2
+)
+
+var invalid = fmt.Errorf("invalid ansi string")
+var missingTerminator = fmt.Errorf("missing escape terminator 'm'")
+var invalidTrueColorSequence = fmt.Errorf("invalid TrueColor sequence")
+var invalid256ColSequence = fmt.Errorf("invalid 256 colour sequence")
+
+const (
+	// Default colors uses foreground color codes [30-37].
+	// See ColourMap and case for background colors.
+	defaultForegroundColor = "37"
+	defaultBackgroundColor = "30"
+)
+
+// StyledText represents a single formatted string
+type StyledText struct {
+	Label      string
+	FgCol      *Col
+	BgCol      *Col
+	Style      TextStyle
+	ColourMode ColourMode
+	// Offset is the offset into the input string where the StyledText begins
+	Offset int
+	// Len is the length in bytes of the substring of the input text that
+	// contains the styled text
+	Len int
+}
+
+func (s *StyledText) styleToParams() []string {
+	var params []string
+	if s.Bold() {
+		params = append(params, "1")
+	}
+	if s.Faint() {
+		params = append(params, "2")
+	}
+	if s.Italic() {
+		params = append(params, "3")
+	}
+	if s.Underlined() {
+		params = append(params, "4")
+	}
+	if s.Blinking() {
+		params = append(params, "5")
+	}
+	if s.Inversed() {
+		params = append(params, "7")
+	}
+	if s.Invisible() {
+		params = append(params, "8")
+	}
+	if s.Strikethrough() {
+		params = append(params, "9")
+	}
+	if s.FgCol != nil {
+		// Do we have an ID?
+		switch s.ColourMode {
+		case Default:
+			offset := 30
+			id := s.FgCol.Id
+			// Adjust when bold has been applied to the id
+			if (s.Bold() || s.Bright()) && id > 7 && id < 16 {
+				id -= 8
+			}
+			if s.Bright() {
+				offset = 90
+			}
+			params = append(params, fmt.Sprintf("%d", id+offset))
+		case TwoFiveSix:
+			params = append(params, []string{"38", "5", fmt.Sprintf("%d", s.FgCol.Id)}...)
+		case TrueColour:
+			r := fmt.Sprintf("%d", s.FgCol.Rgb.R)
+			g := fmt.Sprintf("%d", s.FgCol.Rgb.G)
+			b := fmt.Sprintf("%d", s.FgCol.Rgb.B)
+			params = append(params, []string{"38", "2", r, g, b}...)
+		}
+	}
+	if s.BgCol != nil {
+		// Do we have an ID?
+		switch s.ColourMode {
+		case Default:
+			id := s.BgCol.Id
+			offset := 40
+			if s.Bright() {
+				offset = 100
+			}
+			// Adjust when bold has been applied to the id
+			if (s.Bold() || s.Bright()) && id > 7 && id < 16 {
+				id -= 8
+			}
+			params = append(params, fmt.Sprintf("%d", id+offset))
+		case TwoFiveSix:
+			params = append(params, []string{"48", "5", fmt.Sprintf("%d", s.BgCol.Id)}...)
+		case TrueColour:
+			r := fmt.Sprintf("%d", s.BgCol.Rgb.R)
+			g := fmt.Sprintf("%d", s.BgCol.Rgb.G)
+			b := fmt.Sprintf("%d", s.BgCol.Rgb.B)
+			params = append(params, []string{"48", "2", r, g, b}...)
+		}
+	}
+	return params
+}
+
+func (s *StyledText) String() string {
+	params := strings.Join(s.styleToParams(), ";")
+	return "\033[0;" + params + "m" + s.Label + "\033[0m"
+}
+
+// Bold will return true if the text has a Bold style
+func (s *StyledText) Bold() bool {
+	return s.Style&Bold == Bold
+}
+
+// Faint will return true if the text has a Faint style
+func (s *StyledText) Faint() bool {
+	return s.Style&Faint == Faint
+}
+
+// Italic will return true if the text has an Italic style
+func (s *StyledText) Italic() bool {
+	return s.Style&Italic == Italic
+}
+
+// Blinking will return true if the text has a Blinking style
+func (s *StyledText) Blinking() bool {
+	return s.Style&Blinking == Blinking
+}
+
+// Inversed will return true if the text has an Inversed style
+func (s *StyledText) Inversed() bool {
+	return s.Style&Inversed == Inversed
+}
+
+// Invisible will return true if the text has an Invisible style
+func (s *StyledText) Invisible() bool {
+	return s.Style&Invisible == Invisible
+}
+
+// Underlined will return true if the text has an Underlined style
+func (s *StyledText) Underlined() bool {
+	return s.Style&Underlined == Underlined
+}
+
+// Strikethrough will return true if the text has a Strikethrough style
+func (s *StyledText) Strikethrough() bool {
+	return s.Style&Strikethrough == Strikethrough
+}
+
+// Bright will return true if the text has a Bright style
+func (s *StyledText) Bright() bool {
+	return s.Style&Bright == Bright
+}
+
+// ColourMap maps ansi identifiers to a colour
+var ColourMap = map[string]map[string]*Col{
+	"Regular": {
+		"30":  Cols[0],
+		"31":  Cols[1],
+		"32":  Cols[2],
+		"33":  Cols[3],
+		"34":  Cols[4],
+		"35":  Cols[5],
+		"36":  Cols[6],
+		"37":  Cols[7],
+		"90":  Cols[8],
+		"91":  Cols[9],
+		"92":  Cols[10],
+		"93":  Cols[11],
+		"94":  Cols[12],
+		"95":  Cols[13],
+		"96":  Cols[14],
+		"97":  Cols[15],
+		"100": Cols[8],
+		"101": Cols[9],
+		"102": Cols[10],
+		"103": Cols[11],
+		"104": Cols[12],
+		"105": Cols[13],
+		"106": Cols[14],
+		"107": Cols[15],
+	},
+	"Bold": {
+		"30":  Cols[8],
+		"31":  Cols[9],
+		"32":  Cols[10],
+		"33":  Cols[11],
+		"34":  Cols[12],
+		"35":  Cols[13],
+		"36":  Cols[14],
+		"37":  Cols[15],
+		"90":  Cols[8],
+		"91":  Cols[9],
+		"92":  Cols[10],
+		"93":  Cols[11],
+		"94":  Cols[12],
+		"95":  Cols[13],
+		"96":  Cols[14],
+		"97":  Cols[15],
+		"100": Cols[8],
+		"101": Cols[9],
+		"102": Cols[10],
+		"103": Cols[11],
+		"104": Cols[12],
+		"105": Cols[13],
+		"106": Cols[14],
+		"107": Cols[15],
+	},
+	"Faint": {
+		"30": Cols[0],
+		"31": Cols[1],
+		"32": Cols[2],
+		"33": Cols[3],
+		"34": Cols[4],
+		"35": Cols[5],
+		"36": Cols[6],
+		"37": Cols[7],
+	},
+}
+
+// Parse will convert an ansi encoded string and return
+// a slice of StyledText structs that represent the text.
+// If parsing is unsuccessful, an error is returned.
+func Parse(input string, options ...ParseOption) ([]*StyledText, error) {
+	var result []*StyledText
+	index := 0
+	offset := 0
+	escapeCodeLen := 0
+	var currentStyledText = &StyledText{}
+
+	if len(input) == 0 {
+		return []*StyledText{currentStyledText}, nil
+	}
+
+	for {
+		// Read all chars to next escape code
+		esc := strings.Index(input, "\033[")
+
+		// If no more esc chars, save what's left and return
+		if esc == -1 {
+			text := input[index:]
+			if len(text) > 0 {
+				currentStyledText.Label = text
+				currentStyledText.Offset = offset
+				currentStyledText.Len = len(text) + escapeCodeLen
+				result = append(result, currentStyledText)
+			}
+			return result, nil
+		}
+		label := input[:esc]
+		if len(label) > 0 {
+			currentStyledText.Label = label
+			currentStyledText.Offset = offset
+			currentStyledText.Len = len(label) + escapeCodeLen
+			offset += currentStyledText.Len
+			result = append(result, currentStyledText)
+			currentStyledText = &StyledText{
+				Label: "",
+				FgCol: currentStyledText.FgCol,
+				BgCol: currentStyledText.BgCol,
+				Style: currentStyledText.Style,
+			}
+			escapeCodeLen = 0
+		}
+		input = input[esc:]
+		// skip
+		input = input[2:]
+
+		// Read in params
+		endesc := strings.Index(input, "m")
+		if endesc == -1 {
+			return nil, missingTerminator
+		}
+		paramText := input[:endesc]
+		input = input[endesc+1:]
+		escapeCodeLen += 2 + endesc + 1
+		params := strings.Split(paramText, ";")
+		colourMap := ColourMap["Regular"]
+		skip := 0
+		for index, param := range params {
+			if skip > 0 {
+				skip--
+				continue
+			}
+			param = stripLeadingZeros(param)
+			switch param {
+			case "0", "":
+				colourMap = ColourMap["Regular"]
+				currentStyledText.Style = 0
+				currentStyledText.FgCol = nil
+				currentStyledText.BgCol = nil
+			case "1":
+				// Bold
+				colourMap = ColourMap["Bold"]
+				currentStyledText.Style |= Bold
+			case "2":
+				// Dim/Feint
+				colourMap = ColourMap["Faint"]
+				currentStyledText.Style |= Faint
+			case "3":
+				// Italic
+				currentStyledText.Style |= Italic
+			case "4":
+				// Underlined
+				currentStyledText.Style |= Underlined
+			case "5":
+				// Blinking
+				currentStyledText.Style |= Blinking
+			case "7":
+				// Inversed
+				currentStyledText.Style |= Inversed
+			case "8":
+				// Invisible
+				currentStyledText.Style |= Invisible
+			case "9":
+				// Strikethrough
+				currentStyledText.Style |= Strikethrough
+			case "30", "31", "32", "33", "34", "35", "36", "37":
+				currentStyledText.FgCol = colourMap[param]
+			case "90", "91", "92", "93", "94", "95", "96", "97":
+				currentStyledText.FgCol = colourMap[param]
+				currentStyledText.Style |= Bright
+			case "100", "101", "102", "103", "104", "105", "106", "107":
+				currentStyledText.BgCol = colourMap[param]
+				currentStyledText.Style |= Bright
+			case "40", "41", "42", "43", "44", "45", "46", "47":
+				bgcol := "3" + param[1:] // Equivalent of -10
+				currentStyledText.BgCol = colourMap[bgcol]
+			case "38", "48":
+				if len(params)-index < 3 {
+					return nil, invalid
+				}
+				// 256 colours
+				param1 := stripLeadingZeros(params[index+1])
+				if param1 == "5" {
+					skip = 2
+					colIndexText := stripLeadingZeros(params[index+2])
+					colIndex, err := strconv.Atoi(colIndexText)
+					if err != nil {
+						return nil, invalid256ColSequence
+					}
+					if colIndex < 0 || colIndex > 255 {
+						return nil, invalid256ColSequence
+					}
+					currentStyledText.ColourMode = TwoFiveSix
+					if param == "38" {
+						currentStyledText.FgCol = Cols[colIndex]
+						continue
+					}
+					currentStyledText.BgCol = Cols[colIndex]
+					continue
+				}
+				// we must have 4 params left
+				if len(params)-index < 5 {
+					return nil, invalidTrueColorSequence
+				}
+				if param1 != "2" {
+					return nil, invalidTrueColorSequence
+				}
+				var r, g, b uint8
+				ri, err := strconv.Atoi(params[index+2])
+				if err != nil {
+					return nil, invalidTrueColorSequence
+				}
+				gi, err := strconv.Atoi(params[index+3])
+				if err != nil {
+					return nil, invalidTrueColorSequence
+				}
+				bi, err := strconv.Atoi(params[index+4])
+				if err != nil {
+					return nil, invalidTrueColorSequence
+				}
+				if bi > 255 || gi > 255 || ri > 255 {
+					return nil, invalidTrueColorSequence
+				}
+				if bi < 0 || gi < 0 || ri < 0 {
+					return nil, invalidTrueColorSequence
+				}
+				r = uint8(ri)
+				g = uint8(gi)
+				b = uint8(bi)
+				skip = 4
+				colvalue := fmt.Sprintf("#%02x%02x%02x", r, g, b)
+				currentStyledText.ColourMode = TrueColour
+				if param == "38" {
+					currentStyledText.FgCol = &Col{Id: 256, Hex: colvalue, Rgb: Rgb{r, g, b}}
+					continue
+				}
+				currentStyledText.BgCol = &Col{Id: 256, Hex: colvalue, Rgb: Rgb{r, g, b}}
+			case "39":
+				// Lookup for default foreground color.
+				foregroundColor := colourMap[defaultForegroundColor]
+				for _, option := range options {
+					if option.ansiForegroundColor != "" {
+						foregroundColor = colourMap[option.ansiForegroundColor]
+						break
+					}
+				}
+
+				// Set selected foreground color.
+				currentStyledText.FgCol = foregroundColor
+			case "49":
+				// Lookup for default background color.
+				backgroundColor := colourMap[defaultBackgroundColor]
+				for _, option := range options {
+					if option.ansiBackgroundColor != "" {
+						backgroundColor = colourMap[option.ansiBackgroundColor]
+						break
+					}
+				}
+
+				// Set selected background color.
+				currentStyledText.BgCol = backgroundColor
+			default:
+				// Unexpected codes may be ignored.
+				unexpectedCodeIgnored := false
+				for _, option := range options {
+					if option.ignoreUnexpectedCode {
+						unexpectedCodeIgnored = true
+						break
+					}
+				}
+				if !unexpectedCodeIgnored {
+					return nil, invalid
+				}
+			}
+		}
+	}
+}
+
+func stripLeadingZeros(s string) string {
+	if len(s) < 2 {
+		return s
+	}
+	return strings.TrimLeft(s, "0")
+}
+
+// HasEscapeCodes tests that input has escape codes.
+func HasEscapeCodes(input string) bool {
+	return strings.IndexAny(input, "\033[") != -1
+}
+
+// String builds an ANSI string for specified StyledText slice.
+func String(input []*StyledText) string {
+	var result strings.Builder
+	for _, text := range input {
+		params := text.styleToParams()
+		if len(params) == 0 {
+			result.WriteString(text.Label)
+			continue
+		}
+		result.WriteString(text.String())
+	}
+	return result.String()
+}
+
+// Truncate truncates text to length but preserves control symbols in ANSI string.
+func Truncate(input string, maxChars int, options ...ParseOption) (string, error) {
+	parsed, err := Parse(input, options...)
+	if err != nil {
+		return "", err
+	}
+	charsLeft := maxChars
+	var result []*StyledText
+	for _, element := range parsed {
+		userPerceivedChars := uniseg.GraphemeClusterCount(element.Label)
+		if userPerceivedChars >= charsLeft {
+			var newLabel []rune
+			graphemes := uniseg.NewGraphemes(element.Label)
+			for graphemes.Next() {
+				newLabel = append(newLabel, graphemes.Runes()...)
+				charsLeft--
+				if charsLeft == 0 {
+					element.Label = string(newLabel)
+					result = append(result, element)
+					return String(result), nil
+				}
+			}
+		}
+		result = append(result, element)
+		charsLeft -= userPerceivedChars
+	}
+	return String(result), nil
+}
+
+// Cleanse removes ANSI control symbols from the string.
+func Cleanse(input string, options ...ParseOption) (string, error) {
+	if input == "" {
+		return "", nil
+	}
+	parsed, err := Parse(input, options...)
+	if err != nil {
+		return "", err
+	}
+	var result strings.Builder
+	for _, element := range parsed {
+		result.WriteString(element.Label)
+	}
+	return result.String(), nil
+}
+
+// Length calculates count of user-perceived characters in ANSI string.
+func Length(input string, options ...ParseOption) (int, error) {
+	if input == "" {
+		return 0, nil
+	}
+	parsed, err := Parse(input, options...)
+	if err != nil {
+		return -1, err
+	}
+	var result int
+	for _, element := range parsed {
+		userPerceivedChars := uniseg.GraphemeClusterCount(element.Label)
+		result += userPerceivedChars
+	}
+	return result, nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/go-ansi-parser/cols.go","mode":420,"size":30110,"sha256":"ff58aeef8281b7bf56ee24801458d8bb574dba523d12f65c23ada6d8003fb8a0","index":0,"count":1,"encoding":"utf-8","payloadBytes":30110}
+package ansi
+
+// Rgb represents an RGB colour value
+// with 8bits per channel
+type Rgb struct {
+	R uint8 `json:"r"`
+	G uint8 `json:"g"`
+	B uint8 `json:"b"`
+}
+
+// Hsl represents the HSL value of the colour
+type Hsl struct {
+	H float64 `json:"h"`
+	S float64 `json:"s"`
+	L float64 `json:"l"`
+}
+
+// Col represents a colour value.
+// The Id is the ANSI colour ID.
+type Col struct {
+	Id   int    `json:"id"`
+	Hex  string `json:"hex"`
+	Rgb  Rgb    `json:"rgb"`
+	Hsl  Hsl    `json:"hsl"`
+	Name string `json:"name"`
+}
+
+// Cols represents the default colour definitions
+// used by the library. This may be overridden.
+var Cols = []*Col{
+	{
+		Id:   0,
+		Hex:  "#000000",
+		Rgb:  Rgb{0, 0, 0},
+		Hsl:  Hsl{0, 0, 0},
+		Name: "Black",
+	},
+	{
+		Id:   1,
+		Hex:  "#800000",
+		Rgb:  Rgb{128, 0, 0},
+		Hsl:  Hsl{0, 100, 25},
+		Name: "Maroon",
+	},
+	{
+		Id:   2,
+		Hex:  "#008000",
+		Rgb:  Rgb{0, 128, 0},
+		Hsl:  Hsl{120, 100, 25},
+		Name: "Green",
+	},
+	{
+		Id:   3,
+		Hex:  "#808000",
+		Rgb:  Rgb{128, 128, 0},
+		Hsl:  Hsl{60, 100, 25},
+		Name: "Olive",
+	},
+	{
+		Id:   4,
+		Hex:  "#000080",
+		Rgb:  Rgb{0, 0, 128},
+		Hsl:  Hsl{240, 100, 25},
+		Name: "Navy",
+	},
+	{
+		Id:   5,
+		Hex:  "#800080",
+		Rgb:  Rgb{128, 0, 128},
+		Hsl:  Hsl{300, 100, 25},
+		Name: "Purple",
+	},
+	{
+		Id:   6,
+		Hex:  "#008080",
+		Rgb:  Rgb{0, 128, 128},
+		Hsl:  Hsl{180, 100, 25},
+		Name: "Teal",
+	},
+	{
+		Id:   7,
+		Hex:  "#c0c0c0",
+		Rgb:  Rgb{192, 192, 192},
+		Hsl:  Hsl{0, 0, 75},
+		Name: "Silver",
+	},
+	{
+		Id:   8,
+		Hex:  "#808080",
+		Rgb:  Rgb{128, 128, 128},
+		Hsl:  Hsl{0, 0, 50},
+		Name: "Grey",
+	},
+	{
+		Id:   9,
+		Hex:  "#ff0000",
+		Rgb:  Rgb{255, 0, 0},
+		Hsl:  Hsl{0, 100, 50},
+		Name: "Red",
+	},
+	{
+		Id:   10,
+		Hex:  "#00ff00",
+		Rgb:  Rgb{0, 255, 0},
+		Hsl:  Hsl{120, 100, 50},
+		Name: "Lime",
+	},
+	{
+		Id:   11,
+		Hex:  "#ffff00",
+		Rgb:  Rgb{255, 255, 0},
+		Hsl:  Hsl{60, 100, 50},
+		Name: "Yellow",
+	},
+	{
+		Id:   12,
+		Hex:  "#0000ff",
+		Rgb:  Rgb{0, 0, 255},
+		Hsl:  Hsl{240, 100, 50},
+		Name: "Blue",
+	},
+	{
+		Id:   13,
+		Hex:  "#ff00ff",
+		Rgb:  Rgb{255, 0, 255},
+		Hsl:  Hsl{300, 100, 50},
+		Name: "Fuchsia",
+	},
+	{
+		Id:   14,
+		Hex:  "#00ffff",
+		Rgb:  Rgb{0, 255, 255},
+		Hsl:  Hsl{180, 100, 50},
+		Name: "Aqua",
+	},
+	{
+		Id:   15,
+		Hex:  "#ffffff",
+		Rgb:  Rgb{255, 255, 255},
+		Hsl:  Hsl{0, 0, 100},
+		Name: "White",
+	},
+	{
+		Id:   16,
+		Hex:  "#000000",
+		Rgb:  Rgb{0, 0, 0},
+		Hsl:  Hsl{0, 0, 0},
+		Name: "Grey0",
+	},
+	{
+		Id:   17,
+		Hex:  "#00005f",
+		Rgb:  Rgb{0, 0, 95},
+		Hsl:  Hsl{240, 100, 18},
+		Name: "NavyBlue",
+	},
+	{
+		Id:   18,
+		Hex:  "#000087",
+		Rgb:  Rgb{0, 0, 135},
+		Hsl:  Hsl{240, 100, 26},
+		Name: "DarkBlue",
+	},
+	{
+		Id:   19,
+		Hex:  "#0000af",
+		Rgb:  Rgb{0, 0, 175},
+		Hsl:  Hsl{240, 100, 34},
+		Name: "Blue3",
+	},
+	{
+		Id:   20,
+		Hex:  "#0000d7",
+		Rgb:  Rgb{0, 0, 215},
+		Hsl:  Hsl{240, 100, 42},
+		Name: "Blue3",
+	},
+	{
+		Id:   21,
+		Hex:  "#0000ff",
+		Rgb:  Rgb{0, 0, 255},
+		Hsl:  Hsl{240, 100, 50},
+		Name: "Blue1",
+	},
+	{
+		Id:   22,
+		Hex:  "#005f00",
+		Rgb:  Rgb{0, 95, 0},
+		Hsl:  Hsl{120, 100, 18},
+		Name: "DarkGreen",
+	},
+	{
+		Id:   23,
+		Hex:  "#005f5f",
+		Rgb:  Rgb{0, 95, 95},
+		Hsl:  Hsl{180, 100, 18},
+		Name: "DeepSkyBlue4",
+	},
+	{
+		Id:   24,
+		Hex:  "#005f87",
+		Rgb:  Rgb{0, 95, 135},
+		Hsl:  Hsl{197.777777777778, 100, 26},
+		Name: "DeepSkyBlue4",
+	},
+	{
+		Id:   25,
+		Hex:  "#005faf",
+		Rgb:  Rgb{0, 95, 175},
+		Hsl:  Hsl{207.428571428571, 100, 34},
+		Name: "DeepSkyBlue4",
+	},
+	{
+		Id:   26,
+		Hex:  "#005fd7",
+		Rgb:  Rgb{0, 95, 215},
+		Hsl:  Hsl{213.488372093023, 100, 42},
+		Name: "DodgerBlue3",
+	},
+	{
+		Id:   27,
+		Hex:  "#005fff",
+		Rgb:  Rgb{0, 95, 255},
+		Hsl:  Hsl{217.647058823529, 100, 50},
+		Name: "DodgerBlue2",
+	},
+	{
+		Id:   28,
+		Hex:  "#008700",
+		Rgb:  Rgb{0, 135, 0},
+		Hsl:  Hsl{120, 100, 26},
+		Name: "Green4",
+	},
+	{
+		Id:   29,
+		Hex:  "#00875f",
+		Rgb:  Rgb{0, 135, 95},
+		Hsl:  Hsl{162.222222222222, 100, 26},
+		Name: "SpringGreen4",
+	},
+	{
+		Id:   30,
+		Hex:  "#008787",
+		Rgb:  Rgb{0, 135, 135},
+		Hsl:  Hsl{180, 100, 26},
+		Name: "Turquoise4",
+	},
+	{
+		Id:   31,
+		Hex:  "#0087af",
+		Rgb:  Rgb{0, 135, 175},
+		Hsl:  Hsl{193.714285714286, 100, 34},
+		Name: "DeepSkyBlue3",
+	},
+	{
+		Id:   32,
+		Hex:  "#0087d7",
+		Rgb:  Rgb{0, 135, 215},
+		Hsl:  Hsl{202.325581395349, 100, 42},
+		Name: "DeepSkyBlue3",
+	},
+	{
+		Id:   33,
+		Hex:  "#0087ff",
+		Rgb:  Rgb{0, 135, 255},
+		Hsl:  Hsl{208.235294117647, 100, 50},
+		Name: "DodgerBlue1",
+	},
+	{
+		Id:   34,
+		Hex:  "#00af00",
+		Rgb:  Rgb{0, 175, 0},
+		Hsl:  Hsl{120, 100, 34},
+		Name: "Green3",
+	},
+	{
+		Id:   35,
+		Hex:  "#00af5f",
+		Rgb:  Rgb{0, 175, 95},
+		Hsl:  Hsl{152.571428571429, 100, 34},
+		Name: "SpringGreen3",
+	},
+	{
+		Id:   36,
+		Hex:  "#00af87",
+		Rgb:  Rgb{0, 175, 135},
+		Hsl:  Hsl{166.285714285714, 100, 34},
+		Name: "DarkCyan",
+	},
+	{
+		Id:   37,
+		Hex:  "#00afaf",
+		Rgb:  Rgb{0, 175, 175},
+		Hsl:  Hsl{180, 100, 34},
+		Name: "LightSeaGreen",
+	},
+	{
+		Id:   38,
+		Hex:  "#00afd7",
+		Rgb:  Rgb{0, 175, 215},
+		Hsl:  Hsl{191.162790697674, 100, 42},
+		Name: "DeepSkyBlue2",
+	},
+	{
+		Id:   39,
+		Hex:  "#00afff",
+		Rgb:  Rgb{0, 175, 255},
+		Hsl:  Hsl{198.823529411765, 100, 50},
+		Name: "DeepSkyBlue1",
+	},
+	{
+		Id:   40,
+		Hex:  "#00d700",
+		Rgb:  Rgb{0, 215, 0},
+		Hsl:  Hsl{120, 100, 42},
+		Name: "Green3",
+	},
+	{
+		Id:   41,
+		Hex:  "#00d75f",
+		Rgb:  Rgb{0, 215, 95},
+		Hsl:  Hsl{146.511627906977, 100, 42},
+		Name: "SpringGreen3",
+	},
+	{
+		Id:   42,
+		Hex:  "#00d787",
+		Rgb:  Rgb{0, 215, 135},
+		Hsl:  Hsl{157.674418604651, 100, 42},
+		Name: "SpringGreen2",
+	},
+	{
+		Id:   43,
+		Hex:  "#00d7af",
+		Rgb:  Rgb{0, 215, 175},
+		Hsl:  Hsl{168.837209302326, 100, 42},
+		Name: "Cyan3",
+	},
+	{
+		Id:   44,
+		Hex:  "#00d7d7",
+		Rgb:  Rgb{0, 215, 215},
+		Hsl:  Hsl{180, 100, 42},
+		Name: "DarkTurquoise",
+	},
+	{
+		Id:   45,
+		Hex:  "#00d7ff",
+		Rgb:  Rgb{0, 215, 255},
+		Hsl:  Hsl{189.411764705882, 100, 50},
+		Name: "Turquoise2",
+	},
+	{
+		Id:   46,
+		Hex:  "#00ff00",
+		Rgb:  Rgb{0, 255, 0},
+		Hsl:  Hsl{120, 100, 50},
+		Name: "Green1",
+	},
+	{
+		Id:   47,
+		Hex:  "#00ff5f",
+		Rgb:  Rgb{0, 255, 95},
+		Hsl:  Hsl{142.352941176471, 100, 50},
+		Name: "SpringGreen2",
+	},
+	{
+		Id:   48,
+		Hex:  "#00ff87",
+		Rgb:  Rgb{0, 255, 135},
+		Hsl:  Hsl{151.764705882353, 100, 50},
+		Name: "SpringGreen1",
+	},
+	{
+		Id:   49,
+		Hex:  "#00ffaf",
+		Rgb:  Rgb{0, 255, 175},
+		Hsl:  Hsl{161.176470588235, 100, 50},
+		Name: "MediumSpringGreen",
+	},
+	{
+		Id:   50,
+		Hex:  "#00ffd7",
+		Rgb:  Rgb{0, 255, 215},
+		Hsl:  Hsl{170.588235294118, 100, 50},
+		Name: "Cyan2",
+	},
+	{
+		Id:   51,
+		Hex:  "#00ffff",
+		Rgb:  Rgb{0, 255, 255},
+		Hsl:  Hsl{180, 100, 50},
+		Name: "Cyan1",
+	},
+	{
+		Id:   52,
+		Hex:  "#5f0000",
+		Rgb:  Rgb{95, 0, 0},
+		Hsl:  Hsl{0, 100, 18},
+		Name: "DarkRed",
+	},
+	{
+		Id:   53,
+		Hex:  "#5f005f",
+		Rgb:  Rgb{95, 0, 95},
+		Hsl:  Hsl{300, 100, 18},
+		Name: "DeepPink4",
+	},
+	{
+		Id:   54,
+		Hex:  "#5f0087",
+		Rgb:  Rgb{95, 0, 135},
+		Hsl:  Hsl{282.222222222222, 100, 26},
+		Name: "Purple4",
+	},
+	{
+		Id:   55,
+		Hex:  "#5f00af",
+		Rgb:  Rgb{95, 0, 175},
+		Hsl:  Hsl{272.571428571429, 100, 34},
+		Name: "Purple4",
+	},
+	{
+		Id:   56,
+		Hex:  "#5f00d7",
+		Rgb:  Rgb{95, 0, 215},
+		Hsl:  Hsl{266.511627906977, 100, 42},
+		Name: "Purple3",
+	},
+	{
+		Id:   57,
+		Hex:  "#5f00ff",
+		Rgb:  Rgb{95, 0, 255},
+		Hsl:  Hsl{262.352941176471, 100, 50},
+		Name: "BlueViolet",
+	},
+	{
+		Id:   58,
+		Hex:  "#5f5f00",
+		Rgb:  Rgb{95, 95, 0},
+		Hsl:  Hsl{60, 100, 18},
+		Name: "Orange4",
+	},
+	{
+		Id:   59,
+		Hex:  "#5f5f5f",
+		Rgb:  Rgb{95, 95, 95},
+		Hsl:  Hsl{0, 0, 37},
+		Name: "Grey37",
+	},
+	{
+		Id:   60,
+		Hex:  "#5f5f87",
+		Rgb:  Rgb{95, 95, 135},
+		Hsl:  Hsl{240, 17, 45},
+		Name: "MediumPurple4",
+	},
+	{
+		Id:   61,
+		Hex:  "#5f5faf",
+		Rgb:  Rgb{95, 95, 175},
+		Hsl:  Hsl{240, 33, 52},
+		Name: "SlateBlue3",
+	},
+	{
+		Id:   62,
+		Hex:  "#5f5fd7",
+		Rgb:  Rgb{95, 95, 215},
+		Hsl:  Hsl{240, 60, 60},
+		Name: "SlateBlue3",
+	},
+	{
+		Id:   63,
+		Hex:  "#5f5fff",
+		Rgb:  Rgb{95, 95, 255},
+		Hsl:  Hsl{240, 100, 68},
+		Name: "RoyalBlue1",
+	},
+	{
+		Id:   64,
+		Hex:  "#5f8700",
+		Rgb:  Rgb{95, 135, 0},
+		Hsl:  Hsl{77.7777777777778, 100, 26},
+		Name: "Chartreuse4",
+	},
+	{
+		Id:   65,
+		Hex:  "#5f875f",
+		Rgb:  Rgb{95, 135, 95},
+		Hsl:  Hsl{120, 17, 45},
+		Name: "DarkSeaGreen4",
+	},
+	{
+		Id:   66,
+		Hex:  "#5f8787",
+		Rgb:  Rgb{95, 135, 135},
+		Hsl:  Hsl{180, 17, 45},
+		Name: "PaleTurquoise4",
+	},
+	{
+		Id:   67,
+		Hex:  "#5f87af",
+		Rgb:  Rgb{95, 135, 175},
+		Hsl:  Hsl{210, 33, 52},
+		Name: "SteelBlue",
+	},
+	{
+		Id:   68,
+		Hex:  "#5f87d7",
+		Rgb:  Rgb{95, 135, 215},
+		Hsl:  Hsl{220, 60, 60},
+		Name: "SteelBlue3",
+	},
+	{
+		Id:   69,
+		Hex:  "#5f87ff",
+		Rgb:  Rgb{95, 135, 255},
+		Hsl:  Hsl{225, 100, 68},
+		Name: "CornflowerBlue",
+	},
+	{
+		Id:   70,
+		Hex:  "#5faf00",
+		Rgb:  Rgb{95, 175, 0},
+		Hsl:  Hsl{87.4285714285714, 100, 34},
+		Name: "Chartreuse3",
+	},
+	{
+		Id:   71,
+		Hex:  "#5faf5f",
+		Rgb:  Rgb{95, 175, 95},
+		Hsl:  Hsl{120, 33, 52},
+		Name: "DarkSeaGreen4",
+	},
+	{
+		Id:   72,
+		Hex:  "#5faf87",
+		Rgb:  Rgb{95, 175, 135},
+		Hsl:  Hsl{150, 33, 52},
+		Name: "CadetBlue",
+	},
+	{
+		Id:   73,
+		Hex:  "#5fafaf",
+		Rgb:  Rgb{95, 175, 175},
+		Hsl:  Hsl{180, 33, 52},
+		Name: "CadetBlue",
+	},
+	{
+		Id:   74,
+		Hex:  "#5fafd7",
+		Rgb:  Rgb{95, 175, 215},
+		Hsl:  Hsl{200, 60, 60},
+		Name: "SkyBlue3",
+	},
+	{
+		Id:   75,
+		Hex:  "#5fafff",
+		Rgb:  Rgb{95, 175, 255},
+		Hsl:  Hsl{210, 100, 68},
+		Name: "SteelBlue1",
+	},
+	{
+		Id:   76,
+		Hex:  "#5fd700",
+		Rgb:  Rgb{95, 215, 0},
+		Hsl:  Hsl{93.4883720930233, 100, 42},
+		Name: "Chartreuse3",
+	},
+	{
+		Id:   77,
+		Hex:  "#5fd75f",
+		Rgb:  Rgb{95, 215, 95},
+		Hsl:  Hsl{120, 60, 60},
+		Name: "PaleGreen3",
+	},
+	{
+		Id:   78,
+		Hex:  "#5fd787",
+		Rgb:  Rgb{95, 215, 135},
+		Hsl:  Hsl{140, 60, 60},
+		Name: "SeaGreen3",
+	},
+	{
+		Id:   79,
+		Hex:  "#5fd7af",
+		Rgb:  Rgb{95, 215, 175},
+		Hsl:  Hsl{160, 60, 60},
+		Name: "Aquamarine3",
+	},
+	{
+		Id:   80,
+		Hex:  "#5fd7d7",
+		Rgb:  Rgb{95, 215, 215},
+		Hsl:  Hsl{180, 60, 60},
+		Name: "MediumTurquoise",
+	},
+	{
+		Id:   81,
+		Hex:  "#5fd7ff",
+		Rgb:  Rgb{95, 215, 255},
+		Hsl:  Hsl{195, 100, 68},
+		Name: "SteelBlue1",
+	},
+	{
+		Id:   82,
+		Hex:  "#5fff00",
+		Rgb:  Rgb{95, 255, 0},
+		Hsl:  Hsl{97.6470588235294, 100, 50},
+		Name: "Chartreuse2",
+	},
+	{
+		Id:   83,
+		Hex:  "#5fff5f",
+		Rgb:  Rgb{95, 255, 95},
+		Hsl:  Hsl{120, 100, 68},
+		Name: "SeaGreen2",
+	},
+	{
+		Id:   84,
+		Hex:  "#5fff87",
+		Rgb:  Rgb{95, 255, 135},
+		Hsl:  Hsl{135, 100, 68},
+		Name: "SeaGreen1",
+	},
+	{
+		Id:   85,
+		Hex:  "#5fffaf",
+		Rgb:  Rgb{95, 255, 175},
+		Hsl:  Hsl{150, 100, 68},
+		Name: "SeaGreen1",
+	},
+	{
+		Id:   86,
+		Hex:  "#5fffd7",
+		Rgb:  Rgb{95, 255, 215},
+		Hsl:  Hsl{165, 100, 68},
+		Name: "Aquamarine1",
+	},
+	{
+		Id:   87,
+		Hex:  "#5fffff",
+		Rgb:  Rgb{95, 255, 255},
+		Hsl:  Hsl{180, 100, 68},
+		Name: "DarkSlateGray2",
+	},
+	{
+		Id:   88,
+		Hex:  "#870000",
+		Rgb:  Rgb{135, 0, 0},
+		Hsl:  Hsl{0, 100, 26},
+		Name: "DarkRed",
+	},
+	{
+		Id:   89,
+		Hex:  "#87005f",
+		Rgb:  Rgb{135, 0, 95},
+		Hsl:  Hsl{317.777777777778, 100, 26},
+		Name: "DeepPink4",
+	},
+	{
+		Id:   90,
+		Hex:  "#870087",
+		Rgb:  Rgb{135, 0, 135},
+		Hsl:  Hsl{300, 100, 26},
+		Name: "DarkMagenta",
+	},
+	{
+		Id:   91,
+		Hex:  "#8700af",
+		Rgb:  Rgb{135, 0, 175},
+		Hsl:  Hsl{286.285714285714, 100, 34},
+		Name: "DarkMagenta",
+	},
+	{
+		Id:   92,
+		Hex:  "#8700d7",
+		Rgb:  Rgb{135, 0, 215},
+		Hsl:  Hsl{277.674418604651, 100, 42},
+		Name: "DarkViolet",
+	},
+	{
+		Id:   93,
+		Hex:  "#8700ff",
+		Rgb:  Rgb{135, 0, 255},
+		Hsl:  Hsl{271.764705882353, 100, 50},
+		Name: "Purple",
+	},
+	{
+		Id:   94,
+		Hex:  "#875f00",
+		Rgb:  Rgb{135, 95, 0},
+		Hsl:  Hsl{42.2222222222222, 100, 26},
+		Name: "Orange4",
+	},
+	{
+		Id:   95,
+		Hex:  "#875f5f",
+		Rgb:  Rgb{135, 95, 95},
+		Hsl:  Hsl{0, 17, 45},
+		Name: "LightPink4",
+	},
+	{
+		Id:   96,
+		Hex:  "#875f87",
+		Rgb:  Rgb{135, 95, 135},
+		Hsl:  Hsl{300, 17, 45},
+		Name: "Plum4",
+	},
+	{
+		Id:   97,
+		Hex:  "#875faf",
+		Rgb:  Rgb{135, 95, 175},
+		Hsl:  Hsl{270, 33, 52},
+		Name: "MediumPurple3",
+	},
+	{
+		Id:   98,
+		Hex:  "#875fd7",
+		Rgb:  Rgb{135, 95, 215},
+		Hsl:  Hsl{260, 60, 60},
+		Name: "MediumPurple3",
+	},
+	{
+		Id:   99,
+		Hex:  "#875fff",
+		Rgb:  Rgb{135, 95, 255},
+		Hsl:  Hsl{255, 100, 68},
+		Name: "SlateBlue1",
+	},
+	{
+		Id:   100,
+		Hex:  "#878700",
+		Rgb:  Rgb{135, 135, 0},
+		Hsl:  Hsl{60, 100, 26},
+		Name: "Yellow4",
+	},
+	{
+		Id:   101,
+		Hex:  "#87875f",
+		Rgb:  Rgb{135, 135, 95},
+		Hsl:  Hsl{60, 17, 45},
+		Name: "Wheat4",
+	},
+	{
+		Id:   102,
+		Hex:  "#878787",
+		Rgb:  Rgb{135, 135, 135},
+		Hsl:  Hsl{0, 0, 52},
+		Name: "Grey53",
+	},
+	{
+		Id:   103,
+		Hex:  "#8787af",
+		Rgb:  Rgb{135, 135, 175},
+		Hsl:  Hsl{240, 20, 60},
+		Name: "LightSlateGrey",
+	},
+	{
+		Id:   104,
+		Hex:  "#8787d7",
+		Rgb:  Rgb{135, 135, 215},
+		Hsl:  Hsl{240, 50, 68},
+		Name: "MediumPurple",
+	},
+	{
+		Id:   105,
+		Hex:  "#8787ff",
+		Rgb:  Rgb{135, 135, 255},
+		Hsl:  Hsl{240, 100, 76},
+		Name: "LightSlateBlue",
+	},
+	{
+		Id:   106,
+		Hex:  "#87af00",
+		Rgb:  Rgb{135, 175, 0},
+		Hsl:  Hsl{73.7142857142857, 100, 34},
+		Name: "Yellow4",
+	},
+	{
+		Id:   107,
+		Hex:  "#87af5f",
+		Rgb:  Rgb{135, 175, 95},
+		Hsl:  Hsl{90, 33, 52},
+		Name: "DarkOliveGreen3",
+	},
+	{
+		Id:   108,
+		Hex:  "#87af87",
+		Rgb:  Rgb{135, 175, 135},
+		Hsl:  Hsl{120, 20, 60},
+		Name: "DarkSeaGreen",
+	},
+	{
+		Id:   109,
+		Hex:  "#87afaf",
+		Rgb:  Rgb{135, 175, 175},
+		Hsl:  Hsl{180, 20, 60},
+		Name: "LightSkyBlue3",
+	},
+	{
+		Id:   110,
+		Hex:  "#87afd7",
+		Rgb:  Rgb{135, 175, 215},
+		Hsl:  Hsl{210, 50, 68},
+		Name: "LightSkyBlue3",
+	},
+	{
+		Id:   111,
+		Hex:  "#87afff",
+		Rgb:  Rgb{135, 175, 255},
+		Hsl:  Hsl{220, 100, 76},
+		Name: "SkyBlue2",
+	},
+	{
+		Id:   112,
+		Hex:  "#87d700",
+		Rgb:  Rgb{135, 215, 0},
+		Hsl:  Hsl{82.3255813953488, 100, 42},
+		Name: "Chartreuse2",
+	},
+	{
+		Id:   113,
+		Hex:  "#87d75f",
+		Rgb:  Rgb{135, 215, 95},
+		Hsl:  Hsl{100, 60, 60},
+		Name: "DarkOliveGreen3",
+	},
+	{
+		Id:   114,
+		Hex:  "#87d787",
+		Rgb:  Rgb{135, 215, 135},
+		Hsl:  Hsl{120, 50, 68},
+		Name: "PaleGreen3",
+	},
+	{
+		Id:   115,
+		Hex:  "#87d7af",
+		Rgb:  Rgb{135, 215, 175},
+		Hsl:  Hsl{150, 50, 68},
+		Name: "DarkSeaGreen3",
+	},
+	{
+		Id:   116,
+		Hex:  "#87d7d7",
+		Rgb:  Rgb{135, 215, 215},
+		Hsl:  Hsl{180, 50, 68},
+		Name: "DarkSlateGray3",
+	},
+	{
+		Id:   117,
+		Hex:  "#87d7ff",
+		Rgb:  Rgb{135, 215, 255},
+		Hsl:  Hsl{200, 100, 76},
+		Name: "SkyBlue1",
+	},
+	{
+		Id:   118,
+		Hex:  "#87ff00",
+		Rgb:  Rgb{135, 255, 0},
+		Hsl:  Hsl{88.2352941176471, 100, 50},
+		Name: "Chartreuse1",
+	},
+	{
+		Id:   119,
+		Hex:  "#87ff5f",
+		Rgb:  Rgb{135, 255, 95},
+		Hsl:  Hsl{105, 100, 68},
+		Name: "LightGreen",
+	},
+	{
+		Id:   120,
+		Hex:  "#87ff87",
+		Rgb:  Rgb{135, 255, 135},
+		Hsl:  Hsl{120, 100, 76},
+		Name: "LightGreen",
+	},
+	{
+		Id:   121,
+		Hex:  "#87ffaf",
+		Rgb:  Rgb{135, 255, 175},
+		Hsl:  Hsl{140, 100, 76},
+		Name: "PaleGreen1",
+	},
+	{
+		Id:   122,
+		Hex:  "#87ffd7",
+		Rgb:  Rgb{135, 255, 215},
+		Hsl:  Hsl{160, 100, 76},
+		Name: "Aquamarine1",
+	},
+	{
+		Id:   123,
+		Hex:  "#87ffff",
+		Rgb:  Rgb{135, 255, 255},
+		Hsl:  Hsl{180, 100, 76},
+		Name: "DarkSlateGray1",
+	},
+	{
+		Id:   124,
+		Hex:  "#af0000",
+		Rgb:  Rgb{175, 0, 0},
+		Hsl:  Hsl{0, 100, 34},
+		Name: "Red3",
+	},
+	{
+		Id:   125,
+		Hex:  "#af005f",
+		Rgb:  Rgb{175, 0, 95},
+		Hsl:  Hsl{327.428571428571, 100, 34},
+		Name: "DeepPink4",
+	},
+	{
+		Id:   126,
+		Hex:  "#af0087",
+		Rgb:  Rgb{175, 0, 135},
+		Hsl:  Hsl{313.714285714286, 100, 34},
+		Name: "MediumVioletRed",
+	},
+	{
+		Id:   127,
+		Hex:  "#af00af",
+		Rgb:  Rgb{175, 0, 175},
+		Hsl:  Hsl{300, 100, 34},
+		Name: "Magenta3",
+	},
+	{
+		Id:   128,
+		Hex:  "#af00d7",
+		Rgb:  Rgb{175, 0, 215},
+		Hsl:  Hsl{288.837209302326, 100, 42},
+		Name: "DarkViolet",
+	},
+	{
+		Id:   129,
+		Hex:  "#af00ff",
+		Rgb:  Rgb{175, 0, 255},
+		Hsl:  Hsl{281.176470588235, 100, 50},
+		Name: "Purple",
+	},
+	{
+		Id:   130,
+		Hex:  "#af5f00",
+		Rgb:  Rgb{175, 95, 0},
+		Hsl:  Hsl{32.5714285714286, 100, 34},
+		Name: "DarkOrange3",
+	},
+	{
+		Id:   131,
+		Hex:  "#af5f5f",
+		Rgb:  Rgb{175, 95, 95},
+		Hsl:  Hsl{0, 33, 52},
+		Name: "IndianRed",
+	},
+	{
+		Id:   132,
+		Hex:  "#af5f87",
+		Rgb:  Rgb{175, 95, 135},
+		Hsl:  Hsl{330, 33, 52},
+		Name: "HotPink3",
+	},
+	{
+		Id:   133,
+		Hex:  "#af5faf",
+		Rgb:  Rgb{175, 95, 175},
+		Hsl:  Hsl{300, 33, 52},
+		Name: "MediumOrchid3",
+	},
+	{
+		Id:   134,
+		Hex:  "#af5fd7",
+		Rgb:  Rgb{175, 95, 215},
+		Hsl:  Hsl{280, 60, 60},
+		Name: "MediumOrchid",
+	},
+	{
+		Id:   135,
+		Hex:  "#af5fff",
+		Rgb:  Rgb{175, 95, 255},
+		Hsl:  Hsl{270, 100, 68},
+		Name: "MediumPurple2",
+	},
+	{
+		Id:   136,
+		Hex:  "#af8700",
+		Rgb:  Rgb{175, 135, 0},
+		Hsl:  Hsl{46.2857142857143, 100, 34},
+		Name: "DarkGoldenrod",
+	},
+	{
+		Id:   137,
+		Hex:  "#af875f",
+		Rgb:  Rgb{175, 135, 95},
+		Hsl:  Hsl{30, 33, 52},
+		Name: "LightSalmon3",
+	},
+	{
+		Id:   138,
+		Hex:  "#af8787",
+		Rgb:  Rgb{175, 135, 135},
+		Hsl:  Hsl{0, 20, 60},
+		Name: "RosyBrown",
+	},
+	{
+		Id:   139,
+		Hex:  "#af87af",
+		Rgb:  Rgb{175, 135, 175},
+		Hsl:  Hsl{300, 20, 60},
+		Name: "Grey63",
+	},
+	{
+		Id:   140,
+		Hex:  "#af87d7",
+		Rgb:  Rgb{175, 135, 215},
+		Hsl:  Hsl{270, 50, 68},
+		Name: "MediumPurple2",
+	},
+	{
+		Id:   141,
+		Hex:  "#af87ff",
+		Rgb:  Rgb{175, 135, 255},
+		Hsl:  Hsl{260, 100, 76},
+		Name: "MediumPurple1",
+	},
+	{
+		Id:   142,
+		Hex:  "#afaf00",
+		Rgb:  Rgb{175, 175, 0},
+		Hsl:  Hsl{60, 100, 34},
+		Name: "Gold3",
+	},
+	{
+		Id:   143,
+		Hex:  "#afaf5f",
+		Rgb:  Rgb{175, 175, 95},
+		Hsl:  Hsl{60, 33, 52},
+		Name: "DarkKhaki",
+	},
+	{
+		Id:   144,
+		Hex:  "#afaf87",
+		Rgb:  Rgb{175, 175, 135},
+		Hsl:  Hsl{60, 20, 60},
+		Name: "NavajoWhite3",
+	},
+	{
+		Id:   145,
+		Hex:  "#afafaf",
+		Rgb:  Rgb{175, 175, 175},
+		Hsl:  Hsl{0, 0, 68},
+		Name: "Grey69",
+	},
+	{
+		Id:   146,
+		Hex:  "#afafd7",
+		Rgb:  Rgb{175, 175, 215},
+		Hsl:  Hsl{240, 33, 76},
+		Name: "LightSteelBlue3",
+	},
+	{
+		Id:   147,
+		Hex:  "#afafff",
+		Rgb:  Rgb{175, 175, 255},
+		Hsl:  Hsl{240, 100, 84},
+		Name: "LightSteelBlue",
+	},
+	{
+		Id:   148,
+		Hex:  "#afd700",
+		Rgb:  Rgb{175, 215, 0},
+		Hsl:  Hsl{71.1627906976744, 100, 42},
+		Name: "Yellow3",
+	},
+	{
+		Id:   149,
+		Hex:  "#afd75f",
+		Rgb:  Rgb{175, 215, 95},
+		Hsl:  Hsl{80, 60, 60},
+		Name: "DarkOliveGreen3",
+	},
+	{
+		Id:   150,
+		Hex:  "#afd787",
+		Rgb:  Rgb{175, 215, 135},
+		Hsl:  Hsl{90, 50, 68},
+		Name: "DarkSeaGreen3",
+	},
+	{
+		Id:   151,
+		Hex:  "#afd7af",
+		Rgb:  Rgb{175, 215, 175},
+		Hsl:  Hsl{120, 33, 76},
+		Name: "DarkSeaGreen2",
+	},
+	{
+		Id:   152,
+		Hex:  "#afd7d7",
+		Rgb:  Rgb{175, 215, 215},
+		Hsl:  Hsl{180, 33, 76},
+		Name: "LightCyan3",
+	},
+	{
+		Id:   153,
+		Hex:  "#afd7ff",
+		Rgb:  Rgb{175, 215, 255},
+		Hsl:  Hsl{210, 100, 84},
+		Name: "LightSkyBlue1",
+	},
+	{
+		Id:   154,
+		Hex:  "#afff00",
+		Rgb:  Rgb{175, 255, 0},
+		Hsl:  Hsl{78.8235294117647, 100, 50},
+		Name: "GreenYellow",
+	},
+	{
+		Id:   155,
+		Hex:  "#afff5f",
+		Rgb:  Rgb{175, 255, 95},
+		Hsl:  Hsl{90, 100, 68},
+		Name: "DarkOliveGreen2",
+	},
+	{
+		Id:   156,
+		Hex:  "#afff87",
+		Rgb:  Rgb{175, 255, 135},
+		Hsl:  Hsl{100, 100, 76},
+		Name: "PaleGreen1",
+	},
+	{
+		Id:   157,
+		Hex:  "#afffaf",
+		Rgb:  Rgb{175, 255, 175},
+		Hsl:  Hsl{120, 100, 84},
+		Name: "DarkSeaGreen2",
+	},
+	{
+		Id:   158,
+		Hex:  "#afffd7",
+		Rgb:  Rgb{175, 255, 215},
+		Hsl:  Hsl{150, 100, 84},
+		Name: "DarkSeaGreen1",
+	},
+	{
+		Id:   159,
+		Hex:  "#afffff",
+		Rgb:  Rgb{175, 255, 255},
+		Hsl:  Hsl{180, 100, 84},
+		Name: "PaleTurquoise1",
+	},
+	{
+		Id:   160,
+		Hex:  "#d70000",
+		Rgb:  Rgb{215, 0, 0},
+		Hsl:  Hsl{0, 100, 42},
+		Name: "Red3",
+	},
+	{
+		Id:   161,
+		Hex:  "#d7005f",
+		Rgb:  Rgb{215, 0, 95},
+		Hsl:  Hsl{333.488372093023, 100, 42},
+		Name: "DeepPink3",
+	},
+	{
+		Id:   162,
+		Hex:  "#d70087",
+		Rgb:  Rgb{215, 0, 135},
+		Hsl:  Hsl{322.325581395349, 100, 42},
+		Name: "DeepPink3",
+	},
+	{
+		Id:   163,
+		Hex:  "#d700af",
+		Rgb:  Rgb{215, 0, 175},
+		Hsl:  Hsl{311.162790697674, 100, 42},
+		Name: "Magenta3",
+	},
+	{
+		Id:   164,
+		Hex:  "#d700d7",
+		Rgb:  Rgb{215, 0, 215},
+		Hsl:  Hsl{300, 100, 42},
+		Name: "Magenta3",
+	},
+	{
+		Id:   165,
+		Hex:  "#d700ff",
+		Rgb:  Rgb{215, 0, 255},
+		Hsl:  Hsl{290.588235294118, 100, 50},
+		Name: "Magenta2",
+	},
+	{
+		Id:   166,
+		Hex:  "#d75f00",
+		Rgb:  Rgb{215, 95, 0},
+		Hsl:  Hsl{26.5116279069767, 100, 42},
+		Name: "DarkOrange3",
+	},
+	{
+		Id:   167,
+		Hex:  "#d75f5f",
+		Rgb:  Rgb{215, 95, 95},
+		Hsl:  Hsl{0, 60, 60},
+		Name: "IndianRed",
+	},
+	{
+		Id:   168,
+		Hex:  "#d75f87",
+		Rgb:  Rgb{215, 95, 135},
+		Hsl:  Hsl{340, 60, 60},
+		Name: "HotPink3",
+	},
+	{
+		Id:   169,
+		Hex:  "#d75faf",
+		Rgb:  Rgb{215, 95, 175},
+		Hsl:  Hsl{320, 60, 60},
+		Name: "HotPink2",
+	},
+	{
+		Id:   170,
+		Hex:  "#d75fd7",
+		Rgb:  Rgb{215, 95, 215},
+		Hsl:  Hsl{300, 60, 60},
+		Name: "Orchid",
+	},
+	{
+		Id:   171,
+		Hex:  "#d75fff",
+		Rgb:  Rgb{215, 95, 255},
+		Hsl:  Hsl{285, 100, 68},
+		Name: "MediumOrchid1",
+	},
+	{
+		Id:   172,
+		Hex:  "#d78700",
+		Rgb:  Rgb{215, 135, 0},
+		Hsl:  Hsl{37.6744186046512, 100, 42},
+		Name: "Orange3",
+	},
+	{
+		Id:   173,
+		Hex:  "#d7875f",
+		Rgb:  Rgb{215, 135, 95},
+		Hsl:  Hsl{20, 60, 60},
+		Name: "LightSalmon3",
+	},
+	{
+		Id:   174,
+		Hex:  "#d78787",
+		Rgb:  Rgb{215, 135, 135},
+		Hsl:  Hsl{0, 50, 68},
+		Name: "LightPink3",
+	},
+	{
+		Id:   175,
+		Hex:  "#d787af",
+		Rgb:  Rgb{215, 135, 175},
+		Hsl:  Hsl{330, 50, 68},
+		Name: "Pink3",
+	},
+	{
+		Id:   176,
+		Hex:  "#d787d7",
+		Rgb:  Rgb{215, 135, 215},
+		Hsl:  Hsl{300, 50, 68},
+		Name: "Plum3",
+	},
+	{
+		Id:   177,
+		Hex:  "#d787ff",
+		Rgb:  Rgb{215, 135, 255},
+		Hsl:  Hsl{280, 100, 76},
+		Name: "Violet",
+	},
+	{
+		Id:   178,
+		Hex:  "#d7af00",
+		Rgb:  Rgb{215, 175, 0},
+		Hsl:  Hsl{48.8372093023256, 100, 42},
+		Name: "Gold3",
+	},
+	{
+		Id:   179,
+		Hex:  "#d7af5f",
+		Rgb:  Rgb{215, 175, 95},
+		Hsl:  Hsl{40, 60, 60},
+		Name: "LightGoldenrod3",
+	},
+	{
+		Id:   180,
+		Hex:  "#d7af87",
+		Rgb:  Rgb{215, 175, 135},
+		Hsl:  Hsl{30, 50, 68},
+		Name: "Tan",
+	},
+	{
+		Id:   181,
+		Hex:  "#d7afaf",
+		Rgb:  Rgb{215, 175, 175},
+		Hsl:  Hsl{0, 33, 76},
+		Name: "MistyRose3",
+	},
+	{
+		Id:   182,
+		Hex:  "#d7afd7",
+		Rgb:  Rgb{215, 175, 215},
+		Hsl:  Hsl{300, 33, 76},
+		Name: "Thistle3",
+	},
+	{
+		Id:   183,
+		Hex:  "#d7afff",
+		Rgb:  Rgb{215, 175, 255},
+		Hsl:  Hsl{270, 100, 84},
+		Name: "Plum2",
+	},
+	{
+		Id:   184,
+		Hex:  "#d7d700",
+		Rgb:  Rgb{215, 215, 0},
+		Hsl:  Hsl{60, 100, 42},
+		Name: "Yellow3",
+	},
+	{
+		Id:   185,
+		Hex:  "#d7d75f",
+		Rgb:  Rgb{215, 215, 95},
+		Hsl:  Hsl{60, 60, 60},
+		Name: "Khaki3",
+	},
+	{
+		Id:   186,
+		Hex:  "#d7d787",
+		Rgb:  Rgb{215, 215, 135},
+		Hsl:  Hsl{60, 50, 68},
+		Name: "LightGoldenrod2",
+	},
+	{
+		Id:   187,
+		Hex:  "#d7d7af",
+		Rgb:  Rgb{215, 215, 175},
+		Hsl:  Hsl{60, 33, 76},
+		Name: "LightYellow3",
+	},
+	{
+		Id:   188,
+		Hex:  "#d7d7d7",
+		Rgb:  Rgb{215, 215, 215},
+		Hsl:  Hsl{0, 0, 84},
+		Name: "Grey84",
+	},
+	{
+		Id:   189,
+		Hex:  "#d7d7ff",
+		Rgb:  Rgb{215, 215, 255},
+		Hsl:  Hsl{240, 100, 92},
+		Name: "LightSteelBlue1",
+	},
+	{
+		Id:   190,
+		Hex:  "#d7ff00",
+		Rgb:  Rgb{215, 255, 0},
+		Hsl:  Hsl{69.4117647058823, 100, 50},
+		Name: "Yellow2",
+	},
+	{
+		Id:   191,
+		Hex:  "#d7ff5f",
+		Rgb:  Rgb{215, 255, 95},
+		Hsl:  Hsl{75, 100, 68},
+		Name: "DarkOliveGreen1",
+	},
+	{
+		Id:   192,
+		Hex:  "#d7ff87",
+		Rgb:  Rgb{215, 255, 135},
+		Hsl:  Hsl{80, 100, 76},
+		Name: "DarkOliveGreen1",
+	},
+	{
+		Id:   193,
+		Hex:  "#d7ffaf",
+		Rgb:  Rgb{215, 255, 175},
+		Hsl:  Hsl{90, 100, 84},
+		Name: "DarkSeaGreen1",
+	},
+	{
+		Id:   194,
+		Hex:  "#d7ffd7",
+		Rgb:  Rgb{215, 255, 215},
+		Hsl:  Hsl{120, 100, 92},
+		Name: "Honeydew2",
+	},
+	{
+		Id:   195,
+		Hex:  "#d7ffff",
+		Rgb:  Rgb{215, 255, 255},
+		Hsl:  Hsl{180, 100, 92},
+		Name: "LightCyan1",
+	},
+	{
+		Id:   196,
+		Hex:  "#ff0000",
+		Rgb:  Rgb{255, 0, 0},
+		Hsl:  Hsl{0, 100, 50},
+		Name: "Red1",
+	},
+	{
+		Id:   197,
+		Hex:  "#ff005f",
+		Rgb:  Rgb{255, 0, 95},
+		Hsl:  Hsl{337.647058823529, 100, 50},
+		Name: "DeepPink2",
+	},
+	{
+		Id:   198,
+		Hex:  "#ff0087",
+		Rgb:  Rgb{255, 0, 135},
+		Hsl:  Hsl{328.235294117647, 100, 50},
+		Name: "DeepPink1",
+	},
+	{
+		Id:   199,
+		Hex:  "#ff00af",
+		Rgb:  Rgb{255, 0, 175},
+		Hsl:  Hsl{318.823529411765, 100, 50},
+		Name: "DeepPink1",
+	},
+	{
+		Id:   200,
+		Hex:  "#ff00d7",
+		Rgb:  Rgb{255, 0, 215},
+		Hsl:  Hsl{309.411764705882, 100, 50},
+		Name: "Magenta2",
+	},
+	{
+		Id:   201,
+		Hex:  "#ff00ff",
+		Rgb:  Rgb{255, 0, 255},
+		Hsl:  Hsl{300, 100, 50},
+		Name: "Magenta1",
+	},
+	{
+		Id:   202,
+		Hex:  "#ff5f00",
+		Rgb:  Rgb{255, 95, 0},
+		Hsl:  Hsl{22.3529411764706, 100, 50},
+		Name: "OrangeRed1",
+	},
+	{
+		Id:   203,
+		Hex:  "#ff5f5f",
+		Rgb:  Rgb{255, 95, 95},
+		Hsl:  Hsl{0, 100, 68},
+		Name: "IndianRed1",
+	},
+	{
+		Id:   204,
+		Hex:  "#ff5f87",
+		Rgb:  Rgb{255, 95, 135},
+		Hsl:  Hsl{345, 100, 68},
+		Name: "IndianRed1",
+	},
+	{
+		Id:   205,
+		Hex:  "#ff5faf",
+		Rgb:  Rgb{255, 95, 175},
+		Hsl:  Hsl{330, 100, 68},
+		Name: "HotPink",
+	},
+	{
+		Id:   206,
+		Hex:  "#ff5fd7",
+		Rgb:  Rgb{255, 95, 215},
+		Hsl:  Hsl{315, 100, 68},
+		Name: "HotPink",
+	},
+	{
+		Id:   207,
+		Hex:  "#ff5fff",
+		Rgb:  Rgb{255, 95, 255},
+		Hsl:  Hsl{300, 100, 68},
+		Name: "MediumOrchid1",
+	},
+	{
+		Id:   208,
+		Hex:  "#ff8700",
+		Rgb:  Rgb{255, 135, 0},
+		Hsl:  Hsl{31.7647058823529, 100, 50},
+		Name: "DarkOrange",
+	},
+	{
+		Id:   209,
+		Hex:  "#ff875f",
+		Rgb:  Rgb{255, 135, 95},
+		Hsl:  Hsl{15, 100, 68},
+		Name: "Salmon1",
+	},
+	{
+		Id:   210,
+		Hex:  "#ff8787",
+		Rgb:  Rgb{255, 135, 135},
+		Hsl:  Hsl{0, 100, 76},
+		Name: "LightCoral",
+	},
+	{
+		Id:   211,
+		Hex:  "#ff87af",
+		Rgb:  Rgb{255, 135, 175},
+		Hsl:  Hsl{340, 100, 76},
+		Name: "PaleVioletRed1",
+	},
+	{
+		Id:   212,
+		Hex:  "#ff87d7",
+		Rgb:  Rgb{255, 135, 215},
+		Hsl:  Hsl{320, 100, 76},
+		Name: "Orchid2",
+	},
+	{
+		Id:   213,
+		Hex:  "#ff87ff",
+		Rgb:  Rgb{255, 135, 255},
+		Hsl:  Hsl{300, 100, 76},
+		Name: "Orchid1",
+	},
+	{
+		Id:   214,
+		Hex:  "#ffaf00",
+		Rgb:  Rgb{255, 175, 0},
+		Hsl:  Hsl{41.1764705882353, 100, 50},
+		Name: "Orange1",
+	},
+	{
+		Id:   215,
+		Hex:  "#ffaf5f",
+		Rgb:  Rgb{255, 175, 95},
+		Hsl:  Hsl{30, 100, 68},
+		Name: "SandyBrown",
+	},
+	{
+		Id:   216,
+		Hex:  "#ffaf87",
+		Rgb:  Rgb{255, 175, 135},
+		Hsl:  Hsl{20, 100, 76},
+		Name: "LightSalmon1",
+	},
+	{
+		Id:   217,
+		Hex:  "#ffafaf",
+		Rgb:  Rgb{255, 175, 175},
+		Hsl:  Hsl{0, 100, 84},
+		Name: "LightPink1",
+	},
+	{
+		Id:   218,
+		Hex:  "#ffafd7",
+		Rgb:  Rgb{255, 175, 215},
+		Hsl:  Hsl{330, 100, 84},
+		Name: "Pink1",
+	},
+	{
+		Id:   219,
+		Hex:  "#ffafff",
+		Rgb:  Rgb{255, 175, 255},
+		Hsl:  Hsl{300, 100, 84},
+		Name: "Plum1",
+	},
+	{
+		Id:   220,
+		Hex:  "#ffd700",
+		Rgb:  Rgb{255, 215, 0},
+		Hsl:  Hsl{50.5882352941176, 100, 50},
+		Name: "Gold1",
+	},
+	{
+		Id:   221,
+		Hex:  "#ffd75f",
+		Rgb:  Rgb{255, 215, 95},
+		Hsl:  Hsl{45, 100, 68},
+		Name: "LightGoldenrod2",
+	},
+	{
+		Id:   222,
+		Hex:  "#ffd787",
+		Rgb:  Rgb{255, 215, 135},
+		Hsl:  Hsl{40, 100, 76},
+		Name: "LightGoldenrod2",
+	},
+	{
+		Id:   223,
+		Hex:  "#ffd7af",
+		Rgb:  Rgb{255, 215, 175},
+		Hsl:  Hsl{30, 100, 84},
+		Name: "NavajoWhite1",
+	},
+	{
+		Id:   224,
+		Hex:  "#ffd7d7",
+		Rgb:  Rgb{255, 215, 215},
+		Hsl:  Hsl{0, 100, 92},
+		Name: "MistyRose1",
+	},
+	{
+		Id:   225,
+		Hex:  "#ffd7ff",
+		Rgb:  Rgb{255, 215, 255},
+		Hsl:  Hsl{300, 100, 92},
+		Name: "Thistle1",
+	},
+	{
+		Id:   226,
+		Hex:  "#ffff00",
+		Rgb:  Rgb{255, 255, 0},
+		Hsl:  Hsl{60, 100, 50},
+		Name: "Yellow1",
+	},
+	{
+		Id:   227,
+		Hex:  "#ffff5f",
+		Rgb:  Rgb{255, 255, 95},
+		Hsl:  Hsl{60, 100, 68},
+		Name: "LightGoldenrod1",
+	},
+	{
+		Id:   228,
+		Hex:  "#ffff87",
+		Rgb:  Rgb{255, 255, 135},
+		Hsl:  Hsl{60, 100, 76},
+		Name: "Khaki1",
+	},
+	{
+		Id:   229,
+		Hex:  "#ffffaf",
+		Rgb:  Rgb{255, 255, 175},
+		Hsl:  Hsl{60, 100, 84},
+		Name: "Wheat1",
+	},
+	{
+		Id:   230,
+		Hex:  "#ffffd7",
+		Rgb:  Rgb{255, 255, 215},
+		Hsl:  Hsl{60, 100, 92},
+		Name: "Cornsilk1",
+	},
+	{
+		Id:   231,
+		Hex:  "#ffffff",
+		Rgb:  Rgb{255, 255, 255},
+		Hsl:  Hsl{0, 0, 100},
+		Name: "Grey100",
+	},
+	{
+		Id:   232,
+		Hex:  "#080808",
+		Rgb:  Rgb{8, 8, 8},
+		Hsl:  Hsl{0, 0, 3},
+		Name: "Grey3",
+	},
+	{
+		Id:   233,
+		Hex:  "#121212",
+		Rgb:  Rgb{18, 18, 18},
+		Hsl:  Hsl{0, 0, 7},
+		Name: "Grey7",
+	},
+	{
+		Id:   234,
+		Hex:  "#1c1c1c",
+		Rgb:  Rgb{28, 28, 28},
+		Hsl:  Hsl{0, 0, 10},
+		Name: "Grey11",
+	},
+	{
+		Id:   235,
+		Hex:  "#262626",
+		Rgb:  Rgb{38, 38, 38},
+		Hsl:  Hsl{0, 0, 14},
+		Name: "Grey15",
+	},
+	{
+		Id:   236,
+		Hex:  "#303030",
+		Rgb:  Rgb{48, 48, 48},
+		Hsl:  Hsl{0, 0, 18},
+		Name: "Grey19",
+	},
+	{
+		Id:   237,
+		Hex:  "#3a3a3a",
+		Rgb:  Rgb{58, 58, 58},
+		Hsl:  Hsl{0, 0, 22},
+		Name: "Grey23",
+	},
+	{
+		Id:   238,
+		Hex:  "#444444",
+		Rgb:  Rgb{68, 68, 68},
+		Hsl:  Hsl{0, 0, 26},
+		Name: "Grey27",
+	},
+	{
+		Id:   239,
+		Hex:  "#4e4e4e",
+		Rgb:  Rgb{78, 78, 78},
+		Hsl:  Hsl{0, 0, 30},
+		Name: "Grey30",
+	},
+	{
+		Id:   240,
+		Hex:  "#585858",
+		Rgb:  Rgb{88, 88, 88},
+		Hsl:  Hsl{0, 0, 34},
+		Name: "Grey35",
+	},
+	{
+		Id:   241,
+		Hex:  "#626262",
+		Rgb:  Rgb{98, 98, 98},
+		Hsl:  Hsl{0, 0, 37},
+		Name: "Grey39",
+	},
+	{
+		Id:   242,
+		Hex:  "#6c6c6c",
+		Rgb:  Rgb{108, 108, 108},
+		Hsl:  Hsl{0, 0, 40},
+		Name: "Grey42",
+	},
+	{
+		Id:   243,
+		Hex:  "#767676",
+		Rgb:  Rgb{118, 118, 118},
+		Hsl:  Hsl{0, 0, 46},
+		Name: "Grey46",
+	},
+	{
+		Id:   244,
+		Hex:  "#808080",
+		Rgb:  Rgb{128, 128, 128},
+		Hsl:  Hsl{0, 0, 50},
+		Name: "Grey50",
+	},
+	{
+		Id:   245,
+		Hex:  "#8a8a8a",
+		Rgb:  Rgb{138, 138, 138},
+		Hsl:  Hsl{0, 0, 54},
+		Name: "Grey54",
+	},
+	{
+		Id:   246,
+		Hex:  "#949494",
+		Rgb:  Rgb{148, 148, 148},
+		Hsl:  Hsl{0, 0, 58},
+		Name: "Grey58",
+	},
+	{
+		Id:   247,
+		Hex:  "#9e9e9e",
+		Rgb:  Rgb{158, 158, 158},
+		Hsl:  Hsl{0, 0, 61},
+		Name: "Grey62",
+	},
+	{
+		Id:   248,
+		Hex:  "#a8a8a8",
+		Rgb:  Rgb{168, 168, 168},
+		Hsl:  Hsl{0, 0, 65},
+		Name: "Grey66",
+	},
+	{
+		Id:   249,
+		Hex:  "#b2b2b2",
+		Rgb:  Rgb{178, 178, 178},
+		Hsl:  Hsl{0, 0, 69},
+		Name: "Grey70",
+	},
+	{
+		Id:   250,
+		Hex:  "#bcbcbc",
+		Rgb:  Rgb{188, 188, 188},
+		Hsl:  Hsl{0, 0, 73},
+		Name: "Grey74",
+	},
+	{
+		Id:   251,
+		Hex:  "#c6c6c6",
+		Rgb:  Rgb{198, 198, 198},
+		Hsl:  Hsl{0, 0, 77},
+		Name: "Grey78",
+	},
+	{
+		Id:   252,
+		Hex:  "#d0d0d0",
+		Rgb:  Rgb{208, 208, 208},
+		Hsl:  Hsl{0, 0, 81},
+		Name: "Grey82",
+	},
+	{
+		Id:   253,
+		Hex:  "#dadada",
+		Rgb:  Rgb{218, 218, 218},
+		Hsl:  Hsl{0, 0, 85},
+		Name: "Grey85",
+	},
+	{
+		Id:   254,
+		Hex:  "#e4e4e4",
+		Rgb:  Rgb{228, 228, 228},
+		Hsl:  Hsl{0, 0, 89},
+		Name: "Grey89",
+	},
+	{
+		Id:   255,
+		Hex:  "#eeeeee",
+		Rgb:  Rgb{238, 238, 238},
+		Hsl:  Hsl{0, 0, 93},
+		Name: "Grey93",
+	},
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/go-ansi-parser/logo.png","mode":420,"size":10362,"sha256":"87a36c82f2898cd5ab2bbc76096dadf422933f6f7b77f76a269526243f945d1b","index":0,"count":1,"encoding":"base64","payloadBytes":13816}
+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
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/go-ansi-parser/options.go","mode":420,"size":845,"sha256":"1e7ed890b78e3a4fa87b6c41fd50be1a7331065de846bfa7c25e98a977bbe238","index":0,"count":1,"encoding":"utf-8","payloadBytes":845}
+package ansi
+
+// ParseOption specifies parse option.
+type ParseOption struct {
+	ignoreUnexpectedCode bool
+	ansiForegroundColor  string
+	ansiBackgroundColor  string
+}
+
+// WithIgnoreInvalidCodes disables returning an error on invalid ANSI code.
+func WithIgnoreInvalidCodes() ParseOption {
+	return ParseOption{ignoreUnexpectedCode: true}
+}
+
+// WithDefaultForegroundColor specifies default foreground code (ANSI 39).
+// See ColourMap variable and foreground color codes 30-37.
+func WithDefaultForegroundColor(ansiColor string) ParseOption {
+	return ParseOption{ansiForegroundColor: ansiColor}
+}
+
+// WithDefaultBackgroundColor specifies default foreground code (ANSI 49).
+// See ColourMap variable and foreground color codes 30-37.
+func WithDefaultBackgroundColor(ansiColor string) ParseOption {
+	return ParseOption{ansiBackgroundColor: ansiColor}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/gosod/.gitignore","mode":420,"size":272,"sha256":"750e5fd3dc47744ff1c098703e872469c972d8b9b5ab56449793592eb47de1ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":272}
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+generated
+examples/ignore/ignore
+examples/basic/basic
+examples/filters/filters
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/gosod/LICENSE","mode":420,"size":1068,"sha256":"6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
+MIT License
+
+Copyright (c) 2019 Lea Anthony
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/leaanthony/gosod/gosod.go","mode":420,"size":232,"sha256":"f9fc78ccf72763047b815f0f00aa3be3c3c4dee1c8bf2ba683edae44cb87c1e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":232}
+package gosod
+
+import (
+	"github.com/leaanthony/gosod/internal/templatedir"
+	"io/fs"
+)
+
+// New creates a new TemplateDir structure for the given filesystem
+func New(fs fs.FS) *templatedir.TemplateDir {
+	return templatedir.New(fs)
+}
+
+@@END
 @@PORTABLE {"path":"vendor/github.com/leaanthony/gosod/internal/templatedir/templatedir.go","mode":420,"size":6017,"sha256":"2faaab0bb516666df02b206b3cf1ea1f89e8cd4886bf17a5969835efe6c7ba42","index":0,"count":1,"encoding":"utf-8","payloadBytes":6017}
 package templatedir
 
@@ -59063,2845 +63212,6 @@ func (sd *SimpleDock) Update() {
 		}
 		//c.child.Invalidate(true)
 	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/listview.go","mode":420,"size":14657,"sha256":"214cf0d1f761c7dc3363f20544d8244bac9fa5920ebbf2ec6cd8be6f93086406","index":0,"count":1,"encoding":"utf-8","payloadBytes":14657}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"errors"
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-// ListItem represents an item in a ListView widget.
-type ListItem interface {
-	Text() []string  // Text returns the text of the multi-column item.
-	ImageIndex() int // ImageIndex is used only if SetImageList is called on the listview
-}
-
-// ListItemChecker is used for checkbox support in ListView.
-type ListItemChecker interface {
-	Checked() bool
-	SetChecked(checked bool)
-}
-
-// ListItemSetter is used in OnEndLabelEdit event.
-type ListItemSetter interface {
-	SetText(s string) // set first item in the array via LabelEdit event
-}
-
-// StringListItem is helper for basic string lists.
-type StringListItem struct {
-	ID    int
-	Data  string
-	Check bool
-}
-
-func (s StringListItem) Text() []string          { return []string{s.Data} }
-func (s StringListItem) Checked() bool           { return s.Check }
-func (s StringListItem) SetChecked(checked bool) { s.Check = checked }
-func (s StringListItem) ImageIndex() int         { return 0 }
-
-type ListView struct {
-	ControlBase
-
-	iml       *ImageList
-	lastIndex int
-	cols      int // count of columns
-
-	item2Handle map[ListItem]uintptr
-	handle2Item map[uintptr]ListItem
-
-	onEndLabelEdit EventManager
-	onDoubleClick  EventManager
-	onClick        EventManager
-	onKeyDown      EventManager
-	onItemChanging EventManager
-	onItemChanged  EventManager
-	onCheckChanged EventManager
-	onViewChange   EventManager
-	onEndScroll    EventManager
-}
-
-func NewListView(parent Controller) *ListView {
-	lv := new(ListView)
-
-	lv.InitControl("SysListView32", parent /*w32.WS_EX_CLIENTEDGE*/, 0,
-		w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.LVS_REPORT|w32.LVS_EDITLABELS|w32.LVS_SHOWSELALWAYS)
-
-	lv.item2Handle = make(map[ListItem]uintptr)
-	lv.handle2Item = make(map[uintptr]ListItem)
-
-	RegMsgHandler(lv)
-
-	lv.SetFont(DefaultFont)
-	lv.SetSize(200, 400)
-
-	if err := lv.SetTheme("Explorer"); err != nil {
-		// theme error is ignored
-	}
-	return lv
-}
-
-// FIXME: Changes the state of an item in a list-view control. Refer LVM_SETITEMSTATE message.
-func (lv *ListView) setItemState(i int, state, mask uint) {
-	var item w32.LVITEM
-	item.State, item.StateMask = uint32(state), uint32(mask)
-	w32.SendMessage(lv.hwnd, w32.LVM_SETITEMSTATE, uintptr(i), uintptr(unsafe.Pointer(&item)))
-}
-
-func (lv *ListView) EnableSingleSelect(enable bool) {
-	SetStyle(lv.hwnd, enable, w32.LVS_SINGLESEL)
-}
-
-func (lv *ListView) EnableSortHeader(enable bool) {
-	SetStyle(lv.hwnd, enable, w32.LVS_NOSORTHEADER)
-}
-
-func (lv *ListView) EnableSortAscending(enable bool) {
-	SetStyle(lv.hwnd, enable, w32.LVS_SORTASCENDING)
-}
-
-func (lv *ListView) EnableEditLabels(enable bool) {
-	SetStyle(lv.hwnd, enable, w32.LVS_EDITLABELS)
-}
-
-func (lv *ListView) EnableFullRowSelect(enable bool) {
-	if enable {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, w32.LVS_EX_FULLROWSELECT)
-	} else {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, w32.LVS_EX_FULLROWSELECT, 0)
-	}
-}
-
-func (lv *ListView) EnableDoubleBuffer(enable bool) {
-	if enable {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, w32.LVS_EX_DOUBLEBUFFER)
-	} else {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, w32.LVS_EX_DOUBLEBUFFER, 0)
-	}
-}
-
-func (lv *ListView) EnableHotTrack(enable bool) {
-	if enable {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, w32.LVS_EX_TRACKSELECT)
-	} else {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, w32.LVS_EX_TRACKSELECT, 0)
-	}
-}
-
-func (lv *ListView) SetItemCount(count int) bool {
-	return w32.SendMessage(lv.hwnd, w32.LVM_SETITEMCOUNT, uintptr(count), 0) != 0
-}
-
-func (lv *ListView) ItemCount() int {
-	return int(w32.SendMessage(lv.hwnd, w32.LVM_GETITEMCOUNT, 0, 0))
-}
-
-func (lv *ListView) ItemAt(x, y int) ListItem {
-	hti := w32.LVHITTESTINFO{Pt: w32.POINT{int32(x), int32(y)}}
-	w32.SendMessage(lv.hwnd, w32.LVM_HITTEST, 0, uintptr(unsafe.Pointer(&hti)))
-	return lv.findItemByIndex(int(hti.IItem))
-}
-
-func (lv *ListView) Items() (list []ListItem) {
-	for item := range lv.item2Handle {
-		list = append(list, item)
-	}
-	return list
-}
-
-func (lv *ListView) AddColumn(caption string, width int) {
-	var lc w32.LVCOLUMN
-	lc.Mask = w32.LVCF_TEXT
-	if width != 0 {
-		lc.Mask = lc.Mask | w32.LVCF_WIDTH
-		lc.Cx = int32(width)
-	}
-	lc.PszText = syscall.StringToUTF16Ptr(caption)
-	lv.insertLvColumn(&lc, lv.cols)
-	lv.cols++
-}
-
-// StretchLastColumn makes the last column take up all remaining horizontal
-// space of the *ListView.
-// The effect of this is not persistent.
-func (lv *ListView) StretchLastColumn() error {
-	if lv.cols == 0 {
-		return nil
-	}
-	if w32.SendMessage(lv.hwnd, w32.LVM_SETCOLUMNWIDTH, uintptr(lv.cols-1), w32.LVSCW_AUTOSIZE_USEHEADER) == 0 {
-		//panic("LVM_SETCOLUMNWIDTH failed")
-	}
-	return nil
-}
-
-// CheckBoxes returns if the *TableView has check boxes.
-func (lv *ListView) CheckBoxes() bool {
-	return w32.SendMessage(lv.hwnd, w32.LVM_GETEXTENDEDLISTVIEWSTYLE, 0, 0)&w32.LVS_EX_CHECKBOXES > 0
-}
-
-// SetCheckBoxes sets if the *TableView has check boxes.
-func (lv *ListView) SetCheckBoxes(value bool) {
-	exStyle := w32.SendMessage(lv.hwnd, w32.LVM_GETEXTENDEDLISTVIEWSTYLE, 0, 0)
-	oldStyle := exStyle
-	if value {
-		exStyle |= w32.LVS_EX_CHECKBOXES
-	} else {
-		exStyle &^= w32.LVS_EX_CHECKBOXES
-	}
-	if exStyle != oldStyle {
-		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, exStyle)
-	}
-
-	mask := w32.SendMessage(lv.hwnd, w32.LVM_GETCALLBACKMASK, 0, 0)
-	if value {
-		mask |= w32.LVIS_STATEIMAGEMASK
-	} else {
-		mask &^= w32.LVIS_STATEIMAGEMASK
-	}
-
-	if w32.SendMessage(lv.hwnd, w32.LVM_SETCALLBACKMASK, mask, 0) == w32.FALSE {
-		panic("SendMessage(LVM_SETCALLBACKMASK)")
-	}
-}
-
-func (lv *ListView) applyImage(lc *w32.LVITEM, imIndex int) {
-	if lv.iml != nil {
-		lc.Mask |= w32.LVIF_IMAGE
-		lc.IImage = int32(imIndex)
-	}
-}
-
-func (lv *ListView) AddItem(item ListItem) {
-	lv.InsertItem(item, lv.ItemCount())
-}
-
-func (lv *ListView) InsertItem(item ListItem, index int) {
-	text := item.Text()
-	li := &w32.LVITEM{
-		Mask:    w32.LVIF_TEXT | w32.LVIF_PARAM,
-		PszText: syscall.StringToUTF16Ptr(text[0]),
-		IItem:   int32(index),
-	}
-
-	lv.lastIndex++
-	ix := new(int)
-	*ix = lv.lastIndex
-	li.LParam = uintptr(*ix)
-	lv.handle2Item[li.LParam] = item
-	lv.item2Handle[item] = li.LParam
-
-	lv.applyImage(li, item.ImageIndex())
-	lv.insertLvItem(li)
-
-	for i := 1; i < len(text); i++ {
-		li.Mask = w32.LVIF_TEXT
-		li.PszText = syscall.StringToUTF16Ptr(text[i])
-		li.ISubItem = int32(i)
-		lv.setLvItem(li)
-	}
-}
-
-func (lv *ListView) UpdateItem(item ListItem) bool {
-	lparam, ok := lv.item2Handle[item]
-	if !ok {
-		return false
-	}
-
-	index := lv.findIndexByItem(item)
-	if index == -1 {
-		return false
-	}
-
-	text := item.Text()
-	li := &w32.LVITEM{
-		Mask:    w32.LVIF_TEXT | w32.LVIF_PARAM,
-		PszText: syscall.StringToUTF16Ptr(text[0]),
-		LParam:  lparam,
-		IItem:   int32(index),
-	}
-
-	lv.applyImage(li, item.ImageIndex())
-	lv.setLvItem(li)
-
-	for i := 1; i < len(text); i++ {
-		li.Mask = w32.LVIF_TEXT
-		li.PszText = syscall.StringToUTF16Ptr(text[i])
-		li.ISubItem = int32(i)
-		lv.setLvItem(li)
-	}
-	return true
-}
-
-func (lv *ListView) insertLvColumn(lvColumn *w32.LVCOLUMN, iCol int) {
-	w32.SendMessage(lv.hwnd, w32.LVM_INSERTCOLUMN, uintptr(iCol), uintptr(unsafe.Pointer(lvColumn)))
-}
-
-func (lv *ListView) insertLvItem(lvItem *w32.LVITEM) {
-	w32.SendMessage(lv.hwnd, w32.LVM_INSERTITEM, 0, uintptr(unsafe.Pointer(lvItem)))
-}
-
-func (lv *ListView) setLvItem(lvItem *w32.LVITEM) {
-	w32.SendMessage(lv.hwnd, w32.LVM_SETITEM, 0, uintptr(unsafe.Pointer(lvItem)))
-}
-
-func (lv *ListView) DeleteAllItems() bool {
-	if w32.SendMessage(lv.hwnd, w32.LVM_DELETEALLITEMS, 0, 0) == w32.TRUE {
-		lv.item2Handle = make(map[ListItem]uintptr)
-		lv.handle2Item = make(map[uintptr]ListItem)
-		return true
-	}
-	return false
-}
-
-func (lv *ListView) DeleteItem(item ListItem) error {
-	index := lv.findIndexByItem(item)
-	if index == -1 {
-		return errors.New("item not found")
-	}
-
-	if w32.SendMessage(lv.hwnd, w32.LVM_DELETEITEM, uintptr(index), 0) == 0 {
-		return errors.New("SendMessage(TVM_DELETEITEM) failed")
-	}
-
-	h := lv.item2Handle[item]
-	delete(lv.item2Handle, item)
-	delete(lv.handle2Item, h)
-	return nil
-}
-
-func (lv *ListView) findIndexByItem(item ListItem) int {
-	lparam, ok := lv.item2Handle[item]
-	if !ok {
-		return -1
-	}
-
-	it := &w32.LVFINDINFO{
-		Flags:  w32.LVFI_PARAM,
-		LParam: lparam,
-	}
-	var i int = -1
-	return int(w32.SendMessage(lv.hwnd, w32.LVM_FINDITEM, uintptr(i), uintptr(unsafe.Pointer(it))))
-}
-
-func (lv *ListView) findItemByIndex(i int) ListItem {
-	it := &w32.LVITEM{
-		Mask:  w32.LVIF_PARAM,
-		IItem: int32(i),
-	}
-
-	if w32.SendMessage(lv.hwnd, w32.LVM_GETITEM, 0, uintptr(unsafe.Pointer(it))) == w32.TRUE {
-		if item, ok := lv.handle2Item[it.LParam]; ok {
-			return item
-		}
-	}
-	return nil
-}
-
-func (lv *ListView) EnsureVisible(item ListItem) bool {
-	if i := lv.findIndexByItem(item); i != -1 {
-		return w32.SendMessage(lv.hwnd, w32.LVM_ENSUREVISIBLE, uintptr(i), 1) == 0
-	}
-	return false
-}
-
-func (lv *ListView) SelectedItem() ListItem {
-	if items := lv.SelectedItems(); len(items) > 0 {
-		return items[0]
-	}
-	return nil
-}
-
-func (lv *ListView) SetSelectedItem(item ListItem) bool {
-	if i := lv.findIndexByItem(item); i > -1 {
-		lv.SetSelectedIndex(i)
-		return true
-	}
-	return false
-}
-
-// mask is used to set the LVITEM.Mask for ListView.GetItem which indicates which attributes you'd like to receive
-// of LVITEM.
-func (lv *ListView) SelectedItems() []ListItem {
-	var items []ListItem
-
-	var i int = -1
-	for {
-		if i = int(w32.SendMessage(lv.hwnd, w32.LVM_GETNEXTITEM, uintptr(i), uintptr(w32.LVNI_SELECTED))); i == -1 {
-			break
-		}
-
-		if item := lv.findItemByIndex(i); item != nil {
-			items = append(items, item)
-		}
-	}
-	return items
-}
-
-func (lv *ListView) SelectedCount() uint {
-	return uint(w32.SendMessage(lv.hwnd, w32.LVM_GETSELECTEDCOUNT, 0, 0))
-}
-
-// GetSelectedIndex first selected item index. Returns -1 if no item is selected.
-func (lv *ListView) SelectedIndex() int {
-	var i int = -1
-	return int(w32.SendMessage(lv.hwnd, w32.LVM_GETNEXTITEM, uintptr(i), uintptr(w32.LVNI_SELECTED)))
-}
-
-// Set i to -1 to select all items.
-func (lv *ListView) SetSelectedIndex(i int) {
-	lv.setItemState(i, w32.LVIS_SELECTED, w32.LVIS_SELECTED)
-}
-
-func (lv *ListView) SetImageList(imageList *ImageList) {
-	w32.SendMessage(lv.hwnd, w32.LVM_SETIMAGELIST, w32.LVSIL_SMALL, uintptr(imageList.Handle()))
-	lv.iml = imageList
-}
-
-// Event publishers
-func (lv *ListView) OnEndLabelEdit() *EventManager {
-	return &lv.onEndLabelEdit
-}
-
-func (lv *ListView) OnDoubleClick() *EventManager {
-	return &lv.onDoubleClick
-}
-
-func (lv *ListView) OnClick() *EventManager {
-	return &lv.onClick
-}
-
-func (lv *ListView) OnKeyDown() *EventManager {
-	return &lv.onKeyDown
-}
-
-func (lv *ListView) OnItemChanging() *EventManager {
-	return &lv.onItemChanging
-}
-
-func (lv *ListView) OnItemChanged() *EventManager {
-	return &lv.onItemChanged
-}
-
-func (lv *ListView) OnCheckChanged() *EventManager {
-	return &lv.onCheckChanged
-}
-
-func (lv *ListView) OnViewChange() *EventManager {
-	return &lv.onViewChange
-}
-
-func (lv *ListView) OnEndScroll() *EventManager {
-	return &lv.onEndScroll
-}
-
-// Message processor
-func (lv *ListView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	/*case w32.WM_ERASEBKGND:
-	lv.StretchLastColumn()
-	println("case w32.WM_ERASEBKGND")
-	return 1*/
-
-	case w32.WM_NOTIFY:
-		nm := (*w32.NMHDR)(unsafe.Pointer(lparam))
-		code := int32(nm.Code)
-
-		switch code {
-		case w32.LVN_BEGINLABELEDITW:
-			// println("Begin label edit")
-		case w32.LVN_ENDLABELEDITW:
-			nmdi := (*w32.NMLVDISPINFO)(unsafe.Pointer(lparam))
-			if nmdi.Item.PszText != nil {
-				fmt.Println(nmdi.Item.PszText, nmdi.Item)
-				if item, ok := lv.handle2Item[nmdi.Item.LParam]; ok {
-					lv.onEndLabelEdit.Fire(NewEvent(lv,
-						&LabelEditEventData{Item: item,
-							Text: w32.UTF16PtrToString(nmdi.Item.PszText)}))
-				}
-				return w32.TRUE
-			}
-		case w32.NM_DBLCLK:
-			lv.onDoubleClick.Fire(NewEvent(lv, nil))
-
-		case w32.NM_CLICK:
-			ac := (*w32.NMITEMACTIVATE)(unsafe.Pointer(lparam))
-			var hti w32.LVHITTESTINFO
-			hti.Pt = w32.POINT{ac.PtAction.X, ac.PtAction.Y}
-			w32.SendMessage(lv.hwnd, w32.LVM_HITTEST, 0, uintptr(unsafe.Pointer(&hti)))
-
-			if hti.Flags == w32.LVHT_ONITEMSTATEICON {
-				if item := lv.findItemByIndex(int(hti.IItem)); item != nil {
-					if item, ok := item.(ListItemChecker); ok {
-						checked := !item.Checked()
-						item.SetChecked(checked)
-						lv.onCheckChanged.Fire(NewEvent(lv, item))
-
-						if w32.SendMessage(lv.hwnd, w32.LVM_UPDATE, uintptr(hti.IItem), 0) == w32.FALSE {
-							panic("SendMessage(LVM_UPDATE)")
-						}
-					}
-				}
-			}
-
-			hti.Pt = w32.POINT{ac.PtAction.X, ac.PtAction.Y}
-			w32.SendMessage(lv.hwnd, w32.LVM_SUBITEMHITTEST, 0, uintptr(unsafe.Pointer(&hti)))
-			lv.onClick.Fire(NewEvent(lv, hti.ISubItem))
-
-		case w32.LVN_KEYDOWN:
-			nmkey := (*w32.NMLVKEYDOWN)(unsafe.Pointer(lparam))
-			if nmkey.WVKey == w32.VK_SPACE && lv.CheckBoxes() {
-				if item := lv.SelectedItem(); item != nil {
-					if item, ok := item.(ListItemChecker); ok {
-						checked := !item.Checked()
-						item.SetChecked(checked)
-						lv.onCheckChanged.Fire(NewEvent(lv, item))
-					}
-
-					index := lv.findIndexByItem(item)
-					if w32.SendMessage(lv.hwnd, w32.LVM_UPDATE, uintptr(index), 0) == w32.FALSE {
-						panic("SendMessage(LVM_UPDATE)")
-					}
-				}
-			}
-			lv.onKeyDown.Fire(NewEvent(lv, nmkey.WVKey))
-			key := nmkey.WVKey
-			w32.SendMessage(lv.Parent().Handle(), w32.WM_KEYDOWN, uintptr(key), 0)
-
-		case w32.LVN_ITEMCHANGING:
-			// This event also fires when listview has changed via code.
-			nmlv := (*w32.NMLISTVIEW)(unsafe.Pointer(lparam))
-			item := lv.findItemByIndex(int(nmlv.IItem))
-			lv.onItemChanging.Fire(NewEvent(lv, item))
-
-		case w32.LVN_ITEMCHANGED:
-			// This event also fires when listview has changed via code.
-			nmlv := (*w32.NMLISTVIEW)(unsafe.Pointer(lparam))
-			item := lv.findItemByIndex(int(nmlv.IItem))
-			lv.onItemChanged.Fire(NewEvent(lv, item))
-
-		case w32.LVN_GETDISPINFO:
-			nmdi := (*w32.NMLVDISPINFO)(unsafe.Pointer(lparam))
-			if nmdi.Item.StateMask&w32.LVIS_STATEIMAGEMASK > 0 {
-				if item, ok := lv.handle2Item[nmdi.Item.LParam]; ok {
-					if item, ok := item.(ListItemChecker); ok {
-
-						checked := item.Checked()
-						if checked {
-							nmdi.Item.State = 0x2000
-						} else {
-							nmdi.Item.State = 0x1000
-						}
-					}
-				}
-			}
-
-			lv.onViewChange.Fire(NewEvent(lv, nil))
-
-		case w32.LVN_ENDSCROLL:
-			lv.onEndScroll.Fire(NewEvent(lv, nil))
-		}
-	}
-	return w32.DefWindowProc(lv.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/menu.go","mode":420,"size":8397,"sha256":"48585eca4660a45bf2bb73c290e5927e959a7db69a2105e49d0c5a97ba23e0f5","index":0,"count":1,"encoding":"utf-8","payloadBytes":8397}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-var (
-	nextMenuItemID  uint16 = 3
-	actionsByID            = make(map[uint16]*MenuItem)
-	shortcut2Action        = make(map[Shortcut]*MenuItem)
-	menuItems              = make(map[w32.HMENU][]*MenuItem)
-	radioGroups            = make(map[*MenuItem]*RadioGroup)
-	initialised     bool
-)
-
-var NoShortcut = Shortcut{}
-
-// Menu for main window and context menus on controls.
-// Most methods used for both main window menu and context menu.
-type Menu struct {
-	hMenu w32.HMENU
-	hwnd  w32.HWND // hwnd might be nil if it is context menu.
-}
-
-type MenuItem struct {
-	hMenu    w32.HMENU
-	hSubMenu w32.HMENU // Non zero if this item is in itself a submenu.
-
-	text     string
-	toolTip  string
-	image    *Bitmap
-	shortcut Shortcut
-	enabled  bool
-
-	checkable bool
-	checked   bool
-	isRadio   bool
-
-	id uint16
-
-	onClick EventManager
-}
-
-type RadioGroup struct {
-	members []*MenuItem
-	hwnd    w32.HWND
-}
-
-func NewContextMenu() *MenuItem {
-	hMenu := w32.CreatePopupMenu()
-	if hMenu == 0 {
-		panic("failed CreateMenu")
-	}
-
-	item := &MenuItem{
-		hMenu:    hMenu,
-		hSubMenu: hMenu,
-	}
-	return item
-}
-
-func (m *Menu) Dispose() {
-	if m.hMenu != 0 {
-		w32.DestroyMenu(m.hMenu)
-		m.hMenu = 0
-	}
-}
-
-func (m *Menu) IsDisposed() bool {
-	return m.hMenu == 0
-}
-
-func initMenuItemInfoFromAction(mii *w32.MENUITEMINFO, a *MenuItem) {
-	mii.CbSize = uint32(unsafe.Sizeof(*mii))
-	mii.FMask = w32.MIIM_FTYPE | w32.MIIM_ID | w32.MIIM_STATE | w32.MIIM_STRING
-	if a.image != nil {
-		mii.FMask |= w32.MIIM_BITMAP
-		mii.HbmpItem = a.image.handle
-	}
-	if a.IsSeparator() {
-		mii.FType = w32.MFT_SEPARATOR
-	} else {
-		mii.FType = w32.MFT_STRING
-		var text string
-		if s := a.shortcut; s.Key != 0 {
-			text = fmt.Sprintf("%s\t%s", a.text, s.String())
-			shortcut2Action[a.shortcut] = a
-		} else {
-			text = a.text
-		}
-		mii.DwTypeData = syscall.StringToUTF16Ptr(text)
-		mii.Cch = uint32(len([]rune(a.text)))
-	}
-	mii.WID = uint32(a.id)
-
-	if a.Enabled() {
-		mii.FState &^= w32.MFS_DISABLED
-	} else {
-		mii.FState |= w32.MFS_DISABLED
-	}
-
-	if a.Checkable() {
-		mii.FMask |= w32.MIIM_CHECKMARKS
-	}
-	if a.Checked() {
-		mii.FState |= w32.MFS_CHECKED
-	}
-
-	if a.hSubMenu != 0 {
-		mii.FMask |= w32.MIIM_SUBMENU
-		mii.HSubMenu = a.hSubMenu
-	}
-}
-
-// Show menu on the main window.
-func (m *Menu) Show() {
-	initialised = true
-	updateRadioGroups()
-	if !w32.DrawMenuBar(m.hwnd) {
-		panic("DrawMenuBar failed")
-	}
-}
-
-// AddSubMenu returns item that is used as submenu to perform AddItem(s).
-func (m *Menu) AddSubMenu(text string) *MenuItem {
-	hSubMenu := w32.CreateMenu()
-	if hSubMenu == 0 {
-		panic("failed CreateMenu")
-	}
-	return addMenuItem(m.hMenu, hSubMenu, text, Shortcut{}, nil, false)
-}
-
-// This method will iterate through the menu items, group radio items together, build a
-// quick access map and set the initial items
-func updateRadioGroups() {
-
-	if !initialised {
-		return
-	}
-
-	radioItemsChecked := []*MenuItem{}
-	radioGroups = make(map[*MenuItem]*RadioGroup)
-	var currentRadioGroupMembers []*MenuItem
-	// Iterate the menus
-	for _, menu := range menuItems {
-		menuLength := len(menu)
-		for index, menuItem := range menu {
-			if menuItem.isRadio {
-				currentRadioGroupMembers = append(currentRadioGroupMembers, menuItem)
-				if menuItem.checked {
-					radioItemsChecked = append(radioItemsChecked, menuItem)
-				}
-
-				// If end of menu
-				if index == menuLength-1 {
-					radioGroup := &RadioGroup{
-						members: currentRadioGroupMembers,
-						hwnd:    menuItem.hMenu,
-					}
-					// Save the group to each member iin the radiomap
-					for _, member := range currentRadioGroupMembers {
-						radioGroups[member] = radioGroup
-					}
-					currentRadioGroupMembers = []*MenuItem{}
-				}
-				continue
-			}
-
-			// Not a radio item
-			if len(currentRadioGroupMembers) > 0 {
-				radioGroup := &RadioGroup{
-					members: currentRadioGroupMembers,
-					hwnd:    menuItem.hMenu,
-				}
-				// Save the group to each member iin the radiomap
-				for _, member := range currentRadioGroupMembers {
-					radioGroups[member] = radioGroup
-				}
-				currentRadioGroupMembers = []*MenuItem{}
-			}
-		}
-	}
-
-	// Enable the checked items
-	for _, item := range radioItemsChecked {
-		radioGroup := radioGroups[item]
-		startID := radioGroup.members[0].id
-		endID := radioGroup.members[len(radioGroup.members)-1].id
-		w32.SelectRadioMenuItem(item.id, startID, endID, radioGroup.hwnd)
-	}
-
-}
-
-func (mi *MenuItem) OnClick() *EventManager {
-	return &mi.onClick
-}
-
-func (mi *MenuItem) AddSeparator() {
-	addMenuItem(mi.hSubMenu, 0, "-", Shortcut{}, nil, false)
-}
-
-// AddItem adds plain menu item.
-func (mi *MenuItem) AddItem(text string, shortcut Shortcut) *MenuItem {
-	return addMenuItem(mi.hSubMenu, 0, text, shortcut, nil, false)
-}
-
-// AddItemCheckable adds plain menu item that can have a checkmark.
-func (mi *MenuItem) AddItemCheckable(text string, shortcut Shortcut) *MenuItem {
-	return addMenuItem(mi.hSubMenu, 0, text, shortcut, nil, true)
-}
-
-// AddItemRadio adds plain menu item that can have a checkmark and is part of a radio group.
-func (mi *MenuItem) AddItemRadio(text string, shortcut Shortcut) *MenuItem {
-	menuItem := addMenuItem(mi.hSubMenu, 0, text, shortcut, nil, true)
-	menuItem.isRadio = true
-	return menuItem
-}
-
-// AddItemWithBitmap adds menu item with shortcut and bitmap.
-func (mi *MenuItem) AddItemWithBitmap(text string, shortcut Shortcut, image *Bitmap) *MenuItem {
-	return addMenuItem(mi.hSubMenu, 0, text, shortcut, image, false)
-}
-
-// AddSubMenu adds a submenu.
-func (mi *MenuItem) AddSubMenu(text string) *MenuItem {
-	hSubMenu := w32.CreatePopupMenu()
-	if hSubMenu == 0 {
-		panic("failed CreatePopupMenu")
-	}
-	return addMenuItem(mi.hSubMenu, hSubMenu, text, Shortcut{}, nil, false)
-}
-
-// AddItem to the menu, set text to "-" for separators.
-func addMenuItem(hMenu, hSubMenu w32.HMENU, text string, shortcut Shortcut, image *Bitmap, checkable bool) *MenuItem {
-	item := &MenuItem{
-		hMenu:     hMenu,
-		hSubMenu:  hSubMenu,
-		text:      text,
-		shortcut:  shortcut,
-		image:     image,
-		enabled:   true,
-		id:        nextMenuItemID,
-		checkable: checkable,
-		isRadio:   false,
-		//visible:  true,
-	}
-	nextMenuItemID++
-	actionsByID[item.id] = item
-	menuItems[hMenu] = append(menuItems[hMenu], item)
-
-	var mii w32.MENUITEMINFO
-	initMenuItemInfoFromAction(&mii, item)
-
-	index := -1
-	if !w32.InsertMenuItem(hMenu, uint32(index), true, &mii) {
-		panic("InsertMenuItem failed")
-	}
-	return item
-}
-
-func indexInObserver(a *MenuItem) int {
-	var idx int
-	for _, mi := range menuItems[a.hMenu] {
-		if mi == a {
-			return idx
-		}
-		idx++
-	}
-	return -1
-}
-
-func findMenuItemByID(id int) *MenuItem {
-	return actionsByID[uint16(id)]
-}
-
-func (mi *MenuItem) update() {
-	var mii w32.MENUITEMINFO
-	initMenuItemInfoFromAction(&mii, mi)
-
-	if !w32.SetMenuItemInfo(mi.hMenu, uint32(indexInObserver(mi)), true, &mii) {
-		panic("SetMenuItemInfo failed")
-	}
-	if mi.isRadio {
-		mi.updateRadioGroup()
-	}
-}
-
-func (mi *MenuItem) IsSeparator() bool { return mi.text == "-" }
-func (mi *MenuItem) SetSeparator()     { mi.text = "-" }
-
-func (mi *MenuItem) Enabled() bool     { return mi.enabled }
-func (mi *MenuItem) SetEnabled(b bool) { mi.enabled = b; mi.update() }
-
-func (mi *MenuItem) Checkable() bool     { return mi.checkable }
-func (mi *MenuItem) SetCheckable(b bool) { mi.checkable = b; mi.update() }
-
-func (mi *MenuItem) Checked() bool { return mi.checked }
-func (mi *MenuItem) SetChecked(b bool) {
-	if mi.isRadio {
-		radioGroup := radioGroups[mi]
-		if radioGroup != nil {
-			for _, member := range radioGroup.members {
-				member.checked = false
-			}
-		}
-
-	}
-	mi.checked = b
-	mi.update()
-}
-
-func (mi *MenuItem) Text() string     { return mi.text }
-func (mi *MenuItem) SetText(s string) { mi.text = s; mi.update() }
-
-func (mi *MenuItem) Image() *Bitmap     { return mi.image }
-func (mi *MenuItem) SetImage(b *Bitmap) { mi.image = b; mi.update() }
-
-func (mi *MenuItem) ToolTip() string     { return mi.toolTip }
-func (mi *MenuItem) SetToolTip(s string) { mi.toolTip = s; mi.update() }
-
-func (mi *MenuItem) updateRadioGroup() {
-	radioGroup := radioGroups[mi]
-	if radioGroup == nil {
-		return
-	}
-	startID := radioGroup.members[0].id
-	endID := radioGroup.members[len(radioGroup.members)-1].id
-	w32.SelectRadioMenuItem(mi.id, startID, endID, radioGroup.hwnd)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/mousecontrol.go","mode":420,"size":1219,"sha256":"67e08adeb31aa9c7ef7d2265d0fc11e55f17b75d3d9ff16cc6dbaa455ab523a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1219}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-// MouseControl used for creating custom controls that need mouse hover or mouse leave events.
-type MouseControl struct {
-	ControlBase
-	isMouseLeft bool
-}
-
-func (cc *MouseControl) Init(parent Controller, className string, exStyle, style uint) {
-	RegClassOnlyOnce(className)
-	cc.hwnd = CreateWindow(className, parent, exStyle, style)
-	cc.parent = parent
-	RegMsgHandler(cc)
-
-	cc.isMouseLeft = true
-	cc.SetFont(DefaultFont)
-}
-
-func (cc *MouseControl) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	sender := GetMsgHandler(cc.hwnd)
-	switch msg {
-	case w32.WM_CREATE:
-		internalTrackMouseEvent(cc.hwnd)
-		cc.onCreate.Fire(NewEvent(sender, nil))
-	case w32.WM_CLOSE:
-		cc.onClose.Fire(NewEvent(sender, nil))
-	case w32.WM_MOUSEMOVE:
-		//if cc.isMouseLeft {
-
-		cc.onMouseHover.Fire(NewEvent(sender, nil))
-		//internalTrackMouseEvent(cc.hwnd)
-		cc.isMouseLeft = false
-
-		//}
-	case w32.WM_MOUSELEAVE:
-		cc.onMouseLeave.Fire(NewEvent(sender, nil))
-		cc.isMouseLeft = true
-	}
-	return w32.DefWindowProc(cc.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/msghandlerregistry.go","mode":420,"size":579,"sha256":"0096959418f6b7d4cf48a1375c4c260fae868b2d58f0407e863f4f03433301bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":579}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-func RegMsgHandler(controller Controller) {
-	gControllerRegistry[controller.Handle()] = controller
-}
-
-func UnRegMsgHandler(hwnd w32.HWND) {
-	delete(gControllerRegistry, hwnd)
-}
-
-func GetMsgHandler(hwnd w32.HWND) Controller {
-	if controller, isExists := gControllerRegistry[hwnd]; isExists {
-		return controller
-	}
-
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/panel.go","mode":420,"size":4728,"sha256":"c5f18146b7f4e30e934929c6c415b93ea7fdefe5626b444960f4f86239cdb0b1","index":0,"count":1,"encoding":"utf-8","payloadBytes":4728}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Panel struct {
-	ControlBase
-	layoutMng LayoutManager
-}
-
-func NewPanel(parent Controller) *Panel {
-	pa := new(Panel)
-
-	RegClassOnlyOnce("winc_Panel")
-	pa.hwnd = CreateWindow("winc_Panel", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
-	pa.parent = parent
-	RegMsgHandler(pa)
-
-	pa.SetFont(DefaultFont)
-	pa.SetText("")
-	pa.SetSize(200, 65)
-	return pa
-}
-
-// SetLayout panel implements DockAllow interface.
-func (pa *Panel) SetLayout(mng LayoutManager) {
-	pa.layoutMng = mng
-}
-
-func (pa *Panel) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_SIZE, w32.WM_PAINT:
-		if pa.layoutMng != nil {
-			pa.layoutMng.Update()
-		}
-	}
-	return w32.DefWindowProc(pa.hwnd, msg, wparam, lparam)
-}
-
-var errorPanelPen = NewPen(w32.PS_GEOMETRIC, 2, NewSolidColorBrush(RGB(255, 128, 128)))
-var errorPanelOkPen = NewPen(w32.PS_GEOMETRIC, 2, NewSolidColorBrush(RGB(220, 220, 220)))
-
-// ErrorPanel shows errors or important messages.
-// It is meant to stand out of other on screen controls.
-type ErrorPanel struct {
-	ControlBase
-	pen    *Pen
-	margin int
-}
-
-// NewErrorPanel.
-func NewErrorPanel(parent Controller) *ErrorPanel {
-	f := new(ErrorPanel)
-	f.init(parent)
-
-	f.SetFont(DefaultFont)
-	f.SetText("No errors")
-	f.SetSize(200, 65)
-	f.margin = 5
-	f.pen = errorPanelOkPen
-	return f
-}
-
-func (epa *ErrorPanel) init(parent Controller) {
-	RegClassOnlyOnce("winc_ErrorPanel")
-
-	epa.hwnd = CreateWindow("winc_ErrorPanel", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
-	epa.parent = parent
-
-	RegMsgHandler(epa)
-}
-
-func (epa *ErrorPanel) SetMargin(margin int) {
-	epa.margin = margin
-}
-
-func (epa *ErrorPanel) Printf(format string, v ...interface{}) {
-	epa.SetText(fmt.Sprintf(format, v...))
-	epa.ShowAsError(false)
-}
-
-func (epa *ErrorPanel) Errorf(format string, v ...interface{}) {
-	epa.SetText(fmt.Sprintf(format, v...))
-	epa.ShowAsError(true)
-}
-
-func (epa *ErrorPanel) ShowAsError(show bool) {
-	if show {
-		epa.pen = errorPanelPen
-	} else {
-		epa.pen = errorPanelOkPen
-	}
-	epa.Invalidate(true)
-}
-
-func (epa *ErrorPanel) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_ERASEBKGND:
-		canvas := NewCanvasFromHDC(w32.HDC(wparam))
-		r := epa.Bounds()
-		r.rect.Left += int32(epa.margin)
-		r.rect.Right -= int32(epa.margin)
-		r.rect.Top += int32(epa.margin)
-		r.rect.Bottom -= int32(epa.margin)
-		// old code used NewSystemColorBrush(w32.COLOR_BTNFACE)
-		canvas.DrawFillRect(r, epa.pen, NewSystemColorBrush(w32.COLOR_WINDOW))
-
-		r.rect.Left += 5
-		canvas.DrawText(epa.Text(), r, 0, epa.Font(), RGB(0, 0, 0))
-		canvas.Dispose()
-		return 1
-	}
-	return w32.DefWindowProc(epa.hwnd, msg, wparam, lparam)
-}
-
-// MultiPanel contains other panels and only makes one of them visible.
-type MultiPanel struct {
-	ControlBase
-	current int
-	panels  []*Panel
-}
-
-func NewMultiPanel(parent Controller) *MultiPanel {
-	mpa := new(MultiPanel)
-
-	RegClassOnlyOnce("winc_MultiPanel")
-	mpa.hwnd = CreateWindow("winc_MultiPanel", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
-	mpa.parent = parent
-	RegMsgHandler(mpa)
-
-	mpa.SetFont(DefaultFont)
-	mpa.SetText("")
-	mpa.SetSize(300, 200)
-	mpa.current = -1
-	return mpa
-}
-
-func (mpa *MultiPanel) Count() int { return len(mpa.panels) }
-
-// AddPanel adds panels to the internal list, first panel is visible all others are hidden.
-func (mpa *MultiPanel) AddPanel(panel *Panel) {
-	if len(mpa.panels) > 0 {
-		panel.Hide()
-	}
-	mpa.current = 0
-	mpa.panels = append(mpa.panels, panel)
-}
-
-// ReplacePanel replaces panel, useful for refreshing controls on screen.
-func (mpa *MultiPanel) ReplacePanel(index int, panel *Panel) {
-	mpa.panels[index] = panel
-}
-
-// DeletePanel removed panel.
-func (mpa *MultiPanel) DeletePanel(index int) {
-	mpa.panels = append(mpa.panels[:index], mpa.panels[index+1:]...)
-}
-
-func (mpa *MultiPanel) Current() int {
-	return mpa.current
-}
-
-func (mpa *MultiPanel) SetCurrent(index int) {
-	if index >= len(mpa.panels) {
-		panic("index greater than number of panels")
-	}
-	if mpa.current == -1 {
-		panic("no current panel, add panels first")
-	}
-	for i := range mpa.panels {
-		if i != index {
-			mpa.panels[i].Hide()
-			mpa.panels[i].Invalidate(true)
-		}
-	}
-	mpa.panels[index].Show()
-	mpa.panels[index].Invalidate(true)
-	mpa.current = index
-}
-
-func (mpa *MultiPanel) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_SIZE:
-		// resize contained panels
-		for _, p := range mpa.panels {
-			p.SetPos(0, 0)
-			p.SetSize(mpa.Size())
-		}
-	}
-	return w32.DefWindowProc(mpa.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/path.go","mode":420,"size":1762,"sha256":"5937e5a3ded0c7d7731c4a18c1b9317f4630a97a89d03f76a400953e7997d3a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1762}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"syscall"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-func knownFolderPath(id w32.CSIDL) (string, error) {
-	var buf [w32.MAX_PATH]uint16
-
-	if !w32.SHGetSpecialFolderPath(0, &buf[0], id, false) {
-		return "", fmt.Errorf("SHGetSpecialFolderPath failed")
-	}
-
-	return syscall.UTF16ToString(buf[0:]), nil
-}
-
-func AppDataPath() (string, error) {
-	return knownFolderPath(w32.CSIDL_APPDATA)
-}
-
-func CommonAppDataPath() (string, error) {
-	return knownFolderPath(w32.CSIDL_COMMON_APPDATA)
-}
-
-func LocalAppDataPath() (string, error) {
-	return knownFolderPath(w32.CSIDL_LOCAL_APPDATA)
-}
-
-// EnsureAppDataPath uses AppDataPath to ensure storage for local settings and databases.
-func EnsureAppDataPath(company, product string) (string, error) {
-	path, err := AppDataPath()
-	if err != nil {
-		return path, err
-	}
-	p := filepath.Join(path, company, product)
-
-	if _, err := os.Stat(p); os.IsNotExist(err) {
-		// path/to/whatever does not exist
-		if err := os.MkdirAll(p, os.ModePerm); err != nil {
-			return p, err
-		}
-	}
-	return p, nil
-}
-
-func DriveNames() ([]string, error) {
-	bufLen := w32.GetLogicalDriveStrings(0, nil)
-	if bufLen == 0 {
-		return nil, fmt.Errorf("GetLogicalDriveStrings failed")
-	}
-	buf := make([]uint16, bufLen+1)
-
-	bufLen = w32.GetLogicalDriveStrings(bufLen+1, &buf[0])
-	if bufLen == 0 {
-		return nil, fmt.Errorf("GetLogicalDriveStrings failed")
-	}
-
-	var names []string
-	for i := 0; i < len(buf)-2; {
-		name := syscall.UTF16ToString(buf[i:])
-		names = append(names, name)
-		i += len(name) + 1
-	}
-	return names, nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/pen.go","mode":420,"size":1080,"sha256":"f686a62116108199df054c2e27fd7f63a23d71c20e7e1beb247f28e3c3f03469","index":0,"count":1,"encoding":"utf-8","payloadBytes":1080}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Pen struct {
-	hPen  w32.HPEN
-	style uint
-	brush *Brush
-}
-
-func NewPen(style uint, width uint, brush *Brush) *Pen {
-	if brush == nil {
-		panic("Brush cannot be nil")
-	}
-
-	hPen := w32.ExtCreatePen(style, width, brush.GetLOGBRUSH(), 0, nil)
-	if hPen == 0 {
-		panic("Failed to create pen")
-	}
-
-	return &Pen{hPen, style, brush}
-}
-
-func NewNullPen() *Pen {
-	lb := w32.LOGBRUSH{LbStyle: w32.BS_NULL}
-
-	hPen := w32.ExtCreatePen(w32.PS_COSMETIC|w32.PS_NULL, 1, &lb, 0, nil)
-	if hPen == 0 {
-		panic("failed to create null brush")
-	}
-
-	return &Pen{hPen: hPen}
-}
-
-func (pen *Pen) Style() uint {
-	return pen.style
-}
-
-func (pen *Pen) Brush() *Brush {
-	return pen.brush
-}
-
-func (pen *Pen) GetHPEN() w32.HPEN {
-	return pen.hPen
-}
-
-func (pen *Pen) Dispose() {
-	if pen.hPen != 0 {
-		w32.DeleteObject(w32.HGDIOBJ(pen.hPen))
-		pen.hPen = 0
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/progressbar.go","mode":420,"size":1156,"sha256":"b6af7fdd610402062b93dd91c8e0f34f48cc4dad5d2b2ca298273b1777f4049c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1156}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type ProgressBar struct {
-	ControlBase
-}
-
-func NewProgressBar(parent Controller) *ProgressBar {
-	pb := new(ProgressBar)
-
-	pb.InitControl(w32.PROGRESS_CLASS, parent, 0, w32.WS_CHILD|w32.WS_VISIBLE)
-	RegMsgHandler(pb)
-
-	pb.SetSize(200, 22)
-	return pb
-}
-
-func (pr *ProgressBar) Value() int {
-	ret := w32.SendMessage(pr.hwnd, w32.PBM_GETPOS, 0, 0)
-	return int(ret)
-}
-
-func (pr *ProgressBar) SetValue(v int) {
-	w32.SendMessage(pr.hwnd, w32.PBM_SETPOS, uintptr(v), 0)
-}
-
-func (pr *ProgressBar) Range() (min, max uint) {
-	min = uint(w32.SendMessage(pr.hwnd, w32.PBM_GETRANGE, uintptr(w32.BoolToBOOL(true)), 0))
-	max = uint(w32.SendMessage(pr.hwnd, w32.PBM_GETRANGE, uintptr(w32.BoolToBOOL(false)), 0))
-	return
-}
-
-func (pr *ProgressBar) SetRange(min, max int) {
-	w32.SendMessage(pr.hwnd, w32.PBM_SETRANGE32, uintptr(min), uintptr(max))
-}
-
-func (pr *ProgressBar) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	return w32.DefWindowProc(pr.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/rect.go","mode":420,"size":1673,"sha256":"d104b6752a8de6c359fbccdf6410327311e0fead4b3e14d16fb43346e984298b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1673}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Rect struct {
-	rect w32.RECT
-}
-
-func NewEmptyRect() *Rect {
-	var newRect Rect
-	w32.SetRectEmpty(&newRect.rect)
-
-	return &newRect
-}
-
-func NewRect(left, top, right, bottom int) *Rect {
-	var newRect Rect
-	w32.SetRectEmpty(&newRect.rect)
-	newRect.Set(left, top, right, bottom)
-
-	return &newRect
-}
-
-func (re *Rect) Data() (left, top, right, bottom int32) {
-	left = re.rect.Left
-	top = re.rect.Top
-	right = re.rect.Right
-	bottom = re.rect.Bottom
-	return
-}
-
-func (re *Rect) Width() int {
-	return int(re.rect.Right - re.rect.Left)
-}
-
-func (re *Rect) Height() int {
-	return int(re.rect.Bottom - re.rect.Top)
-}
-
-func (re *Rect) GetW32Rect() *w32.RECT {
-	return &re.rect
-}
-
-func (re *Rect) Set(left, top, right, bottom int) {
-	w32.SetRect(&re.rect, left, top, right, bottom)
-}
-
-func (re *Rect) IsEqual(rect *Rect) bool {
-	return w32.EqualRect(&re.rect, &rect.rect)
-}
-
-func (re *Rect) Inflate(x, y int) {
-	w32.InflateRect(&re.rect, x, y)
-}
-
-func (re *Rect) Intersect(src *Rect) {
-	w32.IntersectRect(&re.rect, &re.rect, &src.rect)
-}
-
-func (re *Rect) IsEmpty() bool {
-	return w32.IsRectEmpty(&re.rect)
-}
-
-func (re *Rect) Offset(x, y int) {
-	w32.OffsetRect(&re.rect, x, y)
-}
-
-func (re *Rect) IsPointIn(x, y int) bool {
-	return w32.PtInRect(&re.rect, x, y)
-}
-
-func (re *Rect) Substract(src *Rect) {
-	w32.SubtractRect(&re.rect, &re.rect, &src.rect)
-}
-
-func (re *Rect) Union(src *Rect) {
-	w32.UnionRect(&re.rect, &re.rect, &src.rect)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/resizer.go","mode":420,"size":4238,"sha256":"5522aba7cdbf82abab8a45b5549138926d5e131a3bb791cb16d2192126659564","index":0,"count":1,"encoding":"utf-8","payloadBytes":4238}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type VResizer struct {
-	ControlBase
-
-	control1 Dockable
-	control2 Dockable
-	dir      Direction
-
-	mouseLeft bool
-	drag      bool
-}
-
-func NewVResizer(parent Controller) *VResizer {
-	sp := new(VResizer)
-
-	RegClassOnlyOnce("winc_VResizer")
-	sp.hwnd = CreateWindow("winc_VResizer", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
-	sp.parent = parent
-	sp.mouseLeft = true
-	RegMsgHandler(sp)
-
-	sp.SetFont(DefaultFont)
-	sp.SetText("")
-	sp.SetSize(20, 100)
-	return sp
-}
-
-func (sp *VResizer) SetControl(control1, control2 Dockable, dir Direction, minSize int) {
-	sp.control1 = control1
-	sp.control2 = control2
-	if dir != Left && dir != Right {
-		panic("invalid direction")
-	}
-	sp.dir = dir
-
-	// TODO(vi): ADDED
-	/*internalTrackMouseEvent(control1.Handle())
-	internalTrackMouseEvent(control2.Handle())
-
-	control1.OnMouseMove().Bind(func(e *Event) {
-		if sp.drag {
-			x := e.Data.(*MouseEventData).X
-			sp.update(x)
-			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZEWE))
-
-		}
-		fmt.Println("control1.OnMouseMove")
-	})
-
-	control2.OnMouseMove().Bind(func(e *Event) {
-		if sp.drag {
-			x := e.Data.(*MouseEventData).X
-			sp.update(x)
-			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZEWE))
-
-		}
-		fmt.Println("control2.OnMouseMove")
-	})
-
-	control1.OnLBUp().Bind(func(e *Event) {
-		sp.drag = false
-		sp.mouseLeft = true
-		fmt.Println("control1.OnLBUp")
-	})
-
-	control2.OnLBUp().Bind(func(e *Event) {
-		sp.drag = false
-		sp.mouseLeft = true
-		fmt.Println("control2.OnLBUp")
-	})*/
-
-	// ---- finish ADDED
-
-}
-
-func (sp *VResizer) update(x int) {
-	pos := x - 10
-
-	w1, h1 := sp.control1.Width(), sp.control1.Height()
-	if sp.dir == Left {
-		w1 += pos
-	} else {
-		w1 -= pos
-	}
-	sp.control1.SetSize(w1, h1)
-	fm := sp.parent.(*Form)
-	fm.UpdateLayout()
-
-	w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_ARROW))
-}
-
-func (sp *VResizer) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_CREATE:
-		internalTrackMouseEvent(sp.hwnd)
-
-	case w32.WM_MOUSEMOVE:
-		if sp.drag {
-			x, _ := genPoint(lparam)
-			sp.update(x)
-		} else {
-			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZEWE))
-		}
-
-		if sp.mouseLeft {
-			internalTrackMouseEvent(sp.hwnd)
-			sp.mouseLeft = false
-		}
-
-	case w32.WM_MOUSELEAVE:
-		sp.drag = false
-		sp.mouseLeft = true
-
-	case w32.WM_LBUTTONUP:
-		sp.drag = false
-
-	case w32.WM_LBUTTONDOWN:
-		sp.drag = true
-	}
-	return w32.DefWindowProc(sp.hwnd, msg, wparam, lparam)
-}
-
-type HResizer struct {
-	ControlBase
-
-	control1  Dockable
-	control2  Dockable
-	dir       Direction
-	mouseLeft bool
-	drag      bool
-}
-
-func NewHResizer(parent Controller) *HResizer {
-	sp := new(HResizer)
-
-	RegClassOnlyOnce("winc_HResizer")
-	sp.hwnd = CreateWindow("winc_HResizer", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
-	sp.parent = parent
-	sp.mouseLeft = true
-	RegMsgHandler(sp)
-
-	sp.SetFont(DefaultFont)
-	sp.SetText("")
-	sp.SetSize(100, 20)
-
-	return sp
-}
-
-func (sp *HResizer) SetControl(control1, control2 Dockable, dir Direction, minSize int) {
-	sp.control1 = control1
-	sp.control2 = control2
-	if dir != Top && dir != Bottom {
-		panic("invalid direction")
-	}
-	sp.dir = dir
-
-}
-
-func (sp *HResizer) update(y int) {
-	pos := y - 10
-
-	w1, h1 := sp.control1.Width(), sp.control1.Height()
-	if sp.dir == Top {
-		h1 += pos
-	} else {
-		h1 -= pos
-	}
-	sp.control1.SetSize(w1, h1)
-
-	fm := sp.parent.(*Form)
-	fm.UpdateLayout()
-
-	w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_ARROW))
-}
-
-func (sp *HResizer) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_CREATE:
-		internalTrackMouseEvent(sp.hwnd)
-
-	case w32.WM_MOUSEMOVE:
-		if sp.drag {
-			_, y := genPoint(lparam)
-			sp.update(y)
-		} else {
-			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZENS))
-		}
-
-		if sp.mouseLeft {
-			internalTrackMouseEvent(sp.hwnd)
-			sp.mouseLeft = false
-		}
-
-	case w32.WM_MOUSELEAVE:
-		sp.drag = false
-		sp.mouseLeft = true
-
-	case w32.WM_LBUTTONUP:
-		sp.drag = false
-
-	case w32.WM_LBUTTONDOWN:
-		sp.drag = true
-	}
-	return w32.DefWindowProc(sp.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/scrollview.go","mode":420,"size":2577,"sha256":"43ee6091b3379ff29f05e780ae2b4f7f69aab00e1d4ea1346a9d065fe7db1f4e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2577}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type ScrollView struct {
-	ControlBase
-	child Dockable
-}
-
-func NewScrollView(parent Controller) *ScrollView {
-	sv := new(ScrollView)
-
-	RegClassOnlyOnce("winc_ScrollView")
-	sv.hwnd = CreateWindow("winc_ScrollView", parent, w32.WS_EX_CONTROLPARENT,
-		w32.WS_CHILD|w32.WS_HSCROLL|w32.WS_VISIBLE|w32.WS_VSCROLL)
-	sv.parent = parent
-	RegMsgHandler(sv)
-
-	sv.SetFont(DefaultFont)
-	sv.SetText("")
-	sv.SetSize(200, 200)
-	return sv
-}
-
-func (sv *ScrollView) SetChild(child Dockable) {
-	sv.child = child
-}
-
-func (sv *ScrollView) UpdateScrollBars() {
-	w, h := sv.child.Width(), sv.child.Height()
-	sw, sh := sv.Size()
-
-	var si w32.SCROLLINFO
-	si.CbSize = uint32(unsafe.Sizeof(si))
-	si.FMask = w32.SIF_PAGE | w32.SIF_RANGE
-
-	si.NMax = int32(w - 1)
-	si.NPage = uint32(sw)
-	w32.SetScrollInfo(sv.hwnd, w32.SB_HORZ, &si, true)
-	x := sv.scroll(w32.SB_HORZ, w32.SB_THUMBPOSITION)
-
-	si.NMax = int32(h)
-	si.NPage = uint32(sh)
-	w32.SetScrollInfo(sv.hwnd, w32.SB_VERT, &si, true)
-	y := sv.scroll(w32.SB_VERT, w32.SB_THUMBPOSITION)
-
-	sv.child.SetPos(x, y)
-}
-
-func (sv *ScrollView) scroll(sb int32, cmd uint16) int {
-	var pos int32
-	var si w32.SCROLLINFO
-	si.CbSize = uint32(unsafe.Sizeof(si))
-	si.FMask = w32.SIF_PAGE | w32.SIF_POS | w32.SIF_RANGE | w32.SIF_TRACKPOS
-
-	w32.GetScrollInfo(sv.hwnd, sb, &si)
-	pos = si.NPos
-
-	switch cmd {
-	case w32.SB_LINELEFT: // == win.SB_LINEUP
-		pos -= 20
-
-	case w32.SB_LINERIGHT: // == win.SB_LINEDOWN
-		pos += 20
-
-	case w32.SB_PAGELEFT: // == win.SB_PAGEUP
-		pos -= int32(si.NPage)
-
-	case w32.SB_PAGERIGHT: // == win.SB_PAGEDOWN
-		pos += int32(si.NPage)
-
-	case w32.SB_THUMBTRACK:
-		pos = si.NTrackPos
-	}
-
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > si.NMax+1-int32(si.NPage) {
-		pos = si.NMax + 1 - int32(si.NPage)
-	}
-
-	si.FMask = w32.SIF_POS
-	si.NPos = pos
-	w32.SetScrollInfo(sv.hwnd, sb, &si, true)
-
-	return -int(pos)
-}
-
-func (sv *ScrollView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	if sv.child != nil {
-		switch msg {
-		case w32.WM_PAINT:
-			sv.UpdateScrollBars()
-
-		case w32.WM_HSCROLL:
-			x, y := sv.child.Pos()
-			x = sv.scroll(w32.SB_HORZ, w32.LOWORD(uint32(wparam)))
-			sv.child.SetPos(x, y)
-
-		case w32.WM_VSCROLL:
-			x, y := sv.child.Pos()
-			y = sv.scroll(w32.SB_VERT, w32.LOWORD(uint32(wparam)))
-			sv.child.SetPos(x, y)
-
-		case w32.WM_SIZE, w32.WM_SIZING:
-			sv.UpdateScrollBars()
-		}
-	}
-	return w32.DefWindowProc(sv.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/slider.go","mode":420,"size":1809,"sha256":"5b05186007655526ff1d91fd1071df42618f9663036ba485fa6b0523462a54a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1809}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-
-type Slider struct {
-	ControlBase
-	prevPos int
-
-	onScroll EventManager
-}
-
-func NewSlider(parent Controller) *Slider {
-	tb := new(Slider)
-
-	tb.InitControl("msctls_trackbar32", parent, 0, w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD /*|w32.TBS_AUTOTICKS*/)
-	RegMsgHandler(tb)
-
-	tb.SetFont(DefaultFont)
-	tb.SetText("Slider")
-	tb.SetSize(200, 32)
-
-	tb.SetRange(0, 100)
-	tb.SetPage(10)
-	return tb
-}
-
-func (tb *Slider) OnScroll() *EventManager {
-	return &tb.onScroll
-}
-
-func (tb *Slider) Value() int {
-	ret := w32.SendMessage(tb.hwnd, w32.TBM_GETPOS, 0, 0)
-	return int(ret)
-}
-
-func (tb *Slider) SetValue(v int) {
-	tb.prevPos = v
-	w32.SendMessage(tb.hwnd, w32.TBM_SETPOS, uintptr(w32.BoolToBOOL(true)), uintptr(v))
-}
-
-func (tb *Slider) Range() (min, max int) {
-	min = int(w32.SendMessage(tb.hwnd, w32.TBM_GETRANGEMIN, 0, 0))
-	max = int(w32.SendMessage(tb.hwnd, w32.TBM_GETRANGEMAX, 0, 0))
-	return min, max
-}
-
-func (tb *Slider) SetRange(min, max int) {
-	w32.SendMessage(tb.hwnd, w32.TBM_SETRANGE, uintptr(w32.BoolToBOOL(true)), uintptr(w32.MAKELONG(uint16(min), uint16(max))))
-}
-
-func (tb *Slider) SetPage(pagesize int) {
-	w32.SendMessage(tb.hwnd, w32.TBM_SETPAGESIZE, 0, uintptr(pagesize))
-}
-
-func (tb *Slider) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	/*
-		// REMOVE:
-		// following code did not work, used workaround below
-		code := w32.LOWORD(uint32(wparam))
-
-		switch code {
-		case w32.TB_ENDTRACK:
-			tb.onScroll.Fire(NewEvent(tb, nil))
-		}*/
-
-	newPos := tb.Value()
-	if newPos != tb.prevPos {
-		tb.onScroll.Fire(NewEvent(tb, nil))
-		tb.prevPos = newPos
-	}
-
-	return w32.DefWindowProc(tb.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/tabview.go","mode":420,"size":2398,"sha256":"5f8e70c50013fea9433799f61f0a247f57996d83fcf8dc76a84439131398289c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2398}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-// TabView creates MultiPanel internally and manages tabs as panels.
-type TabView struct {
-	ControlBase
-
-	panels           *MultiPanel
-	onSelectedChange EventManager
-}
-
-func NewTabView(parent Controller) *TabView {
-	tv := new(TabView)
-
-	tv.InitControl("SysTabControl32", parent, 0,
-		w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.WS_CLIPSIBLINGS)
-	RegMsgHandler(tv)
-
-	tv.panels = NewMultiPanel(parent)
-
-	tv.SetFont(DefaultFont)
-	tv.SetSize(200, 24)
-	return tv
-}
-
-func (tv *TabView) Panels() *MultiPanel {
-	return tv.panels
-}
-
-func (tv *TabView) tcitemFromPage(panel *Panel) *w32.TCITEM {
-	text := syscall.StringToUTF16(panel.Text())
-	item := &w32.TCITEM{
-		Mask:       w32.TCIF_TEXT,
-		PszText:    &text[0],
-		CchTextMax: int32(len(text)),
-	}
-	return item
-}
-
-func (tv *TabView) AddPanel(text string) *Panel {
-	panel := NewPanel(tv.panels)
-	panel.SetText(text)
-
-	item := tv.tcitemFromPage(panel)
-	index := tv.panels.Count()
-	idx := int(w32.SendMessage(tv.hwnd, w32.TCM_INSERTITEM, uintptr(index), uintptr(unsafe.Pointer(item))))
-	if idx == -1 {
-		panic("SendMessage(TCM_INSERTITEM) failed")
-	}
-
-	tv.panels.AddPanel(panel)
-	tv.SetCurrent(idx)
-	return panel
-}
-
-func (tv *TabView) DeletePanel(index int) {
-	w32.SendMessage(tv.hwnd, w32.TCM_DELETEITEM, uintptr(index), 0)
-	tv.panels.DeletePanel(index)
-	switch {
-	case tv.panels.Count() > index:
-		tv.SetCurrent(index)
-	case tv.panels.Count() == 0:
-		tv.SetCurrent(0)
-	}
-}
-
-func (tv *TabView) Current() int {
-	return tv.panels.Current()
-}
-
-func (tv *TabView) SetCurrent(index int) {
-	if index < 0 || index >= tv.panels.Count() {
-		panic("invalid index")
-	}
-	if ret := int(w32.SendMessage(tv.hwnd, w32.TCM_SETCURSEL, uintptr(index), 0)); ret == -1 {
-		panic("SendMessage(TCM_SETCURSEL) failed")
-	}
-	tv.panels.SetCurrent(index)
-}
-
-func (tv *TabView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_NOTIFY:
-		nmhdr := (*w32.NMHDR)(unsafe.Pointer(lparam))
-
-		switch int32(nmhdr.Code) {
-		case w32.TCN_SELCHANGE:
-			cur := int(w32.SendMessage(tv.hwnd, w32.TCM_GETCURSEL, 0, 0))
-			tv.SetCurrent(cur)
-
-			tv.onSelectedChange.Fire(NewEvent(tv, nil))
-		}
-	}
-	return w32.DefWindowProc(tv.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/toolbar.go","mode":420,"size":4667,"sha256":"3f31b58ab220e35454259c93bff19e38ee8de9fe11d5c857c1f430f91cc911e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":4667}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Toolbar struct {
-	ControlBase
-	iml *ImageList
-
-	buttons []*ToolButton
-}
-
-type ToolButton struct {
-	tb *Toolbar
-
-	text      string
-	enabled   bool
-	checkable bool
-	checked   bool
-	image     int
-
-	onClick EventManager
-}
-
-func (bt *ToolButton) OnClick() *EventManager {
-	return &bt.onClick
-}
-
-func (bt *ToolButton) update() { bt.tb.update(bt) }
-
-func (bt *ToolButton) IsSeparator() bool { return bt.text == "-" }
-func (bt *ToolButton) SetSeparator()     { bt.text = "-" }
-
-func (bt *ToolButton) Enabled() bool     { return bt.enabled }
-func (bt *ToolButton) SetEnabled(b bool) { bt.enabled = b; bt.update() }
-
-func (bt *ToolButton) Checkable() bool     { return bt.checkable }
-func (bt *ToolButton) SetCheckable(b bool) { bt.checkable = b; bt.update() }
-
-func (bt *ToolButton) Checked() bool     { return bt.checked }
-func (bt *ToolButton) SetChecked(b bool) { bt.checked = b; bt.update() }
-
-func (bt *ToolButton) Text() string     { return bt.text }
-func (bt *ToolButton) SetText(s string) { bt.text = s; bt.update() }
-
-func (bt *ToolButton) Image() int     { return bt.image }
-func (bt *ToolButton) SetImage(i int) { bt.image = i; bt.update() }
-
-// NewHToolbar creates horizontal toolbar with text on same line as image.
-func NewHToolbar(parent Controller) *Toolbar {
-	return newToolbar(parent, w32.CCS_NODIVIDER|w32.TBSTYLE_FLAT|w32.TBSTYLE_TOOLTIPS|w32.TBSTYLE_WRAPABLE|
-		w32.WS_CHILD|w32.TBSTYLE_LIST)
-}
-
-// NewToolbar creates toolbar with text below the image.
-func NewToolbar(parent Controller) *Toolbar {
-	return newToolbar(parent, w32.CCS_NODIVIDER|w32.TBSTYLE_FLAT|w32.TBSTYLE_TOOLTIPS|w32.TBSTYLE_WRAPABLE|
-		w32.WS_CHILD /*|w32.TBSTYLE_TRANSPARENT*/)
-}
-
-func newToolbar(parent Controller, style uint) *Toolbar {
-	tb := new(Toolbar)
-
-	tb.InitControl("ToolbarWindow32", parent, 0, style)
-
-	exStyle := w32.SendMessage(tb.hwnd, w32.TB_GETEXTENDEDSTYLE, 0, 0)
-	exStyle |= w32.TBSTYLE_EX_DRAWDDARROWS | w32.TBSTYLE_EX_MIXEDBUTTONS
-	w32.SendMessage(tb.hwnd, w32.TB_SETEXTENDEDSTYLE, 0, exStyle)
-	RegMsgHandler(tb)
-
-	tb.SetFont(DefaultFont)
-	tb.SetPos(0, 0)
-	tb.SetSize(200, 40)
-
-	return tb
-}
-
-func (tb *Toolbar) SetImageList(imageList *ImageList) {
-	w32.SendMessage(tb.hwnd, w32.TB_SETIMAGELIST, 0, uintptr(imageList.Handle()))
-	tb.iml = imageList
-}
-
-func (tb *Toolbar) initButton(btn *ToolButton, state, style *byte, image *int32, text *uintptr) {
-	*style |= w32.BTNS_AUTOSIZE
-
-	if btn.checked {
-		*state |= w32.TBSTATE_CHECKED
-	}
-
-	if btn.enabled {
-		*state |= w32.TBSTATE_ENABLED
-	}
-
-	if btn.checkable {
-		*style |= w32.BTNS_CHECK
-	}
-
-	if len(btn.Text()) > 0 {
-		*style |= w32.BTNS_SHOWTEXT
-	}
-
-	if btn.IsSeparator() {
-		*style = w32.BTNS_SEP
-	}
-
-	*image = int32(btn.Image())
-	*text = uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(btn.Text())))
-}
-
-func (tb *Toolbar) update(btn *ToolButton) {
-	tbbi := w32.TBBUTTONINFO{
-		DwMask: w32.TBIF_IMAGE | w32.TBIF_STATE | w32.TBIF_STYLE | w32.TBIF_TEXT,
-	}
-
-	tbbi.CbSize = uint32(unsafe.Sizeof(tbbi))
-
-	var i int
-	for i = range tb.buttons {
-		if tb.buttons[i] == btn {
-			break
-		}
-	}
-
-	tb.initButton(btn, &tbbi.FsState, &tbbi.FsStyle, &tbbi.IImage, &tbbi.PszText)
-	if w32.SendMessage(tb.hwnd, w32.TB_SETBUTTONINFO, uintptr(i), uintptr(unsafe.Pointer(&tbbi))) == 0 {
-		panic("SendMessage(TB_SETBUTTONINFO) failed")
-	}
-}
-
-func (tb *Toolbar) AddSeparator() {
-	tb.AddButton("-", 0)
-}
-
-// AddButton creates and adds button to the toolbar. Use returned toolbutton to setup OnClick event.
-func (tb *Toolbar) AddButton(text string, image int) *ToolButton {
-	bt := &ToolButton{
-		tb:      tb, // points to parent
-		text:    text,
-		image:   image,
-		enabled: true,
-	}
-	tb.buttons = append(tb.buttons, bt)
-	index := len(tb.buttons) - 1
-
-	tbb := w32.TBBUTTON{
-		IdCommand: int32(index),
-	}
-
-	tb.initButton(bt, &tbb.FsState, &tbb.FsStyle, &tbb.IBitmap, &tbb.IString)
-	w32.SendMessage(tb.hwnd, w32.TB_BUTTONSTRUCTSIZE, uintptr(unsafe.Sizeof(tbb)), 0)
-
-	if w32.SendMessage(tb.hwnd, w32.TB_INSERTBUTTON, uintptr(index), uintptr(unsafe.Pointer(&tbb))) == w32.FALSE {
-		panic("SendMessage(TB_ADDBUTTONS)")
-	}
-
-	w32.SendMessage(tb.hwnd, w32.TB_AUTOSIZE, 0, 0)
-	return bt
-}
-
-func (tb *Toolbar) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_COMMAND:
-		switch w32.HIWORD(uint32(wparam)) {
-		case w32.BN_CLICKED:
-			id := uint16(w32.LOWORD(uint32(wparam)))
-			btn := tb.buttons[id]
-			btn.onClick.Fire(NewEvent(tb, nil))
-		}
-	}
-	return w32.DefWindowProc(tb.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/tooltip.go","mode":420,"size":1191,"sha256":"d3b9a40b5780899ccd7e981f507a75dd3ebf971817842d0584841398f6c06f43","index":0,"count":1,"encoding":"utf-8","payloadBytes":1191}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type ToolTip struct {
-	ControlBase
-}
-
-func NewToolTip(parent Controller) *ToolTip {
-	tp := new(ToolTip)
-
-	tp.InitControl("tooltips_class32", parent, w32.WS_EX_TOPMOST, w32.WS_POPUP|w32.TTS_NOPREFIX|w32.TTS_ALWAYSTIP)
-	w32.SetWindowPos(tp.Handle(), w32.HWND_TOPMOST, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE|w32.SWP_NOACTIVATE)
-
-	return tp
-}
-
-func (tp *ToolTip) SetTip(tool Controller, tip string) bool {
-	var ti w32.TOOLINFO
-	ti.CbSize = uint32(unsafe.Sizeof(ti))
-	if tool.Parent() != nil {
-		ti.Hwnd = tool.Parent().Handle()
-	}
-	ti.UFlags = w32.TTF_IDISHWND | w32.TTF_SUBCLASS /* | TTF_ABSOLUTE */
-	ti.UId = uintptr(tool.Handle())
-	ti.LpszText = syscall.StringToUTF16Ptr(tip)
-
-	return w32.SendMessage(tp.Handle(), w32.TTM_ADDTOOL, 0, uintptr(unsafe.Pointer(&ti))) != w32.FALSE
-}
-
-func (tp *ToolTip) WndProc(msg uint, wparam, lparam uintptr) uintptr {
-	return w32.DefWindowProc(tp.hwnd, uint32(msg), wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/treeview.go","mode":420,"size":7052,"sha256":"cdbe468bd1892c179e8df1b3f8d54797c70729d1a23573d26b2b9a8199b0603d","index":0,"count":1,"encoding":"utf-8","payloadBytes":7052}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"errors"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-// TreeItem represents an item in a TreeView widget.
-type TreeItem interface {
-	Text() string    // Text returns the text of the item.
-	ImageIndex() int // ImageIndex is used only if SetImageList is called on the treeview
-}
-
-type treeViewItemInfo struct {
-	handle       w32.HTREEITEM
-	child2Handle map[TreeItem]w32.HTREEITEM
-}
-
-// StringTreeItem is helper for basic string lists.
-type StringTreeItem struct {
-	Data  string
-	Image int
-}
-
-func (s StringTreeItem) Text() string    { return s.Data }
-func (s StringTreeItem) ImageIndex() int { return s.Image }
-
-type TreeView struct {
-	ControlBase
-
-	iml         *ImageList
-	item2Info   map[TreeItem]*treeViewItemInfo
-	handle2Item map[w32.HTREEITEM]TreeItem
-	currItem    TreeItem
-
-	onSelectedChange EventManager
-	onExpand         EventManager
-	onCollapse       EventManager
-	onViewChange     EventManager
-}
-
-func NewTreeView(parent Controller) *TreeView {
-	tv := new(TreeView)
-
-	tv.InitControl("SysTreeView32", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|
-		w32.WS_BORDER|w32.TVS_HASBUTTONS|w32.TVS_LINESATROOT|w32.TVS_SHOWSELALWAYS|
-		w32.TVS_TRACKSELECT /*|w32.WS_EX_CLIENTEDGE*/)
-
-	tv.item2Info = make(map[TreeItem]*treeViewItemInfo)
-	tv.handle2Item = make(map[w32.HTREEITEM]TreeItem)
-
-	RegMsgHandler(tv)
-
-	tv.SetFont(DefaultFont)
-	tv.SetSize(200, 400)
-
-	if err := tv.SetTheme("Explorer"); err != nil {
-		// theme error is ignored
-	}
-	return tv
-}
-
-func (tv *TreeView) EnableDoubleBuffer(enable bool) {
-	if enable {
-		w32.SendMessage(tv.hwnd, w32.TVM_SETEXTENDEDSTYLE, 0, w32.TVS_EX_DOUBLEBUFFER)
-	} else {
-		w32.SendMessage(tv.hwnd, w32.TVM_SETEXTENDEDSTYLE, w32.TVS_EX_DOUBLEBUFFER, 0)
-	}
-}
-
-// SelectedItem is current selected item after OnSelectedChange event.
-func (tv *TreeView) SelectedItem() TreeItem {
-	return tv.currItem
-}
-
-func (tv *TreeView) SetSelectedItem(item TreeItem) bool {
-	var handle w32.HTREEITEM
-	if item != nil {
-		if info := tv.item2Info[item]; info == nil {
-			return false // invalid item
-		} else {
-			handle = info.handle
-		}
-	}
-
-	if w32.SendMessage(tv.hwnd, w32.TVM_SELECTITEM, w32.TVGN_CARET, uintptr(handle)) == 0 {
-		return false // set selected failed
-	}
-	tv.currItem = item
-	return true
-}
-
-func (tv *TreeView) ItemAt(x, y int) TreeItem {
-	hti := w32.TVHITTESTINFO{Pt: w32.POINT{int32(x), int32(y)}}
-	w32.SendMessage(tv.hwnd, w32.TVM_HITTEST, 0, uintptr(unsafe.Pointer(&hti)))
-	if item, ok := tv.handle2Item[hti.HItem]; ok {
-		return item
-	}
-	return nil
-}
-
-func (tv *TreeView) Items() (list []TreeItem) {
-	for item := range tv.item2Info {
-		list = append(list, item)
-	}
-	return list
-}
-
-func (tv *TreeView) InsertItem(item, parent, insertAfter TreeItem) error {
-	var tvins w32.TVINSERTSTRUCT
-	tvi := &tvins.Item
-
-	tvi.Mask = w32.TVIF_TEXT                                                     // w32.TVIF_CHILDREN | w32.TVIF_TEXT
-	tvi.PszText = uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(item.Text()))) // w32.LPSTR_TEXTCALLBACK
-	tvi.CChildren = 0                                                            // w32.I_CHILDRENCALLBACK
-
-	if parent == nil {
-		tvins.HParent = w32.TVI_ROOT
-	} else {
-		info := tv.item2Info[parent]
-		if info == nil {
-			return errors.New("winc: invalid parent")
-		}
-		tvins.HParent = info.handle
-	}
-
-	if insertAfter == nil {
-		tvins.HInsertAfter = w32.TVI_LAST
-	} else {
-		info := tv.item2Info[insertAfter]
-		if info == nil {
-			return errors.New("winc: invalid prev item")
-		}
-		tvins.HInsertAfter = info.handle
-	}
-
-	tv.applyImage(tvi, item)
-
-	hItem := w32.HTREEITEM(w32.SendMessage(tv.hwnd, w32.TVM_INSERTITEM, 0, uintptr(unsafe.Pointer(&tvins))))
-	if hItem == 0 {
-		return errors.New("winc: TVM_INSERTITEM failed")
-	}
-	tv.item2Info[item] = &treeViewItemInfo{hItem, make(map[TreeItem]w32.HTREEITEM)}
-	tv.handle2Item[hItem] = item
-	return nil
-}
-
-func (tv *TreeView) UpdateItem(item TreeItem) bool {
-	it := tv.item2Info[item]
-	if it == nil {
-		return false
-	}
-
-	tvi := &w32.TVITEM{
-		Mask:    w32.TVIF_TEXT,
-		HItem:   it.handle,
-		PszText: uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(item.Text()))),
-	}
-	tv.applyImage(tvi, item)
-
-	if w32.SendMessage(tv.hwnd, w32.TVM_SETITEM, 0, uintptr(unsafe.Pointer(tvi))) == 0 {
-		return false
-	}
-	return true
-}
-
-func (tv *TreeView) DeleteItem(item TreeItem) bool {
-	it := tv.item2Info[item]
-	if it == nil {
-		return false
-	}
-
-	if w32.SendMessage(tv.hwnd, w32.TVM_DELETEITEM, 0, uintptr(it.handle)) == 0 {
-		return false
-	}
-
-	delete(tv.item2Info, item)
-	delete(tv.handle2Item, it.handle)
-	return true
-}
-
-func (tv *TreeView) DeleteAllItems() bool {
-	if w32.SendMessage(tv.hwnd, w32.TVM_DELETEITEM, 0, 0) == 0 {
-		return false
-	}
-
-	tv.item2Info = make(map[TreeItem]*treeViewItemInfo)
-	tv.handle2Item = make(map[w32.HTREEITEM]TreeItem)
-	return true
-}
-
-func (tv *TreeView) Expand(item TreeItem) bool {
-	if w32.SendMessage(tv.hwnd, w32.TVM_EXPAND, w32.TVE_EXPAND, uintptr(tv.item2Info[item].handle)) == 0 {
-		return false
-	}
-	return true
-}
-
-func (tv *TreeView) Collapse(item TreeItem) bool {
-	if w32.SendMessage(tv.hwnd, w32.TVM_EXPAND, w32.TVE_COLLAPSE, uintptr(tv.item2Info[item].handle)) == 0 {
-		return false
-	}
-	return true
-}
-
-func (tv *TreeView) EnsureVisible(item TreeItem) bool {
-	if info := tv.item2Info[item]; info != nil {
-		return w32.SendMessage(tv.hwnd, w32.TVM_ENSUREVISIBLE, 0, uintptr(info.handle)) != 0
-	}
-	return false
-}
-
-func (tv *TreeView) SetImageList(imageList *ImageList) {
-	w32.SendMessage(tv.hwnd, w32.TVM_SETIMAGELIST, 0, uintptr(imageList.Handle()))
-	tv.iml = imageList
-}
-
-func (tv *TreeView) applyImage(tc *w32.TVITEM, item TreeItem) {
-	if tv.iml != nil {
-		tc.Mask |= w32.TVIF_IMAGE | w32.TVIF_SELECTEDIMAGE
-		tc.IImage = int32(item.ImageIndex())
-		tc.ISelectedImage = int32(item.ImageIndex())
-	}
-}
-
-func (tv *TreeView) OnSelectedChange() *EventManager {
-	return &tv.onSelectedChange
-}
-
-func (tv *TreeView) OnExpand() *EventManager {
-	return &tv.onExpand
-}
-
-func (tv *TreeView) OnCollapse() *EventManager {
-	return &tv.onCollapse
-}
-
-func (tv *TreeView) OnViewChange() *EventManager {
-	return &tv.onViewChange
-}
-
-// Message processor
-func (tv *TreeView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_NOTIFY:
-		nm := (*w32.NMHDR)(unsafe.Pointer(lparam))
-
-		switch nm.Code {
-		case w32.TVN_ITEMEXPANDED:
-			nmtv := (*w32.NMTREEVIEW)(unsafe.Pointer(lparam))
-
-			switch nmtv.Action {
-			case w32.TVE_COLLAPSE:
-				tv.onCollapse.Fire(NewEvent(tv, nil))
-
-			case w32.TVE_COLLAPSERESET:
-
-			case w32.TVE_EXPAND:
-				tv.onExpand.Fire(NewEvent(tv, nil))
-
-			case w32.TVE_EXPANDPARTIAL:
-
-			case w32.TVE_TOGGLE:
-			}
-
-		case w32.TVN_SELCHANGED:
-			nmtv := (*w32.NMTREEVIEW)(unsafe.Pointer(lparam))
-			tv.currItem = tv.handle2Item[nmtv.ItemNew.HItem]
-			tv.onSelectedChange.Fire(NewEvent(tv, nil))
-
-		case w32.TVN_GETDISPINFO:
-			tv.onViewChange.Fire(NewEvent(tv, nil))
-		}
-
-	}
-	return w32.DefWindowProc(tv.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/utils.go","mode":420,"size":3823,"sha256":"f0c5f4d0b7a17e5d1428ccc4159c08e91d955046da40f8895aa1314378f80672","index":0,"count":1,"encoding":"utf-8","payloadBytes":3823}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-func internalTrackMouseEvent(hwnd w32.HWND) {
-	var tme w32.TRACKMOUSEEVENT
-	tme.CbSize = uint32(unsafe.Sizeof(tme))
-	tme.DwFlags = w32.TME_LEAVE
-	tme.HwndTrack = hwnd
-	tme.DwHoverTime = w32.HOVER_DEFAULT
-
-	w32.TrackMouseEvent(&tme)
-}
-
-func SetStyle(hwnd w32.HWND, b bool, style int) {
-	originalStyle := int(w32.GetWindowLongPtr(hwnd, w32.GWL_STYLE))
-	if originalStyle != 0 {
-		if b {
-			originalStyle |= style
-		} else {
-			originalStyle &^= style
-		}
-		w32.SetWindowLongPtr(hwnd, w32.GWL_STYLE, uintptr(originalStyle))
-	}
-}
-
-func SetExStyle(hwnd w32.HWND, b bool, style int) {
-	originalStyle := int(w32.GetWindowLongPtr(hwnd, w32.GWL_EXSTYLE))
-	if originalStyle != 0 {
-		if b {
-			originalStyle |= style
-		} else {
-			originalStyle &^= style
-		}
-		w32.SetWindowLongPtr(hwnd, w32.GWL_EXSTYLE, uintptr(originalStyle))
-	}
-}
-
-func CreateWindow(className string, parent Controller, exStyle, style uint) w32.HWND {
-	instance := GetAppInstance()
-	var parentHwnd w32.HWND
-	if parent != nil {
-		parentHwnd = parent.Handle()
-	}
-	var hwnd w32.HWND
-	hwnd = w32.CreateWindowEx(
-		exStyle,
-		syscall.StringToUTF16Ptr(className),
-		nil,
-		style,
-		w32.CW_USEDEFAULT,
-		w32.CW_USEDEFAULT,
-		w32.CW_USEDEFAULT,
-		w32.CW_USEDEFAULT,
-		parentHwnd,
-		0,
-		instance,
-		nil)
-
-	if hwnd == 0 {
-		errStr := fmt.Sprintf("Error occurred in CreateWindow(%s, %v, %d, %d)", className, parent, exStyle, style)
-		panic(errStr)
-	}
-
-	return hwnd
-}
-
-func RegisterClass(className string, wndproc uintptr) {
-	instance := GetAppInstance()
-	icon := w32.LoadIconWithResourceID(instance, w32.IDI_APPLICATION)
-
-	var wc w32.WNDCLASSEX
-	wc.Size = uint32(unsafe.Sizeof(wc))
-	wc.Style = w32.CS_HREDRAW | w32.CS_VREDRAW
-	wc.WndProc = wndproc
-	wc.Instance = instance
-	wc.Background = w32.COLOR_BTNFACE + 1
-	wc.Icon = icon
-	wc.Cursor = w32.LoadCursorWithResourceID(0, w32.IDC_ARROW)
-	wc.ClassName = syscall.StringToUTF16Ptr(className)
-	wc.MenuName = nil
-	wc.IconSm = icon
-
-	if ret := w32.RegisterClassEx(&wc); ret == 0 {
-		panic(syscall.GetLastError())
-	}
-}
-
-func RegisterWindowMessage(name string) uint32 {
-	n := syscall.StringToUTF16Ptr(name)
-
-	ret := w32.RegisterWindowMessage(n)
-	if ret == 0 {
-		panic(syscall.GetLastError())
-	}
-	return ret
-}
-
-func getMonitorInfo(hwnd w32.HWND) *w32.MONITORINFO {
-	currentMonitor := w32.MonitorFromWindow(hwnd, w32.MONITOR_DEFAULTTONEAREST)
-	var info w32.MONITORINFO
-	info.CbSize = uint32(unsafe.Sizeof(info))
-	w32.GetMonitorInfo(currentMonitor, &info)
-	return &info
-}
-func getWindowInfo(hwnd w32.HWND) *w32.WINDOWINFO {
-	var info w32.WINDOWINFO
-	info.CbSize = uint32(unsafe.Sizeof(info))
-	w32.GetWindowInfo(hwnd, &info)
-	return &info
-}
-
-func RegClassOnlyOnce(className string) {
-	isExists := false
-	for _, class := range gRegisteredClasses {
-		if class == className {
-			isExists = true
-			break
-		}
-	}
-
-	if !isExists {
-		RegisterClass(className, GeneralWndprocCallBack)
-		gRegisteredClasses = append(gRegisteredClasses, className)
-	}
-}
-
-func ScreenToClientRect(hwnd w32.HWND, rect *w32.RECT) *Rect {
-	l, t, r, b := rect.Left, rect.Top, rect.Right, rect.Bottom
-	l1, t1, _ := w32.ScreenToClient(hwnd, int(l), int(t))
-	r1, b1, _ := w32.ScreenToClient(hwnd, int(r), int(b))
-	return NewRect(l1, t1, r1, b1)
-}
-
-// ScaleWithDPI scales the pixels from the default DPI-Space (96) to the target DPI-Space.
-func ScaleWithDPI(pixels int, dpi uint) int {
-	return (pixels * int(dpi)) / 96
-}
-
-// ScaleToDefaultDPI scales the pixels from scaled DPI-Space to default DPI-Space (96).
-func ScaleToDefaultDPI(pixels int, dpi uint) int {
-	return (pixels * 96) / int(dpi)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32/comctl32.go","mode":420,"size":2683,"sha256":"fb0da7c5508b5a071400e5b05914de8f65abb6462ac8073ffbd132d38b31f42b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2683}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2012 The W32 Authors. All Rights Reserved.
- */
-
-package w32
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var (
-	modcomctl32 = syscall.NewLazyDLL("comctl32.dll")
-
-	procInitCommonControlsEx    = modcomctl32.NewProc("InitCommonControlsEx")
-	procImageList_Create        = modcomctl32.NewProc("ImageList_Create")
-	procImageList_Destroy       = modcomctl32.NewProc("ImageList_Destroy")
-	procImageList_GetImageCount = modcomctl32.NewProc("ImageList_GetImageCount")
-	procImageList_SetImageCount = modcomctl32.NewProc("ImageList_SetImageCount")
-	procImageList_Add           = modcomctl32.NewProc("ImageList_Add")
-	procImageList_ReplaceIcon   = modcomctl32.NewProc("ImageList_ReplaceIcon")
-	procImageList_Remove        = modcomctl32.NewProc("ImageList_Remove")
-	procTrackMouseEvent         = modcomctl32.NewProc("_TrackMouseEvent")
-)
-
-func InitCommonControlsEx(lpInitCtrls *INITCOMMONCONTROLSEX) bool {
-	ret, _, _ := procInitCommonControlsEx.Call(
-		uintptr(unsafe.Pointer(lpInitCtrls)))
-
-	return ret != 0
-}
-
-func ImageList_Create(cx, cy int, flags uint, cInitial, cGrow int) HIMAGELIST {
-	ret, _, _ := procImageList_Create.Call(
-		uintptr(cx),
-		uintptr(cy),
-		uintptr(flags),
-		uintptr(cInitial),
-		uintptr(cGrow))
-
-	if ret == 0 {
-		panic("Create image list failed")
-	}
-
-	return HIMAGELIST(ret)
-}
-
-func ImageList_Destroy(himl HIMAGELIST) bool {
-	ret, _, _ := procImageList_Destroy.Call(
-		uintptr(himl))
-
-	return ret != 0
-}
-
-func ImageList_GetImageCount(himl HIMAGELIST) int {
-	ret, _, _ := procImageList_GetImageCount.Call(
-		uintptr(himl))
-
-	return int(ret)
-}
-
-func ImageList_SetImageCount(himl HIMAGELIST, uNewCount uint) bool {
-	ret, _, _ := procImageList_SetImageCount.Call(
-		uintptr(himl),
-		uintptr(uNewCount))
-
-	return ret != 0
-}
-
-func ImageList_Add(himl HIMAGELIST, hbmImage, hbmMask HBITMAP) int {
-	ret, _, _ := procImageList_Add.Call(
-		uintptr(himl),
-		uintptr(hbmImage),
-		uintptr(hbmMask))
-
-	return int(ret)
-}
-
-func ImageList_ReplaceIcon(himl HIMAGELIST, i int, hicon HICON) int {
-	ret, _, _ := procImageList_ReplaceIcon.Call(
-		uintptr(himl),
-		uintptr(i),
-		uintptr(hicon))
-
-	return int(ret)
-}
-
-func ImageList_AddIcon(himl HIMAGELIST, hicon HICON) int {
-	return ImageList_ReplaceIcon(himl, -1, hicon)
-}
-
-func ImageList_Remove(himl HIMAGELIST, i int) bool {
-	ret, _, _ := procImageList_Remove.Call(
-		uintptr(himl),
-		uintptr(i))
-
-	return ret != 0
-}
-
-func ImageList_RemoveAll(himl HIMAGELIST) bool {
-	return ImageList_Remove(himl, -1)
-}
-
-func TrackMouseEvent(tme *TRACKMOUSEEVENT) bool {
-	ret, _, _ := procTrackMouseEvent.Call(
-		uintptr(unsafe.Pointer(tme)))
-
-	return ret != 0
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32/comdlg32.go","mode":420,"size":849,"sha256":"bcc1f597e301f9a784cc118f0545d90e46363c52b54eb31dcd0695b610906dc5","index":0,"count":1,"encoding":"utf-8","payloadBytes":849}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2012 The W32 Authors. All Rights Reserved.
- */
-package w32
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var (
-	modcomdlg32 = syscall.NewLazyDLL("comdlg32.dll")
-
-	procGetSaveFileName      = modcomdlg32.NewProc("GetSaveFileNameW")
-	procGetOpenFileName      = modcomdlg32.NewProc("GetOpenFileNameW")
-	procCommDlgExtendedError = modcomdlg32.NewProc("CommDlgExtendedError")
-)
-
-func GetOpenFileName(ofn *OPENFILENAME) bool {
-	ret, _, _ := procGetOpenFileName.Call(
-		uintptr(unsafe.Pointer(ofn)))
-
-	return ret != 0
-}
-
-func GetSaveFileName(ofn *OPENFILENAME) bool {
-	ret, _, _ := procGetSaveFileName.Call(
-		uintptr(unsafe.Pointer(ofn)))
-
-	return ret != 0
-}
-
-func CommDlgExtendedError() uint {
-	ret, _, _ := procCommDlgExtendedError.Call()
-
-	return uint(ret)
 }
 
 @@END

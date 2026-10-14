@@ -137,7 +137,7 @@ class ActionModule(ActionBase):
                 "_ansible_facts_cacheable": False, "_ansible_no_log": True}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":3002,"sha256":"343d7f84cb22d75d8ca7d2984614d017d5d2b3ee28b593bee67aa415ab55b2b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3002}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":3479,"sha256":"d994a46baff0f857b90b3e0d9a3a52595b5c53ddb424f46a0ee9778891cc49f8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3479}
 import json
 import os
 import tempfile
@@ -165,6 +165,15 @@ class ActionModule(ActionBase):
                     isinstance(snapshot.get("validation"), dict) and snapshot["validation"].get("status") == "PASS"):
                 reissue = inspect_reissue(self._task.args.get("pki_state_root"), project.get("id"), pki.get("requests", []))
             result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue, self._task.args.get("deployment_order"), application_image_lock=self._task.args.get("application_image_lock"), application_vault_sources=self._task.args.get("application_vault_sources"))
+            mode = self._task.args.get("execution_mode")
+            if mode is not None:
+                import sys
+                from pathlib import Path
+                tools = str(Path(__file__).resolve().parents[6] / 'tools')
+                if tools not in sys.path:
+                    sys.path.insert(0, tools)
+                from infrastructure_verification import scope_plan
+                result = scope_plan(result, mode, self._task.args.get("pki_state_root"))
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
             if destination and manifest:
@@ -1295,7 +1304,7 @@ class CallbackModule(CallbackBase):
         self._write(payload, "PLATFORM_CORE_DIAGNOSTIC_OUTPUT")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":7228,"sha256":"7f0e64f47c25afe31606cd979d67777e5c962c8eaa605caa16b6d64f1aab68ca","index":0,"count":1,"encoding":"utf-8","payloadBytes":7228}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":8512,"sha256":"037d73c3aae306f8a462133cc860eaddc562b56a7f3a68a84a2be1bac6e6c60a","index":0,"count":1,"encoding":"utf-8","payloadBytes":8512}
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -1467,15 +1476,37 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors
         self._emit("TASK_COMPLETED", "FAILED", result._task, result)
+        try:
+            from infrastructure_verification import record_application_failure
+            # Only a successful daemon inspect followed by the fixed managed
+            # instance-state predicate is application-only. No stdout parsing.
+            application_only = (self._role(result._task) == 'platform.core.application_runtime' and
+                'platform_application_instance_state' in getattr(result._task, 'tags', []) and
+                type(result._result.get('rc')) is int and result._result['rc'] == 0)
+            record_application_failure(self._journal(), application_only, self._context()['actionId'])
+        except Exception:
+            # Missing proof is UNKNOWN, so reuse fails closed on terminal.
+            pass
 
     def v2_runner_on_unreachable(self, result):
-        self._emit("TASK_COMPLETED", "FAILED", result._task, result)
+        self.v2_runner_on_failed(result)
 
     def v2_runner_on_async_ok(self, result):
         self.v2_runner_on_ok(result)
 
     def v2_runner_on_async_failed(self, result):
         self.v2_runner_on_failed(result)
+
+    def v2_playbook_on_stats(self, stats):
+        if os.environ.get('PLATFORM_EXECUTION_VERIFY_EVIDENCE') != '1':
+            return
+        try:
+            from infrastructure_verification import record_stats
+            record_stats(self._journal(), self._context()['actionId'],
+                         {host: stats.summarize(host) for host in stats.processed})
+        except Exception:
+            # Missing coverage blocks reuse; do not change an Ansible exit code.
+            self._journal().mark_task_observability_degraded('TASK_EVENT_WRITE_FAILED')
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/project_snapshot_json.py","mode":420,"size":1874,"sha256":"a2eae7bf50f049bf03ad1c77dc57b8ec771415d323a0f9ad7d0d5e14acfa475b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1874}
@@ -29790,9 +29821,10 @@ platform_application_registry_config_directory: ''
         state: absent
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/verify.yml","mode":420,"size":2068,"sha256":"02845d1c5f095d6ff72f0d25da8d484833349768d4e3dc87079ec1b74499f858","index":0,"count":1,"encoding":"utf-8","payloadBytes":2068}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/verify.yml","mode":420,"size":2114,"sha256":"e4d0d8b86cebc2b8eefd01e67b47ebf9c4a4c8cf2ac46a834cc5dbf2292147cd","index":0,"count":1,"encoding":"utf-8","payloadBytes":2114}
 ---
 - name: Verify exact application image ownership and readiness
+  tags: [platform_application_instance_state]
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -32347,20 +32379,14 @@ artifactLock:
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/inventory/group_vars/all/platform.yml","mode":420,"size":377,"sha256":"be87ed0d97892811e420b5e3dac590d936423f8cbd3e6f73b24d185a03dd277a","index":0,"count":1,"encoding":"utf-8","payloadBytes":377}
+@@PORTABLE {"path":"ansible-core/examples/valid/inventory/group_vars/all/platform.yml","mode":420,"size":264,"sha256":"1c0d72be074bf64e90d4d8347dcf04dfc25752046c3956e0e291697823bfbdb5","index":0,"count":1,"encoding":"utf-8","payloadBytes":264}
 ---
-platform_project:
+platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: "1.0.0-alpha.1"
+      definitionVersion: "1.0.0-alpha.2"
       mode: kraft-standalone
-      members:
-        broker-1:
-          host: node-1
-          roles:
-            - broker
-            - controller
 
 platform_service_catalog_path: "{{ inventory_dir }}/../../../../examples/catalog/service-catalog.yml"
 
@@ -32372,7 +32398,7 @@ platform_host:
   address: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/inventory/hosts.yml","mode":420,"size":163,"sha256":"130603a51333b4fe5a8aec33ea4cb36880d72e9c9cd2240fe5cace2177a4e0b9","index":0,"count":1,"encoding":"utf-8","payloadBytes":163}
+@@PORTABLE {"path":"ansible-core/examples/valid/inventory/hosts.yml","mode":420,"size":314,"sha256":"d510b5e069d48289e86dae5d38909e9c5cb26668c2713c986c826f37118b908b","index":0,"count":1,"encoding":"utf-8","payloadBytes":314}
 ---
 all:
   hosts:
@@ -32383,6 +32409,11 @@ all:
       hosts:
         node-1:
           ansible_host: 192.0.2.10
+          platform_deployments:
+            kafka-main:
+              members:
+                broker-1:
+                  roles: [broker, controller]
 
 @@END
 @@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"f373b3477985f3ff15b2aed86f2f8fbfd95d2997b3bf33781062d383fb97a8fe","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
@@ -32989,7 +33020,7 @@ artifactLock:
     - role: platform.core.target_bootstrap
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2292,"sha256":"4c813cf196574691be6b2b04559fd63fcdf18ee3a75a4a2c116a616f4a06f6a1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2292}
+@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2364,"sha256":"d687d53d28708438b6d2f58ff23b6eacc525425887c989ff475e3459587e3b20","index":0,"count":1,"encoding":"utf-8","payloadBytes":2364}
 ---
 - name: Build target-free machine-readable DeploymentPlan
   hosts: localhost
@@ -33033,6 +33064,7 @@ artifactLock:
         execution_connections: "{{ platform_plan_snapshot.execution_connections | default({}) }}"
         deployment_order: "{{ platform_execution_deployment_order }}"
         application_vault_sources: "{{ platform_execution_application_vault_sources | default({}) }}"
+        execution_mode: "{{ platform_execution_mode | default(omit) }}"
         application_image_lock: "{{ platform_plan_snapshot.application_image_lock | default({}) }}"
       changed_when: false
       become: false
@@ -34099,7 +34131,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":61575,"sha256":"4dcd52329758cb6a7539b09baf933a318c767d3298763089816eead0d109d1de","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":65351,"sha256":"14fcbfdd3d2f7631e61e5526ea03e5c632f138d9f56948702007b32a6744a909","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -34123,6 +34155,7 @@ from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, d
 import execution_secret_lease
 import execution_secret_output
 import execution_target_trust
+import infrastructure_verification as infra
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
@@ -34609,6 +34642,7 @@ def _collection_path(release):
 
 def _environment(release, journal=None, operation=None, leased_private_key=False):
     environment = dict(os.environ)
+    environment.pop('PLATFORM_EXECUTION_VERIFY_EVIDENCE', None)
     environment.pop("ANSIBLE_PRIVATE_KEY_FILE", None)
     for inherited in ("ANSIBLE_SSH_ARGS", "ANSIBLE_SSH_COMMON_ARGS", "ANSIBLE_SSH_EXTRA_ARGS",
                       "ANSIBLE_SSH_EXECUTABLE", "ANSIBLE_HOST_KEY_CHECKING", "ANSIBLE_SSH_HOST_KEY_CHECKING"):
@@ -34743,8 +34777,14 @@ def _finish_run_with_outputs(journal, state, code, summary, manifest, runtime_re
             journal.event("DIAGNOSTIC", "RUNNING", "Generated secret output is not yet durably available")
         except (LifecycleError, OSError, ValueError):
             pass
+    infra.before_terminal(journal, manifest, state)
     result = _terminal(journal, state, code, summary)
     _complete_secret_outputs(journal, manifest, result)
+    try:
+        infra.publish(journal, manifest)
+    except (OSError, ValueError, KeyError):
+        # Evidence cache loss must never alter a completed run or replay mutations.
+        pass
     return result
 
 
@@ -34883,6 +34923,40 @@ def _materialize_runtime_projection(journal, metadata, manifest):
 
 def validate_application_manifest(manifest):
     """Closed mixed manifest admission, used by Build, Start and the controller."""
+    if manifest.get('apiVersion') == infra.MANIFEST_VERSION:
+        module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
+            '../collections/ansible_collections/platform/core/plugins/module_utils'))
+        if module_utils not in sys.path:
+            sys.path.insert(0, module_utils)
+        from schema_validation import SchemaValidator
+        contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+        if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha3/schema.json')):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        infra.validate_manifest(manifest)
+        if manifest['executionMode'] == 'INFRASTRUCTURE_VERIFY_ONLY':
+            return
+        if manifest['executionMode'] == 'APPLICATION_LIBRARIES_ONLY':
+            operations = manifest['operations']
+            if (operations[0]['targets'] != operations[1]['targets'] or
+                    operations[0]['applicationLibraries'] != operations[1]['applicationLibraries'] or
+                    operations[0]['applicationSemanticFingerprint'] != operations[1]['applicationSemanticFingerprint']):
+                raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+            refs, names = set(), set()
+            for item in manifest['applicationSecretRequirements']:
+                if (item['requirementRef'] in refs or item['runtimeReference'] in names or
+                        not set(item['hosts']).issubset(operations[0]['targets']) or
+                        not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries']) or
+                        (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
+                         (item['providerDeployment'] not in manifest['infrastructureVerification']['model']['coverage'] or
+                          item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment'])) or
+                        (item['purpose'] == 'APPLICATION_SECRET' and item['providerDeployment'] is not None)):
+                    raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+                refs.add(item['requirementRef'])
+                names.add(item['runtimeReference'])
+            return
+        manifest = dict(manifest)
+        manifest['apiVersion'] = 'platform.installer/execution-manifest/v1alpha2'
+        del manifest['executionMode'], manifest['infrastructureVerification']
     if manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2':
         if any(item.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')
                for item in manifest.get('operations', [])):
@@ -34911,7 +34985,10 @@ def validate_application_manifest(manifest):
         refs.add(item['requirementRef']); names.add(item['runtimeReference'])
         if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN':
             if (item['providerDeployment'] not in vaults or
-                    item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment']):
+                    item['runtimeReference'] != 'vault-admin-token-'
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":65351,"sha256":"14fcbfdd3d2f7631e61e5526ea03e5c632f138d9f56948702007b32a6744a909","index":1,"count":2,"encoding":"utf-8","payloadBytes":17351}
+ + item['providerDeployment']):
                 raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
         elif item['providerDeployment'] is not None or item['source'] != 'RUNTIME_INPUT':
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
@@ -34956,10 +35033,7 @@ def _materialize_application_projection(journal, manifest):
         if item.get('source') == 'CURRENT_RUN_BOOTSTRAP':
             provider = item['providerDeployment']
             if provider not in declared:
-                raise Lifecy
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":61575,"sha256":"4dcd52329758cb6a7539b09baf933a318c767d3298763089816eead0d109d1de","index":1,"count":2,"encoding":"utf-8","payloadBytes":13575}
-cleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
+                raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
             try:
                 values[item['runtimeReference']] = execution_secret_output.current_run_admin_token(
                     journal.root, journal.directory, manifest['projectIdentity'], provider, journal.run_id)
@@ -35009,9 +35083,15 @@ def _dispatch(release, journal, manifest, stopped):
     commands = [(operation, _command(release, journal, operation)) for operation in operations]
     validate_application_manifest(manifest)
     pki_applied_in_run = False
+    infrastructure_started = False
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
+        if not infrastructure_started and (manifest.get('apiVersion') == infra.MANIFEST_VERSION or
+                (operation['operation'] in ('SERVICE_APPLY', 'PKI_APPLY', 'PKI_REISSUE') and
+                 infra.tracked(journal.root, manifest.get('projectIdentity')))):
+            infra.begin(journal, manifest)
+            infrastructure_started = True
         if operation.get('operation') == 'APPLICATION_LIBRARIES_APPLY':
             try:
                 _materialize_application_projection(journal, manifest)
@@ -35021,6 +35101,8 @@ def _dispatch(release, journal, manifest, stopped):
                 return 'CANCELLED'
         if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY", 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
             execution_target_trust.verify(journal.root, journal.run_id, manifest)
+        if manifest.get('executionMode') == 'INFRASTRUCTURE_VERIFY_ONLY':
+            command = command + ['--skip-tags', 'platform_installer_pki_materialization']
         if pki_applied_in_run and operation.get("operation") == "SERVICE_APPLY":
             command = command + ["--skip-tags", "platform_installer_pki_materialization"]
         pki_lock_descriptor = (_acquire_project_pki_apply_lock(journal)
@@ -35071,8 +35153,11 @@ def _dispatch(release, journal, manifest, stopped):
                         except OSError: pass
                         raise
                     command.extend(["-e", "@" + secret_inputs_path])
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                       env=_environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials)))
+            environment = _environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials))
+            if manifest.get('apiVersion') == infra.MANIFEST_VERSION and operation['operation'] == 'SERVICE_VERIFY':
+                infra.verify_pending(journal, operation)
+                environment['PLATFORM_EXECUTION_VERIFY_EVIDENCE'] = '1'
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
             completed = _wait_for_operation(process, stopped, capture_raw_failure_output)
         finally:
             for temporary_path in (credentials_path, secret_inputs_path):
@@ -35092,6 +35177,8 @@ def _dispatch(release, journal, manifest, stopped):
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
+        if manifest.get('apiVersion') == infra.MANIFEST_VERSION and operation['operation'] == 'SERVICE_VERIFY':
+            infra.verified(journal, operation)
         if operation.get("operation") == "PKI_APPLY":
             pki_applied_in_run = True
     return "SUCCEEDED"
@@ -35892,7 +35979,7 @@ def _secret_output_retention_pending(root, journal):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":63209,"sha256":"e61495e9402144391fb6f747f2a904b3ed4af5897c929da934fb22fbaa3b35ce","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":64466,"sha256":"5b96feef19333255ba607e45713da203a82faa960068d909b9538498184af754","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed JSON protocol for the activated Execution Node runtime.
 
@@ -35918,11 +36005,13 @@ import yaml
 from execution_lifecycle import ACTIVE, Journal, LifecycleError, digest, recover, validate_ownership
 import execution_secret_lease
 import execution_target_trust
+import infrastructure_verification as infra
 
 
 OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "BuildServiceConfigurationPreview", "BuildRuntimeSecretDescriptors", "BuildDeploymentPlan", "StartExecution", "GetExecution", "GetEvents", "CancelExecution", "PutRuntimeSecretLease")
 DEPLOYMENT_PLAN_REQUEST_VERSION = "platform.installer/execution-runtime/v1alpha2"
 APPLICATION_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha3'
+B0_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha4'
 MAX_DEPLOYMENT_ORDER = 256
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
@@ -36014,21 +36103,25 @@ def request():
         return value
     if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
-    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION):
+    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
     if value.get("operation") == "BuildDeploymentPlan":
-        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION):
+        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
         expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
-        if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION:
+        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
             expected.add('applicationVaultSources')
             sources = value.get('applicationVaultSources')
             if (not isinstance(sources, dict) or len(sources) > 16 or
                     any(not isinstance(key, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', key) is None or
                         kind not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for key, kind in sources.items())):
                 raise LifecycleError('APPLICATION_VAULT_SOURCE_INVALID')
+        if value['apiVersion'] == B0_PLAN_REQUEST_VERSION:
+            expected.add('executionMode')
+            if value.get('executionMode') not in infra.MODES:
+                raise LifecycleError('EXECUTION_MODE_UNSUPPORTED')
         order = value.get("deploymentOrder")
         if (set(value) != expected or not isinstance(order, list) or len(order) > MAX_DEPLOYMENT_ORDER or
                 any(not isinstance(item, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", item) is None for item in order) or
@@ -36057,6 +36150,16 @@ def _application_capabilities(args):
     result['applicationExecution'] = {'manifestContract': 'platform.installer/execution-manifest/v1alpha2',
                                      'planContract': 'platform.installer/plan/v1alpha4',
                                      'requiredPlanRequestVersion': APPLICATION_PLAN_REQUEST_VERSION}
+    return result
+
+
+def _b0_capabilities(args):
+    result = _application_capabilities(args)
+    result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha8'
+    result['deploymentPlanRequestVersions'].append(B0_PLAN_REQUEST_VERSION)
+    result['infrastructureVerification'] = dict(protocol='InfrastructureVerification/v1alpha1',
+        executionModes=list(infra.MODES), requiredPlanRequestVersion=B0_PLAN_REQUEST_VERSION,
+        manifestContract=infra.MANIFEST_VERSION, planContract=infra.PLAN_VERSION)
     return result
 
 
@@ -36531,6 +36634,7 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
                     raise LifecycleError("ACTIVE_RUN_EXISTS:%s" % candidate)
             except FileNotFoundError:
                 continue
+        infra.assert_admission(state_root, manifest, run_id)
         journal.initialize(metadata)
         journal.transition("STARTING", "Detached controller accepted")
         if prelaunch is not None:
@@ -36607,6 +36711,8 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         if operation == "BuildDeploymentPlan":
             extra["platform_execution_deployment_order"] = value["deploymentOrder"]
             extra['platform_execution_application_vault_sources'] = value.get('applicationVaultSources', {})
+            if value.get('apiVersion') == B0_PLAN_REQUEST_VERSION:
+                extra['platform_execution_mode'] = value['executionMode']
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
     else:
@@ -36641,7 +36747,10 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             if operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
                 snapshot_path = os.path.join(journal.directory, "project-snapshot.json")
                 if os.path.isfile(snapshot_path) and not os.path.islink(snapshot_path):
-                    with open(snapshot_path, "r", encoding="utf-8") as stream:
+                    with open(snapshot_path, "r", encoding="utf-8") as s
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":64466,"sha256":"5b96feef19333255ba607e45713da203a82faa960068d909b9538498184af754","index":1,"count":2,"encoding":"utf-8","payloadBytes":16466}
+tream:
                         snapshot_error = json.load(stream)
                     if isinstance(snapshot_error, dict) and isinstance(snapshot_error.get("adapterError"), dict):
                         raise CoreOperationError(snapshot_error["adapterError"].get("code") or "PROJECT_SNAPSHOT_FAILED", {"findings": [snapshot_error["adapterError"]]})
@@ -36656,10 +36765,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     if operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
         snapshot_path = os.path.join(journal.directory, "project-snapshot.json")
         if not os.path.isfile(snapshot_path) or os.path.islink(snapshot_path):
-            raise LifecycleError("PROJECT_SNAPSHOT_RESPONSE_MISSING
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":63209,"sha256":"e61495e9402144391fb6f747f2a904b3ed4af5897c929da934fb22fbaa3b35ce","index":1,"count":2,"encoding":"utf-8","payloadBytes":15209}
-")
+            raise LifecycleError("PROJECT_SNAPSHOT_RESPONSE_MISSING")
         with open(snapshot_path, "r", encoding="utf-8") as stream:
             snapshot = json.load(stream)
         if isinstance(snapshot, dict) and isinstance(snapshot.get("adapterError"), dict):
@@ -36694,7 +36800,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             plan = json.load(stream)
         if plan.get("status") == "BLOCKED":
             return {"deploymentPlan": plan, "executionManifestDigest": None}
-        if plan.get('apiVersion') == 'platform.installer/plan/v1alpha4' and value.get('apiVersion') != APPLICATION_PLAN_REQUEST_VERSION:
+        if plan.get('apiVersion') == 'platform.installer/plan/v1alpha4' and value.get('apiVersion') not in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
             raise LifecycleError('APPLICATION_PLAN_REQUEST_VERSION_REQUIRED')
         if plan.get("status") != "EXECUTABLE" or not os.path.isfile(os.path.join(journal.directory, "manifest.json")):
             raise LifecycleError("EXECUTION_MANIFEST_MISSING")
@@ -36866,7 +36972,7 @@ def main():
         return reply(put_runtime_secret_lease(value, args.state_root))
     operation = value["operation"]
     if operation == "GetCapabilities":
-        return reply(_application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
+        return reply(_b0_capabilities(args) if value['apiVersion'] == B0_PLAN_REQUEST_VERSION else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)
@@ -38500,7 +38606,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_target_trust.py","mode":420,"size":8722,"sha256":"375dd39045c45c79adaf19e2042d3651effffa38c5d0d533acd5ed45b5588287","index":0,"count":1,"encoding":"utf-8","payloadBytes":8722}
+@@PORTABLE {"path":"ansible-core/tools/execution_target_trust.py","mode":420,"size":8785,"sha256":"ace332efaed56feb45feefbececba6b977b4fb722ba3212fa19535d449e33576","index":0,"count":1,"encoding":"utf-8","payloadBytes":8785}
 """Narrow per-run SSH host-key trust for Installer-owned execution.
 
 The private manifest supplies Core-resolved endpoints.  Operator-approved keys
@@ -38721,7 +38827,7 @@ def verify(state_root, run_id, manifest):
 
 
 def required(manifest):
-    return any(isinstance(item, dict) and item.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY")
+    return any(isinstance(item, dict) and item.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY", "APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY")
                for item in manifest.get("operations", []))
 
 @@END
@@ -38772,6 +38878,471 @@ def safe_task_error(result, no_log=False):
         if type(value) is int and -255 <= value <= 65535:
             summary += '; %s %d' % (label, value)
     return {'code': code, 'summary': summary}
+
+@@END
+@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":23696,"sha256":"6743895843947543843e8b308b8b3b31fb5837ed616962482082dd3520f1c63e","index":0,"count":1,"encoding":"utf-8","payloadBytes":23696}
+"""B0 bounded infrastructure evidence in the existing private execution namespace.
+
+Local clients may cache the returned summary, but only this node's journal may
+authorize reuse. No target discovery, credentials or service rules live here.
+"""
+import copy
+import hashlib
+import json
+import os
+import re
+import stat
+import tempfile
+import fcntl
+from contextlib import contextmanager
+
+from execution_lifecycle import Journal, LifecycleError, digest, validate_ownership
+
+MODES = ('FULL_PROJECT', 'APPLICATION_LIBRARIES_ONLY', 'INFRASTRUCTURE_VERIFY_ONLY')
+MANIFEST_VERSION = 'platform.installer/execution-manifest/v1alpha3'
+PLAN_VERSION = 'platform.installer/plan/v1alpha5'
+MAX_BYTES = 16 * 1024 * 1024
+
+
+def _private(path, directory=False):
+    info = os.lstat(path)
+    if (info.st_uid != os.geteuid() or info.st_mode & 0o077 or (not directory and info.st_nlink != 1) or
+            not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))):
+        raise LifecycleError('INFRA_EVIDENCE_UNAVAILABLE')
+
+
+def _read(path):
+    _private(os.path.dirname(path), True)
+    _private(path)
+    if os.stat(path).st_size > MAX_BYTES:
+        raise LifecycleError('INFRA_EVIDENCE_UNAVAILABLE')
+    with open(path, encoding='utf-8') as stream:
+        return json.load(stream)
+
+
+def _write(path, value):
+    parent = os.path.dirname(path)
+    _private(parent, True)
+    descriptor, temporary = tempfile.mkstemp(prefix='.infra-', dir=parent)
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+            json.dump(value, stream, sort_keys=True, separators=(',', ':'))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _path(root, project, create=False):
+    _private(root, True)
+    directory = os.path.join(root, 'infrastructure-verification')
+    if create:
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+    _private(directory, True)
+    return os.path.join(directory, hashlib.sha256(project.encode('utf-8')).hexdigest() + '.json')
+
+
+def _index(path):
+    value = _read(path)
+    if (not isinstance(value, dict) or set(value) != {'schemaVersion', 'projectIdentity', 'generation', 'model', 'trust', 'verifies'} or
+            value['schemaVersion'] != 1 or not isinstance(value['generation'], str) or
+            not re.fullmatch(r'[a-f0-9]{32}', value['generation']) or
+            not isinstance(value['trust'], dict) or len(value['trust']) > 256 or
+            not isinstance(value['verifies'], dict) or len(value['verifies']) > 256 or
+            any(not isinstance(ref, dict) or set(ref) != {'runId'} or not isinstance(ref['runId'], str)
+                for ref in value['verifies'].values())):
+        raise LifecycleError('INFRA_EVIDENCE_UNAVAILABLE')
+    return value
+
+
+def model(manifest):
+    """Resolved service operations, not project revision or an app-path exclusion list."""
+    services = [op for op in manifest['operations'] if op['operation'] in ('SERVICE_APPLY', 'SERVICE_VERIFY')]
+    verifies = [op for op in services if op['operation'] == 'SERVICE_VERIFY']
+    coverage = {op['serviceDeployment']: digest(op) for op in verifies}
+    if not coverage or len(coverage) != len(verifies):
+        raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
+    hosts = {host for op in services for host in op.get('targets', [])}
+    semantic = dict(projectIdentity=manifest['projectIdentity'], runtimeRelease=manifest['runtimeRelease'],
+                    services=sorted(services, key=lambda op: op['operationId']),
+                    targetConnections={host: manifest.get('targetConnections', {}).get(host) for host in sorted(hosts)},
+                    artifactSourceAuthorities=manifest['artifactSourceAuthorities'],
+                    pkiMaterializationPlans=manifest['pkiMaterializationPlans'])
+    return dict(fingerprint=digest(semantic), coverage=coverage, hosts=sorted(hosts))
+
+
+def _trust(journal, manifest, hosts):
+    connections = manifest.get('targetConnections', {})
+    if not connections:
+        return {}
+    path = os.path.join(journal.directory, 'known_hosts')
+    _private(path)
+    with open(path, encoding='ascii') as stream:
+        lines = stream.read(65537).splitlines()
+    if len(lines) > 256:
+        raise LifecycleError('INFRA_EVIDENCE_UNAVAILABLE')
+    by_endpoint = {}
+    for line in lines:
+        fields = line.split()
+        if len(fields) != 3 or fields[0] in by_endpoint:
+            raise LifecycleError('INFRA_EVIDENCE_UNAVAILABLE')
+        by_endpoint[fields[0]] = digest(fields[1:])
+    result = {}
+    for host in hosts:
+        connection = connections[host]
+        address, port = connection['address'], connection['port']
+        endpoint = address if port == 22 else '[%s]:%s' % (address, port)
+        result[host] = by_endpoint[endpoint]
+    return result
+
+
+def summary(root, project, expected):
+    """Target-free, bounded and read-only. Revalidate every source journal."""
+    result = dict(status='BLOCKED', infrastructureFingerprint=expected['fingerprint'],
+                  evidenceRevision=None, deployments=[], code='INFRA_VERIFY_MISSING')
+    try:
+        index = _index(_path(root, project))
+        if index.get('projectIdentity') != project or index.get('model') != expected:
+            result['code'] = 'INFRA_VERIFY_STALE'
+            return result
+        result['evidenceRevision'] = digest(index)
+        for deployment, coverage in sorted(expected['coverage'].items()):
+            ref = index.get('verifies', {}).get(deployment)
+            if not ref:
+                continue
+            journal = Journal(root, ref['runId'])
+            _private(journal.directory, True)
+            source = _read(os.path.join(journal.directory, 'manifest.json'))
+            metadata = validate_ownership(journal)
+            status = _read(journal.status_path)
+            terminal = _read(journal.result_path)
+            proof = _read(os.path.join(journal.directory, 'infrastructure-verifies.json'))
+            if (metadata['projectIdentity'] != project or metadata['manifestDigest'] != digest(source) or
+                    status.get('state') != terminal.get('state') or
+                    terminal.get('state') not in ('SUCCEEDED', 'FAILED', 'CANCELLED') or
+                    source.get('infrastructureVerification', {}).get('model') != expected or
+                    proof.get('generation') != index['generation'] or
+                    proof.get('trust') != index.get('trust') or
+                    _trust(journal, source, expected['hosts']) != index.get('trust') or
+                    proof.get('verifies', {}).get(deployment) != coverage):
+                raise LifecycleError('INFRA_EVIDENCE_UNAVAILABLE')
+            result['deployments'].append(dict(deploymentId=deployment, sourceRunId=journal.run_id,
+                                               coverageDigest=coverage, verifiedAt=terminal['completedAt']))
+        if len(result['deployments']) == len(expected['coverage']):
+            result.update(status='PASS', code=None)
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        result.update(status='BLOCKED', code='INFRA_EVIDENCE_UNAVAILABLE', evidenceRevision=None, deployments=[])
+    return result
+
+
+def assert_admission(root, manifest, run_id=None):
+    binding = manifest.get('infrastructureVerification', {})
+    if manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY':
+        return
+    current = summary(root, manifest['projectIdentity'], binding['model'])
+    if current['status'] != 'PASS' or current['evidenceRevision'] != binding['evidenceRevision']:
+        raise LifecycleError('INFRA_EVIDENCE_CHANGED')
+    if run_id is not None:
+        index = _index(_path(root, manifest['projectIdentity']))
+        if _trust(Journal(root, run_id), manifest, binding['model']['hosts']) != index.get('trust'):
+            raise LifecycleError('INFRA_EVIDENCE_CHANGED')
+
+
+def validate_manifest(manifest):
+    binding = manifest.get('infrastructureVerification')
+    if (manifest.get('executionMode') not in MODES or not isinstance(binding, dict) or
+            set(binding) != {'model', 'evidenceRevision'} or
+            not isinstance(binding['model'], dict) or set(binding['model']) != {'fingerprint', 'coverage', 'hosts'}):
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    expected = binding['model']
+    coverage = expected['coverage']
+    if (not isinstance(expected['hosts'], list) or len(expected['hosts']) > 256 or
+            any(not isinstance(host, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}', host) for host in expected['hosts']) or
+            expected['hosts'] != sorted(set(expected['hosts'])) or
+            not isinstance(coverage, dict) or not 1 <= len(coverage) <= 256 or
+            not isinstance(expected['fingerprint'], str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', expected['fingerprint']) or
+            any(not isinstance(key, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,127}', key) or
+                not isinstance(value, str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', value)
+                for key, value in coverage.items())):
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    operations = manifest['operations']
+    mode = manifest['executionMode']
+    if mode == 'FULL_PROJECT' and model(manifest) != expected:
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    if mode == 'INFRASTRUCTURE_VERIFY_ONLY':
+        actual = {op['serviceDeployment']: digest(op) for op in operations if op['operation'] == 'SERVICE_VERIFY'}
+        if (len(actual) != len(operations) or actual != coverage or manifest['applicationSecretRequirements'] or
+                manifest['runtimeSecretOutputs']):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    if mode == 'APPLICATION_LIBRARIES_ONLY':
+        if ([op['operation'] for op in operations] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
+                not isinstance(binding['evidenceRevision'], str) or
+                not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision']) or
+                manifest['runtimeSecretRequirements'] or manifest['runtimeSecretInputs'] or manifest['runtimeSecretOutputs'] or
+                any(item['source'] != 'RUNTIME_INPUT' for item in manifest['applicationSecretRequirements'])):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+
+
+def tracked(root, project):
+    if not project:
+        return False
+    try:
+        return os.path.exists(_path(root, project))
+    except FileNotFoundError:
+        return False
+
+
+@contextmanager
+def _admission_lock(root):
+    descriptor = os.open(os.path.join(root, '.active-runs.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        _private(os.path.join(root, '.active-runs.lock'))
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def begin(journal, manifest):
+    with _admission_lock(journal.root):
+        _begin(journal, manifest)
+
+
+def _begin(journal, manifest):
+    """Once per infrastructure run; called before its first target operation."""
+    mode = manifest.get('executionMode', 'FULL_PROJECT')
+    if mode == 'APPLICATION_LIBRARIES_ONLY':
+        assert_admission(journal.root, manifest, journal.run_id)
+        return
+    marker = os.path.join(journal.directory, 'infrastructure-verifies.json')
+    if os.path.exists(marker):
+        return
+    path = _path(journal.root, manifest['projectIdentity'], True)
+    expected = manifest.get('infrastructureVerification', {}).get('model')
+    try:
+        index = _index(path)
+    except (OSError, ValueError):
+        index = None
+    trust = _trust(journal, manifest, expected['hosts']) if expected else {}
+    if (mode != 'INFRASTRUCTURE_VERIFY_ONLY' or not index or index.get('model') != expected or
+            index.get('trust') != trust):
+        index = dict(schemaVersion=1, projectIdentity=manifest['projectIdentity'], generation=os.urandom(16).hex(),
+                     model=expected, trust=trust, verifies={})
+        _write(path, index)
+    _write(marker, dict(generation=index['generation'], trust=trust, verifies={}))
+
+
+def verify_pending(journal, operation):
+    """A newer attempted Verify supersedes its old success, even on crash/failure."""
+    with _admission_lock(journal.root):
+        path = _path(journal.root, journal.metadata()['projectIdentity'])
+        index = _index(path)
+        proof = _read(os.path.join(journal.directory, 'infrastructure-verifies.json'))
+        if index['generation'] != proof['generation']:
+            raise LifecycleError('INFRA_EVIDENCE_CHANGED')
+        # A pending/failed source is deliberately not usable by summary(). Keep
+        # the latest attempt reference so an older publisher cannot restore it.
+        index['verifies'][operation['serviceDeployment']] = dict(runId=journal.run_id)
+        _write(path, index)
+
+
+def verified(journal, operation):
+    try:
+        stats = _read(_coverage_path(journal, operation['operationId']))
+        for host in operation['targets']:
+            counts = stats[host]
+            if counts['ok'] < 1 or any(counts[key] for key in ('changed', 'failures', 'unreachable', 'ignored', 'rescued')):
+                return False
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    path = os.path.join(journal.directory, 'infrastructure-verifies.json')
+    proof = _read(path)
+    proof['verifies'][operation['serviceDeployment']] = digest(operation)
+    _write(path, proof)
+    return True
+
+
+def _coverage_path(journal, action_id):
+    return os.path.join(journal.directory, 'verify-coverage-' + hashlib.sha256(action_id.encode('utf-8')).hexdigest() + '.json')
+
+
+def record_stats(journal, action_id, stats):
+    """Only bounded numeric Ansible recap counters, never task payloads."""
+    manifest = _read(os.path.join(journal.directory, 'manifest.json'))
+    validate_ownership(journal)
+    if (manifest.get('apiVersion') != MANIFEST_VERSION or journal.status().get('state') != 'RUNNING' or
+            not any(op['operationId'] == action_id and op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']) or
+            not isinstance(stats, dict) or len(stats) > 257):
+        raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
+    fields = ('ok', 'changed', 'failures', 'unreachable', 'ignored', 'rescued')
+    result = {}
+    for host, counts in stats.items():
+        if (not isinstance(host, str) or len(host) > 255 or not isinstance(counts, dict) or
+                any(type(counts.get(key)) is not int or not 0 <= counts[key] <= 1000000 for key in fields)):
+            raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
+        result[host] = {key: counts[key] for key in fields}
+    _write(_coverage_path(journal, action_id), result)
+
+
+def publish(journal, manifest):
+    with _admission_lock(journal.root):
+        _publish(journal, manifest)
+
+
+def before_terminal(journal, manifest, state):
+    # Revoke while the run is still ACTIVE, before another Start can be admitted.
+    if manifest.get('apiVersion') != MANIFEST_VERSION or state == 'SUCCEEDED':
+        return
+    application_started = manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' or any(
+        event.get('eventType') == 'ACTION_STARTED' and event.get('actionId') == 'applications:apply'
+        for event in journal.events())
+    if application_started:
+        with _admission_lock(journal.root):
+            path = _path(journal.root, manifest['projectIdentity'])
+            _revoke_library_failure(journal, manifest, path, _index(path))
+
+
+def _revoke_library_failure(journal, manifest, path, index):
+    if manifest['executionMode'] == 'APPLICATION_LIBRARIES_ONLY':
+        if digest(index) != manifest['infrastructureVerification']['evidenceRevision']:
+            return
+    else:
+        proof = _read(os.path.join(journal.directory, 'infrastructure-verifies.json'))
+        if index['generation'] != proof['generation']:
+            return
+    try:
+        failure = _read(os.path.join(journal.directory, 'application-failure-domain.json'))
+    except (OSError, ValueError):
+        failure = None
+    if not isinstance(failure, dict) or failure.get('domain') != 'APPLICATION_ONLY':
+        index.update(generation=os.urandom(16).hex(), verifies={})
+        _write(path, index)
+
+
+def _publish(journal, manifest):
+    """Optional derived index publication after durable terminal; never replay work."""
+    if manifest.get('apiVersion') != MANIFEST_VERSION:
+        return
+    path = _path(journal.root, manifest['projectIdentity'])
+    index = _index(path)
+    status, result = _read(journal.status_path), _read(journal.result_path)
+    if status.get('state') != result.get('state') or result.get('state') not in ('SUCCEEDED', 'FAILED', 'CANCELLED'):
+        return
+    if manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY':
+        if result['state'] != 'SUCCEEDED':
+            _revoke_library_failure(journal, manifest, path, index)
+        return
+    proof = _read(os.path.join(journal.directory, 'infrastructure-verifies.json'))
+    if (
+            index['generation'] != proof['generation'] or index['model'] != manifest['infrastructureVerification']['model']):
+        return
+    for deployment, coverage in proof['verifies'].items():
+        if (index['model']['coverage'].get(deployment) == coverage and
+                index['verifies'].get(deployment) == {'runId': journal.run_id}):
+            index['verifies'][deployment] = dict(runId=journal.run_id)
+    _write(path, index)
+
+
+def record_application_failure(journal, application_only=False, action_id=None):
+    """Called by the trusted task callback; unknown/provider failures dominate."""
+    validate_ownership(journal)
+    manifest = _read(os.path.join(journal.directory, 'manifest.json'))
+    if (manifest.get('executionMode') not in ('APPLICATION_LIBRARIES_ONLY', 'FULL_PROJECT') or
+            journal.status()['state'] != 'RUNNING' or
+            (manifest.get('executionMode') == 'FULL_PROJECT' and action_id not in ('applications:apply', 'applications:verify'))):
+        return
+    path = os.path.join(journal.directory, 'application-failure-domain.json')
+    descriptor = journal.event_lock()
+    try:
+        try:
+            previous = _read(path)
+        except FileNotFoundError:
+            previous = None
+        domain = 'APPLICATION_ONLY' if application_only and (previous is None or previous.get('domain') == 'APPLICATION_ONLY') else 'UNKNOWN'
+        _write(path, dict(domain=domain))
+    finally:
+        os.close(descriptor)
+
+
+def scope_plan(result, mode, root):
+    """Project the already resolved full plan into a fixed B0 scope."""
+    if mode not in MODES:
+        raise LifecycleError('EXECUTION_MODE_UNSUPPORTED')
+    result = copy.deepcopy(result)
+    plan, manifest = result['deploymentPlan'], result['executionManifest']
+    plan['apiVersion'] = PLAN_VERSION
+    plan['executionMode'] = mode
+    plan['infrastructureVerification'] = dict(status='UNKNOWN', infrastructureFingerprint=None,
+        evidenceRevision=None, deployments=[], code='INFRA_EVIDENCE_UNAVAILABLE')
+    if manifest is None:
+        return result
+    expected = model(manifest)
+    observation = summary(root, manifest['projectIdentity'], expected)
+    binding = dict(model=expected, evidenceRevision=observation['evidenceRevision'])
+    manifest.update(apiVersion=MANIFEST_VERSION, executionMode=mode, infrastructureVerification=binding)
+    manifest.setdefault('applicationSecretRequirements', [])
+    if mode == 'APPLICATION_LIBRARIES_ONLY':
+        if observation['status'] != 'PASS':
+            plan['status'], plan['readiness'] = 'BLOCKED', 'BLOCKED'
+            plan['findings'].append(dict(apiVersion='platform.installer/finding/v1alpha1', kind='Finding',
+                code=observation['code'], status='BLOCKED', category='deployment-plan', field='infrastructureVerification',
+                safeMessage='Infrastructure Verify evidence is missing or stale'))
+            result['executionManifest'] = None
+        if any(item['source'] != 'RUNTIME_INPUT' for item in manifest['applicationSecretRequirements']):
+            raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
+        phases = [p for p in plan['phases'] if p['id'] == 'applications']
+        if not phases:
+            raise LifecycleError('APPLICATION_LIBRARIES_REQUIRED')
+        phases[0]['actions'][0]['dependsOn'] = []
+        manifest['operations'] = [op for op in manifest['operations'] if op['operation'].startswith('APPLICATION_LIBRARIES_')]
+        manifest['runtimeSecretRequirements'] = []
+        manifest['runtimeSecretInputs'] = []
+        manifest['runtimeSecretOutputs'] = []
+        manifest['requiredCredentials'] = [{k: item[k] for k in ('requirementRef', 'purpose', 'hosts')}
+                                           for item in manifest['applicationSecretRequirements']]
+        manifest['runtimeSecretDescriptorSetFingerprint'] = digest(dict(serviceDescriptors=[],
+            applicationDescriptors=manifest['applicationSecretRequirements']))
+        manifest['artifactRequirements'] = [item for item in manifest['artifactRequirements'] if item.get('artifactType') == 'container-image']
+        manifest['artifactSourceAuthorities'] = []
+    elif mode == 'INFRASTRUCTURE_VERIFY_ONLY':
+        phases = [p for p in plan['phases'] if p['id'] == 'services']
+        phases[0]['actions'] = [a for a in phases[0]['actions'] if a['type'] == 'SERVICE_VERIFY']
+        for action in phases[0]['actions']:
+            action['dependsOn'] = []
+        manifest['operations'] = [op for op in manifest['operations'] if op['operation'] == 'SERVICE_VERIFY']
+        manifest['applicationSecretRequirements'] = []
+        manifest['artifactRequirements'] = []
+        manifest['artifactSourceAuthorities'] = []
+        manifest['runtimeSecretOutputs'] = []
+        manifest['runtimeSecretInputs'] = [item for item in manifest['runtimeSecretInputs'] if 'SERVICE_VERIFY' in item['operations']]
+        # Preserve the existing typed lease declaration contract. There is no
+        # Apply operation in this manifest to consume its Apply permission.
+        # Verify may read existing PKI, but must never run PKI materialization.
+        manifest['runtimeSecretRequirements'] = [item for item in manifest['runtimeSecretRequirements'] if item['purpose'] == 'SERVICE_PASSWORD']
+        names = {item['requirementRef'] for item in manifest['runtimeSecretRequirements'] + manifest['runtimeSecretInputs']}
+        manifest['requiredCredentials'] = [item for item in manifest['requiredCredentials'] if item['requirementRef'] in names]
+    else:
+        phases = plan['phases']
+    plan['phases'] = phases
+    for order, phase in enumerate(phases):
+        phase['order'] = order
+    plan['requiredCredentials'] = manifest['requiredCredentials']
+    plan['artifactRequirements'] = manifest['artifactRequirements']
+    plan['infrastructureVerification'] = observation
+    fingerprint = digest(dict(previous=plan['fingerprints']['plan'], mode=mode, binding=binding, phases=phases))
+    plan['fingerprints']['plan'] = manifest['planFingerprint'] = fingerprint
+    plan['id'] = 'plan-' + fingerprint.split(':')[1][:24]
+    result['executionManifestDigest'] = digest(manifest) if result['executionManifest'] else None
+    return result
 
 @@END
 @@PORTABLE {"path":"ansible-core/tools/run_with_runtime_credentials.py","mode":420,"size":3354,"sha256":"8d51ded263f8a0b8ea0cb73138fe24c25490b0d45fe3b47e7c3e10ae7c6c6e8a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3354}
@@ -41181,6 +41752,160 @@ serviceExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha8/schema.json","mode":420,"size":4272,"sha256":"383a5633043935c2f48d09b0b4c3f2192e456175d6810772deae93494e715330","index":0,"count":1,"encoding":"utf-8","payloadBytes":4272}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha8/schema.json",
+  "title": "Execution capabilities with ordered deployment planning",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "bootstrapProtocol",
+    "coreVersion",
+    "catalogDigest",
+    "schemaDigest",
+    "runtime",
+    "supportedOperations",
+    "executionStart",
+    "runtimeSecretDescriptors",
+    "targetCredentialLease",
+    "serviceConfigurationPreview",
+    "deploymentPlanRequestVersions",
+    "applicationExecution",
+    "infrastructureVerification"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-capabilities/v1alpha8"
+    },
+    "kind": {
+      "const": "ExecutionCapabilities"
+    },
+    "bootstrapProtocol": {
+      "$ref": "../v1alpha5/schema.json#/properties/bootstrapProtocol"
+    },
+    "coreVersion": {
+      "$ref": "../v1alpha5/schema.json#/properties/coreVersion"
+    },
+    "catalogDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/catalogDigest"
+    },
+    "schemaDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/schemaDigest"
+    },
+    "runtime": {
+      "$ref": "../v1alpha5/schema.json#/properties/runtime"
+    },
+    "supportedOperations": {
+      "$ref": "../v1alpha5/schema.json#/properties/supportedOperations"
+    },
+    "projectSnapshotRequestVersions": {
+      "$ref": "../v1alpha5/schema.json#/properties/projectSnapshotRequestVersions"
+    },
+    "executionStart": {
+      "$ref": "../v1alpha5/schema.json#/properties/executionStart"
+    },
+    "targetCredentialLease": {
+      "$ref": "../v1alpha5/schema.json#/properties/targetCredentialLease"
+    },
+    "runtimeSecretDescriptors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "maxDescriptors",
+        "maxHostsPerDescriptor",
+        "maxResponseBytes"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "BuildRuntimeSecretDescriptors/v1alpha3"
+        },
+        "maxDescriptors": {
+          "const": 16
+        },
+        "maxHostsPerDescriptor": {
+          "const": 256
+        },
+        "maxResponseBytes": {
+          "const": 65536
+        }
+      }
+    },
+    "serviceConfigurationPreview": {
+      "$ref": "../v1alpha5/schema.json#/properties/serviceConfigurationPreview"
+    },
+    "deploymentPlanRequestVersions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "platform.installer/execution-runtime/v1alpha2",
+          "platform.installer/execution-runtime/v1alpha3",
+          "platform.installer/execution-runtime/v1alpha4"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "applicationExecution": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "manifestContract",
+        "planContract",
+        "requiredPlanRequestVersion"
+      ],
+      "properties": {
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha2"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha4"
+        }
+      }
+    },
+    "infrastructureVerification": {
+      "required": [
+        "protocol",
+        "executionModes",
+        "requiredPlanRequestVersion",
+        "manifestContract",
+        "planContract"
+      ],
+      "properties": {
+        "executionModes": {
+          "const": [
+            "FULL_PROJECT",
+            "APPLICATION_LIBRARIES_ONLY",
+            "INFRASTRUCTURE_VERIFY_ONLY"
+          ]
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha5"
+        },
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha4"
+        },
+        "protocol": {
+          "const": "InfrastructureVerification/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha3"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    }
+  }
+}
+
+@@END
 @@PORTABLE {"path":"contracts/execution-manifest/v1alpha2/application-operation.schema.json","mode":420,"size":1690,"sha256":"ffbf8232f7464c34b36784e8147e6d610f96b04d44428cf2846a5f0ff4ed01fd","index":0,"count":1,"encoding":"utf-8","payloadBytes":1690}
 {
   "oneOf": [
@@ -41535,6 +42260,342 @@ serviceExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/execution-manifest/v1alpha3/schema.json","mode":420,"size":8482,"sha256":"773c97e425eda1d1a09261718ee29a771e5fdc162fde070d1318856ba2e78e2e","index":0,"count":1,"encoding":"utf-8","payloadBytes":8482}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "apiVersion",
+    "applicationSecretRequirements",
+    "artifactRequirements",
+    "artifactSourceAuthorities",
+    "kind",
+    "operations",
+    "pkiMaterializationPlans",
+    "planFingerprint",
+    "projectIdentity",
+    "projectRevision",
+    "requiredCredentials",
+    "runtimeRelease",
+    "runtimeSecretDescriptorSetFingerprint",
+    "runtimeSecretInputs",
+    "runtimeSecretOutputs",
+    "runtimeSecretRequirements",
+    "executionMode",
+    "infrastructureVerification"
+  ],
+  "type": "object",
+  "$id": "https://platform-installer.local/contracts/execution-manifest/v1alpha3/schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "runtimeSecretDescriptorSetFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeRelease": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/runtimeRelease"
+    },
+    "apiVersion": {
+      "const": "platform.installer/execution-manifest/v1alpha3"
+    },
+    "artifactRequirements": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/artifactRequirements"
+    },
+    "targetConnections": {
+      "type": "object"
+    },
+    "runtimeSecretRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "maxItems": 16
+    },
+    "runtimeSecretOutputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "serviceDeployment",
+          "entries"
+        ],
+        "properties": {
+          "protocol": {
+            "const": "SecretOutputDelivery/v1alpha1"
+          },
+          "serviceDeployment": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "entries": {
+            "const": [
+              "admin-token",
+              "unseal-shares"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 64
+    },
+    "applicationSecretRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "runtimeReference",
+          "providerDeployment",
+          "applicationLibraries",
+          "hosts",
+          "operations",
+          "source"
+        ],
+        "properties": {
+          "purpose": {
+            "enum": [
+              "APPLICATION_SECRET",
+              "APPLICATION_VAULT_ADMIN_TOKEN"
+            ]
+          },
+          "providerDeployment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "applicationLibraries": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "maxItems": 256,
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "runtimeReference": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+            },
+            "maxItems": 256,
+            "uniqueItems": true
+          },
+          "operations": {
+            "const": [
+              "APPLICATION_LIBRARIES_APPLY",
+              "APPLICATION_LIBRARIES_VERIFY"
+            ]
+          },
+          "requirementRef": {
+            "type": "string",
+            "pattern": "^application-secret-[a-f0-9]{32}$"
+          },
+          "source": {
+            "enum": [
+              "RUNTIME_INPUT",
+              "CURRENT_RUN_BOOTSTRAP"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 16
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "../v1alpha2/application-operation.schema.json"
+          },
+          {
+            "type": "object",
+            "required": [
+              "operationId",
+              "phaseId",
+              "operation",
+              "serviceDeployment",
+              "serviceType",
+              "requiresArtifactSources"
+            ],
+            "properties": {
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+                },
+                "maxItems": 256,
+                "uniqueItems": true
+              },
+              "reissueRequests": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "requiresArtifactSources": {
+                "type": "boolean"
+              },
+              "phaseId": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "serviceType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operation": {
+                "enum": [
+                  "SERVICE_APPLY",
+                  "SERVICE_VERIFY",
+                  "PKI_APPLY",
+                  "PKI_REISSUE"
+                ]
+              },
+              "operationId": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "roleVariablesByHost": {
+                "type": "object"
+              },
+              "serviceDeployment": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "roleVariablesPrefix": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "maxItems": 1024,
+      "minItems": 1
+    },
+    "projectRevision": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeSecretInputs": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "maxItems": 16
+    },
+    "planFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "requiredCredentials": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/requiredCredentials"
+    },
+    "projectIdentity": {
+      "type": "string",
+      "maxLength": 256,
+      "minLength": 1
+    },
+    "kind": {
+      "const": "ExecutionManifest"
+    },
+    "artifactSourceAuthorities": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "pkiMaterializationPlans": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "maxItems": 4096
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hosts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+              },
+              "maxItems": 256,
+              "uniqueItems": true
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "coverage": {
+              "type": "object",
+              "maxProperties": 256,
+              "propertyNames": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          },
+          "required": [
+            "fingerprint",
+            "coverage",
+            "hosts"
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "evidenceRevision"
+      ]
+    }
+  }
+}
+
+@@END
 @@PORTABLE {"path":"contracts/execution-runtime/v1alpha3/build-deployment-plan.schema.json","mode":420,"size":1118,"sha256":"95346ab77a67ab850c4b912a49b1d2813c0652614b86f6cbd9e9b2f946c23154","index":0,"count":1,"encoding":"utf-8","payloadBytes":1118}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -41556,6 +42617,73 @@ serviceExecutionPriorities:
       "type": "object", "maxProperties": 16,
       "propertyNames": {"pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
       "additionalProperties": {"enum": ["RUNTIME_INPUT", "CURRENT_RUN_BOOTSTRAP"]}
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/execution-runtime/v1alpha4/build-deployment-plan.schema.json","mode":420,"size":1500,"sha256":"14ed4005f275611e93fde8612362d95eef794331e0e8585f578d020094466020","index":0,"count":1,"encoding":"utf-8","payloadBytes":1500}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha4/build-deployment-plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "operation",
+    "runId",
+    "project",
+    "runtimeRelease",
+    "deploymentOrder",
+    "applicationVaultSources",
+    "executionMode"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-runtime/v1alpha4"
+    },
+    "operation": {
+      "const": "BuildDeploymentPlan"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "project": {
+      "type": "object"
+    },
+    "runtimeRelease": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/runtimeRelease"
+    },
+    "deploymentOrder": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+      }
+    },
+    "applicationVaultSources": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "enum": [
+          "RUNTIME_INPUT",
+          "CURRENT_RUN_BOOTSTRAP"
+        ]
+      }
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
     }
   }
 }
@@ -42088,6 +43216,512 @@ serviceExecutionPriorities:
       "items": {
         "$ref": "../../finding/v1alpha1/schema.json"
       }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runtimeRelease": {
+      "type": "object",
+      "required": [
+        "bundleDigest",
+        "coreVersion",
+        "catalogDigest",
+        "planningProtocol"
+      ],
+      "properties": {
+        "bundleDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "coreVersion": {
+          "type": "string"
+        },
+        "catalogDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "planningProtocol": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": [
+        "project",
+        "catalog",
+        "artifacts",
+        "core",
+        "plan"
+      ],
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/digest"
+        },
+        "catalog": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifacts": {
+          "$ref": "#/$defs/digest"
+        },
+        "core": {
+          "$ref": "#/$defs/digest"
+        },
+        "plan": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/serviceArtifact"
+        },
+        {
+          "$ref": "#/$defs/imageArtifact"
+        }
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "required": [
+        "id",
+        "order",
+        "actions"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "targets",
+        "dependsOn",
+        "mutating",
+        "reboot",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "enum": [
+            "PKI_APPLY",
+            "PKI_REISSUE",
+            "SERVICE_APPLY",
+            "SERVICE_VERIFY",
+            "APPLICATION_LIBRARIES_APPLY",
+            "APPLICATION_LIBRARIES_VERIFY"
+          ]
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "mutating": {
+          "type": "boolean"
+        },
+        "reboot": {
+          "enum": [
+            "NONE",
+            "RECOMMENDED",
+            "REQUIRED"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceArtifact": {
+      "type": "object",
+      "required": [
+        "id",
+        "serviceDeployment",
+        "serviceType",
+        "requirementId",
+        "version",
+        "digest",
+        "requiredOffline"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "serviceType": {
+          "type": "string"
+        },
+        "requirementId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "requiredOffline": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "imageArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applicationLibrary": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "variant": {
+              "type": "string"
+            },
+            "architecture": {
+              "enum": [
+                "amd64",
+                "arm64"
+              ]
+            },
+            "os": {
+              "const": "linux"
+            }
+          },
+          "required": [
+            "os",
+            "architecture"
+          ]
+        },
+        "instanceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "localReference": {
+          "type": "string",
+          "pattern": "^platform-application:sha256-[a-f0-9]{64}$"
+        },
+        "sourcePolicy": {
+          "const": "REPOSITORY_THEN_OFFLINE"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "name": {
+          "type": "string"
+        },
+        "imageId": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifactType": {
+          "const": "container-image"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "artifactType",
+        "imageId",
+        "platform",
+        "localReference",
+        "applicationLibrary",
+        "instanceId",
+        "hosts",
+        "sourcePolicy"
+      ]
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/plan/v1alpha5/schema.json","mode":420,"size":10765,"sha256":"63218d6ea966065d767744ec4958271e5acc7cc198670fe13e5e3e63de4441c9","index":0,"count":1,"encoding":"utf-8","payloadBytes":10765}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha5/schema.json",
+  "title": "Application-aware target-free deployment plan",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "id",
+    "createdAt",
+    "projectIdentity",
+    "projectRevision",
+    "planner",
+    "runtimeRelease",
+    "fingerprints",
+    "status",
+    "readiness",
+    "artifactRequirements",
+    "phases",
+    "findings",
+    "executionMode",
+    "infrastructureVerification"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/plan/v1alpha5"
+    },
+    "kind": {
+      "const": "DeploymentPlan"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectIdentity": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "projectRevision": {
+      "$ref": "#/$defs/digest"
+    },
+    "planner": {
+      "type": "object",
+      "required": [
+        "coreVersion",
+        "planningProtocol"
+      ],
+      "properties": {
+        "coreVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planningProtocol": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtimeRelease": {
+      "$ref": "#/$defs/runtimeRelease"
+    },
+    "fingerprints": {
+      "$ref": "#/$defs/fingerprints"
+    },
+    "status": {
+      "enum": [
+        "EXECUTABLE",
+        "BLOCKED"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "REQUIRES_PREPARATION",
+        "BLOCKED"
+      ]
+    },
+    "artifactRequirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+    "requiredCredentials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "hosts"
+        ],
+        "properties": {
+          "requirementRef": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "summary"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "../../finding/v1alpha1/schema.json"
+      }
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            null,
+            "INFRA_VERIFY_MISSING",
+            "INFRA_VERIFY_STALE",
+            "INFRA_EVIDENCE_UNAVAILABLE"
+          ]
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED",
+            "UNKNOWN"
+          ]
+        },
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceRunId": {
+                "minLength": 1,
+                "type": "string",
+                "maxLength": 128
+              },
+              "deploymentId": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "verifiedAt": {
+                "type": "string",
+                "maxLength": 40,
+                "format": "date-time"
+              },
+              "coverageDigest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "deploymentId",
+              "sourceRunId",
+              "coverageDigest",
+              "verifiedAt"
+            ]
+          },
+          "maxItems": 256
+        },
+        "infrastructureFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "status",
+        "infrastructureFingerprint",
+        "evidenceRevision",
+        "deployments",
+        "code"
+      ]
     }
   },
   "additionalProperties": false,
@@ -50111,7 +51745,7 @@ platform_generated_state:
         kafka-3: {identity: {directoryId: 07R5amHmR32VDA6jHkGbTA}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/inventory/group_vars/all/platform.yml","mode":420,"size":949,"sha256":"161360a4b1949c1201146c6807df4f2f4d83669b4f50ac0775a6c4fe0b359546","index":0,"count":1,"encoding":"utf-8","payloadBytes":949}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/inventory/group_vars/all/platform.yml","mode":420,"size":949,"sha256":"efdbe8e2d859fdf18e5c9df47afe4063fb797a6abf3cd7ca78f18ff15953ac77","index":0,"count":1,"encoding":"utf-8","payloadBytes":949}
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
 platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../bundle/artifacts/kafka/kafka_2.13-4.3.1.tgz"
 platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
@@ -50127,7 +51761,7 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
+      definitionVersion: 1.0.0-alpha.2
       mode: kraft-distributed
       configuration:
         quorumMode: dynamic
@@ -50193,7 +51827,7 @@ platform_generated_state:
         kafka-3: {identity: {directoryId: 07R5amHmR32VDA6jHkGbTA}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/inventory/group_vars/all/platform.yml","mode":420,"size":968,"sha256":"2806f641311309d32df31bafbac37ad7e70affcf9125c665a06592b619b11b34","index":0,"count":1,"encoding":"utf-8","payloadBytes":968}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/inventory/group_vars/all/platform.yml","mode":420,"size":968,"sha256":"db874d6c537b2afd8944720d50dc949531390551bb6632a8de1601368a84c1cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":968}
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
 platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../bundle/artifacts/kafka/kafka_2.13-4.3.1.tgz"
 platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
@@ -50210,7 +51844,7 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
+      definitionVersion: 1.0.0-alpha.2
       mode: kraft-distributed
       configuration:
         quorumMode: dynamic
@@ -50290,7 +51924,7 @@ platform_generated_state:
         clusterId: MkU3OEVBNTcwNTJENDM2Qk
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/inventory/group_vars/all/platform.yml","mode":420,"size":1047,"sha256":"6af6ee489c423d83f3673148e0bdc6608755c76e73d426300880984a8438a730","index":0,"count":1,"encoding":"utf-8","payloadBytes":1047}
+@@PORTABLE {"path":"examples/valid/kafka-single/inventory/group_vars/all/platform.yml","mode":420,"size":1047,"sha256":"9db579a6982303521002e863f760f6a7ece001c2e70da5d65d87118054865968","index":0,"count":1,"encoding":"utf-8","payloadBytes":1047}
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
 platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../bundle/artifacts/kafka/kafka_2.13-4.3.1.tgz"
 platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
@@ -50306,7 +51940,7 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
+      definitionVersion: 1.0.0-alpha.2
       mode: kraft-standalone
       configuration:
         quorumMode: dynamic
@@ -50374,7 +52008,7 @@ platform_generated_state:
         controller-3: {identity: {directoryId: 07R5amHmR32VDA6jHkGbTA}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/inventory/group_vars/all/platform.yml","mode":420,"size":945,"sha256":"2a3b207b37e62aaa12e2f51c9c61649f2e92cf2cf2db140443f2b38d422ce891","index":0,"count":1,"encoding":"utf-8","payloadBytes":945}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/inventory/group_vars/all/platform.yml","mode":420,"size":945,"sha256":"dc13eb8d7f34db259421a7b956d428e3364118cdf84ca5896d94e5c5ad866250","index":0,"count":1,"encoding":"utf-8","payloadBytes":945}
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
 platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../bundle/artifacts/kafka/kafka_2.13-4.3.1.tgz"
 platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
@@ -50390,7 +52024,7 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
+      definitionVersion: 1.0.0-alpha.2
       mode: kraft-distributed
       configuration:
         quorumMode: dynamic
@@ -50445,7 +52079,7 @@ catalogLock:
 platform_generated_state: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-ssl-single/inventory/group_vars/all/platform.yml","mode":420,"size":1500,"sha256":"6c7aa05f462ff5dea66b68f8c33872e107922459e949abf44766e9552677f10d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1500}
+@@PORTABLE {"path":"examples/valid/kafka-ssl-single/inventory/group_vars/all/platform.yml","mode":420,"size":1500,"sha256":"c8922ef87a38450b8ea4d5c05ad2f12cac3678ea464e6e72e110f7ecfb4004ee","index":0,"count":1,"encoding":"utf-8","payloadBytes":1500}
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
 platform_kafka_artifact_path: "{{ inventory_dir }}/../../../../bundle/artifacts/kafka/kafka_2.13-4.3.1.tgz"
 platform_kafka_artifact_checksum: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
@@ -50481,7 +52115,7 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
+      definitionVersion: 1.0.0-alpha.2
       mode: kraft-standalone
       configuration:
         quorumMode: dynamic
@@ -50823,18 +52457,16 @@ catalogLock:
       digest: sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/inventory/group_vars/all/platform.yml","mode":420,"size":498,"sha256":"82c10b32a9df0bf8725e7afe920e729ecc288ad4c8b1694a7641aabcb5c39e8f","index":0,"count":1,"encoding":"utf-8","payloadBytes":498}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/inventory/group_vars/all/platform.yml","mode":420,"size":436,"sha256":"5400c1edb1c964acee9fef1a432b8a2017841aa951daee9e87c9d5af1fa13981","index":0,"count":1,"encoding":"utf-8","payloadBytes":436}
 platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
-platform_project:
+platform_desired_state:
   serviceDeployments:
     accounting-db:
       serviceType: postgresql
-      definitionVersion: fixture-v1
+      definitionVersion: 1.0.0-alpha.1
       mode: standalone
       configuration: {}
-      members:
-        database-1: {host: db-node1, roles: [database]}
   endpointGroups: {}
   certificateProfiles: {}
   certificateScopes: {}
@@ -50845,11 +52477,16 @@ platform_project:
 platform_host: {desiredHostname: db-node1, address: 192.0.2.11}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/inventory/hosts.yml","mode":420,"size":160,"sha256":"5fba7b6bb8375e4421dff38a09dd7d56dd5fb55aa419aed6c5f85e68532651b9","index":0,"count":1,"encoding":"utf-8","payloadBytes":160}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/inventory/hosts.yml","mode":420,"size":278,"sha256":"fe291899339f02d8e4aa917fd3019a036af9f61b7349d8c07c457cad8772b538","index":0,"count":1,"encoding":"utf-8","payloadBytes":278}
 all:
   hosts:
     localhost: {ansible_connection: local}
-    db-node1: {ansible_host: 192.0.2.11}
+    db-node1:
+      ansible_host: 192.0.2.11
+      platform_deployments:
+        accounting-db:
+          members:
+            database-1: {roles: [database]}
   children:
     platform_targets:
       hosts: {db-node1: {}}
@@ -113350,1185 +114987,5 @@ status: requires-service-install-10-runtime-evidence
   roles:
     - role: platform.docker.docker_rootless
       platform_docker_verify_only: true
-
-@@END
-@@PORTABLE {"path":"services/docker/service.yml","mode":420,"size":3499,"sha256":"e2cdd5dc4a30a44b81d448ed5172d3d5ff4b513dd2d22ef5ff2749eea4276292","index":0,"count":1,"encoding":"utf-8","payloadBytes":3499}
-apiVersion: platform.installer/service-manifest/v1alpha1
-kind: ServiceManifest
-metadata:
-  id: docker
-  version: "1.0.0-alpha.1"
-  displayName: Docker rootless
-  description: Rootless Docker Engine and Compose with LXC networking and TLS TCP API
-  category: runtime
-modes:
-  create-user:
-    displayName: Create Docker user
-    description: Create a dedicated account using a runtime-only password
-    memberRoles: []
-    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
-    x-requiredRuntimeSecretSettings: [accountCredential]
-  existing-user:
-    displayName: Existing Docker user
-    description: Use an existing eligible account without changing its password
-    memberRoles: []
-    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
-listeners:
-  api: {protocol: tcp, defaultPort: 2376, tlsCapable: true, scope: deployment}
-capabilities: [service.docker.rootless, service.docker.compose]
-dependencies: []
-configurationSchema: {$ref: configuration.schema.json}
-configuration:
-  additionalProperties: false
-  settings:
-    accountName: {kind: MANAGED, roleVariable: platform_docker_account_name, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 32}, ui: {label: Docker account, section: Account, order: 10}}
-    tlsProfile: {kind: MANAGED, roleVariable: platform_docker_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 20, x-referenceKind: TLS_PROFILE}}
-    apiPort: {kind: MANAGED, roleVariable: platform_docker_api_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Docker TLS API port, section: Network, order: 30}}
-    apiBindAddress: {kind: MANAGED, roleVariable: platform_docker_api_bind_address, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 64}, ui: {label: External API bind address, section: Network, order: 31}}
-    accountCredential:
-      kind: MANAGED
-      roleVariable: platform_docker_account_credential
-      type: object
-      scopes: [deployment]
-      validation: {required: [passwordSecretRef]}
-      schema:
-        type: object
-        additionalProperties: false
-        required: [passwordSecretRef]
-        properties:
-          passwordSecretRef: {type: string, minLength: 1}
-      ui: {label: New account password, section: Credentials, order: 40, x-runtimeSecretRequirement: {requirementRef: docker-account-password, purpose: SERVICE_PASSWORD}}
-roleEntrypoints:
-  apply: {fqcn: platform.docker.docker_rootless, variablesPrefix: platform_docker_}
-  verify: {fqcn: platform.docker.docker_rootless, variablesPrefix: platform_docker_}
-artifacts: []
-runtimeRequirements:
-  - {id: docker-engine, name: docker-ce, version: "29.7.2", os: redos, architecture: x86_64, requiredOffline: false}
-  - {id: docker-cli, name: docker-ce-cli, version: "29.7.2", os: redos, architecture: x86_64, requiredOffline: false}
-  - {id: docker-rootless, name: docker-ce-rootless-extras, version: "29.7.2", os: redos, architecture: noarch, requiredOffline: false}
-  - {id: docker-compose, name: docker-compose, version: "5.3.1", os: redos, architecture: x86_64, requiredOffline: false}
-  - {id: docker-lxc, name: lxc, version: "7.0.0", os: redos, architecture: x86_64, requiredOffline: false}
-  - {id: docker-fuse-overlayfs, name: fuse-overlayfs, version: "1.7.1", os: redos, architecture: x86_64, requiredOffline: false}
-compatibilityRef: compatibility.yml
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/galaxy.yml","mode":420,"size":171,"sha256":"714cb4c6102a5920d3fb6fa6733ccde1256111be216b466ae591ae25381ca990","index":0,"count":1,"encoding":"utf-8","payloadBytes":171}
-namespace: platform
-name: haproxy
-version: 1.0.0
-readme: README.md
-authors: [Platform Installer V2]
-description: Platform HAProxy HTTPS routing role
-license: [Apache-2.0]
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/modules/archive_managed_backends.py","mode":420,"size":15343,"sha256":"f353e6d01549239b38b58ad1b52c7bbb3dbfc508c4bda0a29b8d69dbe4cd68eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":15343}
-#!/usr/bin/python
-"""Preflight and archive only proven Platform-owned HAProxy backend fragments.
-
-This intentionally handles one fixed HAProxy layout, not arbitrary filesystem
-cleanup. The retained, exact prior Platform candidate proves the old inventory.
-"""
-
-from __future__ import absolute_import, division, print_function
-
-__metaclass__ = type
-
-import os
-import re
-import stat
-import uuid
-import hashlib
-
-from ansible.module_utils.basic import AnsibleModule
-
-
-DOCUMENTATION = r'''
----
-module: archive_managed_backends
-short_description: Guard and archive exact owned HAProxy backend fragments
-description:
-  - Rejects unowned reserved backend files and archives proven stale fragments before publication.
-options:
-  config_directory:
-    type: path
-    required: true
-    description: Fixed HAProxy configuration root.
-  candidate_files:
-    type: list
-    elements: str
-    required: true
-    description: Exact candidate backend fragment basenames.
-  activation_required:
-    type: bool
-    required: true
-    description: Whether the validated candidate differs from the active graph.
-  operation:
-    type: str
-    choices: [capture, archive]
-    default: archive
-  previous_inventory:
-    type: list
-    elements: dict
-    description: Exact name/SHA-256 proof from capture before candidate reset.
-'''
-
-NAME = re.compile(r"30-backend-[a-z][a-z0-9._-]*\.cfg\Z")
-MAX_FILE = 8 * 1024 * 1024
-MAX_FILES = 256
-MAX_TOTAL = 32 * 1024 * 1024
-OPEN_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-
-
-class ArchiveError(Exception):
-    pass
-
-
-def require(ok, code):
-    if not ok:
-        raise ArchiveError(code)
-
-
-def secure_directory(fd):
-    info = os.fstat(fd)
-    require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0, "HAPROXY_ARCHIVE_DIRECTORY_UNSAFE")
-    # A root-owned sticky ancestor such as /var/tmp cannot rename a root-owned
-    # child; every actual HAProxy/archival directory remains non-writable.
-    require(not (info.st_mode & 0o022) or bool(info.st_mode & stat.S_ISVTX),
-            "HAPROXY_ARCHIVE_DIRECTORY_UNSAFE")
-    return info
-
-
-def open_directory_path(path):
-    require(isinstance(path, str) and path.startswith("/") and
-            not any(part in (".", "..") for part in path.split("/")),
-            "HAPROXY_ARCHIVE_PATH_INVALID")
-    current = os.open("/", OPEN_DIR)
-    try:
-        secure_directory(current)
-        for part in (value for value in path.split("/") if value):
-            next_fd = os.open(part, OPEN_DIR, dir_fd=current)
-            secure_directory(next_fd)
-            os.close(current)
-            current = next_fd
-        return current
-    except BaseException:
-        os.close(current)
-        raise
-
-
-def child_directory(parent, name, create=False):
-    if create:
-        try:
-            os.mkdir(name, 0o700, dir_fd=parent)
-        except FileExistsError:
-            pass
-    fd = os.open(name, OPEN_DIR, dir_fd=parent)
-    info = secure_directory(fd)
-    require(not (info.st_mode & 0o077), "HAPROXY_ARCHIVE_DIRECTORY_UNSAFE")
-    require(info.st_dev == os.fstat(parent).st_dev, "HAPROXY_ARCHIVE_MOUNT_UNSAFE")
-    return fd
-
-
-def read_regular(parent, name):
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
-    try:
-        before = os.fstat(fd)
-        require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and
-                not (before.st_mode & 0o022) and before.st_nlink == 1 and
-                before.st_size <= MAX_FILE and before.st_dev == os.fstat(parent).st_dev,
-                "HAPROXY_ARCHIVE_FILE_UNSAFE")
-        data = bytearray()
-        while len(data) <= MAX_FILE:
-            block = os.read(fd, min(65536, MAX_FILE + 1 - len(data)))
-            if not block:
-                break
-            data.extend(block)
-        after = os.fstat(fd)
-        require(len(data) <= MAX_FILE and len(data) == before.st_size and
-                (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) ==
-                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns),
-                "HAPROXY_ARCHIVE_FILE_CHANGED")
-        return bytes(data), before
-    finally:
-        os.close(fd)
-
-
-def write_snapshot(parent, name, data, source):
-    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                 0o600, dir_fd=parent)
-    try:
-        with os.fdopen(fd, "wb", closefd=False) as output:
-            output.write(data)
-            output.flush()
-        os.fchown(fd, source.st_uid, source.st_gid)
-        os.fchmod(fd, stat.S_IMODE(source.st_mode))
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-
-
-def capture_prior_candidate(config_directory, name_prefix=''):
-    """Prove old active backends against the retained complete candidate graph."""
-    try:
-        config_fd = open_directory_path(config_directory)
-    except FileNotFoundError:
-        return []  # A fresh installation has no active backend inventory.
-    try:
-        try:
-            active_fd = os.open("conf.d", OPEN_DIR, dir_fd=config_fd)
-        except FileNotFoundError:
-            return []
-        try:
-            secure_directory(active_fd)
-            active_names = sorted(os.listdir(active_fd))
-            backend_names = [name for name in active_names if name.startswith("30-backend-")]
-            if not backend_names:
-                return []
-            require(len(active_names) <= MAX_FILES and
-                    all(isinstance(name, str) and "/" not in name for name in active_names),
-                    "HAPROXY_PRIOR_GRAPH_INVALID")
-            # Old releases retained their validated .platform-candidate. If it
-            # is missing or differs, no old file is automatically owned.
-            candidate_fd = os.open("." + (name_prefix + "-" if name_prefix else "") + "candidate", OPEN_DIR, dir_fd=config_fd)
-            try:
-                secure_directory(candidate_fd)
-                require(os.fstat(candidate_fd).st_dev == os.fstat(config_fd).st_dev,
-                        "HAPROXY_PRIOR_GRAPH_INVALID")
-                candidate_conf_fd = os.open("conf.d", OPEN_DIR, dir_fd=candidate_fd)
-                try:
-                    secure_directory(candidate_conf_fd)
-                    require(os.fstat(candidate_conf_fd).st_dev == os.fstat(active_fd).st_dev and
-                            sorted(os.listdir(candidate_conf_fd)) == active_names,
-                            "HAPROXY_PRIOR_GRAPH_INVALID")
-                    active_main, _ = read_regular(config_fd, "haproxy.cfg")
-                    candidate_main, _ = read_regular(candidate_fd, "haproxy.cfg")
-                    require(active_main == candidate_main, "HAPROXY_PRIOR_GRAPH_MISMATCH")
-                    total = len(active_main)
-                    inventory = []
-                    for name in active_names:
-                        active, _ = read_regular(active_fd, name)
-                        candidate, _ = read_regular(candidate_conf_fd, name)
-                        total += len(active)
-                        require(total <= MAX_TOTAL and active == candidate,
-                                "HAPROXY_PRIOR_GRAPH_MISMATCH")
-                        if name in backend_names:
-                            require(NAME.fullmatch(name), "HAPROXY_BACKEND_OWNERSHIP_UNPROVEN")
-                            inventory.append({"name": name, "sha256": hashlib.sha256(active).hexdigest()})
-                    return inventory
-                finally:
-                    os.close(candidate_conf_fd)
-            finally:
-                os.close(candidate_fd)
-        finally:
-            os.close(active_fd)
-    finally:
-        os.close(config_fd)
-
-
-def archive(config_directory, candidate_files, activation_required, previous_inventory=None, name_prefix=''):
-    if previous_inventory is None:
-        previous_inventory = []
-    require(isinstance(candidate_files, list) and len(candidate_files) <= MAX_FILES and
-            len(set(candidate_files)) == len(candidate_files) and
-            all(isinstance(name, str) and NAME.fullmatch(name) for name in candidate_files),
-            "HAPROXY_ARCHIVE_CANDIDATE_INVALID")
-    require(isinstance(previous_inventory, list) and len(previous_inventory) <= MAX_FILES and
-            all(isinstance(item, dict) and set(item) == {"name", "sha256"} and
-                isinstance(item["name"], str) and NAME.fullmatch(item["name"]) and
-                isinstance(item["sha256"], str) and
-                re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
-                for item in previous_inventory), "HAPROXY_PRIOR_INVENTORY_INVALID")
-    proof = {item["name"]: item["sha256"] for item in previous_inventory}
-    require(len(proof) == len(previous_inventory), "HAPROXY_PRIOR_INVENTORY_INVALID")
-    config_fd = open_directory_path(config_directory)
-    try:
-        conf_fd = os.open("conf.d", OPEN_DIR, dir_fd=config_fd)
-        try:
-            conf_info = secure_directory(conf_fd)
-            require(conf_info.st_dev == os.fstat(config_fd).st_dev,
-                    "HAPROXY_ARCHIVE_MOUNT_UNSAFE")
-            names = sorted(os.listdir(conf_fd))
-            backend_names = [name for name in names if name.startswith("30-backend-")]
-            owned_names = sorted(set(backend_names).union(
-                ("10-public.cfg", "20-local-stats.cfg", "90-stats-backends.cfg")).intersection(names))
-            require(len(owned_names) <= MAX_FILES, "HAPROXY_ARCHIVE_FILE_LIMIT")
-            previous = {}
-            total = 0
-            require(set(proof) == set(backend_names), "HAPROXY_BACKEND_OWNERSHIP_UNPROVEN")
-            for name in owned_names:
-                data, metadata = read_regular(conf_fd, name)
-                total += len(data)
-                require(total <= MAX_TOTAL, "HAPROXY_ARCHIVE_SIZE_LIMIT")
-                previous[name] = (data, metadata)
-                if name in backend_names:
-                    require(NAME.fullmatch(name) and
-                            hashlib.sha256(data).hexdigest() == proof[name],
-                            "HAPROXY_BACKEND_OWNERSHIP_UNPROVEN")
-            stale = sorted(set(backend_names).difference(candidate_files))
-            if not activation_required:
-                require(not stale, "HAPROXY_BACKEND_STALE_WITHOUT_ACTIVATION")
-                return {"changed": False, "archived": [], "archivePath": None}
-            try:
-                main = read_regular(config_fd, "haproxy.cfg")
-            except FileNotFoundError:
-                require(not previous, "HAPROXY_ARCHIVE_MAIN_MISSING")
-                main = None
-            if main is None:
-                return {"changed": False, "archived": [], "archivePath": None}
-            archive_name = "." + (name_prefix + "-" if name_prefix else "") + "backend-archive"
-            archive_fd = child_directory(config_fd, archive_name, create=True)
-            try:
-                token = "activation-" + uuid.uuid4().hex
-                session_fd = child_directory(archive_fd, token, create=True)
-                try:
-                    previous_fd = child_directory(session_fd, "previous", create=True)
-                    stale_fd = child_directory(session_fd, "stale", create=True)
-                    try:
-                        previous_conf_fd = child_directory(previous_fd, "conf.d", create=True)
-                        try:
-                            write_snapshot(previous_fd, "haproxy.cfg", *main)
-                            for name, (data, metadata) in previous.items():
-                                write_snapshot(previous_conf_fd, name, data, metadata)
-                            os.fsync(previous_conf_fd)
-                            os.fsync(previous_fd)
-                            moved = []
-                            try:
-                                for name in stale:
-                                    original = previous[name][1]
-                                    current = os.stat(name, dir_fd=conf_fd, follow_symlinks=False)
-                                    require((current.st_dev, current.st_ino, current.st_mtime_ns) ==
-                                            (original.st_dev, original.st_ino, original.st_mtime_ns),
-                                            "HAPROXY_ARCHIVE_FILE_CHANGED")
-                                    os.rename(name, name, src_dir_fd=conf_fd, dst_dir_fd=stale_fd)
-                                    moved.append(name)
-                                    archived = os.stat(name, dir_fd=stale_fd, follow_symlinks=False)
-                                    require(archived.st_ino == original.st_ino and archived.st_dev == original.st_dev,
-                                            "HAPROXY_ARCHIVE_IDENTITY_MISMATCH")
-                                os.fsync(stale_fd)
-                                os.fsync(conf_fd)
-                            except BaseException:
-                                for name in reversed(moved):
-                                    if name not in os.listdir(conf_fd):
-                                        os.rename(name, name, src_dir_fd=stale_fd, dst_dir_fd=conf_fd)
-                                raise
-                        finally:
-                            os.close(previous_conf_fd)
-                    finally:
-                        os.close(previous_fd)
-                        os.close(stale_fd)
-                    os.fsync(session_fd)
-                finally:
-                    os.close(session_fd)
-            finally:
-                os.close(archive_fd)
-            return {"changed": True, "archived": stale,
-                    "archivePath": os.path.join(config_directory, archive_name, token)}
-        finally:
-            os.close(conf_fd)
-    finally:
-        os.close(config_fd)
-
-
-def main():
-    module = AnsibleModule(argument_spec={
-        "config_directory": {"type": "path", "required": True},
-        "candidate_files": {"type": "list", "elements": "str", "default": []},
-        "activation_required": {"type": "bool", "default": False},
-        "operation": {"type": "str", "choices": ["capture", "archive"], "default": "archive"},
-        "previous_inventory": {"type": "list", "elements": "dict", "default": []},
-        "name_prefix": {"type": "str", "default": ""},
-    }, supports_check_mode=False)
-    try:
-        if module.params["name_prefix"] and not re.fullmatch(r"[a-z][a-z0-9_]{0,23}", module.params["name_prefix"]):
-            raise ValueError("HAPROXY_RESOURCE_PREFIX_INVALID")
-        if module.params["operation"] == "capture":
-            result = {"changed": False, "previousInventory": capture_prior_candidate(
-                module.params["config_directory"], module.params["name_prefix"])}
-        else:
-            result = archive(module.params["config_directory"], module.params["candidate_files"],
-                             module.params["activation_required"],
-                             module.params["previous_inventory"], module.params["name_prefix"])
-        module.exit_json(**result)
-    except (ArchiveError, OSError, ValueError) as error:
-        # The archive path and file contents are intentionally not included.
-        module.fail_json(msg=error.args[0] if isinstance(error, ArchiveError)
-                         else "HAPROXY_RESOURCE_PREFIX_INVALID" if isinstance(error, ValueError)
-                         else "HAPROXY_ARCHIVE_IO_FAILURE")
-
-
-if __name__ == "__main__":
-    main()
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/defaults/main.yml","mode":420,"size":1303,"sha256":"f25fe19f5bc1c910a4191b672c02742dc767dd8d472593c4259d1f77f5036773","index":0,"count":1,"encoding":"utf-8","payloadBytes":1303}
-platform_haproxy_package: haproxy
-platform_haproxy_service_name: haproxy
-platform_haproxy_binary: /usr/sbin/haproxy
-platform_haproxy_config_directory: /etc/haproxy
-platform_haproxy_main_config: /etc/haproxy/haproxy.cfg
-platform_haproxy_candidate_directory: "/etc/haproxy/.{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}candidate"
-platform_haproxy_conf_directory: /etc/haproxy/conf.d
-platform_haproxy_pki_directory: /etc/haproxy/pki
-platform_haproxy_tls_profile: platform-tls
-platform_haproxy_public_port: 443
-platform_haproxy_internal_stats_port: 8404
-platform_haproxy_runtime_socket_path: /run/haproxy/admin.sock
-platform_haproxy_systemd_dropin_directory: /etc/systemd/system/haproxy.service.d
-platform_haproxy_systemd_dropin_filename: "10-{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}runtime-directory.conf"
-platform_haproxy_global:
-  log:
-    - {address: 127.0.0.1, facility: local2}
-  maxconn: 4096
-platform_haproxy_defaults: {mode: http, timeout_connect: 5s, timeout_client: 30s, timeout_server: 30s}
-platform_haproxy_stats_backend_defaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
-platform_haproxy_phase: prepare
-platform_haproxy_full_reconcile: false
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate.yml","mode":420,"size":1885,"sha256":"9ffc7c43406bde2d2bb741688c333eb0f2a2e998d9de2e48bda90996a8dcf421","index":0,"count":1,"encoding":"utf-8","payloadBytes":1885}
----
-- name: Inspect active HAProxy main config before publication
-  ansible.builtin.stat:
-    path: "{{ platform_haproxy_main_config }}"
-    follow: false
-  register: _platform_haproxy_previous_main
-
-- name: Calculate previous active HAProxy graph digest when installed
-  ansible.builtin.shell: >-
-    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
-      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
-    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
-    sha256sum | awk '{print $1}'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: _platform_haproxy_previous_graph_digest
-  when: _platform_haproxy_previous_main.stat.isreg | default(false)
-
-- name: Prove backend ownership and archive only stale owned fragments
-  platform.haproxy.archive_managed_backends:
-    name_prefix: "{{ platform_name_prefix | default('', true) }}"
-    config_directory: "{{ platform_haproxy_config_directory }}"
-    candidate_files: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
-    previous_inventory: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
-    activation_required: >-
-      {{ not (_platform_haproxy_previous_main.stat.isreg | default(false)) or
-         _platform_haproxy_previous_graph_digest.stdout != _platform_haproxy_candidate_graph_digest.stdout }}
-  register: _platform_haproxy_backend_archive
-
-- name: Publish and verify exact validated HAProxy graph
-  block:
-    - name: Install and verify candidate graph
-      ansible.builtin.include_tasks: activate_publish.yml
-  rescue:
-    - name: Stop with recoverable HAProxy archive evidence
-      ansible.builtin.fail:
-        msg: >-
-          HAPROXY_ACTIVATION_RECOVERY_REQUIRED
-          archive={{ _platform_haproxy_backend_archive.archivePath | default('none', true) }}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_publish.yml","mode":420,"size":3019,"sha256":"5dea5454319749d7fc03757eb5fd1594a37c5d21232d48d3ba98616ea51425c0","index":0,"count":1,"encoding":"utf-8","payloadBytes":3019}
----
-- name: Install exact validated Platform main configuration atomically
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/haproxy.cfg"
-    dest: "{{ platform_haproxy_main_config }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  register: _platform_haproxy_main_config_install
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Install exact validated Platform HAProxy fragments atomically
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
-    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ ['10-public.cfg'] if platform_haproxy_partial_deployment_id is defined else ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg'] }}"
-  register: _platform_haproxy_fragment_install
-
-- name: Install exact validated managed HAProxy application backend fragments
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
-    dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: >-
-    {{ (platform_haproxy_application_backends | map(attribute='configFileName') | list)
-       if platform_haproxy_partial_deployment_id is defined
-       else platform_haproxy_managed_application_backend_files | default([]) }}
-  register: _platform_haproxy_application_backend_install
-
-- name: Record whether the active HAProxy graph changed
-  ansible.builtin.set_fact:
-    platform_haproxy_active_artifacts_changed: >-
-      {{ (_platform_haproxy_main_config_install.changed | default(false)) or
-         (_platform_haproxy_fragment_install.results | default([]) | selectattr('changed') | list | length > 0) or
-         (_platform_haproxy_application_backend_install.results | default([]) | selectattr('changed') | list | length > 0) or
-         _platform_haproxy_backend_archive.changed }}
-
-- name: Calculate deterministic active HAProxy graph digest
-  ansible.builtin.shell: >-
-    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
-      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
-    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
-    sha256sum | awk '{print $1}'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: _platform_haproxy_active_graph_digest
-
-- name: Require exact candidate and active HAProxy graph equivalence
-  ansible.builtin.assert:
-    that:
-      - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
-    fail_msg: HAPROXY_CANDIDATE_ACTIVE_GRAPH_MISMATCH
-
-- name: Validate active HAProxy configuration before service lifecycle
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
-  changed_when: false
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/check_targets.yml","mode":420,"size":3249,"sha256":"075ac676510ebac800e9e6e91136c72880c1d67b57eba3a701ff053402060b9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":3249}
----
-- name: Probe actual backend TLS identities before HAProxy candidate activation
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/timeout
-      - '12s'
-      - /usr/bin/openssl
-      - s_client
-      - -connect
-      - "{{ item.1.address }}:{{ item.1.port }}"
-      - -servername
-      - "{{ item.0.expectedServerName }}"
-      - -verify_hostname
-      - "{{ item.0.expectedServerName }}"
-      - -CAfile
-      - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
-      - -verify_return_error
-      - -brief
-    # s_client otherwise waits for the HTTPS peer to close its keep-alive
-    # connection and hits timeout after a successful certificate handshake.
-    stdin: 'Q'
-  loop: "{{ platform_haproxy_application_backends | selectattr('expectedServerName', 'defined') | rejectattr('probe', 'defined') | subelements('targets') }}"
-  loop_control:
-    label: "{{ item.0.targetDeploymentId }}/{{ item.1.serverName }}"
-  register: _platform_haproxy_backend_tls_probes
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Require every actual backend TLS identity to match the Core projection
-  ansible.builtin.assert:
-    that:
-      - _platform_haproxy_backend_tls_probes.results | default([]) | selectattr('rc', 'ne', 0) | list | length == 0
-    fail_msg: HAPROXY_BACKEND_TLS_IDENTITY_UNVERIFIED
-
-- name: Require verified HTTPS responses from each specific backend target
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/curl
-      - --silent
-      - --show-error
-      - --noproxy
-      - '*'
-      - --max-time
-      - "{{ item.0.probe.timeout | string }}"
-      - --cacert
-      - "{{ platform_haproxy_pki_directory }}/02-ca-chain.pem"
-      - --resolve
-      - "{{ item.0.endpoint.fqdn }}:{{ item.1.port }}:{{ item.1.address }}"
-      - --output
-      - /dev/null
-      - --write-out
-      - '%{http_code}'
-      - "https://{{ item.0.endpoint.fqdn }}:{{ item.1.port }}{{ item.0.probe.path }}"
-  loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', true) | subelements('targets') }}"
-  register: _platform_haproxy_https_responses
-  failed_when: false
-  changed_when: false
-  no_log: true
-
-- name: Require the expected status on the verified TLS connection
-  ansible.builtin.assert:
-    that:
-      - item.rc == 0
-      - item.stdout == item.item.0.probe.expected_status | string
-    fail_msg: HAPROXY_BACKEND_HTTPS_UNVERIFIED
-  loop: "{{ _platform_haproxy_https_responses.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.0.targetDeploymentId }}/{{ item.item.1.serverName }}"
-  no_log: true
-
-- name: Require reachable HTTP targets before candidate publication
-  ansible.builtin.uri:
-    url: "{{ 'https' if item.0.settings.ssl else 'http' }}://{{ item.1.address }}:{{ item.1.port }}{{ item.0.probe.path }}"
-    headers:
-      Host: "{{ item.0.endpoint.fqdn }}"
-    status_code: "{{ item.0.probe.expected_status }}"
-    timeout: "{{ item.0.probe.timeout }}"
-    validate_certs: true
-    follow_redirects: none
-    return_content: false
-  loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', false) | subelements('targets') }}"
-  changed_when: false
-  no_log: true
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":813,"sha256":"9ba663e290b97056a95fafe8b990719807278fdbb48625b4bf799e0c874af170","index":0,"count":1,"encoding":"utf-8","payloadBytes":813}
----
-- name: Resolve the same backend model for read-only endpoint verification
-  ansible.builtin.include_tasks: resolve.yml
-
-- name: Select this source's backends on this provider host
-  ansible.builtin.set_fact:
-    platform_haproxy_application_backends: >-
-      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
-         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
-         selectattr('providerHostIds', 'contains', inventory_hostname) | list }}
-
-- name: Check selected backend targets read-only
-  ansible.builtin.include_tasks: check_targets.yml
-
-- name: Verify the existing HAProxy service and configuration
-  ansible.builtin.include_tasks: verify.yml
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml","mode":420,"size":2028,"sha256":"bd6b0c28017277a2e45ad7ce65d434c06309f94b73b35664efaabfa49940a82f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2028}
----
-- name: Resolve HAProxy runtime projection from canonical state
-  ansible.builtin.include_tasks: resolve.yml
-  when: platform_haproxy_partial_deployment_id is not defined or platform_haproxy_phase == 'prepare'
-
-- name: Select the exact PKI consumer plan before HAProxy mutation
-  ansible.builtin.include_role:
-    name: platform.core.pki_materialize
-    tasks_from: select_consumer_plan.yml
-  vars:
-    platform_pki_consumer_tls_profile_id: "{{ platform_haproxy_tls_profile }}"
-    platform_execution_service_deployment: "{{ _platform_haproxy_local_deployments[0].key }}"
-  when:
-    - platform_haproxy_partial_deployment_id is not defined
-    - platform_haproxy_phase == 'prepare'
-
-- name: Validate resolved HAProxy artifact sources before mutation
-  ansible.builtin.include_role:
-    name: platform.core.artifact_source_gate
-  vars:
-    platform_artifact_requirements:
-      - {id: haproxy, name: haproxy}
-  when:
-    - platform_haproxy_partial_deployment_id is not defined
-    - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
-
-- name: Deliver selected HAProxy offline artifacts
-  ansible.builtin.include_role:
-    name: platform.core.artifact_delivery
-  vars:
-    platform_artifact_delivery_requirements:
-      - {id: haproxy, name: haproxy}
-  when:
-    - platform_haproxy_partial_deployment_id is not defined
-    - platform_resolved_artifact_sources is defined
-    - platform_haproxy_phase == 'prepare'
-
-- name: Prepare and validate complete HAProxy candidate
-  ansible.builtin.include_tasks: prepare.yml
-  when: platform_haproxy_phase == 'prepare'
-
-- name: Activate exact validated HAProxy candidate
-  ansible.builtin.include_tasks: activate.yml
-  when: platform_haproxy_phase == 'activate'
-
-- name: Start HAProxy after the active-validation barrier
-  ansible.builtin.include_tasks: start.yml
-  when: platform_haproxy_phase == 'start'
-
-- name: Verify HAProxy read-only
-  ansible.builtin.include_tasks: verify.yml
-  when: platform_haproxy_phase == 'verify'
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml","mode":420,"size":907,"sha256":"53f76ec200379c7bef7e870ecc1f6d4a24197c59bec2ee66bdbc6f69722871e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":907}
----
-- name: Validate portable service resource settings
-  ansible.builtin.include_role:
-    name: platform.core.project_settings
-
-- name: Require valid HAProxy phase and canonical desired state
-  ansible.builtin.assert:
-    that:
-      - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
-      - platform_desired_state is mapping
-      - platform_deployments | default({}) is mapping
-      - platform_haproxy_partial_deployment_id is not defined or platform_haproxy_partial_deployment_id is match('^[a-z0-9][a-z0-9-]{0,126}[a-z0-9]$')
-    fail_msg: HAPROXY_DESIRED_STATE_INVALID
-
-- name: Run HAProxy lifecycle only on participating hosts
-  ansible.builtin.include_tasks: lifecycle.yml
-  when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') | selectattr('key', 'in', platform_deployments | default({})) | list | length) > 0
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":11139,"sha256":"63b9aa1db52fff9c515948f8c41b1078c14422d7392e221353c766b05bb60e78","index":0,"count":1,"encoding":"utf-8","payloadBytes":11139}
----
-- name: Capture exact prior Platform HAProxy backend inventory before candidate reset
-  platform.haproxy.archive_managed_backends:
-    name_prefix: "{{ platform_name_prefix | default('', true) }}"
-    operation: capture
-    config_directory: "{{ platform_haproxy_config_directory }}"
-  register: _platform_haproxy_prior_backend_capture
-
-- name: Install HAProxy from configured system repositories
-  ansible.builtin.package:
-    name: "{{ platform_haproxy_package }}"
-    state: present
-  when:
-    - platform_haproxy_partial_deployment_id is not defined
-    - >-
-      platform_resolved_artifact_sources is not defined or
-      platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
-
-- name: Create persistent Platform HAProxy directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-  loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Require HAProxy PKI materialization
-  ansible.builtin.assert:
-    that: platform_pki_selected_consumer_plan.targetDirectory is defined
-    fail_msg: HAPROXY_PKI_PLAN_REQUIRED
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Deploy HAProxy TLS PEM inputs
-  ansible.builtin.copy:
-    src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
-    dest: "{{ platform_haproxy_pki_directory }}/{{ item.bundle }}"
-    remote_src: true
-    owner: root
-    group: haproxy
-    mode: "{{ item.mode }}"
-  loop:
-    - {name: certificate.pem, bundle: '01-certificate.pem', mode: '0640'}
-    - {name: ca-chain.pem, bundle: '02-ca-chain.pem', mode: '0640'}
-    - {name: private-key.pem, bundle: '03-private-key.pem', mode: '0640'}
-  no_log: true
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Discover unrelated HAProxy conf.d files for complete candidate validation
-  ansible.builtin.find:
-    paths: "{{ platform_haproxy_conf_directory }}"
-    file_type: file
-    recurse: false
-    excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
-  register: _platform_haproxy_third_party_fragments
-
-- name: Select exact filenames owned by the partial endpoint source
-  ansible.builtin.set_fact:
-    _platform_haproxy_partial_source_files: >-
-      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
-         map(attribute='value') | flatten |
-         selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id | default('')) |
-         map(attribute='configFileName') | unique | list }}
-
-- name: Build HAProxy PEM bundle atomically without logging key data
-  ansible.builtin.assemble:
-    src: "{{ platform_haproxy_pki_directory }}"
-    dest: "{{ platform_haproxy_pki_directory }}/haproxy.pem"
-    regexp: '^(01-certificate|02-ca-chain|03-private-key)[.]pem$'
-    owner: root
-    group: haproxy
-    mode: '0640'
-  no_log: true
-  register: _platform_haproxy_pem_bundle
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Record whether HAProxy TLS material changed
-  ansible.builtin.set_fact:
-    platform_haproxy_tls_material_changed: "{{ _platform_haproxy_pem_bundle.changed | default(false) }}"
-
-- name: Publish participating HAProxy addresses
-  ansible.builtin.set_fact:
-    platform_haproxy_participant_addresses: >-
-      {{ groups['platform_targets'] | default([]) | map('extract', hostvars, 'ansible_host') | list }}
-
-- name: Select complete managed application backend file model
-  ansible.builtin.set_fact:
-    platform_haproxy_application_backends: >-
-      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
-         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('providerHostIds', 'contains', inventory_hostname) |
-         sort(attribute='configFileName') }}
-    platform_haproxy_managed_application_backend_files: >-
-      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
-         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('providerHostIds', 'contains', inventory_hostname) |
-         map(attribute='configFileName') | sort | list }}
-  when: platform_haproxy_full_reconcile | bool
-
-- name: Retain exact proven backend inventory in base mode
-  ansible.builtin.set_fact:
-    platform_haproxy_application_backends: []
-    platform_haproxy_managed_application_backend_files: >-
-      {{ _platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') | list }}
-  when: not (platform_haproxy_full_reconcile | bool)
-
-- name: Select only this source deployment backend for partial integration
-  ansible.builtin.set_fact:
-    platform_haproxy_application_backends: >-
-      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
-         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
-         selectattr('providerHostIds', 'contains', inventory_hostname) |
-         sort(attribute='configFileName') }}
-    platform_haproxy_managed_application_backend_files: >-
-      {{ (((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
-           reject('in', _platform_haproxy_partial_source_files)) | list) +
-         (platform_haproxy_runtime_projection.backends.backends | dict2items |
-          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-          flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
-          selectattr('providerHostIds', 'contains', inventory_hostname) |
-          map(attribute='configFileName') | list)) | unique | sort }}
-  when:
-    - not (platform_haproxy_full_reconcile | bool)
-    - platform_haproxy_partial_deployment_id is defined
-
-- name: Check the projected targets before candidate publication
-  ansible.builtin.include_tasks: check_targets.yml
-
-- name: Reset only the temporary HAProxy candidate graph
-  ansible.builtin.file:
-    path: "{{ platform_haproxy_candidate_directory }}"
-    state: absent
-  changed_when: false
-
-- name: Create temporary HAProxy candidate workspace
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
-  changed_when: false
-
-- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
-  ansible.builtin.copy:
-    src: "{{ item.path }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: preserve
-  loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
-  changed_when: false
-
-- name: Stage proven existing application backends for base provider update
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
-  when:
-    - not (platform_haproxy_full_reconcile | bool)
-    - >-
-      platform_haproxy_partial_deployment_id is not defined or
-      item.name not in _platform_haproxy_partial_source_files
-  changed_when: false
-
-- name: Render full Platform HAProxy candidate
-  ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: '0640'
-  loop:
-    - {src: haproxy.cfg.j2, dest: haproxy.cfg}
-    - {src: 10-public.cfg.j2, dest: conf.d/10-public.cfg}
-    - {src: 20-local-stats.cfg.j2, dest: conf.d/20-local-stats.cfg}
-    - {src: 90-stats-backends.cfg.j2, dest: conf.d/90-stats-backends.cfg}
-  changed_when: false
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Stage unchanged provider configuration for partial backend validation
-  ansible.builtin.copy:
-    src: "{{ item.src }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
-    remote_src: true
-    mode: preserve
-  loop:
-    - {src: "{{ platform_haproxy_main_config }}", dest: haproxy.cfg}
-    - {src: "{{ platform_haproxy_conf_directory }}/10-public.cfg", dest: conf.d/10-public.cfg}
-    - {src: "{{ platform_haproxy_conf_directory }}/20-local-stats.cfg", dest: conf.d/20-local-stats.cfg}
-    - {src: "{{ platform_haproxy_conf_directory }}/90-stats-backends.cfg", dest: conf.d/90-stats-backends.cfg}
-  changed_when: false
-  when: platform_haproxy_partial_deployment_id is defined
-
-- name: Update domain precedence in the existing public frontend candidate
-  ansible.builtin.template:
-    src: 10-public.cfg.j2
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/10-public.cfg"
-    owner: root
-    group: root
-    mode: '0640'
-  changed_when: false
-  when: platform_haproxy_partial_deployment_id is defined
-
-- name: Render one managed HAProxy application backend candidate per resolved backend
-  ansible.builtin.template:
-    src: 30-application-backend.cfg.j2
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.configFileName }}"
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ platform_haproxy_application_backends }}"
-  loop_control:
-    label: "{{ item.configFileName }}"
-  vars:
-    platform_haproxy_application_backend: "{{ item }}"
-  changed_when: false
-
-- name: Validate structured global HAProxy log settings
-  ansible.builtin.assert:
-    that:
-      - platform_haproxy_global.log is sequence
-      - platform_haproxy_global.log | length > 0
-      - item.address is defined and item.address is string and item.address | length > 0
-      - item.facility is defined and item.facility in ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'auth2', 'ftp', 'ntp', 'audit', 'alert', 'cron2', 'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
-      - item.level is not defined or item.level in ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug']
-    fail_msg: HAPROXY_GLOBAL_LOG_INVALID
-  loop: "{{ platform_haproxy_global.log }}"
-
-- name: Calculate deterministic candidate graph digest
-  ansible.builtin.shell: >-
-    { sha256sum haproxy.cfg; cd conf.d; find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
-    sed 's#  \./#  conf.d/#' | sort |
-    sha256sum | awk '{print $1}'
-  args:
-    chdir: "{{ platform_haproxy_candidate_directory }}"
-    executable: /bin/bash
-  changed_when: false
-  register: _platform_haproxy_candidate_graph_digest
-
-- name: Validate complete HAProxy candidate graph before cluster activation
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_candidate_directory }}/haproxy.cfg", '-f', "{{ platform_haproxy_candidate_directory }}/conf.d"]
-  changed_when: false
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/resolve.yml","mode":420,"size":4368,"sha256":"430ac191aae88fc753baedbe66cbe364b6a675ca258b2ad6691075b0ce8b3592","index":0,"count":1,"encoding":"utf-8","payloadBytes":4368}
----
-- name: Reuse the common normalized endpoint sources
-  ansible.builtin.include_role:
-    name: platform.core.resolve_endpoint_sources
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
-
-- name: Load published service catalog for HAProxy projection
-  ansible.builtin.include_vars:
-    file: "{{ platform_service_catalog_path }}"
-    name: _platform_haproxy_catalog_file
-  run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
-
-- name: Select the one local HAProxy deployment from canonical desired state
-  ansible.builtin.set_fact:
-    _platform_haproxy_local_deployments: >-
-      {{ platform_desired_state.serviceDeployments | dict2items |
-         selectattr('value.serviceType', 'equalto', 'haproxy') |
-         selectattr('key', 'in', platform_deployments | default({})) | list }}
-
-- name: Require one local HAProxy deployment for role-variable projection
-  ansible.builtin.assert:
-    that: _platform_haproxy_local_deployments | length == 1
-    fail_msg: HAPROXY_LOCAL_DEPLOYMENT_AMBIGUOUS
-
-- name: Project the configured HAProxy TLS profile for this deployment
-  ansible.builtin.set_fact:
-    platform_haproxy_tls_profile: >-
-      {{ _platform_haproxy_local_deployments[0].value.configuration.tlsProfile |
-         default(platform_haproxy_tls_profile, true) }}
-
-- name: Collect safe inventory projection for HAProxy
-  ansible.builtin.set_fact:
-    _platform_haproxy_hosts: "{{ _platform_haproxy_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}"
-    _platform_haproxy_placements: "{{ _platform_haproxy_placements | default({}) | combine({item: (hostvars[item].platform_deployments | default({}))}) }}"
-  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
-  run_once: true
-  no_log: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
-
-- name: Resolve generic endpoint projection for HAProxy
-  platform.core.resolve_service_endpoints:
-    endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
-    desired_state: "{{ platform_desired_state }}"
-    service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
-    inventory_deployments: "{{ _platform_haproxy_placements }}"
-    deployment_ids: "{{ [platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined and not (platform_haproxy_full_reconcile | bool) else omit }}"
-  register: _platform_haproxy_endpoints
-  run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
-
-- name: Resolve deterministic HAProxy external backends
-  platform.core.resolve_haproxy_backends:
-    endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
-    desired_state: "{{ platform_desired_state }}"
-    service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
-    inventory_hosts: "{{ _platform_haproxy_hosts }}"
-    inventory_deployments: "{{ _platform_haproxy_placements }}"
-    resolved_service_endpoints: "{{ _platform_haproxy_endpoints.resolved_service_endpoints }}"
-    backend_defaults: {}
-    target_deployment_ids: "{{ [platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined and not (platform_haproxy_full_reconcile | bool) else omit }}"
-  register: _platform_haproxy_backends
-  run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
-
-- name: Publish HAProxy runtime projection
-  ansible.builtin.set_fact:
-    platform_haproxy_runtime_projection:
-      endpoints: >-
-        {{ _platform_haproxy_endpoints.resolved_service_endpoints
-           if (platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined)
-           else {'endpoints': {}, 'hostEndpoints': {}, 'findings': [], 'status': 'PASS'} }}
-      backends: >-
-        {{ _platform_haproxy_backends.resolved_haproxy_backends
-           if (platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined)
-           else {'backends': {}, 'findings': [], 'status': 'PASS'} }}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/start.yml","mode":420,"size":1522,"sha256":"934ce27e037293adc364b8bbf7c7f869f6b995b08fabe07023ae8ef2ed10110c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1522}
----
-- name: Create HAProxy systemd drop-in directory
-  ansible.builtin.file:
-    path: "{{ platform_haproxy_systemd_dropin_directory }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Ensure systemd creates the HAProxy runtime socket directory
-  ansible.builtin.template:
-    src: haproxy-runtime-directory.conf.j2
-    dest: "{{ platform_haproxy_systemd_dropin_directory }}/{{ platform_haproxy_systemd_dropin_filename }}"
-    owner: root
-    group: root
-    mode: '0644'
-  register: _platform_haproxy_runtime_dropin
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Start or reload validated HAProxy service
-  ansible.builtin.systemd:
-    name: "{{ platform_haproxy_service_name }}"
-    daemon_reload: true
-    state: >-
-      {{ 'restarted' if ((platform_haproxy_active_artifacts_changed | default(false) | bool) or
-                         (platform_haproxy_tls_material_changed | default(false) | bool) or
-                         (_platform_haproxy_runtime_dropin.changed | default(false) | bool)) else 'started' }}
-    enabled: true
-  when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Reload existing HAProxy only after a changed partial backend graph
-  ansible.builtin.systemd:
-    name: "{{ platform_haproxy_service_name }}"
-    state: reloaded
-  when:
-    - platform_haproxy_partial_deployment_id is defined
-    - platform_haproxy_active_artifacts_changed | default(false) | bool
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/verify.yml","mode":420,"size":957,"sha256":"3768a04788cac685444b5408a50bfb7df907e2cf90a12670f577019fc7b9d461","index":0,"count":1,"encoding":"utf-8","payloadBytes":957}
----
-- name: Check HAProxy package and active configuration read-only
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
-  changed_when: false
-
-- name: Check HAProxy service is active read-only
-  ansible.builtin.command:
-    argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
-  changed_when: false
-
-- name: Check HAProxy public and local stats listeners read-only
-  ansible.builtin.command:
-    argv: [ss, -ltn]
-  changed_when: false
-  register: _platform_haproxy_listeners
-
-- name: Require HAProxy public and local stats listeners
-  ansible.builtin.assert:
-    that:
-      - "':' ~ (platform_haproxy_public_port | string) in _platform_haproxy_listeners.stdout"
-      - "':' ~ (platform_haproxy_internal_stats_port | string) in _platform_haproxy_listeners.stdout"
-    fail_msg: HAPROXY_LISTENER_VERIFICATION_FAILED
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/10-public.cfg.j2","mode":420,"size":1018,"sha256":"74c72980f638c2ba1a81d8a36948d942d8c53fd20c180c1dc51a937502d97ece","index":0,"count":1,"encoding":"utf-8","payloadBytes":1018}
-frontend public
-    bind *:{{ platform_haproxy_public_port }} ssl crt {{ platform_haproxy_pki_directory }}/haproxy.pem
-    mode http
-    http-request set-var(txn.route_host) req.hdr(host),lower,regsub(:[0-9]+$,)
-{% set endpoint_groups = platform_desired_state.endpointGroups | default({}) %}
-    acl platform_endpoint_domain var(txn.route_host) -m end -i{% for group in endpoint_groups.values() | map(attribute='address') | map(attribute='domain') | unique | sort %} .{{ group }}{% endfor %}{{ '\n' }}
-{% set ordered_groups = [] %}
-{% for group, settings in endpoint_groups | dictsort %}
-{% set _ = ordered_groups.append((settings.address.domain | length, group, settings)) %}
-{% endfor %}
-{% for length, group, settings in ordered_groups | sort(attribute='0', reverse=true) %}
-    acl {{ group }} var(txn.route_host) -m end -i .{{ settings.address.domain }}
-    use_backend %[var(txn.route_host),field(1,'.')]-{{ group }} if {{ group }}
-{% endfor %}
-    http-request return status 503 unless platform_endpoint_domain
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/20-local-stats.cfg.j2","mode":420,"size":561,"sha256":"5903f2dcec09009d9827c244955ff38b17554d1e7c97b94bfda2598b3883eb47","index":0,"count":1,"encoding":"utf-8","payloadBytes":561}
-frontend {{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}local-stats
-    bind {{ ansible_host | default(inventory_hostname) }}:{{ platform_haproxy_internal_stats_port }}{% if platform_haproxy_stats_backend_defaults.ssl %} ssl crt {{ platform_haproxy_pki_directory }}/haproxy.pem{% endif %}{{ '\n' }}
-    mode http
-    acl permitted src {{ platform_haproxy_participant_addresses | join(' ') }}
-    http-request deny unless permitted
-    stats enable
-    stats uri /stats
-    stats hide-version
-    stats show-node
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/30-application-backend.cfg.j2","mode":420,"size":2193,"sha256":"4b03378659237ffec4c9985fdf3aa81934bb22dcd79dcca02d926f62c73fee91","index":0,"count":1,"encoding":"utf-8","payloadBytes":2193}
-# platform-installer-managed-backend/v1 {{ platform_haproxy_application_backend.configFileName }}
-backend {{ platform_haproxy_application_backend.backendName }}
-    balance {{ platform_haproxy_application_backend.settings.balance }}
-{% if platform_haproxy_application_backend.settings.timeoutConnect is defined %}
-    timeout connect {{ platform_haproxy_application_backend.settings.timeoutConnect }}
-{% endif %}
-{% if platform_haproxy_application_backend.settings.timeoutServer is defined %}
-    timeout server {{ platform_haproxy_application_backend.settings.timeoutServer }}
-{% endif %}
-{% if platform_haproxy_application_backend.settings.httpCheck is defined %}
-    option httpchk
-    http-check send meth {{ platform_haproxy_application_backend.settings.httpCheck.method }} uri {{ platform_haproxy_application_backend.settings.httpCheck.path }}
-    http-check expect status {{ platform_haproxy_application_backend.settings.httpCheck.expectedStatus }}
-{% endif %}
-    default-server{% if platform_haproxy_application_backend.settings.ssl %} ssl verify {{ platform_haproxy_application_backend.settings.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% if platform_haproxy_application_backend.expectedServerName is defined %} verifyhost {{ platform_haproxy_application_backend.expectedServerName }}{% endif %}{% endif %}{% if platform_haproxy_application_backend.settings.check %} check fall {{ platform_haproxy_application_backend.settings.fall }} rise {{ platform_haproxy_application_backend.settings.rise }}{% endif %}{{ '\n' }}
-{% for target in platform_haproxy_application_backend.targets %}
-    server {{ target.serverName }} {{ target.address }}:{{ target.port }}{% if platform_haproxy_application_backend.settings.checkInterval is defined %} inter {{ platform_haproxy_application_backend.settings.checkInterval }}{% endif %}{% if platform_haproxy_application_backend.settings.maxconn is defined %} maxconn {{ platform_haproxy_application_backend.settings.maxconn }}{% endif %}{% if platform_haproxy_application_backend.expectedServerName is defined %} sni str({{ platform_haproxy_application_backend.expectedServerName }}){% endif %}{{ '\n' }}
-{% endfor %}
 
 @@END

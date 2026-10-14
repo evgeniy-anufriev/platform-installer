@@ -1,3 +1,2839 @@
+@@PORTABLE {"path":"vendor/golang.org/x/net/html/token.go","mode":420,"size":34221,"sha256":"28e4cab66406c656cd2ae007517bac998b3d68d18fce0e0717ed98bed44ed336","index":0,"count":1,"encoding":"utf-8","payloadBytes":34221}
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package html
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"strconv"
+	"strings"
+
+	"golang.org/x/net/html/atom"
+)
+
+// A TokenType is the type of a Token.
+type TokenType uint32
+
+const (
+	// ErrorToken means that an error occurred during tokenization.
+	ErrorToken TokenType = iota
+	// TextToken means a text node.
+	TextToken
+	// A StartTagToken looks like <a>.
+	StartTagToken
+	// An EndTagToken looks like </a>.
+	EndTagToken
+	// A SelfClosingTagToken tag looks like <br/>.
+	SelfClosingTagToken
+	// A CommentToken looks like <!--x-->.
+	CommentToken
+	// A DoctypeToken looks like <!DOCTYPE x>
+	DoctypeToken
+)
+
+// ErrBufferExceeded means that the buffering limit was exceeded.
+var ErrBufferExceeded = errors.New("max buffer exceeded")
+
+// String returns a string representation of the TokenType.
+func (t TokenType) String() string {
+	switch t {
+	case ErrorToken:
+		return "Error"
+	case TextToken:
+		return "Text"
+	case StartTagToken:
+		return "StartTag"
+	case EndTagToken:
+		return "EndTag"
+	case SelfClosingTagToken:
+		return "SelfClosingTag"
+	case CommentToken:
+		return "Comment"
+	case DoctypeToken:
+		return "Doctype"
+	}
+	return "Invalid(" + strconv.Itoa(int(t)) + ")"
+}
+
+// An Attribute is an attribute namespace-key-value triple. Namespace is
+// non-empty for foreign attributes like xlink, Key is alphabetic (and hence
+// does not contain escapable characters like '&', '<' or '>'), and Val is
+// unescaped (it looks like "a<b" rather than "a&lt;b").
+//
+// Namespace is only used by the parser, not the tokenizer.
+type Attribute struct {
+	Namespace, Key, Val string
+}
+
+// A Token consists of a TokenType and some Data (tag name for start and end
+// tags, content for text, comments and doctypes). A tag Token may also contain
+// a slice of Attributes. Data is unescaped for all Tokens (it looks like "a<b"
+// rather than "a&lt;b"). For tag Tokens, DataAtom is the atom for Data, or
+// zero if Data is not a known tag name.
+type Token struct {
+	Type     TokenType
+	DataAtom atom.Atom
+	Data     string
+	Attr     []Attribute
+}
+
+// tagString returns a string representation of a tag Token's Data and Attr.
+func (t Token) tagString() string {
+	if len(t.Attr) == 0 {
+		return t.Data
+	}
+	buf := bytes.NewBufferString(t.Data)
+	for _, a := range t.Attr {
+		buf.WriteByte(' ')
+		buf.WriteString(a.Key)
+		buf.WriteString(`="`)
+		escape(buf, a.Val)
+		buf.WriteByte('"')
+	}
+	return buf.String()
+}
+
+// String returns a string representation of the Token.
+func (t Token) String() string {
+	switch t.Type {
+	case ErrorToken:
+		return ""
+	case TextToken:
+		return EscapeString(t.Data)
+	case StartTagToken:
+		return "<" + t.tagString() + ">"
+	case EndTagToken:
+		return "</" + t.tagString() + ">"
+	case SelfClosingTagToken:
+		return "<" + t.tagString() + "/>"
+	case CommentToken:
+		return "<!--" + escapeCommentString(t.Data) + "-->"
+	case DoctypeToken:
+		return "<!DOCTYPE " + EscapeString(t.Data) + ">"
+	}
+	return "Invalid(" + strconv.Itoa(int(t.Type)) + ")"
+}
+
+// span is a range of bytes in a Tokenizer's buffer. The start is inclusive,
+// the end is exclusive.
+type span struct {
+	start, end int
+}
+
+// A Tokenizer returns a stream of HTML Tokens.
+type Tokenizer struct {
+	// r is the source of the HTML text.
+	r io.Reader
+	// tt is the TokenType of the current token.
+	tt TokenType
+	// err is the first error encountered during tokenization. It is possible
+	// for tt != Error && err != nil to hold: this means that Next returned a
+	// valid token but the subsequent Next call will return an error token.
+	// For example, if the HTML text input was just "plain", then the first
+	// Next call would set z.err to io.EOF but return a TextToken, and all
+	// subsequent Next calls would return an ErrorToken.
+	// err is never reset. Once it becomes non-nil, it stays non-nil.
+	err error
+	// readErr is the error returned by the io.Reader r. It is separate from
+	// err because it is valid for an io.Reader to return (n int, err1 error)
+	// such that n > 0 && err1 != nil, and callers should always process the
+	// n > 0 bytes before considering the error err1.
+	readErr error
+	// buf[raw.start:raw.end] holds the raw bytes of the current token.
+	// buf[raw.end:] is buffered input that will yield future tokens.
+	raw span
+	buf []byte
+	// maxBuf limits the data buffered in buf. A value of 0 means unlimited.
+	maxBuf int
+	// buf[data.start:data.end] holds the raw bytes of the current token's data:
+	// a text token's text, a tag token's tag name, etc.
+	data span
+	// pendingAttr is the attribute key and value currently being tokenized.
+	// When complete, pendingAttr is pushed onto attr. nAttrReturned is
+	// incremented on each call to TagAttr.
+	pendingAttr   [2]span
+	attr          [][2]span
+	attrNames     map[string]bool
+	nAttrReturned int
+	// rawTag is the "script" in "</script>" that closes the next token. If
+	// non-empty, the subsequent call to Next will return a raw or RCDATA text
+	// token: one that treats "<p>" as text instead of an element.
+	// rawTag's contents are lower-cased.
+	rawTag string
+	// textIsRaw is whether the current text token's data is not escaped.
+	textIsRaw bool
+	// convertNUL is whether NUL bytes in the current token's data should
+	// be converted into \ufffd replacement characters.
+	convertNUL bool
+	// allowCDATA is whether CDATA sections are allowed in the current context.
+	allowCDATA bool
+}
+
+// AllowCDATA sets whether or not the tokenizer recognizes <![CDATA[foo]]> as
+// the text "foo". The default value is false, which means to recognize it as
+// a bogus comment "<!-- [CDATA[foo]] -->" instead.
+//
+// Strictly speaking, an HTML5 compliant tokenizer should allow CDATA if and
+// only if tokenizing foreign content, such as MathML and SVG. However,
+// tracking foreign-contentness is difficult to do purely in the tokenizer,
+// as opposed to the parser, due to HTML integration points: an <svg> element
+// can contain a <foreignObject> that is foreign-to-SVG but not foreign-to-
+// HTML. For strict compliance with the HTML5 tokenization algorithm, it is the
+// responsibility of the user of a tokenizer to call AllowCDATA as appropriate.
+// In practice, if using the tokenizer without caring whether MathML or SVG
+// CDATA is text or comments, such as tokenizing HTML to find all the anchor
+// text, it is acceptable to ignore this responsibility.
+func (z *Tokenizer) AllowCDATA(allowCDATA bool) {
+	z.allowCDATA = allowCDATA
+}
+
+// NextIsNotRawText instructs the tokenizer that the next token should not be
+// considered as 'raw text'. Some elements, such as script and title elements,
+// normally require the next token after the opening tag to be 'raw text' that
+// has no child elements. For example, tokenizing "<title>a<b>c</b>d</title>"
+// yields a start tag token for "<title>", a text token for "a<b>c</b>d", and
+// an end tag token for "</title>". There are no distinct start tag or end tag
+// tokens for the "<b>" and "</b>".
+//
+// This tokenizer implementation will generally look for raw text at the right
+// times. Strictly speaking, an HTML5 compliant tokenizer should not look for
+// raw text if in foreign content: <title> generally needs raw text, but a
+// <title> inside an <svg> does not. Another example is that a <textarea>
+// generally needs raw text, but a <textarea> is not allowed as an immediate
+// child of a <select>; in normal parsing, a <textarea> implies </select>, but
+// one cannot close the implicit element when parsing a <select>'s InnerHTML.
+// Similarly to AllowCDATA, tracking the correct moment to override raw-text-
+// ness is difficult to do purely in the tokenizer, as opposed to the parser.
+// For strict compliance with the HTML5 tokenization algorithm, it is the
+// responsibility of the user of a tokenizer to call NextIsNotRawText as
+// appropriate. In practice, like AllowCDATA, it is acceptable to ignore this
+// responsibility for basic usage.
+//
+// Note that this 'raw text' concept is different from the one offered by the
+// Tokenizer.Raw method.
+func (z *Tokenizer) NextIsNotRawText() {
+	z.rawTag = ""
+}
+
+// Err returns the error associated with the most recent ErrorToken token.
+// This is typically io.EOF, meaning the end of tokenization.
+func (z *Tokenizer) Err() error {
+	if z.tt != ErrorToken {
+		return nil
+	}
+	return z.err
+}
+
+// readByte returns the next byte from the input stream, doing a buffered read
+// from z.r into z.buf if necessary. z.buf[z.raw.start:z.raw.end] remains a contiguous byte
+// slice that holds all the bytes read so far for the current token.
+// It sets z.err if the underlying reader returns an error.
+// Pre-condition: z.err == nil.
+func (z *Tokenizer) readByte() byte {
+	if z.raw.end >= len(z.buf) {
+		// Our buffer is exhausted and we have to read from z.r. Check if the
+		// previous read resulted in an error.
+		if z.readErr != nil {
+			z.err = z.readErr
+			return 0
+		}
+		// We copy z.buf[z.raw.start:z.raw.end] to the beginning of z.buf. If the length
+		// z.raw.end - z.raw.start is more than half the capacity of z.buf, then we
+		// allocate a new buffer before the copy.
+		c := cap(z.buf)
+		d := z.raw.end - z.raw.start
+		var buf1 []byte
+		if 2*d > c {
+			buf1 = make([]byte, d, 2*c)
+		} else {
+			buf1 = z.buf[:d]
+		}
+		copy(buf1, z.buf[z.raw.start:z.raw.end])
+		if x := z.raw.start; x != 0 {
+			// Adjust the data/attr spans to refer to the same contents after the copy.
+			z.data.start -= x
+			z.data.end -= x
+			z.pendingAttr[0].start -= x
+			z.pendingAttr[0].end -= x
+			z.pendingAttr[1].start -= x
+			z.pendingAttr[1].end -= x
+			for i := range z.attr {
+				z.attr[i][0].start -= x
+				z.attr[i][0].end -= x
+				z.attr[i][1].start -= x
+				z.attr[i][1].end -= x
+			}
+		}
+		z.raw.start, z.raw.end, z.buf = 0, d, buf1[:d]
+		// Now that we have copied the live bytes to the start of the buffer,
+		// we read from z.r into the remainder.
+		var n int
+		n, z.readErr = readAtLeastOneByte(z.r, buf1[d:cap(buf1)])
+		if n == 0 {
+			z.err = z.readErr
+			return 0
+		}
+		z.buf = buf1[:d+n]
+	}
+	x := z.buf[z.raw.end]
+	z.raw.end++
+	if z.maxBuf > 0 && z.raw.end-z.raw.start >= z.maxBuf {
+		z.err = ErrBufferExceeded
+		return 0
+	}
+	return x
+}
+
+// Buffered returns a slice containing data buffered but not yet tokenized.
+func (z *Tokenizer) Buffered() []byte {
+	return z.buf[z.raw.end:]
+}
+
+// readAtLeastOneByte wraps an io.Reader so that reading cannot return (0, nil).
+// It returns io.ErrNoProgress if the underlying r.Read method returns (0, nil)
+// too many times in succession.
+func readAtLeastOneByte(r io.Reader, b []byte) (int, error) {
+	for i := 0; i < 100; i++ {
+		if n, err := r.Read(b); n != 0 || err != nil {
+			return n, err
+		}
+	}
+	return 0, io.ErrNoProgress
+}
+
+// skipWhiteSpace skips past any white space.
+func (z *Tokenizer) skipWhiteSpace() {
+	if z.err != nil {
+		return
+	}
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			return
+		}
+		switch c {
+		case ' ', '\n', '\r', '\t', '\f':
+			// No-op.
+		default:
+			z.raw.end--
+			return
+		}
+	}
+}
+
+// readRawOrRCDATA reads until the next "</foo>", where "foo" is z.rawTag and
+// is typically something like "script" or "textarea".
+func (z *Tokenizer) readRawOrRCDATA() {
+	if z.rawTag == "script" {
+		z.readScript()
+		z.textIsRaw = true
+		z.rawTag = ""
+		return
+	}
+loop:
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			break loop
+		}
+		if c != '<' {
+			continue loop
+		}
+		c = z.readByte()
+		if z.err != nil {
+			break loop
+		}
+		if c != '/' {
+			z.raw.end--
+			continue loop
+		}
+		if z.readRawEndTag() || z.err != nil {
+			break loop
+		}
+	}
+	z.data.end = z.raw.end
+	// A textarea's or title's RCDATA can contain escaped entities.
+	z.textIsRaw = z.rawTag != "textarea" && z.rawTag != "title"
+	z.rawTag = ""
+}
+
+// readRawEndTag attempts to read a tag like "</foo>", where "foo" is z.rawTag.
+// If it succeeds, it backs up the input position to reconsume the tag and
+// returns true. Otherwise it returns false. The opening "</" has already been
+// consumed.
+func (z *Tokenizer) readRawEndTag() bool {
+	for i := 0; i < len(z.rawTag); i++ {
+		c := z.readByte()
+		if z.err != nil {
+			return false
+		}
+		if c != z.rawTag[i] && c != z.rawTag[i]-('a'-'A') {
+			z.raw.end--
+			return false
+		}
+	}
+	c := z.readByte()
+	if z.err != nil {
+		return false
+	}
+	switch c {
+	case ' ', '\n', '\r', '\t', '\f', '/', '>':
+		// The 3 is 2 for the leading "</" plus 1 for the trailing character c.
+		z.raw.end -= 3 + len(z.rawTag)
+		return true
+	}
+	z.raw.end--
+	return false
+}
+
+// readScript reads until the next </script> tag, following the byzantine
+// rules for escaping/hiding the closing tag.
+func (z *Tokenizer) readScript() {
+	defer func() {
+		z.data.end = z.raw.end
+	}()
+	var c byte
+
+scriptData:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '<' {
+		goto scriptDataLessThanSign
+	}
+	goto scriptData
+
+scriptDataLessThanSign:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '/':
+		goto scriptDataEndTagOpen
+	case '!':
+		goto scriptDataEscapeStart
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEndTagOpen:
+	if z.readRawEndTag() || z.err != nil {
+		return
+	}
+	goto scriptData
+
+scriptDataEscapeStart:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '-' {
+		goto scriptDataEscapeStartDash
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEscapeStartDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '-' {
+		goto scriptDataEscapedDashDash
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEscaped:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataEscapedDash
+	case '<':
+		goto scriptDataEscapedLessThanSign
+	}
+	goto scriptDataEscaped
+
+scriptDataEscapedDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataEscapedDashDash
+	case '<':
+		goto scriptDataEscapedLessThanSign
+	}
+	goto scriptDataEscaped
+
+scriptDataEscapedDashDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataEscapedDashDash
+	case '<':
+		goto scriptDataEscapedLessThanSign
+	case '>':
+		goto scriptData
+	}
+	goto scriptDataEscaped
+
+scriptDataEscapedLessThanSign:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '/' {
+		goto scriptDataEscapedEndTagOpen
+	}
+	if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
+		goto scriptDataDoubleEscapeStart
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEscapedEndTagOpen:
+	if z.readRawEndTag() || z.err != nil {
+		return
+	}
+	goto scriptDataEscaped
+
+scriptDataDoubleEscapeStart:
+	z.raw.end--
+	for i := 0; i < len("script"); i++ {
+		c = z.readByte()
+		if z.err != nil {
+			return
+		}
+		if c != "script"[i] && c != "SCRIPT"[i] {
+			z.raw.end--
+			goto scriptDataEscaped
+		}
+	}
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case ' ', '\n', '\r', '\t', '\f', '/', '>':
+		goto scriptDataDoubleEscaped
+	}
+	z.raw.end--
+	goto scriptDataEscaped
+
+scriptDataDoubleEscaped:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataDoubleEscapedDash
+	case '<':
+		goto scriptDataDoubleEscapedLessThanSign
+	}
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapedDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataDoubleEscapedDashDash
+	case '<':
+		goto scriptDataDoubleEscapedLessThanSign
+	}
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapedDashDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataDoubleEscapedDashDash
+	case '<':
+		goto scriptDataDoubleEscapedLessThanSign
+	case '>':
+		goto scriptData
+	}
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapedLessThanSign:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '/' {
+		goto scriptDataDoubleEscapeEnd
+	}
+	z.raw.end--
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapeEnd:
+	if z.readRawEndTag() {
+		z.raw.end += len("</script>")
+		goto scriptDataEscaped
+	}
+	if z.err != nil {
+		return
+	}
+	goto scriptDataDoubleEscaped
+}
+
+// readComment reads the next comment token starting with "<!--". The opening
+// "<!--" has already been consumed.
+func (z *Tokenizer) readComment() {
+	// When modifying this function, consider manually increasing the
+	// maxSuffixLen constant in func TestComments, from 6 to e.g. 9 or more.
+	// That increase should only be temporary, not committed, as it
+	// exponentially affects the test running time.
+
+	z.data.start = z.raw.end
+	defer func() {
+		if z.data.end < z.data.start {
+			// It's a comment with no data, like <!-->.
+			z.data.end = z.data.start
+		}
+	}()
+
+	var dashCount int
+	beginning := true
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			z.data.end = z.calculateAbruptCommentDataEnd()
+			return
+		}
+		switch c {
+		case '-':
+			dashCount++
+			continue
+		case '>':
+			if dashCount >= 2 || beginning {
+				z.data.end = z.raw.end - len("-->")
+				return
+			}
+		case '!':
+			if dashCount >= 2 {
+				c = z.readByte()
+				if z.err != nil {
+					z.data.end = z.calculateAbruptCommentDataEnd()
+					return
+				} else if c == '>' {
+					z.data.end = z.raw.end - len("--!>")
+					return
+				} else if c == '-' {
+					dashCount = 1
+					beginning = false
+					continue
+				}
+			}
+		}
+		dashCount = 0
+		beginning = false
+	}
+}
+
+func (z *Tokenizer) calculateAbruptCommentDataEnd() int {
+	raw := z.Raw()
+	const prefixLen = len("<!--")
+	if len(raw) >= prefixLen {
+		raw = raw[prefixLen:]
+		if hasSuffix(raw, "--!") {
+			return z.raw.end - 3
+		} else if hasSuffix(raw, "--") {
+			return z.raw.end - 2
+		} else if hasSuffix(raw, "-") {
+			return z.raw.end - 1
+		}
+	}
+	return z.raw.end
+}
+
+func hasSuffix(b []byte, suffix string) bool {
+	if len(b) < len(suffix) {
+		return false
+	}
+	b = b[len(b)-len(suffix):]
+	for i := range b {
+		if b[i] != suffix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// readUntilCloseAngle reads until the next ">".
+func (z *Tokenizer) readUntilCloseAngle() {
+	z.data.start = z.raw.end
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			z.data.end = z.raw.end
+			return
+		}
+		if c == '>' {
+			z.data.end = z.raw.end - len(">")
+			return
+		}
+	}
+}
+
+// readMarkupDeclaration reads the next token starting with "<!". It might be
+// a "<!--comment-->", a "<!DOCTYPE foo>", a "<![CDATA[section]]>" or
+// "<!a bogus comment". The opening "<!" has already been consumed.
+func (z *Tokenizer) readMarkupDeclaration() TokenType {
+	z.data.start = z.raw.end
+	var c [2]byte
+	for i := 0; i < 2; i++ {
+		c[i] = z.readByte()
+		if z.err != nil {
+			// bogus comment
+			z.data.end = z.raw.end
+			if i == 1 && c[0] == '>' {
+				z.data.end--
+			}
+			return CommentToken
+		}
+	}
+	if c[0] == '-' && c[1] == '-' {
+		z.readComment()
+		return CommentToken
+	}
+	z.raw.end -= 2
+	if z.readDoctype() {
+		return DoctypeToken
+	}
+	if z.allowCDATA && z.readCDATA() {
+		z.convertNUL = true
+		return TextToken
+	}
+	// It's a bogus comment.
+	z.readUntilCloseAngle()
+	return CommentToken
+}
+
+// readDoctype attempts to read a doctype declaration and returns true if
+// successful. The opening "<!" has already been consumed.
+func (z *Tokenizer) readDoctype() bool {
+	const s = "DOCTYPE"
+	for i := 0; i < len(s); i++ {
+		c := z.readByte()
+		if z.err != nil {
+			if z.err == io.EOF {
+				// Back up to read the fragment of "DOCTYPE" again, reset
+				// z.err to signal EOF on the next call
+				z.raw.end = z.data.start
+				z.err = nil
+				return false
+			}
+			z.data.end = z.raw.end
+			return false
+		}
+		if c != s[i] && c != s[i]+('a'-'A') {
+			// Back up to read the fragment of "DOCTYPE" again.
+			z.raw.end = z.data.start
+			return false
+		}
+	}
+	if z.skipWhiteSpace(); z.err != nil {
+		z.data.start = z.raw.end
+		z.data.end = z.raw.end
+		return true
+	}
+	z.readUntilCloseAngle()
+	return true
+}
+
+// readCDATA attempts to read a CDATA section and returns true if
+// successful. The opening "<!" has already been consumed.
+func (z *Tokenizer) readCDATA() bool {
+	const s = "[CDATA["
+	for i := 0; i < len(s); i++ {
+		c := z.readByte()
+		if z.err != nil {
+			if z.err == io.EOF {
+				// Back up to read the fragment of "[CDATA[" again, reset
+				// z.err to signal EOF on the next call
+				z.raw.end = z.data.start
+				z.err = nil
+				return false
+			}
+			z.data.end = z.raw.end
+			return false
+		}
+		if c != s[i] {
+			// Back up to read the fragment of "[CDATA[" again.
+			z.raw.end = z.data.start
+			return false
+		}
+	}
+	z.data.start = z.raw.end
+	brackets := 0
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			z.data.end = z.raw.end
+			return true
+		}
+		switch c {
+		case ']':
+			brackets++
+		case '>':
+			if brackets >= 2 {
+				z.data.end = z.raw.end - len("]]>")
+				return true
+			}
+			brackets = 0
+		default:
+			brackets = 0
+		}
+	}
+}
+
+// startTagIn returns whether the start tag in z.buf[z.data.start:z.data.end]
+// case-insensitively matches any element of ss.
+func (z *Tokenizer) startTagIn(ss ...string) bool {
+loop:
+	for _, s := range ss {
+		if z.data.end-z.data.start != len(s) {
+			continue loop
+		}
+		for i := 0; i < len(s); i++ {
+			c := z.buf[z.data.start+i]
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != s[i] {
+				continue loop
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// readStartTag reads the next start tag token. The opening "<a" has already
+// been consumed, where 'a' means anything in [A-Za-z].
+func (z *Tokenizer) readStartTag() TokenType {
+	z.readTag(true)
+	if z.err != nil {
+		return ErrorToken
+	}
+	// Several tags flag the tokenizer's next token as raw.
+	c, raw := z.buf[z.data.start], false
+	if 'A' <= c && c <= 'Z' {
+		c += 'a' - 'A'
+	}
+	switch c {
+	case 'i':
+		raw = z.startTagIn("iframe")
+	case 'n':
+		raw = z.startTagIn("noembed", "noframes", "noscript")
+	case 'p':
+		raw = z.startTagIn("plaintext")
+	case 's':
+		raw = z.startTagIn("script", "style")
+	case 't':
+		raw = z.startTagIn("textarea", "title")
+	case 'x':
+		raw = z.startTagIn("xmp")
+	}
+	if raw {
+		z.rawTag = strings.ToLower(string(z.buf[z.data.start:z.data.end]))
+	}
+	// Look for a self-closing token (e.g. <br/>).
+	//
+	// Originally, we did this by just checking that the last character of the
+	// tag (ignoring the closing bracket) was a solidus (/) character, but this
+	// is not always accurate.
+	//
+	// We need to be careful that we don't misinterpret a non-self-closing tag
+	// as self-closing, as can happen if the tag contains unquoted attribute
+	// values (i.e. <p a=/>).
+	//
+	// To avoid this, we check that the last non-bracket character of the tag
+	// (z.raw.end-2) isn't the same character as the last non-quote character of
+	// the last attribute of the tag (z.pendingAttr[1].end-1), if the tag has
+	// attributes.
+	nAttrs := len(z.attr)
+	if z.err == nil && z.buf[z.raw.end-2] == '/' && (nAttrs == 0 || z.raw.end-2 != z.attr[nAttrs-1][1].end-1) {
+		return SelfClosingTagToken
+	}
+	return StartTagToken
+}
+
+// readTag reads the next tag token and its attributes. If saveAttr, those
+// attributes are saved in z.attr, otherwise z.attr is set to an empty slice.
+// The opening "<a" or "</a" has already been consumed, where 'a' means anything
+// in [A-Za-z].
+func (z *Tokenizer) readTag(saveAttr bool) {
+	z.attr = z.attr[:0]
+	z.nAttrReturned = 0
+	clear(z.attrNames)
+	// Read the tag name and attribute key/value pairs.
+	z.readTagName()
+	if z.skipWhiteSpace(); z.err != nil {
+		return
+	}
+	for {
+		c := z.readByte()
+		if z.err != nil || c == '>' {
+			break
+		}
+		z.raw.end--
+		z.readTagAttrKey()
+		z.readTagAttrVal()
+		// Save pendingAttr if saveAttr and that attribute has a non-empty key, and the key hasn't been seen before.
+		key := string(lower(bytes.Clone(z.buf[z.pendingAttr[0].start:z.pendingAttr[0].end])))
+		if saveAttr && z.pendingAttr[0].start != z.pendingAttr[0].end && !z.attrNames[key] {
+			z.attr = append(z.attr, z.pendingAttr)
+			z.attrNames[key] = true
+		}
+		if z.skipWhiteSpace(); z.err != nil {
+			break
+		}
+	}
+}
+
+// readTagName sets z.data to the "div" in "<div k=v>". The reader (z.raw.end)
+// is positioned such that the first byte of the tag name (the "d" in "<div")
+// has already been consumed.
+func (z *Tokenizer) readTagName() {
+	z.data.start = z.raw.end - 1
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			z.data.end = z.raw.end
+			return
+		}
+		switch c {
+		case ' ', '\n', '\r', '\t', '\f':
+			z.data.end = z.raw.end - 1
+			return
+		case '/', '>':
+			z.raw.end--
+			z.data.end = z.raw.end
+			return
+		}
+	}
+}
+
+// readTagAttrKey sets z.pendingAttr[0] to the "k" in "<div k=v>".
+// Precondition: z.err == nil.
+func (z *Tokenizer) readTagAttrKey() {
+	z.pendingAttr[0].start = z.raw.end
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			z.pendingAttr[0].end = z.raw.end
+			return
+		}
+		switch c {
+		case '=':
+			if z.pendingAttr[0].start+1 == z.raw.end {
+				// WHATWG 13.2.5.32, if we see an equals sign before the attribute name
+				// begins, we treat it as a character in the attribute name and continue.
+				continue
+			}
+			fallthrough
+		case ' ', '\n', '\r', '\t', '\f', '/', '>':
+			// WHATWG 13.2.5.33 Attribute name state
+			// We need to reconsume the char in the after attribute name state to support the / character
+			z.raw.end--
+			z.pendingAttr[0].end = z.raw.end
+			return
+		}
+	}
+}
+
+// readTagAttrVal sets z.pendingAttr[1] to the "v" in "<div k=v>".
+func (z *Tokenizer) readTagAttrVal() {
+	z.pendingAttr[1].start = z.raw.end
+	z.pendingAttr[1].end = z.raw.end
+	if z.skipWhiteSpace(); z.err != nil {
+		return
+	}
+	c := z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '/' {
+		// WHATWG 13.2.5.34 After attribute name state
+		// U+002F SOLIDUS (/) - Switch to the self-closing start tag state.
+		return
+	}
+	if c != '=' {
+		z.raw.end--
+		return
+	}
+	if z.skipWhiteSpace(); z.err != nil {
+		return
+	}
+	quote := z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch quote {
+	case '>':
+		z.raw.end--
+		return
+
+	case '\'', '"':
+		z.pendingAttr[1].start = z.raw.end
+		for {
+			c := z.readByte()
+			if z.err != nil {
+				z.pendingAttr[1].end = z.raw.end
+				return
+			}
+			if c == quote {
+				z.pendingAttr[1].end = z.raw.end - 1
+				return
+			}
+		}
+
+	default:
+		z.pendingAttr[1].start = z.raw.end - 1
+		for {
+			c := z.readByte()
+			if z.err != nil {
+				z.pendingAttr[1].end = z.raw.end
+				return
+			}
+			switch c {
+			case ' ', '\n', '\r', '\t', '\f':
+				z.pendingAttr[1].end = z.raw.end - 1
+				return
+			case '>':
+				z.raw.end--
+				z.pendingAttr[1].end = z.raw.end
+				return
+			}
+		}
+	}
+}
+
+// Next scans the next token and returns its type.
+func (z *Tokenizer) Next() TokenType {
+	z.raw.start = z.raw.end
+	z.data.start = z.raw.end
+	z.data.end = z.raw.end
+	if z.err != nil {
+		z.tt = ErrorToken
+		return z.tt
+	}
+	if z.rawTag != "" {
+		if z.rawTag == "plaintext" {
+			// Read everything up to EOF.
+			for z.err == nil {
+				z.readByte()
+			}
+			z.data.end = z.raw.end
+			z.textIsRaw = true
+		} else {
+			z.readRawOrRCDATA()
+		}
+		if z.data.end > z.data.start {
+			z.tt = TextToken
+			z.convertNUL = true
+			return z.tt
+		}
+	}
+	z.textIsRaw = false
+	z.convertNUL = false
+
+loop:
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			break loop
+		}
+		if c != '<' {
+			continue loop
+		}
+
+		// Check if the '<' we have just read is part of a tag, comment
+		// or doctype. If not, it's part of the accumulated text token.
+		c = z.readByte()
+		if z.err != nil {
+			break loop
+		}
+		var tokenType TokenType
+		switch {
+		case 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z':
+			tokenType = StartTagToken
+		case c == '/':
+			tokenType = EndTagToken
+		case c == '!' || c == '?':
+			// We use CommentToken to mean any of "<!--actual comments-->",
+			// "<!DOCTYPE declarations>" and "<?xml processing instructions?>".
+			tokenType = CommentToken
+		default:
+			// Reconsume the current character.
+			z.raw.end--
+			continue
+		}
+
+		// We have a non-text token, but we might have accumulated some text
+		// before that. If so, we return the text first, and return the non-
+		// text token on the subsequent call to Next.
+		if x := z.raw.end - len("<a"); z.raw.start < x {
+			z.raw.end = x
+			z.data.end = x
+			z.tt = TextToken
+			return z.tt
+		}
+		switch tokenType {
+		case StartTagToken:
+			z.tt = z.readStartTag()
+			return z.tt
+		case EndTagToken:
+			c = z.readByte()
+			if z.err != nil {
+				break loop
+			}
+			if c == '>' {
+				// "</>" does not generate a token at all. Generate an empty comment
+				// to allow passthrough clients to pick up the data using Raw.
+				// Reset the tokenizer state and start again.
+				z.tt = CommentToken
+				return z.tt
+			}
+			if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
+				z.readTag(false)
+				if z.err != nil {
+					z.tt = ErrorToken
+				} else {
+					z.tt = EndTagToken
+				}
+				return z.tt
+			}
+			z.raw.end--
+			z.readUntilCloseAngle()
+			z.tt = CommentToken
+			return z.tt
+		case CommentToken:
+			if c == '!' {
+				z.tt = z.readMarkupDeclaration()
+				return z.tt
+			}
+			z.raw.end--
+			z.readUntilCloseAngle()
+			z.tt = CommentToken
+			return z.tt
+		}
+	}
+	if z.raw.start < z.raw.end {
+		z.data.end = z.raw.end
+		z.tt = TextToken
+		return z.tt
+	}
+	z.tt = ErrorToken
+	return z.tt
+}
+
+// Raw returns the unmodified text of the current token. Calling Next, Token,
+// Text, TagName or TagAttr may change the contents of the returned slice.
+//
+// The token stream's raw bytes partition the byte stream (up until an
+// ErrorToken). There are no overlaps or gaps between two consecutive token's
+// raw bytes. One implication is that the byte offset of the current token is
+// the sum of the lengths of all previous tokens' raw bytes.
+func (z *Tokenizer) Raw() []byte {
+	return z.buf[z.raw.start:z.raw.end]
+}
+
+// convertNewlines converts "\r" and "\r\n" in s to "\n".
+// The conversion happens in place, but the resulting slice may be shorter.
+func convertNewlines(s []byte) []byte {
+	for i, c := range s {
+		if c != '\r' {
+			continue
+		}
+
+		src := i + 1
+		if src >= len(s) || s[src] != '\n' {
+			s[i] = '\n'
+			continue
+		}
+
+		dst := i
+		for src < len(s) {
+			if s[src] == '\r' {
+				if src+1 < len(s) && s[src+1] == '\n' {
+					src++
+				}
+				s[dst] = '\n'
+			} else {
+				s[dst] = s[src]
+			}
+			src++
+			dst++
+		}
+		return s[:dst]
+	}
+	return s
+}
+
+var (
+	nul         = []byte("\x00")
+	replacement = []byte("\ufffd")
+)
+
+// Text returns the unescaped text of a text, comment or doctype token. The
+// contents of the returned slice may change on the next call to Next.
+func (z *Tokenizer) Text() []byte {
+	switch z.tt {
+	case TextToken, CommentToken, DoctypeToken:
+		s := z.buf[z.data.start:z.data.end]
+		z.data.start = z.raw.end
+		z.data.end = z.raw.end
+		s = convertNewlines(s)
+		if (z.convertNUL || z.tt == CommentToken) && bytes.Contains(s, nul) {
+			s = bytes.Replace(s, nul, replacement, -1)
+		}
+		if !z.textIsRaw {
+			s = unescape(s, false)
+		}
+		return s
+	}
+	return nil
+}
+
+// TagName returns the lower-cased name of a tag token (the `img` out of
+// `<IMG SRC="foo">`) and whether the tag has attributes.
+// The contents of the returned slice may change on the next call to Next.
+func (z *Tokenizer) TagName() (name []byte, hasAttr bool) {
+	if z.data.start < z.data.end {
+		switch z.tt {
+		case StartTagToken, EndTagToken, SelfClosingTagToken:
+			s := bytes.ReplaceAll(z.buf[z.data.start:z.data.end], nul, replacement)
+			z.data.start = z.raw.end
+			z.data.end = z.raw.end
+			return lower(s), z.nAttrReturned < len(z.attr)
+		}
+	}
+	return nil, false
+}
+
+// TagAttr returns the lower-cased key and unescaped value of the next unparsed
+// attribute for the current tag token and whether there are more attributes.
+// The contents of the returned slices may change on the next call to Next.
+func (z *Tokenizer) TagAttr() (key, val []byte, moreAttr bool) {
+	if z.nAttrReturned < len(z.attr) {
+		switch z.tt {
+		case StartTagToken, SelfClosingTagToken:
+			x := z.attr[z.nAttrReturned]
+			z.nAttrReturned++
+			key = bytes.ReplaceAll(z.buf[x[0].start:x[0].end], nul, replacement)
+			val = bytes.ReplaceAll(z.buf[x[1].start:x[1].end], nul, replacement)
+			return lower(key), unescape(convertNewlines(val), true), z.nAttrReturned < len(z.attr)
+		}
+	}
+	return nil, nil, false
+}
+
+// Token returns the current Token. The result's Data and Attr values remain
+// valid after subsequent Next calls.
+func (z *Tokenizer) Token() Token {
+	t := Token{Type: z.tt}
+	switch z.tt {
+	case TextToken, CommentToken, DoctypeToken:
+		t.Data = string(z.Text())
+	case StartTagToken, SelfClosingTagToken, EndTagToken:
+		name, moreAttr := z.TagName()
+		for moreAttr {
+			var key, val []byte
+			key, val, moreAttr = z.TagAttr()
+			t.Attr = append(t.Attr, Attribute{"", atom.String(key), string(val)})
+		}
+		if a := atom.Lookup(name); a != 0 {
+			t.DataAtom, t.Data = a, a.String()
+		} else {
+			t.DataAtom, t.Data = 0, string(name)
+		}
+	}
+	return t
+}
+
+// SetMaxBuf sets a limit on the amount of data buffered during tokenization.
+// A value of 0 means unlimited.
+func (z *Tokenizer) SetMaxBuf(n int) {
+	z.maxBuf = n
+}
+
+// NewTokenizer returns a new HTML Tokenizer for the given Reader.
+// The input is assumed to be UTF-8 encoded.
+func NewTokenizer(r io.Reader) *Tokenizer {
+	return NewTokenizerFragment(r, "")
+}
+
+// NewTokenizerFragment returns a new HTML Tokenizer for the given Reader, for
+// tokenizing an existing element's InnerHTML fragment. contextTag is that
+// element's tag, such as "div" or "iframe".
+//
+// For example, how the InnerHTML "a<b" is tokenized depends on whether it is
+// for a <p> tag or a <script> tag.
+//
+// The input is assumed to be UTF-8 encoded.
+func NewTokenizerFragment(r io.Reader, contextTag string) *Tokenizer {
+	z := &Tokenizer{
+		r:         r,
+		buf:       make([]byte, 0, 4096),
+		attrNames: make(map[string]bool),
+	}
+	if contextTag != "" {
+		// Per the "Parsing HTML Fragments" portion of the spec:
+		//    For performance reasons, an implementation that does not report errors
+		//    and that uses the actual state machine described in this specification
+		//    directly could use the PLAINTEXT state instead of the RAWTEXT and script
+		//    data states where those are mentioned in the list above. Except for
+		//    rules regarding parse errors, they are equivalent, since there is no
+		//    appropriate end tag token in the fragment case, yet they involve far
+		//    fewer state transitions.
+		//
+		// As such we just set everything to plaintext, which makes some complex parsing
+		// cases somewhat simpler.
+		switch s := strings.ToLower(contextTag); s {
+		case "title", "textarea":
+			z.rawTag = s
+		case "style", "xmp", "iframe", "noembed", "noframes", "script", "noscript", "plaintext":
+			z.rawTag = "plaintext"
+		}
+	}
+	return z
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http/httpguts/guts.go","mode":420,"size":1425,"sha256":"3da54270a625540809f2f767e54e18acf27199aca64b6cf16d6d3fa3999de959","index":0,"count":1,"encoding":"utf-8","payloadBytes":1425}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package httpguts provides functions implementing various details
+// of the HTTP specification.
+//
+// This package is shared by the standard library (which vendors it)
+// and x/net/http2. It comes with no API stability promise.
+package httpguts
+
+import (
+	"net/textproto"
+	"strings"
+)
+
+// ValidTrailerHeader reports whether name is a valid header field name to appear
+// in trailers.
+// See RFC 7230, Section 4.1.2
+func ValidTrailerHeader(name string) bool {
+	name = textproto.CanonicalMIMEHeaderKey(name)
+	if strings.HasPrefix(name, "If-") || badTrailer[name] {
+		return false
+	}
+	return true
+}
+
+var badTrailer = map[string]bool{
+	"Authorization":       true,
+	"Cache-Control":       true,
+	"Connection":          true,
+	"Content-Encoding":    true,
+	"Content-Length":      true,
+	"Content-Range":       true,
+	"Content-Type":        true,
+	"Expect":              true,
+	"Host":                true,
+	"Keep-Alive":          true,
+	"Max-Forwards":        true,
+	"Pragma":              true,
+	"Proxy-Authenticate":  true,
+	"Proxy-Authorization": true,
+	"Proxy-Connection":    true,
+	"Range":               true,
+	"Realm":               true,
+	"Te":                  true,
+	"Trailer":             true,
+	"Transfer-Encoding":   true,
+	"Www-Authenticate":    true,
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http/httpguts/httplex.go","mode":420,"size":8933,"sha256":"8cfd5819dc821d45f82fde10afff4b2e652535b0091e0559fc8ad7766051a2c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8933}
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package httpguts
+
+import (
+	"net"
+	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/net/idna"
+)
+
+var isTokenTable = [256]bool{
+	'!':  true,
+	'#':  true,
+	'$':  true,
+	'%':  true,
+	'&':  true,
+	'\'': true,
+	'*':  true,
+	'+':  true,
+	'-':  true,
+	'.':  true,
+	'0':  true,
+	'1':  true,
+	'2':  true,
+	'3':  true,
+	'4':  true,
+	'5':  true,
+	'6':  true,
+	'7':  true,
+	'8':  true,
+	'9':  true,
+	'A':  true,
+	'B':  true,
+	'C':  true,
+	'D':  true,
+	'E':  true,
+	'F':  true,
+	'G':  true,
+	'H':  true,
+	'I':  true,
+	'J':  true,
+	'K':  true,
+	'L':  true,
+	'M':  true,
+	'N':  true,
+	'O':  true,
+	'P':  true,
+	'Q':  true,
+	'R':  true,
+	'S':  true,
+	'T':  true,
+	'U':  true,
+	'W':  true,
+	'V':  true,
+	'X':  true,
+	'Y':  true,
+	'Z':  true,
+	'^':  true,
+	'_':  true,
+	'`':  true,
+	'a':  true,
+	'b':  true,
+	'c':  true,
+	'd':  true,
+	'e':  true,
+	'f':  true,
+	'g':  true,
+	'h':  true,
+	'i':  true,
+	'j':  true,
+	'k':  true,
+	'l':  true,
+	'm':  true,
+	'n':  true,
+	'o':  true,
+	'p':  true,
+	'q':  true,
+	'r':  true,
+	's':  true,
+	't':  true,
+	'u':  true,
+	'v':  true,
+	'w':  true,
+	'x':  true,
+	'y':  true,
+	'z':  true,
+	'|':  true,
+	'~':  true,
+}
+
+func IsTokenRune(r rune) bool {
+	return r < utf8.RuneSelf && isTokenTable[byte(r)]
+}
+
+// HeaderValuesContainsToken reports whether any string in values
+// contains the provided token, ASCII case-insensitively.
+func HeaderValuesContainsToken(values []string, token string) bool {
+	for _, v := range values {
+		if headerValueContainsToken(v, token) {
+			return true
+		}
+	}
+	return false
+}
+
+// isOWS reports whether b is an optional whitespace byte, as defined
+// by RFC 7230 section 3.2.3.
+func isOWS(b byte) bool { return b == ' ' || b == '\t' }
+
+// trimOWS returns x with all optional whitespace removes from the
+// beginning and end.
+func trimOWS(x string) string {
+	// TODO: consider using strings.Trim(x, " \t") instead,
+	// if and when it's fast enough. See issue 10292.
+	// But this ASCII-only code will probably always beat UTF-8
+	// aware code.
+	for len(x) > 0 && isOWS(x[0]) {
+		x = x[1:]
+	}
+	for len(x) > 0 && isOWS(x[len(x)-1]) {
+		x = x[:len(x)-1]
+	}
+	return x
+}
+
+// headerValueContainsToken reports whether v (assumed to be a
+// 0#element, in the ABNF extension described in RFC 7230 section 7)
+// contains token amongst its comma-separated tokens, ASCII
+// case-insensitively.
+func headerValueContainsToken(v string, token string) bool {
+	for comma := strings.IndexByte(v, ','); comma != -1; comma = strings.IndexByte(v, ',') {
+		if tokenEqual(trimOWS(v[:comma]), token) {
+			return true
+		}
+		v = v[comma+1:]
+	}
+	return tokenEqual(trimOWS(v), token)
+}
+
+// lowerASCII returns the ASCII lowercase version of b.
+func lowerASCII(b byte) byte {
+	if 'A' <= b && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
+// tokenEqual reports whether t1 and t2 are equal, ASCII case-insensitively.
+func tokenEqual(t1, t2 string) bool {
+	if len(t1) != len(t2) {
+		return false
+	}
+	for i, b := range t1 {
+		if b >= utf8.RuneSelf {
+			// No UTF-8 or non-ASCII allowed in tokens.
+			return false
+		}
+		if lowerASCII(byte(b)) != lowerASCII(t2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// isLWS reports whether b is linear white space, according
+// to http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
+//
+//	LWS            = [CRLF] 1*( SP | HT )
+func isLWS(b byte) bool { return b == ' ' || b == '\t' }
+
+// isCTL reports whether b is a control byte, according
+// to http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
+//
+//	CTL            = <any US-ASCII control character
+//	                 (octets 0 - 31) and DEL (127)>
+func isCTL(b byte) bool {
+	const del = 0x7f // a CTL
+	return b < ' ' || b == del
+}
+
+// ValidHeaderFieldName reports whether v is a valid HTTP/1.x header name.
+// HTTP/2 imposes the additional restriction that uppercase ASCII
+// letters are not allowed.
+//
+// RFC 7230 says:
+//
+//	header-field   = field-name ":" OWS field-value OWS
+//	field-name     = token
+//	token          = 1*tchar
+//	tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
+//	        "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
+func ValidHeaderFieldName(v string) bool {
+	if len(v) == 0 {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if !isTokenTable[v[i]] {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidHostHeader reports whether h is a valid host header.
+func ValidHostHeader(h string) bool {
+	// The latest spec is actually this:
+	//
+	// http://tools.ietf.org/html/rfc7230#section-5.4
+	//     Host = uri-host [ ":" port ]
+	//
+	// Where uri-host is:
+	//     http://tools.ietf.org/html/rfc3986#section-3.2.2
+	//
+	// But we're going to be much more lenient for now and just
+	// search for any byte that's not a valid byte in any of those
+	// expressions.
+	for i := 0; i < len(h); i++ {
+		if !validHostByte[h[i]] {
+			return false
+		}
+	}
+	return true
+}
+
+// See the validHostHeader comment.
+var validHostByte = [256]bool{
+	'0': true, '1': true, '2': true, '3': true, '4': true, '5': true, '6': true, '7': true,
+	'8': true, '9': true,
+
+	'a': true, 'b': true, 'c': true, 'd': true, 'e': true, 'f': true, 'g': true, 'h': true,
+	'i': true, 'j': true, 'k': true, 'l': true, 'm': true, 'n': true, 'o': true, 'p': true,
+	'q': true, 'r': true, 's': true, 't': true, 'u': true, 'v': true, 'w': true, 'x': true,
+	'y': true, 'z': true,
+
+	'A': true, 'B': true, 'C': true, 'D': true, 'E': true, 'F': true, 'G': true, 'H': true,
+	'I': true, 'J': true, 'K': true, 'L': true, 'M': true, 'N': true, 'O': true, 'P': true,
+	'Q': true, 'R': true, 'S': true, 'T': true, 'U': true, 'V': true, 'W': true, 'X': true,
+	'Y': true, 'Z': true,
+
+	'!':  true, // sub-delims
+	'$':  true, // sub-delims
+	'%':  true, // pct-encoded (and used in IPv6 zones)
+	'&':  true, // sub-delims
+	'(':  true, // sub-delims
+	')':  true, // sub-delims
+	'*':  true, // sub-delims
+	'+':  true, // sub-delims
+	',':  true, // sub-delims
+	'-':  true, // unreserved
+	'.':  true, // unreserved
+	':':  true, // IPv6address + Host expression's optional port
+	';':  true, // sub-delims
+	'=':  true, // sub-delims
+	'[':  true,
+	'\'': true, // sub-delims
+	']':  true,
+	'_':  true, // unreserved
+	'~':  true, // unreserved
+}
+
+// ValidHeaderFieldValue reports whether v is a valid "field-value" according to
+// http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2 :
+//
+//	message-header = field-name ":" [ field-value ]
+//	field-value    = *( field-content | LWS )
+//	field-content  = <the OCTETs making up the field-value
+//	                 and consisting of either *TEXT or combinations
+//	                 of token, separators, and quoted-string>
+//
+// http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2 :
+//
+//	TEXT           = <any OCTET except CTLs,
+//	                  but including LWS>
+//	LWS            = [CRLF] 1*( SP | HT )
+//	CTL            = <any US-ASCII control character
+//	                 (octets 0 - 31) and DEL (127)>
+//
+// RFC 7230 says:
+//
+//	field-value    = *( field-content / obs-fold )
+//	obj-fold       =  N/A to http2, and deprecated
+//	field-content  = field-vchar [ 1*( SP / HTAB ) field-vchar ]
+//	field-vchar    = VCHAR / obs-text
+//	obs-text       = %x80-FF
+//	VCHAR          = "any visible [USASCII] character"
+//
+// http2 further says: "Similarly, HTTP/2 allows header field values
+// that are not valid. While most of the values that can be encoded
+// will not alter header field parsing, carriage return (CR, ASCII
+// 0xd), line feed (LF, ASCII 0xa), and the zero character (NUL, ASCII
+// 0x0) might be exploited by an attacker if they are translated
+// verbatim. Any request or response that contains a character not
+// permitted in a header field value MUST be treated as malformed
+// (Section 8.1.2.6). Valid characters are defined by the
+// field-content ABNF rule in Section 3.2 of [RFC7230]."
+//
+// This function does not (yet?) properly handle the rejection of
+// strings that begin or end with SP or HTAB.
+func ValidHeaderFieldValue(v string) bool {
+	for i := 0; i < len(v); i++ {
+		b := v[i]
+		if isCTL(b) && !isLWS(b) {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// PunycodeHostPort returns the IDNA Punycode version
+// of the provided "host" or "host:port" string.
+func PunycodeHostPort(v string) (string, error) {
+	if isASCII(v) {
+		return v, nil
+	}
+
+	host, port, err := net.SplitHostPort(v)
+	if err != nil {
+		// The input 'v' argument was just a "host" argument,
+		// without a port. This error should not be returned
+		// to the caller.
+		host = v
+		port = ""
+	}
+	host, err = idna.ToASCII(host)
+	if err != nil {
+		// Non-UTF-8? Not representable in Punycode, in any
+		// case.
+		return "", err
+	}
+	if port == "" {
+		return host, nil
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/.gitignore","mode":420,"size":11,"sha256":"a72adf98822b3f9f99b5781137976efb8de250ebbfbcfc7a8851a6822553d234","index":0,"count":1,"encoding":"utf-8","payloadBytes":11}
+*~
+h2i/h2i
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/ascii.go","mode":420,"size":1378,"sha256":"d8ee0e0a6b2c41a17a18e263b7f9b5701174dbe10e59496daadc9db6a647f708","index":0,"count":1,"encoding":"utf-8","payloadBytes":1378}
+// Copyright 2021 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package http2
+
+import "strings"
+
+// The HTTP protocols are defined in terms of ASCII, not Unicode. This file
+// contains helper functions which may use Unicode-aware functions which would
+// otherwise be unsafe and could introduce vulnerabilities if used improperly.
+
+// asciiEqualFold is strings.EqualFold, ASCII only. It reports whether s and t
+// are equal, ASCII-case-insensitively.
+func asciiEqualFold(s, t string) bool {
+	if len(s) != len(t) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if lower(s[i]) != lower(t[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// lower returns the ASCII lowercase version of b.
+func lower(b byte) byte {
+	if 'A' <= b && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
+// isASCIIPrint returns whether s is ASCII and printable according to
+// https://tools.ietf.org/html/rfc20#section-4.2.
+func isASCIIPrint(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < ' ' || s[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// asciiToLower returns the lowercase version of s if s is ASCII and printable,
+// and whether or not it was.
+func asciiToLower(s string) (lower string, ok bool) {
+	if !isASCIIPrint(s) {
+		return "", false
+	}
+	return strings.ToLower(s), true
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/ciphers.go","mode":420,"size":35208,"sha256":"623262af28491cd81b3570936cd06757f629d2ae4fb6ef087af6762f30d7a5eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":35208}
+// Copyright 2017 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package http2
+
+// A list of the possible cipher suite ids. Taken from
+// https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
+
+const (
+	cipher_TLS_NULL_WITH_NULL_NULL               uint16 = 0x0000
+	cipher_TLS_RSA_WITH_NULL_MD5                 uint16 = 0x0001
+	cipher_TLS_RSA_WITH_NULL_SHA                 uint16 = 0x0002
+	cipher_TLS_RSA_EXPORT_WITH_RC4_40_MD5        uint16 = 0x0003
+	cipher_TLS_RSA_WITH_RC4_128_MD5              uint16 = 0x0004
+	cipher_TLS_RSA_WITH_RC4_128_SHA              uint16 = 0x0005
+	cipher_TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5    uint16 = 0x0006
+	cipher_TLS_RSA_WITH_IDEA_CBC_SHA             uint16 = 0x0007
+	cipher_TLS_RSA_EXPORT_WITH_DES40_CBC_SHA     uint16 = 0x0008
+	cipher_TLS_RSA_WITH_DES_CBC_SHA              uint16 = 0x0009
+	cipher_TLS_RSA_WITH_3DES_EDE_CBC_SHA         uint16 = 0x000A
+	cipher_TLS_DH_DSS_EXPORT_WITH_DES40_CBC_SHA  uint16 = 0x000B
+	cipher_TLS_DH_DSS_WITH_DES_CBC_SHA           uint16 = 0x000C
+	cipher_TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA      uint16 = 0x000D
+	cipher_TLS_DH_RSA_EXPORT_WITH_DES40_CBC_SHA  uint16 = 0x000E
+	cipher_TLS_DH_RSA_WITH_DES_CBC_SHA           uint16 = 0x000F
+	cipher_TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA      uint16 = 0x0010
+	cipher_TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA uint16 = 0x0011
+	cipher_TLS_DHE_DSS_WITH_DES_CBC_SHA          uint16 = 0x0012
+	cipher_TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA     uint16 = 0x0013
+	cipher_TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA uint16 = 0x0014
+	cipher_TLS_DHE_RSA_WITH_DES_CBC_SHA          uint16 = 0x0015
+	cipher_TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA     uint16 = 0x0016
+	cipher_TLS_DH_anon_EXPORT_WITH_RC4_40_MD5    uint16 = 0x0017
+	cipher_TLS_DH_anon_WITH_RC4_128_MD5          uint16 = 0x0018
+	cipher_TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA uint16 = 0x0019
+	cipher_TLS_DH_anon_WITH_DES_CBC_SHA          uint16 = 0x001A
+	cipher_TLS_DH_anon_WITH_3DES_EDE_CBC_SHA     uint16 = 0x001B
+	// Reserved uint16 =  0x001C-1D
+	cipher_TLS_KRB5_WITH_DES_CBC_SHA             uint16 = 0x001E
+	cipher_TLS_KRB5_WITH_3DES_EDE_CBC_SHA        uint16 = 0x001F
+	cipher_TLS_KRB5_WITH_RC4_128_SHA             uint16 = 0x0020
+	cipher_TLS_KRB5_WITH_IDEA_CBC_SHA            uint16 = 0x0021
+	cipher_TLS_KRB5_WITH_DES_CBC_MD5             uint16 = 0x0022
+	cipher_TLS_KRB5_WITH_3DES_EDE_CBC_MD5        uint16 = 0x0023
+	cipher_TLS_KRB5_WITH_RC4_128_MD5             uint16 = 0x0024
+	cipher_TLS_KRB5_WITH_IDEA_CBC_MD5            uint16 = 0x0025
+	cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_SHA   uint16 = 0x0026
+	cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_SHA   uint16 = 0x0027
+	cipher_TLS_KRB5_EXPORT_WITH_RC4_40_SHA       uint16 = 0x0028
+	cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_MD5   uint16 = 0x0029
+	cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_MD5   uint16 = 0x002A
+	cipher_TLS_KRB5_EXPORT_WITH_RC4_40_MD5       uint16 = 0x002B
+	cipher_TLS_PSK_WITH_NULL_SHA                 uint16 = 0x002C
+	cipher_TLS_DHE_PSK_WITH_NULL_SHA             uint16 = 0x002D
+	cipher_TLS_RSA_PSK_WITH_NULL_SHA             uint16 = 0x002E
+	cipher_TLS_RSA_WITH_AES_128_CBC_SHA          uint16 = 0x002F
+	cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA       uint16 = 0x0030
+	cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA       uint16 = 0x0031
+	cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA      uint16 = 0x0032
+	cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA      uint16 = 0x0033
+	cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA      uint16 = 0x0034
+	cipher_TLS_RSA_WITH_AES_256_CBC_SHA          uint16 = 0x0035
+	cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA       uint16 = 0x0036
+	cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA       uint16 = 0x0037
+	cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA      uint16 = 0x0038
+	cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA      uint16 = 0x0039
+	cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA      uint16 = 0x003A
+	cipher_TLS_RSA_WITH_NULL_SHA256              uint16 = 0x003B
+	cipher_TLS_RSA_WITH_AES_128_CBC_SHA256       uint16 = 0x003C
+	cipher_TLS_RSA_WITH_AES_256_CBC_SHA256       uint16 = 0x003D
+	cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA256    uint16 = 0x003E
+	cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA256    uint16 = 0x003F
+	cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA256   uint16 = 0x0040
+	cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA     uint16 = 0x0041
+	cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA  uint16 = 0x0042
+	cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA  uint16 = 0x0043
+	cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA uint16 = 0x0044
+	cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA uint16 = 0x0045
+	cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA uint16 = 0x0046
+	// Reserved uint16 =  0x0047-4F
+	// Reserved uint16 =  0x0050-58
+	// Reserved uint16 =  0x0059-5C
+	// Unassigned uint16 =  0x005D-5F
+	// Reserved uint16 =  0x0060-66
+	cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 uint16 = 0x0067
+	cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA256  uint16 = 0x0068
+	cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA256  uint16 = 0x0069
+	cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA256 uint16 = 0x006A
+	cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 uint16 = 0x006B
+	cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA256 uint16 = 0x006C
+	cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA256 uint16 = 0x006D
+	// Unassigned uint16 =  0x006E-83
+	cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA        uint16 = 0x0084
+	cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA     uint16 = 0x0085
+	cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA     uint16 = 0x0086
+	cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA    uint16 = 0x0087
+	cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA    uint16 = 0x0088
+	cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA    uint16 = 0x0089
+	cipher_TLS_PSK_WITH_RC4_128_SHA                 uint16 = 0x008A
+	cipher_TLS_PSK_WITH_3DES_EDE_CBC_SHA            uint16 = 0x008B
+	cipher_TLS_PSK_WITH_AES_128_CBC_SHA             uint16 = 0x008C
+	cipher_TLS_PSK_WITH_AES_256_CBC_SHA             uint16 = 0x008D
+	cipher_TLS_DHE_PSK_WITH_RC4_128_SHA             uint16 = 0x008E
+	cipher_TLS_DHE_PSK_WITH_3DES_EDE_CBC_SHA        uint16 = 0x008F
+	cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA         uint16 = 0x0090
+	cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA         uint16 = 0x0091
+	cipher_TLS_RSA_PSK_WITH_RC4_128_SHA             uint16 = 0x0092
+	cipher_TLS_RSA_PSK_WITH_3DES_EDE_CBC_SHA        uint16 = 0x0093
+	cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA         uint16 = 0x0094
+	cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA         uint16 = 0x0095
+	cipher_TLS_RSA_WITH_SEED_CBC_SHA                uint16 = 0x0096
+	cipher_TLS_DH_DSS_WITH_SEED_CBC_SHA             uint16 = 0x0097
+	cipher_TLS_DH_RSA_WITH_SEED_CBC_SHA             uint16 = 0x0098
+	cipher_TLS_DHE_DSS_WITH_SEED_CBC_SHA            uint16 = 0x0099
+	cipher_TLS_DHE_RSA_WITH_SEED_CBC_SHA            uint16 = 0x009A
+	cipher_TLS_DH_anon_WITH_SEED_CBC_SHA            uint16 = 0x009B
+	cipher_TLS_RSA_WITH_AES_128_GCM_SHA256          uint16 = 0x009C
+	cipher_TLS_RSA_WITH_AES_256_GCM_SHA384          uint16 = 0x009D
+	cipher_TLS_DHE_RSA_WITH_AES_128_GCM_SHA256      uint16 = 0x009E
+	cipher_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384      uint16 = 0x009F
+	cipher_TLS_DH_RSA_WITH_AES_128_GCM_SHA256       uint16 = 0x00A0
+	cipher_TLS_DH_RSA_WITH_AES_256_GCM_SHA384       uint16 = 0x00A1
+	cipher_TLS_DHE_DSS_WITH_AES_128_GCM_SHA256      uint16 = 0x00A2
+	cipher_TLS_DHE_DSS_WITH_AES_256_GCM_SHA384      uint16 = 0x00A3
+	cipher_TLS_DH_DSS_WITH_AES_128_GCM_SHA256       uint16 = 0x00A4
+	cipher_TLS_DH_DSS_WITH_AES_256_GCM_SHA384       uint16 = 0x00A5
+	cipher_TLS_DH_anon_WITH_AES_128_GCM_SHA256      uint16 = 0x00A6
+	cipher_TLS_DH_anon_WITH_AES_256_GCM_SHA384      uint16 = 0x00A7
+	cipher_TLS_PSK_WITH_AES_128_GCM_SHA256          uint16 = 0x00A8
+	cipher_TLS_PSK_WITH_AES_256_GCM_SHA384          uint16 = 0x00A9
+	cipher_TLS_DHE_PSK_WITH_AES_128_GCM_SHA256      uint16 = 0x00AA
+	cipher_TLS_DHE_PSK_WITH_AES_256_GCM_SHA384      uint16 = 0x00AB
+	cipher_TLS_RSA_PSK_WITH_AES_128_GCM_SHA256      uint16 = 0x00AC
+	cipher_TLS_RSA_PSK_WITH_AES_256_GCM_SHA384      uint16 = 0x00AD
+	cipher_TLS_PSK_WITH_AES_128_CBC_SHA256          uint16 = 0x00AE
+	cipher_TLS_PSK_WITH_AES_256_CBC_SHA384          uint16 = 0x00AF
+	cipher_TLS_PSK_WITH_NULL_SHA256                 uint16 = 0x00B0
+	cipher_TLS_PSK_WITH_NULL_SHA384                 uint16 = 0x00B1
+	cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA256      uint16 = 0x00B2
+	cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA384      uint16 = 0x00B3
+	cipher_TLS_DHE_PSK_WITH_NULL_SHA256             uint16 = 0x00B4
+	cipher_TLS_DHE_PSK_WITH_NULL_SHA384             uint16 = 0x00B5
+	cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA256      uint16 = 0x00B6
+	cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA384      uint16 = 0x00B7
+	cipher_TLS_RSA_PSK_WITH_NULL_SHA256             uint16 = 0x00B8
+	cipher_TLS_RSA_PSK_WITH_NULL_SHA384             uint16 = 0x00B9
+	cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256     uint16 = 0x00BA
+	cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA256  uint16 = 0x00BB
+	cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256  uint16 = 0x00BC
+	cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0x00BD
+	cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0x00BE
+	cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0x00BF
+	cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256     uint16 = 0x00C0
+	cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA256  uint16 = 0x00C1
+	cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256  uint16 = 0x00C2
+	cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256 uint16 = 0x00C3
+	cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256 uint16 = 0x00C4
+	cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256 uint16 = 0x00C5
+	// Unassigned uint16 =  0x00C6-FE
+	cipher_TLS_EMPTY_RENEGOTIATION_INFO_SCSV uint16 = 0x00FF
+	// Unassigned uint16 =  0x01-55,*
+	cipher_TLS_FALLBACK_SCSV uint16 = 0x5600
+	// Unassigned                                   uint16 = 0x5601 - 0xC000
+	cipher_TLS_ECDH_ECDSA_WITH_NULL_SHA                 uint16 = 0xC001
+	cipher_TLS_ECDH_ECDSA_WITH_RC4_128_SHA              uint16 = 0xC002
+	cipher_TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA         uint16 = 0xC003
+	cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA          uint16 = 0xC004
+	cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA          uint16 = 0xC005
+	cipher_TLS_ECDHE_ECDSA_WITH_NULL_SHA                uint16 = 0xC006
+	cipher_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA             uint16 = 0xC007
+	cipher_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA        uint16 = 0xC008
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA         uint16 = 0xC009
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA         uint16 = 0xC00A
+	cipher_TLS_ECDH_RSA_WITH_NULL_SHA                   uint16 = 0xC00B
+	cipher_TLS_ECDH_RSA_WITH_RC4_128_SHA                uint16 = 0xC00C
+	cipher_TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA           uint16 = 0xC00D
+	cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA            uint16 = 0xC00E
+	cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA            uint16 = 0xC00F
+	cipher_TLS_ECDHE_RSA_WITH_NULL_SHA                  uint16 = 0xC010
+	cipher_TLS_ECDHE_RSA_WITH_RC4_128_SHA               uint16 = 0xC011
+	cipher_TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA          uint16 = 0xC012
+	cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA           uint16 = 0xC013
+	cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA           uint16 = 0xC014
+	cipher_TLS_ECDH_anon_WITH_NULL_SHA                  uint16 = 0xC015
+	cipher_TLS_ECDH_anon_WITH_RC4_128_SHA               uint16 = 0xC016
+	cipher_TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA          uint16 = 0xC017
+	cipher_TLS_ECDH_anon_WITH_AES_128_CBC_SHA           uint16 = 0xC018
+	cipher_TLS_ECDH_anon_WITH_AES_256_CBC_SHA           uint16 = 0xC019
+	cipher_TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA            uint16 = 0xC01A
+	cipher_TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA        uint16 = 0xC01B
+	cipher_TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA        uint16 = 0xC01C
+	cipher_TLS_SRP_SHA_WITH_AES_128_CBC_SHA             uint16 = 0xC01D
+	cipher_TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA         uint16 = 0xC01E
+	cipher_TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA         uint16 = 0xC01F
+	cipher_TLS_SRP_SHA_WITH_AES_256_CBC_SHA             uint16 = 0xC020
+	cipher_TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA         uint16 = 0xC021
+	cipher_TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA         uint16 = 0xC022
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256      uint16 = 0xC023
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384      uint16 = 0xC024
+	cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256       uint16 = 0xC025
+	cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384       uint16 = 0xC026
+	cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256        uint16 = 0xC027
+	cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384        uint16 = 0xC028
+	cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256         uint16 = 0xC029
+	cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384         uint16 = 0xC02A
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256      uint16 = 0xC02B
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384      uint16 = 0xC02C
+	cipher_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256       uint16 = 0xC02D
+	cipher_TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384       uint16 = 0xC02E
+	cipher_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256        uint16 = 0xC02F
+	cipher_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384        uint16 = 0xC030
+	cipher_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256         uint16 = 0xC031
+	cipher_TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384         uint16 = 0xC032
+	cipher_TLS_ECDHE_PSK_WITH_RC4_128_SHA               uint16 = 0xC033
+	cipher_TLS_ECDHE_PSK_WITH_3DES_EDE_CBC_SHA          uint16 = 0xC034
+	cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA           uint16 = 0xC035
+	cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA           uint16 = 0xC036
+	cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256        uint16 = 0xC037
+	cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA384        uint16 = 0xC038
+	cipher_TLS_ECDHE_PSK_WITH_NULL_SHA                  uint16 = 0xC039
+	cipher_TLS_ECDHE_PSK_WITH_NULL_SHA256               uint16 = 0xC03A
+	cipher_TLS_ECDHE_PSK_WITH_NULL_SHA384               uint16 = 0xC03B
+	cipher_TLS_RSA_WITH_ARIA_128_CBC_SHA256             uint16 = 0xC03C
+	cipher_TLS_RSA_WITH_ARIA_256_CBC_SHA384             uint16 = 0xC03D
+	cipher_TLS_DH_DSS_WITH_ARIA_128_CBC_SHA256          uint16 = 0xC03E
+	cipher_TLS_DH_DSS_WITH_ARIA_256_CBC_SHA384          uint16 = 0xC03F
+	cipher_TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256          uint16 = 0xC040
+	cipher_TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384          uint16 = 0xC041
+	cipher_TLS_DHE_DSS_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC042
+	cipher_TLS_DHE_DSS_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC043
+	cipher_TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC044
+	cipher_TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC045
+	cipher_TLS_DH_anon_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC046
+	cipher_TLS_DH_anon_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC047
+	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256     uint16 = 0xC048
+	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384     uint16 = 0xC049
+	cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256      uint16 = 0xC04A
+	cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384      uint16 = 0xC04B
+	cipher_TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256       uint16 = 0xC04C
+	cipher_TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384       uint16 = 0xC04D
+	cipher_TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256        uint16 = 0xC04E
+	cipher_TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384        uint16 = 0xC04F
+	cipher_TLS_RSA_WITH_ARIA_128_GCM_SHA256             uint16 = 0xC050
+	cipher_TLS_RSA_WITH_ARIA_256_GCM_SHA384             uint16 = 0xC051
+	cipher_TLS_DHE_RSA_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC052
+	cipher_TLS_DHE_RSA_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC053
+	cipher_TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256          uint16 = 0xC054
+	cipher_TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384          uint16 = 0xC055
+	cipher_TLS_DHE_DSS_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC056
+	cipher_TLS_DHE_DSS_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC057
+	cipher_TLS_DH_DSS_WITH_ARIA_128_GCM_SHA256          uint16 = 0xC058
+	cipher_TLS_DH_DSS_WITH_ARIA_256_GCM_SHA384          uint16 = 0xC059
+	cipher_TLS_DH_anon_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC05A
+	cipher_TLS_DH_anon_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC05B
+	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256     uint16 = 0xC05C
+	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_256_GCM_SHA384     uint16 = 0xC05D
+	cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256      uint16 = 0xC05E
+	cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384      uint16 = 0xC05F
+	cipher_TLS_ECDHE_RSA_WITH_ARIA_128_GCM_SHA256       uint16 = 0xC060
+	cipher_TLS_ECDHE_RSA_WITH_ARIA_256_GCM_SHA384       uint16 = 0xC061
+	cipher_TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256        uint16 = 0xC062
+	cipher_TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384        uint16 = 0xC063
+	cipher_TLS_PSK_WITH_ARIA_128_CBC_SHA256             uint16 = 0xC064
+	cipher_TLS_PSK_WITH_ARIA_256_CBC_SHA384             uint16 = 0xC065
+	cipher_TLS_DHE_PSK_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC066
+	cipher_TLS_DHE_PSK_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC067
+	cipher_TLS_RSA_PSK_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC068
+	cipher_TLS_RSA_PSK_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC069
+	cipher_TLS_PSK_WITH_ARIA_128_GCM_SHA256             uint16 = 0xC06A
+	cipher_TLS_PSK_WITH_ARIA_256_GCM_SHA384             uint16 = 0xC06B
+	cipher_TLS_DHE_PSK_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC06C
+	cipher_TLS_DHE_PSK_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC06D
+	cipher_TLS_RSA_PSK_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC06E
+	cipher_TLS_RSA_PSK_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC06F
+	cipher_TLS_ECDHE_PSK_WITH_ARIA_128_CBC_SHA256       uint16 = 0xC070
+	cipher_TLS_ECDHE_PSK_WITH_ARIA_256_CBC_SHA384       uint16 = 0xC071
+	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0xC072
+	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384 uint16 = 0xC073
+	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256  uint16 = 0xC074
+	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384  uint16 = 0xC075
+	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256   uint16 = 0xC076
+	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384   uint16 = 0xC077
+	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256    uint16 = 0xC078
+	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384    uint16 = 0xC079
+	cipher_TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256         uint16 = 0xC07A
+	cipher_TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384         uint16 = 0xC07B
+	cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC07C
+	cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC07D
+	cipher_TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256      uint16 = 0xC07E
+	cipher_TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384      uint16 = 0xC07F
+	cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC080
+	cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC081
+	cipher_TLS_DH_DSS_WITH_CAMELLIA_128_GCM_SHA256      uint16 = 0xC082
+	cipher_TLS_DH_DSS_WITH_CAMELLIA_256_GCM_SHA384      uint16 = 0xC083
+	cipher_TLS_DH_anon_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC084
+	cipher_TLS_DH_anon_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC085
+	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_GCM_SHA256 uint16 = 0xC086
+	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384 uint16 = 0xC087
+	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256  uint16 = 0xC088
+	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384  uint16 = 0xC089
+	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_128_GCM_SHA256   uint16 = 0xC08A
+	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_256_GCM_SHA384   uint16 = 0xC08B
+	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256    uint16 = 0xC08C
+	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384    uint16 = 0xC08D
+	cipher_TLS_PSK_WITH_CAMELLIA_128_GCM_SHA256         uint16 = 0xC08E
+	cipher_TLS_PSK_WITH_CAMELLIA_256_GCM_SHA384         uint16 = 0xC08F
+	cipher_TLS_DHE_PSK_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC090
+	cipher_TLS_DHE_PSK_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC091
+	cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC092
+	cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC093
+	cipher_TLS_PSK_WITH_CAMELLIA_128_CBC_SHA256         uint16 = 0xC094
+	cipher_TLS_PSK_WITH_CAMELLIA_256_CBC_SHA384         uint16 = 0xC095
+	cipher_TLS_DHE_PSK_WITH_CAMELLIA_128_CBC_SHA256     uint16 = 0xC096
+	cipher_TLS_DHE_PSK_WITH_CAMELLIA_256_CBC_SHA384     uint16 = 0xC097
+	cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_CBC_SHA256     uint16 = 0xC098
+	cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_CBC_SHA384     uint16 = 0xC099
+	cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_128_CBC_SHA256   uint16 = 0xC09A
+	cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_256_CBC_SHA384   uint16 = 0xC09B
+	cipher_TLS_RSA_WITH_AES_128_CCM                     uint16 = 0xC09C
+	cipher_TLS_RSA_WITH_AES_256_CCM                     uint16 = 0xC09D
+	cipher_TLS_DHE_RSA_WITH_AES_128_CCM                 uint16 = 0xC09E
+	cipher_TLS_DHE_RSA_WITH_AES_256_CCM                 uint16 = 0xC09F
+	cipher_TLS_RSA_WITH_AES_128_CCM_8                   uint16 = 0xC0A0
+	cipher_TLS_RSA_WITH_AES_256_CCM_8                   uint16 = 0xC0A1
+	cipher_TLS_DHE_RSA_WITH_AES_128_CCM_8               uint16 = 0xC0A2
+	cipher_TLS_DHE_RSA_WITH_AES_256_CCM_8               uint16 = 0xC0A3
+	cipher_TLS_PSK_WITH_AES_128_CCM                     uint16 = 0xC0A4
+	cipher_TLS_PSK_WITH_AES_256_CCM                     uint16 = 0xC0A5
+	cipher_TLS_DHE_PSK_WITH_AES_128_CCM                 uint16 = 0xC0A6
+	cipher_TLS_DHE_PSK_WITH_AES_256_CCM                 uint16 = 0xC0A7
+	cipher_TLS_PSK_WITH_AES_128_CCM_8                   uint16 = 0xC0A8
+	cipher_TLS_PSK_WITH_AES_256_CCM_8                   uint16 = 0xC0A9
+	cipher_TLS_PSK_DHE_WITH_AES_128_CCM_8               uint16 = 0xC0AA
+	cipher_TLS_PSK_DHE_WITH_AES_256_CCM_8               uint16 = 0xC0AB
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CCM             uint16 = 0xC0AC
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CCM             uint16 = 0xC0AD
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8           uint16 = 0xC0AE
+	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8           uint16 = 0xC0AF
+	// Unassigned uint16 =  0xC0B0-FF
+	// Unassigned uint16 =  0xC1-CB,*
+	// Unassigned uint16 =  0xCC00-A7
+	cipher_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256   uint16 = 0xCCA8
+	cipher_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 uint16 = 0xCCA9
+	cipher_TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256     uint16 = 0xCCAA
+	cipher_TLS_PSK_WITH_CHACHA20_POLY1305_SHA256         uint16 = 0xCCAB
+	cipher_TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256   uint16 = 0xCCAC
+	cipher_TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256     uint16 = 0xCCAD
+	cipher_TLS_RSA_PSK_WITH_CHACHA20_POLY1305_SHA256     uint16 = 0xCCAE
+)
+
+// isBadCipher reports whether the cipher is blacklisted by the HTTP/2 spec.
+// References:
+// https://tools.ietf.org/html/rfc7540#appendix-A
+// Reject cipher suites from Appendix A.
+// "This list includes those cipher suites that do not
+// offer an ephemeral key exchange and those that are
+// based on the TLS null, stream or block cipher type"
+func isBadCipher(cipher uint16) bool {
+	switch cipher {
+	case cipher_TLS_NULL_WITH_NULL_NULL,
+		cipher_TLS_RSA_WITH_NULL_MD5,
+		cipher_TLS_RSA_WITH_NULL_SHA,
+		cipher_TLS_RSA_EXPORT_WITH_RC4_40_MD5,
+		cipher_TLS_RSA_WITH_RC4_128_MD5,
+		cipher_TLS_RSA_WITH_RC4_128_SHA,
+		cipher_TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5,
+		cipher_TLS_RSA_WITH_IDEA_CBC_SHA,
+		cipher_TLS_RSA_EXPORT_WITH_DES40_CBC_SHA,
+		cipher_TLS_RSA_WITH_DES_CBC_SHA,
+		cipher_TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_DH_DSS_EXPORT_WITH_DES40_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_DES_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_DH_RSA_EXPORT_WITH_DES40_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_DES_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_DES_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_DES_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_DH_anon_EXPORT_WITH_RC4_40_MD5,
+		cipher_TLS_DH_anon_WITH_RC4_128_MD5,
+		cipher_TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_DES_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_KRB5_WITH_DES_CBC_SHA,
+		cipher_TLS_KRB5_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_KRB5_WITH_RC4_128_SHA,
+		cipher_TLS_KRB5_WITH_IDEA_CBC_SHA,
+		cipher_TLS_KRB5_WITH_DES_CBC_MD5,
+		cipher_TLS_KRB5_WITH_3DES_EDE_CBC_MD5,
+		cipher_TLS_KRB5_WITH_RC4_128_MD5,
+		cipher_TLS_KRB5_WITH_IDEA_CBC_MD5,
+		cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_SHA,
+		cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_SHA,
+		cipher_TLS_KRB5_EXPORT_WITH_RC4_40_SHA,
+		cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_MD5,
+		cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_MD5,
+		cipher_TLS_KRB5_EXPORT_WITH_RC4_40_MD5,
+		cipher_TLS_PSK_WITH_NULL_SHA,
+		cipher_TLS_DHE_PSK_WITH_NULL_SHA,
+		cipher_TLS_RSA_PSK_WITH_NULL_SHA,
+		cipher_TLS_RSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA,
+		cipher_TLS_RSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA,
+		cipher_TLS_RSA_WITH_NULL_SHA256,
+		cipher_TLS_RSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_RSA_WITH_AES_256_CBC_SHA256,
+		cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA256,
+		cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA256,
+		cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA256,
+		cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
+		cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA256,
+		cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA,
+		cipher_TLS_PSK_WITH_RC4_128_SHA,
+		cipher_TLS_PSK_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_PSK_WITH_AES_128_CBC_SHA,
+		cipher_TLS_PSK_WITH_AES_256_CBC_SHA,
+		cipher_TLS_DHE_PSK_WITH_RC4_128_SHA,
+		cipher_TLS_DHE_PSK_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA,
+		cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA,
+		cipher_TLS_RSA_PSK_WITH_RC4_128_SHA,
+		cipher_TLS_RSA_PSK_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA,
+		cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA,
+		cipher_TLS_RSA_WITH_SEED_CBC_SHA,
+		cipher_TLS_DH_DSS_WITH_SEED_CBC_SHA,
+		cipher_TLS_DH_RSA_WITH_SEED_CBC_SHA,
+		cipher_TLS_DHE_DSS_WITH_SEED_CBC_SHA,
+		cipher_TLS_DHE_RSA_WITH_SEED_CBC_SHA,
+		cipher_TLS_DH_anon_WITH_SEED_CBC_SHA,
+		cipher_TLS_RSA_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_RSA_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_DH_RSA_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_DH_RSA_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_DH_DSS_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_DH_DSS_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_DH_anon_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_DH_anon_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_PSK_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_PSK_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_RSA_PSK_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_RSA_PSK_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_PSK_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_PSK_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_PSK_WITH_NULL_SHA256,
+		cipher_TLS_PSK_WITH_NULL_SHA384,
+		cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_DHE_PSK_WITH_NULL_SHA256,
+		cipher_TLS_DHE_PSK_WITH_NULL_SHA384,
+		cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_RSA_PSK_WITH_NULL_SHA256,
+		cipher_TLS_RSA_PSK_WITH_NULL_SHA384,
+		cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+		cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA256,
+		cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+		cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256,
+		cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+		cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256,
+		cipher_TLS_EMPTY_RENEGOTIATION_INFO_SCSV,
+		cipher_TLS_ECDH_ECDSA_WITH_NULL_SHA,
+		cipher_TLS_ECDH_ECDSA_WITH_RC4_128_SHA,
+		cipher_TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_ECDHE_ECDSA_WITH_NULL_SHA,
+		cipher_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
+		cipher_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_ECDH_RSA_WITH_NULL_SHA,
+		cipher_TLS_ECDH_RSA_WITH_RC4_128_SHA,
+		cipher_TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_ECDHE_RSA_WITH_NULL_SHA,
+		cipher_TLS_ECDHE_RSA_WITH_RC4_128_SHA,
+		cipher_TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_ECDH_anon_WITH_NULL_SHA,
+		cipher_TLS_ECDH_anon_WITH_RC4_128_SHA,
+		cipher_TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_ECDH_anon_WITH_AES_128_CBC_SHA,
+		cipher_TLS_ECDH_anon_WITH_AES_256_CBC_SHA,
+		cipher_TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_SRP_SHA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA,
+		cipher_TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA,
+		cipher_TLS_SRP_SHA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA,
+		cipher_TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA,
+		cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256,
+		cipher_TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384,
+		cipher_TLS_ECDHE_PSK_WITH_RC4_128_SHA,
+		cipher_TLS_ECDHE_PSK_WITH_3DES_EDE_CBC_SHA,
+		cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA,
+		cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA,
+		cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256,
+		cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA384,
+		cipher_TLS_ECDHE_PSK_WITH_NULL_SHA,
+		cipher_TLS_ECDHE_PSK_WITH_NULL_SHA256,
+		cipher_TLS_ECDHE_PSK_WITH_NULL_SHA384,
+		cipher_TLS_RSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_RSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_DH_DSS_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_DH_DSS_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_DHE_DSS_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_DHE_DSS_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_DH_anon_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_DH_anon_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_RSA_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_RSA_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_DH_DSS_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_DH_DSS_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_DH_anon_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_DH_anon_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_PSK_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_PSK_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_DHE_PSK_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_DHE_PSK_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_RSA_PSK_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_RSA_PSK_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_PSK_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_PSK_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_RSA_PSK_WITH_ARIA_128_GCM_SHA256,
+		cipher_TLS_RSA_PSK_WITH_ARIA_256_GCM_SHA384,
+		cipher_TLS_ECDHE_PSK_WITH_ARIA_128_CBC_SHA256,
+		cipher_TLS_ECDHE_PSK_WITH_ARIA_256_CBC_SHA384,
+		cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_DH_DSS_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_DH_DSS_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_DH_anon_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_DH_anon_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_PSK_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_PSK_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_GCM_SHA256,
+		cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_GCM_SHA384,
+		cipher_TLS_PSK_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_PSK_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_DHE_PSK_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_DHE_PSK_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_128_CBC_SHA256,
+		cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_256_CBC_SHA384,
+		cipher_TLS_RSA_WITH_AES_128_CCM,
+		cipher_TLS_RSA_WITH_AES_256_CCM,
+		cipher_TLS_RSA_WITH_AES_128_CCM_8,
+		cipher_TLS_RSA_WITH_AES_256_CCM_8,
+		cipher_TLS_PSK_WITH_AES_128_CCM,
+		cipher_TLS_PSK_WITH_AES_256_CCM,
+		cipher_TLS_PSK_WITH_AES_128_CCM_8,
+		cipher_TLS_PSK_WITH_AES_256_CCM_8:
+		return true
+	default:
+		return false
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/client_conn_pool.go","mode":420,"size":8075,"sha256":"ee773ca6b4e00a999f916214138ca74ea06a9d3d8d6fdffba354871587019dcf","index":0,"count":1,"encoding":"utf-8","payloadBytes":8075}
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build !(go1.27 && !http2legacy)
+
+// Transport code's client connection pooling.
+
+package http2
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"sync"
+)
+
+// clientConnPoolIdleCloser is the interface implemented by ClientConnPool
+// implementations which can close their idle connections.
+type clientConnPoolIdleCloser interface {
+	ClientConnPool
+	closeIdleConnections()
+}
+
+var (
+	_ clientConnPoolIdleCloser = (*clientConnPool)(nil)
+	_ clientConnPoolIdleCloser = noDialClientConnPool{}
+)
+
+// TODO: use singleflight for dialing and addConnCalls?
+type clientConnPool struct {
+	t *Transport
+
+	mu sync.Mutex // TODO: maybe switch to RWMutex
+	// TODO: add support for sharing conns based on cert names
+	// (e.g. share conn for googleapis.com and appspot.com)
+	conns        map[string][]*ClientConn // key is host:port
+	dialing      map[string]*dialCall     // currently in-flight dials
+	keys         map[*ClientConn][]string
+	addConnCalls map[string]*addConnCall // in-flight addConnIfNeeded calls
+}
+
+func (p *clientConnPool) GetClientConn(req *http.Request, addr string) (*ClientConn, error) {
+	return p.getClientConn(req, addr, dialOnMiss)
+}
+
+const (
+	dialOnMiss   = true
+	noDialOnMiss = false
+)
+
+func (p *clientConnPool) getClientConn(req *http.Request, addr string, dialOnMiss bool) (*ClientConn, error) {
+	// TODO(dneil): Dial a new connection when t.DisableKeepAlives is set?
+	if isConnectionCloseRequest(req) && dialOnMiss {
+		// It gets its own connection.
+		traceGetConn(req, addr)
+		const singleUse = true
+		cc, err := p.t.dialClientConn(req.Context(), addr, singleUse)
+		if err != nil {
+			return nil, err
+		}
+		return cc, nil
+	}
+	for {
+		p.mu.Lock()
+		for _, cc := range p.conns[addr] {
+			if cc.ReserveNewRequest() {
+				// When a connection is presented to us by the net/http package,
+				// the GetConn hook has already been called.
+				// Don't call it a second time here.
+				if !cc.getConnCalled {
+					traceGetConn(req, addr)
+				}
+				cc.getConnCalled = false
+				p.mu.Unlock()
+				return cc, nil
+			}
+		}
+		if !dialOnMiss {
+			p.mu.Unlock()
+			return nil, ErrNoCachedConn
+		}
+		traceGetConn(req, addr)
+		call := p.getStartDialLocked(req.Context(), addr)
+		p.mu.Unlock()
+		<-call.done
+		if shouldRetryDial(call, req) {
+			continue
+		}
+		cc, err := call.res, call.err
+		if err != nil {
+			return nil, err
+		}
+		if cc.ReserveNewRequest() {
+			return cc, nil
+		}
+	}
+}
+
+// dialCall is an in-flight Transport dial call to a host.
+type dialCall struct {
+	_ incomparable
+	p *clientConnPool
+	// the context associated with the request
+	// that created this dialCall
+	ctx  context.Context
+	done chan struct{} // closed when done
+	res  *ClientConn   // valid after done is closed
+	err  error         // valid after done is closed
+}
+
+// requires p.mu is held.
+func (p *clientConnPool) getStartDialLocked(ctx context.Context, addr string) *dialCall {
+	if call, ok := p.dialing[addr]; ok {
+		// A dial is already in-flight. Don't start another.
+		return call
+	}
+	call := &dialCall{p: p, done: make(chan struct{}), ctx: ctx}
+	if p.dialing == nil {
+		p.dialing = make(map[string]*dialCall)
+	}
+	p.dialing[addr] = call
+	go call.dial(call.ctx, addr)
+	return call
+}
+
+// run in its own goroutine.
+func (c *dialCall) dial(ctx context.Context, addr string) {
+	const singleUse = false // shared conn
+	c.res, c.err = c.p.t.dialClientConn(ctx, addr, singleUse)
+
+	c.p.mu.Lock()
+	delete(c.p.dialing, addr)
+	if c.err == nil {
+		c.p.addConnLocked(addr, c.res)
+	}
+	c.p.mu.Unlock()
+
+	close(c.done)
+}
+
+// addConnIfNeeded makes a NewClientConn out of c if a connection for key doesn't
+// already exist. It coalesces concurrent calls with the same key.
+// This is used by the http1 Transport code when it creates a new connection. Because
+// the http1 Transport doesn't de-dup TCP dials to outbound hosts (because it doesn't know
+// the protocol), it can get into a situation where it has multiple TLS connections.
+// This code decides which ones live or die.
+// The return value used is whether c was used.
+// c is never closed.
+func (p *clientConnPool) addConnIfNeeded(key string, t *Transport, c net.Conn) (used bool, err error) {
+	p.mu.Lock()
+	for _, cc := range p.conns[key] {
+		if cc.CanTakeNewRequest() {
+			p.mu.Unlock()
+			return false, nil
+		}
+	}
+	call, dup := p.addConnCalls[key]
+	if !dup {
+		if p.addConnCalls == nil {
+			p.addConnCalls = make(map[string]*addConnCall)
+		}
+		call = &addConnCall{
+			p:    p,
+			done: make(chan struct{}),
+		}
+		p.addConnCalls[key] = call
+		go call.run(t, key, c)
+	}
+	p.mu.Unlock()
+
+	<-call.done
+	if call.err != nil {
+		return false, call.err
+	}
+	return !dup, nil
+}
+
+type addConnCall struct {
+	_    incomparable
+	p    *clientConnPool
+	done chan struct{} // closed when done
+	err  error
+}
+
+func (c *addConnCall) run(t *Transport, key string, nc net.Conn) {
+	cc, err := t.NewClientConn(nc)
+
+	p := c.p
+	p.mu.Lock()
+	if err != nil {
+		c.err = err
+	} else {
+		cc.getConnCalled = true // already called by the net/http package
+		p.addConnLocked(key, cc)
+	}
+	delete(p.addConnCalls, key)
+	p.mu.Unlock()
+	close(c.done)
+}
+
+// p.mu must be held
+func (p *clientConnPool) addConnLocked(key string, cc *ClientConn) {
+	for _, v := range p.conns[key] {
+		if v == cc {
+			return
+		}
+	}
+	if p.conns == nil {
+		p.conns = make(map[string][]*ClientConn)
+	}
+	if p.keys == nil {
+		p.keys = make(map[*ClientConn][]string)
+	}
+	p.conns[key] = append(p.conns[key], cc)
+	p.keys[cc] = append(p.keys[cc], key)
+}
+
+func (p *clientConnPool) MarkDead(cc *ClientConn) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, key := range p.keys[cc] {
+		vv, ok := p.conns[key]
+		if !ok {
+			continue
+		}
+		newList := filterOutClientConn(vv, cc)
+		if len(newList) > 0 {
+			p.conns[key] = newList
+		} else {
+			delete(p.conns, key)
+		}
+	}
+	delete(p.keys, cc)
+}
+
+func (p *clientConnPool) closeIdleConnections() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	// TODO: don't close a cc if it was just added to the pool
+	// milliseconds ago and has never been used. There's currently
+	// a small race window with the HTTP/1 Transport's integration
+	// where it can add an idle conn just before using it, and
+	// somebody else can concurrently call CloseIdleConns and
+	// break some caller's RoundTrip.
+	for _, vv := range p.conns {
+		for _, cc := range vv {
+			cc.closeIfIdle()
+		}
+	}
+}
+
+func filterOutClientConn(in []*ClientConn, exclude *ClientConn) []*ClientConn {
+	out := in[:0]
+	for _, v := range in {
+		if v != exclude {
+			out = append(out, v)
+		}
+	}
+	// If we filtered it out, zero out the last item to prevent
+	// the GC from seeing it.
+	if len(in) != len(out) {
+		in[len(in)-1] = nil
+	}
+	return out
+}
+
+// noDialClientConnPool is an implementation of http2.ClientConnPool
+// which never dials. We let the HTTP/1.1 client dial and use its TLS
+// connection instead.
+type noDialClientConnPool struct{ *clientConnPool }
+
+func (p noDialClientConnPool) GetClientConn(req *http.Request, addr string) (*ClientConn, error) {
+	return p.getClientConn(req, addr, noDialOnMiss)
+}
+
+// shouldRetryDial reports whether the current request should
+// retry dialing after the call finished unsuccessfully, for example
+// if the dial was canceled because of a context cancellation or
+// deadline expiry.
+func shouldRetryDial(call *dialCall, req *http.Request) bool {
+	if call.err == nil {
+		// No error, no need to retry
+		return false
+	}
+	if call.ctx == req.Context() {
+		// If the call has the same context as the request, the dial
+		// should not be retried, since any cancellation will have come
+		// from this request.
+		return false
+	}
+	if !errors.Is(call.err, context.Canceled) && !errors.Is(call.err, context.DeadlineExceeded) {
+		// If the call error is not because of a context cancellation or a deadline expiry,
+		// the dial should not be retried.
+		return false
+	}
+	// Only retry if the error is a context cancellation error or deadline expiry
+	// and the context associated with the call was canceled or expired.
+	return call.ctx.Err() != nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/client_priority_go126.go","mode":420,"size":705,"sha256":"b51147502bb7e74c384f1dd249c951920055b380d18fe38862532f8f24736db9","index":0,"count":1,"encoding":"utf-8","payloadBytes":705}
+// Copyright 2026 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build !go1.27
+
+package http2
+
+import "net/http"
+
+// Support for go.dev/issue/75500 is added in Go 1.27. In case anyone uses
+// x/net with versions before Go 1.27, we return true here so that their write
+// scheduler will still be the round-robin write scheduler rather than the RFC
+// 9218 write scheduler. That way, older users of Go will not see a sudden
+// change of behavior just from importing x/net.
+//
+// TODO(nsh): remove this file after x/net go.mod is at Go 1.27.
+func clientPriorityDisabled(_ *http.Server) bool {
+	return true
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/client_priority_go127.go","mode":420,"size":298,"sha256":"49ebedf409518018a7b5f79f4376894fa69921c02db93a91c3ec5a699820704a","index":0,"count":1,"encoding":"utf-8","payloadBytes":298}
+// Copyright 2026 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build go1.27
+
+package http2
+
+import "net/http"
+
+func clientPriorityDisabled(s *http.Server) bool {
+	return s.DisableClientPriority
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/http2/clientconn.go","mode":420,"size":1668,"sha256":"75517095356686258410eebac3a058152f4e4fcf85d98732e55e72db3d8860b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1668}
+// Copyright 2026 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package http2
+
+import (
+	"context"
+	"net/http"
+)
+
+func (cc *ClientConn) RoundTrip(req *http.Request) (*http.Response, error) {
+	return cc.roundTrip(req)
+}
+
+// SetDoNotReuse marks cc as not reusable for future HTTP requests.
+func (cc *ClientConn) SetDoNotReuse() {
+	cc.setDoNotReuse()
+}
+
+// CanTakeNewRequest reports whether the connection can take a new request,
+// meaning it has not been closed or received or sent a GOAWAY.
+//
+// If the caller is going to immediately make a new request on this
+// connection, use ReserveNewRequest instead.
+func (cc *ClientConn) CanTakeNewRequest() bool {
+	return cc.canTakeNewRequest()
+}
+
+// ReserveNewRequest is like CanTakeNewRequest but also reserves a
+// concurrent stream in cc. The reservation is decremented on the
+// next call to RoundTrip.
+func (cc *ClientConn) ReserveNewRequest() bool {
+	return cc.reserveNewRequest()
+}
+
+// State returns a snapshot of cc's state.
+func (cc *ClientConn) State() ClientConnState {
+	return cc.state()
+}
+
+// Shutdown gracefully closes the client connection, waiting for running streams to complete.
+func (cc *ClientConn) Shutdown(ctx context.Context) error {
+	return cc.shutdown(ctx)
+}
+
+// Close closes the client connection immediately.
+//
+// In-flight requests are interrupted. For a graceful shutdown, use Shutdown instead.
+func (cc *ClientConn) Close() error {
+	return cc.close()
+}
+
+// Ping sends a PING frame to the server and waits for the ack.
+func (cc *ClientConn) Ping(ctx context.Context) error {
+	return cc.ping(ctx)
+}
+
+@@END
 @@PORTABLE {"path":"vendor/golang.org/x/net/http2/config.go","mode":420,"size":6110,"sha256":"d167984b5523fecaf2b99b626c7a4be2d7fc2268b6719b01913263cb80ca4d5a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6110}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -128268,3784 +131104,6 @@ func write(fd int, p []byte) (n int, err error) {
 
 func mmap(addr uintptr, length uintptr, prot int, flag int, fd int, pos int64) (ret uintptr, err error) {
 	r0, _, e1 := Syscall9(SYS_MMAP, uintptr(addr), uintptr(length), uintptr(prot), uintptr(flag), uintptr(fd), uintptr(pos), uintptr(pos>>32), 0, 0)
-	ret = uintptr(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func munmap(addr uintptr, length uintptr) (err error) {
-	_, _, e1 := Syscall(SYS_MUNMAP, uintptr(addr), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept4(fd int, rsa *RawSockaddrAny, addrlen *_Socklen, flags int) (nfd int, err error) {
-	r0, _, e1 := Syscall6(SYS_ACCEPT4, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)), uintptr(flags), 0, 0)
-	nfd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimensat(dirfd int, path string, times *[2]Timespec, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_UTIMENSAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(times)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/sys/unix/zsyscall_freebsd_amd64.go","mode":420,"size":45979,"sha256":"25b3b0394494814dc7e52c37ac2f319606cdb46ac4abfab55e14ecac60c5428b","index":0,"count":1,"encoding":"utf-8","payloadBytes":45979}
-// go run mksyscall.go -tags freebsd,amd64 syscall_bsd.go syscall_freebsd.go syscall_freebsd_amd64.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build freebsd && amd64
-
-package unix
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var _ syscall.Errno
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getgroups(ngid int, gid *_Gid_t) (n int, err error) {
-	r0, _, e1 := RawSyscall(SYS_GETGROUPS, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setgroups(ngid int, gid *_Gid_t) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETGROUPS, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func wait4(pid int, wstatus *_C_int, options int, rusage *Rusage) (wpid int, err error) {
-	r0, _, e1 := Syscall6(SYS_WAIT4, uintptr(pid), uintptr(unsafe.Pointer(wstatus)), uintptr(options), uintptr(unsafe.Pointer(rusage)), 0, 0)
-	wpid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
-	r0, _, e1 := Syscall(SYS_ACCEPT, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := Syscall(SYS_BIND, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := Syscall(SYS_CONNECT, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socket(domain int, typ int, proto int) (fd int, err error) {
-	r0, _, e1 := RawSyscall(SYS_SOCKET, uintptr(domain), uintptr(typ), uintptr(proto))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
-	_, _, e1 := Syscall6(SYS_GETSOCKOPT, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(unsafe.Pointer(vallen)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
-	_, _, e1 := Syscall6(SYS_SETSOCKOPT, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(vallen), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETPEERNAME, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETSOCKNAME, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Shutdown(s int, how int) (err error) {
-	_, _, e1 := Syscall(SYS_SHUTDOWN, uintptr(s), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
-	_, _, e1 := RawSyscall6(SYS_SOCKETPAIR, uintptr(domain), uintptr(typ), uintptr(proto), uintptr(unsafe.Pointer(fd)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_RECVFROM, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(flags), uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall6(SYS_SENDTO, uintptr(s), uintptr(_p0), uintptr(len(buf)), uintptr(flags), uintptr(to), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := Syscall(SYS_RECVMSG, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := Syscall(SYS_SENDMSG, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func kevent(kq int, change unsafe.Pointer, nchange int, event unsafe.Pointer, nevent int, timeout *Timespec) (n int, err error) {
-	r0, _, e1 := Syscall6(SYS_KEVENT, uintptr(kq), uintptr(change), uintptr(nchange), uintptr(event), uintptr(nevent), uintptr(unsafe.Pointer(timeout)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimes(path string, timeval *[2]Timeval) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UTIMES, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func futimes(fd int, timeval *[2]Timeval) (err error) {
-	_, _, e1 := Syscall(SYS_FUTIMES, uintptr(fd), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
-	r0, _, e1 := Syscall(SYS_POLL, uintptr(unsafe.Pointer(fds)), uintptr(nfds), uintptr(timeout))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Madvise(b []byte, behav int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MADVISE, uintptr(_p0), uintptr(len(b)), uintptr(behav))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MLOCK, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlockall(flags int) (err error) {
-	_, _, e1 := Syscall(SYS_MLOCKALL, uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mprotect(b []byte, prot int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MPROTECT, uintptr(_p0), uintptr(len(b)), uintptr(prot))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Msync(b []byte, flags int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MSYNC, uintptr(_p0), uintptr(len(b)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MUNLOCK, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlockall() (err error) {
-	_, _, e1 := Syscall(SYS_MUNLOCKALL, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pipe2(p *[2]_C_int, flags int) (err error) {
-	_, _, e1 := RawSyscall(SYS_PIPE2, uintptr(unsafe.Pointer(p)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getcwd(buf []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS___GETCWD, uintptr(_p0), uintptr(len(buf)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctl(fd int, req uint, arg uintptr) (err error) {
-	_, _, e1 := Syscall(SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctlPtr(fd int, req uint, arg unsafe.Pointer) (err error) {
-	_, _, e1 := Syscall(SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sysctl(mib []_C_int, old *byte, oldlen *uintptr, new *byte, newlen uintptr) (err error) {
-	var _p0 unsafe.Pointer
-	if len(mib) > 0 {
-		_p0 = unsafe.Pointer(&mib[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall6(SYS___SYSCTL, uintptr(_p0), uintptr(len(mib)), uintptr(unsafe.Pointer(old)), uintptr(unsafe.Pointer(oldlen)), uintptr(unsafe.Pointer(new)), uintptr(newlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ptrace(request int, pid int, addr uintptr, data int) (err error) {
-	_, _, e1 := Syscall6(SYS_PTRACE, uintptr(request), uintptr(pid), uintptr(addr), uintptr(data), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ptracePtr(request int, pid int, addr unsafe.Pointer, data int) (err error) {
-	_, _, e1 := Syscall6(SYS_PTRACE, uintptr(request), uintptr(pid), uintptr(addr), uintptr(data), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Access(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_ACCESS, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Adjtime(delta *Timeval, olddelta *Timeval) (err error) {
-	_, _, e1 := Syscall(SYS_ADJTIME, uintptr(unsafe.Pointer(delta)), uintptr(unsafe.Pointer(olddelta)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func CapEnter() (err error) {
-	_, _, e1 := Syscall(SYS_CAP_ENTER, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func capRightsGet(version int, fd int, rightsp *CapRights) (err error) {
-	_, _, e1 := Syscall(SYS___CAP_RIGHTS_GET, uintptr(version), uintptr(fd), uintptr(unsafe.Pointer(rightsp)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func capRightsLimit(fd int, rightsp *CapRights) (err error) {
-	_, _, e1 := Syscall(SYS_CAP_RIGHTS_LIMIT, uintptr(fd), uintptr(unsafe.Pointer(rightsp)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHDIR, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chflags(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHFLAGS, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chmod(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHMOD, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHOWN, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chroot(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHROOT, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ClockGettime(clockid int32, time *Timespec) (err error) {
-	_, _, e1 := Syscall(SYS_CLOCK_GETTIME, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Close(fd int) (err error) {
-	_, _, e1 := Syscall(SYS_CLOSE, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup(fd int) (nfd int, err error) {
-	r0, _, e1 := Syscall(SYS_DUP, uintptr(fd), 0, 0)
-	nfd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup2(from int, to int) (err error) {
-	_, _, e1 := Syscall(SYS_DUP2, uintptr(from), uintptr(to), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Exit(code int) {
-	Syscall(SYS_EXIT, uintptr(code), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrGetFd(fd int, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_GET_FD, uintptr(fd), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p0)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrSetFd(fd int, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_SET_FD, uintptr(fd), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p0)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrDeleteFd(fd int, attrnamespace int, attrname string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_EXTATTR_DELETE_FD, uintptr(fd), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrListFd(fd int, attrnamespace int, data uintptr, nbytes int) (ret int, err error) {
-	r0, _, e1 := Syscall6(SYS_EXTATTR_LIST_FD, uintptr(fd), uintptr(attrnamespace), uintptr(data), uintptr(nbytes), 0, 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrGetFile(file string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_GET_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrSetFile(file string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_SET_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrDeleteFile(file string, attrnamespace int, attrname string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_EXTATTR_DELETE_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrListFile(file string, attrnamespace int, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_LIST_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(data), uintptr(nbytes), 0, 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrGetLink(link string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_GET_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrSetLink(link string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_SET_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrDeleteLink(link string, attrnamespace int, attrname string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_EXTATTR_DELETE_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrListLink(link string, attrnamespace int, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_LIST_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(data), uintptr(nbytes), 0, 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fadvise(fd int, offset int64, length int64, advice int) (err error) {
-	_, _, e1 := Syscall6(SYS_POSIX_FADVISE, uintptr(fd), uintptr(offset), uintptr(length), uintptr(advice), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FACCESSAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchdir(fd int) (err error) {
-	_, _, e1 := Syscall(SYS_FCHDIR, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchflags(fd int, flags int) (err error) {
-	_, _, e1 := Syscall(SYS_FCHFLAGS, uintptr(fd), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmod(fd int, mode uint32) (err error) {
-	_, _, e1 := Syscall(SYS_FCHMOD, uintptr(fd), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FCHMODAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchown(fd int, uid int, gid int) (err error) {
-	_, _, e1 := Syscall(SYS_FCHOWN, uintptr(fd), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FCHOWNAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Flock(fd int, how int) (err error) {
-	_, _, e1 := Syscall(SYS_FLOCK, uintptr(fd), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fpathconf(fd int, name int) (val int, err error) {
-	r0, _, e1 := Syscall(SYS_FPATHCONF, uintptr(fd), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstat(fd int, stat *Stat_t) (err error) {
-	_, _, e1 := Syscall(SYS_FSTAT, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatat(fd int, path string, stat *Stat_t, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FSTATAT, uintptr(fd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatfs(fd int, stat *Statfs_t) (err error) {
-	_, _, e1 := Syscall(SYS_FSTATFS, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fsync(fd int) (err error) {
-	_, _, e1 := Syscall(SYS_FSYNC, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ftruncate(fd int, length int64) (err error) {
-	_, _, e1 := Syscall(SYS_FTRUNCATE, uintptr(fd), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getdirentries(fd int, buf []byte, basep *uint64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_GETDIRENTRIES, uintptr(fd), uintptr(_p0), uintptr(len(buf)), uintptr(unsafe.Pointer(basep)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getdtablesize() (size int) {
-	r0, _, _ := Syscall(SYS_GETDTABLESIZE, 0, 0, 0)
-	size = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getegid() (egid int) {
-	r0, _, _ := RawSyscall(SYS_GETEGID, 0, 0, 0)
-	egid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Geteuid() (uid int) {
-	r0, _, _ := RawSyscall(SYS_GETEUID, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getgid() (gid int) {
-	r0, _, _ := RawSyscall(SYS_GETGID, 0, 0, 0)
-	gid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgid(pid int) (pgid int, err error) {
-	r0, _, e1 := RawSyscall(SYS_GETPGID, uintptr(pid), 0, 0)
-	pgid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgrp() (pgrp int) {
-	r0, _, _ := RawSyscall(SYS_GETPGRP, 0, 0, 0)
-	pgrp = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpid() (pid int) {
-	r0, _, _ := RawSyscall(SYS_GETPID, 0, 0, 0)
-	pid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getppid() (ppid int) {
-	r0, _, _ := RawSyscall(SYS_GETPPID, 0, 0, 0)
-	ppid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpriority(which int, who int) (prio int, err error) {
-	r0, _, e1 := Syscall(SYS_GETPRIORITY, uintptr(which), uintptr(who), 0)
-	prio = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrlimit(which int, lim *Rlimit) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETRLIMIT, uintptr(which), uintptr(unsafe.Pointer(lim)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrusage(who int, rusage *Rusage) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETRUSAGE, uintptr(who), uintptr(unsafe.Pointer(rusage)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsid(pid int) (sid int, err error) {
-	r0, _, e1 := RawSyscall(SYS_GETSID, uintptr(pid), 0, 0)
-	sid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Gettimeofday(tv *Timeval) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETTIMEOFDAY, uintptr(unsafe.Pointer(tv)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getuid() (uid int) {
-	r0, _, _ := RawSyscall(SYS_GETUID, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Issetugid() (tainted bool) {
-	r0, _, _ := Syscall(SYS_ISSETUGID, 0, 0, 0)
-	tainted = bool(r0 != 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kill(pid int, signum syscall.Signal) (err error) {
-	_, _, e1 := Syscall(SYS_KILL, uintptr(pid), uintptr(signum), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kqueue() (fd int, err error) {
-	r0, _, e1 := Syscall(SYS_KQUEUE, 0, 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lchown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_LCHOWN, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Link(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Linkat(pathfd int, path string, linkfd int, link string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_LINKAT, uintptr(pathfd), uintptr(unsafe.Pointer(_p0)), uintptr(linkfd), uintptr(unsafe.Pointer(_p1)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Listen(s int, backlog int) (err error) {
-	_, _, e1 := Syscall(SYS_LISTEN, uintptr(s), uintptr(backlog), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdir(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_MKDIR, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdirat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_MKDIRAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifo(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_MKFIFO, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknodat(fd int, path string, mode uint32, dev uint64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_MKNODAT, uintptr(fd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(dev), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
-	_, _, e1 := Syscall(SYS_NANOSLEEP, uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(leftover)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Open(path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall(SYS_OPEN, uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Openat(fdat int, path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_OPENAT, uintptr(fdat), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm), 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pathconf(path string, name int) (val int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall(SYS_PATHCONF, uintptr(unsafe.Pointer(_p0)), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pread(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_PREAD, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_PWRITE, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func read(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS_READ, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlink(path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS_READLINK, uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlinkat(dirfd int, path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_READLINKAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rename(from string, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_RENAME, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Renameat(fromfd int, from string, tofd int, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_RENAMEAT, uintptr(fromfd), uintptr(unsafe.Pointer(_p0)), uintptr(tofd), uintptr(unsafe.Pointer(_p1)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Revoke(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_REVOKE, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rmdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_RMDIR, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
-	r0, _, e1 := Syscall(SYS_LSEEK, uintptr(fd), uintptr(offset), uintptr(whence))
-	newoffset = int64(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
-	r0, _, e1 := Syscall6(SYS_SELECT, uintptr(nfd), uintptr(unsafe.Pointer(r)), uintptr(unsafe.Pointer(w)), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(timeout)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setegid(egid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETEGID, uintptr(egid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seteuid(euid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETEUID, uintptr(euid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setgid(gid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETGID, uintptr(gid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setlogin(name string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(name)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_SETLOGIN, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpgid(pid int, pgid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETPGID, uintptr(pid), uintptr(pgid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpriority(which int, who int, prio int) (err error) {
-	_, _, e1 := Syscall(SYS_SETPRIORITY, uintptr(which), uintptr(who), uintptr(prio))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setregid(rgid int, egid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETREGID, uintptr(rgid), uintptr(egid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setreuid(ruid int, euid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETREUID, uintptr(ruid), uintptr(euid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresgid(rgid int, egid int, sgid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETRESGID, uintptr(rgid), uintptr(egid), uintptr(sgid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresuid(ruid int, euid int, suid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETRESUID, uintptr(ruid), uintptr(euid), uintptr(suid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setsid() (pid int, err error) {
-	r0, _, e1 := RawSyscall(SYS_SETSID, 0, 0, 0)
-	pid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Settimeofday(tp *Timeval) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETTIMEOFDAY, uintptr(unsafe.Pointer(tp)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setuid(uid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETUID, uintptr(uid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statfs(path string, stat *Statfs_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_STATFS, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlink(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_SYMLINK, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlinkat(oldpath string, newdirfd int, newpath string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(oldpath)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(newpath)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_SYMLINKAT, uintptr(unsafe.Pointer(_p0)), uintptr(newdirfd), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sync() (err error) {
-	_, _, e1 := Syscall(SYS_SYNC, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Truncate(path string, length int64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_TRUNCATE, uintptr(unsafe.Pointer(_p0)), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Umask(newmask int) (oldmask int) {
-	r0, _, _ := Syscall(SYS_UMASK, uintptr(newmask), 0, 0)
-	oldmask = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Undelete(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNDELETE, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlink(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNLINK, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlinkat(dirfd int, path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNLINKAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unmount(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNMOUNT, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func write(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS_WRITE, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func mmap(addr uintptr, length uintptr, prot int, flag int, fd int, pos int64) (ret uintptr, err error) {
-	r0, _, e1 := Syscall6(SYS_MMAP, uintptr(addr), uintptr(length), uintptr(prot), uintptr(flag), uintptr(fd), uintptr(pos))
-	ret = uintptr(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func munmap(addr uintptr, length uintptr) (err error) {
-	_, _, e1 := Syscall(SYS_MUNMAP, uintptr(addr), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept4(fd int, rsa *RawSockaddrAny, addrlen *_Socklen, flags int) (nfd int, err error) {
-	r0, _, e1 := Syscall6(SYS_ACCEPT4, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)), uintptr(flags), 0, 0)
-	nfd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimensat(dirfd int, path string, times *[2]Timespec, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_UTIMENSAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(times)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/sys/unix/zsyscall_freebsd_arm.go","mode":420,"size":46211,"sha256":"70d3d252dc6bbfde7871192caa80963b8f1f934d4332c903a74426c8c71cfaaa","index":0,"count":1,"encoding":"utf-8","payloadBytes":46211}
-// go run mksyscall.go -l32 -arm -tags freebsd,arm syscall_bsd.go syscall_freebsd.go syscall_freebsd_arm.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build freebsd && arm
-
-package unix
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var _ syscall.Errno
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getgroups(ngid int, gid *_Gid_t) (n int, err error) {
-	r0, _, e1 := RawSyscall(SYS_GETGROUPS, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setgroups(ngid int, gid *_Gid_t) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETGROUPS, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func wait4(pid int, wstatus *_C_int, options int, rusage *Rusage) (wpid int, err error) {
-	r0, _, e1 := Syscall6(SYS_WAIT4, uintptr(pid), uintptr(unsafe.Pointer(wstatus)), uintptr(options), uintptr(unsafe.Pointer(rusage)), 0, 0)
-	wpid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
-	r0, _, e1 := Syscall(SYS_ACCEPT, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := Syscall(SYS_BIND, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := Syscall(SYS_CONNECT, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socket(domain int, typ int, proto int) (fd int, err error) {
-	r0, _, e1 := RawSyscall(SYS_SOCKET, uintptr(domain), uintptr(typ), uintptr(proto))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
-	_, _, e1 := Syscall6(SYS_GETSOCKOPT, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(unsafe.Pointer(vallen)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
-	_, _, e1 := Syscall6(SYS_SETSOCKOPT, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(vallen), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETPEERNAME, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETSOCKNAME, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Shutdown(s int, how int) (err error) {
-	_, _, e1 := Syscall(SYS_SHUTDOWN, uintptr(s), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
-	_, _, e1 := RawSyscall6(SYS_SOCKETPAIR, uintptr(domain), uintptr(typ), uintptr(proto), uintptr(unsafe.Pointer(fd)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_RECVFROM, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(flags), uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall6(SYS_SENDTO, uintptr(s), uintptr(_p0), uintptr(len(buf)), uintptr(flags), uintptr(to), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := Syscall(SYS_RECVMSG, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := Syscall(SYS_SENDMSG, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func kevent(kq int, change unsafe.Pointer, nchange int, event unsafe.Pointer, nevent int, timeout *Timespec) (n int, err error) {
-	r0, _, e1 := Syscall6(SYS_KEVENT, uintptr(kq), uintptr(change), uintptr(nchange), uintptr(event), uintptr(nevent), uintptr(unsafe.Pointer(timeout)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimes(path string, timeval *[2]Timeval) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UTIMES, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func futimes(fd int, timeval *[2]Timeval) (err error) {
-	_, _, e1 := Syscall(SYS_FUTIMES, uintptr(fd), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
-	r0, _, e1 := Syscall(SYS_POLL, uintptr(unsafe.Pointer(fds)), uintptr(nfds), uintptr(timeout))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Madvise(b []byte, behav int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MADVISE, uintptr(_p0), uintptr(len(b)), uintptr(behav))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MLOCK, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlockall(flags int) (err error) {
-	_, _, e1 := Syscall(SYS_MLOCKALL, uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mprotect(b []byte, prot int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MPROTECT, uintptr(_p0), uintptr(len(b)), uintptr(prot))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Msync(b []byte, flags int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MSYNC, uintptr(_p0), uintptr(len(b)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall(SYS_MUNLOCK, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlockall() (err error) {
-	_, _, e1 := Syscall(SYS_MUNLOCKALL, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pipe2(p *[2]_C_int, flags int) (err error) {
-	_, _, e1 := RawSyscall(SYS_PIPE2, uintptr(unsafe.Pointer(p)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getcwd(buf []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS___GETCWD, uintptr(_p0), uintptr(len(buf)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctl(fd int, req uint, arg uintptr) (err error) {
-	_, _, e1 := Syscall(SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctlPtr(fd int, req uint, arg unsafe.Pointer) (err error) {
-	_, _, e1 := Syscall(SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sysctl(mib []_C_int, old *byte, oldlen *uintptr, new *byte, newlen uintptr) (err error) {
-	var _p0 unsafe.Pointer
-	if len(mib) > 0 {
-		_p0 = unsafe.Pointer(&mib[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := Syscall6(SYS___SYSCTL, uintptr(_p0), uintptr(len(mib)), uintptr(unsafe.Pointer(old)), uintptr(unsafe.Pointer(oldlen)), uintptr(unsafe.Pointer(new)), uintptr(newlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ptrace(request int, pid int, addr uintptr, data int) (err error) {
-	_, _, e1 := Syscall6(SYS_PTRACE, uintptr(request), uintptr(pid), uintptr(addr), uintptr(data), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ptracePtr(request int, pid int, addr unsafe.Pointer, data int) (err error) {
-	_, _, e1 := Syscall6(SYS_PTRACE, uintptr(request), uintptr(pid), uintptr(addr), uintptr(data), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Access(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_ACCESS, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Adjtime(delta *Timeval, olddelta *Timeval) (err error) {
-	_, _, e1 := Syscall(SYS_ADJTIME, uintptr(unsafe.Pointer(delta)), uintptr(unsafe.Pointer(olddelta)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func CapEnter() (err error) {
-	_, _, e1 := Syscall(SYS_CAP_ENTER, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func capRightsGet(version int, fd int, rightsp *CapRights) (err error) {
-	_, _, e1 := Syscall(SYS___CAP_RIGHTS_GET, uintptr(version), uintptr(fd), uintptr(unsafe.Pointer(rightsp)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func capRightsLimit(fd int, rightsp *CapRights) (err error) {
-	_, _, e1 := Syscall(SYS_CAP_RIGHTS_LIMIT, uintptr(fd), uintptr(unsafe.Pointer(rightsp)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHDIR, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chflags(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHFLAGS, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chmod(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHMOD, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHOWN, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chroot(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_CHROOT, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ClockGettime(clockid int32, time *Timespec) (err error) {
-	_, _, e1 := Syscall(SYS_CLOCK_GETTIME, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Close(fd int) (err error) {
-	_, _, e1 := Syscall(SYS_CLOSE, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup(fd int) (nfd int, err error) {
-	r0, _, e1 := Syscall(SYS_DUP, uintptr(fd), 0, 0)
-	nfd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup2(from int, to int) (err error) {
-	_, _, e1 := Syscall(SYS_DUP2, uintptr(from), uintptr(to), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Exit(code int) {
-	Syscall(SYS_EXIT, uintptr(code), 0, 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrGetFd(fd int, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_GET_FD, uintptr(fd), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p0)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrSetFd(fd int, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_SET_FD, uintptr(fd), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p0)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrDeleteFd(fd int, attrnamespace int, attrname string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_EXTATTR_DELETE_FD, uintptr(fd), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p0)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrListFd(fd int, attrnamespace int, data uintptr, nbytes int) (ret int, err error) {
-	r0, _, e1 := Syscall6(SYS_EXTATTR_LIST_FD, uintptr(fd), uintptr(attrnamespace), uintptr(data), uintptr(nbytes), 0, 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrGetFile(file string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_GET_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrSetFile(file string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_SET_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrDeleteFile(file string, attrnamespace int, attrname string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_EXTATTR_DELETE_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrListFile(file string, attrnamespace int, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(file)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_LIST_FILE, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(data), uintptr(nbytes), 0, 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrGetLink(link string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_GET_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrSetLink(link string, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_SET_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)), uintptr(data), uintptr(nbytes), 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrDeleteLink(link string, attrnamespace int, attrname string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(attrname)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_EXTATTR_DELETE_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ExtattrListLink(link string, attrnamespace int, data uintptr, nbytes int) (ret int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_EXTATTR_LIST_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(attrnamespace), uintptr(data), uintptr(nbytes), 0, 0)
-	ret = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fadvise(fd int, offset int64, length int64, advice int) (err error) {
-	_, _, e1 := Syscall9(SYS_POSIX_FADVISE, uintptr(fd), 0, uintptr(offset), uintptr(offset>>32), uintptr(length), uintptr(length>>32), uintptr(advice), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FACCESSAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchdir(fd int) (err error) {
-	_, _, e1 := Syscall(SYS_FCHDIR, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchflags(fd int, flags int) (err error) {
-	_, _, e1 := Syscall(SYS_FCHFLAGS, uintptr(fd), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmod(fd int, mode uint32) (err error) {
-	_, _, e1 := Syscall(SYS_FCHMOD, uintptr(fd), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FCHMODAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchown(fd int, uid int, gid int) (err error) {
-	_, _, e1 := Syscall(SYS_FCHOWN, uintptr(fd), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FCHOWNAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Flock(fd int, how int) (err error) {
-	_, _, e1 := Syscall(SYS_FLOCK, uintptr(fd), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fpathconf(fd int, name int) (val int, err error) {
-	r0, _, e1 := Syscall(SYS_FPATHCONF, uintptr(fd), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstat(fd int, stat *Stat_t) (err error) {
-	_, _, e1 := Syscall(SYS_FSTAT, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatat(fd int, path string, stat *Stat_t, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_FSTATAT, uintptr(fd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatfs(fd int, stat *Statfs_t) (err error) {
-	_, _, e1 := Syscall(SYS_FSTATFS, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fsync(fd int) (err error) {
-	_, _, e1 := Syscall(SYS_FSYNC, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ftruncate(fd int, length int64) (err error) {
-	_, _, e1 := Syscall6(SYS_FTRUNCATE, uintptr(fd), 0, uintptr(length), uintptr(length>>32), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getdirentries(fd int, buf []byte, basep *uint64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_GETDIRENTRIES, uintptr(fd), uintptr(_p0), uintptr(len(buf)), uintptr(unsafe.Pointer(basep)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getdtablesize() (size int) {
-	r0, _, _ := Syscall(SYS_GETDTABLESIZE, 0, 0, 0)
-	size = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getegid() (egid int) {
-	r0, _, _ := RawSyscall(SYS_GETEGID, 0, 0, 0)
-	egid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Geteuid() (uid int) {
-	r0, _, _ := RawSyscall(SYS_GETEUID, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getgid() (gid int) {
-	r0, _, _ := RawSyscall(SYS_GETGID, 0, 0, 0)
-	gid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgid(pid int) (pgid int, err error) {
-	r0, _, e1 := RawSyscall(SYS_GETPGID, uintptr(pid), 0, 0)
-	pgid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgrp() (pgrp int) {
-	r0, _, _ := RawSyscall(SYS_GETPGRP, 0, 0, 0)
-	pgrp = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpid() (pid int) {
-	r0, _, _ := RawSyscall(SYS_GETPID, 0, 0, 0)
-	pid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getppid() (ppid int) {
-	r0, _, _ := RawSyscall(SYS_GETPPID, 0, 0, 0)
-	ppid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpriority(which int, who int) (prio int, err error) {
-	r0, _, e1 := Syscall(SYS_GETPRIORITY, uintptr(which), uintptr(who), 0)
-	prio = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrlimit(which int, lim *Rlimit) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETRLIMIT, uintptr(which), uintptr(unsafe.Pointer(lim)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrusage(who int, rusage *Rusage) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETRUSAGE, uintptr(who), uintptr(unsafe.Pointer(rusage)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsid(pid int) (sid int, err error) {
-	r0, _, e1 := RawSyscall(SYS_GETSID, uintptr(pid), 0, 0)
-	sid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Gettimeofday(tv *Timeval) (err error) {
-	_, _, e1 := RawSyscall(SYS_GETTIMEOFDAY, uintptr(unsafe.Pointer(tv)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getuid() (uid int) {
-	r0, _, _ := RawSyscall(SYS_GETUID, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Issetugid() (tainted bool) {
-	r0, _, _ := Syscall(SYS_ISSETUGID, 0, 0, 0)
-	tainted = bool(r0 != 0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kill(pid int, signum syscall.Signal) (err error) {
-	_, _, e1 := Syscall(SYS_KILL, uintptr(pid), uintptr(signum), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kqueue() (fd int, err error) {
-	r0, _, e1 := Syscall(SYS_KQUEUE, 0, 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lchown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_LCHOWN, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Link(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_LINK, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Linkat(pathfd int, path string, linkfd int, link string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_LINKAT, uintptr(pathfd), uintptr(unsafe.Pointer(_p0)), uintptr(linkfd), uintptr(unsafe.Pointer(_p1)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Listen(s int, backlog int) (err error) {
-	_, _, e1 := Syscall(SYS_LISTEN, uintptr(s), uintptr(backlog), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdir(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_MKDIR, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdirat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_MKDIRAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifo(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_MKFIFO, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknodat(fd int, path string, mode uint32, dev uint64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_MKNODAT, uintptr(fd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0, uintptr(dev), uintptr(dev>>32))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
-	_, _, e1 := Syscall(SYS_NANOSLEEP, uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(leftover)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Open(path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall(SYS_OPEN, uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Openat(fdat int, path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall6(SYS_OPENAT, uintptr(fdat), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm), 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pathconf(path string, name int) (val int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := Syscall(SYS_PATHCONF, uintptr(unsafe.Pointer(_p0)), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pread(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_PREAD, uintptr(fd), uintptr(_p0), uintptr(len(p)), 0, uintptr(offset), uintptr(offset>>32))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_PWRITE, uintptr(fd), uintptr(_p0), uintptr(len(p)), 0, uintptr(offset), uintptr(offset>>32))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func read(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS_READ, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlink(path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS_READLINK, uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlinkat(dirfd int, path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall6(SYS_READLINKAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rename(from string, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_RENAME, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Renameat(fromfd int, from string, tofd int, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_RENAMEAT, uintptr(fromfd), uintptr(unsafe.Pointer(_p0)), uintptr(tofd), uintptr(unsafe.Pointer(_p1)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Revoke(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_REVOKE, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rmdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_RMDIR, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
-	r0, r1, e1 := Syscall6(SYS_LSEEK, uintptr(fd), 0, uintptr(offset), uintptr(offset>>32), uintptr(whence), 0)
-	newoffset = int64(int64(r1)<<32 | int64(r0))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
-	r0, _, e1 := Syscall6(SYS_SELECT, uintptr(nfd), uintptr(unsafe.Pointer(r)), uintptr(unsafe.Pointer(w)), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(timeout)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setegid(egid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETEGID, uintptr(egid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seteuid(euid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETEUID, uintptr(euid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setgid(gid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETGID, uintptr(gid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setlogin(name string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(name)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_SETLOGIN, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpgid(pid int, pgid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETPGID, uintptr(pid), uintptr(pgid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpriority(which int, who int, prio int) (err error) {
-	_, _, e1 := Syscall(SYS_SETPRIORITY, uintptr(which), uintptr(who), uintptr(prio))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setregid(rgid int, egid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETREGID, uintptr(rgid), uintptr(egid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setreuid(ruid int, euid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETREUID, uintptr(ruid), uintptr(euid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresgid(rgid int, egid int, sgid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETRESGID, uintptr(rgid), uintptr(egid), uintptr(sgid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresuid(ruid int, euid int, suid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETRESUID, uintptr(ruid), uintptr(euid), uintptr(suid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setsid() (pid int, err error) {
-	r0, _, e1 := RawSyscall(SYS_SETSID, 0, 0, 0)
-	pid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Settimeofday(tp *Timeval) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETTIMEOFDAY, uintptr(unsafe.Pointer(tp)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setuid(uid int) (err error) {
-	_, _, e1 := RawSyscall(SYS_SETUID, uintptr(uid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statfs(path string, stat *Statfs_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_STATFS, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlink(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_SYMLINK, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlinkat(oldpath string, newdirfd int, newpath string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(oldpath)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(newpath)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_SYMLINKAT, uintptr(unsafe.Pointer(_p0)), uintptr(newdirfd), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sync() (err error) {
-	_, _, e1 := Syscall(SYS_SYNC, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Truncate(path string, length int64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall6(SYS_TRUNCATE, uintptr(unsafe.Pointer(_p0)), 0, uintptr(length), uintptr(length>>32), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Umask(newmask int) (oldmask int) {
-	r0, _, _ := Syscall(SYS_UMASK, uintptr(newmask), 0, 0)
-	oldmask = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Undelete(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNDELETE, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlink(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNLINK, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlinkat(dirfd int, path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNLINKAT, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unmount(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := Syscall(SYS_UNMOUNT, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func write(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := Syscall(SYS_WRITE, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func mmap(addr uintptr, length uintptr, prot int, flag int, fd int, pos int64) (ret uintptr, err error) {
-	r0, _, e1 := Syscall9(SYS_MMAP, uintptr(addr), uintptr(length), uintptr(prot), uintptr(flag), uintptr(fd), 0, uintptr(pos), uintptr(pos>>32), 0)
 	ret = uintptr(r0)
 	if e1 != 0 {
 		err = errnoErr(e1)

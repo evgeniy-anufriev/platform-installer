@@ -1,3 +1,2976 @@
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/compact/language.go","mode":420,"size":7447,"sha256":"1d49845ec8c93b000391718e3127c0979c054186570805fce27f7fe167ad2c5d","index":0,"count":1,"encoding":"utf-8","payloadBytes":7447}
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:generate go run gen.go gen_index.go -output tables.go
+//go:generate go run gen_parents.go
+
+package compact
+
+// TODO: Remove above NOTE after:
+// - verifying that tables are dropped correctly (most notably matcher tables).
+
+import (
+	"strings"
+
+	"golang.org/x/text/internal/language"
+)
+
+// Tag represents a BCP 47 language tag. It is used to specify an instance of a
+// specific language or locale. All language tag values are guaranteed to be
+// well-formed.
+type Tag struct {
+	// NOTE: exported tags will become part of the public API.
+	language ID
+	locale   ID
+	full     fullTag // always a language.Tag for now.
+}
+
+const _und = 0
+
+type fullTag interface {
+	IsRoot() bool
+	Parent() language.Tag
+}
+
+// Make a compact Tag from a fully specified internal language Tag.
+func Make(t language.Tag) (tag Tag) {
+	if region := t.TypeForKey("rg"); len(region) == 6 && region[2:] == "zzzz" {
+		if r, err := language.ParseRegion(region[:2]); err == nil {
+			tFull := t
+			t, _ = t.SetTypeForKey("rg", "")
+			// TODO: should we not consider "va" for the language tag?
+			var exact1, exact2 bool
+			tag.language, exact1 = FromTag(t)
+			t.RegionID = r
+			tag.locale, exact2 = FromTag(t)
+			if !exact1 || !exact2 {
+				tag.full = tFull
+			}
+			return tag
+		}
+	}
+	lang, ok := FromTag(t)
+	tag.language = lang
+	tag.locale = lang
+	if !ok {
+		tag.full = t
+	}
+	return tag
+}
+
+// Tag returns an internal language Tag version of this tag.
+func (t Tag) Tag() language.Tag {
+	if t.full != nil {
+		return t.full.(language.Tag)
+	}
+	tag := t.language.Tag()
+	if t.language != t.locale {
+		loc := t.locale.Tag()
+		tag, _ = tag.SetTypeForKey("rg", strings.ToLower(loc.RegionID.String())+"zzzz")
+	}
+	return tag
+}
+
+// IsCompact reports whether this tag is fully defined in terms of ID.
+func (t *Tag) IsCompact() bool {
+	return t.full == nil
+}
+
+// MayHaveVariants reports whether a tag may have variants. If it returns false
+// it is guaranteed the tag does not have variants.
+func (t Tag) MayHaveVariants() bool {
+	return t.full != nil || int(t.language) >= len(coreTags)
+}
+
+// MayHaveExtensions reports whether a tag may have extensions. If it returns
+// false it is guaranteed the tag does not have them.
+func (t Tag) MayHaveExtensions() bool {
+	return t.full != nil ||
+		int(t.language) >= len(coreTags) ||
+		t.language != t.locale
+}
+
+// IsRoot returns true if t is equal to language "und".
+func (t Tag) IsRoot() bool {
+	if t.full != nil {
+		return t.full.IsRoot()
+	}
+	return t.language == _und
+}
+
+// Parent returns the CLDR parent of t. In CLDR, missing fields in data for a
+// specific language are substituted with fields from the parent language.
+// The parent for a language may change for newer versions of CLDR.
+func (t Tag) Parent() Tag {
+	if t.full != nil {
+		return Make(t.full.Parent())
+	}
+	if t.language != t.locale {
+		// Simulate stripping -u-rg-xxxxxx
+		return Tag{language: t.language, locale: t.language}
+	}
+	// TODO: use parent lookup table once cycle from internal package is
+	// removed. Probably by internalizing the table and declaring this fast
+	// enough.
+	// lang := compactID(internal.Parent(uint16(t.language)))
+	lang, _ := FromTag(t.language.Tag().Parent())
+	return Tag{language: lang, locale: lang}
+}
+
+// nextToken returns token t and the rest of the string.
+func nextToken(s string) (t, tail string) {
+	p := strings.Index(s[1:], "-")
+	if p == -1 {
+		return s[1:], ""
+	}
+	p++
+	return s[1:p], s[p:]
+}
+
+// LanguageID returns an index, where 0 <= index < NumCompactTags, for tags
+// for which data exists in the text repository.The index will change over time
+// and should not be stored in persistent storage. If t does not match a compact
+// index, exact will be false and the compact index will be returned for the
+// first match after repeatedly taking the Parent of t.
+func LanguageID(t Tag) (id ID, exact bool) {
+	return t.language, t.full == nil
+}
+
+// RegionalID returns the ID for the regional variant of this tag. This index is
+// used to indicate region-specific overrides, such as default currency, default
+// calendar and week data, default time cycle, and default measurement system
+// and unit preferences.
+//
+// For instance, the tag en-GB-u-rg-uszzzz specifies British English with US
+// settings for currency, number formatting, etc. The CompactIndex for this tag
+// will be that for en-GB, while the RegionalID will be the one corresponding to
+// en-US.
+func RegionalID(t Tag) (id ID, exact bool) {
+	return t.locale, t.full == nil
+}
+
+// LanguageTag returns t stripped of regional variant indicators.
+//
+// At the moment this means it is stripped of a regional and variant subtag "rg"
+// and "va" in the "u" extension.
+func (t Tag) LanguageTag() Tag {
+	if t.full == nil {
+		return Tag{language: t.language, locale: t.language}
+	}
+	tt := t.Tag()
+	tt.SetTypeForKey("rg", "")
+	tt.SetTypeForKey("va", "")
+	return Make(tt)
+}
+
+// RegionalTag returns the regional variant of the tag.
+//
+// At the moment this means that the region is set from the regional subtag
+// "rg" in the "u" extension.
+func (t Tag) RegionalTag() Tag {
+	rt := Tag{language: t.locale, locale: t.locale}
+	if t.full == nil {
+		return rt
+	}
+	b := language.Builder{}
+	tag := t.Tag()
+	// tag, _ = tag.SetTypeForKey("rg", "")
+	b.SetTag(t.locale.Tag())
+	if v := tag.Variants(); v != "" {
+		for _, v := range strings.Split(v, "-") {
+			b.AddVariant(v)
+		}
+	}
+	for _, e := range tag.Extensions() {
+		b.AddExt(e)
+	}
+	return t
+}
+
+// FromTag reports closest matching ID for an internal language Tag.
+func FromTag(t language.Tag) (id ID, exact bool) {
+	// TODO: perhaps give more frequent tags a lower index.
+	// TODO: we could make the indexes stable. This will excluded some
+	//       possibilities for optimization, so don't do this quite yet.
+	exact = true
+
+	b, s, r := t.Raw()
+	if t.HasString() {
+		if t.IsPrivateUse() {
+			// We have no entries for user-defined tags.
+			return 0, false
+		}
+		hasExtra := false
+		if t.HasVariants() {
+			if t.HasExtensions() {
+				build := language.Builder{}
+				build.SetTag(language.Tag{LangID: b, ScriptID: s, RegionID: r})
+				build.AddVariant(t.Variants())
+				exact = false
+				t = build.Make()
+			}
+			hasExtra = true
+		} else if _, ok := t.Extension('u'); ok {
+			// TODO: va may mean something else. Consider not considering it.
+			// Strip all but the 'va' entry.
+			old := t
+			variant := t.TypeForKey("va")
+			t = language.Tag{LangID: b, ScriptID: s, RegionID: r}
+			if variant != "" {
+				t, _ = t.SetTypeForKey("va", variant)
+				hasExtra = true
+			}
+			exact = old == t
+		} else {
+			exact = false
+		}
+		if hasExtra {
+			// We have some variants.
+			for i, s := range specialTags {
+				if s == t {
+					return ID(i + len(coreTags)), exact
+				}
+			}
+			exact = false
+		}
+	}
+	if x, ok := getCoreIndex(t); ok {
+		return x, exact
+	}
+	exact = false
+	if r != 0 && s == 0 {
+		// Deal with cases where an extra script is inserted for the region.
+		t, _ := t.Maximize()
+		if x, ok := getCoreIndex(t); ok {
+			return x, exact
+		}
+	}
+	for t = t.Parent(); t != root; t = t.Parent() {
+		// No variants specified: just compare core components.
+		// The key has the form lllssrrr, where l, s, and r are nibbles for
+		// respectively the langID, scriptID, and regionID.
+		if x, ok := getCoreIndex(t); ok {
+			return x, exact
+		}
+	}
+	return 0, exact
+}
+
+var root = language.Tag{}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/compact/parents.go","mode":420,"size":6853,"sha256":"57dc7b46cb5b6df81ed5764b338e1b463c183e3561427307c9d25fa876d9bdc7","index":0,"count":1,"encoding":"utf-8","payloadBytes":6853}
+// Code generated by running "go generate" in golang.org/x/text. DO NOT EDIT.
+
+package compact
+
+// parents maps a compact index of a tag to the compact index of the parent of
+// this tag.
+var parents = []ID{ // 775 elements
+	// Entry 0 - 3F
+	0x0000, 0x0000, 0x0001, 0x0001, 0x0000, 0x0004, 0x0000, 0x0006,
+	0x0000, 0x0008, 0x0000, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a,
+	0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a,
+	0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a,
+	0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x000a, 0x0000,
+	0x0000, 0x0028, 0x0000, 0x002a, 0x0000, 0x002c, 0x0000, 0x0000,
+	0x002f, 0x002e, 0x002e, 0x0000, 0x0033, 0x0000, 0x0035, 0x0000,
+	0x0037, 0x0000, 0x0039, 0x0000, 0x003b, 0x0000, 0x0000, 0x003e,
+	// Entry 40 - 7F
+	0x0000, 0x0040, 0x0040, 0x0000, 0x0043, 0x0043, 0x0000, 0x0046,
+	0x0000, 0x0048, 0x0000, 0x0000, 0x004b, 0x004a, 0x004a, 0x0000,
+	0x004f, 0x004f, 0x004f, 0x004f, 0x0000, 0x0054, 0x0054, 0x0000,
+	0x0057, 0x0000, 0x0059, 0x0000, 0x005b, 0x0000, 0x005d, 0x005d,
+	0x0000, 0x0060, 0x0000, 0x0062, 0x0000, 0x0064, 0x0000, 0x0066,
+	0x0066, 0x0000, 0x0069, 0x0000, 0x006b, 0x006b, 0x006b, 0x006b,
+	0x006b, 0x006b, 0x006b, 0x0000, 0x0073, 0x0000, 0x0075, 0x0000,
+	0x0077, 0x0000, 0x0000, 0x007a, 0x0000, 0x007c, 0x0000, 0x007e,
+	// Entry 80 - BF
+	0x0000, 0x0080, 0x0080, 0x0000, 0x0083, 0x0083, 0x0000, 0x0086,
+	0x0087, 0x0087, 0x0087, 0x0086, 0x0088, 0x0087, 0x0087, 0x0087,
+	0x0086, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0088,
+	0x0087, 0x0087, 0x0087, 0x0087, 0x0088, 0x0087, 0x0088, 0x0087,
+	0x0087, 0x0088, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087,
+	0x0087, 0x0087, 0x0087, 0x0086, 0x0087, 0x0087, 0x0087, 0x0087,
+	0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087,
+	0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0086, 0x0087, 0x0086,
+	// Entry C0 - FF
+	0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087,
+	0x0088, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087,
+	0x0086, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0088, 0x0087,
+	0x0087, 0x0088, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087,
+	0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0086, 0x0086, 0x0087,
+	0x0087, 0x0086, 0x0087, 0x0087, 0x0087, 0x0087, 0x0087, 0x0000,
+	0x00ef, 0x0000, 0x00f1, 0x00f2, 0x00f2, 0x00f2, 0x00f2, 0x00f2,
+	0x00f2, 0x00f2, 0x00f2, 0x00f2, 0x00f1, 0x00f2, 0x00f1, 0x00f1,
+	// Entry 100 - 13F
+	0x00f2, 0x00f2, 0x00f1, 0x00f2, 0x00f2, 0x00f2, 0x00f2, 0x00f1,
+	0x00f2, 0x00f2, 0x00f2, 0x00f2, 0x00f2, 0x00f2, 0x0000, 0x010e,
+	0x0000, 0x0110, 0x0000, 0x0112, 0x0000, 0x0114, 0x0114, 0x0000,
+	0x0117, 0x0117, 0x0117, 0x0117, 0x0000, 0x011c, 0x0000, 0x011e,
+	0x0000, 0x0120, 0x0120, 0x0000, 0x0123, 0x0123, 0x0123, 0x0123,
+	0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123,
+	0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123,
+	0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123,
+	// Entry 140 - 17F
+	0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123,
+	0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123, 0x0123,
+	0x0123, 0x0123, 0x0000, 0x0152, 0x0000, 0x0154, 0x0000, 0x0156,
+	0x0000, 0x0158, 0x0000, 0x015a, 0x0000, 0x015c, 0x015c, 0x015c,
+	0x0000, 0x0160, 0x0000, 0x0000, 0x0163, 0x0000, 0x0165, 0x0000,
+	0x0167, 0x0167, 0x0167, 0x0000, 0x016b, 0x0000, 0x016d, 0x0000,
+	0x016f, 0x0000, 0x0171, 0x0171, 0x0000, 0x0174, 0x0000, 0x0176,
+	0x0000, 0x0178, 0x0000, 0x017a, 0x0000, 0x017c, 0x0000, 0x017e,
+	// Entry 180 - 1BF
+	0x0000, 0x0000, 0x0000, 0x0182, 0x0000, 0x0184, 0x0184, 0x0184,
+	0x0184, 0x0000, 0x0000, 0x0000, 0x018b, 0x0000, 0x0000, 0x018e,
+	0x0000, 0x0000, 0x0191, 0x0000, 0x0000, 0x0000, 0x0195, 0x0000,
+	0x0197, 0x0000, 0x0000, 0x019a, 0x0000, 0x0000, 0x019d, 0x0000,
+	0x019f, 0x0000, 0x01a1, 0x0000, 0x01a3, 0x0000, 0x01a5, 0x0000,
+	0x01a7, 0x0000, 0x01a9, 0x0000, 0x01ab, 0x0000, 0x01ad, 0x0000,
+	0x01af, 0x0000, 0x01b1, 0x01b1, 0x0000, 0x01b4, 0x0000, 0x01b6,
+	0x0000, 0x01b8, 0x0000, 0x01ba, 0x0000, 0x01bc, 0x0000, 0x0000,
+	// Entry 1C0 - 1FF
+	0x01bf, 0x0000, 0x01c1, 0x0000, 0x01c3, 0x0000, 0x01c5, 0x0000,
+	0x01c7, 0x0000, 0x01c9, 0x0000, 0x01cb, 0x01cb, 0x01cb, 0x01cb,
+	0x0000, 0x01d0, 0x0000, 0x01d2, 0x01d2, 0x0000, 0x01d5, 0x0000,
+	0x01d7, 0x0000, 0x01d9, 0x0000, 0x01db, 0x0000, 0x01dd, 0x0000,
+	0x01df, 0x01df, 0x0000, 0x01e2, 0x0000, 0x01e4, 0x0000, 0x01e6,
+	0x0000, 0x01e8, 0x0000, 0x01ea, 0x0000, 0x01ec, 0x0000, 0x01ee,
+	0x0000, 0x01f0, 0x0000, 0x0000, 0x01f3, 0x0000, 0x01f5, 0x01f5,
+	0x01f5, 0x0000, 0x01f9, 0x0000, 0x01fb, 0x0000, 0x01fd, 0x0000,
+	// Entry 200 - 23F
+	0x01ff, 0x0000, 0x0000, 0x0202, 0x0000, 0x0204, 0x0204, 0x0000,
+	0x0207, 0x0000, 0x0209, 0x0209, 0x0000, 0x020c, 0x020c, 0x0000,
+	0x020f, 0x020f, 0x020f, 0x020f, 0x020f, 0x020f, 0x020f, 0x0000,
+	0x0217, 0x0000, 0x0219, 0x0000, 0x021b, 0x0000, 0x0000, 0x0000,
+	0x0000, 0x0000, 0x0221, 0x0000, 0x0000, 0x0224, 0x0000, 0x0226,
+	0x0226, 0x0000, 0x0229, 0x0000, 0x022b, 0x022b, 0x0000, 0x0000,
+	0x022f, 0x022e, 0x022e, 0x0000, 0x0000, 0x0234, 0x0000, 0x0236,
+	0x0000, 0x0238, 0x0000, 0x0244, 0x023a, 0x0244, 0x0244, 0x0244,
+	// Entry 240 - 27F
+	0x0244, 0x0244, 0x0244, 0x0244, 0x023a, 0x0244, 0x0244, 0x0000,
+	0x0247, 0x0247, 0x0247, 0x0000, 0x024b, 0x0000, 0x024d, 0x0000,
+	0x024f, 0x024f, 0x0000, 0x0252, 0x0000, 0x0254, 0x0254, 0x0254,
+	0x0254, 0x0254, 0x0254, 0x0000, 0x025b, 0x0000, 0x025d, 0x0000,
+	0x025f, 0x0000, 0x0261, 0x0000, 0x0263, 0x0000, 0x0265, 0x0000,
+	0x0000, 0x0268, 0x0268, 0x0268, 0x0000, 0x026c, 0x0000, 0x026e,
+	0x0000, 0x0270, 0x0000, 0x0000, 0x0000, 0x0274, 0x0273, 0x0273,
+	0x0000, 0x0278, 0x0000, 0x027a, 0x0000, 0x027c, 0x0000, 0x0000,
+	// Entry 280 - 2BF
+	0x0000, 0x0000, 0x0281, 0x0000, 0x0000, 0x0284, 0x0000, 0x0286,
+	0x0286, 0x0286, 0x0286, 0x0000, 0x028b, 0x028b, 0x028b, 0x0000,
+	0x028f, 0x028f, 0x028f, 0x028f, 0x028f, 0x0000, 0x0295, 0x0295,
+	0x0295, 0x0295, 0x0000, 0x0000, 0x0000, 0x0000, 0x029d, 0x029d,
+	0x029d, 0x0000, 0x02a1, 0x02a1, 0x02a1, 0x02a1, 0x0000, 0x0000,
+	0x02a7, 0x02a7, 0x02a7, 0x02a7, 0x0000, 0x02ac, 0x0000, 0x02ae,
+	0x02ae, 0x0000, 0x02b1, 0x0000, 0x02b3, 0x0000, 0x02b5, 0x02b5,
+	0x0000, 0x0000, 0x02b9, 0x0000, 0x0000, 0x0000, 0x02bd, 0x0000,
+	// Entry 2C0 - 2FF
+	0x02bf, 0x02bf, 0x0000, 0x0000, 0x02c3, 0x0000, 0x02c5, 0x0000,
+	0x02c7, 0x0000, 0x02c9, 0x0000, 0x02cb, 0x0000, 0x02cd, 0x02cd,
+	0x0000, 0x0000, 0x02d1, 0x0000, 0x02d3, 0x02d0, 0x02d0, 0x0000,
+	0x0000, 0x02d8, 0x02d7, 0x02d7, 0x0000, 0x0000, 0x02dd, 0x0000,
+	0x02df, 0x0000, 0x02e1, 0x0000, 0x0000, 0x02e4, 0x0000, 0x02e6,
+	0x0000, 0x0000, 0x02e9, 0x0000, 0x02eb, 0x0000, 0x02ed, 0x0000,
+	0x02ef, 0x02ef, 0x0000, 0x0000, 0x02f3, 0x02f2, 0x02f2, 0x0000,
+	0x02f7, 0x0000, 0x02f9, 0x02f9, 0x02f9, 0x02f9, 0x02f9, 0x0000,
+	// Entry 300 - 33F
+	0x02ff, 0x0300, 0x02ff, 0x0000, 0x0303, 0x0051, 0x00e6,
+} // Size: 1574 bytes
+
+// Total table size 1574 bytes (1KiB); checksum: 895AAF0B
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/compact/tables.go","mode":420,"size":32128,"sha256":"99415fb6642ebd291f825497d32e70ae32da8569815d8f4ef587664c6c5ce7d5","index":0,"count":1,"encoding":"utf-8","payloadBytes":32128}
+// Code generated by running "go generate" in golang.org/x/text. DO NOT EDIT.
+
+package compact
+
+import "golang.org/x/text/internal/language"
+
+// CLDRVersion is the CLDR version from which the tables in this package are derived.
+const CLDRVersion = "32"
+
+// NumCompactTags is the number of common tags. The maximum tag is
+// NumCompactTags-1.
+const NumCompactTags = 775
+const (
+	undIndex          ID = 0
+	afIndex           ID = 1
+	afNAIndex         ID = 2
+	afZAIndex         ID = 3
+	agqIndex          ID = 4
+	agqCMIndex        ID = 5
+	akIndex           ID = 6
+	akGHIndex         ID = 7
+	amIndex           ID = 8
+	amETIndex         ID = 9
+	arIndex           ID = 10
+	ar001Index        ID = 11
+	arAEIndex         ID = 12
+	arBHIndex         ID = 13
+	arDJIndex         ID = 14
+	arDZIndex         ID = 15
+	arEGIndex         ID = 16
+	arEHIndex         ID = 17
+	arERIndex         ID = 18
+	arILIndex         ID = 19
+	arIQIndex         ID = 20
+	arJOIndex         ID = 21
+	arKMIndex         ID = 22
+	arKWIndex         ID = 23
+	arLBIndex         ID = 24
+	arLYIndex         ID = 25
+	arMAIndex         ID = 26
+	arMRIndex         ID = 27
+	arOMIndex         ID = 28
+	arPSIndex         ID = 29
+	arQAIndex         ID = 30
+	arSAIndex         ID = 31
+	arSDIndex         ID = 32
+	arSOIndex         ID = 33
+	arSSIndex         ID = 34
+	arSYIndex         ID = 35
+	arTDIndex         ID = 36
+	arTNIndex         ID = 37
+	arYEIndex         ID = 38
+	arsIndex          ID = 39
+	asIndex           ID = 40
+	asINIndex         ID = 41
+	asaIndex          ID = 42
+	asaTZIndex        ID = 43
+	astIndex          ID = 44
+	astESIndex        ID = 45
+	azIndex           ID = 46
+	azCyrlIndex       ID = 47
+	azCyrlAZIndex     ID = 48
+	azLatnIndex       ID = 49
+	azLatnAZIndex     ID = 50
+	basIndex          ID = 51
+	basCMIndex        ID = 52
+	beIndex           ID = 53
+	beBYIndex         ID = 54
+	bemIndex          ID = 55
+	bemZMIndex        ID = 56
+	bezIndex          ID = 57
+	bezTZIndex        ID = 58
+	bgIndex           ID = 59
+	bgBGIndex         ID = 60
+	bhIndex           ID = 61
+	bmIndex           ID = 62
+	bmMLIndex         ID = 63
+	bnIndex           ID = 64
+	bnBDIndex         ID = 65
+	bnINIndex         ID = 66
+	boIndex           ID = 67
+	boCNIndex         ID = 68
+	boINIndex         ID = 69
+	brIndex           ID = 70
+	brFRIndex         ID = 71
+	brxIndex          ID = 72
+	brxINIndex        ID = 73
+	bsIndex           ID = 74
+	bsCyrlIndex       ID = 75
+	bsCyrlBAIndex     ID = 76
+	bsLatnIndex       ID = 77
+	bsLatnBAIndex     ID = 78
+	caIndex           ID = 79
+	caADIndex         ID = 80
+	caESIndex         ID = 81
+	caFRIndex         ID = 82
+	caITIndex         ID = 83
+	ccpIndex          ID = 84
+	ccpBDIndex        ID = 85
+	ccpINIndex        ID = 86
+	ceIndex           ID = 87
+	ceRUIndex         ID = 88
+	cggIndex          ID = 89
+	cggUGIndex        ID = 90
+	chrIndex          ID = 91
+	chrUSIndex        ID = 92
+	ckbIndex          ID = 93
+	ckbIQIndex        ID = 94
+	ckbIRIndex        ID = 95
+	csIndex           ID = 96
+	csCZIndex         ID = 97
+	cuIndex           ID = 98
+	cuRUIndex         ID = 99
+	cyIndex           ID = 100
+	cyGBIndex         ID = 101
+	daIndex           ID = 102
+	daDKIndex         ID = 103
+	daGLIndex         ID = 104
+	davIndex          ID = 105
+	davKEIndex        ID = 106
+	deIndex           ID = 107
+	deATIndex         ID = 108
+	deBEIndex         ID = 109
+	deCHIndex         ID = 110
+	deDEIndex         ID = 111
+	deITIndex         ID = 112
+	deLIIndex         ID = 113
+	deLUIndex         ID = 114
+	djeIndex          ID = 115
+	djeNEIndex        ID = 116
+	dsbIndex          ID = 117
+	dsbDEIndex        ID = 118
+	duaIndex          ID = 119
+	duaCMIndex        ID = 120
+	dvIndex           ID = 121
+	dyoIndex          ID = 122
+	dyoSNIndex        ID = 123
+	dzIndex           ID = 124
+	dzBTIndex         ID = 125
+	ebuIndex          ID = 126
+	ebuKEIndex        ID = 127
+	eeIndex           ID = 128
+	eeGHIndex         ID = 129
+	eeTGIndex         ID = 130
+	elIndex           ID = 131
+	elCYIndex         ID = 132
+	elGRIndex         ID = 133
+	enIndex           ID = 134
+	en001Index        ID = 135
+	en150Index        ID = 136
+	enAGIndex         ID = 137
+	enAIIndex         ID = 138
+	enASIndex         ID = 139
+	enATIndex         ID = 140
+	enAUIndex         ID = 141
+	enBBIndex         ID = 142
+	enBEIndex         ID = 143
+	enBIIndex         ID = 144
+	enBMIndex         ID = 145
+	enBSIndex         ID = 146
+	enBWIndex         ID = 147
+	enBZIndex         ID = 148
+	enCAIndex         ID = 149
+	enCCIndex         ID = 150
+	enCHIndex         ID = 151
+	enCKIndex         ID = 152
+	enCMIndex         ID = 153
+	enCXIndex         ID = 154
+	enCYIndex         ID = 155
+	enDEIndex         ID = 156
+	enDGIndex         ID = 157
+	enDKIndex         ID = 158
+	enDMIndex         ID = 159
+	enERIndex         ID = 160
+	enFIIndex         ID = 161
+	enFJIndex         ID = 162
+	enFKIndex         ID = 163
+	enFMIndex         ID = 164
+	enGBIndex         ID = 165
+	enGDIndex         ID = 166
+	enGGIndex         ID = 167
+	enGHIndex         ID = 168
+	enGIIndex         ID = 169
+	enGMIndex         ID = 170
+	enGUIndex         ID = 171
+	enGYIndex         ID = 172
+	enHKIndex         ID = 173
+	enIEIndex         ID = 174
+	enILIndex         ID = 175
+	enIMIndex         ID = 176
+	enINIndex         ID = 177
+	enIOIndex         ID = 178
+	enJEIndex         ID = 179
+	enJMIndex         ID = 180
+	enKEIndex         ID = 181
+	enKIIndex         ID = 182
+	enKNIndex         ID = 183
+	enKYIndex         ID = 184
+	enLCIndex         ID = 185
+	enLRIndex         ID = 186
+	enLSIndex         ID = 187
+	enMGIndex         ID = 188
+	enMHIndex         ID = 189
+	enMOIndex         ID = 190
+	enMPIndex         ID = 191
+	enMSIndex         ID = 192
+	enMTIndex         ID = 193
+	enMUIndex         ID = 194
+	enMWIndex         ID = 195
+	enMYIndex         ID = 196
+	enNAIndex         ID = 197
+	enNFIndex         ID = 198
+	enNGIndex         ID = 199
+	enNLIndex         ID = 200
+	enNRIndex         ID = 201
+	enNUIndex         ID = 202
+	enNZIndex         ID = 203
+	enPGIndex         ID = 204
+	enPHIndex         ID = 205
+	enPKIndex         ID = 206
+	enPNIndex         ID = 207
+	enPRIndex         ID = 208
+	enPWIndex         ID = 209
+	enRWIndex         ID = 210
+	enSBIndex         ID = 211
+	enSCIndex         ID = 212
+	enSDIndex         ID = 213
+	enSEIndex         ID = 214
+	enSGIndex         ID = 215
+	enSHIndex         ID = 216
+	enSIIndex         ID = 217
+	enSLIndex         ID = 218
+	enSSIndex         ID = 219
+	enSXIndex         ID = 220
+	enSZIndex         ID = 221
+	enTCIndex         ID = 222
+	enTKIndex         ID = 223
+	enTOIndex         ID = 224
+	enTTIndex         ID = 225
+	enTVIndex         ID = 226
+	enTZIndex         ID = 227
+	enUGIndex         ID = 228
+	enUMIndex         ID = 229
+	enUSIndex         ID = 230
+	enVCIndex         ID = 231
+	enVGIndex         ID = 232
+	enVIIndex         ID = 233
+	enVUIndex         ID = 234
+	enWSIndex         ID = 235
+	enZAIndex         ID = 236
+	enZMIndex         ID = 237
+	enZWIndex         ID = 238
+	eoIndex           ID = 239
+	eo001Index        ID = 240
+	esIndex           ID = 241
+	es419Index        ID = 242
+	esARIndex         ID = 243
+	esBOIndex         ID = 244
+	esBRIndex         ID = 245
+	esBZIndex         ID = 246
+	esCLIndex         ID = 247
+	esCOIndex         ID = 248
+	esCRIndex         ID = 249
+	esCUIndex         ID = 250
+	esDOIndex         ID = 251
+	esEAIndex         ID = 252
+	esECIndex         ID = 253
+	esESIndex         ID = 254
+	esGQIndex         ID = 255
+	esGTIndex         ID = 256
+	esHNIndex         ID = 257
+	esICIndex         ID = 258
+	esMXIndex         ID = 259
+	esNIIndex         ID = 260
+	esPAIndex         ID = 261
+	esPEIndex         ID = 262
+	esPHIndex         ID = 263
+	esPRIndex         ID = 264
+	esPYIndex         ID = 265
+	esSVIndex         ID = 266
+	esUSIndex         ID = 267
+	esUYIndex         ID = 268
+	esVEIndex         ID = 269
+	etIndex           ID = 270
+	etEEIndex         ID = 271
+	euIndex           ID = 272
+	euESIndex         ID = 273
+	ewoIndex          ID = 274
+	ewoCMIndex        ID = 275
+	faIndex           ID = 276
+	faAFIndex         ID = 277
+	faIRIndex         ID = 278
+	ffIndex           ID = 279
+	ffCMIndex         ID = 280
+	ffGNIndex         ID = 281
+	ffMRIndex         ID = 282
+	ffSNIndex         ID = 283
+	fiIndex           ID = 284
+	fiFIIndex         ID = 285
+	filIndex          ID = 286
+	filPHIndex        ID = 287
+	foIndex           ID = 288
+	foDKIndex         ID = 289
+	foFOIndex         ID = 290
+	frIndex           ID = 291
+	frBEIndex         ID = 292
+	frBFIndex         ID = 293
+	frBIIndex         ID = 294
+	frBJIndex         ID = 295
+	frBLIndex         ID = 296
+	frCAIndex         ID = 297
+	frCDIndex         ID = 298
+	frCFIndex         ID = 299
+	frCGIndex         ID = 300
+	frCHIndex         ID = 301
+	frCIIndex         ID = 302
+	frCMIndex         ID = 303
+	frDJIndex         ID = 304
+	frDZIndex         ID = 305
+	frFRIndex         ID = 306
+	frGAIndex         ID = 307
+	frGFIndex         ID = 308
+	frGNIndex         ID = 309
+	frGPIndex         ID = 310
+	frGQIndex         ID = 311
+	frHTIndex         ID = 312
+	frKMIndex         ID = 313
+	frLUIndex         ID = 314
+	frMAIndex         ID = 315
+	frMCIndex         ID = 316
+	frMFIndex         ID = 317
+	frMGIndex         ID = 318
+	frMLIndex         ID = 319
+	frMQIndex         ID = 320
+	frMRIndex         ID = 321
+	frMUIndex         ID = 322
+	frNCIndex         ID = 323
+	frNEIndex         ID = 324
+	frPFIndex         ID = 325
+	frPMIndex         ID = 326
+	frREIndex         ID = 327
+	frRWIndex         ID = 328
+	frSCIndex         ID = 329
+	frSNIndex         ID = 330
+	frSYIndex         ID = 331
+	frTDIndex         ID = 332
+	frTGIndex         ID = 333
+	frTNIndex         ID = 334
+	frVUIndex         ID = 335
+	frWFIndex         ID = 336
+	frYTIndex         ID = 337
+	furIndex          ID = 338
+	furITIndex        ID = 339
+	fyIndex           ID = 340
+	fyNLIndex         ID = 341
+	gaIndex           ID = 342
+	gaIEIndex         ID = 343
+	gdIndex           ID = 344
+	gdGBIndex         ID = 345
+	glIndex           ID = 346
+	glESIndex         ID = 347
+	gswIndex          ID = 348
+	gswCHIndex        ID = 349
+	gswFRIndex        ID = 350
+	gswLIIndex        ID = 351
+	guIndex           ID = 352
+	guINIndex         ID = 353
+	guwIndex          ID = 354
+	guzIndex          ID = 355
+	guzKEIndex        ID = 356
+	gvIndex           ID = 357
+	gvIMIndex         ID = 358
+	haIndex           ID = 359
+	haGHIndex         ID = 360
+	haNEIndex         ID = 361
+	haNGIndex         ID = 362
+	hawIndex          ID = 363
+	hawUSIndex        ID = 364
+	heIndex           ID = 365
+	heILIndex         ID = 366
+	hiIndex           ID = 367
+	hiINIndex         ID = 368
+	hrIndex           ID = 369
+	hrBAIndex         ID = 370
+	hrHRIndex         ID = 371
+	hsbIndex          ID = 372
+	hsbDEIndex        ID = 373
+	huIndex           ID = 374
+	huHUIndex         ID = 375
+	hyIndex           ID = 376
+	hyAMIndex         ID = 377
+	idIndex           ID = 378
+	idIDIndex         ID = 379
+	igIndex           ID = 380
+	igNGIndex         ID = 381
+	iiIndex           ID = 382
+	iiCNIndex         ID = 383
+	inIndex           ID = 384
+	ioIndex           ID = 385
+	isIndex           ID = 386
+	isISIndex         ID = 387
+	itIndex           ID = 388
+	itCHIndex         ID = 389
+	itITIndex         ID = 390
+	itSMIndex         ID = 391
+	itVAIndex         ID = 392
+	iuIndex           ID = 393
+	iwIndex           ID = 394
+	jaIndex           ID = 395
+	jaJPIndex         ID = 396
+	jboIndex          ID = 397
+	jgoIndex          ID = 398
+	jgoCMIndex        ID = 399
+	jiIndex           ID = 400
+	jmcIndex          ID = 401
+	jmcTZIndex        ID = 402
+	jvIndex           ID = 403
+	jwIndex           ID = 404
+	kaIndex           ID = 405
+	kaGEIndex         ID = 406
+	kabIndex          ID = 407
+	kabDZIndex        ID = 408
+	kajIndex          ID = 409
+	kamIndex          ID = 410
+	kamKEIndex        ID = 411
+	kcgIndex          ID = 412
+	kdeIndex          ID = 413
+	kdeTZIndex        ID = 414
+	keaIndex          ID = 415
+	keaCVIndex        ID = 416
+	khqIndex          ID = 417
+	khqMLIndex        ID = 418
+	kiIndex           ID = 419
+	kiKEIndex         ID = 420
+	kkIndex           ID = 421
+	kkKZIndex         ID = 422
+	kkjIndex          ID = 423
+	kkjCMIndex        ID = 424
+	klIndex           ID = 425
+	klGLIndex         ID = 426
+	klnIndex          ID = 427
+	klnKEIndex        ID = 428
+	kmIndex           ID = 429
+	kmKHIndex         ID = 430
+	knIndex           ID = 431
+	knINIndex         ID = 432
+	koIndex           ID = 433
+	koKPIndex         ID = 434
+	koKRIndex         ID = 435
+	kokIndex          ID = 436
+	kokINIndex        ID = 437
+	ksIndex           ID = 438
+	ksINIndex         ID = 439
+	ksbIndex          ID = 440
+	ksbTZIndex        ID = 441
+	ksfIndex          ID = 442
+	ksfCMIndex        ID = 443
+	kshIndex          ID = 444
+	kshDEIndex        ID = 445
+	kuIndex           ID = 446
+	kwIndex           ID = 447
+	kwGBIndex         ID = 448
+	kyIndex           ID = 449
+	kyKGIndex         ID = 450
+	lagIndex          ID = 451
+	lagTZIndex        ID = 452
+	lbIndex           ID = 453
+	lbLUIndex         ID = 454
+	lgIndex           ID = 455
+	lgUGIndex         ID = 456
+	lktIndex          ID = 457
+	lktUSIndex        ID = 458
+	lnIndex           ID = 459
+	lnAOIndex         ID = 460
+	lnCDIndex         ID = 461
+	lnCFIndex         ID = 462
+	lnCGIndex         ID = 463
+	loIndex           ID = 464
+	loLAIndex         ID = 465
+	lrcIndex          ID = 466
+	lrcIQIndex        ID = 467
+	lrcIRIndex        ID = 468
+	ltIndex           ID = 469
+	ltLTIndex         ID = 470
+	luIndex           ID = 471
+	luCDIndex         ID = 472
+	luoIndex          ID = 473
+	luoKEIndex        ID = 474
+	luyIndex          ID = 475
+	luyKEIndex        ID = 476
+	lvIndex           ID = 477
+	lvLVIndex         ID = 478
+	masIndex          ID = 479
+	masKEIndex        ID = 480
+	masTZIndex        ID = 481
+	merIndex          ID = 482
+	merKEIndex        ID = 483
+	mfeIndex          ID = 484
+	mfeMUIndex        ID = 485
+	mgIndex           ID = 486
+	mgMGIndex         ID = 487
+	mghIndex          ID = 488
+	mghMZIndex        ID = 489
+	mgoIndex          ID = 490
+	mgoCMIndex        ID = 491
+	mkIndex           ID = 492
+	mkMKIndex         ID = 493
+	mlIndex           ID = 494
+	mlINIndex         ID = 495
+	mnIndex           ID = 496
+	mnMNIndex         ID = 497
+	moIndex           ID = 498
+	mrIndex           ID = 499
+	mrINIndex         ID = 500
+	msIndex           ID = 501
+	msBNIndex         ID = 502
+	msMYIndex         ID = 503
+	msSGIndex         ID = 504
+	mtIndex           ID = 505
+	mtMTIndex         ID = 506
+	muaIndex          ID = 507
+	muaCMIndex        ID = 508
+	myIndex           ID = 509
+	myMMIndex         ID = 510
+	mznIndex          ID = 511
+	mznIRIndex        ID = 512
+	nahIndex          ID = 513
+	naqIndex          ID = 514
+	naqNAIndex        ID = 515
+	nbIndex           ID = 516
+	nbNOIndex         ID = 517
+	nbSJIndex         ID = 518
+	ndIndex           ID = 519
+	ndZWIndex         ID = 520
+	ndsIndex          ID = 521
+	ndsDEIndex        ID = 522
+	ndsNLIndex        ID = 523
+	neIndex           ID = 524
+	neINIndex         ID = 525
+	neNPIndex         ID = 526
+	nlIndex           ID = 527
+	nlAWIndex         ID = 528
+	nlBEIndex         ID = 529
+	nlBQIndex         ID = 530
+	nlCWIndex         ID = 531
+	nlNLIndex         ID = 532
+	nlSRIndex         ID = 533
+	nlSXIndex         ID = 534
+	nmgIndex          ID = 535
+	nmgCMIndex        ID = 536
+	nnIndex           ID = 537
+	nnNOIndex         ID = 538
+	nnhIndex          ID = 539
+	nnhCMIndex        ID = 540
+	noIndex           ID = 541
+	nqoIndex          ID = 542
+	nrIndex           ID = 543
+	nsoIndex          ID = 544
+	nusIndex          ID = 545
+	nusSSIndex        ID = 546
+	nyIndex           ID = 547
+	nynIndex          ID = 548
+	nynUGIndex        ID = 549
+	omIndex           ID = 550
+	omETIndex         ID = 551
+	omKEIndex         ID = 552
+	orIndex           ID = 553
+	orINIndex         ID = 554
+	osIndex           ID = 555
+	osGEIndex         ID = 556
+	osRUIndex         ID = 557
+	paIndex           ID = 558
+	paArabIndex       ID = 559
+	paArabPKIndex     ID = 560
+	paGuruIndex       ID = 561
+	paGuruINIndex     ID = 562
+	papIndex          ID = 563
+	plIndex           ID = 564
+	plPLIndex         ID = 565
+	prgIndex          ID = 566
+	prg001Index       ID = 567
+	psIndex           ID = 568
+	psAFIndex         ID = 569
+	ptIndex           ID = 570
+	ptAOIndex         ID = 571
+	ptBRIndex         ID = 572
+	ptCHIndex         ID = 573
+	ptCVIndex         ID = 574
+	ptGQIndex         ID = 575
+	ptGWIndex         ID = 576
+	ptLUIndex         ID = 577
+	ptMOIndex         ID = 578
+	ptMZIndex         ID = 579
+	ptPTIndex         ID = 580
+	ptSTIndex         ID = 581
+	ptTLIndex         ID = 582
+	quIndex           ID = 583
+	quBOIndex         ID = 584
+	quECIndex         ID = 585
+	quPEIndex         ID = 586
+	rmIndex           ID = 587
+	rmCHIndex         ID = 588
+	rnIndex           ID = 589
+	rnBIIndex         ID = 590
+	roIndex           ID = 591
+	roMDIndex         ID = 592
+	roROIndex         ID = 593
+	rofIndex          ID = 594
+	rofTZIndex        ID = 595
+	ruIndex           ID = 596
+	ruBYIndex         ID = 597
+	ruKGIndex         ID = 598
+	ruKZIndex         ID = 599
+	ruMDIndex         ID = 600
+	ruRUIndex         ID = 601
+	ruUAIndex         ID = 602
+	rwIndex           ID = 603
+	rwRWIndex         ID = 604
+	rwkIndex          ID = 605
+	rwkTZIndex        ID = 606
+	sahIndex          ID = 607
+	sahRUIndex        ID = 608
+	saqIndex          ID = 609
+	saqKEIndex        ID = 610
+	sbpIndex          ID = 611
+	sbpTZIndex        ID = 612
+	sdIndex           ID = 613
+	sdPKIndex         ID = 614
+	sdhIndex          ID = 615
+	seIndex           ID = 616
+	seFIIndex         ID = 617
+	seNOIndex         ID = 618
+	seSEIndex         ID = 619
+	sehIndex          ID = 620
+	sehMZIndex        ID = 621
+	sesIndex          ID = 622
+	sesMLIndex        ID = 623
+	sgIndex           ID = 624
+	sgCFIndex         ID = 625
+	shIndex           ID = 626
+	shiIndex          ID = 627
+	shiLatnIndex      ID = 628
+	shiLatnMAIndex    ID = 629
+	shiTfngIndex      ID = 630
+	shiTfngMAIndex    ID = 631
+	siIndex           ID = 632
+	siLKIndex         ID = 633
+	skIndex           ID = 634
+	skSKIndex         ID = 635
+	slIndex           ID = 636
+	slSIIndex         ID = 637
+	smaIndex          ID = 638
+	smiIndex          ID = 639
+	smjIndex          ID = 640
+	smnIndex          ID = 641
+	smnFIIndex        ID = 642
+	smsIndex          ID = 643
+	snIndex           ID = 644
+	snZWIndex         ID = 645
+	soIndex           ID = 646
+	soDJIndex         ID = 647
+	soETIndex         ID = 648
+	soKEIndex         ID = 649
+	soSOIndex         ID = 650
+	sqIndex           ID = 651
+	sqALIndex         ID = 652
+	sqMKIndex         ID = 653
+	sqXKIndex         ID = 654
+	srIndex           ID = 655
+	srCyrlIndex       ID = 656
+	srCyrlBAIndex     ID = 657
+	srCyrlMEIndex     ID = 658
+	srCyrlRSIndex     ID = 659
+	srCyrlXKIndex     ID = 660
+	srLatnIndex       ID = 661
+	srLatnBAIndex     ID = 662
+	srLatnMEIndex     ID = 663
+	srLatnRSIndex     ID = 664
+	srLatnXKIndex     ID = 665
+	ssIndex           ID = 666
+	ssyIndex          ID = 667
+	stIndex           ID = 668
+	svIndex           ID = 669
+	svAXIndex         ID = 670
+	svFIIndex         ID = 671
+	svSEIndex         ID = 672
+	swIndex           ID = 673
+	swCDIndex         ID = 674
+	swKEIndex         ID = 675
+	swTZIndex         ID = 676
+	swUGIndex         ID = 677
+	syrIndex          ID = 678
+	taIndex           ID = 679
+	taINIndex         ID = 680
+	taLKIndex         ID = 681
+	taMYIndex         ID = 682
+	taSGIndex         ID = 683
+	teIndex           ID = 684
+	teINIndex         ID = 685
+	teoIndex          ID = 686
+	teoKEIndex        ID = 687
+	teoUGIndex        ID = 688
+	tgIndex           ID = 689
+	tgTJIndex         ID = 690
+	thIndex           ID = 691
+	thTHIndex         ID = 692
+	tiIndex           ID = 693
+	tiERIndex         ID = 694
+	tiETIndex         ID = 695
+	tigIndex          ID = 696
+	tkIndex           ID = 697
+	tkTMIndex         ID = 698
+	tlIndex           ID = 699
+	tnIndex           ID = 700
+	toIndex           ID = 701
+	toTOIndex         ID = 702
+	trIndex           ID = 703
+	trCYIndex         ID = 704
+	trTRIndex         ID = 705
+	tsIndex           ID = 706
+	ttIndex           ID = 707
+	ttRUIndex         ID = 708
+	twqIndex          ID = 709
+	twqNEIndex        ID = 710
+	tzmIndex          ID = 711
+	tzmMAIndex        ID = 712
+	ugIndex           ID = 713
+	ugCNIndex         ID = 714
+	ukIndex           ID = 715
+	ukUAIndex         ID = 716
+	urIndex           ID = 717
+	urINIndex         ID = 718
+	urPKIndex         ID = 719
+	uzIndex           ID = 720
+	uzArabIndex       ID = 721
+	uzArabAFIndex     ID = 722
+	uzCyrlIndex       ID = 723
+	uzCyrlUZIndex     ID = 724
+	uzLatnIndex       ID = 725
+	uzLatnUZIndex     ID = 726
+	vaiIndex          ID = 727
+	vaiLatnIndex      ID = 728
+	vaiLatnLRIndex    ID = 729
+	vaiVaiiIndex      ID = 730
+	vaiVaiiLRIndex    ID = 731
+	veIndex           ID = 732
+	viIndex           ID = 733
+	viVNIndex         ID = 734
+	voIndex           ID = 735
+	vo001Index        ID = 736
+	vunIndex          ID = 737
+	vunTZIndex        ID = 738
+	waIndex           ID = 739
+	waeIndex          ID = 740
+	waeCHIndex        ID = 741
+	woIndex           ID = 742
+	woSNIndex         ID = 743
+	xhIndex           ID = 744
+	xogIndex          ID = 745
+	xogUGIndex        ID = 746
+	yavIndex          ID = 747
+	yavCMIndex        ID = 748
+	yiIndex           ID = 749
+	yi001Index        ID = 750
+	yoIndex           ID = 751
+	yoBJIndex         ID = 752
+	yoNGIndex         ID = 753
+	yueIndex          ID = 754
+	yueHansIndex      ID = 755
+	yueHansCNIndex    ID = 756
+	yueHantIndex      ID = 757
+	yueHantHKIndex    ID = 758
+	zghIndex          ID = 759
+	zghMAIndex        ID = 760
+	zhIndex           ID = 761
+	zhHansIndex       ID = 762
+	zhHansCNIndex     ID = 763
+	zhHansHKIndex     ID = 764
+	zhHansMOIndex     ID = 765
+	zhHansSGIndex     ID = 766
+	zhHantIndex       ID = 767
+	zhHantHKIndex     ID = 768
+	zhHantMOIndex     ID = 769
+	zhHantTWIndex     ID = 770
+	zuIndex           ID = 771
+	zuZAIndex         ID = 772
+	caESvalenciaIndex ID = 773
+	enUSuvaposixIndex ID = 774
+)
+
+var coreTags = []language.CompactCoreInfo{ // 773 elements
+	// Entry 0 - 1F
+	0x00000000, 0x01600000, 0x016000d3, 0x01600162,
+	0x01c00000, 0x01c00052, 0x02100000, 0x02100081,
+	0x02700000, 0x02700070, 0x03a00000, 0x03a00001,
+	0x03a00023, 0x03a00039, 0x03a00063, 0x03a00068,
+	0x03a0006c, 0x03a0006d, 0x03a0006e, 0x03a00098,
+	0x03a0009c, 0x03a000a2, 0x03a000a9, 0x03a000ad,
+	0x03a000b1, 0x03a000ba, 0x03a000bb, 0x03a000ca,
+	0x03a000e2, 0x03a000ee, 0x03a000f4, 0x03a00109,
+	// Entry 20 - 3F
+	0x03a0010c, 0x03a00116, 0x03a00118, 0x03a0011d,
+	0x03a00121, 0x03a00129, 0x03a0015f, 0x04000000,
+	0x04300000, 0x0430009a, 0x04400000, 0x04400130,
+	0x04800000, 0x0480006f, 0x05800000, 0x05820000,
+	0x05820032, 0x0585b000, 0x0585b032, 0x05e00000,
+	0x05e00052, 0x07100000, 0x07100047, 0x07500000,
+	0x07500163, 0x07900000, 0x07900130, 0x07e00000,
+	0x07e00038, 0x08200000, 0x0a000000, 0x0a0000c4,
+	// Entry 40 - 5F
+	0x0a500000, 0x0a500035, 0x0a50009a, 0x0a900000,
+	0x0a900053, 0x0a90009a, 0x0b200000, 0x0b200079,
+	0x0b500000, 0x0b50009a, 0x0b700000, 0x0b720000,
+	0x0b720033, 0x0b75b000, 0x0b75b033, 0x0d700000,
+	0x0d700022, 0x0d70006f, 0x0d700079, 0x0d70009f,
+	0x0db00000, 0x0db00035, 0x0db0009a, 0x0dc00000,
+	0x0dc00107, 0x0df00000, 0x0df00132, 0x0e500000,
+	0x0e500136, 0x0e900000, 0x0e90009c, 0x0e90009d,
+	// Entry 60 - 7F
+	0x0fa00000, 0x0fa0005f, 0x0fe00000, 0x0fe00107,
+	0x10000000, 0x1000007c, 0x10100000, 0x10100064,
+	0x10100083, 0x10800000, 0x108000a5, 0x10d00000,
+	0x10d0002e, 0x10d00036, 0x10d0004e, 0x10d00061,
+	0x10d0009f, 0x10d000b3, 0x10d000b8, 0x11700000,
+	0x117000d5, 0x11f00000, 0x11f00061, 0x12400000,
+	0x12400052, 0x12800000, 0x12b00000, 0x12b00115,
+	0x12d00000, 0x12d00043, 0x12f00000, 0x12f000a5,
+	// Entry 80 - 9F
+	0x13000000, 0x13000081, 0x13000123, 0x13600000,
+	0x1360005e, 0x13600088, 0x13900000, 0x13900001,
+	0x1390001a, 0x13900025, 0x13900026, 0x1390002d,
+	0x1390002e, 0x1390002f, 0x13900034, 0x13900036,
+	0x1390003a, 0x1390003d, 0x13900042, 0x13900046,
+	0x13900048, 0x13900049, 0x1390004a, 0x1390004e,
+	0x13900050, 0x13900052, 0x1390005d, 0x1390005e,
+	0x13900061, 0x13900062, 0x13900064, 0x13900065,
+	// Entry A0 - BF
+	0x1390006e, 0x13900073, 0x13900074, 0x13900075,
+	0x13900076, 0x1390007c, 0x1390007d, 0x13900080,
+	0x13900081, 0x13900082, 0x13900084, 0x1390008b,
+	0x1390008d, 0x1390008e, 0x13900097, 0x13900098,
+	0x13900099, 0x1390009a, 0x1390009b, 0x139000a0,
+	0x139000a1, 0x139000a5, 0x139000a8, 0x139000aa,
+	0x139000ae, 0x139000b2, 0x139000b5, 0x139000b6,
+	0x139000c0, 0x139000c1, 0x139000c7, 0x139000c8,
+	// Entry C0 - DF
+	0x139000cb, 0x139000cc, 0x139000cd, 0x139000cf,
+	0x139000d1, 0x139000d3, 0x139000d6, 0x139000d7,
+	0x139000da, 0x139000de, 0x139000e0, 0x139000e1,
+	0x139000e7, 0x139000e8, 0x139000e9, 0x139000ec,
+	0x139000ed, 0x139000f1, 0x13900108, 0x1390010a,
+	0x1390010b, 0x1390010c, 0x1390010d, 0x1390010e,
+	0x1390010f, 0x13900110, 0x13900113, 0x13900118,
+	0x1390011c, 0x1390011e, 0x13900120, 0x13900126,
+	// Entry E0 - FF
+	0x1390012a, 0x1390012d, 0x1390012e, 0x13900130,
+	0x13900132, 0x13900134, 0x13900136, 0x1390013a,
+	0x1390013d, 0x1390013e, 0x13900140, 0x13900143,
+	0x13900162, 0x13900163, 0x13900165, 0x13c00000,
+	0x13c00001, 0x13e00000, 0x13e0001f, 0x13e0002c,
+	0x13e0003f, 0x13e00041, 0x13e00048, 0x13e00051,
+	0x13e00054, 0x13e00057, 0x13e0005a, 0x13e00066,
+	0x13e00069, 0x13e0006a, 0x13e0006f, 0x13e00087,
+	// Entry 100 - 11F
+	0x13e0008a, 0x13e00090, 0x13e00095, 0x13e000d0,
+	0x13e000d9, 0x13e000e3, 0x13e000e5, 0x13e000e8,
+	0x13e000ed, 0x13e000f2, 0x13e0011b, 0x13e00136,
+	0x13e00137, 0x13e0013c, 0x14000000, 0x1400006b,
+	0x14500000, 0x1450006f, 0x14600000, 0x14600052,
+	0x14800000, 0x14800024, 0x1480009d, 0x14e00000,
+	0x14e00052, 0x14e00085, 0x14e000ca, 0x14e00115,
+	0x15100000, 0x15100073, 0x15300000, 0x153000e8,
+	// Entry 120 - 13F
+	0x15800000, 0x15800064, 0x15800077, 0x15e00000,
+	0x15e00036, 0x15e00037, 0x15e0003a, 0x15e0003b,
+	0x15e0003c, 0x15e00049, 0x15e0004b, 0x15e0004c,
+	0x15e0004d, 0x15e0004e, 0x15e0004f, 0x15e00052,
+	0x15e00063, 0x15e00068, 0x15e00079, 0x15e0007b,
+	0x15e0007f, 0x15e00085, 0x15e00086, 0x15e00087,
+	0x15e00092, 0x15e000a9, 0x15e000b8, 0x15e000bb,
+	0x15e000bc, 0x15e000bf, 0x15e000c0, 0x15e000c4,
+	// Entry 140 - 15F
+	0x15e000c9, 0x15e000ca, 0x15e000cd, 0x15e000d4,
+	0x15e000d5, 0x15e000e6, 0x15e000eb, 0x15e00103,
+	0x15e00108, 0x15e0010b, 0x15e00115, 0x15e0011d,
+	0x15e00121, 0x15e00123, 0x15e00129, 0x15e00140,
+	0x15e00141, 0x15e00160, 0x16900000, 0x1690009f,
+	0x16d00000, 0x16d000da, 0x16e00000, 0x16e00097,
+	0x17e00000, 0x17e0007c, 0x19000000, 0x1900006f,
+	0x1a300000, 0x1a30004e, 0x1a300079, 0x1a3000b3,
+	// Entry 160 - 17F
+	0x1a400000, 0x1a40009a, 0x1a900000, 0x1ab00000,
+	0x1ab000a5, 0x1ac00000, 0x1ac00099, 0x1b400000,
+	0x1b400081, 0x1b4000d5, 0x1b4000d7, 0x1b800000,
+	0x1b800136, 0x1bc00000, 0x1bc00098, 0x1be00000,
+	0x1be0009a, 0x1d100000, 0x1d100033, 0x1d100091,
+	0x1d200000, 0x1d200061, 0x1d500000, 0x1d500093,
+	0x1d700000, 0x1d700028, 0x1e100000, 0x1e100096,
+	0x1e700000, 0x1e7000d7, 0x1ea00000, 0x1ea00053,
+	// Entry 180 - 19F
+	0x1f300000, 0x1f500000, 0x1f800000, 0x1f80009e,
+	0x1f900000, 0x1f90004e, 0x1f90009f, 0x1f900114,
+	0x1f900139, 0x1fa00000, 0x1fb00000, 0x20000000,
+	0x200000a3, 0x20300000, 0x20700000, 0x20700052,
+	0x20800000, 0x20a00000, 0x20a00130, 0x20e00000,
+	0x20f00000, 0x21000000, 0x2100007e, 0x21200000,
+	0x21200068, 0x21600000, 0x21700000, 0x217000a5,
+	0x21f00000, 0x22300000, 0x22300130, 0x22700000,
+	// Entry 1A0 - 1BF
+	0x2270005b, 0x23400000, 0x234000c4, 0x23900000,
+	0x239000a5, 0x24200000, 0x242000af, 0x24400000,
+	0x24400052, 0x24500000, 0x24500083, 0x24600000,
+	0x246000a5, 0x24a00000, 0x24a000a7, 0x25100000,
+	0x2510009a, 0x25400000, 0x254000ab, 0x254000ac,
+	0x25600000, 0x2560009a, 0x26a00000, 0x26a0009a,
+	0x26b00000, 0x26b00130, 0x26d00000, 0x26d00052,
+	0x26e00000, 0x26e00061, 0x27400000, 0x28100000,
+	// Entry 1C0 - 1DF
+	0x2810007c, 0x28a00000, 0x28a000a6, 0x29100000,
+	0x29100130, 0x29500000, 0x295000b8, 0x2a300000,
+	0x2a300132, 0x2af00000, 0x2af00136, 0x2b500000,
+	0x2b50002a, 0x2b50004b, 0x2b50004c, 0x2b50004d,
+	0x2b800000, 0x2b8000b0, 0x2bf00000, 0x2bf0009c,
+	0x2bf0009d, 0x2c000000, 0x2c0000b7, 0x2c200000,
+	0x2c20004b, 0x2c400000, 0x2c4000a5, 0x2c500000,
+	0x2c5000a5, 0x2c700000, 0x2c7000b9, 0x2d100000,
+	// Entry 1E0 - 1FF
+	0x2d1000a5, 0x2d100130, 0x2e900000, 0x2e9000a5,
+	0x2ed00000, 0x2ed000cd, 0x2f100000, 0x2f1000c0,
+	0x2f200000, 0x2f2000d2, 0x2f400000, 0x2f400052,
+	0x2ff00000, 0x2ff000c3, 0x30400000, 0x3040009a,
+	0x30b00000, 0x30b000c6, 0x31000000, 0x31b00000,
+	0x31b0009a, 0x31f00000, 0x31f0003e, 0x31f000d1,
+	0x31f0010e, 0x32000000, 0x320000cc, 0x32500000,
+	0x32500052, 0x33100000, 0x331000c5, 0x33a00000,
+	// Entry 200 - 21F
+	0x33a0009d, 0x34100000, 0x34500000, 0x345000d3,
+	0x34700000, 0x347000db, 0x34700111, 0x34e00000,
+	0x34e00165, 0x35000000, 0x35000061, 0x350000da,
+	0x35100000, 0x3510009a, 0x351000dc, 0x36700000,
+	0x36700030, 0x36700036, 0x36700040, 0x3670005c,
+	0x367000da, 0x36700117, 0x3670011c, 0x36800000,
+	0x36800052, 0x36a00000, 0x36a000db, 0x36c00000,
+	0x36c00052, 0x36f00000, 0x37500000, 0x37600000,
+	// Entry 220 - 23F
+	0x37a00000, 0x38000000, 0x38000118, 0x38700000,
+	0x38900000, 0x38900132, 0x39000000, 0x39000070,
+	0x390000a5, 0x39500000, 0x3950009a, 0x39800000,
+	0x3980007e, 0x39800107, 0x39d00000, 0x39d05000,
+	0x39d050e9, 0x39d36000, 0x39d3609a, 0x3a100000,
+	0x3b300000, 0x3b3000ea, 0x3bd00000, 0x3bd00001,
+	0x3be00000, 0x3be00024, 0x3c000000, 0x3c00002a,
+	0x3c000041, 0x3c00004e, 0x3c00005b, 0x3c000087,
+	// Entry 240 - 25F
+	0x3c00008c, 0x3c0000b8, 0x3c0000c7, 0x3c0000d2,
+	0x3c0000ef, 0x3c000119, 0x3c000127, 0x3c400000,
+	0x3c40003f, 0x3c40006a, 0x3c4000e5, 0x3d400000,
+	0x3d40004e, 0x3d900000, 0x3d90003a, 0x3dc00000,
+	0x3dc000bd, 0x3dc00105, 0x3de00000, 0x3de00130,
+	0x3e200000, 0x3e200047, 0x3e2000a6, 0x3e2000af,
+	0x3e2000bd, 0x3e200107, 0x3e200131, 0x3e500000,
+	0x3e500108, 0x3e600000, 0x3e600130, 0x3eb00000,
+	// Entry 260 - 27F
+	0x3eb00107, 0x3ec00000, 0x3ec000a5, 0x3f300000,
+	0x3f300130, 0x3fa00000, 0x3fa000e9, 0x3fc00000,
+	0x3fd00000, 0x3fd00073, 0x3fd000db, 0x3fd0010d,
+	0x3ff00000, 0x3ff000d2, 0x40100000, 0x401000c4,
+	0x40200000, 0x4020004c, 0x40700000, 0x40800000,
+	0x4085b000, 0x4085b0bb, 0x408eb000, 0x408eb0bb,
+	0x40c00000, 0x40c000b4, 0x41200000, 0x41200112,
+	0x41600000, 0x41600110, 0x41c00000, 0x41d00000,
+	// Entry 280 - 29F
+	0x41e00000, 0x41f00000, 0x41f00073, 0x42200000,
+	0x42300000, 0x42300165, 0x42900000, 0x42900063,
+	0x42900070, 0x429000a5, 0x42900116, 0x43100000,
+	0x43100027, 0x431000c3, 0x4310014e, 0x43200000,
+	0x43220000, 0x43220033, 0x432200be, 0x43220106,
+	0x4322014e, 0x4325b000, 0x4325b033, 0x4325b0be,
+	0x4325b106, 0x4325b14e, 0x43700000, 0x43a00000,
+	0x43b00000, 0x44400000, 0x44400031, 0x44400073,
+	// Entry 2A0 - 2BF
+	0x4440010d, 0x44500000, 0x4450004b, 0x445000a5,
+	0x44500130, 0x44500132, 0x44e00000, 0x45000000,
+	0x4500009a, 0x450000b4, 0x450000d1, 0x4500010e,
+	0x46100000, 0x4610009a, 0x46400000, 0x464000a5,
+	0x46400132, 0x46700000, 0x46700125, 0x46b00000,
+	0x46b00124, 0x46f00000, 0x46f0006e, 0x46f00070,
+	0x47100000, 0x47600000, 0x47600128, 0x47a00000,
+	0x48000000, 0x48200000, 0x4820012a, 0x48a00000,
+	// Entry 2C0 - 2DF
+	0x48a0005e, 0x48a0012c, 0x48e00000, 0x49400000,
+	0x49400107, 0x4a400000, 0x4a4000d5, 0x4a900000,
+	0x4a9000bb, 0x4ac00000, 0x4ac00053, 0x4ae00000,
+	0x4ae00131, 0x4b400000, 0x4b40009a, 0x4b4000e9,
+	0x4bc00000, 0x4bc05000, 0x4bc05024, 0x4bc20000,
+	0x4bc20138, 0x4bc5b000, 0x4bc5b138, 0x4be00000,
+	0x4be5b000, 0x4be5b0b5, 0x4bef4000, 0x4bef40b5,
+	0x4c000000, 0x4c300000, 0x4c30013f, 0x4c900000,
+	// Entry 2E0 - 2FF
+	0x4c900001, 0x4cc00000, 0x4cc00130, 0x4ce00000,
+	0x4cf00000, 0x4cf0004e, 0x4e500000, 0x4e500115,
+	0x4f200000, 0x4fb00000, 0x4fb00132, 0x50900000,
+	0x50900052, 0x51200000, 0x51200001, 0x51800000,
+	0x5180003b, 0x518000d7, 0x51f00000, 0x51f3b000,
+	0x51f3b053, 0x51f3c000, 0x51f3c08e, 0x52800000,
+	0x528000bb, 0x52900000, 0x5293b000, 0x5293b053,
+	0x5293b08e, 0x5293b0c7, 0x5293b10e, 0x5293c000,
+	// Entry 300 - 31F
+	0x5293c08e, 0x5293c0c7, 0x5293c12f, 0x52f00000,
+	0x52f00162,
+} // Size: 3116 bytes
+
+const specialTagsStr string = "ca-ES-valencia en-US-u-va-posix"
+
+// Total table size 3147 bytes (3KiB); checksum: 5A8FFFA5
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/compact/tags.go","mode":420,"size":5651,"sha256":"e6f98b11ee9c2d5d4d51a5d810d4ea2eff0872a8d11b962979744899e020e12c","index":0,"count":1,"encoding":"utf-8","payloadBytes":5651}
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package compact
+
+var (
+	und = Tag{}
+
+	Und Tag = Tag{}
+
+	Afrikaans            Tag = Tag{language: afIndex, locale: afIndex}
+	Amharic              Tag = Tag{language: amIndex, locale: amIndex}
+	Arabic               Tag = Tag{language: arIndex, locale: arIndex}
+	ModernStandardArabic Tag = Tag{language: ar001Index, locale: ar001Index}
+	Azerbaijani          Tag = Tag{language: azIndex, locale: azIndex}
+	Bulgarian            Tag = Tag{language: bgIndex, locale: bgIndex}
+	Bengali              Tag = Tag{language: bnIndex, locale: bnIndex}
+	Catalan              Tag = Tag{language: caIndex, locale: caIndex}
+	Czech                Tag = Tag{language: csIndex, locale: csIndex}
+	Danish               Tag = Tag{language: daIndex, locale: daIndex}
+	German               Tag = Tag{language: deIndex, locale: deIndex}
+	Greek                Tag = Tag{language: elIndex, locale: elIndex}
+	English              Tag = Tag{language: enIndex, locale: enIndex}
+	AmericanEnglish      Tag = Tag{language: enUSIndex, locale: enUSIndex}
+	BritishEnglish       Tag = Tag{language: enGBIndex, locale: enGBIndex}
+	Spanish              Tag = Tag{language: esIndex, locale: esIndex}
+	EuropeanSpanish      Tag = Tag{language: esESIndex, locale: esESIndex}
+	LatinAmericanSpanish Tag = Tag{language: es419Index, locale: es419Index}
+	Estonian             Tag = Tag{language: etIndex, locale: etIndex}
+	Persian              Tag = Tag{language: faIndex, locale: faIndex}
+	Finnish              Tag = Tag{language: fiIndex, locale: fiIndex}
+	Filipino             Tag = Tag{language: filIndex, locale: filIndex}
+	French               Tag = Tag{language: frIndex, locale: frIndex}
+	CanadianFrench       Tag = Tag{language: frCAIndex, locale: frCAIndex}
+	Gujarati             Tag = Tag{language: guIndex, locale: guIndex}
+	Hebrew               Tag = Tag{language: heIndex, locale: heIndex}
+	Hindi                Tag = Tag{language: hiIndex, locale: hiIndex}
+	Croatian             Tag = Tag{language: hrIndex, locale: hrIndex}
+	Hungarian            Tag = Tag{language: huIndex, locale: huIndex}
+	Armenian             Tag = Tag{language: hyIndex, locale: hyIndex}
+	Indonesian           Tag = Tag{language: idIndex, locale: idIndex}
+	Icelandic            Tag = Tag{language: isIndex, locale: isIndex}
+	Italian              Tag = Tag{language: itIndex, locale: itIndex}
+	Japanese             Tag = Tag{language: jaIndex, locale: jaIndex}
+	Georgian             Tag = Tag{language: kaIndex, locale: kaIndex}
+	Kazakh               Tag = Tag{language: kkIndex, locale: kkIndex}
+	Khmer                Tag = Tag{language: kmIndex, locale: kmIndex}
+	Kannada              Tag = Tag{language: knIndex, locale: knIndex}
+	Korean               Tag = Tag{language: koIndex, locale: koIndex}
+	Kirghiz              Tag = Tag{language: kyIndex, locale: kyIndex}
+	Lao                  Tag = Tag{language: loIndex, locale: loIndex}
+	Lithuanian           Tag = Tag{language: ltIndex, locale: ltIndex}
+	Latvian              Tag = Tag{language: lvIndex, locale: lvIndex}
+	Macedonian           Tag = Tag{language: mkIndex, locale: mkIndex}
+	Malayalam            Tag = Tag{language: mlIndex, locale: mlIndex}
+	Mongolian            Tag = Tag{language: mnIndex, locale: mnIndex}
+	Marathi              Tag = Tag{language: mrIndex, locale: mrIndex}
+	Malay                Tag = Tag{language: msIndex, locale: msIndex}
+	Burmese              Tag = Tag{language: myIndex, locale: myIndex}
+	Nepali               Tag = Tag{language: neIndex, locale: neIndex}
+	Dutch                Tag = Tag{language: nlIndex, locale: nlIndex}
+	Norwegian            Tag = Tag{language: noIndex, locale: noIndex}
+	Punjabi              Tag = Tag{language: paIndex, locale: paIndex}
+	Polish               Tag = Tag{language: plIndex, locale: plIndex}
+	Portuguese           Tag = Tag{language: ptIndex, locale: ptIndex}
+	BrazilianPortuguese  Tag = Tag{language: ptBRIndex, locale: ptBRIndex}
+	EuropeanPortuguese   Tag = Tag{language: ptPTIndex, locale: ptPTIndex}
+	Romanian             Tag = Tag{language: roIndex, locale: roIndex}
+	Russian              Tag = Tag{language: ruIndex, locale: ruIndex}
+	Sinhala              Tag = Tag{language: siIndex, locale: siIndex}
+	Slovak               Tag = Tag{language: skIndex, locale: skIndex}
+	Slovenian            Tag = Tag{language: slIndex, locale: slIndex}
+	Albanian             Tag = Tag{language: sqIndex, locale: sqIndex}
+	Serbian              Tag = Tag{language: srIndex, locale: srIndex}
+	SerbianLatin         Tag = Tag{language: srLatnIndex, locale: srLatnIndex}
+	Swedish              Tag = Tag{language: svIndex, locale: svIndex}
+	Swahili              Tag = Tag{language: swIndex, locale: swIndex}
+	Tamil                Tag = Tag{language: taIndex, locale: taIndex}
+	Telugu               Tag = Tag{language: teIndex, locale: teIndex}
+	Thai                 Tag = Tag{language: thIndex, locale: thIndex}
+	Turkish              Tag = Tag{language: trIndex, locale: trIndex}
+	Ukrainian            Tag = Tag{language: ukIndex, locale: ukIndex}
+	Urdu                 Tag = Tag{language: urIndex, locale: urIndex}
+	Uzbek                Tag = Tag{language: uzIndex, locale: uzIndex}
+	Vietnamese           Tag = Tag{language: viIndex, locale: viIndex}
+	Chinese              Tag = Tag{language: zhIndex, locale: zhIndex}
+	SimplifiedChinese    Tag = Tag{language: zhHansIndex, locale: zhHansIndex}
+	TraditionalChinese   Tag = Tag{language: zhHantIndex, locale: zhHantIndex}
+	Zulu                 Tag = Tag{language: zuIndex, locale: zuIndex}
+)
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/compose.go","mode":420,"size":3881,"sha256":"7657b95eac8448d5d2273c048d316dde3ac0e49ac058487a69b2b990ebc7f8ef","index":0,"count":1,"encoding":"utf-8","payloadBytes":3881}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package language
+
+import (
+	"sort"
+	"strings"
+)
+
+// A Builder allows constructing a Tag from individual components.
+// Its main user is Compose in the top-level language package.
+type Builder struct {
+	Tag Tag
+
+	private    string // the x extension
+	variants   []string
+	extensions []string
+}
+
+// Make returns a new Tag from the current settings.
+func (b *Builder) Make() Tag {
+	t := b.Tag
+
+	if len(b.extensions) > 0 || len(b.variants) > 0 {
+		sort.Sort(sortVariants(b.variants))
+		sort.Strings(b.extensions)
+
+		if b.private != "" {
+			b.extensions = append(b.extensions, b.private)
+		}
+		n := maxCoreSize + tokenLen(b.variants...) + tokenLen(b.extensions...)
+		buf := make([]byte, n)
+		p := t.genCoreBytes(buf)
+		t.pVariant = byte(p)
+		p += appendTokens(buf[p:], b.variants...)
+		t.pExt = uint16(p)
+		p += appendTokens(buf[p:], b.extensions...)
+		t.str = string(buf[:p])
+		// We may not always need to remake the string, but when or when not
+		// to do so is rather tricky.
+		scan := makeScanner(buf[:p])
+		t, _ = parse(&scan, "")
+		return t
+
+	} else if b.private != "" {
+		t.str = b.private
+		t.RemakeString()
+	}
+	return t
+}
+
+// SetTag copies all the settings from a given Tag. Any previously set values
+// are discarded.
+func (b *Builder) SetTag(t Tag) {
+	b.Tag.LangID = t.LangID
+	b.Tag.RegionID = t.RegionID
+	b.Tag.ScriptID = t.ScriptID
+	// TODO: optimize
+	b.variants = b.variants[:0]
+	if variants := t.Variants(); variants != "" {
+		for _, vr := range strings.Split(variants[1:], "-") {
+			b.variants = append(b.variants, vr)
+		}
+	}
+	b.extensions, b.private = b.extensions[:0], ""
+	for _, e := range t.Extensions() {
+		b.AddExt(e)
+	}
+}
+
+// AddExt adds extension e to the tag. e must be a valid extension as returned
+// by Tag.Extension. If the extension already exists, it will be discarded,
+// except for a -u extension, where non-existing key-type pairs will added.
+func (b *Builder) AddExt(e string) {
+	if e[0] == 'x' {
+		if b.private == "" {
+			b.private = e
+		}
+		return
+	}
+	for i, s := range b.extensions {
+		if s[0] == e[0] {
+			if e[0] == 'u' {
+				b.extensions[i] += e[1:]
+			}
+			return
+		}
+	}
+	b.extensions = append(b.extensions, e)
+}
+
+// SetExt sets the extension e to the tag. e must be a valid extension as
+// returned by Tag.Extension. If the extension already exists, it will be
+// overwritten, except for a -u extension, where the individual key-type pairs
+// will be set.
+func (b *Builder) SetExt(e string) {
+	if e[0] == 'x' {
+		b.private = e
+		return
+	}
+	for i, s := range b.extensions {
+		if s[0] == e[0] {
+			if e[0] == 'u' {
+				b.extensions[i] = e + s[1:]
+			} else {
+				b.extensions[i] = e
+			}
+			return
+		}
+	}
+	b.extensions = append(b.extensions, e)
+}
+
+// AddVariant adds any number of variants.
+func (b *Builder) AddVariant(v ...string) {
+	for _, v := range v {
+		if v != "" {
+			b.variants = append(b.variants, v)
+		}
+	}
+}
+
+// ClearVariants removes any variants previously added, including those
+// copied from a Tag in SetTag.
+func (b *Builder) ClearVariants() {
+	b.variants = b.variants[:0]
+}
+
+// ClearExtensions removes any extensions previously added, including those
+// copied from a Tag in SetTag.
+func (b *Builder) ClearExtensions() {
+	b.private = ""
+	b.extensions = b.extensions[:0]
+}
+
+func tokenLen(token ...string) (n int) {
+	for _, t := range token {
+		n += len(t) + 1
+	}
+	return
+}
+
+func appendTokens(b []byte, token ...string) int {
+	p := 0
+	for _, t := range token {
+		b[p] = '-'
+		copy(b[p+1:], t)
+		p += 1 + len(t)
+	}
+	return p
+}
+
+type sortVariants []string
+
+func (s sortVariants) Len() int {
+	return len(s)
+}
+
+func (s sortVariants) Swap(i, j int) {
+	s[j], s[i] = s[i], s[j]
+}
+
+func (s sortVariants) Less(i, j int) bool {
+	return variantIndex[s[i]] < variantIndex[s[j]]
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/coverage.go","mode":420,"size":730,"sha256":"8c8238012deb1b3c42820c755343db1bc326dc5cbddfcc24f97abbb7e0c6cee1","index":0,"count":1,"encoding":"utf-8","payloadBytes":730}
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package language
+
+// BaseLanguages returns the list of all supported base languages. It generates
+// the list by traversing the internal structures.
+func BaseLanguages() []Language {
+	base := make([]Language, 0, NumLanguages)
+	for i := 0; i < langNoIndexOffset; i++ {
+		// We included "und" already for the value 0.
+		if i != nonCanonicalUnd {
+			base = append(base, Language(i))
+		}
+	}
+	i := langNoIndexOffset
+	for _, v := range langNoIndex {
+		for k := 0; k < 8; k++ {
+			if v&1 == 1 {
+				base = append(base, Language(i))
+			}
+			v >>= 1
+			i++
+		}
+	}
+	return base
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/language.go","mode":420,"size":17174,"sha256":"19a0ccf7635fd3dbad3766d953996df5d1c24a367e44c49200ab6ec3023fc871","index":0,"count":1,"encoding":"utf-8","payloadBytes":17174}
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:generate go run gen.go gen_common.go -output tables.go
+
+package language // import "golang.org/x/text/internal/language"
+
+// TODO: Remove above NOTE after:
+// - verifying that tables are dropped correctly (most notably matcher tables).
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+const (
+	// maxCoreSize is the maximum size of a BCP 47 tag without variants and
+	// extensions. Equals max lang (3) + script (4) + max reg (3) + 2 dashes.
+	maxCoreSize = 12
+
+	// max99thPercentileSize is a somewhat arbitrary buffer size that presumably
+	// is large enough to hold at least 99% of the BCP 47 tags.
+	max99thPercentileSize = 32
+
+	// maxSimpleUExtensionSize is the maximum size of a -u extension with one
+	// key-type pair. Equals len("-u-") + key (2) + dash + max value (8).
+	maxSimpleUExtensionSize = 14
+)
+
+// Tag represents a BCP 47 language tag. It is used to specify an instance of a
+// specific language or locale. All language tag values are guaranteed to be
+// well-formed. The zero value of Tag is Und.
+type Tag struct {
+	// TODO: the following fields have the form TagTypeID. This name is chosen
+	// to allow refactoring the public package without conflicting with its
+	// Base, Script, and Region methods. Once the transition is fully completed
+	// the ID can be stripped from the name.
+
+	LangID   Language
+	RegionID Region
+	// TODO: we will soon run out of positions for ScriptID. Idea: instead of
+	// storing lang, region, and ScriptID codes, store only the compact index and
+	// have a lookup table from this code to its expansion. This greatly speeds
+	// up table lookup, speed up common variant cases.
+	// This will also immediately free up 3 extra bytes. Also, the pVariant
+	// field can now be moved to the lookup table, as the compact index uniquely
+	// determines the offset of a possible variant.
+	ScriptID Script
+	pVariant byte   // offset in str, includes preceding '-'
+	pExt     uint16 // offset of first extension, includes preceding '-'
+
+	// str is the string representation of the Tag. It will only be used if the
+	// tag has variants or extensions.
+	str string
+}
+
+// Make is a convenience wrapper for Parse that omits the error.
+// In case of an error, a sensible default is returned.
+func Make(s string) Tag {
+	t, _ := Parse(s)
+	return t
+}
+
+// Raw returns the raw base language, script and region, without making an
+// attempt to infer their values.
+// TODO: consider removing
+func (t Tag) Raw() (b Language, s Script, r Region) {
+	return t.LangID, t.ScriptID, t.RegionID
+}
+
+// equalTags compares language, script and region subtags only.
+func (t Tag) equalTags(a Tag) bool {
+	return t.LangID == a.LangID && t.ScriptID == a.ScriptID && t.RegionID == a.RegionID
+}
+
+// IsRoot returns true if t is equal to language "und".
+func (t Tag) IsRoot() bool {
+	if int(t.pVariant) < len(t.str) {
+		return false
+	}
+	return t.equalTags(Und)
+}
+
+// IsPrivateUse reports whether the Tag consists solely of an IsPrivateUse use
+// tag.
+func (t Tag) IsPrivateUse() bool {
+	return t.str != "" && t.pVariant == 0
+}
+
+// RemakeString is used to update t.str in case lang, script or region changed.
+// It is assumed that pExt and pVariant still point to the start of the
+// respective parts.
+func (t *Tag) RemakeString() {
+	if t.str == "" {
+		return
+	}
+	extra := t.str[t.pVariant:]
+	if t.pVariant > 0 {
+		extra = extra[1:]
+	}
+	if t.equalTags(Und) && strings.HasPrefix(extra, "x-") {
+		t.str = extra
+		t.pVariant = 0
+		t.pExt = 0
+		return
+	}
+	var buf [max99thPercentileSize]byte // avoid extra memory allocation in most cases.
+	b := buf[:t.genCoreBytes(buf[:])]
+	if extra != "" {
+		diff := len(b) - int(t.pVariant)
+		b = append(b, '-')
+		b = append(b, extra...)
+		t.pVariant = uint8(int(t.pVariant) + diff)
+		t.pExt = uint16(int(t.pExt) + diff)
+	} else {
+		t.pVariant = uint8(len(b))
+		t.pExt = uint16(len(b))
+	}
+	t.str = string(b)
+}
+
+// genCoreBytes writes a string for the base languages, script and region tags
+// to the given buffer and returns the number of bytes written. It will never
+// write more than maxCoreSize bytes.
+func (t *Tag) genCoreBytes(buf []byte) int {
+	n := t.LangID.StringToBuf(buf[:])
+	if t.ScriptID != 0 {
+		n += copy(buf[n:], "-")
+		n += copy(buf[n:], t.ScriptID.String())
+	}
+	if t.RegionID != 0 {
+		n += copy(buf[n:], "-")
+		n += copy(buf[n:], t.RegionID.String())
+	}
+	return n
+}
+
+// String returns the canonical string representation of the language tag.
+func (t Tag) String() string {
+	if t.str != "" {
+		return t.str
+	}
+	if t.ScriptID == 0 && t.RegionID == 0 {
+		return t.LangID.String()
+	}
+	buf := [maxCoreSize]byte{}
+	return string(buf[:t.genCoreBytes(buf[:])])
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (t Tag) MarshalText() (text []byte, err error) {
+	if t.str != "" {
+		text = append(text, t.str...)
+	} else if t.ScriptID == 0 && t.RegionID == 0 {
+		text = append(text, t.LangID.String()...)
+	} else {
+		buf := [maxCoreSize]byte{}
+		text = buf[:t.genCoreBytes(buf[:])]
+	}
+	return text, nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (t *Tag) UnmarshalText(text []byte) error {
+	tag, err := Parse(string(text))
+	*t = tag
+	return err
+}
+
+// Variants returns the part of the tag holding all variants or the empty string
+// if there are no variants defined.
+func (t Tag) Variants() string {
+	if t.pVariant == 0 {
+		return ""
+	}
+	return t.str[t.pVariant:t.pExt]
+}
+
+// VariantOrPrivateUseTags returns variants or private use tags.
+func (t Tag) VariantOrPrivateUseTags() string {
+	if t.pExt > 0 {
+		return t.str[t.pVariant:t.pExt]
+	}
+	return t.str[t.pVariant:]
+}
+
+// HasString reports whether this tag defines more than just the raw
+// components.
+func (t Tag) HasString() bool {
+	return t.str != ""
+}
+
+// Parent returns the CLDR parent of t. In CLDR, missing fields in data for a
+// specific language are substituted with fields from the parent language.
+// The parent for a language may change for newer versions of CLDR.
+func (t Tag) Parent() Tag {
+	if t.str != "" {
+		// Strip the variants and extensions.
+		b, s, r := t.Raw()
+		t = Tag{LangID: b, ScriptID: s, RegionID: r}
+		if t.RegionID == 0 && t.ScriptID != 0 && t.LangID != 0 {
+			base, _ := addTags(Tag{LangID: t.LangID})
+			if base.ScriptID == t.ScriptID {
+				return Tag{LangID: t.LangID}
+			}
+		}
+		return t
+	}
+	if t.LangID != 0 {
+		if t.RegionID != 0 {
+			maxScript := t.ScriptID
+			if maxScript == 0 {
+				max, _ := addTags(t)
+				maxScript = max.ScriptID
+			}
+
+			for i := range parents {
+				if Language(parents[i].lang) == t.LangID && Script(parents[i].maxScript) == maxScript {
+					for _, r := range parents[i].fromRegion {
+						if Region(r) == t.RegionID {
+							return Tag{
+								LangID:   t.LangID,
+								ScriptID: Script(parents[i].script),
+								RegionID: Region(parents[i].toRegion),
+							}
+						}
+					}
+				}
+			}
+
+			// Strip the script if it is the default one.
+			base, _ := addTags(Tag{LangID: t.LangID})
+			if base.ScriptID != maxScript {
+				return Tag{LangID: t.LangID, ScriptID: maxScript}
+			}
+			return Tag{LangID: t.LangID}
+		} else if t.ScriptID != 0 {
+			// The parent for an base-script pair with a non-default script is
+			// "und" instead of the base language.
+			base, _ := addTags(Tag{LangID: t.LangID})
+			if base.ScriptID != t.ScriptID {
+				return Und
+			}
+			return Tag{LangID: t.LangID}
+		}
+	}
+	return Und
+}
+
+// ParseExtension parses s as an extension and returns it on success.
+func ParseExtension(s string) (ext string, err error) {
+	defer func() {
+		if recover() != nil {
+			ext = ""
+			err = ErrSyntax
+		}
+	}()
+
+	scan := makeScannerString(s)
+	var end int
+	if n := len(scan.token); n != 1 {
+		return "", ErrSyntax
+	}
+	scan.toLower(0, len(scan.b))
+	end = parseExtension(&scan)
+	if end != len(s) {
+		return "", ErrSyntax
+	}
+	return string(scan.b), nil
+}
+
+// HasVariants reports whether t has variants.
+func (t Tag) HasVariants() bool {
+	return uint16(t.pVariant) < t.pExt
+}
+
+// HasExtensions reports whether t has extensions.
+func (t Tag) HasExtensions() bool {
+	return int(t.pExt) < len(t.str)
+}
+
+// Extension returns the extension of type x for tag t. It will return
+// false for ok if t does not have the requested extension. The returned
+// extension will be invalid in this case.
+func (t Tag) Extension(x byte) (ext string, ok bool) {
+	for i := int(t.pExt); i < len(t.str)-1; {
+		var ext string
+		i, ext = getExtension(t.str, i)
+		if ext[0] == x {
+			return ext, true
+		}
+	}
+	return "", false
+}
+
+// Extensions returns all extensions of t.
+func (t Tag) Extensions() []string {
+	e := []string{}
+	for i := int(t.pExt); i < len(t.str)-1; {
+		var ext string
+		i, ext = getExtension(t.str, i)
+		e = append(e, ext)
+	}
+	return e
+}
+
+// TypeForKey returns the type associated with the given key, where key and type
+// are of the allowed values defined for the Unicode locale extension ('u') in
+// https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers.
+// TypeForKey will traverse the inheritance chain to get the correct value.
+//
+// If there are multiple types associated with a key, only the first will be
+// returned. If there is no type associated with a key, it returns the empty
+// string.
+func (t Tag) TypeForKey(key string) string {
+	if _, start, end, _ := t.findTypeForKey(key); end != start {
+		s := t.str[start:end]
+		if p := strings.IndexByte(s, '-'); p >= 0 {
+			s = s[:p]
+		}
+		return s
+	}
+	return ""
+}
+
+var (
+	errPrivateUse       = errors.New("cannot set a key on a private use tag")
+	errInvalidArguments = errors.New("invalid key or type")
+)
+
+// SetTypeForKey returns a new Tag with the key set to type, where key and type
+// are of the allowed values defined for the Unicode locale extension ('u') in
+// https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers.
+// An empty value removes an existing pair with the same key.
+func (t Tag) SetTypeForKey(key, value string) (Tag, error) {
+	if t.IsPrivateUse() {
+		return t, errPrivateUse
+	}
+	if len(key) != 2 {
+		return t, errInvalidArguments
+	}
+
+	// Remove the setting if value is "".
+	if value == "" {
+		start, sep, end, _ := t.findTypeForKey(key)
+		if start != sep {
+			// Remove a possible empty extension.
+			switch {
+			case t.str[start-2] != '-': // has previous elements.
+			case end == len(t.str), // end of string
+				end+2 < len(t.str) && t.str[end+2] == '-': // end of extension
+				start -= 2
+			}
+			if start == int(t.pVariant) && end == len(t.str) {
+				t.str = ""
+				t.pVariant, t.pExt = 0, 0
+			} else {
+				t.str = fmt.Sprintf("%s%s", t.str[:start], t.str[end:])
+			}
+		}
+		return t, nil
+	}
+
+	if len(value) < 3 || len(value) > 8 {
+		return t, errInvalidArguments
+	}
+
+	var (
+		buf    [maxCoreSize + maxSimpleUExtensionSize]byte
+		uStart int // start of the -u extension.
+	)
+
+	// Generate the tag string if needed.
+	if t.str == "" {
+		uStart = t.genCoreBytes(buf[:])
+		buf[uStart] = '-'
+		uStart++
+	}
+
+	// Create new key-type pair and parse it to verify.
+	b := buf[uStart:]
+	copy(b, "u-")
+	copy(b[2:], key)
+	b[4] = '-'
+	b = b[:5+copy(b[5:], value)]
+	scan := makeScanner(b)
+	if parseExtensions(&scan); scan.err != nil {
+		return t, scan.err
+	}
+
+	// Assemble the replacement string.
+	if t.str == "" {
+		t.pVariant, t.pExt = byte(uStart-1), uint16(uStart-1)
+		t.str = string(buf[:uStart+len(b)])
+	} else {
+		s := t.str
+		start, sep, end, hasExt := t.findTypeForKey(key)
+		if start == sep {
+			if hasExt {
+				b = b[2:]
+			}
+			t.str = fmt.Sprintf("%s-%s%s", s[:sep], b, s[end:])
+		} else {
+			t.str = fmt.Sprintf("%s-%s%s", s[:start+3], value, s[end:])
+		}
+	}
+	return t, nil
+}
+
+// findTypeForKey returns the start and end position for the type corresponding
+// to key or the point at which to insert the key-value pair if the type
+// wasn't found. The hasExt return value reports whether an -u extension was present.
+// Note: the extensions are typically very small and are likely to contain
+// only one key-type pair.
+func (t Tag) findTypeForKey(key string) (start, sep, end int, hasExt bool) {
+	p := int(t.pExt)
+	if len(key) != 2 || p == len(t.str) || p == 0 {
+		return p, p, p, false
+	}
+	s := t.str
+
+	// Find the correct extension.
+	for p++; s[p] != 'u'; p++ {
+		if s[p] > 'u' {
+			p--
+			return p, p, p, false
+		}
+		if p = nextExtension(s, p); p == len(s) {
+			return len(s), len(s), len(s), false
+		}
+	}
+	// Proceed to the hyphen following the extension name.
+	p++
+
+	// curKey is the key currently being processed.
+	curKey := ""
+
+	// Iterate over keys until we get the end of a section.
+	for {
+		end = p
+		for p++; p < len(s) && s[p] != '-'; p++ {
+		}
+		n := p - end - 1
+		if n <= 2 && curKey == key {
+			if sep < end {
+				sep++
+			}
+			return start, sep, end, true
+		}
+		switch n {
+		case 0, // invalid string
+			1: // next extension
+			return end, end, end, true
+		case 2:
+			// next key
+			curKey = s[end+1 : p]
+			if curKey > key {
+				return end, end, end, true
+			}
+			start = end
+			sep = p
+		}
+	}
+}
+
+// ParseBase parses a 2- or 3-letter ISO 639 code.
+// It returns a ValueError if s is a well-formed but unknown language identifier
+// or another error if another error occurred.
+func ParseBase(s string) (l Language, err error) {
+	defer func() {
+		if recover() != nil {
+			l = 0
+			err = ErrSyntax
+		}
+	}()
+
+	if n := len(s); n < 2 || 3 < n {
+		return 0, ErrSyntax
+	}
+	var buf [3]byte
+	return getLangID(buf[:copy(buf[:], s)])
+}
+
+// ParseScript parses a 4-letter ISO 15924 code.
+// It returns a ValueError if s is a well-formed but unknown script identifier
+// or another error if another error occurred.
+func ParseScript(s string) (scr Script, err error) {
+	defer func() {
+		if recover() != nil {
+			scr = 0
+			err = ErrSyntax
+		}
+	}()
+
+	if len(s) != 4 {
+		return 0, ErrSyntax
+	}
+	var buf [4]byte
+	return getScriptID(script, buf[:copy(buf[:], s)])
+}
+
+// EncodeM49 returns the Region for the given UN M.49 code.
+// It returns an error if r is not a valid code.
+func EncodeM49(r int) (Region, error) {
+	return getRegionM49(r)
+}
+
+// ParseRegion parses a 2- or 3-letter ISO 3166-1 or a UN M.49 code.
+// It returns a ValueError if s is a well-formed but unknown region identifier
+// or another error if another error occurred.
+func ParseRegion(s string) (r Region, err error) {
+	defer func() {
+		if recover() != nil {
+			r = 0
+			err = ErrSyntax
+		}
+	}()
+
+	if n := len(s); n < 2 || 3 < n {
+		return 0, ErrSyntax
+	}
+	var buf [3]byte
+	return getRegionID(buf[:copy(buf[:], s)])
+}
+
+// IsCountry returns whether this region is a country or autonomous area. This
+// includes non-standard definitions from CLDR.
+func (r Region) IsCountry() bool {
+	if r == 0 || r.IsGroup() || r.IsPrivateUse() && r != _XK {
+		return false
+	}
+	return true
+}
+
+// IsGroup returns whether this region defines a collection of regions. This
+// includes non-standard definitions from CLDR.
+func (r Region) IsGroup() bool {
+	if r == 0 {
+		return false
+	}
+	return int(regionInclusion[r]) < len(regionContainment)
+}
+
+// Contains returns whether Region c is contained by Region r. It returns true
+// if c == r.
+func (r Region) Contains(c Region) bool {
+	if r == c {
+		return true
+	}
+	g := regionInclusion[r]
+	if g >= nRegionGroups {
+		return false
+	}
+	m := regionContainment[g]
+
+	d := regionInclusion[c]
+	b := regionInclusionBits[d]
+
+	// A contained country may belong to multiple disjoint groups. Matching any
+	// of these indicates containment. If the contained region is a group, it
+	// must strictly be a subset.
+	if d >= nRegionGroups {
+		return b&m != 0
+	}
+	return b&^m == 0
+}
+
+var errNoTLD = errors.New("language: region is not a valid ccTLD")
+
+// TLD returns the country code top-level domain (ccTLD). UK is returned for GB.
+// In all other cases it returns either the region itself or an error.
+//
+// This method may return an error for a region for which there exists a
+// canonical form with a ccTLD. To get that ccTLD canonicalize r first. The
+// region will already be canonicalized it was obtained from a Tag that was
+// obtained using any of the default methods.
+func (r Region) TLD() (Region, error) {
+	// See http://en.wikipedia.org/wiki/Country_code_top-level_domain for the
+	// difference between ISO 3166-1 and IANA ccTLD.
+	if r == _GB {
+		r = _UK
+	}
+	if (r.typ() & ccTLD) == 0 {
+		return 0, errNoTLD
+	}
+	return r, nil
+}
+
+// Canonicalize returns the region or a possible replacement if the region is
+// deprecated. It will not return a replacement for deprecated regions that
+// are split into multiple regions.
+func (r Region) Canonicalize() Region {
+	if cr := normRegion(r); cr != 0 {
+		return cr
+	}
+	return r
+}
+
+// Variant represents a registered variant of a language as defined by BCP 47.
+type Variant struct {
+	ID  uint8
+	str string
+}
+
+// ParseVariant parses and returns a Variant. An error is returned if s is not
+// a valid variant.
+func ParseVariant(s string) (v Variant, err error) {
+	defer func() {
+		if recover() != nil {
+			v = Variant{}
+			err = ErrSyntax
+		}
+	}()
+
+	s = strings.ToLower(s)
+	if id, ok := variantIndex[s]; ok {
+		return Variant{id, s}, nil
+	}
+	return Variant{}, NewValueError([]byte(s))
+}
+
+// String returns the string representation of the variant.
+func (v Variant) String() string {
+	return v.str
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/lookup.go","mode":420,"size":12387,"sha256":"8f0ac8780f89d5c2b29b98fd599269b445d7bb612a7948c9e97d425424b5ea38","index":0,"count":1,"encoding":"utf-8","payloadBytes":12387}
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package language
+
+import (
+	"bytes"
+	"fmt"
+	"sort"
+	"strconv"
+
+	"golang.org/x/text/internal/tag"
+)
+
+// findIndex tries to find the given tag in idx and returns a standardized error
+// if it could not be found.
+func findIndex(idx tag.Index, key []byte, form string) (index int, err error) {
+	if !tag.FixCase(form, key) {
+		return 0, ErrSyntax
+	}
+	i := idx.Index(key)
+	if i == -1 {
+		return 0, NewValueError(key)
+	}
+	return i, nil
+}
+
+func searchUint(imap []uint16, key uint16) int {
+	return sort.Search(len(imap), func(i int) bool {
+		return imap[i] >= key
+	})
+}
+
+type Language uint16
+
+// getLangID returns the langID of s if s is a canonical subtag
+// or langUnknown if s is not a canonical subtag.
+func getLangID(s []byte) (Language, error) {
+	if len(s) == 2 {
+		return getLangISO2(s)
+	}
+	return getLangISO3(s)
+}
+
+// TODO language normalization as well as the AliasMaps could be moved to the
+// higher level package, but it is a bit tricky to separate the generation.
+
+func (id Language) Canonicalize() (Language, AliasType) {
+	return normLang(id)
+}
+
+// normLang returns the mapped langID of id according to mapping m.
+func normLang(id Language) (Language, AliasType) {
+	k := sort.Search(len(AliasMap), func(i int) bool {
+		return AliasMap[i].From >= uint16(id)
+	})
+	if k < len(AliasMap) && AliasMap[k].From == uint16(id) {
+		return Language(AliasMap[k].To), AliasTypes[k]
+	}
+	return id, AliasTypeUnknown
+}
+
+// getLangISO2 returns the langID for the given 2-letter ISO language code
+// or unknownLang if this does not exist.
+func getLangISO2(s []byte) (Language, error) {
+	if !tag.FixCase("zz", s) {
+		return 0, ErrSyntax
+	}
+	if i := lang.Index(s); i != -1 && lang.Elem(i)[3] != 0 {
+		return Language(i), nil
+	}
+	return 0, NewValueError(s)
+}
+
+const base = 'z' - 'a' + 1
+
+func strToInt(s []byte) uint {
+	v := uint(0)
+	for i := 0; i < len(s); i++ {
+		v *= base
+		v += uint(s[i] - 'a')
+	}
+	return v
+}
+
+// converts the given integer to the original ASCII string passed to strToInt.
+// len(s) must match the number of characters obtained.
+func intToStr(v uint, s []byte) {
+	for i := len(s) - 1; i >= 0; i-- {
+		s[i] = byte(v%base) + 'a'
+		v /= base
+	}
+}
+
+// getLangISO3 returns the langID for the given 3-letter ISO language code
+// or unknownLang if this does not exist.
+func getLangISO3(s []byte) (Language, error) {
+	if tag.FixCase("und", s) {
+		// first try to match canonical 3-letter entries
+		for i := lang.Index(s[:2]); i != -1; i = lang.Next(s[:2], i) {
+			if e := lang.Elem(i); e[3] == 0 && e[2] == s[2] {
+				// We treat "und" as special and always translate it to "unspecified".
+				// Note that ZZ and Zzzz are private use and are not treated as
+				// unspecified by default.
+				id := Language(i)
+				if id == nonCanonicalUnd {
+					return 0, nil
+				}
+				return id, nil
+			}
+		}
+		if i := altLangISO3.Index(s); i != -1 {
+			return Language(altLangIndex[altLangISO3.Elem(i)[3]]), nil
+		}
+		n := strToInt(s)
+		if langNoIndex[n/8]&(1<<(n%8)) != 0 {
+			return Language(n) + langNoIndexOffset, nil
+		}
+		// Check for non-canonical uses of ISO3.
+		for i := lang.Index(s[:1]); i != -1; i = lang.Next(s[:1], i) {
+			if e := lang.Elem(i); e[2] == s[1] && e[3] == s[2] {
+				return Language(i), nil
+			}
+		}
+		return 0, NewValueError(s)
+	}
+	return 0, ErrSyntax
+}
+
+// StringToBuf writes the string to b and returns the number of bytes
+// written.  cap(b) must be >= 3.
+func (id Language) StringToBuf(b []byte) int {
+	if id >= langNoIndexOffset {
+		intToStr(uint(id)-langNoIndexOffset, b[:3])
+		return 3
+	} else if id == 0 {
+		return copy(b, "und")
+	}
+	l := lang[id<<2:]
+	if l[3] == 0 {
+		return copy(b, l[:3])
+	}
+	return copy(b, l[:2])
+}
+
+// String returns the BCP 47 representation of the langID.
+// Use b as variable name, instead of id, to ensure the variable
+// used is consistent with that of Base in which this type is embedded.
+func (b Language) String() string {
+	if b == 0 {
+		return "und"
+	} else if b >= langNoIndexOffset {
+		b -= langNoIndexOffset
+		buf := [3]byte{}
+		intToStr(uint(b), buf[:])
+		return string(buf[:])
+	}
+	l := lang.Elem(int(b))
+	if l[3] == 0 {
+		return l[:3]
+	}
+	return l[:2]
+}
+
+// ISO3 returns the ISO 639-3 language code.
+func (b Language) ISO3() string {
+	if b == 0 || b >= langNoIndexOffset {
+		return b.String()
+	}
+	l := lang.Elem(int(b))
+	if l[3] == 0 {
+		return l[:3]
+	} else if l[2] == 0 {
+		return altLangISO3.Elem(int(l[3]))[:3]
+	}
+	// This allocation will only happen for 3-letter ISO codes
+	// that are non-canonical BCP 47 language identifiers.
+	return l[0:1] + l[2:4]
+}
+
+// IsPrivateUse reports whether this language code is reserved for private use.
+func (b Language) IsPrivateUse() bool {
+	return langPrivateStart <= b && b <= langPrivateEnd
+}
+
+// SuppressScript returns the script marked as SuppressScript in the IANA
+// language tag repository, or 0 if there is no such script.
+func (b Language) SuppressScript() Script {
+	if b < langNoIndexOffset {
+		return Script(suppressScript[b])
+	}
+	return 0
+}
+
+type Region uint16
+
+// getRegionID returns the region id for s if s is a valid 2-letter region code
+// or unknownRegion.
+func getRegionID(s []byte) (Region, error) {
+	if len(s) == 3 {
+		if isAlpha(s[0]) {
+			return getRegionISO3(s)
+		}
+		if i, err := strconv.ParseUint(string(s), 10, 10); err == nil {
+			return getRegionM49(int(i))
+		}
+	}
+	return getRegionISO2(s)
+}
+
+// getRegionISO2 returns the regionID for the given 2-letter ISO country code
+// or unknownRegion if this does not exist.
+func getRegionISO2(s []byte) (Region, error) {
+	i, err := findIndex(regionISO, s, "ZZ")
+	if err != nil {
+		return 0, err
+	}
+	return Region(i) + isoRegionOffset, nil
+}
+
+// getRegionISO3 returns the regionID for the given 3-letter ISO country code
+// or unknownRegion if this does not exist.
+func getRegionISO3(s []byte) (Region, error) {
+	if tag.FixCase("ZZZ", s) {
+		for i := regionISO.Index(s[:1]); i != -1; i = regionISO.Next(s[:1], i) {
+			if e := regionISO.Elem(i); e[2] == s[1] && e[3] == s[2] {
+				return Region(i) + isoRegionOffset, nil
+			}
+		}
+		for i := 0; i < len(altRegionISO3); i += 3 {
+			if tag.Compare(altRegionISO3[i:i+3], s) == 0 {
+				return Region(altRegionIDs[i/3]), nil
+			}
+		}
+		return 0, NewValueError(s)
+	}
+	return 0, ErrSyntax
+}
+
+func getRegionM49(n int) (Region, error) {
+	if 0 < n && n <= 999 {
+		const (
+			searchBits = 7
+			regionBits = 9
+			regionMask = 1<<regionBits - 1
+		)
+		idx := n >> searchBits
+		buf := fromM49[m49Index[idx]:m49Index[idx+1]]
+		val := uint16(n) << regionBits // we rely on bits shifting out
+		i := sort.Search(len(buf), func(i int) bool {
+			return buf[i] >= val
+		})
+		if r := fromM49[int(m49Index[idx])+i]; r&^regionMask == val {
+			return Region(r & regionMask), nil
+		}
+	}
+	var e ValueError
+	fmt.Fprint(bytes.NewBuffer([]byte(e.v[:])), n)
+	return 0, e
+}
+
+// normRegion returns a region if r is deprecated or 0 otherwise.
+// TODO: consider supporting BYS (-> BLR), CSK (-> 200 or CZ), PHI (-> PHL) and AFI (-> DJ).
+// TODO: consider mapping split up regions to new most populous one (like CLDR).
+func normRegion(r Region) Region {
+	m := regionOldMap
+	k := sort.Search(len(m), func(i int) bool {
+		return m[i].From >= uint16(r)
+	})
+	if k < len(m) && m[k].From == uint16(r) {
+		return Region(m[k].To)
+	}
+	return 0
+}
+
+const (
+	iso3166UserAssigned = 1 << iota
+	ccTLD
+	bcp47Region
+)
+
+func (r Region) typ() byte {
+	return regionTypes[r]
+}
+
+// String returns the BCP 47 representation for the region.
+// It returns "ZZ" for an unspecified region.
+func (r Region) String() string {
+	if r < isoRegionOffset {
+		if r == 0 {
+			return "ZZ"
+		}
+		return fmt.Sprintf("%03d", r.M49())
+	}
+	r -= isoRegionOffset
+	return regionISO.Elem(int(r))[:2]
+}
+
+// ISO3 returns the 3-letter ISO code of r.
+// Note that not all regions have a 3-letter ISO code.
+// In such cases this method returns "ZZZ".
+func (r Region) ISO3() string {
+	if r < isoRegionOffset {
+		return "ZZZ"
+	}
+	r -= isoRegionOffset
+	reg := regionISO.Elem(int(r))
+	switch reg[2] {
+	case 0:
+		return altRegionISO3[reg[3]:][:3]
+	case ' ':
+		return "ZZZ"
+	}
+	return reg[0:1] + reg[2:4]
+}
+
+// M49 returns the UN M.49 encoding of r, or 0 if this encoding
+// is not defined for r.
+func (r Region) M49() int {
+	return int(m49[r])
+}
+
+// IsPrivateUse reports whether r has the ISO 3166 User-assigned status. This
+// may include private-use tags that are assigned by CLDR and used in this
+// implementation. So IsPrivateUse and IsCountry can be simultaneously true.
+func (r Region) IsPrivateUse() bool {
+	return r.typ()&iso3166UserAssigned != 0
+}
+
+type Script uint16
+
+// getScriptID returns the script id for string s. It assumes that s
+// is of the format [A-Z][a-z]{3}.
+func getScriptID(idx tag.Index, s []byte) (Script, error) {
+	i, err := findIndex(idx, s, "Zzzz")
+	return Script(i), err
+}
+
+// String returns the script code in title case.
+// It returns "Zzzz" for an unspecified script.
+func (s Script) String() string {
+	if s == 0 {
+		return "Zzzz"
+	}
+	return script.Elem(int(s))
+}
+
+// IsPrivateUse reports whether this script code is reserved for private use.
+func (s Script) IsPrivateUse() bool {
+	return _Qaaa <= s && s <= _Qabx
+}
+
+const (
+	maxAltTaglen = len("en-US-POSIX")
+	maxLen       = maxAltTaglen
+)
+
+var (
+	// grandfatheredMap holds a mapping from legacy and grandfathered tags to
+	// their base language or index to more elaborate tag.
+	grandfatheredMap = map[[maxLen]byte]int16{
+		[maxLen]byte{'a', 'r', 't', '-', 'l', 'o', 'j', 'b', 'a', 'n'}: _jbo, // art-lojban
+		[maxLen]byte{'i', '-', 'a', 'm', 'i'}:                          _ami, // i-ami
+		[maxLen]byte{'i', '-', 'b', 'n', 'n'}:                          _bnn, // i-bnn
+		[maxLen]byte{'i', '-', 'h', 'a', 'k'}:                          _hak, // i-hak
+		[maxLen]byte{'i', '-', 'k', 'l', 'i', 'n', 'g', 'o', 'n'}:      _tlh, // i-klingon
+		[maxLen]byte{'i', '-', 'l', 'u', 'x'}:                          _lb,  // i-lux
+		[maxLen]byte{'i', '-', 'n', 'a', 'v', 'a', 'j', 'o'}:           _nv,  // i-navajo
+		[maxLen]byte{'i', '-', 'p', 'w', 'n'}:                          _pwn, // i-pwn
+		[maxLen]byte{'i', '-', 't', 'a', 'o'}:                          _tao, // i-tao
+		[maxLen]byte{'i', '-', 't', 'a', 'y'}:                          _tay, // i-tay
+		[maxLen]byte{'i', '-', 't', 's', 'u'}:                          _tsu, // i-tsu
+		[maxLen]byte{'n', 'o', '-', 'b', 'o', 'k'}:                     _nb,  // no-bok
+		[maxLen]byte{'n', 'o', '-', 'n', 'y', 'n'}:                     _nn,  // no-nyn
+		[maxLen]byte{'s', 'g', 'n', '-', 'b', 'e', '-', 'f', 'r'}:      _sfb, // sgn-BE-FR
+		[maxLen]byte{'s', 'g', 'n', '-', 'b', 'e', '-', 'n', 'l'}:      _vgt, // sgn-BE-NL
+		[maxLen]byte{'s', 'g', 'n', '-', 'c', 'h', '-', 'd', 'e'}:      _sgg, // sgn-CH-DE
+		[maxLen]byte{'z', 'h', '-', 'g', 'u', 'o', 'y', 'u'}:           _cmn, // zh-guoyu
+		[maxLen]byte{'z', 'h', '-', 'h', 'a', 'k', 'k', 'a'}:           _hak, // zh-hakka
+		[maxLen]byte{'z', 'h', '-', 'm', 'i', 'n', '-', 'n', 'a', 'n'}: _nan, // zh-min-nan
+		[maxLen]byte{'z', 'h', '-', 'x', 'i', 'a', 'n', 'g'}:           _hsn, // zh-xiang
+
+		// Grandfathered tags with no modern replacement will be converted as
+		// follows:
+		[maxLen]byte{'c', 'e', 'l', '-', 'g', 'a', 'u', 'l', 'i', 's', 'h'}: -1, // cel-gaulish
+		[maxLen]byte{'e', 'n', '-', 'g', 'b', '-', 'o', 'e', 'd'}:           -2, // en-GB-oed
+		[maxLen]byte{'i', '-', 'd', 'e', 'f', 'a', 'u', 'l', 't'}:           -3, // i-default
+		[maxLen]byte{'i', '-', 'e', 'n', 'o', 'c', 'h', 'i', 'a', 'n'}:      -4, // i-enochian
+		[maxLen]byte{'i', '-', 'm', 'i', 'n', 'g', 'o'}:                     -5, // i-mingo
+		[maxLen]byte{'z', 'h', '-', 'm', 'i', 'n'}:                          -6, // zh-min
+
+		// CLDR-specific tag.
+		[maxLen]byte{'r', 'o', 'o', 't'}:                                    0,  // root
+		[maxLen]byte{'e', 'n', '-', 'u', 's', '-', 'p', 'o', 's', 'i', 'x'}: -7, // en_US_POSIX"
+	}
+
+	altTagIndex = [...]uint8{0, 17, 31, 45, 61, 74, 86, 102}
+
+	altTags = "xtg-x-cel-gaulishen-GB-oxendicten-x-i-defaultund-x-i-enochiansee-x-i-mingonan-x-zh-minen-US-u-va-posix"
+)
+
+func grandfathered(s [maxAltTaglen]byte) (t Tag, ok bool) {
+	if v, ok := grandfatheredMap[s]; ok {
+		if v < 0 {
+			return Make(altTags[altTagIndex[-v-1]:altTagIndex[-v]]), true
+		}
+		t.LangID = Language(v)
+		return t, true
+	}
+	return t, false
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/match.go","mode":420,"size":5824,"sha256":"711e9c548516929762f0636a69788ba6eed6ed10bfb47634f3b5d5a1f26a1547","index":0,"count":1,"encoding":"utf-8","payloadBytes":5824}
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package language
+
+import "errors"
+
+type scriptRegionFlags uint8
+
+const (
+	isList = 1 << iota
+	scriptInFrom
+	regionInFrom
+)
+
+func (t *Tag) setUndefinedLang(id Language) {
+	if t.LangID == 0 {
+		t.LangID = id
+	}
+}
+
+func (t *Tag) setUndefinedScript(id Script) {
+	if t.ScriptID == 0 {
+		t.ScriptID = id
+	}
+}
+
+func (t *Tag) setUndefinedRegion(id Region) {
+	if t.RegionID == 0 || t.RegionID.Contains(id) {
+		t.RegionID = id
+	}
+}
+
+// ErrMissingLikelyTagsData indicates no information was available
+// to compute likely values of missing tags.
+var ErrMissingLikelyTagsData = errors.New("missing likely tags data")
+
+// addLikelySubtags sets subtags to their most likely value, given the locale.
+// In most cases this means setting fields for unknown values, but in some
+// cases it may alter a value.  It returns an ErrMissingLikelyTagsData error
+// if the given locale cannot be expanded.
+func (t Tag) addLikelySubtags() (Tag, error) {
+	id, err := addTags(t)
+	if err != nil {
+		return t, err
+	} else if id.equalTags(t) {
+		return t, nil
+	}
+	id.RemakeString()
+	return id, nil
+}
+
+// specializeRegion attempts to specialize a group region.
+func specializeRegion(t *Tag) bool {
+	if i := regionInclusion[t.RegionID]; i < nRegionGroups {
+		x := likelyRegionGroup[i]
+		if Language(x.lang) == t.LangID && Script(x.script) == t.ScriptID {
+			t.RegionID = Region(x.region)
+		}
+		return true
+	}
+	return false
+}
+
+// Maximize returns a new tag with missing tags filled in.
+func (t Tag) Maximize() (Tag, error) {
+	return addTags(t)
+}
+
+func addTags(t Tag) (Tag, error) {
+	// We leave private use identifiers alone.
+	if t.IsPrivateUse() {
+		return t, nil
+	}
+	if t.ScriptID != 0 && t.RegionID != 0 {
+		if t.LangID != 0 {
+			// already fully specified
+			specializeRegion(&t)
+			return t, nil
+		}
+		// Search matches for und-script-region. Note that for these cases
+		// region will never be a group so there is no need to check for this.
+		list := likelyRegion[t.RegionID : t.RegionID+1]
+		if x := list[0]; x.flags&isList != 0 {
+			list = likelyRegionList[x.lang : x.lang+uint16(x.script)]
+		}
+		for _, x := range list {
+			// Deviating from the spec. See match_test.go for details.
+			if Script(x.script) == t.ScriptID {
+				t.setUndefinedLang(Language(x.lang))
+				return t, nil
+			}
+		}
+	}
+	if t.LangID != 0 {
+		// Search matches for lang-script and lang-region, where lang != und.
+		if t.LangID < langNoIndexOffset {
+			x := likelyLang[t.LangID]
+			if x.flags&isList != 0 {
+				list := likelyLangList[x.region : x.region+uint16(x.script)]
+				if t.ScriptID != 0 {
+					for _, x := range list {
+						if Script(x.script) == t.ScriptID && x.flags&scriptInFrom != 0 {
+							t.setUndefinedRegion(Region(x.region))
+							return t, nil
+						}
+					}
+				} else if t.RegionID != 0 {
+					count := 0
+					goodScript := true
+					tt := t
+					for _, x := range list {
+						// We visit all entries for which the script was not
+						// defined, including the ones where the region was not
+						// defined. This allows for proper disambiguation within
+						// regions.
+						if x.flags&scriptInFrom == 0 && t.RegionID.Contains(Region(x.region)) {
+							tt.RegionID = Region(x.region)
+							tt.setUndefinedScript(Script(x.script))
+							goodScript = goodScript && tt.ScriptID == Script(x.script)
+							count++
+						}
+					}
+					if count == 1 {
+						return tt, nil
+					}
+					// Even if we fail to find a unique Region, we might have
+					// an unambiguous script.
+					if goodScript {
+						t.ScriptID = tt.ScriptID
+					}
+				}
+			}
+		}
+	} else {
+		// Search matches for und-script.
+		if t.ScriptID != 0 {
+			x := likelyScript[t.ScriptID]
+			if x.region != 0 {
+				t.setUndefinedRegion(Region(x.region))
+				t.setUndefinedLang(Language(x.lang))
+				return t, nil
+			}
+		}
+		// Search matches for und-region. If und-script-region exists, it would
+		// have been found earlier.
+		if t.RegionID != 0 {
+			if i := regionInclusion[t.RegionID]; i < nRegionGroups {
+				x := likelyRegionGroup[i]
+				if x.region != 0 {
+					t.setUndefinedLang(Language(x.lang))
+					t.setUndefinedScript(Script(x.script))
+					t.RegionID = Region(x.region)
+				}
+			} else {
+				x := likelyRegion[t.RegionID]
+				if x.flags&isList != 0 {
+					x = likelyRegionList[x.lang]
+				}
+				if x.script != 0 && x.flags != scriptInFrom {
+					t.setUndefinedLang(Language(x.lang))
+					t.setUndefinedScript(Script(x.script))
+					return t, nil
+				}
+			}
+		}
+	}
+
+	// Search matches for lang.
+	if t.LangID < langNoIndexOffset {
+		x := likelyLang[t.LangID]
+		if x.flags&isList != 0 {
+			x = likelyLangList[x.region]
+		}
+		if x.region != 0 {
+			t.setUndefinedScript(Script(x.script))
+			t.setUndefinedRegion(Region(x.region))
+		}
+		specializeRegion(&t)
+		if t.LangID == 0 {
+			t.LangID = _en // default language
+		}
+		return t, nil
+	}
+	return t, ErrMissingLikelyTagsData
+}
+
+func (t *Tag) setTagsFrom(id Tag) {
+	t.LangID = id.LangID
+	t.ScriptID = id.ScriptID
+	t.RegionID = id.RegionID
+}
+
+// minimize removes the region or script subtags from t such that
+// t.addLikelySubtags() == t.minimize().addLikelySubtags().
+func (t Tag) minimize() (Tag, error) {
+	t, err := minimizeTags(t)
+	if err != nil {
+		return t, err
+	}
+	t.RemakeString()
+	return t, nil
+}
+
+// minimizeTags mimics the behavior of the ICU 51 C implementation.
+func minimizeTags(t Tag) (Tag, error) {
+	if t.equalTags(Und) {
+		return t, nil
+	}
+	max, err := addTags(t)
+	if err != nil {
+		return t, err
+	}
+	for _, id := range [...]Tag{
+		{LangID: t.LangID},
+		{LangID: t.LangID, RegionID: t.RegionID},
+		{LangID: t.LangID, ScriptID: t.ScriptID},
+	} {
+		if x, err := addTags(id); err == nil && max.equalTags(x) {
+			t.setTagsFrom(id)
+			break
+		}
+	}
+	return t, nil
+}
+
+@@END
 @@PORTABLE {"path":"vendor/golang.org/x/text/internal/language/parse.go","mode":420,"size":15241,"sha256":"0c884b51bb83d3633a51f16e90c7dbaf45c301a449e366df591eda11a3000972","index":0,"count":1,"encoding":"utf-8","payloadBytes":15241}
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

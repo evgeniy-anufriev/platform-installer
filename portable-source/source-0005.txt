@@ -1,3 +1,3576 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/dark.json","mode":420,"size":3405,"sha256":"8997ef4f7024816f7c30a42acfd3b5356892988679e43c6f74310b7d5d879578","index":0,"count":1,"encoding":"utf-8","payloadBytes":3405}
+{
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "color": "252",
+    "margin": 2
+  },
+  "block_quote": {
+    "indent": 1,
+    "indent_token": "│ "
+  },
+  "paragraph": {},
+  "list": {
+    "level_indent": 2
+  },
+  "heading": {
+    "block_suffix": "\n",
+    "color": "39",
+    "bold": true
+  },
+  "h1": {
+    "prefix": " ",
+    "suffix": " ",
+    "color": "228",
+    "background_color": "63",
+    "bold": true
+  },
+  "h2": {
+    "prefix": "## "
+  },
+  "h3": {
+    "prefix": "### "
+  },
+  "h4": {
+    "prefix": "#### "
+  },
+  "h5": {
+    "prefix": "##### "
+  },
+  "h6": {
+    "prefix": "###### ",
+    "color": "35",
+    "bold": false
+  },
+  "text": {},
+  "strikethrough": {
+    "crossed_out": true
+  },
+  "emph": {
+    "italic": true
+  },
+  "strong": {
+    "bold": true
+  },
+  "hr": {
+    "color": "240",
+    "format": "\n--------\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". "
+  },
+  "task": {
+    "ticked": "[✓] ",
+    "unticked": "[ ] "
+  },
+  "link": {
+    "color": "30",
+    "underline": true
+  },
+  "link_text": {
+    "color": "35",
+    "bold": true
+  },
+  "image": {
+    "color": "212",
+    "underline": true
+  },
+  "image_text": {
+    "color": "243",
+    "format": "Image: {{.text}} →"
+  },
+  "code": {
+    "prefix": " ",
+    "suffix": " ",
+    "color": "203",
+    "background_color": "236"
+  },
+  "code_block": {
+    "color": "244",
+    "margin": 2,
+    "chroma": {
+      "text": {
+        "color": "#C4C4C4"
+      },
+      "error": {
+        "color": "#F1F1F1",
+        "background_color": "#F05B5B"
+      },
+      "comment": {
+        "color": "#676767"
+      },
+      "comment_preproc": {
+        "color": "#FF875F"
+      },
+      "keyword": {
+        "color": "#00AAFF"
+      },
+      "keyword_reserved": {
+        "color": "#FF5FD2"
+      },
+      "keyword_namespace": {
+        "color": "#FF5F87"
+      },
+      "keyword_type": {
+        "color": "#6E6ED8"
+      },
+      "operator": {
+        "color": "#EF8080"
+      },
+      "punctuation": {
+        "color": "#E8E8A8"
+      },
+      "name": {
+        "color": "#C4C4C4"
+      },
+      "name_builtin": {
+        "color": "#FF8EC7"
+      },
+      "name_tag": {
+        "color": "#B083EA"
+      },
+      "name_attribute": {
+        "color": "#7A7AE6"
+      },
+      "name_class": {
+        "color": "#F1F1F1",
+        "underline": true,
+        "bold": true
+      },
+      "name_constant": {},
+      "name_decorator": {
+        "color": "#FFFF87"
+      },
+      "name_exception": {},
+      "name_function": {
+        "color": "#00D787"
+      },
+      "name_other": {},
+      "literal": {},
+      "literal_number": {
+        "color": "#6EEFC0"
+      },
+      "literal_date": {},
+      "literal_string": {
+        "color": "#C69669"
+      },
+      "literal_string_escape": {
+        "color": "#AFFFD7"
+      },
+      "generic_deleted": {
+        "color": "#FD5B5B"
+      },
+      "generic_emph": {
+        "italic": true
+      },
+      "generic_inserted": {
+        "color": "#00D787"
+      },
+      "generic_strong": {
+        "bold": true
+      },
+      "generic_subheading": {
+        "color": "#777777"
+      },
+      "background": {
+        "background_color": "#373737"
+      }
+    }
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n🠶 "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/dracula.go","mode":420,"size":5052,"sha256":"4ec7938b1069b909184b1178c38fc8096938cc385bcb538a87f015a421ebb96a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5052}
+package styles
+
+import "github.com/charmbracelet/glamour/ansi"
+
+// DraculaStyleConfig is the dracula style.
+var DraculaStyleConfig = ansi.StyleConfig{
+	Document: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BlockPrefix: "\n",
+			BlockSuffix: "\n",
+			Color:       stringPtr("#f8f8f2"),
+		},
+		Margin: uintPtr(defaultMargin),
+	},
+	BlockQuote: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color:  stringPtr("#f1fa8c"),
+			Italic: boolPtr(true),
+		},
+		Indent: uintPtr(defaultMargin),
+	},
+	List: ansi.StyleList{
+		LevelIndent: defaultMargin,
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr("#f8f8f2"),
+			},
+		},
+	},
+	Heading: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BlockSuffix: "\n",
+			Color:       stringPtr("#bd93f9"),
+			Bold:        boolPtr(true),
+		},
+	},
+	H1: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "# ",
+		},
+	},
+	H2: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "## ",
+		},
+	},
+	H3: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "### ",
+		},
+	},
+	H4: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "#### ",
+		},
+	},
+	H5: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "##### ",
+		},
+	},
+	H6: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "###### ",
+		},
+	},
+	Strikethrough: ansi.StylePrimitive{
+		CrossedOut: boolPtr(true),
+	},
+	Emph: ansi.StylePrimitive{
+		Color:  stringPtr("#f1fa8c"),
+		Italic: boolPtr(true),
+	},
+	Strong: ansi.StylePrimitive{
+		Bold:  boolPtr(true),
+		Color: stringPtr("#ffb86c"),
+	},
+	HorizontalRule: ansi.StylePrimitive{
+		Color:  stringPtr("#6272A4"),
+		Format: "\n--------\n",
+	},
+	Item: ansi.StylePrimitive{
+		BlockPrefix: "• ",
+	},
+	Enumeration: ansi.StylePrimitive{
+		BlockPrefix: ". ",
+		Color:       stringPtr("#8be9fd"),
+	},
+	Task: ansi.StyleTask{
+		StylePrimitive: ansi.StylePrimitive{},
+		Ticked:         "[✓] ",
+		Unticked:       "[ ] ",
+	},
+	Link: ansi.StylePrimitive{
+		Color:     stringPtr("#8be9fd"),
+		Underline: boolPtr(true),
+	},
+	LinkText: ansi.StylePrimitive{
+		Color: stringPtr("#ff79c6"),
+	},
+	Image: ansi.StylePrimitive{
+		Color:     stringPtr("#8be9fd"),
+		Underline: boolPtr(true),
+	},
+	ImageText: ansi.StylePrimitive{
+		Color:  stringPtr("#ff79c6"),
+		Format: "Image: {{.text}} →",
+	},
+	Code: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("#50fa7b"),
+		},
+	},
+	CodeBlock: ansi.StyleCodeBlock{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr("#ffb86c"),
+			},
+			Margin: uintPtr(defaultMargin),
+		},
+		Chroma: &ansi.Chroma{
+			Text: ansi.StylePrimitive{
+				Color: stringPtr("#f8f8f2"),
+			},
+			Error: ansi.StylePrimitive{
+				Color:           stringPtr("#f8f8f2"),
+				BackgroundColor: stringPtr("#ff5555"),
+			},
+			Comment: ansi.StylePrimitive{
+				Color: stringPtr("#6272A4"),
+			},
+			CommentPreproc: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			Keyword: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			KeywordReserved: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			KeywordNamespace: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			KeywordType: ansi.StylePrimitive{
+				Color: stringPtr("#8be9fd"),
+			},
+			Operator: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			Punctuation: ansi.StylePrimitive{
+				Color: stringPtr("#f8f8f2"),
+			},
+			Name: ansi.StylePrimitive{
+				Color: stringPtr("#8be9fd"),
+			},
+			NameBuiltin: ansi.StylePrimitive{
+				Color: stringPtr("#8be9fd"),
+			},
+			NameTag: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			NameAttribute: ansi.StylePrimitive{
+				Color: stringPtr("#50fa7b"),
+			},
+			NameClass: ansi.StylePrimitive{
+				Color: stringPtr("#8be9fd"),
+			},
+			NameConstant: ansi.StylePrimitive{
+				Color: stringPtr("#bd93f9"),
+			},
+			NameDecorator: ansi.StylePrimitive{
+				Color: stringPtr("#50fa7b"),
+			},
+			NameFunction: ansi.StylePrimitive{
+				Color: stringPtr("#50fa7b"),
+			},
+			LiteralNumber: ansi.StylePrimitive{
+				Color: stringPtr("#6EEFC0"),
+			},
+			LiteralString: ansi.StylePrimitive{
+				Color: stringPtr("#f1fa8c"),
+			},
+			LiteralStringEscape: ansi.StylePrimitive{
+				Color: stringPtr("#ff79c6"),
+			},
+			GenericDeleted: ansi.StylePrimitive{
+				Color: stringPtr("#ff5555"),
+			},
+			GenericEmph: ansi.StylePrimitive{
+				Color:  stringPtr("#f1fa8c"),
+				Italic: boolPtr(true),
+			},
+			GenericInserted: ansi.StylePrimitive{
+				Color: stringPtr("#50fa7b"),
+			},
+			GenericStrong: ansi.StylePrimitive{
+				Color: stringPtr("#ffb86c"),
+				Bold:  boolPtr(true),
+			},
+			GenericSubheading: ansi.StylePrimitive{
+				Color: stringPtr("#bd93f9"),
+			},
+			Background: ansi.StylePrimitive{
+				BackgroundColor: stringPtr("#282a36"),
+			},
+		},
+	},
+	Table: ansi.StyleTable{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+		},
+	},
+	DefinitionDescription: ansi.StylePrimitive{
+		BlockPrefix: "\n🠶 ",
+	},
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/dracula.json","mode":420,"size":3386,"sha256":"d01912a5305fd2dc731b6f569d77d8e085000904f7c0c390a8b737ca4900a086","index":0,"count":1,"encoding":"utf-8","payloadBytes":3386}
+{
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "color": "#f8f8f2",
+    "margin": 2
+  },
+  "block_quote": {
+    "color": "#f1fa8c",
+    "italic": true,
+    "indent": 2
+  },
+  "paragraph": {},
+  "list": {
+    "color": "#f8f8f2",
+    "level_indent": 2
+  },
+  "heading": {
+    "block_suffix": "\n",
+    "color": "#bd93f9",
+    "bold": true
+  },
+  "h1": {
+    "prefix": "# "
+  },
+  "h2": {
+    "prefix": "## "
+  },
+  "h3": {
+    "prefix": "### "
+  },
+  "h4": {
+    "prefix": "#### "
+  },
+  "h5": {
+    "prefix": "##### "
+  },
+  "h6": {
+    "prefix": "###### "
+  },
+  "text": {},
+  "strikethrough": {
+    "crossed_out": true
+  },
+  "emph": {
+    "color": "#f1fa8c",
+    "italic": true
+  },
+  "strong": {
+    "color": "#ffb86c",
+    "bold": true
+  },
+  "hr": {
+    "color": "#6272A4",
+    "format": "\n--------\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". ",
+    "color": "#8be9fd"
+  },
+  "task": {
+    "ticked": "[✓] ",
+    "unticked": "[ ] "
+  },
+  "link": {
+    "color": "#8be9fd",
+    "underline": true
+  },
+  "link_text": {
+    "color": "#ff79c6"
+  },
+  "image": {
+    "color": "#8be9fd",
+    "underline": true
+  },
+  "image_text": {
+    "color": "#ff79c6",
+    "format": "Image: {{.text}} →"
+  },
+  "code": {
+    "color": "#50fa7b"
+  },
+  "code_block": {
+    "color": "#ffb86c",
+    "margin": 2,
+    "chroma": {
+      "text": {
+        "color": "#f8f8f2"
+      },
+      "error": {
+        "color": "#f8f8f2",
+        "background_color": "#ff5555"
+      },
+      "comment": {
+        "color": "#6272A4"
+      },
+      "comment_preproc": {
+        "color": "#ff79c6"
+      },
+      "keyword": {
+        "color": "#ff79c6"
+      },
+      "keyword_reserved": {
+        "color": "#ff79c6"
+      },
+      "keyword_namespace": {
+        "color": "#ff79c6"
+      },
+      "keyword_type": {
+        "color": "#8be9fd"
+      },
+      "operator": {
+        "color": "#ff79c6"
+      },
+      "punctuation": {
+        "color": "#f8f8f2"
+      },
+      "name": {
+        "color": "#8be9fd"
+      },
+      "name_builtin": {
+        "color": "#8be9fd"
+      },
+      "name_tag": {
+        "color": "#ff79c6"
+      },
+      "name_attribute": {
+        "color": "#50fa7b"
+      },
+      "name_class": {
+        "color": "#8be9fd"
+      },
+      "name_constant": {
+        "color": "#bd93f9"
+      },
+      "name_decorator": {
+        "color": "#50fa7b"
+      },
+      "name_exception": {},
+      "name_function": {
+        "color": "#50fa7b"
+      },
+      "name_other": {},
+      "literal": {},
+      "literal_number": {
+        "color": "#6EEFC0"
+      },
+      "literal_date": {},
+      "literal_string": {
+        "color": "#f1fa8c"
+      },
+      "literal_string_escape": {
+        "color": "#ff79c6"
+      },
+      "generic_deleted": {
+        "color": "#ff5555"
+      },
+      "generic_emph": {
+        "color": "#f1fa8c",
+        "italic": true
+      },
+      "generic_inserted": {
+        "color": "#50fa7b"
+      },
+      "generic_strong": {
+        "color": "#ffb86c",
+        "bold": true
+      },
+      "generic_subheading": {
+        "color": "#bd93f9"
+      },
+      "background": {
+        "background_color": "#282a36"
+      }
+    }
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n🠶 "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/light.json","mode":420,"size":3386,"sha256":"d8eb8e0fc7dee333d3111d297da37c9161f1b283f52ebecfb9ef1e5c8a32625f","index":0,"count":1,"encoding":"utf-8","payloadBytes":3386}
+{
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "color": "234",
+    "margin": 2
+  },
+  "block_quote": {
+    "indent": 1,
+    "indent_token": "│ "
+  },
+  "paragraph": {},
+  "list": {
+    "level_indent": 2
+  },
+  "heading": {
+    "block_suffix": "\n",
+    "color": "27",
+    "bold": true
+  },
+  "h1": {
+    "prefix": " ",
+    "suffix": " ",
+    "color": "228",
+    "background_color": "63",
+    "bold": true
+  },
+  "h2": {
+    "prefix": "## "
+  },
+  "h3": {
+    "prefix": "### "
+  },
+  "h4": {
+    "prefix": "#### "
+  },
+  "h5": {
+    "prefix": "##### "
+  },
+  "h6": {
+    "prefix": "###### ",
+    "bold": false
+  },
+  "text": {},
+  "strikethrough": {
+    "crossed_out": true
+  },
+  "emph": {
+    "italic": true
+  },
+  "strong": {
+    "bold": true
+  },
+  "hr": {
+    "color": "249",
+    "format": "\n--------\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". "
+  },
+  "task": {
+    "ticked": "[✓] ",
+    "unticked": "[ ] "
+  },
+  "link": {
+    "color": "36",
+    "underline": true
+  },
+  "link_text": {
+    "color": "29",
+    "bold": true
+  },
+  "image": {
+    "color": "205",
+    "underline": true
+  },
+  "image_text": {
+    "color": "243",
+    "format": "Image: {{.text}} →"
+  },
+  "code": {
+    "prefix": " ",
+    "suffix": " ",
+    "color": "203",
+    "background_color": "254"
+  },
+  "code_block": {
+    "color": "242",
+    "margin": 2,
+    "chroma": {
+      "text": {
+        "color": "#2A2A2A"
+      },
+      "error": {
+        "color": "#F1F1F1",
+        "background_color": "#FF5555"
+      },
+      "comment": {
+        "color": "#8D8D8D"
+      },
+      "comment_preproc": {
+        "color": "#FF875F"
+      },
+      "keyword": {
+        "color": "#279EFC"
+      },
+      "keyword_reserved": {
+        "color": "#FF5FD2"
+      },
+      "keyword_namespace": {
+        "color": "#FB406F"
+      },
+      "keyword_type": {
+        "color": "#7049C2"
+      },
+      "operator": {
+        "color": "#FF2626"
+      },
+      "punctuation": {
+        "color": "#FA7878"
+      },
+      "name": {},
+      "name_builtin": {
+        "color": "#0A1BB1"
+      },
+      "name_tag": {
+        "color": "#581290"
+      },
+      "name_attribute": {
+        "color": "#8362CB"
+      },
+      "name_class": {
+        "color": "#212121",
+        "underline": true,
+        "bold": true
+      },
+      "name_constant": {
+        "color": "#581290"
+      },
+      "name_decorator": {
+        "color": "#A3A322"
+      },
+      "name_exception": {},
+      "name_function": {
+        "color": "#019F57"
+      },
+      "name_other": {},
+      "literal": {},
+      "literal_number": {
+        "color": "#22CCAE"
+      },
+      "literal_date": {},
+      "literal_string": {
+        "color": "#7E5B38"
+      },
+      "literal_string_escape": {
+        "color": "#00AEAE"
+      },
+      "generic_deleted": {
+        "color": "#FD5B5B"
+      },
+      "generic_emph": {
+        "italic": true
+      },
+      "generic_inserted": {
+        "color": "#00D787"
+      },
+      "generic_strong": {
+        "bold": true
+      },
+      "generic_subheading": {
+        "color": "#777777"
+      },
+      "background": {
+        "background_color": "#373737"
+      }
+    }
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n🠶 "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/notty.json","mode":420,"size":1285,"sha256":"323c20c0a6c47adc66867346c6ff4018594cae54a7ac3942f58b8f83c2a32a09","index":0,"count":1,"encoding":"utf-8","payloadBytes":1285}
+{
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "margin": 2
+  },
+  "block_quote": {
+    "indent": 1,
+    "indent_token": "| "
+  },
+  "paragraph": {},
+  "list": {
+    "level_indent": 4
+  },
+  "heading": {
+    "block_suffix": "\n"
+  },
+  "h1": {
+    "prefix": "# "
+  },
+  "h2": {
+    "prefix": "## "
+  },
+  "h3": {
+    "prefix": "### "
+  },
+  "h4": {
+    "prefix": "#### "
+  },
+  "h5": {
+    "prefix": "##### "
+  },
+  "h6": {
+    "prefix": "###### "
+  },
+  "text": {},
+  "strikethrough": {
+    "block_prefix": "~~",
+    "block_suffix": "~~"
+  },
+  "emph": {
+    "block_prefix": "*",
+    "block_suffix": "*"
+  },
+  "strong": {
+    "block_prefix": "**",
+    "block_suffix": "**"
+  },
+  "hr": {
+    "format": "\n--------\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". "
+  },
+  "task": {
+    "ticked": "[x] ",
+    "unticked": "[ ] "
+  },
+  "link": {},
+  "link_text": {},
+  "image": {},
+  "image_text": {
+    "format": "Image: {{.text}} →"
+  },
+  "code": {
+    "block_prefix": "`",
+    "block_suffix": "`"
+  },
+  "code_block": {
+    "margin": 2
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n* "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/pink.json","mode":420,"size":1368,"sha256":"75c7ffc2ebe5cbaeb49c66393c56e28263dc38b72428cc9cf398a3fcaa1fe955","index":0,"count":1,"encoding":"utf-8","payloadBytes":1368}
+{
+  "document": {
+    "margin": 2
+  },
+  "block_quote": {
+    "indent": 1,
+    "indent_token": "│ "
+  },
+  "paragraph": {},
+  "list": {
+    "level_indent": 2
+  },
+  "heading": {
+    "block_suffix": "\n",
+    "color": "212",
+    "bold": true
+  },
+  "h1": {
+    "block_prefix": "\n",
+    "block_suffix": "\n"
+  },
+  "h2": {
+    "prefix": "▌ "
+  },
+  "h3": {
+    "prefix": "┃ "
+  },
+  "h4": {
+    "prefix": "│ "
+  },
+  "h5": {
+    "prefix": "┆ "
+  },
+  "h6": {
+    "prefix": "┊ ",
+    "bold": false
+  },
+  "text": {},
+  "strikethrough": {
+    "crossed_out": true
+  },
+  "emph": {
+    "italic": true
+  },
+  "strong": {
+    "bold": true
+  },
+  "hr": {
+    "color": "212",
+    "format": "\n──────\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". "
+  },
+  "task": {
+    "ticked": "[✓] ",
+    "unticked": "[ ] "
+  },
+  "link": {
+    "color": "99",
+    "underline": true
+  },
+  "link_text": {
+    "bold": true
+  },
+  "image": {
+    "underline": true
+  },
+  "image_text": {
+    "format": "Image: {{.text}}"
+  },
+  "code": {
+    "prefix": " ",
+    "suffix": " ",
+    "color": "212",
+    "background_color": "236"
+  },
+  "code_block": {},
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n🠶 "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/styles.go","mode":420,"size":15969,"sha256":"13bd5b7d13b7818200f0e849281ac3857f175de9ae11e1bbb63bd805676eb24b","index":0,"count":1,"encoding":"utf-8","payloadBytes":15969}
+package styles
+
+//go:generate go run ../internal/generate-style-json
+
+import (
+	"github.com/charmbracelet/glamour/ansi"
+)
+
+const (
+	defaultListIndent      = 2
+	defaultListLevelIndent = 4
+	defaultMargin          = 2
+)
+
+// Default styles.
+const (
+	AsciiStyle      = "ascii"
+	AutoStyle       = "auto"
+	DarkStyle       = "dark"
+	DraculaStyle    = "dracula"
+	TokyoNightStyle = "tokyo-night"
+	LightStyle      = "light"
+	NoTTYStyle      = "notty"
+	PinkStyle       = "pink"
+)
+
+var (
+	// ASCIIStyleConfig uses only ASCII characters.
+	ASCIIStyleConfig = ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockPrefix: "\n",
+				BlockSuffix: "\n",
+			},
+			Margin: uintPtr(defaultMargin),
+		},
+		BlockQuote: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+			Indent:         uintPtr(1),
+			IndentToken:    stringPtr("| "),
+		},
+		Paragraph: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+		},
+		List: ansi.StyleList{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{},
+			},
+			LevelIndent: defaultListLevelIndent,
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "# ",
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "## ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "### ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "#### ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "##### ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "###### ",
+			},
+		},
+		Strikethrough: ansi.StylePrimitive{
+			BlockPrefix: "~~",
+			BlockSuffix: "~~",
+		},
+		Emph: ansi.StylePrimitive{
+			BlockPrefix: "*",
+			BlockSuffix: "*",
+		},
+		Strong: ansi.StylePrimitive{
+			BlockPrefix: "**",
+			BlockSuffix: "**",
+		},
+		HorizontalRule: ansi.StylePrimitive{
+			Format: "\n--------\n",
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: ansi.StyleTask{
+			Ticked:   "[x] ",
+			Unticked: "[ ] ",
+		},
+		ImageText: ansi.StylePrimitive{
+			Format: "Image: {{.text}} →",
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockPrefix: "`",
+				BlockSuffix: "`",
+			},
+		},
+		CodeBlock: ansi.StyleCodeBlock{
+			StyleBlock: ansi.StyleBlock{
+				Margin: uintPtr(defaultMargin),
+			},
+		},
+		Table: ansi.StyleTable{},
+		DefinitionDescription: ansi.StylePrimitive{
+			BlockPrefix: "\n* ",
+		},
+	}
+
+	// DarkStyleConfig is the default dark style.
+	DarkStyleConfig = ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockPrefix: "\n",
+				BlockSuffix: "\n",
+				Color:       stringPtr("252"),
+			},
+			Margin: uintPtr(defaultMargin),
+		},
+		BlockQuote: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+			Indent:         uintPtr(1),
+			IndentToken:    stringPtr("│ "),
+		},
+		List: ansi.StyleList{
+			LevelIndent: defaultListIndent,
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+				Color:       stringPtr("39"),
+				Bold:        boolPtr(true),
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix:          " ",
+				Suffix:          " ",
+				Color:           stringPtr("228"),
+				BackgroundColor: stringPtr("63"),
+				Bold:            boolPtr(true),
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "## ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "### ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "#### ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "##### ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "###### ",
+				Color:  stringPtr("35"),
+				Bold:   boolPtr(false),
+			},
+		},
+		Strikethrough: ansi.StylePrimitive{
+			CrossedOut: boolPtr(true),
+		},
+		Emph: ansi.StylePrimitive{
+			Italic: boolPtr(true),
+		},
+		Strong: ansi.StylePrimitive{
+			Bold: boolPtr(true),
+		},
+		HorizontalRule: ansi.StylePrimitive{
+			Color:  stringPtr("240"),
+			Format: "\n--------\n",
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: ansi.StyleTask{
+			StylePrimitive: ansi.StylePrimitive{},
+			Ticked:         "[✓] ",
+			Unticked:       "[ ] ",
+		},
+		Link: ansi.StylePrimitive{
+			Color:     stringPtr("30"),
+			Underline: boolPtr(true),
+		},
+		LinkText: ansi.StylePrimitive{
+			Color: stringPtr("35"),
+			Bold:  boolPtr(true),
+		},
+		Image: ansi.StylePrimitive{
+			Color:     stringPtr("212"),
+			Underline: boolPtr(true),
+		},
+		ImageText: ansi.StylePrimitive{
+			Color:  stringPtr("243"),
+			Format: "Image: {{.text}} →",
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix:          " ",
+				Suffix:          " ",
+				Color:           stringPtr("203"),
+				BackgroundColor: stringPtr("236"),
+			},
+		},
+		CodeBlock: ansi.StyleCodeBlock{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{
+					Color: stringPtr("244"),
+				},
+				Margin: uintPtr(defaultMargin),
+			},
+			Chroma: &ansi.Chroma{
+				Text: ansi.StylePrimitive{
+					Color: stringPtr("#C4C4C4"),
+				},
+				Error: ansi.StylePrimitive{
+					Color:           stringPtr("#F1F1F1"),
+					BackgroundColor: stringPtr("#F05B5B"),
+				},
+				Comment: ansi.StylePrimitive{
+					Color: stringPtr("#676767"),
+				},
+				CommentPreproc: ansi.StylePrimitive{
+					Color: stringPtr("#FF875F"),
+				},
+				Keyword: ansi.StylePrimitive{
+					Color: stringPtr("#00AAFF"),
+				},
+				KeywordReserved: ansi.StylePrimitive{
+					Color: stringPtr("#FF5FD2"),
+				},
+				KeywordNamespace: ansi.StylePrimitive{
+					Color: stringPtr("#FF5F87"),
+				},
+				KeywordType: ansi.StylePrimitive{
+					Color: stringPtr("#6E6ED8"),
+				},
+				Operator: ansi.StylePrimitive{
+					Color: stringPtr("#EF8080"),
+				},
+				Punctuation: ansi.StylePrimitive{
+					Color: stringPtr("#E8E8A8"),
+				},
+				Name: ansi.StylePrimitive{
+					Color: stringPtr("#C4C4C4"),
+				},
+				NameBuiltin: ansi.StylePrimitive{
+					Color: stringPtr("#FF8EC7"),
+				},
+				NameTag: ansi.StylePrimitive{
+					Color: stringPtr("#B083EA"),
+				},
+				NameAttribute: ansi.StylePrimitive{
+					Color: stringPtr("#7A7AE6"),
+				},
+				NameClass: ansi.StylePrimitive{
+					Color:     stringPtr("#F1F1F1"),
+					Underline: boolPtr(true),
+					Bold:      boolPtr(true),
+				},
+				NameDecorator: ansi.StylePrimitive{
+					Color: stringPtr("#FFFF87"),
+				},
+				NameFunction: ansi.StylePrimitive{
+					Color: stringPtr("#00D787"),
+				},
+				LiteralNumber: ansi.StylePrimitive{
+					Color: stringPtr("#6EEFC0"),
+				},
+				LiteralString: ansi.StylePrimitive{
+					Color: stringPtr("#C69669"),
+				},
+				LiteralStringEscape: ansi.StylePrimitive{
+					Color: stringPtr("#AFFFD7"),
+				},
+				GenericDeleted: ansi.StylePrimitive{
+					Color: stringPtr("#FD5B5B"),
+				},
+				GenericEmph: ansi.StylePrimitive{
+					Italic: boolPtr(true),
+				},
+				GenericInserted: ansi.StylePrimitive{
+					Color: stringPtr("#00D787"),
+				},
+				GenericStrong: ansi.StylePrimitive{
+					Bold: boolPtr(true),
+				},
+				GenericSubheading: ansi.StylePrimitive{
+					Color: stringPtr("#777777"),
+				},
+				Background: ansi.StylePrimitive{
+					BackgroundColor: stringPtr("#373737"),
+				},
+			},
+		},
+		Table: ansi.StyleTable{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{},
+			},
+		},
+		DefinitionDescription: ansi.StylePrimitive{
+			BlockPrefix: "\n🠶 ",
+		},
+	}
+
+	// LightStyleConfig is the default light style.
+	LightStyleConfig = ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockPrefix: "\n",
+				BlockSuffix: "\n",
+				Color:       stringPtr("234"),
+			},
+			Margin: uintPtr(defaultMargin),
+		},
+		BlockQuote: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+			Indent:         uintPtr(1),
+			IndentToken:    stringPtr("│ "),
+		},
+		List: ansi.StyleList{
+			LevelIndent: defaultListIndent,
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+				Color:       stringPtr("27"),
+				Bold:        boolPtr(true),
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix:          " ",
+				Suffix:          " ",
+				Color:           stringPtr("228"),
+				BackgroundColor: stringPtr("63"),
+				Bold:            boolPtr(true),
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "## ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "### ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "#### ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "##### ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "###### ",
+				Bold:   boolPtr(false),
+			},
+		},
+		Strikethrough: ansi.StylePrimitive{
+			CrossedOut: boolPtr(true),
+		},
+		Emph: ansi.StylePrimitive{
+			Italic: boolPtr(true),
+		},
+		Strong: ansi.StylePrimitive{
+			Bold: boolPtr(true),
+		},
+		HorizontalRule: ansi.StylePrimitive{
+			Color:  stringPtr("249"),
+			Format: "\n--------\n",
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: ansi.StyleTask{
+			StylePrimitive: ansi.StylePrimitive{},
+			Ticked:         "[✓] ",
+			Unticked:       "[ ] ",
+		},
+		Link: ansi.StylePrimitive{
+			Color:     stringPtr("36"),
+			Underline: boolPtr(true),
+		},
+		LinkText: ansi.StylePrimitive{
+			Color: stringPtr("29"),
+			Bold:  boolPtr(true),
+		},
+		Image: ansi.StylePrimitive{
+			Color:     stringPtr("205"),
+			Underline: boolPtr(true),
+		},
+		ImageText: ansi.StylePrimitive{
+			Color:  stringPtr("243"),
+			Format: "Image: {{.text}} →",
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix:          " ",
+				Suffix:          " ",
+				Color:           stringPtr("203"),
+				BackgroundColor: stringPtr("254"),
+			},
+		},
+		CodeBlock: ansi.StyleCodeBlock{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{
+					Color: stringPtr("242"),
+				},
+				Margin: uintPtr(defaultMargin),
+			},
+			Chroma: &ansi.Chroma{
+				Text: ansi.StylePrimitive{
+					Color: stringPtr("#2A2A2A"),
+				},
+				Error: ansi.StylePrimitive{
+					Color:           stringPtr("#F1F1F1"),
+					BackgroundColor: stringPtr("#FF5555"),
+				},
+				Comment: ansi.StylePrimitive{
+					Color: stringPtr("#8D8D8D"),
+				},
+				CommentPreproc: ansi.StylePrimitive{
+					Color: stringPtr("#FF875F"),
+				},
+				Keyword: ansi.StylePrimitive{
+					Color: stringPtr("#279EFC"),
+				},
+				KeywordReserved: ansi.StylePrimitive{
+					Color: stringPtr("#FF5FD2"),
+				},
+				KeywordNamespace: ansi.StylePrimitive{
+					Color: stringPtr("#FB406F"),
+				},
+				KeywordType: ansi.StylePrimitive{
+					Color: stringPtr("#7049C2"),
+				},
+				Operator: ansi.StylePrimitive{
+					Color: stringPtr("#FF2626"),
+				},
+				Punctuation: ansi.StylePrimitive{
+					Color: stringPtr("#FA7878"),
+				},
+				NameBuiltin: ansi.StylePrimitive{
+					Color: stringPtr("#0A1BB1"),
+				},
+				NameTag: ansi.StylePrimitive{
+					Color: stringPtr("#581290"),
+				},
+				NameAttribute: ansi.StylePrimitive{
+					Color: stringPtr("#8362CB"),
+				},
+				NameClass: ansi.StylePrimitive{
+					Color:     stringPtr("#212121"),
+					Underline: boolPtr(true),
+					Bold:      boolPtr(true),
+				},
+				NameConstant: ansi.StylePrimitive{
+					Color: stringPtr("#581290"),
+				},
+				NameDecorator: ansi.StylePrimitive{
+					Color: stringPtr("#A3A322"),
+				},
+				NameFunction: ansi.StylePrimitive{
+					Color: stringPtr("#019F57"),
+				},
+				LiteralNumber: ansi.StylePrimitive{
+					Color: stringPtr("#22CCAE"),
+				},
+				LiteralString: ansi.StylePrimitive{
+					Color: stringPtr("#7E5B38"),
+				},
+				LiteralStringEscape: ansi.StylePrimitive{
+					Color: stringPtr("#00AEAE"),
+				},
+				GenericDeleted: ansi.StylePrimitive{
+					Color: stringPtr("#FD5B5B"),
+				},
+				GenericEmph: ansi.StylePrimitive{
+					Italic: boolPtr(true),
+				},
+				GenericInserted: ansi.StylePrimitive{
+					Color: stringPtr("#00D787"),
+				},
+				GenericStrong: ansi.StylePrimitive{
+					Bold: boolPtr(true),
+				},
+				GenericSubheading: ansi.StylePrimitive{
+					Color: stringPtr("#777777"),
+				},
+				Background: ansi.StylePrimitive{
+					BackgroundColor: stringPtr("#373737"),
+				},
+			},
+		},
+		Table: ansi.StyleTable{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{},
+			},
+		},
+		DefinitionDescription: ansi.StylePrimitive{
+			BlockPrefix: "\n🠶 ",
+		},
+	}
+
+	// PinkStyleConfig is the default pink style.
+	PinkStyleConfig = ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			Margin: uintPtr(defaultMargin),
+		},
+		BlockQuote: ansi.StyleBlock{
+			Indent:      uintPtr(1),
+			IndentToken: stringPtr("│ "),
+		},
+		List: ansi.StyleList{
+			LevelIndent: defaultListIndent,
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+				Color:       stringPtr("212"),
+				Bold:        boolPtr(true),
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+				BlockPrefix: "\n",
+				Prefix:      "",
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "▌ ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "┃ ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "│ ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "┆ ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "┊ ",
+				Bold:   boolPtr(false),
+			},
+		},
+		Text: ansi.StylePrimitive{},
+		Strikethrough: ansi.StylePrimitive{
+			CrossedOut: boolPtr(true),
+		},
+		Emph: ansi.StylePrimitive{
+			Italic: boolPtr(true),
+		},
+		Strong: ansi.StylePrimitive{
+			Bold: boolPtr(true),
+		},
+		HorizontalRule: ansi.StylePrimitive{
+			Color:  stringPtr("212"),
+			Format: "\n──────\n",
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: ansi.StyleTask{
+			Ticked:   "[✓] ",
+			Unticked: "[ ] ",
+		},
+		Link: ansi.StylePrimitive{
+			Color:     stringPtr("99"),
+			Underline: boolPtr(true),
+		},
+		LinkText: ansi.StylePrimitive{
+			Bold: boolPtr(true),
+		},
+		Image: ansi.StylePrimitive{
+			Underline: boolPtr(true),
+		},
+		ImageText: ansi.StylePrimitive{
+			Format: "Image: {{.text}}",
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:           stringPtr("212"),
+				BackgroundColor: stringPtr("236"),
+				Prefix:          " ",
+				Suffix:          " ",
+			},
+		},
+		Table:          ansi.StyleTable{},
+		DefinitionList: ansi.StyleBlock{},
+		DefinitionTerm: ansi.StylePrimitive{},
+		DefinitionDescription: ansi.StylePrimitive{
+			BlockPrefix: "\n🠶 ",
+		},
+		HTMLBlock: ansi.StyleBlock{},
+		HTMLSpan:  ansi.StyleBlock{},
+	}
+
+	// NoTTYStyleConfig is the default notty style.
+	NoTTYStyleConfig = ASCIIStyleConfig
+
+	// DefaultStyles are the default styles.
+	DefaultStyles = map[string]*ansi.StyleConfig{
+		AsciiStyle: &ASCIIStyleConfig,
+		DarkStyle:  &DarkStyleConfig,
+		LightStyle: &LightStyleConfig,
+		NoTTYStyle: &NoTTYStyleConfig,
+		PinkStyle:  &PinkStyleConfig,
+
+		// Popular themes
+		DraculaStyle:    &DraculaStyleConfig,
+		TokyoNightStyle: &TokyoNightStyleConfig,
+	}
+)
+
+func boolPtr(b bool) *bool       { return &b }
+func stringPtr(s string) *string { return &s }
+func uintPtr(u uint) *uint       { return &u }
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/tokyo-night.go","mode":420,"size":4888,"sha256":"8e12f107a3ecb06310737815c19f134c190d0dc328f698fd20bdce2edff92cce","index":0,"count":1,"encoding":"utf-8","payloadBytes":4888}
+package styles
+
+import "github.com/charmbracelet/glamour/ansi"
+
+// TokyoNightStyle is the tokyo night style.
+var TokyoNightStyleConfig = ansi.StyleConfig{
+	Document: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BlockPrefix: "\n",
+			BlockSuffix: "\n",
+			Color:       stringPtr("#a9b1d6"),
+		},
+		Margin: uintPtr(defaultMargin),
+	},
+	BlockQuote: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{},
+		Indent:         uintPtr(1),
+		IndentToken:    stringPtr("│ "),
+	},
+	List: ansi.StyleList{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr("#a9b1d6"),
+			},
+		},
+		LevelIndent: defaultListIndent,
+	},
+	Heading: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BlockSuffix: "\n",
+			Color:       stringPtr("#bb9af7"),
+			Bold:        boolPtr(true),
+		},
+	},
+	H1: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "# ",
+			Bold:   boolPtr(true),
+		},
+	},
+	H2: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "## ",
+		},
+	},
+	H3: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "### ",
+		},
+	},
+	H4: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "#### ",
+		},
+	},
+	H5: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "##### ",
+		},
+	},
+	H6: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Prefix: "###### ",
+		},
+	},
+	Strikethrough: ansi.StylePrimitive{
+		CrossedOut: boolPtr(true),
+	},
+	Emph: ansi.StylePrimitive{
+		Italic: boolPtr(true),
+	},
+	Strong: ansi.StylePrimitive{
+		Bold: boolPtr(true),
+	},
+	HorizontalRule: ansi.StylePrimitive{
+		Color:  stringPtr("#565f89"),
+		Format: "\n--------\n",
+	},
+	Item: ansi.StylePrimitive{
+		BlockPrefix: "• ",
+	},
+	Enumeration: ansi.StylePrimitive{
+		BlockPrefix: ". ",
+		Color:       stringPtr("#7aa2f7"),
+	},
+	Task: ansi.StyleTask{
+		StylePrimitive: ansi.StylePrimitive{},
+		Ticked:         "[✓] ",
+		Unticked:       "[ ] ",
+	},
+	Link: ansi.StylePrimitive{
+		Color:     stringPtr("#7aa2f7"),
+		Underline: boolPtr(true),
+	},
+	LinkText: ansi.StylePrimitive{
+		Color: stringPtr("#2ac3de"),
+	},
+	Image: ansi.StylePrimitive{
+		Color:     stringPtr("#7aa2f7"),
+		Underline: boolPtr(true),
+	},
+	ImageText: ansi.StylePrimitive{
+		Color:  stringPtr("#2ac3de"),
+		Format: "Image: {{.text}} →",
+	},
+	Code: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("#9ece6a"),
+		},
+	},
+	CodeBlock: ansi.StyleCodeBlock{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr("#ff9e64"),
+			},
+			Margin: uintPtr(defaultMargin),
+		},
+		Chroma: &ansi.Chroma{
+			Text: ansi.StylePrimitive{
+				Color: stringPtr("#a9b1d6"),
+			},
+			Error: ansi.StylePrimitive{
+				Color:           stringPtr("#a9b1d6"),
+				BackgroundColor: stringPtr("#f7768e"),
+			},
+			Comment: ansi.StylePrimitive{
+				Color: stringPtr("#565f89"),
+			},
+			CommentPreproc: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			Keyword: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			KeywordReserved: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			KeywordNamespace: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			KeywordType: ansi.StylePrimitive{
+				Color: stringPtr("#7aa2f7"),
+			},
+			Operator: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			Punctuation: ansi.StylePrimitive{
+				Color: stringPtr("#a9b1d6"),
+			},
+			Name: ansi.StylePrimitive{
+				Color: stringPtr("#7aa2f7"),
+			},
+			NameConstant: ansi.StylePrimitive{
+				Color: stringPtr("#bb9af7"),
+			},
+			NameBuiltin: ansi.StylePrimitive{
+				Color: stringPtr("#7aa2f7"),
+			},
+			NameTag: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			NameAttribute: ansi.StylePrimitive{
+				Color: stringPtr("#9ece6a"),
+			},
+			NameClass: ansi.StylePrimitive{
+				Color: stringPtr("#7aa2f7"),
+			},
+			NameDecorator: ansi.StylePrimitive{
+				Color: stringPtr("#9ece6a"),
+			},
+			NameFunction: ansi.StylePrimitive{
+				Color: stringPtr("#9ece6a"),
+			},
+			LiteralNumber: ansi.StylePrimitive{},
+			LiteralString: ansi.StylePrimitive{
+				Color: stringPtr("#e0af68"),
+			},
+			LiteralStringEscape: ansi.StylePrimitive{
+				Color: stringPtr("#2ac3de"),
+			},
+			GenericDeleted: ansi.StylePrimitive{
+				Color: stringPtr("#f7768e"),
+			},
+			GenericEmph: ansi.StylePrimitive{
+				Italic: boolPtr(true),
+			},
+			GenericInserted: ansi.StylePrimitive{
+				Color: stringPtr("#9ece6a"),
+			},
+			GenericStrong: ansi.StylePrimitive{
+				Bold: boolPtr(true),
+			},
+			GenericSubheading: ansi.StylePrimitive{
+				Color: stringPtr("#bb9af7"),
+			},
+			Background: ansi.StylePrimitive{
+				BackgroundColor: stringPtr("#1a1b26"),
+			},
+		},
+	},
+	Table: ansi.StyleTable{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+		},
+	},
+	DefinitionDescription: ansi.StylePrimitive{
+		BlockPrefix: "\n🠶 ",
+	},
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/tokyo_night.json","mode":420,"size":3250,"sha256":"9e1bba67ddc53c3f85e619ff0659c3d0806682eb302658b9cce531cf1202bada","index":0,"count":1,"encoding":"utf-8","payloadBytes":3250}
+{
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "color": "#a9b1d6",
+    "margin": 2
+  },
+  "block_quote": {
+    "indent": 1,
+    "indent_token": "│ "
+  },
+  "paragraph": {},
+  "list": {
+    "color": "#a9b1d6",
+    "level_indent": 2
+  },
+  "heading": {
+    "block_suffix": "\n",
+    "color": "#bb9af7",
+    "bold": true
+  },
+  "h1": {
+    "prefix": "# ",
+    "bold": true
+  },
+  "h2": {
+    "prefix": "## "
+  },
+  "h3": {
+    "prefix": "### "
+  },
+  "h4": {
+    "prefix": "#### "
+  },
+  "h5": {
+    "prefix": "##### "
+  },
+  "h6": {
+    "prefix": "###### "
+  },
+  "text": {},
+  "strikethrough": {
+    "crossed_out": true
+  },
+  "emph": {
+    "italic": true
+  },
+  "strong": {
+    "bold": true
+  },
+  "hr": {
+    "color": "#565f89",
+    "format": "\n--------\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". ",
+    "color": "#7aa2f7"
+  },
+  "task": {
+    "ticked": "[✓] ",
+    "unticked": "[ ] "
+  },
+  "link": {
+    "color": "#7aa2f7",
+    "underline": true
+  },
+  "link_text": {
+    "color": "#2ac3de"
+  },
+  "image": {
+    "color": "#7aa2f7",
+    "underline": true
+  },
+  "image_text": {
+    "color": "#2ac3de",
+    "format": "Image: {{.text}} →"
+  },
+  "code": {
+    "color": "#9ece6a"
+  },
+  "code_block": {
+    "color": "#ff9e64",
+    "margin": 2,
+    "chroma": {
+      "text": {
+        "color": "#a9b1d6"
+      },
+      "error": {
+        "color": "#a9b1d6",
+        "background_color": "#f7768e"
+      },
+      "comment": {
+        "color": "#565f89"
+      },
+      "comment_preproc": {
+        "color": "#2ac3de"
+      },
+      "keyword": {
+        "color": "#2ac3de"
+      },
+      "keyword_reserved": {
+        "color": "#2ac3de"
+      },
+      "keyword_namespace": {
+        "color": "#2ac3de"
+      },
+      "keyword_type": {
+        "color": "#7aa2f7"
+      },
+      "operator": {
+        "color": "#2ac3de"
+      },
+      "punctuation": {
+        "color": "#a9b1d6"
+      },
+      "name": {
+        "color": "#7aa2f7"
+      },
+      "name_builtin": {
+        "color": "#7aa2f7"
+      },
+      "name_tag": {
+        "color": "#2ac3de"
+      },
+      "name_attribute": {
+        "color": "#9ece6a"
+      },
+      "name_class": {
+        "color": "#7aa2f7"
+      },
+      "name_constant": {
+        "color": "#bb9af7"
+      },
+      "name_decorator": {
+        "color": "#9ece6a"
+      },
+      "name_exception": {},
+      "name_function": {
+        "color": "#9ece6a"
+      },
+      "name_other": {},
+      "literal": {},
+      "literal_number": {},
+      "literal_date": {},
+      "literal_string": {
+        "color": "#e0af68"
+      },
+      "literal_string_escape": {
+        "color": "#2ac3de"
+      },
+      "generic_deleted": {
+        "color": "#f7768e"
+      },
+      "generic_emph": {
+        "italic": true
+      },
+      "generic_inserted": {
+        "color": "#9ece6a"
+      },
+      "generic_strong": {
+        "bold": true
+      },
+      "generic_subheading": {
+        "color": "#bb9af7"
+      },
+      "background": {
+        "background_color": "#1a1b26"
+      }
+    }
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n🠶 "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/.gitignore","mode":420,"size":21,"sha256":"562cfa9d06e29e0734fbb909c387b3d0c837372199f1989df3280df33b18fd8d","index":0,"count":1,"encoding":"utf-8","payloadBytes":21}
+ssh_example_ed25519*
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/.golangci-soft.yml","mode":420,"size":682,"sha256":"6fa08f3e82e6c7c1f187643021f3774859e094cfd954f16d311c666e739de6d1","index":0,"count":1,"encoding":"utf-8","payloadBytes":682}
+run:
+  tests: false
+
+issues:
+  include:
+    - EXC0001
+    - EXC0005
+    - EXC0011
+    - EXC0012
+    - EXC0013
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    # - dupl
+    - exhaustive
+    # - exhaustivestruct
+    - goconst
+    - godot
+    - godox
+    - gomnd
+    - gomoddirectives
+    - goprintffuncname
+    # - lll
+    - misspell
+    - nakedret
+    - nestif
+    - noctx
+    - nolintlint
+    - prealloc
+    - wrapcheck
+
+  # disable default linters, they are already enabled in .golangci.yml
+  disable:
+    - deadcode
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unused
+    - varcheck
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/.golangci.yml","mode":420,"size":403,"sha256":"9407049d303d0dc6344c879e72627f98d4112ddf4c49d44a39c03880cd596ef8","index":0,"count":1,"encoding":"utf-8","payloadBytes":403}
+run:
+  tests: false
+
+issues:
+  include:
+    - EXC0001
+    - EXC0005
+    - EXC0011
+    - EXC0012
+    - EXC0013
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    - bodyclose
+    - exportloopref
+    - gofumpt
+    - goimports
+    - gosec
+    - nilerr
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - tparallel
+    - unconvert
+    - unparam
+    - whitespace
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/.goreleaser.yml","mode":420,"size":158,"sha256":"e11cac998d8933b24bc0765dc84373c87e412e7a1262d300e8ab4d1ca77cd6d7","index":0,"count":1,"encoding":"utf-8","payloadBytes":158}
+includes:
+  - from_url:
+      url: charmbracelet/meta/main/goreleaser-lib.yaml
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/LICENSE","mode":420,"size":1080,"sha256":"699cffa88b62691ea09706d356e5ee0982e87ca2b1c58ca682f27d6ae87f9efc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1080}
+MIT License
+
+Copyright (c) 2021-2023 Charmbracelet, Inc
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/README.md","mode":420,"size":18254,"sha256":"602aefd936abc8e590c468bef8809e6a055f76da03aa127685e57bddfbd91334","index":0,"count":1,"encoding":"utf-8","payloadBytes":18254}
+# Lip Gloss
+
+<p>
+    <a href="https://stuff.charm.sh/lipgloss/lipgloss-mascot-2k.png"><img width="340" alt="Lip Gloss title treatment" src="https://github.com/charmbracelet/lipgloss/assets/25087/147cadb1-4254-43ec-ae6b-8d6ca7b029a1"></a><br>
+    <a href="https://github.com/charmbracelet/lipgloss/releases"><img src="https://img.shields.io/github/release/charmbracelet/lipgloss.svg" alt="Latest Release"></a>
+    <a href="https://pkg.go.dev/github.com/charmbracelet/lipgloss?tab=doc"><img src="https://godoc.org/github.com/golang/gddo?status.svg" alt="GoDoc"></a>
+    <a href="https://github.com/charmbracelet/lipgloss/actions"><img src="https://github.com/charmbracelet/lipgloss/workflows/build/badge.svg" alt="Build Status"></a>
+    <a href="https://www.phorm.ai/query?projectId=a0e324b6-b706-4546-b951-6671ea60c13f"><img src="https://stuff.charm.sh/misc/phorm-badge.svg" alt="phorm.ai"></a>
+</p>
+
+Style definitions for nice terminal layouts. Built with TUIs in mind.
+
+![Lip Gloss example](https://stuff.charm.sh/lipgloss/lipgloss-example.png)
+
+Lip Gloss takes an expressive, declarative approach to terminal rendering.
+Users familiar with CSS will feel at home with Lip Gloss.
+
+```go
+
+import "github.com/charmbracelet/lipgloss"
+
+var style = lipgloss.NewStyle().
+    Bold(true).
+    Foreground(lipgloss.Color("#FAFAFA")).
+    Background(lipgloss.Color("#7D56F4")).
+    PaddingTop(2).
+    PaddingLeft(4).
+    Width(22)
+
+fmt.Println(style.Render("Hello, kitty"))
+```
+
+## Colors
+
+Lip Gloss supports the following color profiles:
+
+### ANSI 16 colors (4-bit)
+
+```go
+lipgloss.Color("5")  // magenta
+lipgloss.Color("9")  // red
+lipgloss.Color("12") // light blue
+```
+
+### ANSI 256 Colors (8-bit)
+
+```go
+lipgloss.Color("86")  // aqua
+lipgloss.Color("201") // hot pink
+lipgloss.Color("202") // orange
+```
+
+### True Color (16,777,216 colors; 24-bit)
+
+```go
+lipgloss.Color("#0000FF") // good ol' 100% blue
+lipgloss.Color("#04B575") // a green
+lipgloss.Color("#3C3C3C") // a dark gray
+```
+
+...as well as a 1-bit ASCII profile, which is black and white only.
+
+The terminal's color profile will be automatically detected, and colors outside
+the gamut of the current palette will be automatically coerced to their closest
+available value.
+
+### Adaptive Colors
+
+You can also specify color options for light and dark backgrounds:
+
+```go
+lipgloss.AdaptiveColor{Light: "236", Dark: "248"}
+```
+
+The terminal's background color will automatically be detected and the
+appropriate color will be chosen at runtime.
+
+### Complete Colors
+
+CompleteColor specifies exact values for truecolor, ANSI256, and ANSI color
+profiles.
+
+```go
+lipgloss.CompleteColor{True: "#0000FF", ANSI256: "86", ANSI: "5"}
+```
+
+Automatic color degradation will not be performed in this case and it will be
+based on the color specified.
+
+### Complete Adaptive Colors
+
+You can use CompleteColor with AdaptiveColor to specify the exact values for
+light and dark backgrounds without automatic color degradation.
+
+```go
+lipgloss.CompleteAdaptiveColor{
+    Light: CompleteColor{TrueColor: "#d7ffae", ANSI256: "193", ANSI: "11"},
+    Dark:  CompleteColor{TrueColor: "#d75fee", ANSI256: "163", ANSI: "5"},
+}
+```
+
+## Inline Formatting
+
+Lip Gloss supports the usual ANSI text formatting options:
+
+```go
+var style = lipgloss.NewStyle().
+    Bold(true).
+    Italic(true).
+    Faint(true).
+    Blink(true).
+    Strikethrough(true).
+    Underline(true).
+    Reverse(true)
+```
+
+## Block-Level Formatting
+
+Lip Gloss also supports rules for block-level formatting:
+
+```go
+// Padding
+var style = lipgloss.NewStyle().
+    PaddingTop(2).
+    PaddingRight(4).
+    PaddingBottom(2).
+    PaddingLeft(4)
+
+// Margins
+var style = lipgloss.NewStyle().
+    MarginTop(2).
+    MarginRight(4).
+    MarginBottom(2).
+    MarginLeft(4)
+```
+
+There is also shorthand syntax for margins and padding, which follows the same
+format as CSS:
+
+```go
+// 2 cells on all sides
+lipgloss.NewStyle().Padding(2)
+
+// 2 cells on the top and bottom, 4 cells on the left and right
+lipgloss.NewStyle().Margin(2, 4)
+
+// 1 cell on the top, 4 cells on the sides, 2 cells on the bottom
+lipgloss.NewStyle().Padding(1, 4, 2)
+
+// Clockwise, starting from the top: 2 cells on the top, 4 on the right, 3 on
+// the bottom, and 1 on the left
+lipgloss.NewStyle().Margin(2, 4, 3, 1)
+```
+
+## Aligning Text
+
+You can align paragraphs of text to the left, right, or center.
+
+```go
+var style = lipgloss.NewStyle().
+    Width(24).
+    Align(lipgloss.Left).  // align it left
+    Align(lipgloss.Right). // no wait, align it right
+    Align(lipgloss.Center) // just kidding, align it in the center
+```
+
+## Width and Height
+
+Setting a minimum width and height is simple and straightforward.
+
+```go
+var style = lipgloss.NewStyle().
+    SetString("What’s for lunch?").
+    Width(24).
+    Height(32).
+    Foreground(lipgloss.Color("63"))
+```
+
+## Borders
+
+Adding borders is easy:
+
+```go
+// Add a purple, rectangular border
+var style = lipgloss.NewStyle().
+    BorderStyle(lipgloss.NormalBorder()).
+    BorderForeground(lipgloss.Color("63"))
+
+// Set a rounded, yellow-on-purple border to the top and left
+var anotherStyle = lipgloss.NewStyle().
+    BorderStyle(lipgloss.RoundedBorder()).
+    BorderForeground(lipgloss.Color("228")).
+    BorderBackground(lipgloss.Color("63")).
+    BorderTop(true).
+    BorderLeft(true)
+
+// Make your own border
+var myCuteBorder = lipgloss.Border{
+    Top:         "._.:*:",
+    Bottom:      "._.:*:",
+    Left:        "|*",
+    Right:       "|*",
+    TopLeft:     "*",
+    TopRight:    "*",
+    BottomLeft:  "*",
+    BottomRight: "*",
+}
+```
+
+There are also shorthand functions for defining borders, which follow a similar
+pattern to the margin and padding shorthand functions.
+
+```go
+// Add a thick border to the top and bottom
+lipgloss.NewStyle().
+    Border(lipgloss.ThickBorder(), true, false)
+
+// Add a double border to the top and left sides. Rules are set clockwise
+// from top.
+lipgloss.NewStyle().
+    Border(lipgloss.DoubleBorder(), true, false, false, true)
+```
+
+For more on borders see [the docs][docs].
+
+## Copying Styles
+
+Just use assignment:
+
+```go
+style := lipgloss.NewStyle().Foreground(lipgloss.Color("219"))
+
+copiedStyle := style // this is a true copy
+
+wildStyle := style.Blink(true) // this is also true copy, with blink added
+
+```
+
+Since `Style` data structures contains only primitive types, assigning a style
+to another effectively creates a new copy of the style without mutating the
+original.
+
+## Inheritance
+
+Styles can inherit rules from other styles. When inheriting, only unset rules
+on the receiver are inherited.
+
+```go
+var styleA = lipgloss.NewStyle().
+    Foreground(lipgloss.Color("229")).
+    Background(lipgloss.Color("63"))
+
+// Only the background color will be inherited here, because the foreground
+// color will have been already set:
+var styleB = lipgloss.NewStyle().
+    Foreground(lipgloss.Color("201")).
+    Inherit(styleA)
+```
+
+## Unsetting Rules
+
+All rules can be unset:
+
+```go
+var style = lipgloss.NewStyle().
+    Bold(true).                        // make it bold
+    UnsetBold().                       // jk don't make it bold
+    Background(lipgloss.Color("227")). // yellow background
+    UnsetBackground()                  // never mind
+```
+
+When a rule is unset, it won't be inherited or copied.
+
+## Enforcing Rules
+
+Sometimes, such as when developing a component, you want to make sure style
+definitions respect their intended purpose in the UI. This is where `Inline`
+and `MaxWidth`, and `MaxHeight` come in:
+
+```go
+// Force rendering onto a single line, ignoring margins, padding, and borders.
+someStyle.Inline(true).Render("yadda yadda")
+
+// Also limit rendering to five cells
+someStyle.Inline(true).MaxWidth(5).Render("yadda yadda")
+
+// Limit rendering to a 5x5 cell block
+someStyle.MaxWidth(5).MaxHeight(5).Render("yadda yadda")
+```
+
+## Tabs
+
+The tab character (`\t`) is rendered differently in different terminals (often
+as 8 spaces, sometimes 4). Because of this inconsistency, Lip Gloss converts
+tabs to 4 spaces at render time. This behavior can be changed on a per-style
+basis, however:
+
+```go
+style := lipgloss.NewStyle() // tabs will render as 4 spaces, the default
+style = style.TabWidth(2)    // render tabs as 2 spaces
+style = style.TabWidth(0)    // remove tabs entirely
+style = style.TabWidth(lipgloss.NoTabConversion) // leave tabs intact
+```
+
+## Rendering
+
+Generally, you just call the `Render(string...)` method on a `lipgloss.Style`:
+
+```go
+style := lipgloss.NewStyle().Bold(true).SetString("Hello,")
+fmt.Println(style.Render("kitty.")) // Hello, kitty.
+fmt.Println(style.Render("puppy.")) // Hello, puppy.
+```
+
+But you could also use the Stringer interface:
+
+```go
+var style = lipgloss.NewStyle().SetString("你好，猫咪。").Bold(true)
+fmt.Println(style) // 你好，猫咪。
+```
+
+### Custom Renderers
+
+Custom renderers allow you to render to a specific outputs. This is
+particularly important when you want to render to different outputs and
+correctly detect the color profile and dark background status for each, such as
+in a server-client situation.
+
+```go
+func myLittleHandler(sess ssh.Session) {
+    // Create a renderer for the client.
+    renderer := lipgloss.NewRenderer(sess)
+
+    // Create a new style on the renderer.
+    style := renderer.NewStyle().Background(lipgloss.AdaptiveColor{Light: "63", Dark: "228"})
+
+    // Render. The color profile and dark background state will be correctly detected.
+    io.WriteString(sess, style.Render("Heyyyyyyy"))
+}
+```
+
+For an example on using a custom renderer over SSH with [Wish][wish] see the
+[SSH example][ssh-example].
+
+## Utilities
+
+In addition to pure styling, Lip Gloss also ships with some utilities to help
+assemble your layouts.
+
+### Joining Paragraphs
+
+Horizontally and vertically joining paragraphs is a cinch.
+
+```go
+// Horizontally join three paragraphs along their bottom edges
+lipgloss.JoinHorizontal(lipgloss.Bottom, paragraphA, paragraphB, paragraphC)
+
+// Vertically join two paragraphs along their center axes
+lipgloss.JoinVertical(lipgloss.Center, paragraphA, paragraphB)
+
+// Horizontally join three paragraphs, with the shorter ones aligning 20%
+// from the top of the tallest
+lipgloss.JoinHorizontal(0.2, paragraphA, paragraphB, paragraphC)
+```
+
+### Measuring Width and Height
+
+Sometimes you’ll want to know the width and height of text blocks when building
+your layouts.
+
+```go
+// Render a block of text.
+var style = lipgloss.NewStyle().
+    Width(40).
+    Padding(2)
+var block string = style.Render(someLongString)
+
+// Get the actual, physical dimensions of the text block.
+width := lipgloss.Width(block)
+height := lipgloss.Height(block)
+
+// Here's a shorthand function.
+w, h := lipgloss.Size(block)
+```
+
+### Placing Text in Whitespace
+
+Sometimes you’ll simply want to place a block of text in whitespace.
+
+```go
+// Center a paragraph horizontally in a space 80 cells wide. The height of
+// the block returned will be as tall as the input paragraph.
+block := lipgloss.PlaceHorizontal(80, lipgloss.Center, fancyStyledParagraph)
+
+// Place a paragraph at the bottom of a space 30 cells tall. The width of
+// the text block returned will be as wide as the input paragraph.
+block := lipgloss.PlaceVertical(30, lipgloss.Bottom, fancyStyledParagraph)
+
+// Place a paragraph in the bottom right corner of a 30x80 cell space.
+block := lipgloss.Place(30, 80, lipgloss.Right, lipgloss.Bottom, fancyStyledParagraph)
+```
+
+You can also style the whitespace. For details, see [the docs][docs].
+
+### Rendering Tables
+
+Lip Gloss ships with a table rendering sub-package.
+
+```go
+import "github.com/charmbracelet/lipgloss/table"
+```
+
+Define some rows of data.
+
+```go
+rows := [][]string{
+    {"Chinese", "您好", "你好"},
+    {"Japanese", "こんにちは", "やあ"},
+    {"Arabic", "أهلين", "أهلا"},
+    {"Russian", "Здравствуйте", "Привет"},
+    {"Spanish", "Hola", "¿Qué tal?"},
+}
+```
+
+Use the table package to style and render the table.
+
+```go
+t := table.New().
+    Border(lipgloss.NormalBorder()).
+    BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("99"))).
+    StyleFunc(func(row, col int) lipgloss.Style {
+        switch {
+        case row == 0:
+            return HeaderStyle
+        case row%2 == 0:
+            return EvenRowStyle
+        default:
+            return OddRowStyle
+        }
+    }).
+    Headers("LANGUAGE", "FORMAL", "INFORMAL").
+    Rows(rows...)
+
+// You can also add tables row-by-row
+t.Row("English", "You look absolutely fabulous.", "How's it going?")
+```
+
+Print the table.
+
+```go
+fmt.Println(t)
+```
+
+![Table Example](https://github.com/charmbracelet/lipgloss/assets/42545625/6e4b70c4-f494-45da-a467-bdd27df30d5d)
+
+For more on tables see [the docs](https://pkg.go.dev/github.com/charmbracelet/lipgloss?tab=doc) and [examples](https://github.com/charmbracelet/lipgloss/tree/master/examples/table).
+
+## Rendering Lists
+
+Lip Gloss ships with a list rendering sub-package.
+
+```go
+import "github.com/charmbracelet/lipgloss/list"
+```
+
+Define a new list.
+
+```go
+l := list.New("A", "B", "C")
+```
+
+Print the list.
+
+```go
+fmt.Println(l)
+
+// • A
+// • B
+// • C
+```
+
+Lists have the ability to nest.
+
+```go
+l := list.New(
+  "A", list.New("Artichoke"),
+  "B", list.New("Baking Flour", "Bananas", "Barley", "Bean Sprouts"),
+  "C", list.New("Cashew Apple", "Cashews", "Coconut Milk", "Curry Paste", "Currywurst"),
+  "D", list.New("Dill", "Dragonfruit", "Dried Shrimp"),
+  "E", list.New("Eggs"),
+  "F", list.New("Fish Cake", "Furikake"),
+  "J", list.New("Jicama"),
+  "K", list.New("Kohlrabi"),
+  "L", list.New("Leeks", "Lentils", "Licorice Root"),
+)
+```
+
+Print the list.
+
+```go
+fmt.Println(l)
+```
+
+<p align="center">
+<img width="600" alt="image" src="https://github.com/charmbracelet/lipgloss/assets/42545625/0dc9f440-0748-4151-a3b0-7dcf29dfcdb0">
+</p>
+
+Lists can be customized via their enumeration function as well as using
+`lipgloss.Style`s.
+
+```go
+enumeratorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("99")).MarginRight(1)
+itemStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212")).MarginRight(1)
+
+l := list.New(
+  "Glossier",
+  "Claire’s Boutique",
+  "Nyx",
+  "Mac",
+  "Milk",
+).
+  Enumerator(list.Roman).
+  EnumeratorStyle(enumeratorStyle).
+  ItemStyle(itemStyle)
+```
+
+Print the list.
+
+<p align="center">
+<img width="600" alt="List example" src="https://github.com/charmbracelet/lipgloss/assets/42545625/360494f1-57fb-4e13-bc19-0006efe01561">
+</p>
+
+In addition to the predefined enumerators (`Arabic`, `Alphabet`, `Roman`, `Bullet`, `Tree`),
+you may also define your own custom enumerator:
+
+```go
+l := list.New("Duck", "Duck", "Duck", "Duck", "Goose", "Duck", "Duck")
+
+func DuckDuckGooseEnumerator(l list.Items, i int) string {
+    if l.At(i).Value() == "Goose" {
+        return "Honk →"
+    }
+    return ""
+}
+
+l = l.Enumerator(DuckDuckGooseEnumerator)
+```
+
+Print the list:
+
+<p align="center">
+<img width="600" alt="image" src="https://github.com/charmbracelet/lipgloss/assets/42545625/157aaf30-140d-4948-9bb4-dfba46e5b87e">
+</p>
+
+If you need, you can also build lists incrementally:
+
+```go
+l := list.New()
+
+for i := 0; i < repeat; i++ {
+    l.Item("Lip Gloss")
+}
+```
+
+---
+
+## FAQ
+
+<details>
+<summary>
+Why are things misaligning? Why are borders at the wrong widths?
+</summary>
+<p>This is most likely due to your locale and encoding, particularly with
+regard to Chinese, Japanese, and Korean (for example, <code>zh_CN.UTF-8</code>
+or <code>ja_JP.UTF-8</code>). The most direct way to fix this is to set
+<code>RUNEWIDTH_EASTASIAN=0</code> in your environment.</p>
+
+<p>For details see <a href="https://github.com/charmbracelet/lipgloss/issues/40">https://github.com/charmbracelet/lipgloss/issues/40.</a></p>
+</details>
+
+<details>
+<summary>
+Why isn't Lip Gloss displaying colors?
+</summary>
+<p>Lip Gloss automatically degrades colors to the best available option in the
+given terminal, and if output's not a TTY it will remove color output entirely.
+This is common when running tests, CI, or when piping output elsewhere.</p>
+
+<p>If necessary, you can force a color profile in your tests with
+<a href="https://pkg.go.dev/github.com/charmbracelet/lipgloss#SetColorProfile"><code>SetColorProfile</code></a>.</p>
+
+```go
+import (
+    "github.com/charmbracelet/lipgloss"
+    "github.com/muesli/termenv"
+)
+
+lipgloss.SetColorProfile(termenv.TrueColor)
+```
+
+_Note:_ this option limits the flexibility of your application and can cause
+ANSI escape codes to be output in cases where that might not be desired. Take
+careful note of your use case and environment before choosing to force a color
+profile.
+
+</details>
+
+## What about [Bubble Tea][tea]?
+
+Lip Gloss doesn’t replace Bubble Tea. Rather, it is an excellent Bubble Tea
+companion. It was designed to make assembling terminal user interface views as
+simple and fun as possible so that you can focus on building your application
+instead of concerning yourself with low-level layout details.
+
+In simple terms, you can use Lip Gloss to help build your Bubble Tea views.
+
+[tea]: https://github.com/charmbracelet/tea
+
+## Under the Hood
+
+Lip Gloss is built on the excellent [Termenv][termenv] and [Reflow][reflow]
+libraries which deal with color and ANSI-aware text operations, respectively.
+For many use cases Termenv and Reflow will be sufficient for your needs.
+
+[termenv]: https://github.com/muesli/termenv
+[reflow]: https://github.com/muesli/reflow
+
+## Rendering Markdown
+
+For a more document-centric rendering solution with support for things like
+lists, tables, and syntax-highlighted code have a look at [Glamour][glamour],
+the stylesheet-based Markdown renderer.
+
+[glamour]: https://github.com/charmbracelet/glamour
+
+## Feedback
+
+We’d love to hear your thoughts on this project. Feel free to drop us a note!
+
+- [Twitter](https://twitter.com/charmcli)
+- [The Fediverse](https://mastodon.social/@charmcli)
+- [Discord](https://charm.sh/chat)
+
+## License
+
+[MIT](https://github.com/charmbracelet/lipgloss/raw/master/LICENSE)
+
+---
+
+Part of [Charm](https://charm.sh).
+
+<a href="https://charm.sh/"><img alt="The Charm logo" src="https://stuff.charm.sh/charm-badge.jpg" width="400"></a>
+
+Charm热爱开源 • Charm loves open source
+
+[docs]: https://pkg.go.dev/github.com/charmbracelet/lipgloss?tab=doc
+[wish]: https://github.com/charmbracelet/wish
+[ssh-example]: examples/ssh
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/align.go","mode":420,"size":2195,"sha256":"670ff15a322dacaa44ff22922878af3228a0ad2cd415eb1ea0244b164a7ab66b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2195}
+package lipgloss
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
+)
+
+// Perform text alignment. If the string is multi-lined, we also make all lines
+// the same width by padding them with spaces. If a termenv style is passed,
+// use that to style the spaces added.
+func alignTextHorizontal(str string, pos Position, width int, style *termenv.Style) string {
+	lines, widestLine := getLines(str)
+	var b strings.Builder
+
+	for i, l := range lines {
+		lineWidth := ansi.StringWidth(l)
+
+		shortAmount := widestLine - lineWidth                // difference from the widest line
+		shortAmount += max(0, width-(shortAmount+lineWidth)) // difference from the total width, if set
+
+		if shortAmount > 0 {
+			switch pos { //nolint:exhaustive
+			case Right:
+				s := strings.Repeat(" ", shortAmount)
+				if style != nil {
+					s = style.Styled(s)
+				}
+				l = s + l
+			case Center:
+				// Note: remainder goes on the right.
+				left := shortAmount / 2       //nolint:gomnd
+				right := left + shortAmount%2 //nolint:gomnd
+
+				leftSpaces := strings.Repeat(" ", left)
+				rightSpaces := strings.Repeat(" ", right)
+
+				if style != nil {
+					leftSpaces = style.Styled(leftSpaces)
+					rightSpaces = style.Styled(rightSpaces)
+				}
+				l = leftSpaces + l + rightSpaces
+			default: // Left
+				s := strings.Repeat(" ", shortAmount)
+				if style != nil {
+					s = style.Styled(s)
+				}
+				l += s
+			}
+		}
+
+		b.WriteString(l)
+		if i < len(lines)-1 {
+			b.WriteRune('\n')
+		}
+	}
+
+	return b.String()
+}
+
+func alignTextVertical(str string, pos Position, height int, _ *termenv.Style) string {
+	strHeight := strings.Count(str, "\n") + 1
+	if height < strHeight {
+		return str
+	}
+
+	switch pos {
+	case Top:
+		return str + strings.Repeat("\n", height-strHeight)
+	case Center:
+		topPadding, bottomPadding := (height-strHeight)/2, (height-strHeight)/2 //nolint:gomnd
+		if strHeight+topPadding+bottomPadding > height {
+			topPadding--
+		} else if strHeight+topPadding+bottomPadding < height {
+			bottomPadding++
+		}
+		return strings.Repeat("\n", topPadding) + str + strings.Repeat("\n", bottomPadding)
+	case Bottom:
+		return strings.Repeat("\n", height-strHeight) + str
+	}
+	return str
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/ansi_unix.go","mode":420,"size":146,"sha256":"0d510270a74e2eb3e39005d7637282e2653d494ddd4ec07d85568ca2269f16e1","index":0,"count":1,"encoding":"utf-8","payloadBytes":146}
+//go:build !windows
+// +build !windows
+
+package lipgloss
+
+// enableLegacyWindowsANSI is only needed on Windows.
+func enableLegacyWindowsANSI() {}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/ansi_windows.go","mode":420,"size":485,"sha256":"a97c735e3e2522dde9e018d15e93f8e9d294163d577d0c304d7d453370a14ead","index":0,"count":1,"encoding":"utf-8","payloadBytes":485}
+//go:build windows
+// +build windows
+
+package lipgloss
+
+import (
+	"sync"
+
+	"github.com/muesli/termenv"
+)
+
+var enableANSI sync.Once
+
+// enableANSIColors enables support for ANSI color sequences in the Windows
+// default console (cmd.exe and the PowerShell application). Note that this
+// only works with Windows 10. Also note that Windows Terminal supports colors
+// by default.
+func enableLegacyWindowsANSI() {
+	enableANSI.Do(func() {
+		_, _ = termenv.EnableWindowsANSIConsole()
+	})
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/borders.go","mode":420,"size":10375,"sha256":"e4b5f6f8f05e48fb083800c99a78a481dc7a210dd8863c54e340e1fa006fcf39","index":0,"count":1,"encoding":"utf-8","payloadBytes":10375}
+package lipgloss
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
+	"github.com/rivo/uniseg"
+)
+
+// Border contains a series of values which comprise the various parts of a
+// border.
+type Border struct {
+	Top          string
+	Bottom       string
+	Left         string
+	Right        string
+	TopLeft      string
+	TopRight     string
+	BottomLeft   string
+	BottomRight  string
+	MiddleLeft   string
+	MiddleRight  string
+	Middle       string
+	MiddleTop    string
+	MiddleBottom string
+}
+
+// GetTopSize returns the width of the top border. If borders contain runes of
+// varying widths, the widest rune is returned. If no border exists on the top
+// edge, 0 is returned.
+func (b Border) GetTopSize() int {
+	return getBorderEdgeWidth(b.TopLeft, b.Top, b.TopRight)
+}
+
+// GetRightSize returns the width of the right border. If borders contain
+// runes of varying widths, the widest rune is returned. If no border exists on
+// the right edge, 0 is returned.
+func (b Border) GetRightSize() int {
+	return getBorderEdgeWidth(b.TopRight, b.Right, b.BottomRight)
+}
+
+// GetBottomSize returns the width of the bottom border. If borders contain
+// runes of varying widths, the widest rune is returned. If no border exists on
+// the bottom edge, 0 is returned.
+func (b Border) GetBottomSize() int {
+	return getBorderEdgeWidth(b.BottomLeft, b.Bottom, b.BottomRight)
+}
+
+// GetLeftSize returns the width of the left border. If borders contain runes
+// of varying widths, the widest rune is returned. If no border exists on the
+// left edge, 0 is returned.
+func (b Border) GetLeftSize() int {
+	return getBorderEdgeWidth(b.TopLeft, b.Left, b.BottomLeft)
+}
+
+func getBorderEdgeWidth(borderParts ...string) (maxWidth int) {
+	for _, piece := range borderParts {
+		w := maxRuneWidth(piece)
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+	return maxWidth
+}
+
+var (
+	noBorder = Border{}
+
+	normalBorder = Border{
+		Top:          "─",
+		Bottom:       "─",
+		Left:         "│",
+		Right:        "│",
+		TopLeft:      "┌",
+		TopRight:     "┐",
+		BottomLeft:   "└",
+		BottomRight:  "┘",
+		MiddleLeft:   "├",
+		MiddleRight:  "┤",
+		Middle:       "┼",
+		MiddleTop:    "┬",
+		MiddleBottom: "┴",
+	}
+
+	roundedBorder = Border{
+		Top:          "─",
+		Bottom:       "─",
+		Left:         "│",
+		Right:        "│",
+		TopLeft:      "╭",
+		TopRight:     "╮",
+		BottomLeft:   "╰",
+		BottomRight:  "╯",
+		MiddleLeft:   "├",
+		MiddleRight:  "┤",
+		Middle:       "┼",
+		MiddleTop:    "┬",
+		MiddleBottom: "┴",
+	}
+
+	blockBorder = Border{
+		Top:         "█",
+		Bottom:      "█",
+		Left:        "█",
+		Right:       "█",
+		TopLeft:     "█",
+		TopRight:    "█",
+		BottomLeft:  "█",
+		BottomRight: "█",
+	}
+
+	outerHalfBlockBorder = Border{
+		Top:         "▀",
+		Bottom:      "▄",
+		Left:        "▌",
+		Right:       "▐",
+		TopLeft:     "▛",
+		TopRight:    "▜",
+		BottomLeft:  "▙",
+		BottomRight: "▟",
+	}
+
+	innerHalfBlockBorder = Border{
+		Top:         "▄",
+		Bottom:      "▀",
+		Left:        "▐",
+		Right:       "▌",
+		TopLeft:     "▗",
+		TopRight:    "▖",
+		BottomLeft:  "▝",
+		BottomRight: "▘",
+	}
+
+	thickBorder = Border{
+		Top:          "━",
+		Bottom:       "━",
+		Left:         "┃",
+		Right:        "┃",
+		TopLeft:      "┏",
+		TopRight:     "┓",
+		BottomLeft:   "┗",
+		BottomRight:  "┛",
+		MiddleLeft:   "┣",
+		MiddleRight:  "┫",
+		Middle:       "╋",
+		MiddleTop:    "┳",
+		MiddleBottom: "┻",
+	}
+
+	doubleBorder = Border{
+		Top:          "═",
+		Bottom:       "═",
+		Left:         "║",
+		Right:        "║",
+		TopLeft:      "╔",
+		TopRight:     "╗",
+		BottomLeft:   "╚",
+		BottomRight:  "╝",
+		MiddleLeft:   "╠",
+		MiddleRight:  "╣",
+		Middle:       "╬",
+		MiddleTop:    "╦",
+		MiddleBottom: "╩",
+	}
+
+	hiddenBorder = Border{
+		Top:          " ",
+		Bottom:       " ",
+		Left:         " ",
+		Right:        " ",
+		TopLeft:      " ",
+		TopRight:     " ",
+		BottomLeft:   " ",
+		BottomRight:  " ",
+		MiddleLeft:   " ",
+		MiddleRight:  " ",
+		Middle:       " ",
+		MiddleTop:    " ",
+		MiddleBottom: " ",
+	}
+)
+
+// NormalBorder returns a standard-type border with a normal weight and 90
+// degree corners.
+func NormalBorder() Border {
+	return normalBorder
+}
+
+// RoundedBorder returns a border with rounded corners.
+func RoundedBorder() Border {
+	return roundedBorder
+}
+
+// BlockBorder returns a border that takes the whole block.
+func BlockBorder() Border {
+	return blockBorder
+}
+
+// OuterHalfBlockBorder returns a half-block border that sits outside the frame.
+func OuterHalfBlockBorder() Border {
+	return outerHalfBlockBorder
+}
+
+// InnerHalfBlockBorder returns a half-block border that sits inside the frame.
+func InnerHalfBlockBorder() Border {
+	return innerHalfBlockBorder
+}
+
+// ThickBorder returns a border that's thicker than the one returned by
+// NormalBorder.
+func ThickBorder() Border {
+	return thickBorder
+}
+
+// DoubleBorder returns a border comprised of two thin strokes.
+func DoubleBorder() Border {
+	return doubleBorder
+}
+
+// HiddenBorder returns a border that renders as a series of single-cell
+// spaces. It's useful for cases when you want to remove a standard border but
+// maintain layout positioning. This said, you can still apply a background
+// color to a hidden border.
+func HiddenBorder() Border {
+	return hiddenBorder
+}
+
+func (s Style) applyBorder(str string) string {
+	var (
+		topSet    = s.isSet(borderTopKey)
+		rightSet  = s.isSet(borderRightKey)
+		bottomSet = s.isSet(borderBottomKey)
+		leftSet   = s.isSet(borderLeftKey)
+
+		border    = s.getBorderStyle()
+		hasTop    = s.getAsBool(borderTopKey, false)
+		hasRight  = s.getAsBool(borderRightKey, false)
+		hasBottom = s.getAsBool(borderBottomKey, false)
+		hasLeft   = s.getAsBool(borderLeftKey, false)
+
+		topFG    = s.getAsColor(borderTopForegroundKey)
+		rightFG  = s.getAsColor(borderRightForegroundKey)
+		bottomFG = s.getAsColor(borderBottomForegroundKey)
+		leftFG   = s.getAsColor(borderLeftForegroundKey)
+
+		topBG    = s.getAsColor(borderTopBackgroundKey)
+		rightBG  = s.getAsColor(borderRightBackgroundKey)
+		bottomBG = s.getAsColor(borderBottomBackgroundKey)
+		leftBG   = s.getAsColor(borderLeftBackgroundKey)
+	)
+
+	// If a border is set and no sides have been specifically turned on or off
+	// render borders on all sides.
+	if border != noBorder && !(topSet || rightSet || bottomSet || leftSet) {
+		hasTop = true
+		hasRight = true
+		hasBottom = true
+		hasLeft = true
+	}
+
+	// If no border is set or all borders are been disabled, abort.
+	if border == noBorder || (!hasTop && !hasRight && !hasBottom && !hasLeft) {
+		return str
+	}
+
+	lines, width := getLines(str)
+
+	if hasLeft {
+		if border.Left == "" {
+			border.Left = " "
+		}
+		width += maxRuneWidth(border.Left)
+	}
+
+	if hasRight && border.Right == "" {
+		border.Right = " "
+	}
+
+	// If corners should be rendered but are set with the empty string, fill them
+	// with a single space.
+	if hasTop && hasLeft && border.TopLeft == "" {
+		border.TopLeft = " "
+	}
+	if hasTop && hasRight && border.TopRight == "" {
+		border.TopRight = " "
+	}
+	if hasBottom && hasLeft && border.BottomLeft == "" {
+		border.BottomLeft = " "
+	}
+	if hasBottom && hasRight && border.BottomRight == "" {
+		border.BottomRight = " "
+	}
+
+	// Figure out which corners we should actually be using based on which
+	// sides are set to show.
+	if hasTop {
+		switch {
+		case !hasLeft && !hasRight:
+			border.TopLeft = ""
+			border.TopRight = ""
+		case !hasLeft:
+			border.TopLeft = ""
+		case !hasRight:
+			border.TopRight = ""
+		}
+	}
+	if hasBottom {
+		switch {
+		case !hasLeft && !hasRight:
+			border.BottomLeft = ""
+			border.BottomRight = ""
+		case !hasLeft:
+			border.BottomLeft = ""
+		case !hasRight:
+			border.BottomRight = ""
+		}
+	}
+
+	// For now, limit corners to one rune.
+	border.TopLeft = getFirstRuneAsString(border.TopLeft)
+	border.TopRight = getFirstRuneAsString(border.TopRight)
+	border.BottomRight = getFirstRuneAsString(border.BottomRight)
+	border.BottomLeft = getFirstRuneAsString(border.BottomLeft)
+
+	var out strings.Builder
+
+	// Render top
+	if hasTop {
+		top := renderHorizontalEdge(border.TopLeft, border.Top, border.TopRight, width)
+		top = s.styleBorder(top, topFG, topBG)
+		out.WriteString(top)
+		out.WriteRune('\n')
+	}
+
+	leftRunes := []rune(border.Left)
+	leftIndex := 0
+
+	rightRunes := []rune(border.Right)
+	rightIndex := 0
+
+	// Render sides
+	for i, l := range lines {
+		if hasLeft {
+			r := string(leftRunes[leftIndex])
+			leftIndex++
+			if leftIndex >= len(leftRunes) {
+				leftIndex = 0
+			}
+			out.WriteString(s.styleBorder(r, leftFG, leftBG))
+		}
+		out.WriteString(l)
+		if hasRight {
+			r := string(rightRunes[rightIndex])
+			rightIndex++
+			if rightIndex >= len(rightRunes) {
+				rightIndex = 0
+			}
+			out.WriteString(s.styleBorder(r, rightFG, rightBG))
+		}
+		if i < len(lines)-1 {
+			out.WriteRune('\n')
+		}
+	}
+
+	// Render bottom
+	if hasBottom {
+		bottom := renderHorizontalEdge(border.BottomLeft, border.Bottom, border.BottomRight, width)
+		bottom = s.styleBorder(bottom, bottomFG, bottomBG)
+		out.WriteRune('\n')
+		out.WriteString(bottom)
+	}
+
+	return out.String()
+}
+
+// Render the horizontal (top or bottom) portion of a border.
+func renderHorizontalEdge(left, middle, right string, width int) string {
+	if middle == "" {
+		middle = " "
+	}
+
+	leftWidth := ansi.StringWidth(left)
+	rightWidth := ansi.StringWidth(right)
+
+	runes := []rune(middle)
+	j := 0
+
+	out := strings.Builder{}
+	out.WriteString(left)
+	for i := leftWidth + rightWidth; i < width+rightWidth; {
+		out.WriteRune(runes[j])
+		j++
+		if j >= len(runes) {
+			j = 0
+		}
+		i += ansi.StringWidth(string(runes[j]))
+	}
+	out.WriteString(right)
+
+	return out.String()
+}
+
+// Apply foreground and background styling to a border.
+func (s Style) styleBorder(border string, fg, bg TerminalColor) string {
+	if fg == noColor && bg == noColor {
+		return border
+	}
+
+	style := termenv.Style{}
+
+	if fg != noColor {
+		style = style.Foreground(fg.color(s.r))
+	}
+	if bg != noColor {
+		style = style.Background(bg.color(s.r))
+	}
+
+	return style.Styled(border)
+}
+
+func maxRuneWidth(str string) int {
+	var width int
+
+	state := -1
+	for len(str) > 0 {
+		var w int
+		_, str, w, state = uniseg.FirstGraphemeClusterInString(str, state)
+		if w > width {
+			width = w
+		}
+	}
+
+	return width
+}
+
+func getFirstRuneAsString(str string) string {
+	if str == "" {
+		return str
+	}
+	r := []rune(str)
+	return string(r[0])
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/color.go","mode":420,"size":4906,"sha256":"ff8ac4f438aa0de4e8614267d16022b8b693ddc11d9561380df19f24bbf2e5da","index":0,"count":1,"encoding":"utf-8","payloadBytes":4906}
+package lipgloss
+
+import (
+	"strconv"
+
+	"github.com/muesli/termenv"
+)
+
+// TerminalColor is a color intended to be rendered in the terminal.
+type TerminalColor interface {
+	color(*Renderer) termenv.Color
+	RGBA() (r, g, b, a uint32)
+}
+
+var noColor = NoColor{}
+
+// NoColor is used to specify the absence of color styling. When this is active
+// foreground colors will be rendered with the terminal's default text color,
+// and background colors will not be drawn at all.
+//
+// Example usage:
+//
+//	var style = someStyle.Background(lipgloss.NoColor{})
+type NoColor struct{}
+
+func (NoColor) color(*Renderer) termenv.Color {
+	return termenv.NoColor{}
+}
+
+// RGBA returns the RGBA value of this color. Because we have to return
+// something, despite this color being the absence of color, we're returning
+// black with 100% opacity.
+//
+// Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+//
+// Deprecated.
+func (n NoColor) RGBA() (r, g, b, a uint32) {
+	return 0x0, 0x0, 0x0, 0xFFFF //nolint:gomnd
+}
+
+// Color specifies a color by hex or ANSI value. For example:
+//
+//	ansiColor := lipgloss.Color("21")
+//	hexColor := lipgloss.Color("#0000ff")
+type Color string
+
+func (c Color) color(r *Renderer) termenv.Color {
+	return r.ColorProfile().Color(string(c))
+}
+
+// RGBA returns the RGBA value of this color. This satisfies the Go Color
+// interface. Note that on error we return black with 100% opacity, or:
+//
+// Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+//
+// Deprecated.
+func (c Color) RGBA() (r, g, b, a uint32) {
+	return termenv.ConvertToRGB(c.color(renderer)).RGBA()
+}
+
+// ANSIColor is a color specified by an ANSI color value. It's merely syntactic
+// sugar for the more general Color function. Invalid colors will render as
+// black.
+//
+// Example usage:
+//
+//	// These two statements are equivalent.
+//	colorA := lipgloss.ANSIColor(21)
+//	colorB := lipgloss.Color("21")
+type ANSIColor uint
+
+func (ac ANSIColor) color(r *Renderer) termenv.Color {
+	return Color(strconv.FormatUint(uint64(ac), 10)).color(r)
+}
+
+// RGBA returns the RGBA value of this color. This satisfies the Go Color
+// interface. Note that on error we return black with 100% opacity, or:
+//
+// Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+//
+// Deprecated.
+func (ac ANSIColor) RGBA() (r, g, b, a uint32) {
+	cf := Color(strconv.FormatUint(uint64(ac), 10))
+	return cf.RGBA()
+}
+
+// AdaptiveColor provides color options for light and dark backgrounds. The
+// appropriate color will be returned at runtime based on the darkness of the
+// terminal background color.
+//
+// Example usage:
+//
+//	color := lipgloss.AdaptiveColor{Light: "#0000ff", Dark: "#000099"}
+type AdaptiveColor struct {
+	Light string
+	Dark  string
+}
+
+func (ac AdaptiveColor) color(r *Renderer) termenv.Color {
+	if r.HasDarkBackground() {
+		return Color(ac.Dark).color(r)
+	}
+	return Color(ac.Light).color(r)
+}
+
+// RGBA returns the RGBA value of this color. This satisfies the Go Color
+// interface. Note that on error we return black with 100% opacity, or:
+//
+// Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+//
+// Deprecated.
+func (ac AdaptiveColor) RGBA() (r, g, b, a uint32) {
+	return termenv.ConvertToRGB(ac.color(renderer)).RGBA()
+}
+
+// CompleteColor specifies exact values for truecolor, ANSI256, and ANSI color
+// profiles. Automatic color degradation will not be performed.
+type CompleteColor struct {
+	TrueColor string
+	ANSI256   string
+	ANSI      string
+}
+
+func (c CompleteColor) color(r *Renderer) termenv.Color {
+	p := r.ColorProfile()
+	switch p { //nolint:exhaustive
+	case termenv.TrueColor:
+		return p.Color(c.TrueColor)
+	case termenv.ANSI256:
+		return p.Color(c.ANSI256)
+	case termenv.ANSI:
+		return p.Color(c.ANSI)
+	default:
+		return termenv.NoColor{}
+	}
+}
+
+// RGBA returns the RGBA value of this color. This satisfies the Go Color
+// interface. Note that on error we return black with 100% opacity, or:
+//
+// Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+// CompleteAdaptiveColor specifies exact values for truecolor, ANSI256, and ANSI color
+//
+// Deprecated.
+func (c CompleteColor) RGBA() (r, g, b, a uint32) {
+	return termenv.ConvertToRGB(c.color(renderer)).RGBA()
+}
+
+// CompleteAdaptiveColor specifies exact values for truecolor, ANSI256, and ANSI color
+// profiles, with separate options for light and dark backgrounds. Automatic
+// color degradation will not be performed.
+type CompleteAdaptiveColor struct {
+	Light CompleteColor
+	Dark  CompleteColor
+}
+
+func (cac CompleteAdaptiveColor) color(r *Renderer) termenv.Color {
+	if r.HasDarkBackground() {
+		return cac.Dark.color(r)
+	}
+	return cac.Light.color(r)
+}
+
+// RGBA returns the RGBA value of this color. This satisfies the Go Color
+// interface. Note that on error we return black with 100% opacity, or:
+//
+// Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+//
+// Deprecated.
+func (cac CompleteAdaptiveColor) RGBA() (r, g, b, a uint32) {
+	return termenv.ConvertToRGB(cac.color(renderer)).RGBA()
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/get.go","mode":420,"size":15879,"sha256":"1caad435ba91640e5893fd7f98f8cde46e510f64a7b9f3ba8e2b90b2353f61ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":15879}
 package lipgloss
 
@@ -160735,2130 +164308,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lithammer/fuzzysearch/fuzzy/fuzzy.go","mode":420,"size":8211,"sha256":"eba24e05b1cb5e665e1dda3e9c6e3f783a6e46a7b5301a21b3d8dfa0add2603c","index":0,"count":1,"encoding":"utf-8","payloadBytes":8211}
-// Fuzzy searching allows for flexibly matching a string with partial input,
-// useful for filtering data very quickly based on lightweight user input.
-package fuzzy
-
-import (
-	"unicode"
-	"unicode/utf8"
-
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
-)
-
-func noopTransformer() transform.Transformer {
-	return nopTransformer{}
-}
-
-func foldTransformer() transform.Transformer {
-	return unicodeFoldTransformer{}
-}
-
-func normalizeTransformer() transform.Transformer {
-	return transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-}
-
-func normalizedFoldTransformer() transform.Transformer {
-	return transform.Chain(normalizeTransformer(), foldTransformer())
-}
-
-// Match returns true if source matches target using a fuzzy-searching
-// algorithm. Note that it doesn't implement Levenshtein distance (see
-// RankMatch instead), but rather a simplified version where there's no
-// approximation. The method will return true only if each character in the
-// source can be found in the target and occurs after the preceding matches.
-func Match(source, target string) bool {
-	return match(source, target, noopTransformer())
-}
-
-// MatchFold is a case-insensitive version of Match.
-func MatchFold(source, target string) bool {
-	return match(source, target, foldTransformer())
-}
-
-// MatchNormalized is a unicode-normalized version of Match.
-func MatchNormalized(source, target string) bool {
-	return match(source, target, normalizeTransformer())
-}
-
-// MatchNormalizedFold is a unicode-normalized and case-insensitive version of Match.
-func MatchNormalizedFold(source, target string) bool {
-	return match(source, target, normalizedFoldTransformer())
-}
-
-func match(source, target string, transformer transform.Transformer) bool {
-	sourceT := stringTransform(source, transformer)
-	targetT := stringTransform(target, transformer)
-	return matchTransformed(sourceT, targetT)
-}
-
-func matchTransformed(source, target string) bool {
-	lenDiff := len(target) - len(source)
-
-	if lenDiff < 0 {
-		return false
-	}
-
-	if lenDiff == 0 && source == target {
-		return true
-	}
-
-Outer:
-	for _, r1 := range source {
-		for i, r2 := range target {
-			if r1 == r2 {
-				target = target[i+utf8.RuneLen(r2):]
-				continue Outer
-			}
-		}
-		return false
-	}
-
-	return true
-}
-
-// Find will return a list of strings in targets that fuzzy matches source.
-func Find(source string, targets []string) []string {
-	return find(source, targets, noopTransformer())
-}
-
-// FindFold is a case-insensitive version of Find.
-func FindFold(source string, targets []string) []string {
-	return find(source, targets, foldTransformer())
-}
-
-// FindNormalized is a unicode-normalized version of Find.
-func FindNormalized(source string, targets []string) []string {
-	return find(source, targets, normalizeTransformer())
-}
-
-// FindNormalizedFold is a unicode-normalized and case-insensitive version of Find.
-func FindNormalizedFold(source string, targets []string) []string {
-	return find(source, targets, normalizedFoldTransformer())
-}
-
-func find(source string, targets []string, transformer transform.Transformer) []string {
-	sourceT := stringTransform(source, transformer)
-
-	var matches []string
-
-	for _, target := range targets {
-		targetT := stringTransform(target, transformer)
-		if matchTransformed(sourceT, targetT) {
-			matches = append(matches, target)
-		}
-	}
-
-	return matches
-}
-
-// RankMatch is similar to Match except it will measure the Levenshtein
-// distance between the source and the target and return its result. If there
-// was no match, it will return -1.
-// Given the requirements of match, RankMatch only needs to perform a subset of
-// the Levenshtein calculation, only deletions need be considered, required
-// additions and substitutions would fail the match test.
-func RankMatch(source, target string) int {
-	return rank(source, target, noopTransformer())
-}
-
-// RankMatchFold is a case-insensitive version of RankMatch.
-func RankMatchFold(source, target string) int {
-	return rank(source, target, foldTransformer())
-}
-
-// RankMatchNormalized is a unicode-normalized version of RankMatch.
-func RankMatchNormalized(source, target string) int {
-	return rank(source, target, normalizeTransformer())
-}
-
-// RankMatchNormalizedFold is a unicode-normalized and case-insensitive version of RankMatch.
-func RankMatchNormalizedFold(source, target string) int {
-	return rank(source, target, normalizedFoldTransformer())
-}
-
-func rank(source, target string, transformer transform.Transformer) int {
-	lenDiff := len(target) - len(source)
-
-	if lenDiff < 0 {
-		return -1
-	}
-
-	source = stringTransform(source, transformer)
-	target = stringTransform(target, transformer)
-
-	if lenDiff == 0 && source == target {
-		return 0
-	}
-
-	runeDiff := 0
-
-Outer:
-	for _, r1 := range source {
-		for i, r2 := range target {
-			if r1 == r2 {
-				target = target[i+utf8.RuneLen(r2):]
-				continue Outer
-			} else {
-				runeDiff++
-			}
-		}
-		return -1
-	}
-
-	// Count up remaining char
-	runeDiff += utf8.RuneCountInString(target)
-
-	return runeDiff
-}
-
-// RankFind is similar to Find, except it will also rank all matches using
-// Levenshtein distance.
-func RankFind(source string, targets []string) Ranks {
-	return rankFind(source, targets, noopTransformer())
-}
-
-// RankFindFold is a case-insensitive version of RankFind.
-func RankFindFold(source string, targets []string) Ranks {
-	return rankFind(source, targets, foldTransformer())
-}
-
-// RankFindNormalized is a unicode-normalized version of RankFind.
-func RankFindNormalized(source string, targets []string) Ranks {
-	return rankFind(source, targets, normalizeTransformer())
-}
-
-// RankFindNormalizedFold is a unicode-normalized and case-insensitive version of RankFind.
-func RankFindNormalizedFold(source string, targets []string) Ranks {
-	return rankFind(source, targets, normalizedFoldTransformer())
-}
-
-func rankFind(source string, targets []string, transformer transform.Transformer) Ranks {
-	sourceT := stringTransform(source, transformer)
-
-	var r Ranks
-
-	for index, target := range targets {
-		targetT := stringTransform(target, transformer)
-		if matchTransformed(sourceT, targetT) {
-			distance := LevenshteinDistance(source, target)
-			r = append(r, Rank{source, target, distance, index})
-		}
-	}
-	return r
-}
-
-type Rank struct {
-	// Source is used as the source for matching.
-	Source string
-
-	// Target is the word matched against.
-	Target string
-
-	// Distance is the Levenshtein distance between Source and Target.
-	Distance int
-
-	// Location of Target in original list
-	OriginalIndex int
-}
-
-type Ranks []Rank
-
-func (r Ranks) Len() int {
-	return len(r)
-}
-
-func (r Ranks) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
-}
-
-func (r Ranks) Less(i, j int) bool {
-	return r[i].Distance < r[j].Distance
-}
-
-func stringTransform(s string, t transform.Transformer) (transformed string) {
-	// Fast path for the nop transformer to prevent unnecessary allocations.
-	if _, ok := t.(nopTransformer); ok {
-		return s
-	}
-
-	var err error
-	transformed, _, err = transform.String(t, s)
-	if err != nil {
-		transformed = s
-	}
-
-	return
-}
-
-type unicodeFoldTransformer struct{ transform.NopResetter }
-
-func (unicodeFoldTransformer) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
-	// Converting src to a string allocates.
-	// In theory, it need not; see https://go.dev/issue/27148.
-	// It is possible to write this loop using utf8.DecodeRune
-	// and thereby avoid allocations, but it is noticeably slower.
-	// So just let's wait for the compiler to get smarter.
-	for _, r := range string(src) {
-		if r == utf8.RuneError {
-			// Go spec for ranging over a string says:
-			// If the iteration encounters an invalid UTF-8 sequence,
-			// the second value will be 0xFFFD, the Unicode replacement character,
-			// and the next iteration will advance a single byte in the string.
-			nSrc++
-		} else {
-			nSrc += utf8.RuneLen(r)
-		}
-		r = unicode.ToLower(r)
-		x := utf8.RuneLen(r)
-		if x > len(dst[nDst:]) {
-			err = transform.ErrShortDst
-			break
-		}
-		nDst += utf8.EncodeRune(dst[nDst:], r)
-	}
-	return nDst, nSrc, err
-}
-
-type nopTransformer struct{ transform.NopResetter }
-
-func (nopTransformer) Transform(dst []byte, src []byte, atEOF bool) (int, int, error) {
-	return 0, len(src), nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lithammer/fuzzysearch/fuzzy/levenshtein.go","mode":420,"size":1074,"sha256":"38c0cd63a02e5f1a5522eefe5b8ac9f43f5a636b18ab7b4bb71fadd04e6fcdb6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1074}
-package fuzzy
-
-// LevenshteinDistance measures the difference between two strings.
-// The Levenshtein distance between two words is the minimum number of
-// single-character edits (i.e. insertions, deletions or substitutions)
-// required to change one word into the other.
-//
-// This implemention is optimized to use O(min(m,n)) space and is based on the
-// optimized C version found here:
-// http://en.wikibooks.org/wiki/Algorithm_implementation/Strings/Levenshtein_distance#C
-func LevenshteinDistance(s, t string) int {
-	r1, r2 := []rune(s), []rune(t)
-	column := make([]int, 1, 64)
-
-	for y := 1; y <= len(r1); y++ {
-		column = append(column, y)
-	}
-
-	for x := 1; x <= len(r2); x++ {
-		column[0] = x
-
-		for y, lastDiag := 1, x-1; y <= len(r1); y++ {
-			oldDiag := column[y]
-			cost := 0
-			if r1[y-1] != r2[x-1] {
-				cost = 1
-			}
-			column[y] = min(column[y]+1, column[y-1]+1, lastDiag+cost)
-			lastDiag = oldDiag
-		}
-	}
-
-	return column[len(r1)]
-}
-
-func min2(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func min(a, b, c int) int {
-	return min2(min2(a, b), c)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/.gitignore","mode":420,"size":1720,"sha256":"e01466644add1e223484c00ccdfa1087f43bb641ad77bfeb224780e828c28a86","index":0,"count":1,"encoding":"utf-8","payloadBytes":1720}
-# Created by https://www.toptal.com/developers/gitignore/api/code,go,linux,macos,windows
-# Edit at https://www.toptal.com/developers/gitignore?templates=code,go,linux,macos,windows
-
-### Code ###
-.vscode/*
-!.vscode/tasks.json
-!.vscode/launch.json
-*.code-workspace
-
-### Go ###
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-### Go Patch ###
-/vendor/
-/Godeps/
-
-### Linux ###
-*~
-
-# temporary files which can be created if a process still has a handle open of a deleted file
-.fuse_hidden*
-
-# KDE directory preferences
-.directory
-
-# Linux trash folder which might appear on any partition or disk
-.Trash-*
-
-# .nfs files are created when an open file is removed but is still being accessed
-.nfs*
-
-### macOS ###
-# General
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Icon must end with two \r
-Icon
-
-
-# Thumbnails
-._*
-
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-### Windows ###
-# Windows thumbnail cache files
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-
-# Dump file
-*.stackdump
-
-# Folder config file
-[Dd]esktop.ini
-
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
-
-# Windows Installer files
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-
-# Windows shortcuts
-*.lnk
-
-# End of https://www.toptal.com/developers/gitignore/api/code,go,linux,macos,windows
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/CHANGELOG.md","mode":420,"size":1396,"sha256":"f05013bc1f9db6e382c85c48a88357eb8717cc591f68766e95639be737293d07","index":0,"count":1,"encoding":"utf-8","payloadBytes":1396}
-# Changelog
-All notable changes to this project will be documented in this file.
-
-This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-The format of this file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-but only releases after v1.0.3 properly adhere to it.
-
-
-## [1.2.0] - 2021-01-27
-### Added
-- HSLuv and HPLuv color spaces (#41, #51)
-- CIE LCh(uv) color space, called `LuvLCh` in code (#51)
-- JSON and envconfig serialization support for `HexColor` (#42)
-- `DistanceLinearRGB` (#53)
-
-### Fixed
-- RGB to/from XYZ conversion is more accurate (#51)
-- A bug in `XYZToLuvWhiteRef` that only applied to very small values was fixed (#51)
-- `BlendHCL` output is clamped so that it's not invalid (#46)
-- Properly documented `DistanceCIE76` (#40)
-- Some small godoc fixes
-
-
-## [1.0.3] - 2019-11-11
-- Remove SQLMock dependency
-
-
-## [1.0.2] - 2019-04-07
-- Fixes SQLMock dependency
-
-
-## [1.0.1] - 2019-03-24
-- Adds support for Go Modules
-
-
-## [1.0.0] - 2018-05-26
-- API Breaking change in `MakeColor`: instead of `panic`ing when alpha is zero, it now returns a secondary, boolean return value indicating success. See [the color.Color interface](#the-colorcolor-interface) section and [this FAQ entry](#q-why-would-makecolor-ever-fail) for details.
-
-
-## [0.9.0] - 2018-05-26
-- Initial version number after having ignored versioning for a long time :)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/LICENSE","mode":420,"size":1055,"sha256":"1e4cf2a117516ec1b54041d68ed4f5d331878b04de3386f4790e7b5b9c04e1ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":1055}
-Copyright (c) 2013 Lucas Beyer
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/README.md","mode":420,"size":22334,"sha256":"b51e0640c97defdb17bc1861af645b9c6b0c277d13ca0c0680fb0d4c15988901","index":0,"count":1,"encoding":"utf-8","payloadBytes":22334}
-go-colorful
-===========
-
-[![go reportcard](https://goreportcard.com/badge/github.com/lucasb-eyer/go-colorful)](https://goreportcard.com/report/github.com/lucasb-eyer/go-colorful)
-
-A library for playing with colors in Go. Supports Go 1.13 onwards.
-
-Why?
-====
-I love games. I make games. I love detail and I get lost in detail.
-One such detail popped up during the development of [Memory Which Does Not Suck](https://github.com/lucasb-eyer/mwdns/),
-when we wanted the server to assign the players random colors. Sometimes
-two players got very similar colors, which bugged me. The very same evening,
-[I want hue](http://tools.medialab.sciences-po.fr/iwanthue/) was the top post
-on HackerNews' frontpage and showed me how to Do It Right™. Last but not
-least, there was no library for handling color spaces available in go. Colorful
-does just that and implements Go's `color.Color` interface.
-
-What?
-=====
-Go-Colorful stores colors in RGB and provides methods from converting these to various color-spaces. Currently supported colorspaces are:
-
-- **RGB:** All three of Red, Green and Blue in [0..1].
-- **HSL:** Hue in [0..360], Saturation and Luminance in [0..1]. For legacy reasons; please forget that it exists.
-- **HSV:** Hue in [0..360], Saturation and Value in [0..1]. You're better off using HCL, see below.
-- **Hex RGB:** The "internet" color format, as in #FF00FF.
-- **Linear RGB:** See [gamma correct rendering](http://www.sjbrown.co.uk/2004/05/14/gamma-correct-rendering/).
-- **CIE-XYZ:** CIE's standard color space, almost in [0..1].
-- **CIE-xyY:** encodes chromacity in x and y and luminance in Y, all in [0..1]
-- **CIE-L\*a\*b\*:** A *perceptually uniform* color space, i.e. distances are meaningful. L\* in [0..1] and a\*, b\* almost in [-1..1].
-- **CIE-L\*u\*v\*:** Very similar to CIE-L\*a\*b\*, there is [no consensus](http://en.wikipedia.org/wiki/CIELUV#Historical_background) on which one is "better".
-- **CIE-L\*C\*h° (HCL):** This is generally the [most useful](http://vis4.net/blog/posts/avoid-equidistant-hsv-colors/) one; CIE-L\*a\*b\* space in polar coordinates, i.e. a *better* HSV. H° is in [0..360], C\* almost in [-1..1] and L\* as in CIE-L\*a\*b\*.
-- **CIE LCh(uv):** Called `LuvLCh` in code, this is a cylindrical transformation of the CIE-L\*u\*v\* color space. Like HCL above: H° is in [0..360], C\* almost in [-1..1] and L\* as in CIE-L\*u\*v\*.
-- **HSLuv:** The better alternative to HSL, see [here](https://www.hsluv.org/) and [here](https://www.kuon.ch/post/2020-03-08-hsluv/). Hue in [0..360], Saturation and Luminance in [0..1].
-- **HPLuv:** A variant of HSLuv. The color space is smoother, but only pastel colors can be included. Because the valid colors are limited, it's easy to get invalid Saturation values way above 1.0, indicating the color can't be represented in HPLuv beccause it's not pastel.
-
-For the colorspaces where it makes sense (XYZ, Lab, Luv, HCl), the
-[D65](http://en.wikipedia.org/wiki/Illuminant_D65) is used as reference white
-by default but methods for using your own reference white are provided.
-
-A coordinate being *almost in* a range means that generally it is, but for very
-bright colors and depending on the reference white, it might overflow this
-range slightly. For example, C\* of #0000ff is 1.338.
-
-Unit-tests are provided.
-
-Nice, but what's it useful for?
--------------------------------
-
-- Converting color spaces. Some people like to do that.
-- Blending (interpolating) between colors in a "natural" look by using the right colorspace.
-- Generating random colors under some constraints (e.g. colors of the same shade, or shades of one color.)
-- Generating gorgeous random palettes with distinct colors of a same temperature.
-
-What not (yet)?
-===============
-There are a few features which are currently missing and might be useful.
-I just haven't implemented them yet because I didn't have the need for it.
-Pull requests welcome.
-
-- Sorting colors (potentially using above mentioned distances)
-
-So which colorspace should I use?
-=================================
-It depends on what you want to do. I think the folks from *I want hue* are
-on-spot when they say that RGB fits to how *screens produce* color, CIE L\*a\*b\*
-fits how *humans perceive* color and HCL fits how *humans think* colors.
-
-Whenever you'd use HSV, rather go for CIE-L\*C\*h°. for fixed lightness L\* and
-chroma C\* values, the hue angle h° rotates through colors of the same
-perceived brightness and intensity.
-
-How?
-====
-
-### Installing
-Installing the library is as easy as
-
-```bash
-$ go get github.com/lucasb-eyer/go-colorful
-```
-
-The package can then be used through an
-
-```go
-import "github.com/lucasb-eyer/go-colorful"
-```
-
-### Basic usage
-
-Create a beautiful blue color using different source space:
-
-```go
-// Any of the following should be the same
-c := colorful.Color{0.313725, 0.478431, 0.721569}
-c, err := colorful.Hex("#517AB8")
-if err != nil {
-    log.Fatal(err)
-}
-c = colorful.Hsv(216.0, 0.56, 0.722)
-c = colorful.Xyz(0.189165, 0.190837, 0.480248)
-c = colorful.Xyy(0.219895, 0.221839, 0.190837)
-c = colorful.Lab(0.507850, 0.040585,-0.370945)
-c = colorful.Luv(0.507849,-0.194172,-0.567924)
-c = colorful.Hcl(276.2440, 0.373160, 0.507849)
-fmt.Printf("RGB values: %v, %v, %v", c.R, c.G, c.B)
-```
-
-And then converting this color back into various color spaces:
-
-```go
-hex := c.Hex()
-h, s, v := c.Hsv()
-x, y, z := c.Xyz()
-x, y, Y := c.Xyy()
-l, a, b := c.Lab()
-l, u, v := c.Luv()
-h, c, l := c.Hcl()
-```
-
-Note that, because of Go's unfortunate choice of requiring an initial uppercase,
-the name of the functions relating to the xyY space are just off. If you have
-any good suggestion, please open an issue. (I don't consider XyY good.)
-
-### The `color.Color` interface
-Because a `colorful.Color` implements Go's `color.Color` interface (found in the
-`image/color` package), it can be used anywhere that expects a `color.Color`.
-
-Furthermore, you can convert anything that implements the `color.Color` interface
-into a `colorful.Color` using the `MakeColor` function:
-
-```go
-c, ok := colorful.MakeColor(color.Gray16{12345})
-```
-
-**Caveat:** Be aware that this latter conversion (using `MakeColor`) hits a
-corner-case when alpha is exactly zero. Because `color.Color` uses pre-multiplied
-alpha colors, this means the RGB values are lost (set to 0) and it's impossible
-to recover them. In such a case `MakeColor` will return `false` as its second value.
-
-### Comparing colors
-In the RGB color space, the Euclidian distance between colors *doesn't* correspond
-to visual/perceptual distance. This means that two pairs of colors which have the
-same distance in RGB space can look much further apart. This is fixed by the
-CIE-L\*a\*b\*, CIE-L\*u\*v\* and CIE-L\*C\*h° color spaces.
-Thus you should only compare colors in any of these space.
-(Note that the distance in CIE-L\*a\*b\* and CIE-L\*C\*h° are the same, since it's the same space but in cylindrical coordinates)
-
-![Color distance comparison](doc/colordist/colordist.png)
-
-The two colors shown on the top look much more different than the two shown on
-the bottom. Still, in RGB space, their distance is the same.
-Here is a little example program which shows the distances between the top two
-and bottom two colors in RGB, CIE-L\*a\*b\* and CIE-L\*u\*v\* space. You can find it in `doc/colordist/colordist.go`.
-
-```go
-package main
-
-import "fmt"
-import "github.com/lucasb-eyer/go-colorful"
-
-func main() {
-	c1a := colorful.Color{150.0 / 255.0, 10.0 / 255.0, 150.0 / 255.0}
-	c1b := colorful.Color{53.0 / 255.0, 10.0 / 255.0, 150.0 / 255.0}
-	c2a := colorful.Color{10.0 / 255.0, 150.0 / 255.0, 50.0 / 255.0}
-	c2b := colorful.Color{99.9 / 255.0, 150.0 / 255.0, 10.0 / 255.0}
-
-	fmt.Printf("DistanceRgb:       c1: %v\tand c2: %v\n", c1a.DistanceRgb(c1b), c2a.DistanceRgb(c2b))
-	fmt.Printf("DistanceLab:       c1: %v\tand c2: %v\n", c1a.DistanceLab(c1b), c2a.DistanceLab(c2b))
-	fmt.Printf("DistanceLuv:       c1: %v\tand c2: %v\n", c1a.DistanceLuv(c1b), c2a.DistanceLuv(c2b))
-	fmt.Printf("DistanceCIE76:     c1: %v\tand c2: %v\n", c1a.DistanceCIE76(c1b), c2a.DistanceCIE76(c2b))
-	fmt.Printf("DistanceCIE94:     c1: %v\tand c2: %v\n", c1a.DistanceCIE94(c1b), c2a.DistanceCIE94(c2b))
-	fmt.Printf("DistanceCIEDE2000: c1: %v\tand c2: %v\n", c1a.DistanceCIEDE2000(c1b), c2a.DistanceCIEDE2000(c2b))
-}
-```
-
-Running the above program shows that you should always prefer any of the CIE distances:
-
-```bash
-$ go run colordist.go
-DistanceRgb:       c1: 0.3803921568627451	and c2: 0.3858713931171159
-DistanceLab:       c1: 0.32048458312798056	and c2: 0.24397151758565272
-DistanceLuv:       c1: 0.5134369614199698	and c2: 0.2568692839860636
-DistanceCIE76:     c1: 0.32048458312798056	and c2: 0.24397151758565272
-DistanceCIE94:     c1: 0.19799168128511324	and c2: 0.12207136371167401
-DistanceCIEDE2000: c1: 0.17274551120971166	and c2: 0.10665210031428465
-```
-
-It also shows that `DistanceLab` is more formally known as `DistanceCIE76` and
-has been superseded by the slightly more accurate, but much more expensive
-`DistanceCIE94` and `DistanceCIEDE2000`.
-
-Note that `AlmostEqualRgb` is provided mainly for (unit-)testing purposes. Use
-it only if you really know what you're doing. It will eat your cat.
-
-### Blending colors
-Blending is highly connected to distance, since it basically "walks through" the
-colorspace thus, if the colorspace maps distances well, the walk is "smooth".
-
-Colorful comes with blending functions in RGB, HSV and any of the LAB spaces.
-Of course, you'd rather want to use the blending functions of the LAB spaces since
-these spaces map distances well but, just in case, here is an example showing
-you how the blendings (`#fdffcc` to `#242a42`) are done in the various spaces:
-
-![Blending colors in different spaces.](doc/colorblend/colorblend.png)
-
-What you see is that HSV is really bad: it adds some green, which is not present
-in the original colors at all! RGB is much better, but it stays light a little
-too long. LUV and LAB both hit the right lightness but LAB has a little more
-color. HCL works in the same vein as HSV (both cylindrical interpolations) but
-it does it right in that there is no green appearing and the lighthness changes
-in a linear manner.
-
-While this seems all good, you need to know one thing: When interpolating in any
-of the CIE color spaces, you might get invalid RGB colors! This is important if
-the starting and ending colors are user-input or random. An example of where this
-happens is when blending between `#eeef61` and `#1e3140`:
-
-![Invalid RGB colors may crop up when blending in CIE spaces.](doc/colorblend/invalid.png)
-
-You can test whether a color is a valid RGB color by calling the `IsValid` method
-and indeed, calling IsValid will return false for the redish colors on the bottom.
-One way to "fix" this is to get a valid color close to the invalid one by calling
-`Clamped`, which always returns a nearby valid color. Doing this, we get the
-following result, which is satisfactory:
-
-![Fixing invalid RGB colors by clamping them to the valid range.](doc/colorblend/clamped.png)
-
-The following is the code creating the above three images; it can be found in `doc/colorblend/colorblend.go`
-
-```go
-package main
-
-import "fmt"
-import "github.com/lucasb-eyer/go-colorful"
-import "image"
-import "image/draw"
-import "image/png"
-import "os"
-
-func main() {
-    blocks := 10
-    blockw := 40
-    img := image.NewRGBA(image.Rect(0,0,blocks*blockw,200))
-
-    c1, _ := colorful.Hex("#fdffcc")
-    c2, _ := colorful.Hex("#242a42")
-
-    // Use these colors to get invalid RGB in the gradient.
-    //c1, _ := colorful.Hex("#EEEF61")
-    //c2, _ := colorful.Hex("#1E3140")
-
-    for i := 0 ; i < blocks ; i++ {
-        draw.Draw(img, image.Rect(i*blockw,  0,(i+1)*blockw, 40), &image.Uniform{c1.BlendHsv(c2, float64(i)/float64(blocks-1))}, image.Point{}, draw.Src)
-        draw.Draw(img, image.Rect(i*blockw, 40,(i+1)*blockw, 80), &image.Uniform{c1.BlendLuv(c2, float64(i)/float64(blocks-1))}, image.Point{}, draw.Src)
-        draw.Draw(img, image.Rect(i*blockw, 80,(i+1)*blockw,120), &image.Uniform{c1.BlendRgb(c2, float64(i)/float64(blocks-1))}, image.Point{}, draw.Src)
-        draw.Draw(img, image.Rect(i*blockw,120,(i+1)*blockw,160), &image.Uniform{c1.BlendLab(c2, float64(i)/float64(blocks-1))}, image.Point{}, draw.Src)
-        draw.Draw(img, image.Rect(i*blockw,160,(i+1)*blockw,200), &image.Uniform{c1.BlendHcl(c2, float64(i)/float64(blocks-1))}, image.Point{}, draw.Src)
-
-        // This can be used to "fix" invalid colors in the gradient.
-        //draw.Draw(img, image.Rect(i*blockw,160,(i+1)*blockw,200), &image.Uniform{c1.BlendHcl(c2, float64(i)/float64(blocks-1)).Clamped()}, image.Point{}, draw.Src)
-    }
-
-    toimg, err := os.Create("colorblend.png")
-    if err != nil {
-        fmt.Printf("Error: %v", err)
-        return
-    }
-    defer toimg.Close()
-
-    png.Encode(toimg, img)
-}
-```
-
-#### Generating color gradients
-A very common reason to blend colors is creating gradients. There is an example
-program in [doc/gradientgen.go](doc/gradientgen/gradientgen.go); it doesn't use any API
-which hasn't been used in the previous example code, so I won't bother pasting
-the code in here. Just look at that gorgeous gradient it generated in HCL space:
-
-!["Spectral" colorbrewer gradient in HCL space.](doc/gradientgen/gradientgen.png)
-
-### Getting random colors
-It is sometimes necessary to generate random colors. You could simply do this
-on your own by generating colors with random values. By restricting the random
-values to a range smaller than [0..1] and using a space such as CIE-H\*C\*l° or
-HSV, you can generate both random shades of a color or random colors of a
-lightness:
-
-```go
-random_blue := colorful.Hcl(180.0+rand.Float64()*50.0, 0.2+rand.Float64()*0.8, 0.3+rand.Float64()*0.7)
-random_dark := colorful.Hcl(rand.Float64()*360.0, rand.Float64(), rand.Float64()*0.4)
-random_light := colorful.Hcl(rand.Float64()*360.0, rand.Float64(), 0.6+rand.Float64()*0.4)
-```
-
-Since getting random "warm" and "happy" colors is quite a common task, there
-are some helper functions:
-
-```go
-colorful.WarmColor()
-colorful.HappyColor()
-colorful.FastWarmColor()
-colorful.FastHappyColor()
-```
-
-The ones prefixed by `Fast` are faster but less coherent since they use the HSV
-space as opposed to the regular ones which use CIE-L\*C\*h° space. The
-following picture shows the warm colors in the top two rows and happy colors
-in the bottom two rows. Within these, the first is the regular one and the
-second is the fast one.
-
-![Warm, fast warm, happy and fast happy random colors, respectively.](doc/colorgens/colorgens.png)
-
-Don't forget to initialize the random seed! You can see the code used for
-generating this picture in `doc/colorgens/colorgens.go`.
-
-### Getting random palettes
-As soon as you need to generate more than one random color, you probably want
-them to be distinguishible. Playing against an opponent which has almost the
-same blue as I do is not fun. This is where random palettes can help.
-
-These palettes are generated using an algorithm which ensures that all colors
-on the palette are as distinguishible as possible. Again, there is a `Fast`
-method which works in HSV and is less perceptually uniform and a non-`Fast`
-method which works in CIE spaces. For more theory on `SoftPalette`, check out
-[I want hue](http://tools.medialab.sciences-po.fr/iwanthue/theory.php). Yet
-again, there is a `Happy` and a `Warm` version, which do what you expect, but
-now there is an additional `Soft` version, which is more configurable: you can
-give a constraint on the color space in order to get colors within a certain *feel*.
-
-Let's start with the simple methods first, all they take is the amount of
-colors to generate, which could, for example, be the player count. They return
-an array of `colorful.Color` objects:
-
-```go
-pal1, err1 := colorful.WarmPalette(10)
-pal2 := colorful.FastWarmPalette(10)
-pal3, err3 := colorful.HappyPalette(10)
-pal4 := colorful.FastHappyPalette(10)
-pal5, err5 := colorful.SoftPalette(10)
-```
-
-Note that the non-fast methods *may* fail if you ask for way too many colors.
-Let's move on to the advanced one, namely `SoftPaletteEx`. Besides the color
-count, this function takes a `SoftPaletteSettings` object as argument. The
-interesting part here is its `CheckColor` member, which is a boolean function
-taking three floating points as arguments: `l`, `a` and `b`. This function
-should return `true` for colors which lie within the region you want and `false`
-otherwise. The other members are `Iteration`, which should be within [5..100]
-where higher means slower but more exact palette, and `ManySamples` which you
-should set to `true` in case your `CheckColor` constraint rejects a large part
-of the color space.
-
-For example, to create a palette of 10 brownish colors, you'd call it like this:
-
-```go
-func isbrowny(l, a, b float64) bool {
-    h, c, L := colorful.LabToHcl(l, a, b)
-    return 10.0 < h && h < 50.0 && 0.1 < c && c < 0.5 && L < 0.5
-}
-// Since the above function is pretty restrictive, we set ManySamples to true.
-brownies := colorful.SoftPaletteEx(10, colorful.SoftPaletteSettings{isbrowny, 50, true})
-```
-
-The following picture shows the palettes generated by all of these methods
-(sourcecode in `doc/palettegens/palettegens.go`), in the order they were presented, i.e.
-from top to bottom: `Warm`, `FastWarm`, `Happy`, `FastHappy`, `Soft`,
-`SoftEx(isbrowny)`. All of them contain some randomness, so YMMV.
-
-![All example palettes](doc/palettegens/palettegens.png)
-
-Again, the code used for generating the above image is available as [doc/palettegens/palettegens.go](https://github.com/lucasb-eyer/go-colorful/blob/master/doc/palettegens/palettegens.go).
-
-### Sorting colors
-TODO: Sort using dist fn.
-
-### Using linear RGB for computations
-There are two methods for transforming RGB<->Linear RGB: a fast and almost precise one,
-and a slow and precise one.
-
-```go
-r, g, b := colorful.Hex("#FF0000").FastLinearRgb()
-```
-
-TODO: describe some more.
-
-### Want to use some other reference point?
-
-```go
-c := colorful.LabWhiteRef(0.507850, 0.040585,-0.370945, colorful.D50)
-l, a, b := c.LabWhiteRef(colorful.D50)
-```
-
-### Reading and writing colors from databases
-
-The type `HexColor` makes it easy to store colors as strings in a database. It
-implements the [https://godoc.org/database/sql#Scanner](database/sql.Scanner)
-and [database/sql/driver.Value](https://godoc.org/database/sql/driver.Value)
-interfaces which provide automatic type conversion.
-
-Example:
-
-```go
-var hc HexColor
-_, err := db.QueryRow("SELECT '#ff0000';").Scan(&hc)
-// hc == HexColor{R: 1, G: 0, B: 0}; err == nil
-```
-
-FAQ
-===
-
-### Q: I get all f!@#ed up values! Your library sucks!
-A: You probably provided values in the wrong range. For example, RGB values are
-expected to reside between 0 and 1, *not* between 0 and 255. Normalize your colors.
-
-### Q: Lab/Luv/HCl seem broken! Your library sucks!
-They look like this:
-
-<img height="150" src="https://user-images.githubusercontent.com/3779568/28646900-6548040c-7264-11e7-8f12-81097a97c260.png">
-
-A: You're likely trying to generate and display colors that can't be represented by RGB,
-and thus monitors. When you're trying to convert, say, `HCL(190.0, 1.0, 1.0).RGB255()`,
-you're asking for RGB values of `(-2105.254  300.680  286.185)`, which clearly don't exist,
-and the `RGB255` function just casts these numbers to `uint8`, creating wrap-around and
-what looks like a completely broken gradient. What you want to do, is either use more
-reasonable values of colors which actually exist in RGB, or just `Clamp()` the resulting
-color to its nearest existing one, living with the consequences:
-`HCL(190.0, 1.0, 1.0).Clamp().RGB255()`. It will look something like this:
-
-<img height="150" src="https://user-images.githubusercontent.com/1476029/29596343-9a8c62c6-8771-11e7-9026-b8eb8852cc4a.png">
-
-[Here's an issue going in-depth about this](https://github.com/lucasb-eyer/go-colorful/issues/14),
-as well as [my answer](https://github.com/lucasb-eyer/go-colorful/issues/14#issuecomment-324205385),
-both with code and pretty pictures. Also note that this was somewhat covered above in the
-["Blending colors" section](https://github.com/lucasb-eyer/go-colorful#blending-colors).
-
-### Q: In a tight loop, conversion to Lab/Luv/HCl/... are slooooow!
-A: Yes, they are.
-This library aims for correctness, readability, and modularity; it wasn't written with speed in mind.
-A large part of the slowness comes from these conversions going through `LinearRgb` which uses powers.
-I implemented a fast approximation to `LinearRgb` called `FastLinearRgb` by using Taylor approximations.
-The approximation is roughly 5x faster and precise up to roughly 0.5%,
-the major caveat being that if the input values are outside the range 0-1, accuracy drops dramatically.
-You can use these in your conversions as follows:
-
-```go
-col := // Get your color somehow
-l, a, b := XyzToLab(LinearRgbToXyz(col.LinearRgb()))
-```
-
-If you need faster versions of `Distance*` and `Blend*` that make use of this fast approximation,
-feel free to implement them and open a pull-request, I'll happily accept.
-
-The derivation of these functions can be followed in [this Jupyter notebook](doc/LinearRGB Approximations.ipynb).
-Here's the main figure showing the approximation quality:
-
-![approximation quality](doc/approx-quality.png)
-
-More speed could be gained by using SIMD instructions in many places.
-You can also get more speed for specific conversions by approximating the full conversion function,
-but that is outside the scope of this library.
-Thanks to [@ZirconiumX](https://github.com/ZirconiumX) for starting this investigation,
-see [issue #18](https://github.com/lucasb-eyer/go-colorful/issues/18) for details.
-
-### Q: Why would `MakeColor` ever fail!?
-A: `MakeColor` fails when the alpha channel is zero. In that case, the
-conversion is undefined. See [issue 21](https://github.com/lucasb-eyer/go-colorful/issues/21)
-as well as the short caveat note in the ["The `color.Color` interface"](README.md#the-colorcolor-interface)
-section above.
-
-Who?
-====
-
-This library was developed by Lucas Beyer with contributions from
-Bastien Dejean (@baskerville), Phil Kulak (@pkulak) and Christian Muehlhaeuser (@muesli).
-
-It is now maintained by makeworld (@makeworld-the-better-one).
-
-
-## License
-
-This repo is under the MIT license, see [LICENSE](LICENSE) for details.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/colorgens.go","mode":420,"size":1317,"sha256":"99ab94fbf27a32e0263c66a5610e2ce83dea1a6682fe1cc9ca7689aa1a3009e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":1317}
-// Various ways to generate single random colors
-
-package colorful
-
-import (
-	"math/rand"
-)
-
-// Creates a random dark, "warm" color through a restricted HSV space.
-func FastWarmColor() Color {
-	return Hsv(
-		rand.Float64()*360.0,
-		0.5+rand.Float64()*0.3,
-		0.3+rand.Float64()*0.3)
-}
-
-// Creates a random dark, "warm" color through restricted HCL space.
-// This is slower than FastWarmColor but will likely give you colors which have
-// the same "warmness" if you run it many times.
-func WarmColor() (c Color) {
-	for c = randomWarm(); !c.IsValid(); c = randomWarm() {
-	}
-	return
-}
-
-func randomWarm() Color {
-	return Hcl(
-		rand.Float64()*360.0,
-		0.1+rand.Float64()*0.3,
-		0.2+rand.Float64()*0.3)
-}
-
-// Creates a random bright, "pimpy" color through a restricted HSV space.
-func FastHappyColor() Color {
-	return Hsv(
-		rand.Float64()*360.0,
-		0.7+rand.Float64()*0.3,
-		0.6+rand.Float64()*0.3)
-}
-
-// Creates a random bright, "pimpy" color through restricted HCL space.
-// This is slower than FastHappyColor but will likely give you colors which
-// have the same "brightness" if you run it many times.
-func HappyColor() (c Color) {
-	for c = randomPimp(); !c.IsValid(); c = randomPimp() {
-	}
-	return
-}
-
-func randomPimp() Color {
-	return Hcl(
-		rand.Float64()*360.0,
-		0.5+rand.Float64()*0.3,
-		0.5+rand.Float64()*0.3)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/colors.go","mode":420,"size":27612,"sha256":"a75c3edb5dd7e957c49694a6ac3c8901ec7aba2fb5dededca552510eb533e37c","index":0,"count":1,"encoding":"utf-8","payloadBytes":27612}
-// The colorful package provides all kinds of functions for working with colors.
-package colorful
-
-import (
-	"fmt"
-	"image/color"
-	"math"
-)
-
-// A color is stored internally using sRGB (standard RGB) values in the range 0-1
-type Color struct {
-	R, G, B float64
-}
-
-// Implement the Go color.Color interface.
-func (col Color) RGBA() (r, g, b, a uint32) {
-	r = uint32(col.R*65535.0 + 0.5)
-	g = uint32(col.G*65535.0 + 0.5)
-	b = uint32(col.B*65535.0 + 0.5)
-	a = 0xFFFF
-	return
-}
-
-// Constructs a colorful.Color from something implementing color.Color
-func MakeColor(col color.Color) (Color, bool) {
-	r, g, b, a := col.RGBA()
-	if a == 0 {
-		return Color{0, 0, 0}, false
-	}
-
-	// Since color.Color is alpha pre-multiplied, we need to divide the
-	// RGB values by alpha again in order to get back the original RGB.
-	r *= 0xffff
-	r /= a
-	g *= 0xffff
-	g /= a
-	b *= 0xffff
-	b /= a
-
-	return Color{float64(r) / 65535.0, float64(g) / 65535.0, float64(b) / 65535.0}, true
-}
-
-// Might come in handy sometimes to reduce boilerplate code.
-func (col Color) RGB255() (r, g, b uint8) {
-	r = uint8(col.R*255.0 + 0.5)
-	g = uint8(col.G*255.0 + 0.5)
-	b = uint8(col.B*255.0 + 0.5)
-	return
-}
-
-// Used to simplify HSLuv testing.
-func (col Color) values() (float64, float64, float64) {
-	return col.R, col.G, col.B
-}
-
-// This is the tolerance used when comparing colors using AlmostEqualRgb.
-const Delta = 1.0 / 255.0
-
-// This is the default reference white point.
-var D65 = [3]float64{0.95047, 1.00000, 1.08883}
-
-// And another one.
-var D50 = [3]float64{0.96422, 1.00000, 0.82521}
-
-// Checks whether the color exists in RGB space, i.e. all values are in [0..1]
-func (c Color) IsValid() bool {
-	return 0.0 <= c.R && c.R <= 1.0 &&
-		0.0 <= c.G && c.G <= 1.0 &&
-		0.0 <= c.B && c.B <= 1.0
-}
-
-// clamp01 clamps from 0 to 1.
-func clamp01(v float64) float64 {
-	return math.Max(0.0, math.Min(v, 1.0))
-}
-
-// Returns Clamps the color into valid range, clamping each value to [0..1]
-// If the color is valid already, this is a no-op.
-func (c Color) Clamped() Color {
-	return Color{clamp01(c.R), clamp01(c.G), clamp01(c.B)}
-}
-
-func sq(v float64) float64 {
-	return v * v
-}
-
-func cub(v float64) float64 {
-	return v * v * v
-}
-
-// DistanceRgb computes the distance between two colors in RGB space.
-// This is not a good measure! Rather do it in Lab space.
-func (c1 Color) DistanceRgb(c2 Color) float64 {
-	return math.Sqrt(sq(c1.R-c2.R) + sq(c1.G-c2.G) + sq(c1.B-c2.B))
-}
-
-// DistanceLinearRGB computes the distance between two colors in linear RGB
-// space. This is not useful for measuring how humans perceive color, but
-// might be useful for other things, like dithering.
-func (c1 Color) DistanceLinearRGB(c2 Color) float64 {
-	r1, g1, b1 := c1.LinearRgb()
-	r2, g2, b2 := c2.LinearRgb()
-	return math.Sqrt(sq(r1-r2) + sq(g1-g2) + sq(b1-b2))
-}
-
-// Check for equality between colors within the tolerance Delta (1/255).
-func (c1 Color) AlmostEqualRgb(c2 Color) bool {
-	return math.Abs(c1.R-c2.R)+
-		math.Abs(c1.G-c2.G)+
-		math.Abs(c1.B-c2.B) < 3.0*Delta
-}
-
-// You don't really want to use this, do you? Go for BlendLab, BlendLuv or BlendHcl.
-func (c1 Color) BlendRgb(c2 Color, t float64) Color {
-	return Color{c1.R + t*(c2.R-c1.R),
-		c1.G + t*(c2.G-c1.G),
-		c1.B + t*(c2.B-c1.B)}
-}
-
-// Utility used by Hxx color-spaces for interpolating between two angles in [0,360].
-func interp_angle(a0, a1, t float64) float64 {
-	// Based on the answer here: http://stackoverflow.com/a/14498790/2366315
-	// With potential proof that it works here: http://math.stackexchange.com/a/2144499
-	delta := math.Mod(math.Mod(a1-a0, 360.0)+540, 360.0) - 180.0
-	return math.Mod(a0+t*delta+360.0, 360.0)
-}
-
-/// HSV ///
-///////////
-// From http://en.wikipedia.org/wiki/HSL_and_HSV
-// Note that h is in [0..360] and s,v in [0..1]
-
-// Hsv returns the Hue [0..360], Saturation and Value [0..1] of the color.
-func (col Color) Hsv() (h, s, v float64) {
-	min := math.Min(math.Min(col.R, col.G), col.B)
-	v = math.Max(math.Max(col.R, col.G), col.B)
-	C := v - min
-
-	s = 0.0
-	if v != 0.0 {
-		s = C / v
-	}
-
-	h = 0.0 // We use 0 instead of undefined as in wp.
-	if min != v {
-		if v == col.R {
-			h = math.Mod((col.G-col.B)/C, 6.0)
-		}
-		if v == col.G {
-			h = (col.B-col.R)/C + 2.0
-		}
-		if v == col.B {
-			h = (col.R-col.G)/C + 4.0
-		}
-		h *= 60.0
-		if h < 0.0 {
-			h += 360.0
-		}
-	}
-	return
-}
-
-// Hsv creates a new Color given a Hue in [0..360], a Saturation and a Value in [0..1]
-func Hsv(H, S, V float64) Color {
-	Hp := H / 60.0
-	C := V * S
-	X := C * (1.0 - math.Abs(math.Mod(Hp, 2.0)-1.0))
-
-	m := V - C
-	r, g, b := 0.0, 0.0, 0.0
-
-	switch {
-	case 0.0 <= Hp && Hp < 1.0:
-		r = C
-		g = X
-	case 1.0 <= Hp && Hp < 2.0:
-		r = X
-		g = C
-	case 2.0 <= Hp && Hp < 3.0:
-		g = C
-		b = X
-	case 3.0 <= Hp && Hp < 4.0:
-		g = X
-		b = C
-	case 4.0 <= Hp && Hp < 5.0:
-		r = X
-		b = C
-	case 5.0 <= Hp && Hp < 6.0:
-		r = C
-		b = X
-	}
-
-	return Color{m + r, m + g, m + b}
-}
-
-// You don't really want to use this, do you? Go for BlendLab, BlendLuv or BlendHcl.
-func (c1 Color) BlendHsv(c2 Color, t float64) Color {
-	h1, s1, v1 := c1.Hsv()
-	h2, s2, v2 := c2.Hsv()
-
-	// We know that h are both in [0..360]
-	return Hsv(interp_angle(h1, h2, t), s1+t*(s2-s1), v1+t*(v2-v1))
-}
-
-/// HSL ///
-///////////
-
-// Hsl returns the Hue [0..360], Saturation [0..1], and Luminance (lightness) [0..1] of the color.
-func (col Color) Hsl() (h, s, l float64) {
-	min := math.Min(math.Min(col.R, col.G), col.B)
-	max := math.Max(math.Max(col.R, col.G), col.B)
-
-	l = (max + min) / 2
-
-	if min == max {
-		s = 0
-		h = 0
-	} else {
-		if l < 0.5 {
-			s = (max - min) / (max + min)
-		} else {
-			s = (max - min) / (2.0 - max - min)
-		}
-
-		if max == col.R {
-			h = (col.G - col.B) / (max - min)
-		} else if max == col.G {
-			h = 2.0 + (col.B-col.R)/(max-min)
-		} else {
-			h = 4.0 + (col.R-col.G)/(max-min)
-		}
-
-		h *= 60
-
-		if h < 0 {
-			h += 360
-		}
-	}
-
-	return
-}
-
-// Hsl creates a new Color given a Hue in [0..360], a Saturation [0..1], and a Luminance (lightness) in [0..1]
-func Hsl(h, s, l float64) Color {
-	if s == 0 {
-		return Color{l, l, l}
-	}
-
-	var r, g, b float64
-	var t1 float64
-	var t2 float64
-	var tr float64
-	var tg float64
-	var tb float64
-
-	if l < 0.5 {
-		t1 = l * (1.0 + s)
-	} else {
-		t1 = l + s - l*s
-	}
-
-	t2 = 2*l - t1
-	h /= 360
-	tr = h + 1.0/3.0
-	tg = h
-	tb = h - 1.0/3.0
-
-	if tr < 0 {
-		tr++
-	}
-	if tr > 1 {
-		tr--
-	}
-	if tg < 0 {
-		tg++
-	}
-	if tg > 1 {
-		tg--
-	}
-	if tb < 0 {
-		tb++
-	}
-	if tb > 1 {
-		tb--
-	}
-
-	// Red
-	if 6*tr < 1 {
-		r = t2 + (t1-t2)*6*tr
-	} else if 2*tr < 1 {
-		r = t1
-	} else if 3*tr < 2 {
-		r = t2 + (t1-t2)*(2.0/3.0-tr)*6
-	} else {
-		r = t2
-	}
-
-	// Green
-	if 6*tg < 1 {
-		g = t2 + (t1-t2)*6*tg
-	} else if 2*tg < 1 {
-		g = t1
-	} else if 3*tg < 2 {
-		g = t2 + (t1-t2)*(2.0/3.0-tg)*6
-	} else {
-		g = t2
-	}
-
-	// Blue
-	if 6*tb < 1 {
-		b = t2 + (t1-t2)*6*tb
-	} else if 2*tb < 1 {
-		b = t1
-	} else if 3*tb < 2 {
-		b = t2 + (t1-t2)*(2.0/3.0-tb)*6
-	} else {
-		b = t2
-	}
-
-	return Color{r, g, b}
-}
-
-/// Hex ///
-///////////
-
-// Hex returns the hex "html" representation of the color, as in #ff0080.
-func (col Color) Hex() string {
-	// Add 0.5 for rounding
-	return fmt.Sprintf("#%02x%02x%02x", uint8(col.R*255.0+0.5), uint8(col.G*255.0+0.5), uint8(col.B*255.0+0.5))
-}
-
-// Hex parses a "html" hex color-string, either in the 3 "#f0c" or 6 "#ff1034" digits form.
-func Hex(scol string) (Color, error) {
-	format := "#%02x%02x%02x"
-	factor := 1.0 / 255.0
-	if len(scol) == 4 {
-		format = "#%1x%1x%1x"
-		factor = 1.0 / 15.0
-	}
-
-	var r, g, b uint8
-	n, err := fmt.Sscanf(scol, format, &r, &g, &b)
-	if err != nil {
-		return Color{}, err
-	}
-	if n != 3 {
-		return Color{}, fmt.Errorf("color: %v is not a hex-color", scol)
-	}
-
-	return Color{float64(r) * factor, float64(g) * factor, float64(b) * factor}, nil
-}
-
-/// Linear ///
-//////////////
-// http://www.sjbrown.co.uk/2004/05/14/gamma-correct-rendering/
-// http://www.brucelindbloom.com/Eqn_RGB_to_XYZ.html
-
-func linearize(v float64) float64 {
-	if v <= 0.04045 {
-		return v / 12.92
-	}
-	return math.Pow((v+0.055)/1.055, 2.4)
-}
-
-// LinearRgb converts the color into the linear RGB space (see http://www.sjbrown.co.uk/2004/05/14/gamma-correct-rendering/).
-func (col Color) LinearRgb() (r, g, b float64) {
-	r = linearize(col.R)
-	g = linearize(col.G)
-	b = linearize(col.B)
-	return
-}
-
-// A much faster and still quite precise linearization using a 6th-order Taylor approximation.
-// See the accompanying Jupyter notebook for derivation of the constants.
-func linearize_fast(v float64) float64 {
-	v1 := v - 0.5
-	v2 := v1 * v1
-	v3 := v2 * v1
-	v4 := v2 * v2
-	//v5 := v3*v2
-	return -0.248750514614486 + 0.925583310193438*v + 1.16740237321695*v2 + 0.280457026598666*v3 - 0.0757991963780179*v4 //+ 0.0437040411548932*v5
-}
-
-// FastLinearRgb is much faster than and almost as accurate as LinearRgb.
-// BUT it is important to NOTE that they only produce good results for valid colors r,g,b in [0,1].
-func (col Color) FastLinearRgb() (r, g, b float64) {
-	r = linearize_fast(col.R)
-	g = linearize_fast(col.G)
-	b = linearize_fast(col.B)
-	return
-}
-
-func delinearize(v float64) float64 {
-	if v <= 0.0031308 {
-		return 12.92 * v
-	}
-	return 1.055*math.Pow(v, 1.0/2.4) - 0.055
-}
-
-// LinearRgb creates an sRGB color out of the given linear RGB color (see http://www.sjbrown.co.uk/2004/05/14/gamma-correct-rendering/).
-func LinearRgb(r, g, b float64) Color {
-	return Color{delinearize(r), delinearize(g), delinearize(b)}
-}
-
-func delinearize_fast(v float64) float64 {
-	// This function (fractional root) is much harder to linearize, so we need to split.
-	if v > 0.2 {
-		v1 := v - 0.6
-		v2 := v1 * v1
-		v3 := v2 * v1
-		v4 := v2 * v2
-		v5 := v3 * v2
-		return 0.442430344268235 + 0.592178981271708*v - 0.287864782562636*v2 + 0.253214392068985*v3 - 0.272557158129811*v4 + 0.325554383321718*v5
-	} else if v > 0.03 {
-		v1 := v - 0.115
-		v2 := v1 * v1
-		v3 := v2 * v1
-		v4 := v2 * v2
-		v5 := v3 * v2
-		return 0.194915592891669 + 1.55227076330229*v - 3.93691860257828*v2 + 18.0679839248761*v3 - 101.468750302746*v4 + 632.341487393927*v5
-	} else {
-		v1 := v - 0.015
-		v2 := v1 * v1
-		v3 := v2 * v1
-		v4 := v2 * v2
-		v5 := v3 * v2
-		// You can clearly see from the involved constants that the low-end is highly nonlinear.
-		return 0.0519565234928877 + 5.09316778537561*v - 99.0338180489702*v2 + 3484.52322764895*v3 - 150028.083412663*v4 + 7168008.42971613*v5
-	}
-}
-
-// FastLinearRgb is much faster than and almost as accurate as LinearRgb.
-// BUT it is important to NOTE that they only produce good results for valid inputs r,g,b in [0,1].
-func FastLinearRgb(r, g, b float64) Color {
-	return Color{delinearize_fast(r), delinearize_fast(g), delinearize_fast(b)}
-}
-
-// XyzToLinearRgb converts from CIE XYZ-space to Linear RGB space.
-func XyzToLinearRgb(x, y, z float64) (r, g, b float64) {
-	r = 3.2409699419045214*x - 1.5373831775700935*y - 0.49861076029300328*z
-	g = -0.96924363628087983*x + 1.8759675015077207*y + 0.041555057407175613*z
-	b = 0.055630079696993609*x - 0.20397695888897657*y + 1.0569715142428786*z
-	return
-}
-
-func LinearRgbToXyz(r, g, b float64) (x, y, z float64) {
-	x = 0.41239079926595948*r + 0.35758433938387796*g + 0.18048078840183429*b
-	y = 0.21263900587151036*r + 0.71516867876775593*g + 0.072192315360733715*b
-	z = 0.019330818715591851*r + 0.11919477979462599*g + 0.95053215224966058*b
-	return
-}
-
-/// XYZ ///
-///////////
-// http://www.sjbrown.co.uk/2004/05/14/gamma-correct-rendering/
-
-func (col Color) Xyz() (x, y, z float64) {
-	return LinearRgbToXyz(col.LinearRgb())
-}
-
-func Xyz(x, y, z float64) Color {
-	return LinearRgb(XyzToLinearRgb(x, y, z))
-}
-
-/// xyY ///
-///////////
-// http://www.brucelindbloom.com/Eqn_XYZ_to_xyY.html
-
-// Well, the name is bad, since it's xyY but Golang needs me to start with a
-// capital letter to make the method public.
-func XyzToXyy(X, Y, Z float64) (x, y, Yout float64) {
-	return XyzToXyyWhiteRef(X, Y, Z, D65)
-}
-
-func XyzToXyyWhiteRef(X, Y, Z float64, wref [3]float64) (x, y, Yout float64) {
-	Yout = Y
-	N := X + Y + Z
-	if math.Abs(N) < 1e-14 {
-		// When we have black, Bruce Lindbloom recommends to use
-		// the reference white's chromacity for x and y.
-		x = wref[0] / (wref[0] + wref[1] + wref[2])
-		y = wref[1] / (wref[0] + wref[1] + wref[2])
-	} else {
-		x = X / N
-		y = Y / N
-	}
-	return
-}
-
-func XyyToXyz(x, y, Y float64) (X, Yout, Z float64) {
-	Yout = Y
-
-	if -1e-14 < y && y < 1e-14 {
-		X = 0.0
-		Z = 0.0
-	} else {
-		X = Y / y * x
-		Z = Y / y * (1.0 - x - y)
-	}
-
-	return
-}
-
-// Converts the given color to CIE xyY space using D65 as reference white.
-// (Note that the reference white is only used for black input.)
-// x, y and Y are in [0..1]
-func (col Color) Xyy() (x, y, Y float64) {
-	return XyzToXyy(col.Xyz())
-}
-
-// Converts the given color to CIE xyY space, taking into account
-// a given reference white. (i.e. the monitor's white)
-// (Note that the reference white is only used for black input.)
-// x, y and Y are in [0..1]
-func (col Color) XyyWhiteRef(wref [3]float64) (x, y, Y float64) {
-	X, Y2, Z := col.Xyz()
-	return XyzToXyyWhiteRef(X, Y2, Z, wref)
-}
-
-// Generates a color by using data given in CIE xyY space.
-// x, y and Y are in [0..1]
-func Xyy(x, y, Y float64) Color {
-	return Xyz(XyyToXyz(x, y, Y))
-}
-
-/// L*a*b* ///
-//////////////
-// http://en.wikipedia.org/wiki/Lab_color_space#CIELAB-CIEXYZ_conversions
-// For L*a*b*, we need to L*a*b*<->XYZ->RGB and the first one is device dependent.
-
-func lab_f(t float64) float64 {
-	if t > 6.0/29.0*6.0/29.0*6.0/29.0 {
-		return math.Cbrt(t)
-	}
-	return t/3.0*29.0/6.0*29.0/6.0 + 4.0/29.0
-}
-
-func XyzToLab(x, y, z float64) (l, a, b float64) {
-	// Use D65 white as reference point by default.
-	// http://www.fredmiranda.com/forum/topic/1035332
-	// http://en.wikipedia.org/wiki/Standard_illuminant
-	return XyzToLabWhiteRef(x, y, z, D65)
-}
-
-func XyzToLabWhiteRef(x, y, z float64, wref [3]float64) (l, a, b float64) {
-	fy := lab_f(y / wref[1])
-	l = 1.16*fy - 0.16
-	a = 5.0 * (lab_f(x/wref[0]) - fy)
-	b = 2.0 * (fy - lab_f(z/wref[2]))
-	return
-}
-
-func lab_finv(t float64) float64 {
-	if t > 6.0/29.0 {
-		return t * t * t
-	}
-	return 3.0 * 6.0 / 29.0 * 6.0 / 29.0 * (t - 4.0/29.0)
-}
-
-func LabToXyz(l, a, b float64) (x, y, z float64) {
-	// D65 white (see above).
-	return LabToXyzWhiteRef(l, a, b, D65)
-}
-
-func LabToXyzWhiteRef(l, a, b float64, wref [3]float64) (x, y, z float64) {
-	l2 := (l + 0.16) / 1.16
-	x = wref[0] * lab_finv(l2+a/5.0)
-	y = wref[1] * lab_finv(l2)
-	z = wref[2] * lab_finv(l2-b/2.0)
-	return
-}
-
-// Converts the given color to CIE L*a*b* space using D65 as reference white.
-func (col Color) Lab() (l, a, b float64) {
-	return XyzToLab(col.Xyz())
-}
-
-// Converts the given color to CIE L*a*b* space, taking into account
-// a given reference white. (i.e. the monitor's white)
-func (col Color) LabWhiteRef(wref [3]float64) (l, a, b float64) {
-	x, y, z := col.Xyz()
-	return XyzToLabWhiteRef(x, y, z, wref)
-}
-
-// Generates a color by using data given in CIE L*a*b* space using D65 as reference white.
-// WARNING: many combinations of `l`, `a`, and `b` values do not have corresponding
-// valid RGB values, check the FAQ in the README if you're unsure.
-func Lab(l, a, b float64) Color {
-	return Xyz(LabToXyz(l, a, b))
-}
-
-// Generates a color by using data given in CIE L*a*b* space, taking
-// into account a given reference white. (i.e. the monitor's white)
-func LabWhiteRef(l, a, b float64, wref [3]float64) Color {
-	return Xyz(LabToXyzWhiteRef(l, a, b, wref))
-}
-
-// DistanceLab is a good measure of visual similarity between two colors!
-// A result of 0 would mean identical colors, while a result of 1 or higher
-// means the colors differ a lot.
-func (c1 Color) DistanceLab(c2 Color) float64 {
-	l1, a1, b1 := c1.Lab()
-	l2, a2, b2 := c2.Lab()
-	return math.Sqrt(sq(l1-l2) + sq(a1-a2) + sq(b1-b2))
-}
-
-// DistanceCIE76 is the same as DistanceLab.
-func (c1 Color) DistanceCIE76(c2 Color) float64 {
-	return c1.DistanceLab(c2)
-}
-
-// Uses the CIE94 formula to calculate color distance. More accurate than
-// DistanceLab, but also more work.
-func (cl Color) DistanceCIE94(cr Color) float64 {
-	l1, a1, b1 := cl.Lab()
-	l2, a2, b2 := cr.Lab()
-
-	// NOTE: Since all those formulas expect L,a,b values 100x larger than we
-	//       have them in this library, we either need to adjust all constants
-	//       in the formula, or convert the ranges of L,a,b before, and then
-	//       scale the distances down again. The latter is less error-prone.
-	l1, a1, b1 = l1*100.0, a1*100.0, b1*100.0
-	l2, a2, b2 = l2*100.0, a2*100.0, b2*100.0
-
-	kl := 1.0 // 2.0 for textiles
-	kc := 1.0
-	kh := 1.0
-	k1 := 0.045 // 0.048 for textiles
-	k2 := 0.015 // 0.014 for textiles.
-
-	deltaL := l1 - l2
-	c1 := math.Sqrt(sq(a1) + sq(b1))
-	c2 := math.Sqrt(sq(a2) + sq(b2))
-	deltaCab := c1 - c2
-
-	// Not taking Sqrt here for stability, and it's unnecessary.
-	deltaHab2 := sq(a1-a2) + sq(b1-b2) - sq(deltaCab)
-	sl := 1.0
-	sc := 1.0 + k1*c1
-	sh := 1.0 + k2*c1
-
-	vL2 := sq(deltaL / (kl * sl))
-	vC2 := sq(deltaCab / (kc * sc))
-	vH2 := deltaHab2 / sq(kh*sh)
-
-	return math.Sqrt(vL2+vC2+vH2) * 0.01 // See above.
-}
-
-// DistanceCIEDE2000 uses the Delta E 2000 formula to calculate color
-// distance. It is more expensive but more accurate than both DistanceLab
-// and DistanceCIE94.
-func (cl Color) DistanceCIEDE2000(cr Color) float64 {
-	return cl.DistanceCIEDE2000klch(cr, 1.0, 1.0, 1.0)
-}
-
-// DistanceCIEDE2000klch uses the Delta E 2000 formula with custom values
-// for the weighting factors kL, kC, and kH.
-func (cl Color) DistanceCIEDE2000klch(cr Color, kl, kc, kh float64) float64 {
-	l1, a1, b1 := cl.Lab()
-	l2, a2, b2 := cr.Lab()
-
-	// As with CIE94, we scale up the ranges of L,a,b beforehand and scale
-	// them down again afterwards.
-	l1, a1, b1 = l1*100.0, a1*100.0, b1*100.0
-	l2, a2, b2 = l2*100.0, a2*100.0, b2*100.0
-
-	cab1 := math.Sqrt(sq(a1) + sq(b1))
-	cab2 := math.Sqrt(sq(a2) + sq(b2))
-	cabmean := (cab1 + cab2) / 2
-
-	g := 0.5 * (1 - math.Sqrt(math.Pow(cabmean, 7)/(math.Pow(cabmean, 7)+math.Pow(25, 7))))
-	ap1 := (1 + g) * a1
-	ap2 := (1 + g) * a2
-	cp1 := math.Sqrt(sq(ap1) + sq(b1))
-	cp2 := math.Sqrt(sq(ap2) + sq(b2))
-
-	hp1 := 0.0
-	if b1 != ap1 || ap1 != 0 {
-		hp1 = math.Atan2(b1, ap1)
-		if hp1 < 0 {
-			hp1 += math.Pi * 2
-		}
-		hp1 *= 180 / math.Pi
-	}
-	hp2 := 0.0
-	if b2 != ap2 || ap2 != 0 {
-		hp2 = math.Atan2(b2, ap2)
-		if hp2 < 0 {
-			hp2 += math.Pi * 2
-		}
-		hp2 *= 180 / math.Pi
-	}
-
-	deltaLp := l2 - l1
-	deltaCp := cp2 - cp1
-	dhp := 0.0
-	cpProduct := cp1 * cp2
-	if cpProduct != 0 {
-		dhp = hp2 - hp1
-		if dhp > 180 {
-			dhp -= 360
-		} else if dhp < -180 {
-			dhp += 360
-		}
-	}
-	deltaHp := 2 * math.Sqrt(cpProduct) * math.Sin(dhp/2*math.Pi/180)
-
-	lpmean := (l1 + l2) / 2
-	cpmean := (cp1 + cp2) / 2
-	hpmean := hp1 + hp2
-	if cpProduct != 0 {
-		hpmean /= 2
-		if math.Abs(hp1-hp2) > 180 {
-			if hp1+hp2 < 360 {
-				hpmean += 180
-			} else {
-				hpmean -= 180
-			}
-		}
-	}
-
-	t := 1 - 0.17*math.Cos((hpmean-30)*math.Pi/180) + 0.24*math.Cos(2*hpmean*math.Pi/180) + 0.32*math.Cos((3*hpmean+6)*math.Pi/180) - 0.2*math.Cos((4*hpmean-63)*math.Pi/180)
-	deltaTheta := 30 * math.Exp(-sq((hpmean-275)/25))
-	rc := 2 * math.Sqrt(math.Pow(cpmean, 7)/(math.Pow(cpmean, 7)+math.Pow(25, 7)))
-	sl := 1 + (0.015*sq(lpmean-50))/math.Sqrt(20+sq(lpmean-50))
-	sc := 1 + 0.045*cpmean
-	sh := 1 + 0.015*cpmean*t
-	rt := -math.Sin(2*deltaTheta*math.Pi/180) * rc
-
-	return math.Sqrt(sq(deltaLp/(kl*sl))+sq(deltaCp/(kc*sc))+sq(deltaHp/(kh*sh))+rt*(deltaCp/(kc*sc))*(deltaHp/(kh*sh))) * 0.01
-}
-
-// BlendLab blends two colors in the L*a*b* color-space, which should result in a smoother blend.
-// t == 0 results in c1, t == 1 results in c2
-func (c1 Color) BlendLab(c2 Color, t float64) Color {
-	l1, a1, b1 := c1.Lab()
-	l2, a2, b2 := c2.Lab()
-	return Lab(l1+t*(l2-l1),
-		a1+t*(a2-a1),
-		b1+t*(b2-b1))
-}
-
-/// L*u*v* ///
-//////////////
-// http://en.wikipedia.org/wiki/CIELUV#XYZ_.E2.86.92_CIELUV_and_CIELUV_.E2.86.92_XYZ_conversions
-// For L*u*v*, we need to L*u*v*<->XYZ<->RGB and the first one is device dependent.
-
-func XyzToLuv(x, y, z float64) (l, a, b float64) {
-	// Use D65 white as reference point by default.
-	// http://www.fredmiranda.com/forum/topic/1035332
-	// http://en.wikipedia.org/wiki/Standard_illuminant
-	return XyzToLuvWhiteRef(x, y, z, D65)
-}
-
-func XyzToLuvWhiteRef(x, y, z float64, wref [3]float64) (l, u, v float64) {
-	if y/wref[1] <= 6.0/29.0*6.0/29.0*6.0/29.0 {
-		l = y / wref[1] * (29.0 / 3.0 * 29.0 / 3.0 * 29.0 / 3.0) / 100.0
-	} else {
-		l = 1.16*math.Cbrt(y/wref[1]) - 0.16
-	}
-	ubis, vbis := xyz_to_uv(x, y, z)
-	un, vn := xyz_to_uv(wref[0], wref[1], wref[2])
-	u = 13.0 * l * (ubis - un)
-	v = 13.0 * l * (vbis - vn)
-	return
-}
-
-// For this part, we do as R's graphics.hcl does, not as wikipedia does.
-// Or is it the same?
-func xyz_to_uv(x, y, z float64) (u, v float64) {
-	denom := x + 15.0*y + 3.0*z
-	if denom == 0.0 {
-		u, v = 0.0, 0.0
-	} else {
-		u = 4.0 * x / denom
-		v = 9.0 * y / denom
-	}
-	return
-}
-
-func LuvToXyz(l, u, v float64) (x, y, z float64) {
-	// D65 white (see above).
-	return LuvToXyzWhiteRef(l, u, v, D65)
-}
-
-func LuvToXyzWhiteRef(l, u, v float64, wref [3]float64) (x, y, z float64) {
-	//y = wref[1] * lab_finv((l + 0.16) / 1.16)
-	if l <= 0.08 {
-		y = wref[1] * l * 100.0 * 3.0 / 29.0 * 3.0 / 29.0 * 3.0 / 29.0
-	} else {
-		y = wref[1] * cub((l+0.16)/1.16)
-	}
-	un, vn := xyz_to_uv(wref[0], wref[1], wref[2])
-	if l != 0.0 {
-		ubis := u/(13.0*l) + un
-		vbis := v/(13.0*l) + vn
-		x = y * 9.0 * ubis / (4.0 * vbis)
-		z = y * (12.0 - 3.0*ubis - 20.0*vbis) / (4.0 * vbis)
-	} else {
-		x, y = 0.0, 0.0
-	}
-	return
-}
-
-// Converts the given color to CIE L*u*v* space using D65 as reference white.
-// L* is in [0..1] and both u* and v* are in about [-1..1]
-func (col Color) Luv() (l, u, v float64) {
-	return XyzToLuv(col.Xyz())
-}
-
-// Converts the given color to CIE L*u*v* space, taking into account
-// a given reference white. (i.e. the monitor's white)
-// L* is in [0..1] and both u* and v* are in about [-1..1]
-func (col Color) LuvWhiteRef(wref [3]float64) (l, u, v float64) {
-	x, y, z := col.Xyz()
-	return XyzToLuvWhiteRef(x, y, z, wref)
-}
-
-// Generates a color by using data given in CIE L*u*v* space using D65 as reference white.
-// L* is in [0..1] and both u* and v* are in about [-1..1]
-// WARNING: many combinations of `l`, `u`, and `v` values do not have corresponding
-// valid RGB values, check the FAQ in the README if you're unsure.
-func Luv(l, u, v float64) Color {
-	return Xyz(LuvToXyz(l, u, v))
-}
-
-// Generates a color by using data given in CIE L*u*v* space, taking
-// into account a given reference white. (i.e. the monitor's white)
-// L* is in [0..1] and both u* and v* are in about [-1..1]
-func LuvWhiteRef(l, u, v float64, wref [3]float64) Color {
-	return Xyz(LuvToXyzWhiteRef(l, u, v, wref))
-}
-
-// DistanceLuv is a good measure of visual similarity between two colors!
-// A result of 0 would mean identical colors, while a result of 1 or higher
-// means the colors differ a lot.
-func (c1 Color) DistanceLuv(c2 Color) float64 {
-	l1, u1, v1 := c1.Luv()
-	l2, u2, v2 := c2.Luv()
-	return math.Sqrt(sq(l1-l2) + sq(u1-u2) + sq(v1-v2))
-}
-
-// BlendLuv blends two colors in the CIE-L*u*v* color-space, which should result in a smoother blend.
-// t == 0 results in c1, t == 1 results in c2
-func (c1 Color) BlendLuv(c2 Color, t float64) Color {
-	l1, u1, v1 := c1.Luv()
-	l2, u2, v2 := c2.Luv()
-	return Luv(l1+t*(l2-l1),
-		u1+t*(u2-u1),
-		v1+t*(v2-v1))
-}
-
-/// HCL ///
-///////////
-// HCL is nothing else than L*a*b* in cylindrical coordinates!
-// (this was wrong on English wikipedia, I fixed it, let's hope the fix stays.)
-// But it is widely popular since it is a "correct HSV"
-// http://www.hunterlab.com/appnotes/an09_96a.pdf
-
-// Converts the given color to HCL space using D65 as reference white.
-// H values are in [0..360], C and L values are in [0..1] although C can overshoot 1.0
-func (col Color) Hcl() (h, c, l float64) {
-	return col.HclWhiteRef(D65)
-}
-
-func LabToHcl(L, a, b float64) (h, c, l float64) {
-	// Oops, floating point workaround necessary if a ~= b and both are very small (i.e. almost zero).
-	if math.Abs(b-a) > 1e-4 && math.Abs(a) > 1e-4 {
-		h = math.Mod(57.29577951308232087721*math.Atan2(b, a)+360.0, 360.0) // Rad2Deg
-	} else {
-		h = 0.0
-	}
-	c = math.Sqrt(sq(a) + sq(b))
-	l = L
-	return
-}
-
-// Converts the given color to HCL space, taking into account
-// a given reference white. (i.e. the monitor's white)
-// H values are in [0..360], C and L values are in [0..1]
-func (col Color) HclWhiteRef(wref [3]float64) (h, c, l float64) {
-	L, a, b := col.LabWhiteRef(wref)
-	return LabToHcl(L, a, b)
-}
-
-// Generates a color by using data given in HCL space using D65 as reference white.
-// H values are in [0..360], C and L values are in [0..1]
-// WARNING: many combinations of `h`, `c`, and `l` values do not have corresponding
-// valid RGB values, check the FAQ in the README if you're unsure.
-func Hcl(h, c, l float64) Color {
-	return HclWhiteRef(h, c, l, D65)
-}
-
-func HclToLab(h, c, l float64) (L, a, b float64) {
-	H := 0.01745329251994329576 * h // Deg2Rad
-	a = c * math.Cos(H)
-	b = c * math.Sin(H)
-	L = l
-	return
-}
-
-// Generates a color by using data given in HCL space, taking
-// into account a given reference white. (i.e. the monitor's white)
-// H values are in [0..360], C and L values are in [0..1]
-func HclWhiteRef(h, c, l float64, wref [3]float64) Color {
-	L, a, b := HclToLab(h, c, l)
-	return LabWhiteRef(L, a, b, wref)
-}
-
-// BlendHcl blends two colors in the CIE-L*C*h° color-space, which should result in a smoother blend.
-// t == 0 results in c1, t == 1 results in c2
-func (col1 Color) BlendHcl(col2 Color, t float64) Color {
-	h1, c1, l1 := col1.Hcl()
-	h2, c2, l2 := col2.Hcl()
-
-	// We know that h are both in [0..360]
-	return Hcl(interp_angle(h1, h2, t), c1+t*(c2-c1), l1+t*(l2-l1)).Clamped()
-}
-
-// LuvLch
-
-// Converts the given color to LuvLCh space using D65 as reference white.
-// h values are in [0..360], C and L values are in [0..1] although C can overshoot 1.0
-func (col Color) LuvLCh() (l, c, h float64) {
-	return col.LuvLChWhiteRef(D65)
-}
-
-func LuvToLuvLCh(L, u, v float64) (l, c, h float64) {
-	// Oops, floating point workaround necessary if u ~= v and both are very small (i.e. almost zero).
-	if math.Abs(v-u) > 1e-4 && math.Abs(u) > 1e-4 {
-		h = math.Mod(57.29577951308232087721*math.Atan2(v, u)+360.0, 360.0) // Rad2Deg
-	} else {
-		h = 0.0
-	}
-	l = L
-	c = math.Sqrt(sq(u) + sq(v))
-	return
-}
-
-// Converts the given color to LuvLCh space, taking into account
-// a given reference white. (i.e. the monitor's white)
-// h values are in [0..360], c and l values are in [0..1]
-func (col Color) LuvLChWhiteRef(wref [3]float64) (l, c, h float64) {
-	return LuvToLuvLCh(col.LuvWhiteRef(wref))
-}
-
-// Generates a color by using data given in LuvLCh space using D65 as reference white.
-// h values are in [0..360], C and L values are in [0..1]
-// WARNING: many combinations of `l`, `c`, and `h` values do not have corresponding
-// valid RGB values, check the FAQ in the README if you're unsure.
-func LuvLCh(l, c, h float64) Color {
-	return LuvLChWhiteRef(l, c, h, D65)
-}
-
-func LuvLChToLuv(l, c, h float64) (L, u, v float64) {
-	H := 0.01745329251994329576 * h // Deg2Rad
-	u = c * math.Cos(H)
-	v = c * math.Sin(H)
-	L = l
-	return
-}
-
-// Generates a color by using data given in LuvLCh space, taking
-// into account a given reference white. (i.e. the monitor's white)
-// h values are in [0..360], C and L values are in [0..1]
-func LuvLChWhiteRef(l, c, h float64, wref [3]float64) Color {
-	L, u, v := LuvLChToLuv(l, c, h)
-	return LuvWhiteRef(L, u, v, wref)
-}
-
-// BlendLuvLCh blends two colors in the cylindrical CIELUV color space.
-// t == 0 results in c1, t == 1 results in c2
-func (col1 Color) BlendLuvLCh(col2 Color, t float64) Color {
-	l1, c1, h1 := col1.LuvLCh()
-	l2, c2, h2 := col2.LuvLCh()
-
-	// We know that h are both in [0..360]
-	return LuvLCh(l1+t*(l2-l1), c1+t*(c2-c1), interp_angle(h1, h2, t))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/happy_palettegen.go","mode":420,"size":746,"sha256":"c5c750f2ba212225577c3d6244f94ea2ac2cd77ee54dd0e0f2fc8b3aef7f6b4d","index":0,"count":1,"encoding":"utf-8","payloadBytes":746}
-package colorful
-
-import (
-	"math/rand"
-)
-
-// Uses the HSV color space to generate colors with similar S,V but distributed
-// evenly along their Hue. This is fast but not always pretty.
-// If you've got time to spare, use Lab (the non-fast below).
-func FastHappyPalette(colorsCount int) (colors []Color) {
-	colors = make([]Color, colorsCount)
-
-	for i := 0; i < colorsCount; i++ {
-		colors[i] = Hsv(float64(i)*(360.0/float64(colorsCount)), 0.8+rand.Float64()*0.2, 0.65+rand.Float64()*0.2)
-	}
-	return
-}
-
-func HappyPalette(colorsCount int) ([]Color, error) {
-	pimpy := func(l, a, b float64) bool {
-		_, c, _ := LabToHcl(l, a, b)
-		return 0.3 <= c && 0.4 <= l && l <= 0.8
-	}
-	return SoftPaletteEx(colorsCount, SoftPaletteSettings{pimpy, 50, true})
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hexcolor.go","mode":420,"size":1412,"sha256":"65055cc3d484a4954cdcfbc7e97771a738a40943cb0c3026a0cde44344de7bf6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1412}
-package colorful
-
-import (
-	"database/sql/driver"
-	"encoding/json"
-	"fmt"
-	"reflect"
-)
-
-// A HexColor is a Color stored as a hex string "#rrggbb". It implements the
-// database/sql.Scanner, database/sql/driver.Value,
-// encoding/json.Unmarshaler and encoding/json.Marshaler interfaces.
-type HexColor Color
-
-type errUnsupportedType struct {
-	got  interface{}
-	want reflect.Type
-}
-
-func (hc *HexColor) Scan(value interface{}) error {
-	s, ok := value.(string)
-	if !ok {
-		return errUnsupportedType{got: reflect.TypeOf(value), want: reflect.TypeOf("")}
-	}
-	c, err := Hex(s)
-	if err != nil {
-		return err
-	}
-	*hc = HexColor(c)
-	return nil
-}
-
-func (hc *HexColor) Value() (driver.Value, error) {
-	return Color(*hc).Hex(), nil
-}
-
-func (e errUnsupportedType) Error() string {
-	return fmt.Sprintf("unsupported type: got %v, want a %s", e.got, e.want)
-}
-
-func (hc *HexColor) UnmarshalJSON(data []byte) error {
-	var hexCode string
-	if err := json.Unmarshal(data, &hexCode); err != nil {
-		return err
-	}
-
-	var col, err = Hex(hexCode)
-	if err != nil {
-		return err
-	}
-	*hc = HexColor(col)
-	return nil
-}
-
-func (hc HexColor) MarshalJSON() ([]byte, error) {
-	return json.Marshal(Color(hc).Hex())
-}
-
-// Decode - deserialize function for https://github.com/kelseyhightower/envconfig
-func (hc *HexColor) Decode(hexCode string) error {
-	var col, err = Hex(hexCode)
-	if err != nil {
-		return err
-	}
-	*hc = HexColor(col)
-	return nil
-}
 
 @@END

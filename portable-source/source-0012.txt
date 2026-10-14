@@ -1,3 +1,2842 @@
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/listview.go","mode":420,"size":14657,"sha256":"214cf0d1f761c7dc3363f20544d8244bac9fa5920ebbf2ec6cd8be6f93086406","index":0,"count":1,"encoding":"utf-8","payloadBytes":14657}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"errors"
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+// ListItem represents an item in a ListView widget.
+type ListItem interface {
+	Text() []string  // Text returns the text of the multi-column item.
+	ImageIndex() int // ImageIndex is used only if SetImageList is called on the listview
+}
+
+// ListItemChecker is used for checkbox support in ListView.
+type ListItemChecker interface {
+	Checked() bool
+	SetChecked(checked bool)
+}
+
+// ListItemSetter is used in OnEndLabelEdit event.
+type ListItemSetter interface {
+	SetText(s string) // set first item in the array via LabelEdit event
+}
+
+// StringListItem is helper for basic string lists.
+type StringListItem struct {
+	ID    int
+	Data  string
+	Check bool
+}
+
+func (s StringListItem) Text() []string          { return []string{s.Data} }
+func (s StringListItem) Checked() bool           { return s.Check }
+func (s StringListItem) SetChecked(checked bool) { s.Check = checked }
+func (s StringListItem) ImageIndex() int         { return 0 }
+
+type ListView struct {
+	ControlBase
+
+	iml       *ImageList
+	lastIndex int
+	cols      int // count of columns
+
+	item2Handle map[ListItem]uintptr
+	handle2Item map[uintptr]ListItem
+
+	onEndLabelEdit EventManager
+	onDoubleClick  EventManager
+	onClick        EventManager
+	onKeyDown      EventManager
+	onItemChanging EventManager
+	onItemChanged  EventManager
+	onCheckChanged EventManager
+	onViewChange   EventManager
+	onEndScroll    EventManager
+}
+
+func NewListView(parent Controller) *ListView {
+	lv := new(ListView)
+
+	lv.InitControl("SysListView32", parent /*w32.WS_EX_CLIENTEDGE*/, 0,
+		w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.LVS_REPORT|w32.LVS_EDITLABELS|w32.LVS_SHOWSELALWAYS)
+
+	lv.item2Handle = make(map[ListItem]uintptr)
+	lv.handle2Item = make(map[uintptr]ListItem)
+
+	RegMsgHandler(lv)
+
+	lv.SetFont(DefaultFont)
+	lv.SetSize(200, 400)
+
+	if err := lv.SetTheme("Explorer"); err != nil {
+		// theme error is ignored
+	}
+	return lv
+}
+
+// FIXME: Changes the state of an item in a list-view control. Refer LVM_SETITEMSTATE message.
+func (lv *ListView) setItemState(i int, state, mask uint) {
+	var item w32.LVITEM
+	item.State, item.StateMask = uint32(state), uint32(mask)
+	w32.SendMessage(lv.hwnd, w32.LVM_SETITEMSTATE, uintptr(i), uintptr(unsafe.Pointer(&item)))
+}
+
+func (lv *ListView) EnableSingleSelect(enable bool) {
+	SetStyle(lv.hwnd, enable, w32.LVS_SINGLESEL)
+}
+
+func (lv *ListView) EnableSortHeader(enable bool) {
+	SetStyle(lv.hwnd, enable, w32.LVS_NOSORTHEADER)
+}
+
+func (lv *ListView) EnableSortAscending(enable bool) {
+	SetStyle(lv.hwnd, enable, w32.LVS_SORTASCENDING)
+}
+
+func (lv *ListView) EnableEditLabels(enable bool) {
+	SetStyle(lv.hwnd, enable, w32.LVS_EDITLABELS)
+}
+
+func (lv *ListView) EnableFullRowSelect(enable bool) {
+	if enable {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, w32.LVS_EX_FULLROWSELECT)
+	} else {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, w32.LVS_EX_FULLROWSELECT, 0)
+	}
+}
+
+func (lv *ListView) EnableDoubleBuffer(enable bool) {
+	if enable {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, w32.LVS_EX_DOUBLEBUFFER)
+	} else {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, w32.LVS_EX_DOUBLEBUFFER, 0)
+	}
+}
+
+func (lv *ListView) EnableHotTrack(enable bool) {
+	if enable {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, w32.LVS_EX_TRACKSELECT)
+	} else {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, w32.LVS_EX_TRACKSELECT, 0)
+	}
+}
+
+func (lv *ListView) SetItemCount(count int) bool {
+	return w32.SendMessage(lv.hwnd, w32.LVM_SETITEMCOUNT, uintptr(count), 0) != 0
+}
+
+func (lv *ListView) ItemCount() int {
+	return int(w32.SendMessage(lv.hwnd, w32.LVM_GETITEMCOUNT, 0, 0))
+}
+
+func (lv *ListView) ItemAt(x, y int) ListItem {
+	hti := w32.LVHITTESTINFO{Pt: w32.POINT{int32(x), int32(y)}}
+	w32.SendMessage(lv.hwnd, w32.LVM_HITTEST, 0, uintptr(unsafe.Pointer(&hti)))
+	return lv.findItemByIndex(int(hti.IItem))
+}
+
+func (lv *ListView) Items() (list []ListItem) {
+	for item := range lv.item2Handle {
+		list = append(list, item)
+	}
+	return list
+}
+
+func (lv *ListView) AddColumn(caption string, width int) {
+	var lc w32.LVCOLUMN
+	lc.Mask = w32.LVCF_TEXT
+	if width != 0 {
+		lc.Mask = lc.Mask | w32.LVCF_WIDTH
+		lc.Cx = int32(width)
+	}
+	lc.PszText = syscall.StringToUTF16Ptr(caption)
+	lv.insertLvColumn(&lc, lv.cols)
+	lv.cols++
+}
+
+// StretchLastColumn makes the last column take up all remaining horizontal
+// space of the *ListView.
+// The effect of this is not persistent.
+func (lv *ListView) StretchLastColumn() error {
+	if lv.cols == 0 {
+		return nil
+	}
+	if w32.SendMessage(lv.hwnd, w32.LVM_SETCOLUMNWIDTH, uintptr(lv.cols-1), w32.LVSCW_AUTOSIZE_USEHEADER) == 0 {
+		//panic("LVM_SETCOLUMNWIDTH failed")
+	}
+	return nil
+}
+
+// CheckBoxes returns if the *TableView has check boxes.
+func (lv *ListView) CheckBoxes() bool {
+	return w32.SendMessage(lv.hwnd, w32.LVM_GETEXTENDEDLISTVIEWSTYLE, 0, 0)&w32.LVS_EX_CHECKBOXES > 0
+}
+
+// SetCheckBoxes sets if the *TableView has check boxes.
+func (lv *ListView) SetCheckBoxes(value bool) {
+	exStyle := w32.SendMessage(lv.hwnd, w32.LVM_GETEXTENDEDLISTVIEWSTYLE, 0, 0)
+	oldStyle := exStyle
+	if value {
+		exStyle |= w32.LVS_EX_CHECKBOXES
+	} else {
+		exStyle &^= w32.LVS_EX_CHECKBOXES
+	}
+	if exStyle != oldStyle {
+		w32.SendMessage(lv.hwnd, w32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0, exStyle)
+	}
+
+	mask := w32.SendMessage(lv.hwnd, w32.LVM_GETCALLBACKMASK, 0, 0)
+	if value {
+		mask |= w32.LVIS_STATEIMAGEMASK
+	} else {
+		mask &^= w32.LVIS_STATEIMAGEMASK
+	}
+
+	if w32.SendMessage(lv.hwnd, w32.LVM_SETCALLBACKMASK, mask, 0) == w32.FALSE {
+		panic("SendMessage(LVM_SETCALLBACKMASK)")
+	}
+}
+
+func (lv *ListView) applyImage(lc *w32.LVITEM, imIndex int) {
+	if lv.iml != nil {
+		lc.Mask |= w32.LVIF_IMAGE
+		lc.IImage = int32(imIndex)
+	}
+}
+
+func (lv *ListView) AddItem(item ListItem) {
+	lv.InsertItem(item, lv.ItemCount())
+}
+
+func (lv *ListView) InsertItem(item ListItem, index int) {
+	text := item.Text()
+	li := &w32.LVITEM{
+		Mask:    w32.LVIF_TEXT | w32.LVIF_PARAM,
+		PszText: syscall.StringToUTF16Ptr(text[0]),
+		IItem:   int32(index),
+	}
+
+	lv.lastIndex++
+	ix := new(int)
+	*ix = lv.lastIndex
+	li.LParam = uintptr(*ix)
+	lv.handle2Item[li.LParam] = item
+	lv.item2Handle[item] = li.LParam
+
+	lv.applyImage(li, item.ImageIndex())
+	lv.insertLvItem(li)
+
+	for i := 1; i < len(text); i++ {
+		li.Mask = w32.LVIF_TEXT
+		li.PszText = syscall.StringToUTF16Ptr(text[i])
+		li.ISubItem = int32(i)
+		lv.setLvItem(li)
+	}
+}
+
+func (lv *ListView) UpdateItem(item ListItem) bool {
+	lparam, ok := lv.item2Handle[item]
+	if !ok {
+		return false
+	}
+
+	index := lv.findIndexByItem(item)
+	if index == -1 {
+		return false
+	}
+
+	text := item.Text()
+	li := &w32.LVITEM{
+		Mask:    w32.LVIF_TEXT | w32.LVIF_PARAM,
+		PszText: syscall.StringToUTF16Ptr(text[0]),
+		LParam:  lparam,
+		IItem:   int32(index),
+	}
+
+	lv.applyImage(li, item.ImageIndex())
+	lv.setLvItem(li)
+
+	for i := 1; i < len(text); i++ {
+		li.Mask = w32.LVIF_TEXT
+		li.PszText = syscall.StringToUTF16Ptr(text[i])
+		li.ISubItem = int32(i)
+		lv.setLvItem(li)
+	}
+	return true
+}
+
+func (lv *ListView) insertLvColumn(lvColumn *w32.LVCOLUMN, iCol int) {
+	w32.SendMessage(lv.hwnd, w32.LVM_INSERTCOLUMN, uintptr(iCol), uintptr(unsafe.Pointer(lvColumn)))
+}
+
+func (lv *ListView) insertLvItem(lvItem *w32.LVITEM) {
+	w32.SendMessage(lv.hwnd, w32.LVM_INSERTITEM, 0, uintptr(unsafe.Pointer(lvItem)))
+}
+
+func (lv *ListView) setLvItem(lvItem *w32.LVITEM) {
+	w32.SendMessage(lv.hwnd, w32.LVM_SETITEM, 0, uintptr(unsafe.Pointer(lvItem)))
+}
+
+func (lv *ListView) DeleteAllItems() bool {
+	if w32.SendMessage(lv.hwnd, w32.LVM_DELETEALLITEMS, 0, 0) == w32.TRUE {
+		lv.item2Handle = make(map[ListItem]uintptr)
+		lv.handle2Item = make(map[uintptr]ListItem)
+		return true
+	}
+	return false
+}
+
+func (lv *ListView) DeleteItem(item ListItem) error {
+	index := lv.findIndexByItem(item)
+	if index == -1 {
+		return errors.New("item not found")
+	}
+
+	if w32.SendMessage(lv.hwnd, w32.LVM_DELETEITEM, uintptr(index), 0) == 0 {
+		return errors.New("SendMessage(TVM_DELETEITEM) failed")
+	}
+
+	h := lv.item2Handle[item]
+	delete(lv.item2Handle, item)
+	delete(lv.handle2Item, h)
+	return nil
+}
+
+func (lv *ListView) findIndexByItem(item ListItem) int {
+	lparam, ok := lv.item2Handle[item]
+	if !ok {
+		return -1
+	}
+
+	it := &w32.LVFINDINFO{
+		Flags:  w32.LVFI_PARAM,
+		LParam: lparam,
+	}
+	var i int = -1
+	return int(w32.SendMessage(lv.hwnd, w32.LVM_FINDITEM, uintptr(i), uintptr(unsafe.Pointer(it))))
+}
+
+func (lv *ListView) findItemByIndex(i int) ListItem {
+	it := &w32.LVITEM{
+		Mask:  w32.LVIF_PARAM,
+		IItem: int32(i),
+	}
+
+	if w32.SendMessage(lv.hwnd, w32.LVM_GETITEM, 0, uintptr(unsafe.Pointer(it))) == w32.TRUE {
+		if item, ok := lv.handle2Item[it.LParam]; ok {
+			return item
+		}
+	}
+	return nil
+}
+
+func (lv *ListView) EnsureVisible(item ListItem) bool {
+	if i := lv.findIndexByItem(item); i != -1 {
+		return w32.SendMessage(lv.hwnd, w32.LVM_ENSUREVISIBLE, uintptr(i), 1) == 0
+	}
+	return false
+}
+
+func (lv *ListView) SelectedItem() ListItem {
+	if items := lv.SelectedItems(); len(items) > 0 {
+		return items[0]
+	}
+	return nil
+}
+
+func (lv *ListView) SetSelectedItem(item ListItem) bool {
+	if i := lv.findIndexByItem(item); i > -1 {
+		lv.SetSelectedIndex(i)
+		return true
+	}
+	return false
+}
+
+// mask is used to set the LVITEM.Mask for ListView.GetItem which indicates which attributes you'd like to receive
+// of LVITEM.
+func (lv *ListView) SelectedItems() []ListItem {
+	var items []ListItem
+
+	var i int = -1
+	for {
+		if i = int(w32.SendMessage(lv.hwnd, w32.LVM_GETNEXTITEM, uintptr(i), uintptr(w32.LVNI_SELECTED))); i == -1 {
+			break
+		}
+
+		if item := lv.findItemByIndex(i); item != nil {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func (lv *ListView) SelectedCount() uint {
+	return uint(w32.SendMessage(lv.hwnd, w32.LVM_GETSELECTEDCOUNT, 0, 0))
+}
+
+// GetSelectedIndex first selected item index. Returns -1 if no item is selected.
+func (lv *ListView) SelectedIndex() int {
+	var i int = -1
+	return int(w32.SendMessage(lv.hwnd, w32.LVM_GETNEXTITEM, uintptr(i), uintptr(w32.LVNI_SELECTED)))
+}
+
+// Set i to -1 to select all items.
+func (lv *ListView) SetSelectedIndex(i int) {
+	lv.setItemState(i, w32.LVIS_SELECTED, w32.LVIS_SELECTED)
+}
+
+func (lv *ListView) SetImageList(imageList *ImageList) {
+	w32.SendMessage(lv.hwnd, w32.LVM_SETIMAGELIST, w32.LVSIL_SMALL, uintptr(imageList.Handle()))
+	lv.iml = imageList
+}
+
+// Event publishers
+func (lv *ListView) OnEndLabelEdit() *EventManager {
+	return &lv.onEndLabelEdit
+}
+
+func (lv *ListView) OnDoubleClick() *EventManager {
+	return &lv.onDoubleClick
+}
+
+func (lv *ListView) OnClick() *EventManager {
+	return &lv.onClick
+}
+
+func (lv *ListView) OnKeyDown() *EventManager {
+	return &lv.onKeyDown
+}
+
+func (lv *ListView) OnItemChanging() *EventManager {
+	return &lv.onItemChanging
+}
+
+func (lv *ListView) OnItemChanged() *EventManager {
+	return &lv.onItemChanged
+}
+
+func (lv *ListView) OnCheckChanged() *EventManager {
+	return &lv.onCheckChanged
+}
+
+func (lv *ListView) OnViewChange() *EventManager {
+	return &lv.onViewChange
+}
+
+func (lv *ListView) OnEndScroll() *EventManager {
+	return &lv.onEndScroll
+}
+
+// Message processor
+func (lv *ListView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	/*case w32.WM_ERASEBKGND:
+	lv.StretchLastColumn()
+	println("case w32.WM_ERASEBKGND")
+	return 1*/
+
+	case w32.WM_NOTIFY:
+		nm := (*w32.NMHDR)(unsafe.Pointer(lparam))
+		code := int32(nm.Code)
+
+		switch code {
+		case w32.LVN_BEGINLABELEDITW:
+			// println("Begin label edit")
+		case w32.LVN_ENDLABELEDITW:
+			nmdi := (*w32.NMLVDISPINFO)(unsafe.Pointer(lparam))
+			if nmdi.Item.PszText != nil {
+				fmt.Println(nmdi.Item.PszText, nmdi.Item)
+				if item, ok := lv.handle2Item[nmdi.Item.LParam]; ok {
+					lv.onEndLabelEdit.Fire(NewEvent(lv,
+						&LabelEditEventData{Item: item,
+							Text: w32.UTF16PtrToString(nmdi.Item.PszText)}))
+				}
+				return w32.TRUE
+			}
+		case w32.NM_DBLCLK:
+			lv.onDoubleClick.Fire(NewEvent(lv, nil))
+
+		case w32.NM_CLICK:
+			ac := (*w32.NMITEMACTIVATE)(unsafe.Pointer(lparam))
+			var hti w32.LVHITTESTINFO
+			hti.Pt = w32.POINT{ac.PtAction.X, ac.PtAction.Y}
+			w32.SendMessage(lv.hwnd, w32.LVM_HITTEST, 0, uintptr(unsafe.Pointer(&hti)))
+
+			if hti.Flags == w32.LVHT_ONITEMSTATEICON {
+				if item := lv.findItemByIndex(int(hti.IItem)); item != nil {
+					if item, ok := item.(ListItemChecker); ok {
+						checked := !item.Checked()
+						item.SetChecked(checked)
+						lv.onCheckChanged.Fire(NewEvent(lv, item))
+
+						if w32.SendMessage(lv.hwnd, w32.LVM_UPDATE, uintptr(hti.IItem), 0) == w32.FALSE {
+							panic("SendMessage(LVM_UPDATE)")
+						}
+					}
+				}
+			}
+
+			hti.Pt = w32.POINT{ac.PtAction.X, ac.PtAction.Y}
+			w32.SendMessage(lv.hwnd, w32.LVM_SUBITEMHITTEST, 0, uintptr(unsafe.Pointer(&hti)))
+			lv.onClick.Fire(NewEvent(lv, hti.ISubItem))
+
+		case w32.LVN_KEYDOWN:
+			nmkey := (*w32.NMLVKEYDOWN)(unsafe.Pointer(lparam))
+			if nmkey.WVKey == w32.VK_SPACE && lv.CheckBoxes() {
+				if item := lv.SelectedItem(); item != nil {
+					if item, ok := item.(ListItemChecker); ok {
+						checked := !item.Checked()
+						item.SetChecked(checked)
+						lv.onCheckChanged.Fire(NewEvent(lv, item))
+					}
+
+					index := lv.findIndexByItem(item)
+					if w32.SendMessage(lv.hwnd, w32.LVM_UPDATE, uintptr(index), 0) == w32.FALSE {
+						panic("SendMessage(LVM_UPDATE)")
+					}
+				}
+			}
+			lv.onKeyDown.Fire(NewEvent(lv, nmkey.WVKey))
+			key := nmkey.WVKey
+			w32.SendMessage(lv.Parent().Handle(), w32.WM_KEYDOWN, uintptr(key), 0)
+
+		case w32.LVN_ITEMCHANGING:
+			// This event also fires when listview has changed via code.
+			nmlv := (*w32.NMLISTVIEW)(unsafe.Pointer(lparam))
+			item := lv.findItemByIndex(int(nmlv.IItem))
+			lv.onItemChanging.Fire(NewEvent(lv, item))
+
+		case w32.LVN_ITEMCHANGED:
+			// This event also fires when listview has changed via code.
+			nmlv := (*w32.NMLISTVIEW)(unsafe.Pointer(lparam))
+			item := lv.findItemByIndex(int(nmlv.IItem))
+			lv.onItemChanged.Fire(NewEvent(lv, item))
+
+		case w32.LVN_GETDISPINFO:
+			nmdi := (*w32.NMLVDISPINFO)(unsafe.Pointer(lparam))
+			if nmdi.Item.StateMask&w32.LVIS_STATEIMAGEMASK > 0 {
+				if item, ok := lv.handle2Item[nmdi.Item.LParam]; ok {
+					if item, ok := item.(ListItemChecker); ok {
+
+						checked := item.Checked()
+						if checked {
+							nmdi.Item.State = 0x2000
+						} else {
+							nmdi.Item.State = 0x1000
+						}
+					}
+				}
+			}
+
+			lv.onViewChange.Fire(NewEvent(lv, nil))
+
+		case w32.LVN_ENDSCROLL:
+			lv.onEndScroll.Fire(NewEvent(lv, nil))
+		}
+	}
+	return w32.DefWindowProc(lv.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/menu.go","mode":420,"size":8397,"sha256":"48585eca4660a45bf2bb73c290e5927e959a7db69a2105e49d0c5a97ba23e0f5","index":0,"count":1,"encoding":"utf-8","payloadBytes":8397}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+var (
+	nextMenuItemID  uint16 = 3
+	actionsByID            = make(map[uint16]*MenuItem)
+	shortcut2Action        = make(map[Shortcut]*MenuItem)
+	menuItems              = make(map[w32.HMENU][]*MenuItem)
+	radioGroups            = make(map[*MenuItem]*RadioGroup)
+	initialised     bool
+)
+
+var NoShortcut = Shortcut{}
+
+// Menu for main window and context menus on controls.
+// Most methods used for both main window menu and context menu.
+type Menu struct {
+	hMenu w32.HMENU
+	hwnd  w32.HWND // hwnd might be nil if it is context menu.
+}
+
+type MenuItem struct {
+	hMenu    w32.HMENU
+	hSubMenu w32.HMENU // Non zero if this item is in itself a submenu.
+
+	text     string
+	toolTip  string
+	image    *Bitmap
+	shortcut Shortcut
+	enabled  bool
+
+	checkable bool
+	checked   bool
+	isRadio   bool
+
+	id uint16
+
+	onClick EventManager
+}
+
+type RadioGroup struct {
+	members []*MenuItem
+	hwnd    w32.HWND
+}
+
+func NewContextMenu() *MenuItem {
+	hMenu := w32.CreatePopupMenu()
+	if hMenu == 0 {
+		panic("failed CreateMenu")
+	}
+
+	item := &MenuItem{
+		hMenu:    hMenu,
+		hSubMenu: hMenu,
+	}
+	return item
+}
+
+func (m *Menu) Dispose() {
+	if m.hMenu != 0 {
+		w32.DestroyMenu(m.hMenu)
+		m.hMenu = 0
+	}
+}
+
+func (m *Menu) IsDisposed() bool {
+	return m.hMenu == 0
+}
+
+func initMenuItemInfoFromAction(mii *w32.MENUITEMINFO, a *MenuItem) {
+	mii.CbSize = uint32(unsafe.Sizeof(*mii))
+	mii.FMask = w32.MIIM_FTYPE | w32.MIIM_ID | w32.MIIM_STATE | w32.MIIM_STRING
+	if a.image != nil {
+		mii.FMask |= w32.MIIM_BITMAP
+		mii.HbmpItem = a.image.handle
+	}
+	if a.IsSeparator() {
+		mii.FType = w32.MFT_SEPARATOR
+	} else {
+		mii.FType = w32.MFT_STRING
+		var text string
+		if s := a.shortcut; s.Key != 0 {
+			text = fmt.Sprintf("%s\t%s", a.text, s.String())
+			shortcut2Action[a.shortcut] = a
+		} else {
+			text = a.text
+		}
+		mii.DwTypeData = syscall.StringToUTF16Ptr(text)
+		mii.Cch = uint32(len([]rune(a.text)))
+	}
+	mii.WID = uint32(a.id)
+
+	if a.Enabled() {
+		mii.FState &^= w32.MFS_DISABLED
+	} else {
+		mii.FState |= w32.MFS_DISABLED
+	}
+
+	if a.Checkable() {
+		mii.FMask |= w32.MIIM_CHECKMARKS
+	}
+	if a.Checked() {
+		mii.FState |= w32.MFS_CHECKED
+	}
+
+	if a.hSubMenu != 0 {
+		mii.FMask |= w32.MIIM_SUBMENU
+		mii.HSubMenu = a.hSubMenu
+	}
+}
+
+// Show menu on the main window.
+func (m *Menu) Show() {
+	initialised = true
+	updateRadioGroups()
+	if !w32.DrawMenuBar(m.hwnd) {
+		panic("DrawMenuBar failed")
+	}
+}
+
+// AddSubMenu returns item that is used as submenu to perform AddItem(s).
+func (m *Menu) AddSubMenu(text string) *MenuItem {
+	hSubMenu := w32.CreateMenu()
+	if hSubMenu == 0 {
+		panic("failed CreateMenu")
+	}
+	return addMenuItem(m.hMenu, hSubMenu, text, Shortcut{}, nil, false)
+}
+
+// This method will iterate through the menu items, group radio items together, build a
+// quick access map and set the initial items
+func updateRadioGroups() {
+
+	if !initialised {
+		return
+	}
+
+	radioItemsChecked := []*MenuItem{}
+	radioGroups = make(map[*MenuItem]*RadioGroup)
+	var currentRadioGroupMembers []*MenuItem
+	// Iterate the menus
+	for _, menu := range menuItems {
+		menuLength := len(menu)
+		for index, menuItem := range menu {
+			if menuItem.isRadio {
+				currentRadioGroupMembers = append(currentRadioGroupMembers, menuItem)
+				if menuItem.checked {
+					radioItemsChecked = append(radioItemsChecked, menuItem)
+				}
+
+				// If end of menu
+				if index == menuLength-1 {
+					radioGroup := &RadioGroup{
+						members: currentRadioGroupMembers,
+						hwnd:    menuItem.hMenu,
+					}
+					// Save the group to each member iin the radiomap
+					for _, member := range currentRadioGroupMembers {
+						radioGroups[member] = radioGroup
+					}
+					currentRadioGroupMembers = []*MenuItem{}
+				}
+				continue
+			}
+
+			// Not a radio item
+			if len(currentRadioGroupMembers) > 0 {
+				radioGroup := &RadioGroup{
+					members: currentRadioGroupMembers,
+					hwnd:    menuItem.hMenu,
+				}
+				// Save the group to each member iin the radiomap
+				for _, member := range currentRadioGroupMembers {
+					radioGroups[member] = radioGroup
+				}
+				currentRadioGroupMembers = []*MenuItem{}
+			}
+		}
+	}
+
+	// Enable the checked items
+	for _, item := range radioItemsChecked {
+		radioGroup := radioGroups[item]
+		startID := radioGroup.members[0].id
+		endID := radioGroup.members[len(radioGroup.members)-1].id
+		w32.SelectRadioMenuItem(item.id, startID, endID, radioGroup.hwnd)
+	}
+
+}
+
+func (mi *MenuItem) OnClick() *EventManager {
+	return &mi.onClick
+}
+
+func (mi *MenuItem) AddSeparator() {
+	addMenuItem(mi.hSubMenu, 0, "-", Shortcut{}, nil, false)
+}
+
+// AddItem adds plain menu item.
+func (mi *MenuItem) AddItem(text string, shortcut Shortcut) *MenuItem {
+	return addMenuItem(mi.hSubMenu, 0, text, shortcut, nil, false)
+}
+
+// AddItemCheckable adds plain menu item that can have a checkmark.
+func (mi *MenuItem) AddItemCheckable(text string, shortcut Shortcut) *MenuItem {
+	return addMenuItem(mi.hSubMenu, 0, text, shortcut, nil, true)
+}
+
+// AddItemRadio adds plain menu item that can have a checkmark and is part of a radio group.
+func (mi *MenuItem) AddItemRadio(text string, shortcut Shortcut) *MenuItem {
+	menuItem := addMenuItem(mi.hSubMenu, 0, text, shortcut, nil, true)
+	menuItem.isRadio = true
+	return menuItem
+}
+
+// AddItemWithBitmap adds menu item with shortcut and bitmap.
+func (mi *MenuItem) AddItemWithBitmap(text string, shortcut Shortcut, image *Bitmap) *MenuItem {
+	return addMenuItem(mi.hSubMenu, 0, text, shortcut, image, false)
+}
+
+// AddSubMenu adds a submenu.
+func (mi *MenuItem) AddSubMenu(text string) *MenuItem {
+	hSubMenu := w32.CreatePopupMenu()
+	if hSubMenu == 0 {
+		panic("failed CreatePopupMenu")
+	}
+	return addMenuItem(mi.hSubMenu, hSubMenu, text, Shortcut{}, nil, false)
+}
+
+// AddItem to the menu, set text to "-" for separators.
+func addMenuItem(hMenu, hSubMenu w32.HMENU, text string, shortcut Shortcut, image *Bitmap, checkable bool) *MenuItem {
+	item := &MenuItem{
+		hMenu:     hMenu,
+		hSubMenu:  hSubMenu,
+		text:      text,
+		shortcut:  shortcut,
+		image:     image,
+		enabled:   true,
+		id:        nextMenuItemID,
+		checkable: checkable,
+		isRadio:   false,
+		//visible:  true,
+	}
+	nextMenuItemID++
+	actionsByID[item.id] = item
+	menuItems[hMenu] = append(menuItems[hMenu], item)
+
+	var mii w32.MENUITEMINFO
+	initMenuItemInfoFromAction(&mii, item)
+
+	index := -1
+	if !w32.InsertMenuItem(hMenu, uint32(index), true, &mii) {
+		panic("InsertMenuItem failed")
+	}
+	return item
+}
+
+func indexInObserver(a *MenuItem) int {
+	var idx int
+	for _, mi := range menuItems[a.hMenu] {
+		if mi == a {
+			return idx
+		}
+		idx++
+	}
+	return -1
+}
+
+func findMenuItemByID(id int) *MenuItem {
+	return actionsByID[uint16(id)]
+}
+
+func (mi *MenuItem) update() {
+	var mii w32.MENUITEMINFO
+	initMenuItemInfoFromAction(&mii, mi)
+
+	if !w32.SetMenuItemInfo(mi.hMenu, uint32(indexInObserver(mi)), true, &mii) {
+		panic("SetMenuItemInfo failed")
+	}
+	if mi.isRadio {
+		mi.updateRadioGroup()
+	}
+}
+
+func (mi *MenuItem) IsSeparator() bool { return mi.text == "-" }
+func (mi *MenuItem) SetSeparator()     { mi.text = "-" }
+
+func (mi *MenuItem) Enabled() bool     { return mi.enabled }
+func (mi *MenuItem) SetEnabled(b bool) { mi.enabled = b; mi.update() }
+
+func (mi *MenuItem) Checkable() bool     { return mi.checkable }
+func (mi *MenuItem) SetCheckable(b bool) { mi.checkable = b; mi.update() }
+
+func (mi *MenuItem) Checked() bool { return mi.checked }
+func (mi *MenuItem) SetChecked(b bool) {
+	if mi.isRadio {
+		radioGroup := radioGroups[mi]
+		if radioGroup != nil {
+			for _, member := range radioGroup.members {
+				member.checked = false
+			}
+		}
+
+	}
+	mi.checked = b
+	mi.update()
+}
+
+func (mi *MenuItem) Text() string     { return mi.text }
+func (mi *MenuItem) SetText(s string) { mi.text = s; mi.update() }
+
+func (mi *MenuItem) Image() *Bitmap     { return mi.image }
+func (mi *MenuItem) SetImage(b *Bitmap) { mi.image = b; mi.update() }
+
+func (mi *MenuItem) ToolTip() string     { return mi.toolTip }
+func (mi *MenuItem) SetToolTip(s string) { mi.toolTip = s; mi.update() }
+
+func (mi *MenuItem) updateRadioGroup() {
+	radioGroup := radioGroups[mi]
+	if radioGroup == nil {
+		return
+	}
+	startID := radioGroup.members[0].id
+	endID := radioGroup.members[len(radioGroup.members)-1].id
+	w32.SelectRadioMenuItem(mi.id, startID, endID, radioGroup.hwnd)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/mousecontrol.go","mode":420,"size":1219,"sha256":"67e08adeb31aa9c7ef7d2265d0fc11e55f17b75d3d9ff16cc6dbaa455ab523a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1219}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+// MouseControl used for creating custom controls that need mouse hover or mouse leave events.
+type MouseControl struct {
+	ControlBase
+	isMouseLeft bool
+}
+
+func (cc *MouseControl) Init(parent Controller, className string, exStyle, style uint) {
+	RegClassOnlyOnce(className)
+	cc.hwnd = CreateWindow(className, parent, exStyle, style)
+	cc.parent = parent
+	RegMsgHandler(cc)
+
+	cc.isMouseLeft = true
+	cc.SetFont(DefaultFont)
+}
+
+func (cc *MouseControl) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	sender := GetMsgHandler(cc.hwnd)
+	switch msg {
+	case w32.WM_CREATE:
+		internalTrackMouseEvent(cc.hwnd)
+		cc.onCreate.Fire(NewEvent(sender, nil))
+	case w32.WM_CLOSE:
+		cc.onClose.Fire(NewEvent(sender, nil))
+	case w32.WM_MOUSEMOVE:
+		//if cc.isMouseLeft {
+
+		cc.onMouseHover.Fire(NewEvent(sender, nil))
+		//internalTrackMouseEvent(cc.hwnd)
+		cc.isMouseLeft = false
+
+		//}
+	case w32.WM_MOUSELEAVE:
+		cc.onMouseLeave.Fire(NewEvent(sender, nil))
+		cc.isMouseLeft = true
+	}
+	return w32.DefWindowProc(cc.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/msghandlerregistry.go","mode":420,"size":579,"sha256":"0096959418f6b7d4cf48a1375c4c260fae868b2d58f0407e863f4f03433301bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":579}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+func RegMsgHandler(controller Controller) {
+	gControllerRegistry[controller.Handle()] = controller
+}
+
+func UnRegMsgHandler(hwnd w32.HWND) {
+	delete(gControllerRegistry, hwnd)
+}
+
+func GetMsgHandler(hwnd w32.HWND) Controller {
+	if controller, isExists := gControllerRegistry[hwnd]; isExists {
+		return controller
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/panel.go","mode":420,"size":4728,"sha256":"c5f18146b7f4e30e934929c6c415b93ea7fdefe5626b444960f4f86239cdb0b1","index":0,"count":1,"encoding":"utf-8","payloadBytes":4728}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Panel struct {
+	ControlBase
+	layoutMng LayoutManager
+}
+
+func NewPanel(parent Controller) *Panel {
+	pa := new(Panel)
+
+	RegClassOnlyOnce("winc_Panel")
+	pa.hwnd = CreateWindow("winc_Panel", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	pa.parent = parent
+	RegMsgHandler(pa)
+
+	pa.SetFont(DefaultFont)
+	pa.SetText("")
+	pa.SetSize(200, 65)
+	return pa
+}
+
+// SetLayout panel implements DockAllow interface.
+func (pa *Panel) SetLayout(mng LayoutManager) {
+	pa.layoutMng = mng
+}
+
+func (pa *Panel) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_SIZE, w32.WM_PAINT:
+		if pa.layoutMng != nil {
+			pa.layoutMng.Update()
+		}
+	}
+	return w32.DefWindowProc(pa.hwnd, msg, wparam, lparam)
+}
+
+var errorPanelPen = NewPen(w32.PS_GEOMETRIC, 2, NewSolidColorBrush(RGB(255, 128, 128)))
+var errorPanelOkPen = NewPen(w32.PS_GEOMETRIC, 2, NewSolidColorBrush(RGB(220, 220, 220)))
+
+// ErrorPanel shows errors or important messages.
+// It is meant to stand out of other on screen controls.
+type ErrorPanel struct {
+	ControlBase
+	pen    *Pen
+	margin int
+}
+
+// NewErrorPanel.
+func NewErrorPanel(parent Controller) *ErrorPanel {
+	f := new(ErrorPanel)
+	f.init(parent)
+
+	f.SetFont(DefaultFont)
+	f.SetText("No errors")
+	f.SetSize(200, 65)
+	f.margin = 5
+	f.pen = errorPanelOkPen
+	return f
+}
+
+func (epa *ErrorPanel) init(parent Controller) {
+	RegClassOnlyOnce("winc_ErrorPanel")
+
+	epa.hwnd = CreateWindow("winc_ErrorPanel", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	epa.parent = parent
+
+	RegMsgHandler(epa)
+}
+
+func (epa *ErrorPanel) SetMargin(margin int) {
+	epa.margin = margin
+}
+
+func (epa *ErrorPanel) Printf(format string, v ...interface{}) {
+	epa.SetText(fmt.Sprintf(format, v...))
+	epa.ShowAsError(false)
+}
+
+func (epa *ErrorPanel) Errorf(format string, v ...interface{}) {
+	epa.SetText(fmt.Sprintf(format, v...))
+	epa.ShowAsError(true)
+}
+
+func (epa *ErrorPanel) ShowAsError(show bool) {
+	if show {
+		epa.pen = errorPanelPen
+	} else {
+		epa.pen = errorPanelOkPen
+	}
+	epa.Invalidate(true)
+}
+
+func (epa *ErrorPanel) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_ERASEBKGND:
+		canvas := NewCanvasFromHDC(w32.HDC(wparam))
+		r := epa.Bounds()
+		r.rect.Left += int32(epa.margin)
+		r.rect.Right -= int32(epa.margin)
+		r.rect.Top += int32(epa.margin)
+		r.rect.Bottom -= int32(epa.margin)
+		// old code used NewSystemColorBrush(w32.COLOR_BTNFACE)
+		canvas.DrawFillRect(r, epa.pen, NewSystemColorBrush(w32.COLOR_WINDOW))
+
+		r.rect.Left += 5
+		canvas.DrawText(epa.Text(), r, 0, epa.Font(), RGB(0, 0, 0))
+		canvas.Dispose()
+		return 1
+	}
+	return w32.DefWindowProc(epa.hwnd, msg, wparam, lparam)
+}
+
+// MultiPanel contains other panels and only makes one of them visible.
+type MultiPanel struct {
+	ControlBase
+	current int
+	panels  []*Panel
+}
+
+func NewMultiPanel(parent Controller) *MultiPanel {
+	mpa := new(MultiPanel)
+
+	RegClassOnlyOnce("winc_MultiPanel")
+	mpa.hwnd = CreateWindow("winc_MultiPanel", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	mpa.parent = parent
+	RegMsgHandler(mpa)
+
+	mpa.SetFont(DefaultFont)
+	mpa.SetText("")
+	mpa.SetSize(300, 200)
+	mpa.current = -1
+	return mpa
+}
+
+func (mpa *MultiPanel) Count() int { return len(mpa.panels) }
+
+// AddPanel adds panels to the internal list, first panel is visible all others are hidden.
+func (mpa *MultiPanel) AddPanel(panel *Panel) {
+	if len(mpa.panels) > 0 {
+		panel.Hide()
+	}
+	mpa.current = 0
+	mpa.panels = append(mpa.panels, panel)
+}
+
+// ReplacePanel replaces panel, useful for refreshing controls on screen.
+func (mpa *MultiPanel) ReplacePanel(index int, panel *Panel) {
+	mpa.panels[index] = panel
+}
+
+// DeletePanel removed panel.
+func (mpa *MultiPanel) DeletePanel(index int) {
+	mpa.panels = append(mpa.panels[:index], mpa.panels[index+1:]...)
+}
+
+func (mpa *MultiPanel) Current() int {
+	return mpa.current
+}
+
+func (mpa *MultiPanel) SetCurrent(index int) {
+	if index >= len(mpa.panels) {
+		panic("index greater than number of panels")
+	}
+	if mpa.current == -1 {
+		panic("no current panel, add panels first")
+	}
+	for i := range mpa.panels {
+		if i != index {
+			mpa.panels[i].Hide()
+			mpa.panels[i].Invalidate(true)
+		}
+	}
+	mpa.panels[index].Show()
+	mpa.panels[index].Invalidate(true)
+	mpa.current = index
+}
+
+func (mpa *MultiPanel) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_SIZE:
+		// resize contained panels
+		for _, p := range mpa.panels {
+			p.SetPos(0, 0)
+			p.SetSize(mpa.Size())
+		}
+	}
+	return w32.DefWindowProc(mpa.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/path.go","mode":420,"size":1762,"sha256":"5937e5a3ded0c7d7731c4a18c1b9317f4630a97a89d03f76a400953e7997d3a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1762}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+func knownFolderPath(id w32.CSIDL) (string, error) {
+	var buf [w32.MAX_PATH]uint16
+
+	if !w32.SHGetSpecialFolderPath(0, &buf[0], id, false) {
+		return "", fmt.Errorf("SHGetSpecialFolderPath failed")
+	}
+
+	return syscall.UTF16ToString(buf[0:]), nil
+}
+
+func AppDataPath() (string, error) {
+	return knownFolderPath(w32.CSIDL_APPDATA)
+}
+
+func CommonAppDataPath() (string, error) {
+	return knownFolderPath(w32.CSIDL_COMMON_APPDATA)
+}
+
+func LocalAppDataPath() (string, error) {
+	return knownFolderPath(w32.CSIDL_LOCAL_APPDATA)
+}
+
+// EnsureAppDataPath uses AppDataPath to ensure storage for local settings and databases.
+func EnsureAppDataPath(company, product string) (string, error) {
+	path, err := AppDataPath()
+	if err != nil {
+		return path, err
+	}
+	p := filepath.Join(path, company, product)
+
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		// path/to/whatever does not exist
+		if err := os.MkdirAll(p, os.ModePerm); err != nil {
+			return p, err
+		}
+	}
+	return p, nil
+}
+
+func DriveNames() ([]string, error) {
+	bufLen := w32.GetLogicalDriveStrings(0, nil)
+	if bufLen == 0 {
+		return nil, fmt.Errorf("GetLogicalDriveStrings failed")
+	}
+	buf := make([]uint16, bufLen+1)
+
+	bufLen = w32.GetLogicalDriveStrings(bufLen+1, &buf[0])
+	if bufLen == 0 {
+		return nil, fmt.Errorf("GetLogicalDriveStrings failed")
+	}
+
+	var names []string
+	for i := 0; i < len(buf)-2; {
+		name := syscall.UTF16ToString(buf[i:])
+		names = append(names, name)
+		i += len(name) + 1
+	}
+	return names, nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/pen.go","mode":420,"size":1080,"sha256":"f686a62116108199df054c2e27fd7f63a23d71c20e7e1beb247f28e3c3f03469","index":0,"count":1,"encoding":"utf-8","payloadBytes":1080}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Pen struct {
+	hPen  w32.HPEN
+	style uint
+	brush *Brush
+}
+
+func NewPen(style uint, width uint, brush *Brush) *Pen {
+	if brush == nil {
+		panic("Brush cannot be nil")
+	}
+
+	hPen := w32.ExtCreatePen(style, width, brush.GetLOGBRUSH(), 0, nil)
+	if hPen == 0 {
+		panic("Failed to create pen")
+	}
+
+	return &Pen{hPen, style, brush}
+}
+
+func NewNullPen() *Pen {
+	lb := w32.LOGBRUSH{LbStyle: w32.BS_NULL}
+
+	hPen := w32.ExtCreatePen(w32.PS_COSMETIC|w32.PS_NULL, 1, &lb, 0, nil)
+	if hPen == 0 {
+		panic("failed to create null brush")
+	}
+
+	return &Pen{hPen: hPen}
+}
+
+func (pen *Pen) Style() uint {
+	return pen.style
+}
+
+func (pen *Pen) Brush() *Brush {
+	return pen.brush
+}
+
+func (pen *Pen) GetHPEN() w32.HPEN {
+	return pen.hPen
+}
+
+func (pen *Pen) Dispose() {
+	if pen.hPen != 0 {
+		w32.DeleteObject(w32.HGDIOBJ(pen.hPen))
+		pen.hPen = 0
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/progressbar.go","mode":420,"size":1156,"sha256":"b6af7fdd610402062b93dd91c8e0f34f48cc4dad5d2b2ca298273b1777f4049c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1156}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type ProgressBar struct {
+	ControlBase
+}
+
+func NewProgressBar(parent Controller) *ProgressBar {
+	pb := new(ProgressBar)
+
+	pb.InitControl(w32.PROGRESS_CLASS, parent, 0, w32.WS_CHILD|w32.WS_VISIBLE)
+	RegMsgHandler(pb)
+
+	pb.SetSize(200, 22)
+	return pb
+}
+
+func (pr *ProgressBar) Value() int {
+	ret := w32.SendMessage(pr.hwnd, w32.PBM_GETPOS, 0, 0)
+	return int(ret)
+}
+
+func (pr *ProgressBar) SetValue(v int) {
+	w32.SendMessage(pr.hwnd, w32.PBM_SETPOS, uintptr(v), 0)
+}
+
+func (pr *ProgressBar) Range() (min, max uint) {
+	min = uint(w32.SendMessage(pr.hwnd, w32.PBM_GETRANGE, uintptr(w32.BoolToBOOL(true)), 0))
+	max = uint(w32.SendMessage(pr.hwnd, w32.PBM_GETRANGE, uintptr(w32.BoolToBOOL(false)), 0))
+	return
+}
+
+func (pr *ProgressBar) SetRange(min, max int) {
+	w32.SendMessage(pr.hwnd, w32.PBM_SETRANGE32, uintptr(min), uintptr(max))
+}
+
+func (pr *ProgressBar) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	return w32.DefWindowProc(pr.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/rect.go","mode":420,"size":1673,"sha256":"d104b6752a8de6c359fbccdf6410327311e0fead4b3e14d16fb43346e984298b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1673}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Rect struct {
+	rect w32.RECT
+}
+
+func NewEmptyRect() *Rect {
+	var newRect Rect
+	w32.SetRectEmpty(&newRect.rect)
+
+	return &newRect
+}
+
+func NewRect(left, top, right, bottom int) *Rect {
+	var newRect Rect
+	w32.SetRectEmpty(&newRect.rect)
+	newRect.Set(left, top, right, bottom)
+
+	return &newRect
+}
+
+func (re *Rect) Data() (left, top, right, bottom int32) {
+	left = re.rect.Left
+	top = re.rect.Top
+	right = re.rect.Right
+	bottom = re.rect.Bottom
+	return
+}
+
+func (re *Rect) Width() int {
+	return int(re.rect.Right - re.rect.Left)
+}
+
+func (re *Rect) Height() int {
+	return int(re.rect.Bottom - re.rect.Top)
+}
+
+func (re *Rect) GetW32Rect() *w32.RECT {
+	return &re.rect
+}
+
+func (re *Rect) Set(left, top, right, bottom int) {
+	w32.SetRect(&re.rect, left, top, right, bottom)
+}
+
+func (re *Rect) IsEqual(rect *Rect) bool {
+	return w32.EqualRect(&re.rect, &rect.rect)
+}
+
+func (re *Rect) Inflate(x, y int) {
+	w32.InflateRect(&re.rect, x, y)
+}
+
+func (re *Rect) Intersect(src *Rect) {
+	w32.IntersectRect(&re.rect, &re.rect, &src.rect)
+}
+
+func (re *Rect) IsEmpty() bool {
+	return w32.IsRectEmpty(&re.rect)
+}
+
+func (re *Rect) Offset(x, y int) {
+	w32.OffsetRect(&re.rect, x, y)
+}
+
+func (re *Rect) IsPointIn(x, y int) bool {
+	return w32.PtInRect(&re.rect, x, y)
+}
+
+func (re *Rect) Substract(src *Rect) {
+	w32.SubtractRect(&re.rect, &re.rect, &src.rect)
+}
+
+func (re *Rect) Union(src *Rect) {
+	w32.UnionRect(&re.rect, &re.rect, &src.rect)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/resizer.go","mode":420,"size":4238,"sha256":"5522aba7cdbf82abab8a45b5549138926d5e131a3bb791cb16d2192126659564","index":0,"count":1,"encoding":"utf-8","payloadBytes":4238}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type VResizer struct {
+	ControlBase
+
+	control1 Dockable
+	control2 Dockable
+	dir      Direction
+
+	mouseLeft bool
+	drag      bool
+}
+
+func NewVResizer(parent Controller) *VResizer {
+	sp := new(VResizer)
+
+	RegClassOnlyOnce("winc_VResizer")
+	sp.hwnd = CreateWindow("winc_VResizer", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	sp.parent = parent
+	sp.mouseLeft = true
+	RegMsgHandler(sp)
+
+	sp.SetFont(DefaultFont)
+	sp.SetText("")
+	sp.SetSize(20, 100)
+	return sp
+}
+
+func (sp *VResizer) SetControl(control1, control2 Dockable, dir Direction, minSize int) {
+	sp.control1 = control1
+	sp.control2 = control2
+	if dir != Left && dir != Right {
+		panic("invalid direction")
+	}
+	sp.dir = dir
+
+	// TODO(vi): ADDED
+	/*internalTrackMouseEvent(control1.Handle())
+	internalTrackMouseEvent(control2.Handle())
+
+	control1.OnMouseMove().Bind(func(e *Event) {
+		if sp.drag {
+			x := e.Data.(*MouseEventData).X
+			sp.update(x)
+			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZEWE))
+
+		}
+		fmt.Println("control1.OnMouseMove")
+	})
+
+	control2.OnMouseMove().Bind(func(e *Event) {
+		if sp.drag {
+			x := e.Data.(*MouseEventData).X
+			sp.update(x)
+			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZEWE))
+
+		}
+		fmt.Println("control2.OnMouseMove")
+	})
+
+	control1.OnLBUp().Bind(func(e *Event) {
+		sp.drag = false
+		sp.mouseLeft = true
+		fmt.Println("control1.OnLBUp")
+	})
+
+	control2.OnLBUp().Bind(func(e *Event) {
+		sp.drag = false
+		sp.mouseLeft = true
+		fmt.Println("control2.OnLBUp")
+	})*/
+
+	// ---- finish ADDED
+
+}
+
+func (sp *VResizer) update(x int) {
+	pos := x - 10
+
+	w1, h1 := sp.control1.Width(), sp.control1.Height()
+	if sp.dir == Left {
+		w1 += pos
+	} else {
+		w1 -= pos
+	}
+	sp.control1.SetSize(w1, h1)
+	fm := sp.parent.(*Form)
+	fm.UpdateLayout()
+
+	w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_ARROW))
+}
+
+func (sp *VResizer) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_CREATE:
+		internalTrackMouseEvent(sp.hwnd)
+
+	case w32.WM_MOUSEMOVE:
+		if sp.drag {
+			x, _ := genPoint(lparam)
+			sp.update(x)
+		} else {
+			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZEWE))
+		}
+
+		if sp.mouseLeft {
+			internalTrackMouseEvent(sp.hwnd)
+			sp.mouseLeft = false
+		}
+
+	case w32.WM_MOUSELEAVE:
+		sp.drag = false
+		sp.mouseLeft = true
+
+	case w32.WM_LBUTTONUP:
+		sp.drag = false
+
+	case w32.WM_LBUTTONDOWN:
+		sp.drag = true
+	}
+	return w32.DefWindowProc(sp.hwnd, msg, wparam, lparam)
+}
+
+type HResizer struct {
+	ControlBase
+
+	control1  Dockable
+	control2  Dockable
+	dir       Direction
+	mouseLeft bool
+	drag      bool
+}
+
+func NewHResizer(parent Controller) *HResizer {
+	sp := new(HResizer)
+
+	RegClassOnlyOnce("winc_HResizer")
+	sp.hwnd = CreateWindow("winc_HResizer", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	sp.parent = parent
+	sp.mouseLeft = true
+	RegMsgHandler(sp)
+
+	sp.SetFont(DefaultFont)
+	sp.SetText("")
+	sp.SetSize(100, 20)
+
+	return sp
+}
+
+func (sp *HResizer) SetControl(control1, control2 Dockable, dir Direction, minSize int) {
+	sp.control1 = control1
+	sp.control2 = control2
+	if dir != Top && dir != Bottom {
+		panic("invalid direction")
+	}
+	sp.dir = dir
+
+}
+
+func (sp *HResizer) update(y int) {
+	pos := y - 10
+
+	w1, h1 := sp.control1.Width(), sp.control1.Height()
+	if sp.dir == Top {
+		h1 += pos
+	} else {
+		h1 -= pos
+	}
+	sp.control1.SetSize(w1, h1)
+
+	fm := sp.parent.(*Form)
+	fm.UpdateLayout()
+
+	w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_ARROW))
+}
+
+func (sp *HResizer) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_CREATE:
+		internalTrackMouseEvent(sp.hwnd)
+
+	case w32.WM_MOUSEMOVE:
+		if sp.drag {
+			_, y := genPoint(lparam)
+			sp.update(y)
+		} else {
+			w32.SetCursor(w32.LoadCursorWithResourceID(0, w32.IDC_SIZENS))
+		}
+
+		if sp.mouseLeft {
+			internalTrackMouseEvent(sp.hwnd)
+			sp.mouseLeft = false
+		}
+
+	case w32.WM_MOUSELEAVE:
+		sp.drag = false
+		sp.mouseLeft = true
+
+	case w32.WM_LBUTTONUP:
+		sp.drag = false
+
+	case w32.WM_LBUTTONDOWN:
+		sp.drag = true
+	}
+	return w32.DefWindowProc(sp.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/scrollview.go","mode":420,"size":2577,"sha256":"43ee6091b3379ff29f05e780ae2b4f7f69aab00e1d4ea1346a9d065fe7db1f4e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2577}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type ScrollView struct {
+	ControlBase
+	child Dockable
+}
+
+func NewScrollView(parent Controller) *ScrollView {
+	sv := new(ScrollView)
+
+	RegClassOnlyOnce("winc_ScrollView")
+	sv.hwnd = CreateWindow("winc_ScrollView", parent, w32.WS_EX_CONTROLPARENT,
+		w32.WS_CHILD|w32.WS_HSCROLL|w32.WS_VISIBLE|w32.WS_VSCROLL)
+	sv.parent = parent
+	RegMsgHandler(sv)
+
+	sv.SetFont(DefaultFont)
+	sv.SetText("")
+	sv.SetSize(200, 200)
+	return sv
+}
+
+func (sv *ScrollView) SetChild(child Dockable) {
+	sv.child = child
+}
+
+func (sv *ScrollView) UpdateScrollBars() {
+	w, h := sv.child.Width(), sv.child.Height()
+	sw, sh := sv.Size()
+
+	var si w32.SCROLLINFO
+	si.CbSize = uint32(unsafe.Sizeof(si))
+	si.FMask = w32.SIF_PAGE | w32.SIF_RANGE
+
+	si.NMax = int32(w - 1)
+	si.NPage = uint32(sw)
+	w32.SetScrollInfo(sv.hwnd, w32.SB_HORZ, &si, true)
+	x := sv.scroll(w32.SB_HORZ, w32.SB_THUMBPOSITION)
+
+	si.NMax = int32(h)
+	si.NPage = uint32(sh)
+	w32.SetScrollInfo(sv.hwnd, w32.SB_VERT, &si, true)
+	y := sv.scroll(w32.SB_VERT, w32.SB_THUMBPOSITION)
+
+	sv.child.SetPos(x, y)
+}
+
+func (sv *ScrollView) scroll(sb int32, cmd uint16) int {
+	var pos int32
+	var si w32.SCROLLINFO
+	si.CbSize = uint32(unsafe.Sizeof(si))
+	si.FMask = w32.SIF_PAGE | w32.SIF_POS | w32.SIF_RANGE | w32.SIF_TRACKPOS
+
+	w32.GetScrollInfo(sv.hwnd, sb, &si)
+	pos = si.NPos
+
+	switch cmd {
+	case w32.SB_LINELEFT: // == win.SB_LINEUP
+		pos -= 20
+
+	case w32.SB_LINERIGHT: // == win.SB_LINEDOWN
+		pos += 20
+
+	case w32.SB_PAGELEFT: // == win.SB_PAGEUP
+		pos -= int32(si.NPage)
+
+	case w32.SB_PAGERIGHT: // == win.SB_PAGEDOWN
+		pos += int32(si.NPage)
+
+	case w32.SB_THUMBTRACK:
+		pos = si.NTrackPos
+	}
+
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > si.NMax+1-int32(si.NPage) {
+		pos = si.NMax + 1 - int32(si.NPage)
+	}
+
+	si.FMask = w32.SIF_POS
+	si.NPos = pos
+	w32.SetScrollInfo(sv.hwnd, sb, &si, true)
+
+	return -int(pos)
+}
+
+func (sv *ScrollView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	if sv.child != nil {
+		switch msg {
+		case w32.WM_PAINT:
+			sv.UpdateScrollBars()
+
+		case w32.WM_HSCROLL:
+			x, y := sv.child.Pos()
+			x = sv.scroll(w32.SB_HORZ, w32.LOWORD(uint32(wparam)))
+			sv.child.SetPos(x, y)
+
+		case w32.WM_VSCROLL:
+			x, y := sv.child.Pos()
+			y = sv.scroll(w32.SB_VERT, w32.LOWORD(uint32(wparam)))
+			sv.child.SetPos(x, y)
+
+		case w32.WM_SIZE, w32.WM_SIZING:
+			sv.UpdateScrollBars()
+		}
+	}
+	return w32.DefWindowProc(sv.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/slider.go","mode":420,"size":1809,"sha256":"5b05186007655526ff1d91fd1071df42618f9663036ba485fa6b0523462a54a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1809}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+
+type Slider struct {
+	ControlBase
+	prevPos int
+
+	onScroll EventManager
+}
+
+func NewSlider(parent Controller) *Slider {
+	tb := new(Slider)
+
+	tb.InitControl("msctls_trackbar32", parent, 0, w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD /*|w32.TBS_AUTOTICKS*/)
+	RegMsgHandler(tb)
+
+	tb.SetFont(DefaultFont)
+	tb.SetText("Slider")
+	tb.SetSize(200, 32)
+
+	tb.SetRange(0, 100)
+	tb.SetPage(10)
+	return tb
+}
+
+func (tb *Slider) OnScroll() *EventManager {
+	return &tb.onScroll
+}
+
+func (tb *Slider) Value() int {
+	ret := w32.SendMessage(tb.hwnd, w32.TBM_GETPOS, 0, 0)
+	return int(ret)
+}
+
+func (tb *Slider) SetValue(v int) {
+	tb.prevPos = v
+	w32.SendMessage(tb.hwnd, w32.TBM_SETPOS, uintptr(w32.BoolToBOOL(true)), uintptr(v))
+}
+
+func (tb *Slider) Range() (min, max int) {
+	min = int(w32.SendMessage(tb.hwnd, w32.TBM_GETRANGEMIN, 0, 0))
+	max = int(w32.SendMessage(tb.hwnd, w32.TBM_GETRANGEMAX, 0, 0))
+	return min, max
+}
+
+func (tb *Slider) SetRange(min, max int) {
+	w32.SendMessage(tb.hwnd, w32.TBM_SETRANGE, uintptr(w32.BoolToBOOL(true)), uintptr(w32.MAKELONG(uint16(min), uint16(max))))
+}
+
+func (tb *Slider) SetPage(pagesize int) {
+	w32.SendMessage(tb.hwnd, w32.TBM_SETPAGESIZE, 0, uintptr(pagesize))
+}
+
+func (tb *Slider) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	/*
+		// REMOVE:
+		// following code did not work, used workaround below
+		code := w32.LOWORD(uint32(wparam))
+
+		switch code {
+		case w32.TB_ENDTRACK:
+			tb.onScroll.Fire(NewEvent(tb, nil))
+		}*/
+
+	newPos := tb.Value()
+	if newPos != tb.prevPos {
+		tb.onScroll.Fire(NewEvent(tb, nil))
+		tb.prevPos = newPos
+	}
+
+	return w32.DefWindowProc(tb.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/tabview.go","mode":420,"size":2398,"sha256":"5f8e70c50013fea9433799f61f0a247f57996d83fcf8dc76a84439131398289c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2398}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+// TabView creates MultiPanel internally and manages tabs as panels.
+type TabView struct {
+	ControlBase
+
+	panels           *MultiPanel
+	onSelectedChange EventManager
+}
+
+func NewTabView(parent Controller) *TabView {
+	tv := new(TabView)
+
+	tv.InitControl("SysTabControl32", parent, 0,
+		w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.WS_CLIPSIBLINGS)
+	RegMsgHandler(tv)
+
+	tv.panels = NewMultiPanel(parent)
+
+	tv.SetFont(DefaultFont)
+	tv.SetSize(200, 24)
+	return tv
+}
+
+func (tv *TabView) Panels() *MultiPanel {
+	return tv.panels
+}
+
+func (tv *TabView) tcitemFromPage(panel *Panel) *w32.TCITEM {
+	text := syscall.StringToUTF16(panel.Text())
+	item := &w32.TCITEM{
+		Mask:       w32.TCIF_TEXT,
+		PszText:    &text[0],
+		CchTextMax: int32(len(text)),
+	}
+	return item
+}
+
+func (tv *TabView) AddPanel(text string) *Panel {
+	panel := NewPanel(tv.panels)
+	panel.SetText(text)
+
+	item := tv.tcitemFromPage(panel)
+	index := tv.panels.Count()
+	idx := int(w32.SendMessage(tv.hwnd, w32.TCM_INSERTITEM, uintptr(index), uintptr(unsafe.Pointer(item))))
+	if idx == -1 {
+		panic("SendMessage(TCM_INSERTITEM) failed")
+	}
+
+	tv.panels.AddPanel(panel)
+	tv.SetCurrent(idx)
+	return panel
+}
+
+func (tv *TabView) DeletePanel(index int) {
+	w32.SendMessage(tv.hwnd, w32.TCM_DELETEITEM, uintptr(index), 0)
+	tv.panels.DeletePanel(index)
+	switch {
+	case tv.panels.Count() > index:
+		tv.SetCurrent(index)
+	case tv.panels.Count() == 0:
+		tv.SetCurrent(0)
+	}
+}
+
+func (tv *TabView) Current() int {
+	return tv.panels.Current()
+}
+
+func (tv *TabView) SetCurrent(index int) {
+	if index < 0 || index >= tv.panels.Count() {
+		panic("invalid index")
+	}
+	if ret := int(w32.SendMessage(tv.hwnd, w32.TCM_SETCURSEL, uintptr(index), 0)); ret == -1 {
+		panic("SendMessage(TCM_SETCURSEL) failed")
+	}
+	tv.panels.SetCurrent(index)
+}
+
+func (tv *TabView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_NOTIFY:
+		nmhdr := (*w32.NMHDR)(unsafe.Pointer(lparam))
+
+		switch int32(nmhdr.Code) {
+		case w32.TCN_SELCHANGE:
+			cur := int(w32.SendMessage(tv.hwnd, w32.TCM_GETCURSEL, 0, 0))
+			tv.SetCurrent(cur)
+
+			tv.onSelectedChange.Fire(NewEvent(tv, nil))
+		}
+	}
+	return w32.DefWindowProc(tv.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/toolbar.go","mode":420,"size":4667,"sha256":"3f31b58ab220e35454259c93bff19e38ee8de9fe11d5c857c1f430f91cc911e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":4667}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Toolbar struct {
+	ControlBase
+	iml *ImageList
+
+	buttons []*ToolButton
+}
+
+type ToolButton struct {
+	tb *Toolbar
+
+	text      string
+	enabled   bool
+	checkable bool
+	checked   bool
+	image     int
+
+	onClick EventManager
+}
+
+func (bt *ToolButton) OnClick() *EventManager {
+	return &bt.onClick
+}
+
+func (bt *ToolButton) update() { bt.tb.update(bt) }
+
+func (bt *ToolButton) IsSeparator() bool { return bt.text == "-" }
+func (bt *ToolButton) SetSeparator()     { bt.text = "-" }
+
+func (bt *ToolButton) Enabled() bool     { return bt.enabled }
+func (bt *ToolButton) SetEnabled(b bool) { bt.enabled = b; bt.update() }
+
+func (bt *ToolButton) Checkable() bool     { return bt.checkable }
+func (bt *ToolButton) SetCheckable(b bool) { bt.checkable = b; bt.update() }
+
+func (bt *ToolButton) Checked() bool     { return bt.checked }
+func (bt *ToolButton) SetChecked(b bool) { bt.checked = b; bt.update() }
+
+func (bt *ToolButton) Text() string     { return bt.text }
+func (bt *ToolButton) SetText(s string) { bt.text = s; bt.update() }
+
+func (bt *ToolButton) Image() int     { return bt.image }
+func (bt *ToolButton) SetImage(i int) { bt.image = i; bt.update() }
+
+// NewHToolbar creates horizontal toolbar with text on same line as image.
+func NewHToolbar(parent Controller) *Toolbar {
+	return newToolbar(parent, w32.CCS_NODIVIDER|w32.TBSTYLE_FLAT|w32.TBSTYLE_TOOLTIPS|w32.TBSTYLE_WRAPABLE|
+		w32.WS_CHILD|w32.TBSTYLE_LIST)
+}
+
+// NewToolbar creates toolbar with text below the image.
+func NewToolbar(parent Controller) *Toolbar {
+	return newToolbar(parent, w32.CCS_NODIVIDER|w32.TBSTYLE_FLAT|w32.TBSTYLE_TOOLTIPS|w32.TBSTYLE_WRAPABLE|
+		w32.WS_CHILD /*|w32.TBSTYLE_TRANSPARENT*/)
+}
+
+func newToolbar(parent Controller, style uint) *Toolbar {
+	tb := new(Toolbar)
+
+	tb.InitControl("ToolbarWindow32", parent, 0, style)
+
+	exStyle := w32.SendMessage(tb.hwnd, w32.TB_GETEXTENDEDSTYLE, 0, 0)
+	exStyle |= w32.TBSTYLE_EX_DRAWDDARROWS | w32.TBSTYLE_EX_MIXEDBUTTONS
+	w32.SendMessage(tb.hwnd, w32.TB_SETEXTENDEDSTYLE, 0, exStyle)
+	RegMsgHandler(tb)
+
+	tb.SetFont(DefaultFont)
+	tb.SetPos(0, 0)
+	tb.SetSize(200, 40)
+
+	return tb
+}
+
+func (tb *Toolbar) SetImageList(imageList *ImageList) {
+	w32.SendMessage(tb.hwnd, w32.TB_SETIMAGELIST, 0, uintptr(imageList.Handle()))
+	tb.iml = imageList
+}
+
+func (tb *Toolbar) initButton(btn *ToolButton, state, style *byte, image *int32, text *uintptr) {
+	*style |= w32.BTNS_AUTOSIZE
+
+	if btn.checked {
+		*state |= w32.TBSTATE_CHECKED
+	}
+
+	if btn.enabled {
+		*state |= w32.TBSTATE_ENABLED
+	}
+
+	if btn.checkable {
+		*style |= w32.BTNS_CHECK
+	}
+
+	if len(btn.Text()) > 0 {
+		*style |= w32.BTNS_SHOWTEXT
+	}
+
+	if btn.IsSeparator() {
+		*style = w32.BTNS_SEP
+	}
+
+	*image = int32(btn.Image())
+	*text = uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(btn.Text())))
+}
+
+func (tb *Toolbar) update(btn *ToolButton) {
+	tbbi := w32.TBBUTTONINFO{
+		DwMask: w32.TBIF_IMAGE | w32.TBIF_STATE | w32.TBIF_STYLE | w32.TBIF_TEXT,
+	}
+
+	tbbi.CbSize = uint32(unsafe.Sizeof(tbbi))
+
+	var i int
+	for i = range tb.buttons {
+		if tb.buttons[i] == btn {
+			break
+		}
+	}
+
+	tb.initButton(btn, &tbbi.FsState, &tbbi.FsStyle, &tbbi.IImage, &tbbi.PszText)
+	if w32.SendMessage(tb.hwnd, w32.TB_SETBUTTONINFO, uintptr(i), uintptr(unsafe.Pointer(&tbbi))) == 0 {
+		panic("SendMessage(TB_SETBUTTONINFO) failed")
+	}
+}
+
+func (tb *Toolbar) AddSeparator() {
+	tb.AddButton("-", 0)
+}
+
+// AddButton creates and adds button to the toolbar. Use returned toolbutton to setup OnClick event.
+func (tb *Toolbar) AddButton(text string, image int) *ToolButton {
+	bt := &ToolButton{
+		tb:      tb, // points to parent
+		text:    text,
+		image:   image,
+		enabled: true,
+	}
+	tb.buttons = append(tb.buttons, bt)
+	index := len(tb.buttons) - 1
+
+	tbb := w32.TBBUTTON{
+		IdCommand: int32(index),
+	}
+
+	tb.initButton(bt, &tbb.FsState, &tbb.FsStyle, &tbb.IBitmap, &tbb.IString)
+	w32.SendMessage(tb.hwnd, w32.TB_BUTTONSTRUCTSIZE, uintptr(unsafe.Sizeof(tbb)), 0)
+
+	if w32.SendMessage(tb.hwnd, w32.TB_INSERTBUTTON, uintptr(index), uintptr(unsafe.Pointer(&tbb))) == w32.FALSE {
+		panic("SendMessage(TB_ADDBUTTONS)")
+	}
+
+	w32.SendMessage(tb.hwnd, w32.TB_AUTOSIZE, 0, 0)
+	return bt
+}
+
+func (tb *Toolbar) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_COMMAND:
+		switch w32.HIWORD(uint32(wparam)) {
+		case w32.BN_CLICKED:
+			id := uint16(w32.LOWORD(uint32(wparam)))
+			btn := tb.buttons[id]
+			btn.onClick.Fire(NewEvent(tb, nil))
+		}
+	}
+	return w32.DefWindowProc(tb.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/tooltip.go","mode":420,"size":1191,"sha256":"d3b9a40b5780899ccd7e981f507a75dd3ebf971817842d0584841398f6c06f43","index":0,"count":1,"encoding":"utf-8","payloadBytes":1191}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type ToolTip struct {
+	ControlBase
+}
+
+func NewToolTip(parent Controller) *ToolTip {
+	tp := new(ToolTip)
+
+	tp.InitControl("tooltips_class32", parent, w32.WS_EX_TOPMOST, w32.WS_POPUP|w32.TTS_NOPREFIX|w32.TTS_ALWAYSTIP)
+	w32.SetWindowPos(tp.Handle(), w32.HWND_TOPMOST, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE|w32.SWP_NOACTIVATE)
+
+	return tp
+}
+
+func (tp *ToolTip) SetTip(tool Controller, tip string) bool {
+	var ti w32.TOOLINFO
+	ti.CbSize = uint32(unsafe.Sizeof(ti))
+	if tool.Parent() != nil {
+		ti.Hwnd = tool.Parent().Handle()
+	}
+	ti.UFlags = w32.TTF_IDISHWND | w32.TTF_SUBCLASS /* | TTF_ABSOLUTE */
+	ti.UId = uintptr(tool.Handle())
+	ti.LpszText = syscall.StringToUTF16Ptr(tip)
+
+	return w32.SendMessage(tp.Handle(), w32.TTM_ADDTOOL, 0, uintptr(unsafe.Pointer(&ti))) != w32.FALSE
+}
+
+func (tp *ToolTip) WndProc(msg uint, wparam, lparam uintptr) uintptr {
+	return w32.DefWindowProc(tp.hwnd, uint32(msg), wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/treeview.go","mode":420,"size":7052,"sha256":"cdbe468bd1892c179e8df1b3f8d54797c70729d1a23573d26b2b9a8199b0603d","index":0,"count":1,"encoding":"utf-8","payloadBytes":7052}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"errors"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+// TreeItem represents an item in a TreeView widget.
+type TreeItem interface {
+	Text() string    // Text returns the text of the item.
+	ImageIndex() int // ImageIndex is used only if SetImageList is called on the treeview
+}
+
+type treeViewItemInfo struct {
+	handle       w32.HTREEITEM
+	child2Handle map[TreeItem]w32.HTREEITEM
+}
+
+// StringTreeItem is helper for basic string lists.
+type StringTreeItem struct {
+	Data  string
+	Image int
+}
+
+func (s StringTreeItem) Text() string    { return s.Data }
+func (s StringTreeItem) ImageIndex() int { return s.Image }
+
+type TreeView struct {
+	ControlBase
+
+	iml         *ImageList
+	item2Info   map[TreeItem]*treeViewItemInfo
+	handle2Item map[w32.HTREEITEM]TreeItem
+	currItem    TreeItem
+
+	onSelectedChange EventManager
+	onExpand         EventManager
+	onCollapse       EventManager
+	onViewChange     EventManager
+}
+
+func NewTreeView(parent Controller) *TreeView {
+	tv := new(TreeView)
+
+	tv.InitControl("SysTreeView32", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|
+		w32.WS_BORDER|w32.TVS_HASBUTTONS|w32.TVS_LINESATROOT|w32.TVS_SHOWSELALWAYS|
+		w32.TVS_TRACKSELECT /*|w32.WS_EX_CLIENTEDGE*/)
+
+	tv.item2Info = make(map[TreeItem]*treeViewItemInfo)
+	tv.handle2Item = make(map[w32.HTREEITEM]TreeItem)
+
+	RegMsgHandler(tv)
+
+	tv.SetFont(DefaultFont)
+	tv.SetSize(200, 400)
+
+	if err := tv.SetTheme("Explorer"); err != nil {
+		// theme error is ignored
+	}
+	return tv
+}
+
+func (tv *TreeView) EnableDoubleBuffer(enable bool) {
+	if enable {
+		w32.SendMessage(tv.hwnd, w32.TVM_SETEXTENDEDSTYLE, 0, w32.TVS_EX_DOUBLEBUFFER)
+	} else {
+		w32.SendMessage(tv.hwnd, w32.TVM_SETEXTENDEDSTYLE, w32.TVS_EX_DOUBLEBUFFER, 0)
+	}
+}
+
+// SelectedItem is current selected item after OnSelectedChange event.
+func (tv *TreeView) SelectedItem() TreeItem {
+	return tv.currItem
+}
+
+func (tv *TreeView) SetSelectedItem(item TreeItem) bool {
+	var handle w32.HTREEITEM
+	if item != nil {
+		if info := tv.item2Info[item]; info == nil {
+			return false // invalid item
+		} else {
+			handle = info.handle
+		}
+	}
+
+	if w32.SendMessage(tv.hwnd, w32.TVM_SELECTITEM, w32.TVGN_CARET, uintptr(handle)) == 0 {
+		return false // set selected failed
+	}
+	tv.currItem = item
+	return true
+}
+
+func (tv *TreeView) ItemAt(x, y int) TreeItem {
+	hti := w32.TVHITTESTINFO{Pt: w32.POINT{int32(x), int32(y)}}
+	w32.SendMessage(tv.hwnd, w32.TVM_HITTEST, 0, uintptr(unsafe.Pointer(&hti)))
+	if item, ok := tv.handle2Item[hti.HItem]; ok {
+		return item
+	}
+	return nil
+}
+
+func (tv *TreeView) Items() (list []TreeItem) {
+	for item := range tv.item2Info {
+		list = append(list, item)
+	}
+	return list
+}
+
+func (tv *TreeView) InsertItem(item, parent, insertAfter TreeItem) error {
+	var tvins w32.TVINSERTSTRUCT
+	tvi := &tvins.Item
+
+	tvi.Mask = w32.TVIF_TEXT                                                     // w32.TVIF_CHILDREN | w32.TVIF_TEXT
+	tvi.PszText = uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(item.Text()))) // w32.LPSTR_TEXTCALLBACK
+	tvi.CChildren = 0                                                            // w32.I_CHILDRENCALLBACK
+
+	if parent == nil {
+		tvins.HParent = w32.TVI_ROOT
+	} else {
+		info := tv.item2Info[parent]
+		if info == nil {
+			return errors.New("winc: invalid parent")
+		}
+		tvins.HParent = info.handle
+	}
+
+	if insertAfter == nil {
+		tvins.HInsertAfter = w32.TVI_LAST
+	} else {
+		info := tv.item2Info[insertAfter]
+		if info == nil {
+			return errors.New("winc: invalid prev item")
+		}
+		tvins.HInsertAfter = info.handle
+	}
+
+	tv.applyImage(tvi, item)
+
+	hItem := w32.HTREEITEM(w32.SendMessage(tv.hwnd, w32.TVM_INSERTITEM, 0, uintptr(unsafe.Pointer(&tvins))))
+	if hItem == 0 {
+		return errors.New("winc: TVM_INSERTITEM failed")
+	}
+	tv.item2Info[item] = &treeViewItemInfo{hItem, make(map[TreeItem]w32.HTREEITEM)}
+	tv.handle2Item[hItem] = item
+	return nil
+}
+
+func (tv *TreeView) UpdateItem(item TreeItem) bool {
+	it := tv.item2Info[item]
+	if it == nil {
+		return false
+	}
+
+	tvi := &w32.TVITEM{
+		Mask:    w32.TVIF_TEXT,
+		HItem:   it.handle,
+		PszText: uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(item.Text()))),
+	}
+	tv.applyImage(tvi, item)
+
+	if w32.SendMessage(tv.hwnd, w32.TVM_SETITEM, 0, uintptr(unsafe.Pointer(tvi))) == 0 {
+		return false
+	}
+	return true
+}
+
+func (tv *TreeView) DeleteItem(item TreeItem) bool {
+	it := tv.item2Info[item]
+	if it == nil {
+		return false
+	}
+
+	if w32.SendMessage(tv.hwnd, w32.TVM_DELETEITEM, 0, uintptr(it.handle)) == 0 {
+		return false
+	}
+
+	delete(tv.item2Info, item)
+	delete(tv.handle2Item, it.handle)
+	return true
+}
+
+func (tv *TreeView) DeleteAllItems() bool {
+	if w32.SendMessage(tv.hwnd, w32.TVM_DELETEITEM, 0, 0) == 0 {
+		return false
+	}
+
+	tv.item2Info = make(map[TreeItem]*treeViewItemInfo)
+	tv.handle2Item = make(map[w32.HTREEITEM]TreeItem)
+	return true
+}
+
+func (tv *TreeView) Expand(item TreeItem) bool {
+	if w32.SendMessage(tv.hwnd, w32.TVM_EXPAND, w32.TVE_EXPAND, uintptr(tv.item2Info[item].handle)) == 0 {
+		return false
+	}
+	return true
+}
+
+func (tv *TreeView) Collapse(item TreeItem) bool {
+	if w32.SendMessage(tv.hwnd, w32.TVM_EXPAND, w32.TVE_COLLAPSE, uintptr(tv.item2Info[item].handle)) == 0 {
+		return false
+	}
+	return true
+}
+
+func (tv *TreeView) EnsureVisible(item TreeItem) bool {
+	if info := tv.item2Info[item]; info != nil {
+		return w32.SendMessage(tv.hwnd, w32.TVM_ENSUREVISIBLE, 0, uintptr(info.handle)) != 0
+	}
+	return false
+}
+
+func (tv *TreeView) SetImageList(imageList *ImageList) {
+	w32.SendMessage(tv.hwnd, w32.TVM_SETIMAGELIST, 0, uintptr(imageList.Handle()))
+	tv.iml = imageList
+}
+
+func (tv *TreeView) applyImage(tc *w32.TVITEM, item TreeItem) {
+	if tv.iml != nil {
+		tc.Mask |= w32.TVIF_IMAGE | w32.TVIF_SELECTEDIMAGE
+		tc.IImage = int32(item.ImageIndex())
+		tc.ISelectedImage = int32(item.ImageIndex())
+	}
+}
+
+func (tv *TreeView) OnSelectedChange() *EventManager {
+	return &tv.onSelectedChange
+}
+
+func (tv *TreeView) OnExpand() *EventManager {
+	return &tv.onExpand
+}
+
+func (tv *TreeView) OnCollapse() *EventManager {
+	return &tv.onCollapse
+}
+
+func (tv *TreeView) OnViewChange() *EventManager {
+	return &tv.onViewChange
+}
+
+// Message processor
+func (tv *TreeView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_NOTIFY:
+		nm := (*w32.NMHDR)(unsafe.Pointer(lparam))
+
+		switch nm.Code {
+		case w32.TVN_ITEMEXPANDED:
+			nmtv := (*w32.NMTREEVIEW)(unsafe.Pointer(lparam))
+
+			switch nmtv.Action {
+			case w32.TVE_COLLAPSE:
+				tv.onCollapse.Fire(NewEvent(tv, nil))
+
+			case w32.TVE_COLLAPSERESET:
+
+			case w32.TVE_EXPAND:
+				tv.onExpand.Fire(NewEvent(tv, nil))
+
+			case w32.TVE_EXPANDPARTIAL:
+
+			case w32.TVE_TOGGLE:
+			}
+
+		case w32.TVN_SELCHANGED:
+			nmtv := (*w32.NMTREEVIEW)(unsafe.Pointer(lparam))
+			tv.currItem = tv.handle2Item[nmtv.ItemNew.HItem]
+			tv.onSelectedChange.Fire(NewEvent(tv, nil))
+
+		case w32.TVN_GETDISPINFO:
+			tv.onViewChange.Fire(NewEvent(tv, nil))
+		}
+
+	}
+	return w32.DefWindowProc(tv.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/utils.go","mode":420,"size":3823,"sha256":"f0c5f4d0b7a17e5d1428ccc4159c08e91d955046da40f8895aa1314378f80672","index":0,"count":1,"encoding":"utf-8","payloadBytes":3823}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+func internalTrackMouseEvent(hwnd w32.HWND) {
+	var tme w32.TRACKMOUSEEVENT
+	tme.CbSize = uint32(unsafe.Sizeof(tme))
+	tme.DwFlags = w32.TME_LEAVE
+	tme.HwndTrack = hwnd
+	tme.DwHoverTime = w32.HOVER_DEFAULT
+
+	w32.TrackMouseEvent(&tme)
+}
+
+func SetStyle(hwnd w32.HWND, b bool, style int) {
+	originalStyle := int(w32.GetWindowLongPtr(hwnd, w32.GWL_STYLE))
+	if originalStyle != 0 {
+		if b {
+			originalStyle |= style
+		} else {
+			originalStyle &^= style
+		}
+		w32.SetWindowLongPtr(hwnd, w32.GWL_STYLE, uintptr(originalStyle))
+	}
+}
+
+func SetExStyle(hwnd w32.HWND, b bool, style int) {
+	originalStyle := int(w32.GetWindowLongPtr(hwnd, w32.GWL_EXSTYLE))
+	if originalStyle != 0 {
+		if b {
+			originalStyle |= style
+		} else {
+			originalStyle &^= style
+		}
+		w32.SetWindowLongPtr(hwnd, w32.GWL_EXSTYLE, uintptr(originalStyle))
+	}
+}
+
+func CreateWindow(className string, parent Controller, exStyle, style uint) w32.HWND {
+	instance := GetAppInstance()
+	var parentHwnd w32.HWND
+	if parent != nil {
+		parentHwnd = parent.Handle()
+	}
+	var hwnd w32.HWND
+	hwnd = w32.CreateWindowEx(
+		exStyle,
+		syscall.StringToUTF16Ptr(className),
+		nil,
+		style,
+		w32.CW_USEDEFAULT,
+		w32.CW_USEDEFAULT,
+		w32.CW_USEDEFAULT,
+		w32.CW_USEDEFAULT,
+		parentHwnd,
+		0,
+		instance,
+		nil)
+
+	if hwnd == 0 {
+		errStr := fmt.Sprintf("Error occurred in CreateWindow(%s, %v, %d, %d)", className, parent, exStyle, style)
+		panic(errStr)
+	}
+
+	return hwnd
+}
+
+func RegisterClass(className string, wndproc uintptr) {
+	instance := GetAppInstance()
+	icon := w32.LoadIconWithResourceID(instance, w32.IDI_APPLICATION)
+
+	var wc w32.WNDCLASSEX
+	wc.Size = uint32(unsafe.Sizeof(wc))
+	wc.Style = w32.CS_HREDRAW | w32.CS_VREDRAW
+	wc.WndProc = wndproc
+	wc.Instance = instance
+	wc.Background = w32.COLOR_BTNFACE + 1
+	wc.Icon = icon
+	wc.Cursor = w32.LoadCursorWithResourceID(0, w32.IDC_ARROW)
+	wc.ClassName = syscall.StringToUTF16Ptr(className)
+	wc.MenuName = nil
+	wc.IconSm = icon
+
+	if ret := w32.RegisterClassEx(&wc); ret == 0 {
+		panic(syscall.GetLastError())
+	}
+}
+
+func RegisterWindowMessage(name string) uint32 {
+	n := syscall.StringToUTF16Ptr(name)
+
+	ret := w32.RegisterWindowMessage(n)
+	if ret == 0 {
+		panic(syscall.GetLastError())
+	}
+	return ret
+}
+
+func getMonitorInfo(hwnd w32.HWND) *w32.MONITORINFO {
+	currentMonitor := w32.MonitorFromWindow(hwnd, w32.MONITOR_DEFAULTTONEAREST)
+	var info w32.MONITORINFO
+	info.CbSize = uint32(unsafe.Sizeof(info))
+	w32.GetMonitorInfo(currentMonitor, &info)
+	return &info
+}
+func getWindowInfo(hwnd w32.HWND) *w32.WINDOWINFO {
+	var info w32.WINDOWINFO
+	info.CbSize = uint32(unsafe.Sizeof(info))
+	w32.GetWindowInfo(hwnd, &info)
+	return &info
+}
+
+func RegClassOnlyOnce(className string) {
+	isExists := false
+	for _, class := range gRegisteredClasses {
+		if class == className {
+			isExists = true
+			break
+		}
+	}
+
+	if !isExists {
+		RegisterClass(className, GeneralWndprocCallBack)
+		gRegisteredClasses = append(gRegisteredClasses, className)
+	}
+}
+
+func ScreenToClientRect(hwnd w32.HWND, rect *w32.RECT) *Rect {
+	l, t, r, b := rect.Left, rect.Top, rect.Right, rect.Bottom
+	l1, t1, _ := w32.ScreenToClient(hwnd, int(l), int(t))
+	r1, b1, _ := w32.ScreenToClient(hwnd, int(r), int(b))
+	return NewRect(l1, t1, r1, b1)
+}
+
+// ScaleWithDPI scales the pixels from the default DPI-Space (96) to the target DPI-Space.
+func ScaleWithDPI(pixels int, dpi uint) int {
+	return (pixels * int(dpi)) / 96
+}
+
+// ScaleToDefaultDPI scales the pixels from scaled DPI-Space to default DPI-Space (96).
+func ScaleToDefaultDPI(pixels int, dpi uint) int {
+	return (pixels * 96) / int(dpi)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32/comctl32.go","mode":420,"size":2683,"sha256":"fb0da7c5508b5a071400e5b05914de8f65abb6462ac8073ffbd132d38b31f42b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2683}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2012 The W32 Authors. All Rights Reserved.
+ */
+
+package w32
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+var (
+	modcomctl32 = syscall.NewLazyDLL("comctl32.dll")
+
+	procInitCommonControlsEx    = modcomctl32.NewProc("InitCommonControlsEx")
+	procImageList_Create        = modcomctl32.NewProc("ImageList_Create")
+	procImageList_Destroy       = modcomctl32.NewProc("ImageList_Destroy")
+	procImageList_GetImageCount = modcomctl32.NewProc("ImageList_GetImageCount")
+	procImageList_SetImageCount = modcomctl32.NewProc("ImageList_SetImageCount")
+	procImageList_Add           = modcomctl32.NewProc("ImageList_Add")
+	procImageList_ReplaceIcon   = modcomctl32.NewProc("ImageList_ReplaceIcon")
+	procImageList_Remove        = modcomctl32.NewProc("ImageList_Remove")
+	procTrackMouseEvent         = modcomctl32.NewProc("_TrackMouseEvent")
+)
+
+func InitCommonControlsEx(lpInitCtrls *INITCOMMONCONTROLSEX) bool {
+	ret, _, _ := procInitCommonControlsEx.Call(
+		uintptr(unsafe.Pointer(lpInitCtrls)))
+
+	return ret != 0
+}
+
+func ImageList_Create(cx, cy int, flags uint, cInitial, cGrow int) HIMAGELIST {
+	ret, _, _ := procImageList_Create.Call(
+		uintptr(cx),
+		uintptr(cy),
+		uintptr(flags),
+		uintptr(cInitial),
+		uintptr(cGrow))
+
+	if ret == 0 {
+		panic("Create image list failed")
+	}
+
+	return HIMAGELIST(ret)
+}
+
+func ImageList_Destroy(himl HIMAGELIST) bool {
+	ret, _, _ := procImageList_Destroy.Call(
+		uintptr(himl))
+
+	return ret != 0
+}
+
+func ImageList_GetImageCount(himl HIMAGELIST) int {
+	ret, _, _ := procImageList_GetImageCount.Call(
+		uintptr(himl))
+
+	return int(ret)
+}
+
+func ImageList_SetImageCount(himl HIMAGELIST, uNewCount uint) bool {
+	ret, _, _ := procImageList_SetImageCount.Call(
+		uintptr(himl),
+		uintptr(uNewCount))
+
+	return ret != 0
+}
+
+func ImageList_Add(himl HIMAGELIST, hbmImage, hbmMask HBITMAP) int {
+	ret, _, _ := procImageList_Add.Call(
+		uintptr(himl),
+		uintptr(hbmImage),
+		uintptr(hbmMask))
+
+	return int(ret)
+}
+
+func ImageList_ReplaceIcon(himl HIMAGELIST, i int, hicon HICON) int {
+	ret, _, _ := procImageList_ReplaceIcon.Call(
+		uintptr(himl),
+		uintptr(i),
+		uintptr(hicon))
+
+	return int(ret)
+}
+
+func ImageList_AddIcon(himl HIMAGELIST, hicon HICON) int {
+	return ImageList_ReplaceIcon(himl, -1, hicon)
+}
+
+func ImageList_Remove(himl HIMAGELIST, i int) bool {
+	ret, _, _ := procImageList_Remove.Call(
+		uintptr(himl),
+		uintptr(i))
+
+	return ret != 0
+}
+
+func ImageList_RemoveAll(himl HIMAGELIST) bool {
+	return ImageList_Remove(himl, -1)
+}
+
+func TrackMouseEvent(tme *TRACKMOUSEEVENT) bool {
+	ret, _, _ := procTrackMouseEvent.Call(
+		uintptr(unsafe.Pointer(tme)))
+
+	return ret != 0
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32/comdlg32.go","mode":420,"size":849,"sha256":"bcc1f597e301f9a784cc118f0545d90e46363c52b54eb31dcd0695b610906dc5","index":0,"count":1,"encoding":"utf-8","payloadBytes":849}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2012 The W32 Authors. All Rights Reserved.
+ */
+package w32
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+var (
+	modcomdlg32 = syscall.NewLazyDLL("comdlg32.dll")
+
+	procGetSaveFileName      = modcomdlg32.NewProc("GetSaveFileNameW")
+	procGetOpenFileName      = modcomdlg32.NewProc("GetOpenFileNameW")
+	procCommDlgExtendedError = modcomdlg32.NewProc("CommDlgExtendedError")
+)
+
+func GetOpenFileName(ofn *OPENFILENAME) bool {
+	ret, _, _ := procGetOpenFileName.Call(
+		uintptr(unsafe.Pointer(ofn)))
+
+	return ret != 0
+}
+
+func GetSaveFileName(ofn *OPENFILENAME) bool {
+	ret, _, _ := procGetSaveFileName.Call(
+		uintptr(unsafe.Pointer(ofn)))
+
+	return ret != 0
+}
+
+func CommDlgExtendedError() uint {
+	ret, _, _ := procCommDlgExtendedError.Call()
+
+	return uint(ret)
+}
+
+@@END
 @@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32/constants.go","mode":420,"size":94550,"sha256":"ebf158e38228af865c8f19ff4084df4e86dcc49a301bd1414eb5cc70df8303ac","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 //go:build windows
 
@@ -52079,2842 +54918,6 @@ var voidElements = map[string]bool{
 	"source": true,
 	"track":  true,
 	"wbr":    true,
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/token.go","mode":420,"size":34221,"sha256":"28e4cab66406c656cd2ae007517bac998b3d68d18fce0e0717ed98bed44ed336","index":0,"count":1,"encoding":"utf-8","payloadBytes":34221}
-// Copyright 2010 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import (
-	"bytes"
-	"errors"
-	"io"
-	"strconv"
-	"strings"
-
-	"golang.org/x/net/html/atom"
-)
-
-// A TokenType is the type of a Token.
-type TokenType uint32
-
-const (
-	// ErrorToken means that an error occurred during tokenization.
-	ErrorToken TokenType = iota
-	// TextToken means a text node.
-	TextToken
-	// A StartTagToken looks like <a>.
-	StartTagToken
-	// An EndTagToken looks like </a>.
-	EndTagToken
-	// A SelfClosingTagToken tag looks like <br/>.
-	SelfClosingTagToken
-	// A CommentToken looks like <!--x-->.
-	CommentToken
-	// A DoctypeToken looks like <!DOCTYPE x>
-	DoctypeToken
-)
-
-// ErrBufferExceeded means that the buffering limit was exceeded.
-var ErrBufferExceeded = errors.New("max buffer exceeded")
-
-// String returns a string representation of the TokenType.
-func (t TokenType) String() string {
-	switch t {
-	case ErrorToken:
-		return "Error"
-	case TextToken:
-		return "Text"
-	case StartTagToken:
-		return "StartTag"
-	case EndTagToken:
-		return "EndTag"
-	case SelfClosingTagToken:
-		return "SelfClosingTag"
-	case CommentToken:
-		return "Comment"
-	case DoctypeToken:
-		return "Doctype"
-	}
-	return "Invalid(" + strconv.Itoa(int(t)) + ")"
-}
-
-// An Attribute is an attribute namespace-key-value triple. Namespace is
-// non-empty for foreign attributes like xlink, Key is alphabetic (and hence
-// does not contain escapable characters like '&', '<' or '>'), and Val is
-// unescaped (it looks like "a<b" rather than "a&lt;b").
-//
-// Namespace is only used by the parser, not the tokenizer.
-type Attribute struct {
-	Namespace, Key, Val string
-}
-
-// A Token consists of a TokenType and some Data (tag name for start and end
-// tags, content for text, comments and doctypes). A tag Token may also contain
-// a slice of Attributes. Data is unescaped for all Tokens (it looks like "a<b"
-// rather than "a&lt;b"). For tag Tokens, DataAtom is the atom for Data, or
-// zero if Data is not a known tag name.
-type Token struct {
-	Type     TokenType
-	DataAtom atom.Atom
-	Data     string
-	Attr     []Attribute
-}
-
-// tagString returns a string representation of a tag Token's Data and Attr.
-func (t Token) tagString() string {
-	if len(t.Attr) == 0 {
-		return t.Data
-	}
-	buf := bytes.NewBufferString(t.Data)
-	for _, a := range t.Attr {
-		buf.WriteByte(' ')
-		buf.WriteString(a.Key)
-		buf.WriteString(`="`)
-		escape(buf, a.Val)
-		buf.WriteByte('"')
-	}
-	return buf.String()
-}
-
-// String returns a string representation of the Token.
-func (t Token) String() string {
-	switch t.Type {
-	case ErrorToken:
-		return ""
-	case TextToken:
-		return EscapeString(t.Data)
-	case StartTagToken:
-		return "<" + t.tagString() + ">"
-	case EndTagToken:
-		return "</" + t.tagString() + ">"
-	case SelfClosingTagToken:
-		return "<" + t.tagString() + "/>"
-	case CommentToken:
-		return "<!--" + escapeCommentString(t.Data) + "-->"
-	case DoctypeToken:
-		return "<!DOCTYPE " + EscapeString(t.Data) + ">"
-	}
-	return "Invalid(" + strconv.Itoa(int(t.Type)) + ")"
-}
-
-// span is a range of bytes in a Tokenizer's buffer. The start is inclusive,
-// the end is exclusive.
-type span struct {
-	start, end int
-}
-
-// A Tokenizer returns a stream of HTML Tokens.
-type Tokenizer struct {
-	// r is the source of the HTML text.
-	r io.Reader
-	// tt is the TokenType of the current token.
-	tt TokenType
-	// err is the first error encountered during tokenization. It is possible
-	// for tt != Error && err != nil to hold: this means that Next returned a
-	// valid token but the subsequent Next call will return an error token.
-	// For example, if the HTML text input was just "plain", then the first
-	// Next call would set z.err to io.EOF but return a TextToken, and all
-	// subsequent Next calls would return an ErrorToken.
-	// err is never reset. Once it becomes non-nil, it stays non-nil.
-	err error
-	// readErr is the error returned by the io.Reader r. It is separate from
-	// err because it is valid for an io.Reader to return (n int, err1 error)
-	// such that n > 0 && err1 != nil, and callers should always process the
-	// n > 0 bytes before considering the error err1.
-	readErr error
-	// buf[raw.start:raw.end] holds the raw bytes of the current token.
-	// buf[raw.end:] is buffered input that will yield future tokens.
-	raw span
-	buf []byte
-	// maxBuf limits the data buffered in buf. A value of 0 means unlimited.
-	maxBuf int
-	// buf[data.start:data.end] holds the raw bytes of the current token's data:
-	// a text token's text, a tag token's tag name, etc.
-	data span
-	// pendingAttr is the attribute key and value currently being tokenized.
-	// When complete, pendingAttr is pushed onto attr. nAttrReturned is
-	// incremented on each call to TagAttr.
-	pendingAttr   [2]span
-	attr          [][2]span
-	attrNames     map[string]bool
-	nAttrReturned int
-	// rawTag is the "script" in "</script>" that closes the next token. If
-	// non-empty, the subsequent call to Next will return a raw or RCDATA text
-	// token: one that treats "<p>" as text instead of an element.
-	// rawTag's contents are lower-cased.
-	rawTag string
-	// textIsRaw is whether the current text token's data is not escaped.
-	textIsRaw bool
-	// convertNUL is whether NUL bytes in the current token's data should
-	// be converted into \ufffd replacement characters.
-	convertNUL bool
-	// allowCDATA is whether CDATA sections are allowed in the current context.
-	allowCDATA bool
-}
-
-// AllowCDATA sets whether or not the tokenizer recognizes <![CDATA[foo]]> as
-// the text "foo". The default value is false, which means to recognize it as
-// a bogus comment "<!-- [CDATA[foo]] -->" instead.
-//
-// Strictly speaking, an HTML5 compliant tokenizer should allow CDATA if and
-// only if tokenizing foreign content, such as MathML and SVG. However,
-// tracking foreign-contentness is difficult to do purely in the tokenizer,
-// as opposed to the parser, due to HTML integration points: an <svg> element
-// can contain a <foreignObject> that is foreign-to-SVG but not foreign-to-
-// HTML. For strict compliance with the HTML5 tokenization algorithm, it is the
-// responsibility of the user of a tokenizer to call AllowCDATA as appropriate.
-// In practice, if using the tokenizer without caring whether MathML or SVG
-// CDATA is text or comments, such as tokenizing HTML to find all the anchor
-// text, it is acceptable to ignore this responsibility.
-func (z *Tokenizer) AllowCDATA(allowCDATA bool) {
-	z.allowCDATA = allowCDATA
-}
-
-// NextIsNotRawText instructs the tokenizer that the next token should not be
-// considered as 'raw text'. Some elements, such as script and title elements,
-// normally require the next token after the opening tag to be 'raw text' that
-// has no child elements. For example, tokenizing "<title>a<b>c</b>d</title>"
-// yields a start tag token for "<title>", a text token for "a<b>c</b>d", and
-// an end tag token for "</title>". There are no distinct start tag or end tag
-// tokens for the "<b>" and "</b>".
-//
-// This tokenizer implementation will generally look for raw text at the right
-// times. Strictly speaking, an HTML5 compliant tokenizer should not look for
-// raw text if in foreign content: <title> generally needs raw text, but a
-// <title> inside an <svg> does not. Another example is that a <textarea>
-// generally needs raw text, but a <textarea> is not allowed as an immediate
-// child of a <select>; in normal parsing, a <textarea> implies </select>, but
-// one cannot close the implicit element when parsing a <select>'s InnerHTML.
-// Similarly to AllowCDATA, tracking the correct moment to override raw-text-
-// ness is difficult to do purely in the tokenizer, as opposed to the parser.
-// For strict compliance with the HTML5 tokenization algorithm, it is the
-// responsibility of the user of a tokenizer to call NextIsNotRawText as
-// appropriate. In practice, like AllowCDATA, it is acceptable to ignore this
-// responsibility for basic usage.
-//
-// Note that this 'raw text' concept is different from the one offered by the
-// Tokenizer.Raw method.
-func (z *Tokenizer) NextIsNotRawText() {
-	z.rawTag = ""
-}
-
-// Err returns the error associated with the most recent ErrorToken token.
-// This is typically io.EOF, meaning the end of tokenization.
-func (z *Tokenizer) Err() error {
-	if z.tt != ErrorToken {
-		return nil
-	}
-	return z.err
-}
-
-// readByte returns the next byte from the input stream, doing a buffered read
-// from z.r into z.buf if necessary. z.buf[z.raw.start:z.raw.end] remains a contiguous byte
-// slice that holds all the bytes read so far for the current token.
-// It sets z.err if the underlying reader returns an error.
-// Pre-condition: z.err == nil.
-func (z *Tokenizer) readByte() byte {
-	if z.raw.end >= len(z.buf) {
-		// Our buffer is exhausted and we have to read from z.r. Check if the
-		// previous read resulted in an error.
-		if z.readErr != nil {
-			z.err = z.readErr
-			return 0
-		}
-		// We copy z.buf[z.raw.start:z.raw.end] to the beginning of z.buf. If the length
-		// z.raw.end - z.raw.start is more than half the capacity of z.buf, then we
-		// allocate a new buffer before the copy.
-		c := cap(z.buf)
-		d := z.raw.end - z.raw.start
-		var buf1 []byte
-		if 2*d > c {
-			buf1 = make([]byte, d, 2*c)
-		} else {
-			buf1 = z.buf[:d]
-		}
-		copy(buf1, z.buf[z.raw.start:z.raw.end])
-		if x := z.raw.start; x != 0 {
-			// Adjust the data/attr spans to refer to the same contents after the copy.
-			z.data.start -= x
-			z.data.end -= x
-			z.pendingAttr[0].start -= x
-			z.pendingAttr[0].end -= x
-			z.pendingAttr[1].start -= x
-			z.pendingAttr[1].end -= x
-			for i := range z.attr {
-				z.attr[i][0].start -= x
-				z.attr[i][0].end -= x
-				z.attr[i][1].start -= x
-				z.attr[i][1].end -= x
-			}
-		}
-		z.raw.start, z.raw.end, z.buf = 0, d, buf1[:d]
-		// Now that we have copied the live bytes to the start of the buffer,
-		// we read from z.r into the remainder.
-		var n int
-		n, z.readErr = readAtLeastOneByte(z.r, buf1[d:cap(buf1)])
-		if n == 0 {
-			z.err = z.readErr
-			return 0
-		}
-		z.buf = buf1[:d+n]
-	}
-	x := z.buf[z.raw.end]
-	z.raw.end++
-	if z.maxBuf > 0 && z.raw.end-z.raw.start >= z.maxBuf {
-		z.err = ErrBufferExceeded
-		return 0
-	}
-	return x
-}
-
-// Buffered returns a slice containing data buffered but not yet tokenized.
-func (z *Tokenizer) Buffered() []byte {
-	return z.buf[z.raw.end:]
-}
-
-// readAtLeastOneByte wraps an io.Reader so that reading cannot return (0, nil).
-// It returns io.ErrNoProgress if the underlying r.Read method returns (0, nil)
-// too many times in succession.
-func readAtLeastOneByte(r io.Reader, b []byte) (int, error) {
-	for i := 0; i < 100; i++ {
-		if n, err := r.Read(b); n != 0 || err != nil {
-			return n, err
-		}
-	}
-	return 0, io.ErrNoProgress
-}
-
-// skipWhiteSpace skips past any white space.
-func (z *Tokenizer) skipWhiteSpace() {
-	if z.err != nil {
-		return
-	}
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			return
-		}
-		switch c {
-		case ' ', '\n', '\r', '\t', '\f':
-			// No-op.
-		default:
-			z.raw.end--
-			return
-		}
-	}
-}
-
-// readRawOrRCDATA reads until the next "</foo>", where "foo" is z.rawTag and
-// is typically something like "script" or "textarea".
-func (z *Tokenizer) readRawOrRCDATA() {
-	if z.rawTag == "script" {
-		z.readScript()
-		z.textIsRaw = true
-		z.rawTag = ""
-		return
-	}
-loop:
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			break loop
-		}
-		if c != '<' {
-			continue loop
-		}
-		c = z.readByte()
-		if z.err != nil {
-			break loop
-		}
-		if c != '/' {
-			z.raw.end--
-			continue loop
-		}
-		if z.readRawEndTag() || z.err != nil {
-			break loop
-		}
-	}
-	z.data.end = z.raw.end
-	// A textarea's or title's RCDATA can contain escaped entities.
-	z.textIsRaw = z.rawTag != "textarea" && z.rawTag != "title"
-	z.rawTag = ""
-}
-
-// readRawEndTag attempts to read a tag like "</foo>", where "foo" is z.rawTag.
-// If it succeeds, it backs up the input position to reconsume the tag and
-// returns true. Otherwise it returns false. The opening "</" has already been
-// consumed.
-func (z *Tokenizer) readRawEndTag() bool {
-	for i := 0; i < len(z.rawTag); i++ {
-		c := z.readByte()
-		if z.err != nil {
-			return false
-		}
-		if c != z.rawTag[i] && c != z.rawTag[i]-('a'-'A') {
-			z.raw.end--
-			return false
-		}
-	}
-	c := z.readByte()
-	if z.err != nil {
-		return false
-	}
-	switch c {
-	case ' ', '\n', '\r', '\t', '\f', '/', '>':
-		// The 3 is 2 for the leading "</" plus 1 for the trailing character c.
-		z.raw.end -= 3 + len(z.rawTag)
-		return true
-	}
-	z.raw.end--
-	return false
-}
-
-// readScript reads until the next </script> tag, following the byzantine
-// rules for escaping/hiding the closing tag.
-func (z *Tokenizer) readScript() {
-	defer func() {
-		z.data.end = z.raw.end
-	}()
-	var c byte
-
-scriptData:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	if c == '<' {
-		goto scriptDataLessThanSign
-	}
-	goto scriptData
-
-scriptDataLessThanSign:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '/':
-		goto scriptDataEndTagOpen
-	case '!':
-		goto scriptDataEscapeStart
-	}
-	z.raw.end--
-	goto scriptData
-
-scriptDataEndTagOpen:
-	if z.readRawEndTag() || z.err != nil {
-		return
-	}
-	goto scriptData
-
-scriptDataEscapeStart:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	if c == '-' {
-		goto scriptDataEscapeStartDash
-	}
-	z.raw.end--
-	goto scriptData
-
-scriptDataEscapeStartDash:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	if c == '-' {
-		goto scriptDataEscapedDashDash
-	}
-	z.raw.end--
-	goto scriptData
-
-scriptDataEscaped:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '-':
-		goto scriptDataEscapedDash
-	case '<':
-		goto scriptDataEscapedLessThanSign
-	}
-	goto scriptDataEscaped
-
-scriptDataEscapedDash:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '-':
-		goto scriptDataEscapedDashDash
-	case '<':
-		goto scriptDataEscapedLessThanSign
-	}
-	goto scriptDataEscaped
-
-scriptDataEscapedDashDash:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '-':
-		goto scriptDataEscapedDashDash
-	case '<':
-		goto scriptDataEscapedLessThanSign
-	case '>':
-		goto scriptData
-	}
-	goto scriptDataEscaped
-
-scriptDataEscapedLessThanSign:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	if c == '/' {
-		goto scriptDataEscapedEndTagOpen
-	}
-	if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
-		goto scriptDataDoubleEscapeStart
-	}
-	z.raw.end--
-	goto scriptData
-
-scriptDataEscapedEndTagOpen:
-	if z.readRawEndTag() || z.err != nil {
-		return
-	}
-	goto scriptDataEscaped
-
-scriptDataDoubleEscapeStart:
-	z.raw.end--
-	for i := 0; i < len("script"); i++ {
-		c = z.readByte()
-		if z.err != nil {
-			return
-		}
-		if c != "script"[i] && c != "SCRIPT"[i] {
-			z.raw.end--
-			goto scriptDataEscaped
-		}
-	}
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case ' ', '\n', '\r', '\t', '\f', '/', '>':
-		goto scriptDataDoubleEscaped
-	}
-	z.raw.end--
-	goto scriptDataEscaped
-
-scriptDataDoubleEscaped:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '-':
-		goto scriptDataDoubleEscapedDash
-	case '<':
-		goto scriptDataDoubleEscapedLessThanSign
-	}
-	goto scriptDataDoubleEscaped
-
-scriptDataDoubleEscapedDash:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '-':
-		goto scriptDataDoubleEscapedDashDash
-	case '<':
-		goto scriptDataDoubleEscapedLessThanSign
-	}
-	goto scriptDataDoubleEscaped
-
-scriptDataDoubleEscapedDashDash:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch c {
-	case '-':
-		goto scriptDataDoubleEscapedDashDash
-	case '<':
-		goto scriptDataDoubleEscapedLessThanSign
-	case '>':
-		goto scriptData
-	}
-	goto scriptDataDoubleEscaped
-
-scriptDataDoubleEscapedLessThanSign:
-	c = z.readByte()
-	if z.err != nil {
-		return
-	}
-	if c == '/' {
-		goto scriptDataDoubleEscapeEnd
-	}
-	z.raw.end--
-	goto scriptDataDoubleEscaped
-
-scriptDataDoubleEscapeEnd:
-	if z.readRawEndTag() {
-		z.raw.end += len("</script>")
-		goto scriptDataEscaped
-	}
-	if z.err != nil {
-		return
-	}
-	goto scriptDataDoubleEscaped
-}
-
-// readComment reads the next comment token starting with "<!--". The opening
-// "<!--" has already been consumed.
-func (z *Tokenizer) readComment() {
-	// When modifying this function, consider manually increasing the
-	// maxSuffixLen constant in func TestComments, from 6 to e.g. 9 or more.
-	// That increase should only be temporary, not committed, as it
-	// exponentially affects the test running time.
-
-	z.data.start = z.raw.end
-	defer func() {
-		if z.data.end < z.data.start {
-			// It's a comment with no data, like <!-->.
-			z.data.end = z.data.start
-		}
-	}()
-
-	var dashCount int
-	beginning := true
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.calculateAbruptCommentDataEnd()
-			return
-		}
-		switch c {
-		case '-':
-			dashCount++
-			continue
-		case '>':
-			if dashCount >= 2 || beginning {
-				z.data.end = z.raw.end - len("-->")
-				return
-			}
-		case '!':
-			if dashCount >= 2 {
-				c = z.readByte()
-				if z.err != nil {
-					z.data.end = z.calculateAbruptCommentDataEnd()
-					return
-				} else if c == '>' {
-					z.data.end = z.raw.end - len("--!>")
-					return
-				} else if c == '-' {
-					dashCount = 1
-					beginning = false
-					continue
-				}
-			}
-		}
-		dashCount = 0
-		beginning = false
-	}
-}
-
-func (z *Tokenizer) calculateAbruptCommentDataEnd() int {
-	raw := z.Raw()
-	const prefixLen = len("<!--")
-	if len(raw) >= prefixLen {
-		raw = raw[prefixLen:]
-		if hasSuffix(raw, "--!") {
-			return z.raw.end - 3
-		} else if hasSuffix(raw, "--") {
-			return z.raw.end - 2
-		} else if hasSuffix(raw, "-") {
-			return z.raw.end - 1
-		}
-	}
-	return z.raw.end
-}
-
-func hasSuffix(b []byte, suffix string) bool {
-	if len(b) < len(suffix) {
-		return false
-	}
-	b = b[len(b)-len(suffix):]
-	for i := range b {
-		if b[i] != suffix[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// readUntilCloseAngle reads until the next ">".
-func (z *Tokenizer) readUntilCloseAngle() {
-	z.data.start = z.raw.end
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.raw.end
-			return
-		}
-		if c == '>' {
-			z.data.end = z.raw.end - len(">")
-			return
-		}
-	}
-}
-
-// readMarkupDeclaration reads the next token starting with "<!". It might be
-// a "<!--comment-->", a "<!DOCTYPE foo>", a "<![CDATA[section]]>" or
-// "<!a bogus comment". The opening "<!" has already been consumed.
-func (z *Tokenizer) readMarkupDeclaration() TokenType {
-	z.data.start = z.raw.end
-	var c [2]byte
-	for i := 0; i < 2; i++ {
-		c[i] = z.readByte()
-		if z.err != nil {
-			// bogus comment
-			z.data.end = z.raw.end
-			if i == 1 && c[0] == '>' {
-				z.data.end--
-			}
-			return CommentToken
-		}
-	}
-	if c[0] == '-' && c[1] == '-' {
-		z.readComment()
-		return CommentToken
-	}
-	z.raw.end -= 2
-	if z.readDoctype() {
-		return DoctypeToken
-	}
-	if z.allowCDATA && z.readCDATA() {
-		z.convertNUL = true
-		return TextToken
-	}
-	// It's a bogus comment.
-	z.readUntilCloseAngle()
-	return CommentToken
-}
-
-// readDoctype attempts to read a doctype declaration and returns true if
-// successful. The opening "<!" has already been consumed.
-func (z *Tokenizer) readDoctype() bool {
-	const s = "DOCTYPE"
-	for i := 0; i < len(s); i++ {
-		c := z.readByte()
-		if z.err != nil {
-			if z.err == io.EOF {
-				// Back up to read the fragment of "DOCTYPE" again, reset
-				// z.err to signal EOF on the next call
-				z.raw.end = z.data.start
-				z.err = nil
-				return false
-			}
-			z.data.end = z.raw.end
-			return false
-		}
-		if c != s[i] && c != s[i]+('a'-'A') {
-			// Back up to read the fragment of "DOCTYPE" again.
-			z.raw.end = z.data.start
-			return false
-		}
-	}
-	if z.skipWhiteSpace(); z.err != nil {
-		z.data.start = z.raw.end
-		z.data.end = z.raw.end
-		return true
-	}
-	z.readUntilCloseAngle()
-	return true
-}
-
-// readCDATA attempts to read a CDATA section and returns true if
-// successful. The opening "<!" has already been consumed.
-func (z *Tokenizer) readCDATA() bool {
-	const s = "[CDATA["
-	for i := 0; i < len(s); i++ {
-		c := z.readByte()
-		if z.err != nil {
-			if z.err == io.EOF {
-				// Back up to read the fragment of "[CDATA[" again, reset
-				// z.err to signal EOF on the next call
-				z.raw.end = z.data.start
-				z.err = nil
-				return false
-			}
-			z.data.end = z.raw.end
-			return false
-		}
-		if c != s[i] {
-			// Back up to read the fragment of "[CDATA[" again.
-			z.raw.end = z.data.start
-			return false
-		}
-	}
-	z.data.start = z.raw.end
-	brackets := 0
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.raw.end
-			return true
-		}
-		switch c {
-		case ']':
-			brackets++
-		case '>':
-			if brackets >= 2 {
-				z.data.end = z.raw.end - len("]]>")
-				return true
-			}
-			brackets = 0
-		default:
-			brackets = 0
-		}
-	}
-}
-
-// startTagIn returns whether the start tag in z.buf[z.data.start:z.data.end]
-// case-insensitively matches any element of ss.
-func (z *Tokenizer) startTagIn(ss ...string) bool {
-loop:
-	for _, s := range ss {
-		if z.data.end-z.data.start != len(s) {
-			continue loop
-		}
-		for i := 0; i < len(s); i++ {
-			c := z.buf[z.data.start+i]
-			if 'A' <= c && c <= 'Z' {
-				c += 'a' - 'A'
-			}
-			if c != s[i] {
-				continue loop
-			}
-		}
-		return true
-	}
-	return false
-}
-
-// readStartTag reads the next start tag token. The opening "<a" has already
-// been consumed, where 'a' means anything in [A-Za-z].
-func (z *Tokenizer) readStartTag() TokenType {
-	z.readTag(true)
-	if z.err != nil {
-		return ErrorToken
-	}
-	// Several tags flag the tokenizer's next token as raw.
-	c, raw := z.buf[z.data.start], false
-	if 'A' <= c && c <= 'Z' {
-		c += 'a' - 'A'
-	}
-	switch c {
-	case 'i':
-		raw = z.startTagIn("iframe")
-	case 'n':
-		raw = z.startTagIn("noembed", "noframes", "noscript")
-	case 'p':
-		raw = z.startTagIn("plaintext")
-	case 's':
-		raw = z.startTagIn("script", "style")
-	case 't':
-		raw = z.startTagIn("textarea", "title")
-	case 'x':
-		raw = z.startTagIn("xmp")
-	}
-	if raw {
-		z.rawTag = strings.ToLower(string(z.buf[z.data.start:z.data.end]))
-	}
-	// Look for a self-closing token (e.g. <br/>).
-	//
-	// Originally, we did this by just checking that the last character of the
-	// tag (ignoring the closing bracket) was a solidus (/) character, but this
-	// is not always accurate.
-	//
-	// We need to be careful that we don't misinterpret a non-self-closing tag
-	// as self-closing, as can happen if the tag contains unquoted attribute
-	// values (i.e. <p a=/>).
-	//
-	// To avoid this, we check that the last non-bracket character of the tag
-	// (z.raw.end-2) isn't the same character as the last non-quote character of
-	// the last attribute of the tag (z.pendingAttr[1].end-1), if the tag has
-	// attributes.
-	nAttrs := len(z.attr)
-	if z.err == nil && z.buf[z.raw.end-2] == '/' && (nAttrs == 0 || z.raw.end-2 != z.attr[nAttrs-1][1].end-1) {
-		return SelfClosingTagToken
-	}
-	return StartTagToken
-}
-
-// readTag reads the next tag token and its attributes. If saveAttr, those
-// attributes are saved in z.attr, otherwise z.attr is set to an empty slice.
-// The opening "<a" or "</a" has already been consumed, where 'a' means anything
-// in [A-Za-z].
-func (z *Tokenizer) readTag(saveAttr bool) {
-	z.attr = z.attr[:0]
-	z.nAttrReturned = 0
-	clear(z.attrNames)
-	// Read the tag name and attribute key/value pairs.
-	z.readTagName()
-	if z.skipWhiteSpace(); z.err != nil {
-		return
-	}
-	for {
-		c := z.readByte()
-		if z.err != nil || c == '>' {
-			break
-		}
-		z.raw.end--
-		z.readTagAttrKey()
-		z.readTagAttrVal()
-		// Save pendingAttr if saveAttr and that attribute has a non-empty key, and the key hasn't been seen before.
-		key := string(lower(bytes.Clone(z.buf[z.pendingAttr[0].start:z.pendingAttr[0].end])))
-		if saveAttr && z.pendingAttr[0].start != z.pendingAttr[0].end && !z.attrNames[key] {
-			z.attr = append(z.attr, z.pendingAttr)
-			z.attrNames[key] = true
-		}
-		if z.skipWhiteSpace(); z.err != nil {
-			break
-		}
-	}
-}
-
-// readTagName sets z.data to the "div" in "<div k=v>". The reader (z.raw.end)
-// is positioned such that the first byte of the tag name (the "d" in "<div")
-// has already been consumed.
-func (z *Tokenizer) readTagName() {
-	z.data.start = z.raw.end - 1
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.raw.end
-			return
-		}
-		switch c {
-		case ' ', '\n', '\r', '\t', '\f':
-			z.data.end = z.raw.end - 1
-			return
-		case '/', '>':
-			z.raw.end--
-			z.data.end = z.raw.end
-			return
-		}
-	}
-}
-
-// readTagAttrKey sets z.pendingAttr[0] to the "k" in "<div k=v>".
-// Precondition: z.err == nil.
-func (z *Tokenizer) readTagAttrKey() {
-	z.pendingAttr[0].start = z.raw.end
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.pendingAttr[0].end = z.raw.end
-			return
-		}
-		switch c {
-		case '=':
-			if z.pendingAttr[0].start+1 == z.raw.end {
-				// WHATWG 13.2.5.32, if we see an equals sign before the attribute name
-				// begins, we treat it as a character in the attribute name and continue.
-				continue
-			}
-			fallthrough
-		case ' ', '\n', '\r', '\t', '\f', '/', '>':
-			// WHATWG 13.2.5.33 Attribute name state
-			// We need to reconsume the char in the after attribute name state to support the / character
-			z.raw.end--
-			z.pendingAttr[0].end = z.raw.end
-			return
-		}
-	}
-}
-
-// readTagAttrVal sets z.pendingAttr[1] to the "v" in "<div k=v>".
-func (z *Tokenizer) readTagAttrVal() {
-	z.pendingAttr[1].start = z.raw.end
-	z.pendingAttr[1].end = z.raw.end
-	if z.skipWhiteSpace(); z.err != nil {
-		return
-	}
-	c := z.readByte()
-	if z.err != nil {
-		return
-	}
-	if c == '/' {
-		// WHATWG 13.2.5.34 After attribute name state
-		// U+002F SOLIDUS (/) - Switch to the self-closing start tag state.
-		return
-	}
-	if c != '=' {
-		z.raw.end--
-		return
-	}
-	if z.skipWhiteSpace(); z.err != nil {
-		return
-	}
-	quote := z.readByte()
-	if z.err != nil {
-		return
-	}
-	switch quote {
-	case '>':
-		z.raw.end--
-		return
-
-	case '\'', '"':
-		z.pendingAttr[1].start = z.raw.end
-		for {
-			c := z.readByte()
-			if z.err != nil {
-				z.pendingAttr[1].end = z.raw.end
-				return
-			}
-			if c == quote {
-				z.pendingAttr[1].end = z.raw.end - 1
-				return
-			}
-		}
-
-	default:
-		z.pendingAttr[1].start = z.raw.end - 1
-		for {
-			c := z.readByte()
-			if z.err != nil {
-				z.pendingAttr[1].end = z.raw.end
-				return
-			}
-			switch c {
-			case ' ', '\n', '\r', '\t', '\f':
-				z.pendingAttr[1].end = z.raw.end - 1
-				return
-			case '>':
-				z.raw.end--
-				z.pendingAttr[1].end = z.raw.end
-				return
-			}
-		}
-	}
-}
-
-// Next scans the next token and returns its type.
-func (z *Tokenizer) Next() TokenType {
-	z.raw.start = z.raw.end
-	z.data.start = z.raw.end
-	z.data.end = z.raw.end
-	if z.err != nil {
-		z.tt = ErrorToken
-		return z.tt
-	}
-	if z.rawTag != "" {
-		if z.rawTag == "plaintext" {
-			// Read everything up to EOF.
-			for z.err == nil {
-				z.readByte()
-			}
-			z.data.end = z.raw.end
-			z.textIsRaw = true
-		} else {
-			z.readRawOrRCDATA()
-		}
-		if z.data.end > z.data.start {
-			z.tt = TextToken
-			z.convertNUL = true
-			return z.tt
-		}
-	}
-	z.textIsRaw = false
-	z.convertNUL = false
-
-loop:
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			break loop
-		}
-		if c != '<' {
-			continue loop
-		}
-
-		// Check if the '<' we have just read is part of a tag, comment
-		// or doctype. If not, it's part of the accumulated text token.
-		c = z.readByte()
-		if z.err != nil {
-			break loop
-		}
-		var tokenType TokenType
-		switch {
-		case 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z':
-			tokenType = StartTagToken
-		case c == '/':
-			tokenType = EndTagToken
-		case c == '!' || c == '?':
-			// We use CommentToken to mean any of "<!--actual comments-->",
-			// "<!DOCTYPE declarations>" and "<?xml processing instructions?>".
-			tokenType = CommentToken
-		default:
-			// Reconsume the current character.
-			z.raw.end--
-			continue
-		}
-
-		// We have a non-text token, but we might have accumulated some text
-		// before that. If so, we return the text first, and return the non-
-		// text token on the subsequent call to Next.
-		if x := z.raw.end - len("<a"); z.raw.start < x {
-			z.raw.end = x
-			z.data.end = x
-			z.tt = TextToken
-			return z.tt
-		}
-		switch tokenType {
-		case StartTagToken:
-			z.tt = z.readStartTag()
-			return z.tt
-		case EndTagToken:
-			c = z.readByte()
-			if z.err != nil {
-				break loop
-			}
-			if c == '>' {
-				// "</>" does not generate a token at all. Generate an empty comment
-				// to allow passthrough clients to pick up the data using Raw.
-				// Reset the tokenizer state and start again.
-				z.tt = CommentToken
-				return z.tt
-			}
-			if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
-				z.readTag(false)
-				if z.err != nil {
-					z.tt = ErrorToken
-				} else {
-					z.tt = EndTagToken
-				}
-				return z.tt
-			}
-			z.raw.end--
-			z.readUntilCloseAngle()
-			z.tt = CommentToken
-			return z.tt
-		case CommentToken:
-			if c == '!' {
-				z.tt = z.readMarkupDeclaration()
-				return z.tt
-			}
-			z.raw.end--
-			z.readUntilCloseAngle()
-			z.tt = CommentToken
-			return z.tt
-		}
-	}
-	if z.raw.start < z.raw.end {
-		z.data.end = z.raw.end
-		z.tt = TextToken
-		return z.tt
-	}
-	z.tt = ErrorToken
-	return z.tt
-}
-
-// Raw returns the unmodified text of the current token. Calling Next, Token,
-// Text, TagName or TagAttr may change the contents of the returned slice.
-//
-// The token stream's raw bytes partition the byte stream (up until an
-// ErrorToken). There are no overlaps or gaps between two consecutive token's
-// raw bytes. One implication is that the byte offset of the current token is
-// the sum of the lengths of all previous tokens' raw bytes.
-func (z *Tokenizer) Raw() []byte {
-	return z.buf[z.raw.start:z.raw.end]
-}
-
-// convertNewlines converts "\r" and "\r\n" in s to "\n".
-// The conversion happens in place, but the resulting slice may be shorter.
-func convertNewlines(s []byte) []byte {
-	for i, c := range s {
-		if c != '\r' {
-			continue
-		}
-
-		src := i + 1
-		if src >= len(s) || s[src] != '\n' {
-			s[i] = '\n'
-			continue
-		}
-
-		dst := i
-		for src < len(s) {
-			if s[src] == '\r' {
-				if src+1 < len(s) && s[src+1] == '\n' {
-					src++
-				}
-				s[dst] = '\n'
-			} else {
-				s[dst] = s[src]
-			}
-			src++
-			dst++
-		}
-		return s[:dst]
-	}
-	return s
-}
-
-var (
-	nul         = []byte("\x00")
-	replacement = []byte("\ufffd")
-)
-
-// Text returns the unescaped text of a text, comment or doctype token. The
-// contents of the returned slice may change on the next call to Next.
-func (z *Tokenizer) Text() []byte {
-	switch z.tt {
-	case TextToken, CommentToken, DoctypeToken:
-		s := z.buf[z.data.start:z.data.end]
-		z.data.start = z.raw.end
-		z.data.end = z.raw.end
-		s = convertNewlines(s)
-		if (z.convertNUL || z.tt == CommentToken) && bytes.Contains(s, nul) {
-			s = bytes.Replace(s, nul, replacement, -1)
-		}
-		if !z.textIsRaw {
-			s = unescape(s, false)
-		}
-		return s
-	}
-	return nil
-}
-
-// TagName returns the lower-cased name of a tag token (the `img` out of
-// `<IMG SRC="foo">`) and whether the tag has attributes.
-// The contents of the returned slice may change on the next call to Next.
-func (z *Tokenizer) TagName() (name []byte, hasAttr bool) {
-	if z.data.start < z.data.end {
-		switch z.tt {
-		case StartTagToken, EndTagToken, SelfClosingTagToken:
-			s := bytes.ReplaceAll(z.buf[z.data.start:z.data.end], nul, replacement)
-			z.data.start = z.raw.end
-			z.data.end = z.raw.end
-			return lower(s), z.nAttrReturned < len(z.attr)
-		}
-	}
-	return nil, false
-}
-
-// TagAttr returns the lower-cased key and unescaped value of the next unparsed
-// attribute for the current tag token and whether there are more attributes.
-// The contents of the returned slices may change on the next call to Next.
-func (z *Tokenizer) TagAttr() (key, val []byte, moreAttr bool) {
-	if z.nAttrReturned < len(z.attr) {
-		switch z.tt {
-		case StartTagToken, SelfClosingTagToken:
-			x := z.attr[z.nAttrReturned]
-			z.nAttrReturned++
-			key = bytes.ReplaceAll(z.buf[x[0].start:x[0].end], nul, replacement)
-			val = bytes.ReplaceAll(z.buf[x[1].start:x[1].end], nul, replacement)
-			return lower(key), unescape(convertNewlines(val), true), z.nAttrReturned < len(z.attr)
-		}
-	}
-	return nil, nil, false
-}
-
-// Token returns the current Token. The result's Data and Attr values remain
-// valid after subsequent Next calls.
-func (z *Tokenizer) Token() Token {
-	t := Token{Type: z.tt}
-	switch z.tt {
-	case TextToken, CommentToken, DoctypeToken:
-		t.Data = string(z.Text())
-	case StartTagToken, SelfClosingTagToken, EndTagToken:
-		name, moreAttr := z.TagName()
-		for moreAttr {
-			var key, val []byte
-			key, val, moreAttr = z.TagAttr()
-			t.Attr = append(t.Attr, Attribute{"", atom.String(key), string(val)})
-		}
-		if a := atom.Lookup(name); a != 0 {
-			t.DataAtom, t.Data = a, a.String()
-		} else {
-			t.DataAtom, t.Data = 0, string(name)
-		}
-	}
-	return t
-}
-
-// SetMaxBuf sets a limit on the amount of data buffered during tokenization.
-// A value of 0 means unlimited.
-func (z *Tokenizer) SetMaxBuf(n int) {
-	z.maxBuf = n
-}
-
-// NewTokenizer returns a new HTML Tokenizer for the given Reader.
-// The input is assumed to be UTF-8 encoded.
-func NewTokenizer(r io.Reader) *Tokenizer {
-	return NewTokenizerFragment(r, "")
-}
-
-// NewTokenizerFragment returns a new HTML Tokenizer for the given Reader, for
-// tokenizing an existing element's InnerHTML fragment. contextTag is that
-// element's tag, such as "div" or "iframe".
-//
-// For example, how the InnerHTML "a<b" is tokenized depends on whether it is
-// for a <p> tag or a <script> tag.
-//
-// The input is assumed to be UTF-8 encoded.
-func NewTokenizerFragment(r io.Reader, contextTag string) *Tokenizer {
-	z := &Tokenizer{
-		r:         r,
-		buf:       make([]byte, 0, 4096),
-		attrNames: make(map[string]bool),
-	}
-	if contextTag != "" {
-		// Per the "Parsing HTML Fragments" portion of the spec:
-		//    For performance reasons, an implementation that does not report errors
-		//    and that uses the actual state machine described in this specification
-		//    directly could use the PLAINTEXT state instead of the RAWTEXT and script
-		//    data states where those are mentioned in the list above. Except for
-		//    rules regarding parse errors, they are equivalent, since there is no
-		//    appropriate end tag token in the fragment case, yet they involve far
-		//    fewer state transitions.
-		//
-		// As such we just set everything to plaintext, which makes some complex parsing
-		// cases somewhat simpler.
-		switch s := strings.ToLower(contextTag); s {
-		case "title", "textarea":
-			z.rawTag = s
-		case "style", "xmp", "iframe", "noembed", "noframes", "script", "noscript", "plaintext":
-			z.rawTag = "plaintext"
-		}
-	}
-	return z
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http/httpguts/guts.go","mode":420,"size":1425,"sha256":"3da54270a625540809f2f767e54e18acf27199aca64b6cf16d6d3fa3999de959","index":0,"count":1,"encoding":"utf-8","payloadBytes":1425}
-// Copyright 2018 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package httpguts provides functions implementing various details
-// of the HTTP specification.
-//
-// This package is shared by the standard library (which vendors it)
-// and x/net/http2. It comes with no API stability promise.
-package httpguts
-
-import (
-	"net/textproto"
-	"strings"
-)
-
-// ValidTrailerHeader reports whether name is a valid header field name to appear
-// in trailers.
-// See RFC 7230, Section 4.1.2
-func ValidTrailerHeader(name string) bool {
-	name = textproto.CanonicalMIMEHeaderKey(name)
-	if strings.HasPrefix(name, "If-") || badTrailer[name] {
-		return false
-	}
-	return true
-}
-
-var badTrailer = map[string]bool{
-	"Authorization":       true,
-	"Cache-Control":       true,
-	"Connection":          true,
-	"Content-Encoding":    true,
-	"Content-Length":      true,
-	"Content-Range":       true,
-	"Content-Type":        true,
-	"Expect":              true,
-	"Host":                true,
-	"Keep-Alive":          true,
-	"Max-Forwards":        true,
-	"Pragma":              true,
-	"Proxy-Authenticate":  true,
-	"Proxy-Authorization": true,
-	"Proxy-Connection":    true,
-	"Range":               true,
-	"Realm":               true,
-	"Te":                  true,
-	"Trailer":             true,
-	"Transfer-Encoding":   true,
-	"Www-Authenticate":    true,
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http/httpguts/httplex.go","mode":420,"size":8933,"sha256":"8cfd5819dc821d45f82fde10afff4b2e652535b0091e0559fc8ad7766051a2c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8933}
-// Copyright 2016 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package httpguts
-
-import (
-	"net"
-	"strings"
-	"unicode/utf8"
-
-	"golang.org/x/net/idna"
-)
-
-var isTokenTable = [256]bool{
-	'!':  true,
-	'#':  true,
-	'$':  true,
-	'%':  true,
-	'&':  true,
-	'\'': true,
-	'*':  true,
-	'+':  true,
-	'-':  true,
-	'.':  true,
-	'0':  true,
-	'1':  true,
-	'2':  true,
-	'3':  true,
-	'4':  true,
-	'5':  true,
-	'6':  true,
-	'7':  true,
-	'8':  true,
-	'9':  true,
-	'A':  true,
-	'B':  true,
-	'C':  true,
-	'D':  true,
-	'E':  true,
-	'F':  true,
-	'G':  true,
-	'H':  true,
-	'I':  true,
-	'J':  true,
-	'K':  true,
-	'L':  true,
-	'M':  true,
-	'N':  true,
-	'O':  true,
-	'P':  true,
-	'Q':  true,
-	'R':  true,
-	'S':  true,
-	'T':  true,
-	'U':  true,
-	'W':  true,
-	'V':  true,
-	'X':  true,
-	'Y':  true,
-	'Z':  true,
-	'^':  true,
-	'_':  true,
-	'`':  true,
-	'a':  true,
-	'b':  true,
-	'c':  true,
-	'd':  true,
-	'e':  true,
-	'f':  true,
-	'g':  true,
-	'h':  true,
-	'i':  true,
-	'j':  true,
-	'k':  true,
-	'l':  true,
-	'm':  true,
-	'n':  true,
-	'o':  true,
-	'p':  true,
-	'q':  true,
-	'r':  true,
-	's':  true,
-	't':  true,
-	'u':  true,
-	'v':  true,
-	'w':  true,
-	'x':  true,
-	'y':  true,
-	'z':  true,
-	'|':  true,
-	'~':  true,
-}
-
-func IsTokenRune(r rune) bool {
-	return r < utf8.RuneSelf && isTokenTable[byte(r)]
-}
-
-// HeaderValuesContainsToken reports whether any string in values
-// contains the provided token, ASCII case-insensitively.
-func HeaderValuesContainsToken(values []string, token string) bool {
-	for _, v := range values {
-		if headerValueContainsToken(v, token) {
-			return true
-		}
-	}
-	return false
-}
-
-// isOWS reports whether b is an optional whitespace byte, as defined
-// by RFC 7230 section 3.2.3.
-func isOWS(b byte) bool { return b == ' ' || b == '\t' }
-
-// trimOWS returns x with all optional whitespace removes from the
-// beginning and end.
-func trimOWS(x string) string {
-	// TODO: consider using strings.Trim(x, " \t") instead,
-	// if and when it's fast enough. See issue 10292.
-	// But this ASCII-only code will probably always beat UTF-8
-	// aware code.
-	for len(x) > 0 && isOWS(x[0]) {
-		x = x[1:]
-	}
-	for len(x) > 0 && isOWS(x[len(x)-1]) {
-		x = x[:len(x)-1]
-	}
-	return x
-}
-
-// headerValueContainsToken reports whether v (assumed to be a
-// 0#element, in the ABNF extension described in RFC 7230 section 7)
-// contains token amongst its comma-separated tokens, ASCII
-// case-insensitively.
-func headerValueContainsToken(v string, token string) bool {
-	for comma := strings.IndexByte(v, ','); comma != -1; comma = strings.IndexByte(v, ',') {
-		if tokenEqual(trimOWS(v[:comma]), token) {
-			return true
-		}
-		v = v[comma+1:]
-	}
-	return tokenEqual(trimOWS(v), token)
-}
-
-// lowerASCII returns the ASCII lowercase version of b.
-func lowerASCII(b byte) byte {
-	if 'A' <= b && b <= 'Z' {
-		return b + ('a' - 'A')
-	}
-	return b
-}
-
-// tokenEqual reports whether t1 and t2 are equal, ASCII case-insensitively.
-func tokenEqual(t1, t2 string) bool {
-	if len(t1) != len(t2) {
-		return false
-	}
-	for i, b := range t1 {
-		if b >= utf8.RuneSelf {
-			// No UTF-8 or non-ASCII allowed in tokens.
-			return false
-		}
-		if lowerASCII(byte(b)) != lowerASCII(t2[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// isLWS reports whether b is linear white space, according
-// to http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
-//
-//	LWS            = [CRLF] 1*( SP | HT )
-func isLWS(b byte) bool { return b == ' ' || b == '\t' }
-
-// isCTL reports whether b is a control byte, according
-// to http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
-//
-//	CTL            = <any US-ASCII control character
-//	                 (octets 0 - 31) and DEL (127)>
-func isCTL(b byte) bool {
-	const del = 0x7f // a CTL
-	return b < ' ' || b == del
-}
-
-// ValidHeaderFieldName reports whether v is a valid HTTP/1.x header name.
-// HTTP/2 imposes the additional restriction that uppercase ASCII
-// letters are not allowed.
-//
-// RFC 7230 says:
-//
-//	header-field   = field-name ":" OWS field-value OWS
-//	field-name     = token
-//	token          = 1*tchar
-//	tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
-//	        "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
-func ValidHeaderFieldName(v string) bool {
-	if len(v) == 0 {
-		return false
-	}
-	for i := 0; i < len(v); i++ {
-		if !isTokenTable[v[i]] {
-			return false
-		}
-	}
-	return true
-}
-
-// ValidHostHeader reports whether h is a valid host header.
-func ValidHostHeader(h string) bool {
-	// The latest spec is actually this:
-	//
-	// http://tools.ietf.org/html/rfc7230#section-5.4
-	//     Host = uri-host [ ":" port ]
-	//
-	// Where uri-host is:
-	//     http://tools.ietf.org/html/rfc3986#section-3.2.2
-	//
-	// But we're going to be much more lenient for now and just
-	// search for any byte that's not a valid byte in any of those
-	// expressions.
-	for i := 0; i < len(h); i++ {
-		if !validHostByte[h[i]] {
-			return false
-		}
-	}
-	return true
-}
-
-// See the validHostHeader comment.
-var validHostByte = [256]bool{
-	'0': true, '1': true, '2': true, '3': true, '4': true, '5': true, '6': true, '7': true,
-	'8': true, '9': true,
-
-	'a': true, 'b': true, 'c': true, 'd': true, 'e': true, 'f': true, 'g': true, 'h': true,
-	'i': true, 'j': true, 'k': true, 'l': true, 'm': true, 'n': true, 'o': true, 'p': true,
-	'q': true, 'r': true, 's': true, 't': true, 'u': true, 'v': true, 'w': true, 'x': true,
-	'y': true, 'z': true,
-
-	'A': true, 'B': true, 'C': true, 'D': true, 'E': true, 'F': true, 'G': true, 'H': true,
-	'I': true, 'J': true, 'K': true, 'L': true, 'M': true, 'N': true, 'O': true, 'P': true,
-	'Q': true, 'R': true, 'S': true, 'T': true, 'U': true, 'V': true, 'W': true, 'X': true,
-	'Y': true, 'Z': true,
-
-	'!':  true, // sub-delims
-	'$':  true, // sub-delims
-	'%':  true, // pct-encoded (and used in IPv6 zones)
-	'&':  true, // sub-delims
-	'(':  true, // sub-delims
-	')':  true, // sub-delims
-	'*':  true, // sub-delims
-	'+':  true, // sub-delims
-	',':  true, // sub-delims
-	'-':  true, // unreserved
-	'.':  true, // unreserved
-	':':  true, // IPv6address + Host expression's optional port
-	';':  true, // sub-delims
-	'=':  true, // sub-delims
-	'[':  true,
-	'\'': true, // sub-delims
-	']':  true,
-	'_':  true, // unreserved
-	'~':  true, // unreserved
-}
-
-// ValidHeaderFieldValue reports whether v is a valid "field-value" according to
-// http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2 :
-//
-//	message-header = field-name ":" [ field-value ]
-//	field-value    = *( field-content | LWS )
-//	field-content  = <the OCTETs making up the field-value
-//	                 and consisting of either *TEXT or combinations
-//	                 of token, separators, and quoted-string>
-//
-// http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2 :
-//
-//	TEXT           = <any OCTET except CTLs,
-//	                  but including LWS>
-//	LWS            = [CRLF] 1*( SP | HT )
-//	CTL            = <any US-ASCII control character
-//	                 (octets 0 - 31) and DEL (127)>
-//
-// RFC 7230 says:
-//
-//	field-value    = *( field-content / obs-fold )
-//	obj-fold       =  N/A to http2, and deprecated
-//	field-content  = field-vchar [ 1*( SP / HTAB ) field-vchar ]
-//	field-vchar    = VCHAR / obs-text
-//	obs-text       = %x80-FF
-//	VCHAR          = "any visible [USASCII] character"
-//
-// http2 further says: "Similarly, HTTP/2 allows header field values
-// that are not valid. While most of the values that can be encoded
-// will not alter header field parsing, carriage return (CR, ASCII
-// 0xd), line feed (LF, ASCII 0xa), and the zero character (NUL, ASCII
-// 0x0) might be exploited by an attacker if they are translated
-// verbatim. Any request or response that contains a character not
-// permitted in a header field value MUST be treated as malformed
-// (Section 8.1.2.6). Valid characters are defined by the
-// field-content ABNF rule in Section 3.2 of [RFC7230]."
-//
-// This function does not (yet?) properly handle the rejection of
-// strings that begin or end with SP or HTAB.
-func ValidHeaderFieldValue(v string) bool {
-	for i := 0; i < len(v); i++ {
-		b := v[i]
-		if isCTL(b) && !isLWS(b) {
-			return false
-		}
-	}
-	return true
-}
-
-func isASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] >= utf8.RuneSelf {
-			return false
-		}
-	}
-	return true
-}
-
-// PunycodeHostPort returns the IDNA Punycode version
-// of the provided "host" or "host:port" string.
-func PunycodeHostPort(v string) (string, error) {
-	if isASCII(v) {
-		return v, nil
-	}
-
-	host, port, err := net.SplitHostPort(v)
-	if err != nil {
-		// The input 'v' argument was just a "host" argument,
-		// without a port. This error should not be returned
-		// to the caller.
-		host = v
-		port = ""
-	}
-	host, err = idna.ToASCII(host)
-	if err != nil {
-		// Non-UTF-8? Not representable in Punycode, in any
-		// case.
-		return "", err
-	}
-	if port == "" {
-		return host, nil
-	}
-	return net.JoinHostPort(host, port), nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/.gitignore","mode":420,"size":11,"sha256":"a72adf98822b3f9f99b5781137976efb8de250ebbfbcfc7a8851a6822553d234","index":0,"count":1,"encoding":"utf-8","payloadBytes":11}
-*~
-h2i/h2i
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/ascii.go","mode":420,"size":1378,"sha256":"d8ee0e0a6b2c41a17a18e263b7f9b5701174dbe10e59496daadc9db6a647f708","index":0,"count":1,"encoding":"utf-8","payloadBytes":1378}
-// Copyright 2021 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package http2
-
-import "strings"
-
-// The HTTP protocols are defined in terms of ASCII, not Unicode. This file
-// contains helper functions which may use Unicode-aware functions which would
-// otherwise be unsafe and could introduce vulnerabilities if used improperly.
-
-// asciiEqualFold is strings.EqualFold, ASCII only. It reports whether s and t
-// are equal, ASCII-case-insensitively.
-func asciiEqualFold(s, t string) bool {
-	if len(s) != len(t) {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if lower(s[i]) != lower(t[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// lower returns the ASCII lowercase version of b.
-func lower(b byte) byte {
-	if 'A' <= b && b <= 'Z' {
-		return b + ('a' - 'A')
-	}
-	return b
-}
-
-// isASCIIPrint returns whether s is ASCII and printable according to
-// https://tools.ietf.org/html/rfc20#section-4.2.
-func isASCIIPrint(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] < ' ' || s[i] > '~' {
-			return false
-		}
-	}
-	return true
-}
-
-// asciiToLower returns the lowercase version of s if s is ASCII and printable,
-// and whether or not it was.
-func asciiToLower(s string) (lower string, ok bool) {
-	if !isASCIIPrint(s) {
-		return "", false
-	}
-	return strings.ToLower(s), true
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/ciphers.go","mode":420,"size":35208,"sha256":"623262af28491cd81b3570936cd06757f629d2ae4fb6ef087af6762f30d7a5eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":35208}
-// Copyright 2017 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package http2
-
-// A list of the possible cipher suite ids. Taken from
-// https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
-
-const (
-	cipher_TLS_NULL_WITH_NULL_NULL               uint16 = 0x0000
-	cipher_TLS_RSA_WITH_NULL_MD5                 uint16 = 0x0001
-	cipher_TLS_RSA_WITH_NULL_SHA                 uint16 = 0x0002
-	cipher_TLS_RSA_EXPORT_WITH_RC4_40_MD5        uint16 = 0x0003
-	cipher_TLS_RSA_WITH_RC4_128_MD5              uint16 = 0x0004
-	cipher_TLS_RSA_WITH_RC4_128_SHA              uint16 = 0x0005
-	cipher_TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5    uint16 = 0x0006
-	cipher_TLS_RSA_WITH_IDEA_CBC_SHA             uint16 = 0x0007
-	cipher_TLS_RSA_EXPORT_WITH_DES40_CBC_SHA     uint16 = 0x0008
-	cipher_TLS_RSA_WITH_DES_CBC_SHA              uint16 = 0x0009
-	cipher_TLS_RSA_WITH_3DES_EDE_CBC_SHA         uint16 = 0x000A
-	cipher_TLS_DH_DSS_EXPORT_WITH_DES40_CBC_SHA  uint16 = 0x000B
-	cipher_TLS_DH_DSS_WITH_DES_CBC_SHA           uint16 = 0x000C
-	cipher_TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA      uint16 = 0x000D
-	cipher_TLS_DH_RSA_EXPORT_WITH_DES40_CBC_SHA  uint16 = 0x000E
-	cipher_TLS_DH_RSA_WITH_DES_CBC_SHA           uint16 = 0x000F
-	cipher_TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA      uint16 = 0x0010
-	cipher_TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA uint16 = 0x0011
-	cipher_TLS_DHE_DSS_WITH_DES_CBC_SHA          uint16 = 0x0012
-	cipher_TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA     uint16 = 0x0013
-	cipher_TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA uint16 = 0x0014
-	cipher_TLS_DHE_RSA_WITH_DES_CBC_SHA          uint16 = 0x0015
-	cipher_TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA     uint16 = 0x0016
-	cipher_TLS_DH_anon_EXPORT_WITH_RC4_40_MD5    uint16 = 0x0017
-	cipher_TLS_DH_anon_WITH_RC4_128_MD5          uint16 = 0x0018
-	cipher_TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA uint16 = 0x0019
-	cipher_TLS_DH_anon_WITH_DES_CBC_SHA          uint16 = 0x001A
-	cipher_TLS_DH_anon_WITH_3DES_EDE_CBC_SHA     uint16 = 0x001B
-	// Reserved uint16 =  0x001C-1D
-	cipher_TLS_KRB5_WITH_DES_CBC_SHA             uint16 = 0x001E
-	cipher_TLS_KRB5_WITH_3DES_EDE_CBC_SHA        uint16 = 0x001F
-	cipher_TLS_KRB5_WITH_RC4_128_SHA             uint16 = 0x0020
-	cipher_TLS_KRB5_WITH_IDEA_CBC_SHA            uint16 = 0x0021
-	cipher_TLS_KRB5_WITH_DES_CBC_MD5             uint16 = 0x0022
-	cipher_TLS_KRB5_WITH_3DES_EDE_CBC_MD5        uint16 = 0x0023
-	cipher_TLS_KRB5_WITH_RC4_128_MD5             uint16 = 0x0024
-	cipher_TLS_KRB5_WITH_IDEA_CBC_MD5            uint16 = 0x0025
-	cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_SHA   uint16 = 0x0026
-	cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_SHA   uint16 = 0x0027
-	cipher_TLS_KRB5_EXPORT_WITH_RC4_40_SHA       uint16 = 0x0028
-	cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_MD5   uint16 = 0x0029
-	cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_MD5   uint16 = 0x002A
-	cipher_TLS_KRB5_EXPORT_WITH_RC4_40_MD5       uint16 = 0x002B
-	cipher_TLS_PSK_WITH_NULL_SHA                 uint16 = 0x002C
-	cipher_TLS_DHE_PSK_WITH_NULL_SHA             uint16 = 0x002D
-	cipher_TLS_RSA_PSK_WITH_NULL_SHA             uint16 = 0x002E
-	cipher_TLS_RSA_WITH_AES_128_CBC_SHA          uint16 = 0x002F
-	cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA       uint16 = 0x0030
-	cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA       uint16 = 0x0031
-	cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA      uint16 = 0x0032
-	cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA      uint16 = 0x0033
-	cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA      uint16 = 0x0034
-	cipher_TLS_RSA_WITH_AES_256_CBC_SHA          uint16 = 0x0035
-	cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA       uint16 = 0x0036
-	cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA       uint16 = 0x0037
-	cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA      uint16 = 0x0038
-	cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA      uint16 = 0x0039
-	cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA      uint16 = 0x003A
-	cipher_TLS_RSA_WITH_NULL_SHA256              uint16 = 0x003B
-	cipher_TLS_RSA_WITH_AES_128_CBC_SHA256       uint16 = 0x003C
-	cipher_TLS_RSA_WITH_AES_256_CBC_SHA256       uint16 = 0x003D
-	cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA256    uint16 = 0x003E
-	cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA256    uint16 = 0x003F
-	cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA256   uint16 = 0x0040
-	cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA     uint16 = 0x0041
-	cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA  uint16 = 0x0042
-	cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA  uint16 = 0x0043
-	cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA uint16 = 0x0044
-	cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA uint16 = 0x0045
-	cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA uint16 = 0x0046
-	// Reserved uint16 =  0x0047-4F
-	// Reserved uint16 =  0x0050-58
-	// Reserved uint16 =  0x0059-5C
-	// Unassigned uint16 =  0x005D-5F
-	// Reserved uint16 =  0x0060-66
-	cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 uint16 = 0x0067
-	cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA256  uint16 = 0x0068
-	cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA256  uint16 = 0x0069
-	cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA256 uint16 = 0x006A
-	cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 uint16 = 0x006B
-	cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA256 uint16 = 0x006C
-	cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA256 uint16 = 0x006D
-	// Unassigned uint16 =  0x006E-83
-	cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA        uint16 = 0x0084
-	cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA     uint16 = 0x0085
-	cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA     uint16 = 0x0086
-	cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA    uint16 = 0x0087
-	cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA    uint16 = 0x0088
-	cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA    uint16 = 0x0089
-	cipher_TLS_PSK_WITH_RC4_128_SHA                 uint16 = 0x008A
-	cipher_TLS_PSK_WITH_3DES_EDE_CBC_SHA            uint16 = 0x008B
-	cipher_TLS_PSK_WITH_AES_128_CBC_SHA             uint16 = 0x008C
-	cipher_TLS_PSK_WITH_AES_256_CBC_SHA             uint16 = 0x008D
-	cipher_TLS_DHE_PSK_WITH_RC4_128_SHA             uint16 = 0x008E
-	cipher_TLS_DHE_PSK_WITH_3DES_EDE_CBC_SHA        uint16 = 0x008F
-	cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA         uint16 = 0x0090
-	cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA         uint16 = 0x0091
-	cipher_TLS_RSA_PSK_WITH_RC4_128_SHA             uint16 = 0x0092
-	cipher_TLS_RSA_PSK_WITH_3DES_EDE_CBC_SHA        uint16 = 0x0093
-	cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA         uint16 = 0x0094
-	cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA         uint16 = 0x0095
-	cipher_TLS_RSA_WITH_SEED_CBC_SHA                uint16 = 0x0096
-	cipher_TLS_DH_DSS_WITH_SEED_CBC_SHA             uint16 = 0x0097
-	cipher_TLS_DH_RSA_WITH_SEED_CBC_SHA             uint16 = 0x0098
-	cipher_TLS_DHE_DSS_WITH_SEED_CBC_SHA            uint16 = 0x0099
-	cipher_TLS_DHE_RSA_WITH_SEED_CBC_SHA            uint16 = 0x009A
-	cipher_TLS_DH_anon_WITH_SEED_CBC_SHA            uint16 = 0x009B
-	cipher_TLS_RSA_WITH_AES_128_GCM_SHA256          uint16 = 0x009C
-	cipher_TLS_RSA_WITH_AES_256_GCM_SHA384          uint16 = 0x009D
-	cipher_TLS_DHE_RSA_WITH_AES_128_GCM_SHA256      uint16 = 0x009E
-	cipher_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384      uint16 = 0x009F
-	cipher_TLS_DH_RSA_WITH_AES_128_GCM_SHA256       uint16 = 0x00A0
-	cipher_TLS_DH_RSA_WITH_AES_256_GCM_SHA384       uint16 = 0x00A1
-	cipher_TLS_DHE_DSS_WITH_AES_128_GCM_SHA256      uint16 = 0x00A2
-	cipher_TLS_DHE_DSS_WITH_AES_256_GCM_SHA384      uint16 = 0x00A3
-	cipher_TLS_DH_DSS_WITH_AES_128_GCM_SHA256       uint16 = 0x00A4
-	cipher_TLS_DH_DSS_WITH_AES_256_GCM_SHA384       uint16 = 0x00A5
-	cipher_TLS_DH_anon_WITH_AES_128_GCM_SHA256      uint16 = 0x00A6
-	cipher_TLS_DH_anon_WITH_AES_256_GCM_SHA384      uint16 = 0x00A7
-	cipher_TLS_PSK_WITH_AES_128_GCM_SHA256          uint16 = 0x00A8
-	cipher_TLS_PSK_WITH_AES_256_GCM_SHA384          uint16 = 0x00A9
-	cipher_TLS_DHE_PSK_WITH_AES_128_GCM_SHA256      uint16 = 0x00AA
-	cipher_TLS_DHE_PSK_WITH_AES_256_GCM_SHA384      uint16 = 0x00AB
-	cipher_TLS_RSA_PSK_WITH_AES_128_GCM_SHA256      uint16 = 0x00AC
-	cipher_TLS_RSA_PSK_WITH_AES_256_GCM_SHA384      uint16 = 0x00AD
-	cipher_TLS_PSK_WITH_AES_128_CBC_SHA256          uint16 = 0x00AE
-	cipher_TLS_PSK_WITH_AES_256_CBC_SHA384          uint16 = 0x00AF
-	cipher_TLS_PSK_WITH_NULL_SHA256                 uint16 = 0x00B0
-	cipher_TLS_PSK_WITH_NULL_SHA384                 uint16 = 0x00B1
-	cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA256      uint16 = 0x00B2
-	cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA384      uint16 = 0x00B3
-	cipher_TLS_DHE_PSK_WITH_NULL_SHA256             uint16 = 0x00B4
-	cipher_TLS_DHE_PSK_WITH_NULL_SHA384             uint16 = 0x00B5
-	cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA256      uint16 = 0x00B6
-	cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA384      uint16 = 0x00B7
-	cipher_TLS_RSA_PSK_WITH_NULL_SHA256             uint16 = 0x00B8
-	cipher_TLS_RSA_PSK_WITH_NULL_SHA384             uint16 = 0x00B9
-	cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256     uint16 = 0x00BA
-	cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA256  uint16 = 0x00BB
-	cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256  uint16 = 0x00BC
-	cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0x00BD
-	cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0x00BE
-	cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0x00BF
-	cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256     uint16 = 0x00C0
-	cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA256  uint16 = 0x00C1
-	cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256  uint16 = 0x00C2
-	cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256 uint16 = 0x00C3
-	cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256 uint16 = 0x00C4
-	cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256 uint16 = 0x00C5
-	// Unassigned uint16 =  0x00C6-FE
-	cipher_TLS_EMPTY_RENEGOTIATION_INFO_SCSV uint16 = 0x00FF
-	// Unassigned uint16 =  0x01-55,*
-	cipher_TLS_FALLBACK_SCSV uint16 = 0x5600
-	// Unassigned                                   uint16 = 0x5601 - 0xC000
-	cipher_TLS_ECDH_ECDSA_WITH_NULL_SHA                 uint16 = 0xC001
-	cipher_TLS_ECDH_ECDSA_WITH_RC4_128_SHA              uint16 = 0xC002
-	cipher_TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA         uint16 = 0xC003
-	cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA          uint16 = 0xC004
-	cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA          uint16 = 0xC005
-	cipher_TLS_ECDHE_ECDSA_WITH_NULL_SHA                uint16 = 0xC006
-	cipher_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA             uint16 = 0xC007
-	cipher_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA        uint16 = 0xC008
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA         uint16 = 0xC009
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA         uint16 = 0xC00A
-	cipher_TLS_ECDH_RSA_WITH_NULL_SHA                   uint16 = 0xC00B
-	cipher_TLS_ECDH_RSA_WITH_RC4_128_SHA                uint16 = 0xC00C
-	cipher_TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA           uint16 = 0xC00D
-	cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA            uint16 = 0xC00E
-	cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA            uint16 = 0xC00F
-	cipher_TLS_ECDHE_RSA_WITH_NULL_SHA                  uint16 = 0xC010
-	cipher_TLS_ECDHE_RSA_WITH_RC4_128_SHA               uint16 = 0xC011
-	cipher_TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA          uint16 = 0xC012
-	cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA           uint16 = 0xC013
-	cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA           uint16 = 0xC014
-	cipher_TLS_ECDH_anon_WITH_NULL_SHA                  uint16 = 0xC015
-	cipher_TLS_ECDH_anon_WITH_RC4_128_SHA               uint16 = 0xC016
-	cipher_TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA          uint16 = 0xC017
-	cipher_TLS_ECDH_anon_WITH_AES_128_CBC_SHA           uint16 = 0xC018
-	cipher_TLS_ECDH_anon_WITH_AES_256_CBC_SHA           uint16 = 0xC019
-	cipher_TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA            uint16 = 0xC01A
-	cipher_TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA        uint16 = 0xC01B
-	cipher_TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA        uint16 = 0xC01C
-	cipher_TLS_SRP_SHA_WITH_AES_128_CBC_SHA             uint16 = 0xC01D
-	cipher_TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA         uint16 = 0xC01E
-	cipher_TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA         uint16 = 0xC01F
-	cipher_TLS_SRP_SHA_WITH_AES_256_CBC_SHA             uint16 = 0xC020
-	cipher_TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA         uint16 = 0xC021
-	cipher_TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA         uint16 = 0xC022
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256      uint16 = 0xC023
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384      uint16 = 0xC024
-	cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256       uint16 = 0xC025
-	cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384       uint16 = 0xC026
-	cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256        uint16 = 0xC027
-	cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384        uint16 = 0xC028
-	cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256         uint16 = 0xC029
-	cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384         uint16 = 0xC02A
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256      uint16 = 0xC02B
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384      uint16 = 0xC02C
-	cipher_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256       uint16 = 0xC02D
-	cipher_TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384       uint16 = 0xC02E
-	cipher_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256        uint16 = 0xC02F
-	cipher_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384        uint16 = 0xC030
-	cipher_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256         uint16 = 0xC031
-	cipher_TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384         uint16 = 0xC032
-	cipher_TLS_ECDHE_PSK_WITH_RC4_128_SHA               uint16 = 0xC033
-	cipher_TLS_ECDHE_PSK_WITH_3DES_EDE_CBC_SHA          uint16 = 0xC034
-	cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA           uint16 = 0xC035
-	cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA           uint16 = 0xC036
-	cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256        uint16 = 0xC037
-	cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA384        uint16 = 0xC038
-	cipher_TLS_ECDHE_PSK_WITH_NULL_SHA                  uint16 = 0xC039
-	cipher_TLS_ECDHE_PSK_WITH_NULL_SHA256               uint16 = 0xC03A
-	cipher_TLS_ECDHE_PSK_WITH_NULL_SHA384               uint16 = 0xC03B
-	cipher_TLS_RSA_WITH_ARIA_128_CBC_SHA256             uint16 = 0xC03C
-	cipher_TLS_RSA_WITH_ARIA_256_CBC_SHA384             uint16 = 0xC03D
-	cipher_TLS_DH_DSS_WITH_ARIA_128_CBC_SHA256          uint16 = 0xC03E
-	cipher_TLS_DH_DSS_WITH_ARIA_256_CBC_SHA384          uint16 = 0xC03F
-	cipher_TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256          uint16 = 0xC040
-	cipher_TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384          uint16 = 0xC041
-	cipher_TLS_DHE_DSS_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC042
-	cipher_TLS_DHE_DSS_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC043
-	cipher_TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC044
-	cipher_TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC045
-	cipher_TLS_DH_anon_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC046
-	cipher_TLS_DH_anon_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC047
-	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256     uint16 = 0xC048
-	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384     uint16 = 0xC049
-	cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256      uint16 = 0xC04A
-	cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384      uint16 = 0xC04B
-	cipher_TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256       uint16 = 0xC04C
-	cipher_TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384       uint16 = 0xC04D
-	cipher_TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256        uint16 = 0xC04E
-	cipher_TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384        uint16 = 0xC04F
-	cipher_TLS_RSA_WITH_ARIA_128_GCM_SHA256             uint16 = 0xC050
-	cipher_TLS_RSA_WITH_ARIA_256_GCM_SHA384             uint16 = 0xC051
-	cipher_TLS_DHE_RSA_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC052
-	cipher_TLS_DHE_RSA_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC053
-	cipher_TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256          uint16 = 0xC054
-	cipher_TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384          uint16 = 0xC055
-	cipher_TLS_DHE_DSS_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC056
-	cipher_TLS_DHE_DSS_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC057
-	cipher_TLS_DH_DSS_WITH_ARIA_128_GCM_SHA256          uint16 = 0xC058
-	cipher_TLS_DH_DSS_WITH_ARIA_256_GCM_SHA384          uint16 = 0xC059
-	cipher_TLS_DH_anon_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC05A
-	cipher_TLS_DH_anon_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC05B
-	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256     uint16 = 0xC05C
-	cipher_TLS_ECDHE_ECDSA_WITH_ARIA_256_GCM_SHA384     uint16 = 0xC05D
-	cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256      uint16 = 0xC05E
-	cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384      uint16 = 0xC05F
-	cipher_TLS_ECDHE_RSA_WITH_ARIA_128_GCM_SHA256       uint16 = 0xC060
-	cipher_TLS_ECDHE_RSA_WITH_ARIA_256_GCM_SHA384       uint16 = 0xC061
-	cipher_TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256        uint16 = 0xC062
-	cipher_TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384        uint16 = 0xC063
-	cipher_TLS_PSK_WITH_ARIA_128_CBC_SHA256             uint16 = 0xC064
-	cipher_TLS_PSK_WITH_ARIA_256_CBC_SHA384             uint16 = 0xC065
-	cipher_TLS_DHE_PSK_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC066
-	cipher_TLS_DHE_PSK_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC067
-	cipher_TLS_RSA_PSK_WITH_ARIA_128_CBC_SHA256         uint16 = 0xC068
-	cipher_TLS_RSA_PSK_WITH_ARIA_256_CBC_SHA384         uint16 = 0xC069
-	cipher_TLS_PSK_WITH_ARIA_128_GCM_SHA256             uint16 = 0xC06A
-	cipher_TLS_PSK_WITH_ARIA_256_GCM_SHA384             uint16 = 0xC06B
-	cipher_TLS_DHE_PSK_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC06C
-	cipher_TLS_DHE_PSK_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC06D
-	cipher_TLS_RSA_PSK_WITH_ARIA_128_GCM_SHA256         uint16 = 0xC06E
-	cipher_TLS_RSA_PSK_WITH_ARIA_256_GCM_SHA384         uint16 = 0xC06F
-	cipher_TLS_ECDHE_PSK_WITH_ARIA_128_CBC_SHA256       uint16 = 0xC070
-	cipher_TLS_ECDHE_PSK_WITH_ARIA_256_CBC_SHA384       uint16 = 0xC071
-	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256 uint16 = 0xC072
-	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384 uint16 = 0xC073
-	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256  uint16 = 0xC074
-	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384  uint16 = 0xC075
-	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256   uint16 = 0xC076
-	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384   uint16 = 0xC077
-	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256    uint16 = 0xC078
-	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384    uint16 = 0xC079
-	cipher_TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256         uint16 = 0xC07A
-	cipher_TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384         uint16 = 0xC07B
-	cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC07C
-	cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC07D
-	cipher_TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256      uint16 = 0xC07E
-	cipher_TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384      uint16 = 0xC07F
-	cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC080
-	cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC081
-	cipher_TLS_DH_DSS_WITH_CAMELLIA_128_GCM_SHA256      uint16 = 0xC082
-	cipher_TLS_DH_DSS_WITH_CAMELLIA_256_GCM_SHA384      uint16 = 0xC083
-	cipher_TLS_DH_anon_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC084
-	cipher_TLS_DH_anon_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC085
-	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_GCM_SHA256 uint16 = 0xC086
-	cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384 uint16 = 0xC087
-	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256  uint16 = 0xC088
-	cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384  uint16 = 0xC089
-	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_128_GCM_SHA256   uint16 = 0xC08A
-	cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_256_GCM_SHA384   uint16 = 0xC08B
-	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256    uint16 = 0xC08C
-	cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384    uint16 = 0xC08D
-	cipher_TLS_PSK_WITH_CAMELLIA_128_GCM_SHA256         uint16 = 0xC08E
-	cipher_TLS_PSK_WITH_CAMELLIA_256_GCM_SHA384         uint16 = 0xC08F
-	cipher_TLS_DHE_PSK_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC090
-	cipher_TLS_DHE_PSK_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC091
-	cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_GCM_SHA256     uint16 = 0xC092
-	cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_GCM_SHA384     uint16 = 0xC093
-	cipher_TLS_PSK_WITH_CAMELLIA_128_CBC_SHA256         uint16 = 0xC094
-	cipher_TLS_PSK_WITH_CAMELLIA_256_CBC_SHA384         uint16 = 0xC095
-	cipher_TLS_DHE_PSK_WITH_CAMELLIA_128_CBC_SHA256     uint16 = 0xC096
-	cipher_TLS_DHE_PSK_WITH_CAMELLIA_256_CBC_SHA384     uint16 = 0xC097
-	cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_CBC_SHA256     uint16 = 0xC098
-	cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_CBC_SHA384     uint16 = 0xC099
-	cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_128_CBC_SHA256   uint16 = 0xC09A
-	cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_256_CBC_SHA384   uint16 = 0xC09B
-	cipher_TLS_RSA_WITH_AES_128_CCM                     uint16 = 0xC09C
-	cipher_TLS_RSA_WITH_AES_256_CCM                     uint16 = 0xC09D
-	cipher_TLS_DHE_RSA_WITH_AES_128_CCM                 uint16 = 0xC09E
-	cipher_TLS_DHE_RSA_WITH_AES_256_CCM                 uint16 = 0xC09F
-	cipher_TLS_RSA_WITH_AES_128_CCM_8                   uint16 = 0xC0A0
-	cipher_TLS_RSA_WITH_AES_256_CCM_8                   uint16 = 0xC0A1
-	cipher_TLS_DHE_RSA_WITH_AES_128_CCM_8               uint16 = 0xC0A2
-	cipher_TLS_DHE_RSA_WITH_AES_256_CCM_8               uint16 = 0xC0A3
-	cipher_TLS_PSK_WITH_AES_128_CCM                     uint16 = 0xC0A4
-	cipher_TLS_PSK_WITH_AES_256_CCM                     uint16 = 0xC0A5
-	cipher_TLS_DHE_PSK_WITH_AES_128_CCM                 uint16 = 0xC0A6
-	cipher_TLS_DHE_PSK_WITH_AES_256_CCM                 uint16 = 0xC0A7
-	cipher_TLS_PSK_WITH_AES_128_CCM_8                   uint16 = 0xC0A8
-	cipher_TLS_PSK_WITH_AES_256_CCM_8                   uint16 = 0xC0A9
-	cipher_TLS_PSK_DHE_WITH_AES_128_CCM_8               uint16 = 0xC0AA
-	cipher_TLS_PSK_DHE_WITH_AES_256_CCM_8               uint16 = 0xC0AB
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CCM             uint16 = 0xC0AC
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CCM             uint16 = 0xC0AD
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8           uint16 = 0xC0AE
-	cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8           uint16 = 0xC0AF
-	// Unassigned uint16 =  0xC0B0-FF
-	// Unassigned uint16 =  0xC1-CB,*
-	// Unassigned uint16 =  0xCC00-A7
-	cipher_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256   uint16 = 0xCCA8
-	cipher_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 uint16 = 0xCCA9
-	cipher_TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256     uint16 = 0xCCAA
-	cipher_TLS_PSK_WITH_CHACHA20_POLY1305_SHA256         uint16 = 0xCCAB
-	cipher_TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256   uint16 = 0xCCAC
-	cipher_TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256     uint16 = 0xCCAD
-	cipher_TLS_RSA_PSK_WITH_CHACHA20_POLY1305_SHA256     uint16 = 0xCCAE
-)
-
-// isBadCipher reports whether the cipher is blacklisted by the HTTP/2 spec.
-// References:
-// https://tools.ietf.org/html/rfc7540#appendix-A
-// Reject cipher suites from Appendix A.
-// "This list includes those cipher suites that do not
-// offer an ephemeral key exchange and those that are
-// based on the TLS null, stream or block cipher type"
-func isBadCipher(cipher uint16) bool {
-	switch cipher {
-	case cipher_TLS_NULL_WITH_NULL_NULL,
-		cipher_TLS_RSA_WITH_NULL_MD5,
-		cipher_TLS_RSA_WITH_NULL_SHA,
-		cipher_TLS_RSA_EXPORT_WITH_RC4_40_MD5,
-		cipher_TLS_RSA_WITH_RC4_128_MD5,
-		cipher_TLS_RSA_WITH_RC4_128_SHA,
-		cipher_TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5,
-		cipher_TLS_RSA_WITH_IDEA_CBC_SHA,
-		cipher_TLS_RSA_EXPORT_WITH_DES40_CBC_SHA,
-		cipher_TLS_RSA_WITH_DES_CBC_SHA,
-		cipher_TLS_RSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_DH_DSS_EXPORT_WITH_DES40_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_DES_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_DH_RSA_EXPORT_WITH_DES40_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_DES_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_DES_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_DES_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_DH_anon_EXPORT_WITH_RC4_40_MD5,
-		cipher_TLS_DH_anon_WITH_RC4_128_MD5,
-		cipher_TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_DES_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_KRB5_WITH_DES_CBC_SHA,
-		cipher_TLS_KRB5_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_KRB5_WITH_RC4_128_SHA,
-		cipher_TLS_KRB5_WITH_IDEA_CBC_SHA,
-		cipher_TLS_KRB5_WITH_DES_CBC_MD5,
-		cipher_TLS_KRB5_WITH_3DES_EDE_CBC_MD5,
-		cipher_TLS_KRB5_WITH_RC4_128_MD5,
-		cipher_TLS_KRB5_WITH_IDEA_CBC_MD5,
-		cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_SHA,
-		cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_SHA,
-		cipher_TLS_KRB5_EXPORT_WITH_RC4_40_SHA,
-		cipher_TLS_KRB5_EXPORT_WITH_DES_CBC_40_MD5,
-		cipher_TLS_KRB5_EXPORT_WITH_RC2_CBC_40_MD5,
-		cipher_TLS_KRB5_EXPORT_WITH_RC4_40_MD5,
-		cipher_TLS_PSK_WITH_NULL_SHA,
-		cipher_TLS_DHE_PSK_WITH_NULL_SHA,
-		cipher_TLS_RSA_PSK_WITH_NULL_SHA,
-		cipher_TLS_RSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA,
-		cipher_TLS_RSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA,
-		cipher_TLS_RSA_WITH_NULL_SHA256,
-		cipher_TLS_RSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_RSA_WITH_AES_256_CBC_SHA256,
-		cipher_TLS_DH_DSS_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_DH_RSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_DHE_DSS_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_DH_DSS_WITH_AES_256_CBC_SHA256,
-		cipher_TLS_DH_RSA_WITH_AES_256_CBC_SHA256,
-		cipher_TLS_DHE_DSS_WITH_AES_256_CBC_SHA256,
-		cipher_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
-		cipher_TLS_DH_anon_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_DH_anon_WITH_AES_256_CBC_SHA256,
-		cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA,
-		cipher_TLS_PSK_WITH_RC4_128_SHA,
-		cipher_TLS_PSK_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_PSK_WITH_AES_128_CBC_SHA,
-		cipher_TLS_PSK_WITH_AES_256_CBC_SHA,
-		cipher_TLS_DHE_PSK_WITH_RC4_128_SHA,
-		cipher_TLS_DHE_PSK_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA,
-		cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA,
-		cipher_TLS_RSA_PSK_WITH_RC4_128_SHA,
-		cipher_TLS_RSA_PSK_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA,
-		cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA,
-		cipher_TLS_RSA_WITH_SEED_CBC_SHA,
-		cipher_TLS_DH_DSS_WITH_SEED_CBC_SHA,
-		cipher_TLS_DH_RSA_WITH_SEED_CBC_SHA,
-		cipher_TLS_DHE_DSS_WITH_SEED_CBC_SHA,
-		cipher_TLS_DHE_RSA_WITH_SEED_CBC_SHA,
-		cipher_TLS_DH_anon_WITH_SEED_CBC_SHA,
-		cipher_TLS_RSA_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_RSA_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_DH_RSA_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_DH_RSA_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_DH_DSS_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_DH_DSS_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_DH_anon_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_DH_anon_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_PSK_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_PSK_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_RSA_PSK_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_RSA_PSK_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_PSK_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_PSK_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_PSK_WITH_NULL_SHA256,
-		cipher_TLS_PSK_WITH_NULL_SHA384,
-		cipher_TLS_DHE_PSK_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_DHE_PSK_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_DHE_PSK_WITH_NULL_SHA256,
-		cipher_TLS_DHE_PSK_WITH_NULL_SHA384,
-		cipher_TLS_RSA_PSK_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_RSA_PSK_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_RSA_PSK_WITH_NULL_SHA256,
-		cipher_TLS_RSA_PSK_WITH_NULL_SHA384,
-		cipher_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-		cipher_TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA256,
-		cipher_TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-		cipher_TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256,
-		cipher_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-		cipher_TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256,
-		cipher_TLS_EMPTY_RENEGOTIATION_INFO_SCSV,
-		cipher_TLS_ECDH_ECDSA_WITH_NULL_SHA,
-		cipher_TLS_ECDH_ECDSA_WITH_RC4_128_SHA,
-		cipher_TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_ECDHE_ECDSA_WITH_NULL_SHA,
-		cipher_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
-		cipher_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_ECDH_RSA_WITH_NULL_SHA,
-		cipher_TLS_ECDH_RSA_WITH_RC4_128_SHA,
-		cipher_TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_ECDHE_RSA_WITH_NULL_SHA,
-		cipher_TLS_ECDHE_RSA_WITH_RC4_128_SHA,
-		cipher_TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_ECDH_anon_WITH_NULL_SHA,
-		cipher_TLS_ECDH_anon_WITH_RC4_128_SHA,
-		cipher_TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_ECDH_anon_WITH_AES_128_CBC_SHA,
-		cipher_TLS_ECDH_anon_WITH_AES_256_CBC_SHA,
-		cipher_TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_SRP_SHA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA,
-		cipher_TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA,
-		cipher_TLS_SRP_SHA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA,
-		cipher_TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA,
-		cipher_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256,
-		cipher_TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384,
-		cipher_TLS_ECDHE_PSK_WITH_RC4_128_SHA,
-		cipher_TLS_ECDHE_PSK_WITH_3DES_EDE_CBC_SHA,
-		cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA,
-		cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA,
-		cipher_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256,
-		cipher_TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA384,
-		cipher_TLS_ECDHE_PSK_WITH_NULL_SHA,
-		cipher_TLS_ECDHE_PSK_WITH_NULL_SHA256,
-		cipher_TLS_ECDHE_PSK_WITH_NULL_SHA384,
-		cipher_TLS_RSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_RSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_DH_DSS_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_DH_DSS_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_DHE_DSS_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_DHE_DSS_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_DH_anon_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_DH_anon_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_RSA_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_RSA_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_DH_DSS_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_DH_DSS_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_DH_anon_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_DH_anon_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_PSK_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_PSK_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_DHE_PSK_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_DHE_PSK_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_RSA_PSK_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_RSA_PSK_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_PSK_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_PSK_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_RSA_PSK_WITH_ARIA_128_GCM_SHA256,
-		cipher_TLS_RSA_PSK_WITH_ARIA_256_GCM_SHA384,
-		cipher_TLS_ECDHE_PSK_WITH_ARIA_128_CBC_SHA256,
-		cipher_TLS_ECDHE_PSK_WITH_ARIA_256_CBC_SHA384,
-		cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_DH_DSS_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_DH_DSS_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_DH_anon_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_DH_anon_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_PSK_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_PSK_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_GCM_SHA256,
-		cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_GCM_SHA384,
-		cipher_TLS_PSK_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_PSK_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_DHE_PSK_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_DHE_PSK_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_RSA_PSK_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_RSA_PSK_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_128_CBC_SHA256,
-		cipher_TLS_ECDHE_PSK_WITH_CAMELLIA_256_CBC_SHA384,
-		cipher_TLS_RSA_WITH_AES_128_CCM,
-		cipher_TLS_RSA_WITH_AES_256_CCM,
-		cipher_TLS_RSA_WITH_AES_128_CCM_8,
-		cipher_TLS_RSA_WITH_AES_256_CCM_8,
-		cipher_TLS_PSK_WITH_AES_128_CCM,
-		cipher_TLS_PSK_WITH_AES_256_CCM,
-		cipher_TLS_PSK_WITH_AES_128_CCM_8,
-		cipher_TLS_PSK_WITH_AES_256_CCM_8:
-		return true
-	default:
-		return false
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/client_conn_pool.go","mode":420,"size":8075,"sha256":"ee773ca6b4e00a999f916214138ca74ea06a9d3d8d6fdffba354871587019dcf","index":0,"count":1,"encoding":"utf-8","payloadBytes":8075}
-// Copyright 2015 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:build !(go1.27 && !http2legacy)
-
-// Transport code's client connection pooling.
-
-package http2
-
-import (
-	"context"
-	"errors"
-	"net"
-	"net/http"
-	"sync"
-)
-
-// clientConnPoolIdleCloser is the interface implemented by ClientConnPool
-// implementations which can close their idle connections.
-type clientConnPoolIdleCloser interface {
-	ClientConnPool
-	closeIdleConnections()
-}
-
-var (
-	_ clientConnPoolIdleCloser = (*clientConnPool)(nil)
-	_ clientConnPoolIdleCloser = noDialClientConnPool{}
-)
-
-// TODO: use singleflight for dialing and addConnCalls?
-type clientConnPool struct {
-	t *Transport
-
-	mu sync.Mutex // TODO: maybe switch to RWMutex
-	// TODO: add support for sharing conns based on cert names
-	// (e.g. share conn for googleapis.com and appspot.com)
-	conns        map[string][]*ClientConn // key is host:port
-	dialing      map[string]*dialCall     // currently in-flight dials
-	keys         map[*ClientConn][]string
-	addConnCalls map[string]*addConnCall // in-flight addConnIfNeeded calls
-}
-
-func (p *clientConnPool) GetClientConn(req *http.Request, addr string) (*ClientConn, error) {
-	return p.getClientConn(req, addr, dialOnMiss)
-}
-
-const (
-	dialOnMiss   = true
-	noDialOnMiss = false
-)
-
-func (p *clientConnPool) getClientConn(req *http.Request, addr string, dialOnMiss bool) (*ClientConn, error) {
-	// TODO(dneil): Dial a new connection when t.DisableKeepAlives is set?
-	if isConnectionCloseRequest(req) && dialOnMiss {
-		// It gets its own connection.
-		traceGetConn(req, addr)
-		const singleUse = true
-		cc, err := p.t.dialClientConn(req.Context(), addr, singleUse)
-		if err != nil {
-			return nil, err
-		}
-		return cc, nil
-	}
-	for {
-		p.mu.Lock()
-		for _, cc := range p.conns[addr] {
-			if cc.ReserveNewRequest() {
-				// When a connection is presented to us by the net/http package,
-				// the GetConn hook has already been called.
-				// Don't call it a second time here.
-				if !cc.getConnCalled {
-					traceGetConn(req, addr)
-				}
-				cc.getConnCalled = false
-				p.mu.Unlock()
-				return cc, nil
-			}
-		}
-		if !dialOnMiss {
-			p.mu.Unlock()
-			return nil, ErrNoCachedConn
-		}
-		traceGetConn(req, addr)
-		call := p.getStartDialLocked(req.Context(), addr)
-		p.mu.Unlock()
-		<-call.done
-		if shouldRetryDial(call, req) {
-			continue
-		}
-		cc, err := call.res, call.err
-		if err != nil {
-			return nil, err
-		}
-		if cc.ReserveNewRequest() {
-			return cc, nil
-		}
-	}
-}
-
-// dialCall is an in-flight Transport dial call to a host.
-type dialCall struct {
-	_ incomparable
-	p *clientConnPool
-	// the context associated with the request
-	// that created this dialCall
-	ctx  context.Context
-	done chan struct{} // closed when done
-	res  *ClientConn   // valid after done is closed
-	err  error         // valid after done is closed
-}
-
-// requires p.mu is held.
-func (p *clientConnPool) getStartDialLocked(ctx context.Context, addr string) *dialCall {
-	if call, ok := p.dialing[addr]; ok {
-		// A dial is already in-flight. Don't start another.
-		return call
-	}
-	call := &dialCall{p: p, done: make(chan struct{}), ctx: ctx}
-	if p.dialing == nil {
-		p.dialing = make(map[string]*dialCall)
-	}
-	p.dialing[addr] = call
-	go call.dial(call.ctx, addr)
-	return call
-}
-
-// run in its own goroutine.
-func (c *dialCall) dial(ctx context.Context, addr string) {
-	const singleUse = false // shared conn
-	c.res, c.err = c.p.t.dialClientConn(ctx, addr, singleUse)
-
-	c.p.mu.Lock()
-	delete(c.p.dialing, addr)
-	if c.err == nil {
-		c.p.addConnLocked(addr, c.res)
-	}
-	c.p.mu.Unlock()
-
-	close(c.done)
-}
-
-// addConnIfNeeded makes a NewClientConn out of c if a connection for key doesn't
-// already exist. It coalesces concurrent calls with the same key.
-// This is used by the http1 Transport code when it creates a new connection. Because
-// the http1 Transport doesn't de-dup TCP dials to outbound hosts (because it doesn't know
-// the protocol), it can get into a situation where it has multiple TLS connections.
-// This code decides which ones live or die.
-// The return value used is whether c was used.
-// c is never closed.
-func (p *clientConnPool) addConnIfNeeded(key string, t *Transport, c net.Conn) (used bool, err error) {
-	p.mu.Lock()
-	for _, cc := range p.conns[key] {
-		if cc.CanTakeNewRequest() {
-			p.mu.Unlock()
-			return false, nil
-		}
-	}
-	call, dup := p.addConnCalls[key]
-	if !dup {
-		if p.addConnCalls == nil {
-			p.addConnCalls = make(map[string]*addConnCall)
-		}
-		call = &addConnCall{
-			p:    p,
-			done: make(chan struct{}),
-		}
-		p.addConnCalls[key] = call
-		go call.run(t, key, c)
-	}
-	p.mu.Unlock()
-
-	<-call.done
-	if call.err != nil {
-		return false, call.err
-	}
-	return !dup, nil
-}
-
-type addConnCall struct {
-	_    incomparable
-	p    *clientConnPool
-	done chan struct{} // closed when done
-	err  error
-}
-
-func (c *addConnCall) run(t *Transport, key string, nc net.Conn) {
-	cc, err := t.NewClientConn(nc)
-
-	p := c.p
-	p.mu.Lock()
-	if err != nil {
-		c.err = err
-	} else {
-		cc.getConnCalled = true // already called by the net/http package
-		p.addConnLocked(key, cc)
-	}
-	delete(p.addConnCalls, key)
-	p.mu.Unlock()
-	close(c.done)
-}
-
-// p.mu must be held
-func (p *clientConnPool) addConnLocked(key string, cc *ClientConn) {
-	for _, v := range p.conns[key] {
-		if v == cc {
-			return
-		}
-	}
-	if p.conns == nil {
-		p.conns = make(map[string][]*ClientConn)
-	}
-	if p.keys == nil {
-		p.keys = make(map[*ClientConn][]string)
-	}
-	p.conns[key] = append(p.conns[key], cc)
-	p.keys[cc] = append(p.keys[cc], key)
-}
-
-func (p *clientConnPool) MarkDead(cc *ClientConn) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for _, key := range p.keys[cc] {
-		vv, ok := p.conns[key]
-		if !ok {
-			continue
-		}
-		newList := filterOutClientConn(vv, cc)
-		if len(newList) > 0 {
-			p.conns[key] = newList
-		} else {
-			delete(p.conns, key)
-		}
-	}
-	delete(p.keys, cc)
-}
-
-func (p *clientConnPool) closeIdleConnections() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	// TODO: don't close a cc if it was just added to the pool
-	// milliseconds ago and has never been used. There's currently
-	// a small race window with the HTTP/1 Transport's integration
-	// where it can add an idle conn just before using it, and
-	// somebody else can concurrently call CloseIdleConns and
-	// break some caller's RoundTrip.
-	for _, vv := range p.conns {
-		for _, cc := range vv {
-			cc.closeIfIdle()
-		}
-	}
-}
-
-func filterOutClientConn(in []*ClientConn, exclude *ClientConn) []*ClientConn {
-	out := in[:0]
-	for _, v := range in {
-		if v != exclude {
-			out = append(out, v)
-		}
-	}
-	// If we filtered it out, zero out the last item to prevent
-	// the GC from seeing it.
-	if len(in) != len(out) {
-		in[len(in)-1] = nil
-	}
-	return out
-}
-
-// noDialClientConnPool is an implementation of http2.ClientConnPool
-// which never dials. We let the HTTP/1.1 client dial and use its TLS
-// connection instead.
-type noDialClientConnPool struct{ *clientConnPool }
-
-func (p noDialClientConnPool) GetClientConn(req *http.Request, addr string) (*ClientConn, error) {
-	return p.getClientConn(req, addr, noDialOnMiss)
-}
-
-// shouldRetryDial reports whether the current request should
-// retry dialing after the call finished unsuccessfully, for example
-// if the dial was canceled because of a context cancellation or
-// deadline expiry.
-func shouldRetryDial(call *dialCall, req *http.Request) bool {
-	if call.err == nil {
-		// No error, no need to retry
-		return false
-	}
-	if call.ctx == req.Context() {
-		// If the call has the same context as the request, the dial
-		// should not be retried, since any cancellation will have come
-		// from this request.
-		return false
-	}
-	if !errors.Is(call.err, context.Canceled) && !errors.Is(call.err, context.DeadlineExceeded) {
-		// If the call error is not because of a context cancellation or a deadline expiry,
-		// the dial should not be retried.
-		return false
-	}
-	// Only retry if the error is a context cancellation error or deadline expiry
-	// and the context associated with the call was canceled or expired.
-	return call.ctx.Err() != nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/client_priority_go126.go","mode":420,"size":705,"sha256":"b51147502bb7e74c384f1dd249c951920055b380d18fe38862532f8f24736db9","index":0,"count":1,"encoding":"utf-8","payloadBytes":705}
-// Copyright 2026 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:build !go1.27
-
-package http2
-
-import "net/http"
-
-// Support for go.dev/issue/75500 is added in Go 1.27. In case anyone uses
-// x/net with versions before Go 1.27, we return true here so that their write
-// scheduler will still be the round-robin write scheduler rather than the RFC
-// 9218 write scheduler. That way, older users of Go will not see a sudden
-// change of behavior just from importing x/net.
-//
-// TODO(nsh): remove this file after x/net go.mod is at Go 1.27.
-func clientPriorityDisabled(_ *http.Server) bool {
-	return true
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/client_priority_go127.go","mode":420,"size":298,"sha256":"49ebedf409518018a7b5f79f4376894fa69921c02db93a91c3ec5a699820704a","index":0,"count":1,"encoding":"utf-8","payloadBytes":298}
-// Copyright 2026 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:build go1.27
-
-package http2
-
-import "net/http"
-
-func clientPriorityDisabled(s *http.Server) bool {
-	return s.DisableClientPriority
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/http2/clientconn.go","mode":420,"size":1668,"sha256":"75517095356686258410eebac3a058152f4e4fcf85d98732e55e72db3d8860b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1668}
-// Copyright 2026 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package http2
-
-import (
-	"context"
-	"net/http"
-)
-
-func (cc *ClientConn) RoundTrip(req *http.Request) (*http.Response, error) {
-	return cc.roundTrip(req)
-}
-
-// SetDoNotReuse marks cc as not reusable for future HTTP requests.
-func (cc *ClientConn) SetDoNotReuse() {
-	cc.setDoNotReuse()
-}
-
-// CanTakeNewRequest reports whether the connection can take a new request,
-// meaning it has not been closed or received or sent a GOAWAY.
-//
-// If the caller is going to immediately make a new request on this
-// connection, use ReserveNewRequest instead.
-func (cc *ClientConn) CanTakeNewRequest() bool {
-	return cc.canTakeNewRequest()
-}
-
-// ReserveNewRequest is like CanTakeNewRequest but also reserves a
-// concurrent stream in cc. The reservation is decremented on the
-// next call to RoundTrip.
-func (cc *ClientConn) ReserveNewRequest() bool {
-	return cc.reserveNewRequest()
-}
-
-// State returns a snapshot of cc's state.
-func (cc *ClientConn) State() ClientConnState {
-	return cc.state()
-}
-
-// Shutdown gracefully closes the client connection, waiting for running streams to complete.
-func (cc *ClientConn) Shutdown(ctx context.Context) error {
-	return cc.shutdown(ctx)
-}
-
-// Close closes the client connection immediately.
-//
-// In-flight requests are interrupted. For a graceful shutdown, use Shutdown instead.
-func (cc *ClientConn) Close() error {
-	return cc.close()
-}
-
-// Ping sends a PING frame to the server and waits for the ack.
-func (cc *ClientConn) Ping(ctx context.Context) error {
-	return cc.ping(ctx)
 }
 
 @@END
