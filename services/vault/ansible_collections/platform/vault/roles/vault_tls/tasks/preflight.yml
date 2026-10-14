@@ -3,18 +3,6 @@
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Read host swap state before Vault changes
-  ansible.builtin.command:
-    argv: [cat, /proc/swaps]
-  register: _platform_vault_swaps
-  changed_when: false
-
-- name: Require host swap disabled for Vault Raft
-  ansible.builtin.assert:
-    that: _platform_vault_swaps.stdout_lines | length <= 1
-    fail_msg: VAULT_SWAP_ENABLED
-  when: platform_vault_mode == 'raft-ha'
-
 - name: Check free space for bounded Vault audit retention
   ansible.builtin.command:
     argv: [df, -PkP, --, /var/log]

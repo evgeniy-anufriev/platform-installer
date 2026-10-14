@@ -24,6 +24,8 @@
     member_id: "{{ item.id }}"
     data_directory: "{{ item.data_directory }}"
     confirmation: "{{ platform_vault_confirm_destructive_reset }}"
+    data_root_directory: "{{ platform_data_root_directory if platform_data_root_directory is defined and platform_data_root_directory != '/var/lib' and item.data_directory.startswith(platform_data_root_directory ~ '/') else omit }}"
+    data_root_owner: "{{ (ansible_user | default('root', true)) if platform_data_root_directory is defined and platform_data_root_directory != '/var/lib' and item.data_directory.startswith(platform_data_root_directory ~ '/') else omit }}"
   loop: "{{ _platform_vault_local_instances }}"
   loop_control:
     label: "{{ item.id }}"

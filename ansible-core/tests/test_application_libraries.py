@@ -117,7 +117,12 @@ class ApplicationLibrariesTest(unittest.TestCase):
         result = APP.resolve_connection("kafka", {}, "CLIENT_SSL", desired, effective, {}, {"node1": {"ansibleHost": "192.0.2.1"}})
         self.assertEqual(19094, result["targets"][0]["port"])
         self.assertTrue(result["targets"][0]["tls"])
-        for selector in (None, "SSL", "UNKNOWN"):
+        shared = APP.resolve_connection("kafka", {}, "SSL", desired, effective, {}, {"node1": {"ansibleHost": "192.0.2.1"}})
+        self.assertEqual(9094, shared["targets"][0]["port"])
+        self.assertTrue(shared["targets"][0]["tls"])
+        effective['services']['kafka']['configuration']['listeners']['value']['CONTROLLER'] = {
+            'purpose': 'controller', 'securityProtocol': 'SSL', 'port': 9093}
+        for selector in (None, "CONTROLLER", "UNKNOWN"):
             with self.subTest(selector=selector), self.assertRaises(ValueError):
                 APP.resolve_connection("kafka", {}, selector, desired, effective, {}, {"node1": {"ansibleHost": "192.0.2.1"}})
 

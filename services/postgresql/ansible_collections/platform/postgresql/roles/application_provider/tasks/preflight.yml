@@ -44,7 +44,8 @@
 - name: Require existing TLS material and verified server identity before mutations
   ansible.builtin.command:
     argv: "{{ ['timeout', '--kill-after=2s', '10s', 'openssl', 's_client', '-starttls', 'postgres', '-connect', application_provider_target.address ~ ':' ~ application_provider_target.port, '-CAfile', application_provider_target.pkiPlans[0].targetDirectory ~ '/ca-chain.pem', '-verify_return_error', ('-verify_ip' if application_provider_target.address is match('^[0-9.]+$') else '-verify_hostname'), application_provider_target.address] }}"
-    stdin: ''
+    # Quit s_client after the verified handshake instead of waiting for input.
+    stdin: Q
   vars:
     application_provider_check_objects: true
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"

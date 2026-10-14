@@ -19,6 +19,8 @@ options:
   data_directory: {type: str, required: true}
   confirmation: {type: str, required: true}
   inspect_only: {type: bool, default: false}
+  data_root_directory: {type: str, default: ''}
+  data_root_owner: {type: str, default: ''}
 author: Platform Installer
 '''
 EXAMPLES = r'''
@@ -60,7 +62,8 @@ def private_mount_namespace():
             'VAULT_CLEAR_MOUNT_ISOLATION_UNAVAILABLE')  # MS_PRIVATE | MS_REC
 
 
-def owned_directory(stack, path, service_uid=None, service_owned_ancestors=False):
+def owned_directory(stack, path, service_uid=None, service_owned_ancestors=False,
+                    data_root=None):
     fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     stack.callback(os.close, fd)
     components = path.strip('/').split('/')
@@ -76,6 +79,9 @@ def owned_directory(stack, path, service_uid=None, service_owned_ancestors=False
                     'VAULT_CLEAR_PATH_UNSAFE')
         else:
             allowed_owners = (0, service_uid) if service_owned_ancestors else (0,)
+            if (data_root is not None and
+                    '/' + '/'.join(components[:index + 1]) == data_root[0]):
+                allowed_owners = allowed_owners + (data_root[1],)
             require(metadata.st_uid in allowed_owners and metadata.st_mode & 0o022 == 0,
                     'VAULT_CLEAR_PATH_UNSAFE')
     return fd
@@ -181,7 +187,8 @@ def same_source(fd, path):
             stat.S_ISDIR(current.st_mode), 'VAULT_CLEAR_SOURCE_CHANGED')
 
 
-def clear_member(deployment, member, data_directory, confirmation, inspect_only=False, name_prefix=''):
+def clear_member(deployment, member, data_directory, confirmation, inspect_only=False, name_prefix='',
+                 data_root_directory='', data_root_owner=''):
     require(isinstance(name_prefix, str) and
             (name_prefix == '' or re.fullmatch(r'[a-z][a-z0-9_]{0,23}', name_prefix) is not None),
             'VAULT_CLEAR_IDENTITY_INVALID')
@@ -207,9 +214,24 @@ def clear_member(deployment, member, data_directory, confirmation, inspect_only=
     unit = service_name + '@' + deployment + '-' + member.rsplit('-', 1)[1]
     require(len(unit + '.service') <= 255, 'VAULT_CLEAR_IDENTITY_INVALID')
     data = data_directory
+    data_root = None
+    if data_root_directory or data_root_owner:
+        require(isinstance(data_root_directory, str) and
+                data_root_directory.startswith('/') and
+                all(component not in ('', '.', '..')
+                    for component in data_root_directory[1:].split('/')) and
+                data.startswith(data_root_directory + '/') and
+                isinstance(data_root_owner, str) and
+                re.fullmatch(r'[a-z_][a-z0-9_-]*', data_root_owner) is not None,
+                'VAULT_CLEAR_PATH_UNSAFE')
+        root_uid = pwd.getpwnam(data_root_owner).pw_uid
+        require(data_root_directory != '/var/lib' or root_uid == 0,
+                'VAULT_CLEAR_PATH_UNSAFE')
+        data_root = (data_root_directory, root_uid)
     config = config_root + '/' + deployment + '/' + member + '/vault.hcl'
     with ExitStack() as stack:
-        directory = owned_directory(stack, data, uid, service_owned_ancestors=True)
+        directory = owned_directory(stack, data, uid, service_owned_ancestors=True,
+                                    data_root=data_root)
         marker = json.loads(read_owned_file(directory, marker_name, uid, 4096, private=True))
         require(marker == {'apiVersion': 'platform.installer/vault-member-marker/v1alpha1',
                            'deploymentId': deployment, 'memberId': member, 'instanceName': unit},
@@ -257,12 +279,16 @@ def main():
         'confirmation': {'type': 'str', 'required': True},
         'inspect_only': {'type': 'bool', 'default': False},
         'name_prefix': {'type': 'str', 'default': ''},
+        'data_root_directory': {'type': 'str', 'default': ''},
+        'data_root_owner': {'type': 'str', 'default': ''},
     }, supports_check_mode=True)
     try:
         predicted = clear_member(module.params['deployment_id'], module.params['member_id'],
                                  module.params['data_directory'], module.params['confirmation'],
                                  module.params['inspect_only'] or module.check_mode,
-                                 module.params['name_prefix'])
+                                 module.params['name_prefix'],
+                                 module.params['data_root_directory'],
+                                 module.params['data_root_owner'])
         module.exit_json(changed=predicted if module.check_mode or
                          not module.params['inspect_only'] else False)
     except ClearFailure as error:

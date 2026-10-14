@@ -1,7 +1,8 @@
 # A9 — полная приёмка standalone Ansible + Core
 
-Дата: 2026-10-13. Статус: технический план для согласования.
-Этот документ не разрешает запуск изменяющего QA и не утверждает PASS.
+Дата: 2026-10-13. Статус: план принят владельцем; А9 QA начат.
+Разрешение владельца: «Выполни комит и приступай к А9».
+Документ не утверждает PASS; результаты находятся в evidence/a9-test-journal.md.
 Текущие разрешения и состояние этапов находятся в CURRENT_STATE.md.
 
 ## 1. Цель и границы (Test Scope)
@@ -97,7 +98,12 @@ Image ID, registry digest и SHA256 Docker archive — разные иденти
 QA overrides: процесс /usr/bin/connection-probe, HTTP container port 8080;
 явный Agent entrypoint /usr/bin/vault agent -config=/opt/vault/agent.hcl;
 readonly PKCS12 material и tmpfs /run/probe. Не менять production binary convention.
-Kafka connectionRef=CLIENT_SSL задаётся в library defaults для serviceType kafka;
+Kafka connectionRef=SSL задаётся в library defaults для serviceType kafka
+по решению владельца 2026-10-13: использовать существующий SSL listener9094
+full-services, без добавления CLIENT_SSL или перезапуска инфраструктуры.
+Явно выбранный interBroker listener брокера обслуживает Kafka protocol;
+controller listener не разрешается для приложения. Это ограниченная корректировка
+Core resolver с отдельным независимым DIFF review и focused tests;
 прочие refs выводятся только при однозначном подходящем connection.
 
 Разные database names/principals/secret refs библиотек позволяют проверить
@@ -232,7 +238,7 @@ desired source с сохранением infrastructure records.
 | A9-Q10 | Stale revision/runtime/scope/lease | Existing contract reject, без target mutation |
 | A9-Q11 | Отсутствующие service refs / no-secret app | Optional hooks отсутствуют; dangling required binding rejected |
 | A9-Q12 | Shared-only secrets без managed accounts | Agent/policy/shared reads работают, accounts hooks отсутствуют |
-| A9-Q13 | Multi-listener ambiguity | Явный Kafka CLIENT_SSL; неоднозначные connection refs rejected |
+| A9-Q13 | Multi-listener ambiguity | Явный Kafka SSL; controller/неизвестный/отсутствующий selector rejected |
 | A9-Q14 | Secret hygiene | Нет plaintext credentials в проекте/.env/events/logs/evidence |
 | A9-Q15 | Cleanup + сохранность baseline | Только owned QA delta удалена; shared records/services сохранены |
 

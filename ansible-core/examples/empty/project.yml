@@ -5,7 +5,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1

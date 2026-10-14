@@ -1,0 +1,6 @@
+
+## Ansible task diagnostics correction (2026-10-14)
+
+Owner requested task/host/error code without secrets. Controller now passes the actual journal root to the existing callback (custom A9 state root previously received no task events). Failed tasks retain static name, host, closed reason code/summary and numeric rc/HTTP status. Arbitrary msg/stdout/stderr/assertion/traceback never enters events; no_log/censored results remain opaque. Unknown reasons stay generic. No Go/UI changes or immutable bundle mutation.
+
+RED OS current-tree: classifier4 PASS; task-observability22 PASS/4 isolated acceptance SKIP. Additional real Ansible local /bin/false through callback/custom owned journal root PASS: task Probe command failure, host node1, exit code1. Independent FULL DIFF APPROVE, no findings. Base1db6604488525eb04125630789361e4042665b99; tracked patchSHA256 0B08F28DA69C8475A52663D70084CD130B1DE2E665FA34401BFCE823EAC47BCF; new classifier2BD2EA96080A6AADD8DB81F0E4AC3B0E804F3C63424E57F7B025C052DCCFAF1B; new tests35C49C332C31161C9601CA50152250335F51770B1A561231512C35B52D8D5A39. Not yet present in bundle09; new verified bundle required before dependent full runs. Kafka diagnostic reproduction remains separate/in progress; no claim of Kafka repair or A9 completion.

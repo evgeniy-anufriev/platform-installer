@@ -17,7 +17,7 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         executable = shutil.which("ansible-playbook")
         if not executable:
             self.skipTest("ansible-playbook is required")
-        main = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+        main = yaml.safe_load((ROLE / "tasks/lifecycle.yml").read_text())
         prepare = yaml.safe_load((ROLE / "tasks/prepare.yml").read_text())
         selected = [task for task in main if task.get("name") in {
             "Validate resolved HAProxy artifact sources before mutation",

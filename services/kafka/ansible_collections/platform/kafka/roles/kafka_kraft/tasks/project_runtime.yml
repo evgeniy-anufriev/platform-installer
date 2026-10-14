@@ -67,8 +67,10 @@
   ansible.builtin.set_fact:
     platform_kafka_schema_registry_enabled: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryEnabled | default(platform_kafka_schema_registry_enabled) }}"
     platform_kafka_schema_registry_kafka_listener: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryKafkaListener | default(platform_kafka_schema_registry_kafka_listener) }}"
-    platform_kafka_schema_registry_http_port: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryHttpPort | default(platform_kafka_schema_registry_http_port) }}"
-    platform_kafka_schema_registry_https_port: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryHttpsPort | default(platform_kafka_schema_registry_https_port) }}"
+
+# project_deployment_host.yml resolves member/deployment REST ports directly.
+# Do not copy integer defaults through scalar set_fact: classic Jinja turns them
+# into strings before the shared Registry projection validates their types.
 
 - name: Project each Kafka deployment with Registry settings
   ansible.builtin.include_tasks: project_deployment.yml

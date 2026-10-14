@@ -1,4 +1,4 @@
 ---
 platform_artifact_stage_root: /var/tmp/platform-installer/artifacts
 platform_artifact_package_manager: dnf
-platform_execution_runtime_root: /var/lib/platform-installer/runtime/current
+platform_execution_runtime_root: "{{ platform_execution_bundle_root | default('/var/lib/platform-installer/runtime/current') }}"

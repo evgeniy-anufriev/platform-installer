@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -869,6 +869,23 @@ definitions:
             label: PostgreSQL port
             section: Network
             order: 10
+        clientCidrs:
+          kind: MANAGED
+          roleVariable: platform_postgresql_client_cidrs
+          type: array
+          scopes:
+          - deployment
+          - member
+          validation:
+            maxItems: 32
+            items:
+              type: string
+              pattern: ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(?:[0-9]|[12][0-9]|3[0-2])$
+          ui:
+            label: Дополнительные клиентские IPv4 CIDR
+            section: Network
+            order: 11
+            description: Дополняют автоматически определённую подсеть. Доступ только через TLS и SCRAM.
         dataDirectory:
           kind: MANAGED
           roleVariable: platform_postgresql_data_directory
@@ -1031,7 +1048,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+    x-definitionDigest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1

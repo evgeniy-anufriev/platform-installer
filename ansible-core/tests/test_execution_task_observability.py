@@ -127,14 +127,14 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
                 self.assertEqual("task-3", failed["task"]["uuid"])
                 self.assertEqual("Unseal a Vault member", failed["task"]["name"])
                 self.assertEqual([], failed["redaction"]["fields"])
-                self.assertEqual("ANSIBLE_TASK_FAILED", failed["error"]["code"])
+                self.assertEqual("ANSIBLE_FAILURE_REDACTED", failed["error"]["code"])
                 self.assertIsNone(journal.task_event("TASK_COMPLETED", "FAILED", "task-4", host="node3"))
                 self.assertTrue(Path(journal.task_failure_reported_path).exists())
                 journal.event("ACTION_COMPLETED", "FAILED", "done", actionId="apply:postgresql")
                 self.assertEqual("FAILED", journal.terminal("FAILED", "EXECUTION_OPERATION_FAILED", "failed")["state"])
             events = journal.events()
             self.assertEqual(7, journal.status()["sequence"])
-            self.assertEqual(1, len([event for event in events if event.get("error", {}).get("code") == "ANSIBLE_TASK_FAILED"]))
+            self.assertEqual(1, len([event for event in events if event.get("error", {}).get("code") == "ANSIBLE_FAILURE_REDACTED"]))
             self.assert_events_match_contract(events)
 
     def test_corrupt_orphaned_terminal_uses_contract_valid_failed_event_status(self):
@@ -316,6 +316,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
                 })
             self.assertEqual("platform.core.execution_events_json", environment["ANSIBLE_CALLBACKS_ENABLED"])
             self.assertEqual("run-1", environment["PLATFORM_EXECUTION_RUN_ID"])
+            self.assertEqual(root, environment["PLATFORM_EXECUTION_STATE_ROOT"])
             self.assertEqual("apply", environment["PLATFORM_EXECUTION_PHASE_ID"])
             self.assertEqual("apply:kafka-main", environment["PLATFORM_EXECUTION_ACTION_ID"])
             self.assertEqual("", environment["PLATFORM_EXECUTION_SERVICE_DEPLOYMENT"])
@@ -468,6 +469,7 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
                 callback.parent.mkdir(parents=True)
                 (core / "tools").mkdir()
                 shutil.copy2(TOOLS / "execution_lifecycle.py", core / "tools" / "execution_lifecycle.py")
+                shutil.copy2(TOOLS / "execution_task_error.py", core / "tools" / "execution_task_error.py")
                 source = Path(execution_events_json.__file__).read_text(encoding="utf-8")
                 marker = str(Path(release, "fault-exercised"))
                 if callback_fault == "callback_exception":
