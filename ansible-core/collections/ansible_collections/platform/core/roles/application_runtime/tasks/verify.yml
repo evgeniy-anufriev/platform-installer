@@ -1,5 +1,6 @@
 ---
 - name: Verify exact application image ownership and readiness
+  tags: [platform_application_instance_state]
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
   become_user: "{{ application_runtime_job.account }}"

@@ -1,0 +1,56 @@
+{
+  "baseCommit": "cee36a3f737f70eb10347f0e3c50bfed398bf188",
+  "reviewedIdentitySha256": "5268325927c15fbbe21af4221283dbe98aa35d915a3e83233cd91651566defb1",
+  "scope": "Standalone RED OS Core; no Go/UI or service installation",
+  "b0Qa": "COMPLETE_WITH_KNOWN_BASELINE_FAILURES",
+  "currentFull": {
+    "tests": 685,
+    "passed": 658,
+    "skipped": 19,
+    "failedMethods": 8,
+    "failureRecords": 15,
+    "errors": 0,
+    "verdict": "FAILED_PRE_EXISTING_CASES"
+  },
+  "baselineBounded": {
+    "tests": 635,
+    "passed": 609,
+    "skipped": 19,
+    "failureRecords": 13,
+    "errors": 1,
+    "excludedUnchangedNativePki": 16,
+    "additionalFailedNativeCasesReproduced": 2
+  },
+  "b0Focused": {
+    "tests": 34,
+    "passed": 34,
+    "failed": 0
+  },
+  "priorAffected": {
+    "tests": 165,
+    "passed": 161,
+    "skipped": 4
+  },
+  "priorOffline": {
+    "tests": 34,
+    "passed": 34
+  },
+  "newFailingMethods": [],
+  "preExistingFailingMethods": [
+    "test_kafka_cli_readiness_retry.KafkaCLIReadinessRetryTests.test_quorum_command_retries_until_all_expected_voters_are_visible",
+    "test_kafka_managed_fixture_projection.ManagedKafkaFixtureProjectionTests.test_managed_fixtures_project_to_the_established_role_shape",
+    "test_pki_single_pass.IntegrityTests.test_real_ansible_reuses_repairs_and_blocks_missing_source",
+    "test_pki_single_pass_resolution.PKISinglePassResolutionTests.test_five_consumers_real_file_change_signals_and_activation_decisions",
+    "test_pki_single_pass_resolution.PKISinglePassResolutionTests.test_skip_reuses_matching_target_and_repairs_corrupt_target",
+    "test_project_resource_settings.ProjectResourceSettingsTests.test_empty_and_named_prefix_with_default_and_custom_root",
+    "test_vault_directory_access.VaultDirectoryAccessTests.test_parent_traversal_does_not_grant_service_write_or_public_access",
+    "test_vault_template_loop.VaultTemplateLoopTests.test_real_templates_track_changed_members_using_standard_item"
+  ],
+  "baseOnlyErrorFixed": "test_execution_target_trust.TargetHostTrustTests.test_controller_ssh_environment_is_run_local",
+  "sourceChangesDuringTriage": [],
+  "evidenceRuntimePath": ".runtime/qa/b0/regression-triage",
+  "review": "TARGETED_RECHECK APPROVE; unchanged identity",
+  "cleanup": "PASS: 2 remote QA workspaces and 1 temporary local baseline worktree removed; 15 evidence files SHA256 verified; 0 active owned QA processes",
+  "historical": true,
+  "supersededBy": "b0-regression-repair-summary.json"
+}

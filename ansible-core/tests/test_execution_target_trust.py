@@ -125,7 +125,7 @@ class TargetHostTrustTests(unittest.TestCase):
     def test_controller_ssh_environment_is_run_local(self):
         with tempfile.TemporaryDirectory() as root, mock.patch.dict(os.environ, {"ANSIBLE_SSH_EXTRA_ARGS": "-o StrictHostKeyChecking=no"}):
             path = Path(root)
-            journal = type("Journal", (), {"directory": str(path / "installer-123456"), "run_id": "installer-123456"})()
+            journal = type("Journal", (), {"root": str(path), "directory": str(path / "installer-123456"), "run_id": "installer-123456"})()
             environment = _environment(str(path), journal, {"phaseId": "pki", "operationId": "pki:apply", "serviceDeployment": None}, True)
             self.assertEqual("True", environment["ANSIBLE_HOST_KEY_CHECKING"])
             self.assertNotIn("ANSIBLE_SSH_EXTRA_ARGS", environment)

@@ -20,7 +20,8 @@ class VaultDirectoryAccessTests(unittest.TestCase):
         self.assertEqual({'path': '{{ item }}', 'state': 'directory', 'owner': 'root',
                           'group': '{{ platform_vault_group }}', 'mode': '0750'},
                          task['ansible.builtin.file'])
-        self.assertEqual(3, len(task['loop']))
+        self.assertEqual(["{{ platform_vault_config_root }}/{{ platform_vault_deployment_id }}",
+                          "{{ platform_vault_log_root }}/{{ platform_vault_deployment_id }}"], task['loop'])
 
     @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0 and
                          shutil.which('ansible-playbook') and shutil.which('runuser'),
@@ -45,6 +46,7 @@ class VaultDirectoryAccessTests(unittest.TestCase):
             roots = {kind: root / kind for kind in ('config', 'data', 'log')}
             member = {kind + '_directory': str(path / 'qa' / 'vault-1')
                       for kind, path in roots.items()}
+            member['data_directory'] = str(roots['data'])
             config = Path(member['config_directory']) / 'vault.hcl'
             private_key = config.parent / 'pki' / 'private-key.pem'
             for path in (config, private_key):
@@ -66,7 +68,8 @@ class VaultDirectoryAccessTests(unittest.TestCase):
                 self.assertEqual(0, result.returncode, 'Local Vault directory proof failed')
                 if repeat:
                     self.assertIn(b'changed=0', result.stdout)
-            for base in roots.values():
+            for kind in ('config', 'log'):
+                base = roots[kind]
                 metadata = (base / 'qa').stat()
                 self.assertEqual((0, account.pw_gid, 0o750),
                                  (metadata.st_uid, metadata.st_gid, metadata.st_mode & 0o777))
@@ -80,3 +83,10 @@ class VaultDirectoryAccessTests(unittest.TestCase):
                 self.assertEqual(0, result.returncode)
             for field in ('config_directory', 'data_directory'):
                 self.assertEqual(0o700, Path(member[field]).stat().st_mode & 0o777)
+                for flag in ('-x', '-w'):
+                    result = subprocess.run(['runuser', '-u', account.pw_name, '--', 'test', flag, member[field]])
+                    self.assertEqual(0, result.returncode)
+            # data_root already includes the deployment; it is not another parent/qa.
+            self.assertEqual((account.pw_uid, 0o700),
+                             (Path(member['data_directory']).stat().st_uid,
+                              Path(member['data_directory']).stat().st_mode & 0o777))

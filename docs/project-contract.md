@@ -233,8 +233,9 @@ Host membership is `platform_application_libraries.<library-id>` in host_vars.
 Ansible resolves namespaces/defaults/overrides before Core validates the derived
 rows. No project.yml is required. Infrastructure-only projects retain v2alpha1
 desired-state validation and v1alpha1 snapshots without application packages.
-Applications produce snapshot v2alpha1, explicitly rejected by the current
-execution planner until the application execution integration stage.
+Applications produce snapshot v2alpha1. A7/A8 extend the execution planner with
+application-aware planning and the mixed execution barrier; the original A1
+rejection is historical, not a current restriction.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
 For standalone A2, the existing `platform_artifact_lock` carries the typed
@@ -246,8 +247,9 @@ from the full image ID. A supplied `localReference` must equal that reference.
 Node-approved compatible registry delivery wins; selected offline fallback bytes
 are verified only when fallback is needed. An unused archive need not exist.
 Rendered files, ownership/config labels and Docker observations are derived state.
-The current Installer execution planner still rejects application snapshots until
-A7; standalone A2 entrypoints do not bypass that guard. See
+Standalone A2 entrypoints remain independently usable. Their existence does not
+authorize Installer execution, which requires the current versioned Core plan,
+approval and Start contract. See
 [fixture contract](../examples/valid/application-runtime/README.md).
 
 ## Server type metadata

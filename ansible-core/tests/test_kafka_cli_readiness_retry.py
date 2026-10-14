@@ -50,6 +50,7 @@ class KafkaCLIReadinessRetryTests(unittest.TestCase):
                     - hosts: localhost
                       gather_facts: false
                       vars:
+                        platform_kafka_name: qa-kafka
                         kafka_cli_connection: {securityProtocol: PLAINTEXT}
                         kafka_cli_command_prefix: [%s]
                         kafka_cli_command_suffix: []

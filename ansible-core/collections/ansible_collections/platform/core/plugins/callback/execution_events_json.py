@@ -169,12 +169,34 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors
         self._emit("TASK_COMPLETED", "FAILED", result._task, result)
+        try:
+            from infrastructure_verification import record_application_failure
+            # Only a successful daemon inspect followed by the fixed managed
+            # instance-state predicate is application-only. No stdout parsing.
+            application_only = (self._role(result._task) == 'platform.core.application_runtime' and
+                'platform_application_instance_state' in getattr(result._task, 'tags', []) and
+                type(result._result.get('rc')) is int and result._result['rc'] == 0)
+            record_application_failure(self._journal(), application_only, self._context()['actionId'])
+        except Exception:
+            # Missing proof is UNKNOWN, so reuse fails closed on terminal.
+            pass
 
     def v2_runner_on_unreachable(self, result):
-        self._emit("TASK_COMPLETED", "FAILED", result._task, result)
+        self.v2_runner_on_failed(result)
 
     def v2_runner_on_async_ok(self, result):
         self.v2_runner_on_ok(result)
 
     def v2_runner_on_async_failed(self, result):
         self.v2_runner_on_failed(result)
+
+    def v2_playbook_on_stats(self, stats):
+        if os.environ.get('PLATFORM_EXECUTION_VERIFY_EVIDENCE') != '1':
+            return
+        try:
+            from infrastructure_verification import record_stats
+            record_stats(self._journal(), self._context()['actionId'],
+                         {host: stats.summarize(host) for host in stats.processed})
+        except Exception:
+            # Missing coverage blocks reuse; do not change an Ansible exit code.
+            self._journal().mark_task_observability_degraded('TASK_EVENT_WRITE_FAILED')

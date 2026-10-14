@@ -41,6 +41,7 @@
         execution_connections: "{{ platform_plan_snapshot.execution_connections | default({}) }}"
         deployment_order: "{{ platform_execution_deployment_order }}"
         application_vault_sources: "{{ platform_execution_application_vault_sources | default({}) }}"
+        execution_mode: "{{ platform_execution_mode | default(omit) }}"
         application_image_lock: "{{ platform_plan_snapshot.application_image_lock | default({}) }}"
       changed_when: false
       become: false

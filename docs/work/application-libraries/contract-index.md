@@ -21,6 +21,8 @@ versioned schemas, service packages или accepted substage scope.
 
 | A9 | Полная standalone Ansible + Core приёмка | [Технический план](milestones/a9/a9-technical-plan.md) |
 
+| B (предложение) | Go backend; cross-run infrastructure Verify evidence и отдельный approved library run | [Технический план](milestones/b/b-technical-plan.md) |
+
 Последующие Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
 не доказывает authenticated access.

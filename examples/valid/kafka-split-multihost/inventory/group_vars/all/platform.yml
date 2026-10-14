@@ -13,7 +13,7 @@ platform_desired_state:
   serviceDeployments:
     kafka-main:
       serviceType: kafka
-      definitionVersion: 1.0.0-alpha.1
+      definitionVersion: 1.0.0-alpha.2
       mode: kraft-distributed
       configuration:
         quorumMode: dynamic

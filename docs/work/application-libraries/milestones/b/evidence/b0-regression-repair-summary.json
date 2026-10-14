@@ -1,0 +1,51 @@
+{
+  "scope": "Owner-authorized test/fixture repair; production logic unchanged",
+  "reviewedB0IdentitySha256": "5268325927c15fbbe21af4221283dbe98aa35d915a3e83233cd91651566defb1",
+  "testFixture20FileIdentitySha256": "a51c8c360ad5adaaee88a0d45d3579a6f513a817b87c84b531873aa2b3814ada",
+  "full": {
+    "verdict": "PASS",
+    "tests": 685,
+    "passed": 666,
+    "skipped": 19,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 1394.247,
+    "excludedNativePki": 0
+  },
+  "focused": {
+    "tests": 12,
+    "passed": 11,
+    "existingSkip": 1,
+    "verdict": "PASS"
+  },
+  "vaultRootPermissionProof": {
+    "tests": 2,
+    "passed": 2,
+    "seconds": 17.231
+  },
+  "offlineB0": {
+    "tests": 34,
+    "passed": 34,
+    "network": "unshare -n",
+    "verdict": "PASS"
+  },
+  "b0CasesInFull": 34,
+  "catalog": "REPRODUCIBLE",
+  "configurationSchemas": "REPRODUCIBLE; PostgreSQL JSON semantics unchanged",
+  "realControllerValidate": [
+    "Core valid",
+    "Kafka single",
+    "PostgreSQL standalone",
+    "BIND standalone",
+    "application-libraries with documented collections"
+  ],
+  "systemTrustStore": {
+    "verdict": "UNCHANGED",
+    "entries": 840,
+    "proof": "Exact metadata/hash JSON equality before/after"
+  },
+  "newSkips": 0,
+  "productionRoleAlgorithmChanges": 0,
+  "evidencePath": ".runtime/qa/b0/regression-repair",
+  "cleanup": "PASS: 1 remote QA source workspace removed via qa-sync; absence verified; 0 active owned QA processes; 15 safe evidence files SHA256 verified locally"
+}

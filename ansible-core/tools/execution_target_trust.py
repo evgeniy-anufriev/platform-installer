@@ -218,5 +218,5 @@ def verify(state_root, run_id, manifest):
 
 
 def required(manifest):
-    return any(isinstance(item, dict) and item.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY")
+    return any(isinstance(item, dict) and item.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY", "APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY")
                for item in manifest.get("operations", []))

@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pki_test_fixture import isolated_deploy_role
 
 if os.name == "posix":
     import grp
@@ -34,6 +35,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix="pki-single-pass-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
+        self.deploy_role = isolated_deploy_role(self.root)
         self.sequence = 0
         self.desired = {
             "certificateAuthorities": {"qa-ca": {"mode": "MANAGED", "commonName": "QA CA"}},
@@ -240,7 +242,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         resolved = self.resolve_in_fresh_process()
         output = self.run_play([
             self.play([self.role()]),
-            self.play([{"ansible.builtin.include_role": {"name": "platform.core.pki_deploy"}},
+            self.play([{"ansible.builtin.include_role": {"name": self.deploy_role}},
                        self.mutation_marker()], hosts="qa-a"),
         ], skip=True, success=False,
             extra={"platform_pki_materialization_plans": resolved["materializationPlans"]})
@@ -265,10 +267,13 @@ class PKISinglePassResolutionTests(unittest.TestCase):
             file = state / source
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_bytes(b"synthetic PKI material for integrity test")
-        deploy = self.play([{"ansible.builtin.include_role": {"name": "platform.core.pki_deploy"}}], hosts="qa-a")
+        deploy = self.play([{"ansible.builtin.include_role": {"name": self.deploy_role}}], hosts="qa-a")
         variables = {"platform_pki_materialization_plans": [plan],
                      "platform_pki_project_id": "single-pass-qa"}
         first = self.run_play([deploy], extra=variables)
+        self.assertEqual([b"synthetic PKI material for integrity test"],
+                         [p.read_bytes() for p in (self.root / 'trust-anchors').glob('*.crt')])
+        refresh_mtime = (self.root / 'trust-refreshed').stat().st_mtime_ns
         self.assertIn("Record non-secret target materialization fingerprint", first)
         second = self.run_play([deploy], skip=True, extra=variables)
         self.assertRegex(second, r"qa-a\s+:.*changed=0.*failed=0")
@@ -293,6 +298,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                 self.assertEqual(0o644, target.stat().st_mode & 0o777)
                 clean = self.run_play([deploy], skip=True, extra=variables)
                 self.assertRegex(clean, r"qa-a\s+:.*changed=0.*failed=0")
+        self.assertEqual(refresh_mtime, (self.root / 'trust-refreshed').stat().st_mtime_ns)
 
     def test_standalone_without_skip_enters_real_mutation_and_request_include(self):
         output = self.run_play([self.play([self.role(), self.mutation_marker()])], success=False)
@@ -476,7 +482,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     {"ansible.builtin.assert": {"that": [
                         "platform_pki_requests == []", "platform_pki_materialization_plans == []",
                     ]}},
-                ]), self.play([{"ansible.builtin.include_role": {"name": "platform.core.pki_deploy"}}],
+                ]), self.play([{"ansible.builtin.include_role": {"name": self.deploy_role}}],
                               hosts="platform_targets")], skip=skip, extra={
                                   "platform_desired_state": {"serviceDeployments": {}},
                                   "platform_pki_materialization_plans": [],
@@ -538,7 +544,8 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                                "_platform_redis_acl_config", "_platform_redis_acl_file",
                                "_platform_redis_acl_legacy_password",
                                "_platform_sentinel_config", "_platform_sentinel_unit",
-                               "_platform_sentinel_acl_config", "_platform_sentinel_acl_legacy_password"):
+                               "_platform_sentinel_acl_config", "_platform_sentinel_acl_legacy_password",
+                               "_platform_sentinel_peer_user", "_platform_sentinel_peer_password"):
                     variables[prefix] = {"changed": False}
                 for owner_service in roles:
                     variables[f"platform_{owner_service}_user"] = self.variables["platform_pki_owner"]

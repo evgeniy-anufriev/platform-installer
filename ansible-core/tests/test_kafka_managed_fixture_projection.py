@@ -9,6 +9,7 @@ import yaml
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 MODULE_ROOT = os.path.join(ROOT, "collections", "ansible_collections", "platform", "core", "plugins", "module_utils")
+sys.path.insert(0, MODULE_ROOT)
 spec = importlib.util.spec_from_file_location(
     "kafka_runtime_projection",
     os.path.join(MODULE_ROOT, "kafka_runtime_projection.py"),
@@ -21,9 +22,9 @@ spec.loader.exec_module(projection)
 class ManagedKafkaFixtureProjectionTests(unittest.TestCase):
     FIXTURES = {
         "kafka-single": {"mode": "kraft-standalone", "namespace": None},
-        "kafka-distributed": {"mode": "kraft-distributed", "namespace": "kafka-same-host"},
-        "kafka-real-multihost": {"mode": "kraft-distributed", "namespace": "kafka-main"},
-        "kafka-split-multihost": {"mode": "kraft-distributed", "namespace": "kafka-split"},
+        "kafka-distributed": {"mode": "kraft-distributed", "namespace": "kafka-same-host", "memberData": True},
+        "kafka-real-multihost": {"mode": "kraft-distributed", "namespace": "kafka-main", "memberData": False},
+        "kafka-split-multihost": {"mode": "kraft-distributed", "namespace": "kafka-split", "memberData": True},
     }
 
     def test_managed_fixtures_project_to_the_established_role_shape(self):
@@ -74,7 +75,7 @@ class ManagedKafkaFixtureProjectionTests(unittest.TestCase):
                     )
                     if expected["namespace"]:
                         self.assertEqual(
-                            f"/var/lib/kafka/{expected['namespace']}/{member_id}",
+                            "/var/lib/kafka-main" + (f"/{member_id}" if expected["memberData"] else ""),
                             instance["data_directory"],
                         )
                         self.assertEqual(

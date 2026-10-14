@@ -1,14 +1,12 @@
 platform_project_manifest_path: "{{ inventory_dir }}/../project.yml"
 platform_service_catalog_path: "{{ inventory_dir }}/../../../catalog/service-catalog.yml"
-platform_project:
+platform_desired_state:
   serviceDeployments:
     accounting-db:
       serviceType: postgresql
-      definitionVersion: fixture-v1
+      definitionVersion: 1.0.0-alpha.1
       mode: standalone
       configuration: {}
-      members:
-        database-1: {host: db-node1, roles: [database]}
   endpointGroups: {}
   certificateProfiles: {}
   certificateScopes: {}

@@ -221,3 +221,12 @@ StartExecution/v1alpha2 with the same typed lease and trust protocol. Bootstrap
 tokens are excluded from preexisting lease values and copied from exact current
 run/provider protected output only after the infrastructure barrier. Durable
 output delivery and temporary runtime input cleanup keep their existing rules.
+
+## B0 infrastructure Verify reuse
+
+`execution-runtime/v1alpha4/build-deployment-plan.schema.json` adds an explicit
+fixed executionMode. Capability v1alpha8 advertises the three supported scopes;
+plan/v1alpha5 and execution-manifest/v1alpha3 bind the Core-derived infrastructure
+model and evidence revision. Earlier versions retain their established meaning.
+Library-only and Verify-only do not imply selective infrastructure Apply support.
+See [execution contract](../docs/contracts/execution-planning-and-events.md#b0-cross-run-infrastructure-verification).

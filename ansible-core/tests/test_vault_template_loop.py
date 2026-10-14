@@ -62,6 +62,7 @@ class VaultTemplateLoopTests(unittest.TestCase):
                     "_platform_vault_config_rendered.results | map(attribute='item.id') | list == ['vault-0', 'vault-1', 'vault-2']",
                     "_platform_vault_units_rendered.results | map(attribute='item.id') | list == ['vault-0', 'vault-1', 'vault-2']"]}})
             play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
+                     "vars_files": [str(ROLE / "defaults/main.yml")],
                      "vars": {"platform_vault_user": "qa", "platform_vault_group": "qa",
                               "platform_vault_deployment_id": "qa", "platform_vault_mode": "standalone"},
                      "tasks": tasks}]

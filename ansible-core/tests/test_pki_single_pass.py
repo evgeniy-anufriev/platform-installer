@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 
 import yaml
+from pki_test_fixture import isolated_deploy_role
 
 CORE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CORE / 'tools'))
@@ -72,6 +73,7 @@ class IntegrityTests(unittest.TestCase):
         import grp
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            deploy_role = isolated_deploy_role(root)
             source = root / 'source' / 'qa'
             files = ['authorities/ca/ca.crt', 'requests/request/leaf.crt',
                      'requests/request/leaf.key', 'requests/request/keystore.p12',
@@ -91,7 +93,7 @@ class IntegrityTests(unittest.TestCase):
                          'platform_pki_owner': pwd.getpwuid(os.getuid()).pw_name,
                          'platform_pki_group': grp.getgrgid(os.getgid()).gr_name}
             play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False,
-                     'vars': variables, 'roles': ['platform.core.pki_deploy'],
+                     'vars': variables, 'roles': [deploy_role],
                      'post_tasks': [{'ansible.builtin.copy': {'content': '{{ platform_pki_material_changed | default(false) | bool | to_json }}',
                                                               'dest': str(root / 'changed')}}]}]
             path = root / 'play.yml'
@@ -111,6 +113,9 @@ class IntegrityTests(unittest.TestCase):
                 return json.loads((root / 'changed').read_text()) if success else None
 
             self.assertTrue(invoke(optimized=False))
+            self.assertEqual([(source / files[0]).read_bytes()],
+                             [p.read_bytes() for p in (root / 'trust-anchors').glob('*.crt')])
+            refresh_mtime = (root / 'trust-refreshed').stat().st_mtime_ns
             original = {name: (target / name).stat().st_mtime_ns for name in destinations}
             self.assertFalse(invoke())
             self.assertEqual(original, {name: (target / name).stat().st_mtime_ns for name in destinations})
@@ -137,6 +142,7 @@ class IntegrityTests(unittest.TestCase):
             before = (target / 'private-key.pem').read_bytes()
             invoke(success=False)
             self.assertEqual(before, (target / 'private-key.pem').read_bytes())
+            self.assertEqual(refresh_mtime, (root / 'trust-refreshed').stat().st_mtime_ns)
 
 
 if __name__ == '__main__':

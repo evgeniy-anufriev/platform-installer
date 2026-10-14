@@ -27,6 +27,49 @@ fictional serviceDeployment. Repeats require fresh Build/approval/run.
 Current status and authorization remain in [CURRENT_STATE](../../CURRENT_STATE.md).
 Implementation audit and milestone gates are retained separately.
 
+## B0 cross-run infrastructure verification
+
+Owner-approved [B plan](../work/application-libraries/milestones/b/b-technical-plan.md)
+adds a separate, negotiated `execution-runtime/v1alpha4` Build request with closed
+`executionMode`: FULL_PROJECT, APPLICATION_LIBRARIES_ONLY or INFRASTRUCTURE_VERIFY_ONLY.
+It produces plan/v1alpha5 and execution-manifest/v1alpha3. GetCapabilities v1alpha4
+returns execution-capabilities/v1alpha8; older requests and A8 semantics stay unchanged.
+Start still uses StartExecution/v1alpha2, staged SSH trust and the existing typed lease.
+
+Core computes one infrastructure model from resolved service Apply/Verify operations,
+full deployment coverage, runtime, connections, artifact authorities and PKI plans.
+Project revision/application operations do not substitute for this model. B0 keeps
+an operational index under `<execution-state>/infrastructure-verification/`, keyed
+by project identity. It holds generation, model and references to bounded private
+run proofs. It is derived execution evidence, never portable desired state.
+
+A mutating infrastructure run invalidates the prior generation once before its
+first target operation. Sequential Apply/Verify pairs of that same run share one
+generation. Verify-only can complete that generation without Apply or PKI mutation;
+a different model or approved host keys starts a new verification generation.
+Verify results are published only after durable terminal state. Partial results
+from a terminal FAILED run can supplement other Verify-only runs; FAILED remains
+FAILED. Missing/corrupt/retained-away journals fail closed; an interrupted index
+update may lose readiness but cannot imply success or replay work.
+
+Library-only Build requires all enabled infrastructure Verify coverage. Under the
+existing active-run admission lock, Start rechecks exact evidence revision, source
+journals and approved SSH host keys before controller launch. The controller
+rechecks before application preparation. Local client JSON is never accepted as
+proof. A stale plan requires fresh Build and approval. There is no fallback to full
+infrastructure installation and no caller-provided playbook/command or skipBarrier.
+
+Library-only contains exactly application Apply and Verify; Vault sources must be
+RUNTIME_INPUT. Unseal shares and CURRENT_RUN_BOOTSTRAP have no application producer
+in that scope. Verify-only retains the established typed service-input declaration
+contract, but dispatch contains no Apply capable of consuming Apply permissions.
+PKI materialization is excluded; service Verify reads existing PKI. Historical
+Verify does not promise continuous target health: normal provider/ownership/readiness
+guards remain. Build and evidence inspection stay target-contact free.
+
+Go local caching/integration belongs to B1–B4, not B0. The original A9 operator
+acceptance is not imported into the new machine-owned evidence index.
+
 > **Version scope:** the evolution from `plan/v1alpha1` below is the original
 > UI-BE-04 design. The standard Core planner emits
 > [DeploymentPlan v1alpha2](../../contracts/plan/v1alpha2/schema.json).

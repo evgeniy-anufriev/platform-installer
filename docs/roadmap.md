@@ -6,6 +6,13 @@ library mutation. Its gate covers mixed success/repeat, failure/cancel, protecte
 same-run Vault token handoff and infrastructure-only compatibility. A9 remains
 the full standalone acceptance; Go and UI follow afterward.
 
+[B](work/application-libraries/milestones/b/b-technical-plan.md) starts with the
+bounded B0 Core extension for cross-run infrastructure Verify evidence and explicit
+library-only/Verify-only scopes. Its gate is node-authoritative full coverage,
+stale-evidence/trust/concurrency protection and standalone RED OS acceptance.
+B1–B4 then integrate the existing Go adapter/writer/lifecycle; C owns application UI.
+Local status is operational evidence, never a second desired-state or Start authority.
+
 Current status and authorization live only in [CURRENT_STATE](../CURRENT_STATE.md).
 This document describes sequence, scope and exit criteria. Recorded implementation
 checkpoints are retained in [history](history/roadmap-checkpoints-20261012.md).

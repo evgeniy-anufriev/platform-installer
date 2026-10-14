@@ -588,3 +588,26 @@ existing names. It does not rename internal
 contract keys, collection names or Installer runtime identity paths. The
 owner will remove old deployments before rollout; the Installer does not
 migrate or remove old resources when the prefix changes.
+
+## ADR-039: Core owns reusable infrastructure Verify evidence
+
+Owner-approved B plan, 2026-10-14. The fixed library-only execution scope may
+reuse successful Verify operations covering all enabled infrastructure deployments
+of one resolved infrastructure model. Core derives the model and validates source
+journals on the selected Execution Node. A bounded operational index in existing
+execution state references those journals; it is not portable desired state.
+
+Infrastructure mutation starts a new evidence generation once per run. A terminal
+FAILED run can contribute completed Verify operations without changing its outcome.
+Verify-only uses the same planner/approval/controller lifecycle and never falls back
+to Apply. Library-only requires a fresh plan, approval and revalidation under the
+existing project active-run admission lock, with exact approved SSH keys.
+Loss or corruption of evidence blocks reuse. Historical Verify is not continuous
+health monitoring; normal provider guards remain in force.
+
+Go may persist a local operational projection analogous to run records; it cannot
+authorize reuse or compute infrastructure equivalence. React renders the Core
+decision. Existing A8 same-run barrier, secret custody and standalone Ansible paths
+are preserved. New request/capability/plan/manifest versions isolate the extension.
+See [technical plan B](work/application-libraries/milestones/b/b-technical-plan.md)
+and [execution contract](contracts/execution-planning-and-events.md#b0-cross-run-infrastructure-verification).

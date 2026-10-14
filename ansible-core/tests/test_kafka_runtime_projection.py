@@ -5,6 +5,7 @@ import unittest
 
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "collections", "ansible_collections", "platform", "core", "plugins", "module_utils")
+sys.path.insert(0, ROOT)
 spec = importlib.util.spec_from_file_location("kafka_runtime_projection", os.path.join(ROOT, "kafka_runtime_projection.py"))
 projection = importlib.util.module_from_spec(spec)
 sys.modules["kafka_runtime_projection"] = projection

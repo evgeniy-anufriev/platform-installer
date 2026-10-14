@@ -36,7 +36,7 @@ class ProjectResourceSettingsTests(unittest.TestCase):
                                    "platform_data_root_directory": root,
                                    deployment_key: "qa-" + service}
                         self.assertEqual(expected_name, RENDER(values[name_key]).render(context))
-                        self.assertEqual(root + "/qa-" + service,
+                        self.assertEqual(root + "/qa-" + service + ("/postgres" if service == "postgresql" else ""),
                                          RENDER(values[data_key]).render(context))
 
     def test_vault_config_and_installer_pki_are_separate(self):

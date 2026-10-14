@@ -21,6 +21,7 @@ from execution_lifecycle import EXECUTION_STATE_ROOT, Journal, LifecycleError, d
 import execution_secret_lease
 import execution_secret_output
 import execution_target_trust
+import infrastructure_verification as infra
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
@@ -507,6 +508,7 @@ def _collection_path(release):
 
 def _environment(release, journal=None, operation=None, leased_private_key=False):
     environment = dict(os.environ)
+    environment.pop('PLATFORM_EXECUTION_VERIFY_EVIDENCE', None)
     environment.pop("ANSIBLE_PRIVATE_KEY_FILE", None)
     for inherited in ("ANSIBLE_SSH_ARGS", "ANSIBLE_SSH_COMMON_ARGS", "ANSIBLE_SSH_EXTRA_ARGS",
                       "ANSIBLE_SSH_EXECUTABLE", "ANSIBLE_HOST_KEY_CHECKING", "ANSIBLE_SSH_HOST_KEY_CHECKING"):
@@ -641,8 +643,14 @@ def _finish_run_with_outputs(journal, state, code, summary, manifest, runtime_re
             journal.event("DIAGNOSTIC", "RUNNING", "Generated secret output is not yet durably available")
         except (LifecycleError, OSError, ValueError):
             pass
+    infra.before_terminal(journal, manifest, state)
     result = _terminal(journal, state, code, summary)
     _complete_secret_outputs(journal, manifest, result)
+    try:
+        infra.publish(journal, manifest)
+    except (OSError, ValueError, KeyError):
+        # Evidence cache loss must never alter a completed run or replay mutations.
+        pass
     return result
 
 
@@ -781,6 +789,40 @@ def _materialize_runtime_projection(journal, metadata, manifest):
 
 def validate_application_manifest(manifest):
     """Closed mixed manifest admission, used by Build, Start and the controller."""
+    if manifest.get('apiVersion') == infra.MANIFEST_VERSION:
+        module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
+            '../collections/ansible_collections/platform/core/plugins/module_utils'))
+        if module_utils not in sys.path:
+            sys.path.insert(0, module_utils)
+        from schema_validation import SchemaValidator
+        contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+        if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha3/schema.json')):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        infra.validate_manifest(manifest)
+        if manifest['executionMode'] == 'INFRASTRUCTURE_VERIFY_ONLY':
+            return
+        if manifest['executionMode'] == 'APPLICATION_LIBRARIES_ONLY':
+            operations = manifest['operations']
+            if (operations[0]['targets'] != operations[1]['targets'] or
+                    operations[0]['applicationLibraries'] != operations[1]['applicationLibraries'] or
+                    operations[0]['applicationSemanticFingerprint'] != operations[1]['applicationSemanticFingerprint']):
+                raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+            refs, names = set(), set()
+            for item in manifest['applicationSecretRequirements']:
+                if (item['requirementRef'] in refs or item['runtimeReference'] in names or
+                        not set(item['hosts']).issubset(operations[0]['targets']) or
+                        not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries']) or
+                        (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
+                         (item['providerDeployment'] not in manifest['infrastructureVerification']['model']['coverage'] or
+                          item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment'])) or
+                        (item['purpose'] == 'APPLICATION_SECRET' and item['providerDeployment'] is not None)):
+                    raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+                refs.add(item['requirementRef'])
+                names.add(item['runtimeReference'])
+            return
+        manifest = dict(manifest)
+        manifest['apiVersion'] = 'platform.installer/execution-manifest/v1alpha2'
+        del manifest['executionMode'], manifest['infrastructureVerification']
     if manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2':
         if any(item.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')
                for item in manifest.get('operations', [])):
@@ -904,9 +946,15 @@ def _dispatch(release, journal, manifest, stopped):
     commands = [(operation, _command(release, journal, operation)) for operation in operations]
     validate_application_manifest(manifest)
     pki_applied_in_run = False
+    infrastructure_started = False
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
+        if not infrastructure_started and (manifest.get('apiVersion') == infra.MANIFEST_VERSION or
+                (operation['operation'] in ('SERVICE_APPLY', 'PKI_APPLY', 'PKI_REISSUE') and
+                 infra.tracked(journal.root, manifest.get('projectIdentity')))):
+            infra.begin(journal, manifest)
+            infrastructure_started = True
         if operation.get('operation') == 'APPLICATION_LIBRARIES_APPLY':
             try:
                 _materialize_application_projection(journal, manifest)
@@ -916,6 +964,8 @@ def _dispatch(release, journal, manifest, stopped):
                 return 'CANCELLED'
         if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY", 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
             execution_target_trust.verify(journal.root, journal.run_id, manifest)
+        if manifest.get('executionMode') == 'INFRASTRUCTURE_VERIFY_ONLY':
+            command = command + ['--skip-tags', 'platform_installer_pki_materialization']
         if pki_applied_in_run and operation.get("operation") == "SERVICE_APPLY":
             command = command + ["--skip-tags", "platform_installer_pki_materialization"]
         pki_lock_descriptor = (_acquire_project_pki_apply_lock(journal)
@@ -966,8 +1016,11 @@ def _dispatch(release, journal, manifest, stopped):
                         except OSError: pass
                         raise
                     command.extend(["-e", "@" + secret_inputs_path])
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                       env=_environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials)))
+            environment = _environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials))
+            if manifest.get('apiVersion') == infra.MANIFEST_VERSION and operation['operation'] == 'SERVICE_VERIFY':
+                infra.verify_pending(journal, operation)
+                environment['PLATFORM_EXECUTION_VERIFY_EVIDENCE'] = '1'
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
             completed = _wait_for_operation(process, stopped, capture_raw_failure_output)
         finally:
             for temporary_path in (credentials_path, secret_inputs_path):
@@ -987,6 +1040,8 @@ def _dispatch(release, journal, manifest, stopped):
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
+        if manifest.get('apiVersion') == infra.MANIFEST_VERSION and operation['operation'] == 'SERVICE_VERIFY':
+            infra.verified(journal, operation)
         if operation.get("operation") == "PKI_APPLY":
             pki_applied_in_run = True
     return "SUCCEEDED"

@@ -12,6 +12,7 @@
 | Понять последовательность и критерии | [Общий план](implementation-plan.md) |
 | Найти review и точную проверенную версию | [Общий PLAN review](reviews/plan-review.md); подэтапы перечислены в индексе |
 | Найти планы и evidence A1–A9 | [Индекс подэтапов](contract-index.md), затем материалы конкретного этапа |
+| Обсудить этап B и отдельный запуск библиотек после Verify инфраструктуры | [Технический план B](milestones/b/b-technical-plan.md) |
 | Найти оптимизации A1/A2 | [Review](milestones/a1-a2-speed/reviews/a1-a2-speed-review.md), [журнал](milestones/a1-a2-speed/evidence/a1-a2-speed-test-journal.md) |
 | Найти lightweight Verify | [Журнал](milestones/lightweight-verify/evidence/lightweight-verify-test-journal.md) |
 | Разобраться в прежних вердиктах и ограничениях обсуждения | [Снимок документации](evidence/documentation-checkpoints-20261012.md) |
