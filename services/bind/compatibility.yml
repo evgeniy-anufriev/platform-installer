@@ -6,3 +6,4 @@ platforms:
     packages: [bind, bind-utils]
     service: named
     testedVersion: 9.18.41
+    testedOSVersions: ["7.3.7"]

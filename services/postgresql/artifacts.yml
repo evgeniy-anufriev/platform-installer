@@ -10,4 +10,15 @@ packageSource:
     - postgresql-contrib-16.14-1.red80
     - pg_auto_failover-2.2-1
   offlineBundle: deferred
+testedPackageSets:
+  - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    packages:
+      - postgresql16-16.14
+      - postgresql16-server-16.14
+      - postgresql16-contrib-16.14
+      - pg_auto_failover-16-2.2-1
+    source: system-repository
+    status: runtime-verified-redos73-support-01
 status: approved-system-repository-acceptance

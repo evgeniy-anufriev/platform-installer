@@ -2,6 +2,13 @@ apiVersion: platform.installer/compatibility/v1alpha1
 service: postgresql
 combinations:
   - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    postgresql: "16.14"
+    pg_auto_failover: "2.2-1"
+    source: system-repository
+    status: runtime-verified-redos73-support-01
+  - os: redos
     osVersion: "8.0"
     architecture: x86_64
     postgresql: "16.14-1.red80"

@@ -6,4 +6,11 @@ packageSource:
   distribution: RED OS
   packages: [redis-8.6.4-1.red80]
   offlineBundle: deferred
+testedPackageSets:
+  - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    packages: [redis-8.10.1-1.el7]
+    source: system-repository
+    status: runtime-verified-redos73-support-01
 status: candidate-system-repository-acceptance

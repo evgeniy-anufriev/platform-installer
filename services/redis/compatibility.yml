@@ -2,6 +2,12 @@ apiVersion: platform.installer/compatibility/v1alpha1
 service: redis
 combinations:
   - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    redis: "8.10.1-1.el7"
+    source: system-repository
+    status: runtime-verified-redos73-support-01
+  - os: redos
     osVersion: "8.0"
     architecture: x86_64
     redis: "8.6.4-1.red80"

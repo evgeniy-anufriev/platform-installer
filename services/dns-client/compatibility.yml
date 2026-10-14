@@ -5,4 +5,4 @@ platforms:
   redos:
     packages: []
     adapters: [systemd-resolved, NetworkManager]
-    testedVersion: "8.0"
+    testedOSVersions: ["7.3.7"]

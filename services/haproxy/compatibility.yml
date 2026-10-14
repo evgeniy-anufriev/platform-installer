@@ -5,4 +5,5 @@ platforms:
   redos:
     packages: [haproxy]
     service: haproxy
-    testedVersion: 2.8
+    testedVersion: 3.4.3
+    testedOSVersions: ["7.3.7"]
