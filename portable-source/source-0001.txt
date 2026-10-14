@@ -80155,12 +80155,13 @@ func Configure(command *exec.Cmd) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/coreadapter/adapter.go","mode":420,"size":2475,"sha256":"075895433d791b97e1a9322e96287368ddd3bc4f4a82922cc6d6fdc38d1d1ccb","index":0,"count":1,"encoding":"utf-8","payloadBytes":2475}
+@@PORTABLE {"path":"internal/coreadapter/adapter.go","mode":420,"size":2844,"sha256":"cc998054ce13664b312d07fb3c5933232667762a86ba031ba6db53e952e4a44d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2844}
 package coreadapter
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 )
 
 // Adapter is the only boundary from Installer application logic to Core.
@@ -80177,6 +80178,8 @@ type Document struct {
 
 // Snapshot mirrors only fields consumed by Installer application semantics.
 type Snapshot struct {
+	APIVersion             string                                 `json:"apiVersion"`
+	ApplicationLibraries   *ApplicationLibraries                  `json:"applicationLibraries,omitempty"`
 	Status                 string                                 `json:"status"`
 	Partial                bool                                   `json:"partial"`
 	Project                map[string]any                         `json:"project"`
@@ -80200,13 +80203,115 @@ type Snapshot struct {
 }
 
 func DecodeSnapshot(data []byte) (*Snapshot, error) {
+	if len(data) > 2*1024*1024 {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
 	var snapshot Snapshot
 	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return nil, err
+	}
+	if err := snapshot.validateApplications(); err != nil {
 		return nil, err
 	}
 	snapshot.Raw = append(snapshot.Raw[:0], data...)
 	return &snapshot, nil
 }
+
+@@END
+@@PORTABLE {"path":"internal/coreadapter/application_libraries.go","mode":420,"size":4587,"sha256":"79b58ae5d9cd27dd1516398e1ee09649de8049dcba353a635204162b5a64b64e","index":0,"count":1,"encoding":"utf-8","payloadBytes":4587}
+package coreadapter
+
+import (
+	"encoding/json"
+	"errors"
+	"regexp"
+)
+
+// These are Core-resolved presentation values, never editable desired state.
+type ApplicationLibraries struct {
+	APIVersion string                        `json:"apiVersion"`
+	Status     string                        `json:"status"`
+	Libraries  map[string]ApplicationLibrary `json:"libraries"`
+	Findings   []map[string]any              `json:"findings"`
+}
+
+type ApplicationLibrary struct {
+	LibraryRef               string                         `json:"libraryRef"`
+	Packages                 map[string]json.RawMessage     `json:"packages"`
+	Instances                map[string]ApplicationInstance `json:"instances"`
+	Resources                map[string]json.RawMessage     `json:"resources"`
+	SharedSecretRequirements map[string]json.RawMessage     `json:"sharedSecretRequirements"`
+}
+
+type ApplicationInstance struct {
+	ApplicationName           string                          `json:"applicationName"`
+	SlotID                    string                          `json:"slotId"`
+	Placements                map[string]ApplicationPlacement `json:"placements"`
+	Connections               map[string]json.RawMessage      `json:"connections"`
+	CredentialRequirements    map[string]json.RawMessage      `json:"credentialRequirements"`
+	RuntimeSecretRequirements []string                        `json:"runtimeSecretRequirements"`
+	SecretBindings            map[string]json.RawMessage      `json:"secretBindings"`
+	AgentRequired             bool                            `json:"agentRequired"`
+	ExecutionPrerequisites    []string                        `json:"executionPrerequisites"`
+	IdentityEnvironment       map[string]string               `json:"identityEnvironment"`
+	ImageRequirement          json.RawMessage                 `json:"imageRequirement"`
+	AppRole                   json.RawMessage                 `json:"approle"`
+}
+
+type ApplicationPlacement struct {
+	ServerID         string                     `json:"SERVER_ID"`
+	RuntimeRef       string                     `json:"runtimeRef"`
+	Command          []string                   `json:"command"`
+	ImageRequirement json.RawMessage            `json:"imageRequirement"`
+	Origin           ApplicationOrigin          `json:"origin"`
+	Parameters       map[string]json.RawMessage `json:"parameters"`
+	Environment      map[string]string          `json:"environment"`
+	Ports            map[string]json.RawMessage `json:"ports"`
+	Endpoint         json.RawMessage            `json:"endpoint"`
+	ContainerName    string                     `json:"containerName"`
+	ComposeProject   string                     `json:"composeProject"`
+	RuntimePath      string                     `json:"runtimePath"`
+	LibraryEnvPath   string                     `json:"libraryEnvPath"`
+}
+
+type ApplicationOrigin struct {
+	Resolution         string `json:"resolution"`
+	Precision          string `json:"precision"`
+	ApplicationPackage string `json:"applicationPackage"`
+	LibraryPackage     string `json:"libraryPackage"`
+	Host               string `json:"host"`
+}
+
+var applicationID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
+
+func (s *Snapshot) validateApplications() error {
+	if s.ApplicationLibraries == nil {
+		return nil
+	}
+	a := s.ApplicationLibraries
+	invalid := errors.New("APPLICATION_SNAPSHOT_RESPONSE_INVALID")
+	if s.APIVersion != "platform.installer/project-snapshot/v2alpha1" || a.APIVersion != "platform.installer/application-libraries/v1alpha1" || (a.Status != "PASS" && a.Status != "BLOCKED") || a.Libraries == nil || len(a.Libraries) > 256 || len(a.Findings) > 1024 {
+		return invalid
+	}
+	for id, library := range a.Libraries {
+		if !validApplicationID(id) || library.LibraryRef == "" || len(library.LibraryRef) > 256 || library.Instances == nil || len(library.Instances) > 256 {
+			return invalid
+		}
+		for id, instance := range library.Instances {
+			if !validApplicationID(id) || !validApplicationID(instance.ApplicationName) || !validApplicationID(instance.SlotID) || instance.Placements == nil || len(instance.Placements) > 256 || len(instance.RuntimeSecretRequirements) > 256 {
+				return invalid
+			}
+			for host, placement := range instance.Placements {
+				if !validApplicationID(host) || placement.ServerID != host || !validApplicationID(placement.RuntimeRef) || placement.Origin.Host != host || placement.Origin.Resolution != "ANSIBLE" || placement.Origin.Precision != "RESOLUTION_SCOPE" {
+					return invalid
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func validApplicationID(id string) bool { return len(id) <= 128 && applicationID.MatchString(id) }
 
 @@END
 @@PORTABLE {"path":"internal/coreadapter/command.go","mode":420,"size":2941,"sha256":"8d45bca62ad5900b85d2b38c19a3f7382c03a05fbe324e2b3180f8b07aaf4e79","index":0,"count":1,"encoding":"utf-8","payloadBytes":2941}
@@ -86699,7 +86804,158 @@ func (state InstallationState) withPrerequisite(code, destination, message strin
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/local_run_record.go","mode":420,"size":7236,"sha256":"ead34f02e5b540fb9c0ea44e562613f9f3514f8dfc90cd9b9f661da8b3ae5308","index":0,"count":1,"encoding":"utf-8","payloadBytes":7236}
+@@PORTABLE {"path":"internal/desktop/local_infrastructure_verification.go","mode":420,"size":6034,"sha256":"41199d421e8945b3027c2f1caaabc26bb5248be41fba8915a7a26b068458d713","index":0,"count":1,"encoding":"utf-8","payloadBytes":6034}
+package desktop
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"platform-installer/internal/executionnode"
+)
+
+// Separate from last-run: a library run must not erase the prior observation.
+// No caller may use this record as execution authorization.
+type localInfrastructureVerification struct {
+	Version              int                                      `json:"version"`
+	ProjectRoot          string                                   `json:"projectRoot"`
+	ProjectID            string                                   `json:"projectId"`
+	ExecutionNodeBinding string                                   `json:"executionNodeBinding"`
+	RuntimeBundleDigest  string                                   `json:"runtimeBundleDigest"`
+	ObservedAt           string                                   `json:"observedAt"`
+	Verification         executionnode.InfrastructureVerification `json:"verification"`
+}
+
+const maxInfrastructureRecordBytes = 128 * 1024
+
+// Cached observations always have UNKNOWN current availability. A fresh Core
+// plan is returned separately by the adapter and is the only admission input.
+type InfrastructureVerificationView struct {
+	Availability string                                    `json:"availability"`
+	ObservedAt   string                                    `json:"observedAt,omitempty"`
+	Previous     *executionnode.InfrastructureVerification `json:"previous,omitempty"`
+}
+
+func infrastructureNodeBinding(node executionnode.Node) string {
+	// Account changes cannot change infrastructure state. Host identity can.
+	data, _ := json.Marshal([]any{node.ID, node.Address, node.Port, node.HostKey.Fingerprint})
+	hash := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(hash[:])
+}
+
+func cachedInfrastructureVerification(store, root, projectID string, node executionnode.Node, bundle string) InfrastructureVerificationView {
+	view := InfrastructureVerificationView{Availability: "UNKNOWN"}
+	r, err := readLocalInfrastructureVerification(store, root, projectID, infrastructureNodeBinding(node), bundle)
+	if err == nil && r != nil {
+		view.ObservedAt, view.Previous = r.ObservedAt, &r.Verification
+	}
+	return view
+}
+
+func cacheInfrastructurePlan(store, root string, node executionnode.Node, plan executionnode.DeploymentPlan, observedAt time.Time) error {
+	canonical, err := canonicalRunProjectRoot(root)
+	if err != nil {
+		return err
+	}
+	bundle, ok := plan.RuntimeRelease["bundleDigest"].(string)
+	if !ok || plan.InfrastructureVerification == nil {
+		return errors.New("INFRASTRUCTURE_CACHE_INVALID")
+	}
+	return writeLocalInfrastructureVerification(store, localInfrastructureVerification{Version: 1, ProjectRoot: canonical, ProjectID: plan.ProjectIdentity, ExecutionNodeBinding: infrastructureNodeBinding(node), RuntimeBundleDigest: bundle, ObservedAt: observedAt.UTC().Format(time.RFC3339Nano), Verification: *plan.InfrastructureVerification})
+}
+
+func defaultInfrastructureVerificationRoot() string {
+	base, err := os.UserConfigDir()
+	if err != nil || base == "" {
+		return ""
+	}
+	return filepath.Join(base, "platform-installer", "infrastructure-verification")
+}
+
+func (r localInfrastructureVerification) valid() bool {
+	if !strings.HasPrefix(r.RuntimeBundleDigest, "sha256:") || strings.ToLower(r.RuntimeBundleDigest) != r.RuntimeBundleDigest {
+		return false
+	}
+	if _, err := hex.DecodeString(strings.TrimPrefix(r.RuntimeBundleDigest, "sha256:")); err != nil {
+		return false
+	}
+	root, err := canonicalRunProjectRoot(r.ProjectRoot)
+	if err != nil || root != r.ProjectRoot || r.Version != 1 || r.ProjectID == "" || len(r.ProjectID) > 128 || r.ExecutionNodeBinding == "" || len(r.ExecutionNodeBinding) > 256 || len(r.RuntimeBundleDigest) != 71 || !r.Verification.Validate() {
+		return false
+	}
+	_, err = time.Parse(time.RFC3339, r.ObservedAt)
+	return err == nil
+}
+
+func writeLocalInfrastructureVerification(store string, record localInfrastructureVerification) error {
+	invalid := errors.New("INFRASTRUCTURE_CACHE_INVALID")
+	if !record.valid() {
+		return invalid
+	}
+	path, err := localRunRecordPath(store, record.ProjectRoot, record.ProjectID)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(record)
+	if err != nil || len(data) > maxInfrastructureRecordBytes {
+		return invalid
+	}
+	if err := os.MkdirAll(store, 0o700); err != nil {
+		return errors.New("INFRASTRUCTURE_CACHE_UNAVAILABLE")
+	}
+	if err := safeLocalRunRecordRoot(store); err != nil {
+		return err
+	}
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		return invalid
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return invalid
+	}
+	return writeLocalOperationalRecord(store, path, data)
+}
+
+// A missing/corrupt record yields no observation. Availability is UNKNOWN even
+// when the prior observation was PASS; refresh requires a new authoritative Build.
+func readLocalInfrastructureVerification(store, projectRoot, projectID, nodeBinding, bundleDigest string) (*localInfrastructureVerification, error) {
+	invalid := errors.New("INFRASTRUCTURE_CACHE_INVALID")
+	path, err := localRunRecordPath(store, projectRoot, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := safeLocalRunRecordRoot(store); err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 2 || info.Size() > maxInfrastructureRecordBytes {
+		return nil, invalid
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxInfrastructureRecordBytes {
+		return nil, invalid
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	var r localInfrastructureVerification
+	root, rootErr := canonicalRunProjectRoot(projectRoot)
+	if d.Decode(&r) != nil || d.Decode(new(any)) != io.EOF || !r.valid() || rootErr != nil || r.ProjectRoot != root || r.ProjectID != projectID || r.ExecutionNodeBinding != nodeBinding || r.RuntimeBundleDigest != bundleDigest {
+		return nil, invalid
+	}
+	return &r, nil
+}
+
+@@END
+@@PORTABLE {"path":"internal/desktop/local_run_record.go","mode":420,"size":7524,"sha256":"5831731619549843abfee7d67b85da5d882bdede63c8279c6ed791164c88b443","index":0,"count":1,"encoding":"utf-8","payloadBytes":7524}
 package desktop
 
 import (
@@ -86862,6 +87118,12 @@ func writeLocalRunRecord(storeRoot string, record localRunRecord) error {
 	if err != nil || len(data) > 8192 {
 		return errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
+	return writeLocalOperationalRecord(storeRoot, path, data)
+}
+
+// Shared atomic publication for bounded operational records. Callers validate
+// their closed record and derive the path using localRunRecordPath.
+func writeLocalOperationalRecord(storeRoot, path string, data []byte) error {
 	temp, err := os.CreateTemp(storeRoot, ".run-record-")
 	if err != nil {
 		return err
@@ -89381,6 +89643,53 @@ func (s *AcquisitionService) AcquireExecutionRuntime(ctx context.Context, node N
 }
 
 @@END
+@@PORTABLE {"path":"internal/executionnode/application_image.go","mode":420,"size":2072,"sha256":"dcde034b1b19c89d7f4902ba7bed18af0e629bfc73f9062032b86a8e2d01a588","index":0,"count":1,"encoding":"utf-8","payloadBytes":2072}
+package executionnode
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"strings"
+)
+
+// Image requirements stay separate from RPM selection; Core owns delivery.
+type ApplicationImageRequirement struct {
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	ArtifactType       string   `json:"artifactType"`
+	ImageID            string   `json:"imageId"`
+	LocalReference     string   `json:"localReference"`
+	ApplicationLibrary string   `json:"applicationLibrary"`
+	InstanceID         string   `json:"instanceId"`
+	Hosts              []string `json:"hosts"`
+	SourcePolicy       string   `json:"sourcePolicy"`
+	Platform           struct {
+		OS           string `json:"os"`
+		Architecture string `json:"architecture"`
+		Variant      string `json:"variant,omitempty"`
+	} `json:"platform"`
+}
+
+func decodeApplicationImage(raw any) (ApplicationImageRequirement, error) {
+	var image ApplicationImageRequirement
+	data, err := json.Marshal(raw)
+	if err == nil && len(data) <= 64*1024 {
+		d := json.NewDecoder(bytes.NewReader(data))
+		d.DisallowUnknownFields()
+		if d.Decode(&image) == nil && d.Decode(new(any)) == io.EOF && image.ID != "" && len(image.ID) <= 256 && image.Name != "" && len(image.Name) <= 512 && image.ArtifactType == "container-image" && validSHA256(image.ImageID) && image.LocalReference == "platform-application:sha256-"+strings.TrimPrefix(image.ImageID, "sha256:") && runtimeSecretDeploymentPattern.MatchString(image.ApplicationLibrary) && len(image.ApplicationLibrary) <= 128 && runtimeSecretDeploymentPattern.MatchString(image.InstanceID) && len(image.InstanceID) <= 128 && image.SourcePolicy == "REPOSITORY_THEN_OFFLINE" && image.Platform.OS == "linux" && (image.Platform.Architecture == "amd64" || image.Platform.Architecture == "arm64") && len(image.Platform.Variant) <= 32 {
+			if hosts, ok := raw.(map[string]any); ok {
+				if _, valid := decodePlanStringList(hosts["hosts"], 256); valid {
+					return image, nil
+				}
+			}
+		}
+	}
+	return ApplicationImageRequirement{}, errors.New("DEPLOYMENT_PLAN_REQUIREMENT_INVALID")
+}
+
+@@END
 @@PORTABLE {"path":"internal/executionnode/credential_lease.go","mode":420,"size":19889,"sha256":"e55e4e2a7e77e53e03709166582e7de8278f3cc2a5932e9a2b6be9e279407e48","index":0,"count":1,"encoding":"utf-8","payloadBytes":19889}
 package executionnode
 
@@ -90431,7 +90740,7 @@ func hardenMirrorHandle(file *os.File) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/execution_service.go","mode":420,"size":30497,"sha256":"7bad12cf6d9d36169d9e6d1b5288e5ada54faa1304b8befdbf0f4ac320efcd79","index":0,"count":1,"encoding":"utf-8","payloadBytes":30497}
+@@PORTABLE {"path":"internal/executionnode/execution_service.go","mode":420,"size":30695,"sha256":"d9a142bbdb44eefc6e5477decd268ca38e88450ab36b163dd7b28561e055717a","index":0,"count":1,"encoding":"utf-8","payloadBytes":30695}
 package executionnode
 
 import (
@@ -90495,20 +90804,23 @@ const (
 )
 
 type DeploymentPlan struct {
-	ID                      string
-	Status                  string
-	ProjectIdentity         string
-	ProjectRevision         string
-	PlanFingerprint         string
-	Acknowledgements        []string
-	AcknowledgementDetails  []PlanAcknowledgement
-	Phases                  []DeploymentPlanPhase
-	RuntimeRelease          map[string]any
-	ArtifactRequirements    []artifactsource.Requirement
-	RequiredCredentials     []RequiredCredential
-	Findings                []Finding
-	stagingID               string
-	executionManifestDigest string
+	ExecutionMode              ExecutionMode
+	InfrastructureVerification *InfrastructureVerification
+	ID                         string
+	Status                     string
+	ProjectIdentity            string
+	ProjectRevision            string
+	PlanFingerprint            string
+	Acknowledgements           []string
+	AcknowledgementDetails     []PlanAcknowledgement
+	Phases                     []DeploymentPlanPhase
+	RuntimeRelease             map[string]any
+	ArtifactRequirements       []artifactsource.Requirement
+	ApplicationImages          []ApplicationImageRequirement
+	RequiredCredentials        []RequiredCredential
+	Findings                   []Finding
+	stagingID                  string
+	executionManifestDigest    string
 }
 
 // RequiredCredential is the bounded public-plan requirement projection. It
@@ -91306,6 +91618,144 @@ func newStartAttemptID() (string, error) {
 // NewRequestID returns one opaque bounded id for a request-owned remote
 // staging operation. It has no run identity semantics.
 func NewRequestID() (string, error) { return newStartAttemptID() }
+
+@@END
+@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":6615,"sha256":"b70e0895571d8f7a0ce78450432aba06ed2323a82124f9cd5cc2151783cb93e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":6615}
+package executionnode
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"platform-installer/internal/coreadapter"
+	"time"
+)
+
+type ExecutionMode string
+
+const (
+	FullProject              ExecutionMode = "FULL_PROJECT"
+	ApplicationLibrariesOnly ExecutionMode = "APPLICATION_LIBRARIES_ONLY"
+	InfrastructureVerifyOnly ExecutionMode = "INFRASTRUCTURE_VERIFY_ONLY"
+)
+
+func (m ExecutionMode) valid() bool {
+	return m == FullProject || m == ApplicationLibrariesOnly || m == InfrastructureVerifyOnly
+}
+
+// InfrastructureVerification is an observation from Core, never Start authority.
+type InfrastructureVerification struct {
+	Status                    string                                 `json:"status"`
+	Code                      *string                                `json:"code"`
+	InfrastructureFingerprint *string                                `json:"infrastructureFingerprint"`
+	EvidenceRevision          *string                                `json:"evidenceRevision"`
+	Deployments               []InfrastructureDeploymentVerification `json:"deployments"`
+}
+
+type InfrastructureDeploymentVerification struct {
+	DeploymentID   string `json:"deploymentId"`
+	SourceRunID    string `json:"sourceRunId"`
+	CoverageDigest string `json:"coverageDigest"`
+	VerifiedAt     string `json:"verifiedAt"`
+}
+
+func (v InfrastructureVerification) Validate() bool {
+	if v.Status != "PASS" && v.Status != "BLOCKED" && v.Status != "UNKNOWN" {
+		return false
+	}
+	if v.Deployments == nil || len(v.Deployments) > 256 {
+		return false
+	}
+	if v.Code != nil && *v.Code != "INFRA_VERIFY_MISSING" && *v.Code != "INFRA_VERIFY_STALE" && *v.Code != "INFRA_EVIDENCE_UNAVAILABLE" {
+		return false
+	}
+	for _, digest := range []*string{v.InfrastructureFingerprint, v.EvidenceRevision} {
+		if digest != nil && !validSHA256(*digest) {
+			return false
+		}
+	}
+	seen := map[string]bool{}
+	for _, d := range v.Deployments {
+		if len(d.DeploymentID) > 128 || !runtimeSecretDeploymentPattern.MatchString(d.DeploymentID) || seen[d.DeploymentID] || !validRuntimeToken(d.SourceRunID) || !validSHA256(d.CoverageDigest) || len(d.VerifiedAt) > 40 {
+			return false
+		}
+		if _, err := time.Parse(time.RFC3339, d.VerifiedAt); err != nil {
+			return false
+		}
+		seen[d.DeploymentID] = true
+	}
+	return true
+}
+
+func decodeInfrastructureVerification(raw any) (*InfrastructureVerification, error) {
+	fields, ok := raw.(map[string]any)
+	if !ok || len(fields) != 5 || !closedKeys(fields, "status", "code", "infrastructureFingerprint", "evidenceRevision", "deployments") {
+		return nil, errors.New("INFRASTRUCTURE_VERIFICATION_RESPONSE_INVALID")
+	}
+	data, err := json.Marshal(raw)
+	if err != nil || len(data) > 128*1024 {
+		return nil, errors.New("INFRASTRUCTURE_VERIFICATION_RESPONSE_INVALID")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var result InfrastructureVerification
+	if decoder.Decode(&result) != nil || decoder.Decode(new(any)) != io.EOF || !result.Validate() {
+		return nil, errors.New("INFRASTRUCTURE_VERIFICATION_RESPONSE_INVALID")
+	}
+	return &result, nil
+}
+
+func b0PlanCapabilitySupported(c map[string]any) bool {
+	if !closedKeys(c, "apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "targetCredentialLease", "runtimeSecretDescriptors", "serviceConfigurationPreview", "deploymentPlanRequestVersions", "projectSnapshotRequestVersions", "applicationExecution", "infrastructureVerification") {
+		return false
+	}
+	v, ok := c["infrastructureVerification"].(map[string]any)
+	return c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" && c["kind"] == "ExecutionCapabilities" && contains(c["supportedOperations"], "BuildDeploymentPlan") && contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha4") && ok && closedKeys(v, "protocol", "executionModes", "requiredPlanRequestVersion", "manifestContract", "planContract") && v["protocol"] == "InfrastructureVerification/v1alpha1" && v["requiredPlanRequestVersion"] == "platform.installer/execution-runtime/v1alpha4" && v["manifestContract"] == "platform.installer/execution-manifest/v1alpha3" && v["planContract"] == "platform.installer/plan/v1alpha5" && validExecutionModes(v["executionModes"])
+}
+
+// ReadApplicationLibraries uses the existing target-free snapshot path. It
+// does not resolve YAML locally or manufacture an empty success on old Core.
+func (t OpenSSHTransport) ReadApplicationLibraries(ctx context.Context, node Node, root string, release map[string]any) (*coreadapter.ApplicationLibraries, error) {
+	snapshot, err := t.BuildProjectSnapshot(ctx, node, root, release)
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.ApplicationLibraries == nil {
+		return nil, errors.New("APPLICATION_SNAPSHOT_RUNTIME_UNSUPPORTED")
+	}
+	return snapshot.ApplicationLibraries, nil
+}
+
+// BuildDeploymentPlanForMode reuses ordinary staging and the fixed Core operation.
+// Unsupported runtimes fail before staging; there is no full-project fallback.
+func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order []string, mode ExecutionMode, vaultSources map[string]string) (DeploymentPlan, error) {
+	if projectRoot == "" || len(release) == 0 || order == nil || len(order) > 256 || !mode.valid() || len(vaultSources) > 16 {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
+	}
+	for id, source := range vaultSources {
+		if len(id) > 128 || !runtimeSecretDeploymentPattern.MatchString(id) || (source != "RUNTIME_INPUT" && source != "CURRENT_RUN_BOOTSTRAP") {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
+		}
+	}
+	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
+	if err != nil {
+		return DeploymentPlan{}, err
+	}
+	if !b0PlanCapabilitySupported(c) {
+		return DeploymentPlan{}, errors.New("EXECUTION_MODE_RUNTIME_UNSUPPORTED")
+	}
+	if vaultSources == nil {
+		vaultSources = map[string]string{}
+	}
+	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha4", "runtimeRelease": release, "deploymentOrder": order, "executionMode": string(mode), "applicationVaultSources": vaultSources})
+}
+
+func validExecutionModes(raw any) bool {
+	values, ok := raw.([]any)
+	return ok && len(values) == 3 && values[0] == string(FullProject) && values[1] == string(ApplicationLibrariesOnly) && values[2] == string(InfrastructureVerifyOnly)
+}
 
 @@END
 @@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":42548,"sha256":"3d069313874145c9bed6d0d9ed5705c398ed8752b0bc2e25c6ad7c465f50e78a","index":0,"count":1,"encoding":"utf-8","payloadBytes":42548}
@@ -93524,7 +93974,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":59564,"sha256":"96e98e8ff05ffb7f4e5f1b7cffc624350945ebfcef1bff33a72eba53acc7cd4e","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":61026,"sha256":"d3eb155998b70f163755b0e61716d7679a818f97ab35444657da863de51d8c6c","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -93775,6 +94225,10 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	if err != nil || !orderedDeploymentPlanRequestSupported(capabilities) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED")
 	}
+	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder})
+}
+
+func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node Node, projectRoot string, request map[string]any) (DeploymentPlan, error) {
 	runID, err := newRunID()
 	if err != nil {
 		return DeploymentPlan{}, err
@@ -93782,12 +94236,16 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "plan"); err != nil {
 		return DeploymentPlan{}, err
 	}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "operation": "BuildDeploymentPlan", "runId": runID, "project": "/var/lib/platform-installer/execution/runs/" + runID + "/project", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder})
+	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
+	response, err := t.runtimeProtocol(ctx, node, request)
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
 	value, ok := response["deploymentPlan"].(map[string]any)
 	if !ok {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha4" && (value["apiVersion"] != "platform.installer/plan/v1alpha5" || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
@@ -93801,6 +94259,9 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 }
 
 func orderedDeploymentPlanRequestSupported(response map[string]any) bool {
+	if response["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" {
+		return b0PlanCapabilitySupported(response) && contains(response["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha2")
+	}
 	if response["apiVersion"] != "platform.installer/execution-capabilities/v1alpha6" || response["kind"] != "ExecutionCapabilities" {
 		return false
 	}
@@ -94502,6 +94963,18 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" {
+		mode, ok := value["executionMode"].(string)
+		plan.ExecutionMode = ExecutionMode(mode)
+		if !ok || !plan.ExecutionMode.valid() {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		var err error
+		plan.InfrastructureVerification, err = decodeInfrastructureVerification(value["infrastructureVerification"])
+		if err != nil {
+			return DeploymentPlan{}, err
+		}
+	}
 	if v, ok := value["id"].(string); ok {
 		plan.ID = v
 	}
@@ -94525,7 +94998,10 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	}
 	plan.AcknowledgementDetails = acknowledgements
 	for _, acknowledgement := range acknowledgements {
-		plan.Acknowledgements = append(plan.Acknowledgements, acknowledgement.Code)
+		plan.Acknowledgements = append(plan.Acknowledgements, acknowledgement.Cod
+@@END
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":61026,"sha256":"d3eb155998b70f163755b0e61716d7679a818f97ab35444657da863de51d8c6c","index":1,"count":2,"encoding":"utf-8","payloadBytes":13026}
+e)
 	}
 	phases, err := decodeDeploymentPlanPhases(value["phases"])
 	if err != nil {
@@ -94538,6 +95014,14 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			item, ok := raw.(map[string]any)
 			if !ok {
 				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+			}
+			if item["artifactType"] == "container-image" {
+				image, err := decodeApplicationImage(item)
+				if err != nil {
+					return DeploymentPlan{}, err
+				}
+				plan.ApplicationImages = append(plan.ApplicationImages, image)
+				continue
 			}
 			requirement := artifactsource.Requirement{}
 			if v, ok := item["requirementId"].(string); ok {
@@ -94562,9 +95046,6 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		}
 	}
 	credentials, err := decodeRequiredCredentials(value["requiredCredentials"])
-
-@@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":59564,"sha256":"96e98e8ff05ffb7f4e5f1b7cffc624350945ebfcef1bff33a72eba53acc7cd4e","index":1,"count":2,"encoding":"utf-8","payloadBytes":11564}
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
@@ -114447,545 +114928,5 @@ platform_docker_packages:
 
 - name: Apply pending Docker restart only after target and bridge exist
   ansible.builtin.meta: flush_handlers
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/resolve_tls.yml","mode":420,"size":4029,"sha256":"017275148451e7666e087a2929b40f40c484b0105daab2558d9025b39d1210d4","index":0,"count":1,"encoding":"utf-8","payloadBytes":4029}
----
-- name: Select Core PKI consumer plan when available
-  ansible.builtin.include_role:
-    name: platform.core.pki_materialize
-    tasks_from: select_consumer_plan.yml
-  vars:
-    platform_pki_consumer_tls_profile_id: "{{ platform_docker_tls_profile }}"
-  when: >-
-    platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
-    | selectattr('hostId', 'equalto', inventory_hostname)
-    | selectattr('tlsProfileId', 'equalto', platform_docker_tls_profile)
-    | list | length > 0
-
-- name: Resolve approved Docker TLS directory
-  ansible.builtin.set_fact:
-    _platform_docker_tls_source: >-
-      {{ platform_pki_selected_consumer_plan.targetDirectory
-         if platform_pki_selected_consumer_plan is defined
-         else platform_docker_tls_directory }}
-  changed_when: false
-
-- name: Reject missing or unsafe PKI directory
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_tls_source is match('^/[A-Za-z0-9_./-]{1,240}$')
-      - "'..' not in _platform_docker_tls_source.split('/')"
-    fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
-
-- name: Inspect exact Docker TLS files
-  ansible.builtin.stat:
-    path: "{{ _platform_docker_tls_source }}/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: [ca-chain.pem, certificate.pem, private-key.pem]
-  register: _platform_docker_tls_files
-  no_log: true
-
-- name: Require regular, non-symlink TLS material
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_tls_files.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
-      - _platform_docker_tls_files.results | selectattr('stat.islnk', 'equalto', true) | list | length == 0
-    fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
-  no_log: true
-
-- name: Require the selected Core PKI request to declare both Docker usages
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_selected_requests | length == 1
-      - "'serverAuth' in (_platform_docker_selected_requests[0].usages | default([]))"
-      - "'clientAuth' in (_platform_docker_selected_requests[0].usages | default([]))"
-    fail_msg: DOCKER_PKI_USAGES_INVALID
-  vars:
-    _platform_docker_selected_requests: >-
-      {{ _platform_pki_consumer_requests
-         | selectattr('id', 'equalto', platform_pki_selected_consumer_plan.requestId)
-         | list }}
-  when: platform_pki_selected_consumer_plan is defined
-
-- name: Read explicit certificate extended key usage
-  ansible.builtin.command:
-    argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, extendedKeyUsage]
-  register: _platform_docker_certificate_eku
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Reject absent or incomplete explicit Docker certificate EKU
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_certificate_eku.rc == 0
-      - _platform_docker_certificate_eku.stdout is search('X509v3 Extended Key Usage:')
-      - _platform_docker_certificate_eku.stdout is search('(?m)(?:^|[,\n])\s*TLS Web Server Authentication\s*(?:,|$)')
-      - _platform_docker_certificate_eku.stdout is search('(?m)(?:^|[,\n])\s*TLS Web Client Authentication\s*(?:,|$)')
-    fail_msg: DOCKER_PKI_USAGES_INVALID
-
-- name: Inspect Docker API certificate SAN
-  ansible.builtin.command:
-    argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, subjectAltName]
-  register: _platform_docker_certificate_san
-  changed_when: false
-  no_log: true
-
-- name: Require certificate identity for the target API address
-  ansible.builtin.assert:
-    that:
-      - >-
-        _platform_docker_certificate_san.stdout is search(
-          '(^|[,\\s])IP Address:' ~ ((ansible_host | default(inventory_hostname)) | regex_escape) ~ '([,\\s]|$)')
-        or _platform_docker_certificate_san.stdout is search(
-          '(^|[,\\s])DNS:' ~ ((ansible_host | default(inventory_hostname)) | regex_escape) ~ '([,\\s]|$)')
-    fail_msg: DOCKER_PKI_API_IDENTITY_MISSING
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/shell_environment.yml","mode":420,"size":1203,"sha256":"23e515cc48f887d2a3229957f8f768fb3553e45fee57ad2fc3fbec8dfc5e60e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":1203}
----
-- name: Inspect Docker account Bash profiles
-  ansible.builtin.stat:
-    path: "{{ _platform_docker_home }}/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: [.bashrc, .bash_profile]
-  register: _platform_docker_shell_profiles
-
-- name: Reject unsafe Docker account profile paths
-  ansible.builtin.assert:
-    that: >-
-      not item.stat.exists or
-      (item.stat.isreg | default(false) and not (item.stat.islnk | default(false)))
-    fail_msg: DOCKER_SHELL_PROFILE_PATH_UNSAFE
-  loop: "{{ _platform_docker_shell_profiles.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-
-- name: Persist rootless Docker environment for Bash sessions
-  ansible.builtin.blockinfile:
-    path: "{{ _platform_docker_home }}/{{ item }}"
-    create: true
-    owner: "{{ platform_docker_account_name }}"
-    group: "{{ _platform_docker_gid }}"
-    mode: '0644'
-    marker: "# {mark} Platform Installer rootless Docker environment"
-    block: |
-      export XDG_RUNTIME_DIR=/run/user/$(id -u)
-      export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
-      export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock
-  loop: [.bashrc, .bash_profile]
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":3354,"sha256":"152aff8c7f84439329566b588da28a9ff8a97123ea0aff90b65ce66caccc0585","index":0,"count":1,"encoding":"utf-8","payloadBytes":3354}
----
-- name: Validate bounded Docker desired inputs
-  ansible.builtin.assert:
-    that:
-      - platform_docker_mode in ['create-user', 'existing-user']
-      - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
-      - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
-      - platform_docker_tls_profile is string
-      - platform_docker_tls_profile | length > 0 or platform_docker_tls_directory | length > 0
-      - platform_docker_api_port | int >= 1
-      - platform_docker_api_port | int <= 65535
-      - platform_docker_internal_api_port | int == 12376
-      - (platform_docker_api_port | int) != (platform_docker_internal_api_port | int)
-      - platform_docker_api_bind_address == '0.0.0.0' or platform_docker_api_bind_address == (ansible_host | default(inventory_hostname))
-      - platform_docker_lxc_bridge == 'lxcbr0'
-      - platform_docker_lxc_veth_limit | int >= 1
-      - platform_docker_lxc_veth_limit | int <= 64
-    fail_msg: DOCKER_ROOTLESS_INPUT_INVALID
-
-- name: Inspect target RED OS identity
-  ansible.builtin.slurp:
-    src: /etc/os-release
-  register: _platform_docker_os_release
-
-- name: Inspect target machine architecture
-  ansible.builtin.command:
-    argv: [uname, -m]
-  register: _platform_docker_architecture
-  changed_when: false
-
-- name: Require supported RED OS architecture
-  ansible.builtin.assert:
-    that:
-      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
-      - _platform_docker_architecture.stdout == 'x86_64'
-    fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
-
-- name: Inspect rootful Docker daemon and socket
-  ansible.builtin.command:
-    argv: [systemctl, is-active, docker.service, docker.socket]
-  register: _platform_docker_rootful_units
-  changed_when: false
-  failed_when: false
-
-- name: Refuse active rootful Docker ownership conflict
-  ansible.builtin.assert:
-    that: "'active' not in _platform_docker_rootful_units.stdout_lines"
-    fail_msg: DOCKER_ROOTFUL_CONFLICT
-
-- name: Validate create-user runtime SecretRef
-  ansible.builtin.assert:
-    that:
-      - platform_docker_account_credential is mapping
-      - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
-      - platform_docker_secret_files is mapping
-      - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
-  when: platform_docker_mode == 'create-user'
-  no_log: true
-
-- name: Inspect create-user runtime password file on the controller
-  ansible.builtin.stat:
-    path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  delegate_to: localhost
-  become: false
-  register: _platform_docker_password_file
-  when: platform_docker_mode == 'create-user'
-  no_log: true
-
-- name: Require bounded regular runtime password file
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_password_file.stat.isreg
-      - not _platform_docker_password_file.stat.islnk
-      - _platform_docker_password_file.stat.size >= 1
-      - _platform_docker_password_file.stat.size <= 4096
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
-  when: platform_docker_mode == 'create-user'
-  no_log: true
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":4983,"sha256":"dd46b6229aa9bfb7031a429b4366062dbcb3bb432f2b1fc123c75c266d145caa","index":0,"count":1,"encoding":"utf-8","payloadBytes":4983}
----
-- name: Resolve selected Docker account for read-only verification
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ platform_docker_account_name }}"
-    fail_key: true
-
-- name: Bind verified UID and private TLS path
-  ansible.builtin.set_fact:
-    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
-    _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
-  changed_when: false
-
-- name: Check Docker account linger state
-  ansible.builtin.command:
-    argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
-  register: _platform_docker_linger
-  changed_when: false
-
-- name: Require user manager availability without a login session
-  ansible.builtin.assert:
-    that: _platform_docker_linger.stdout == 'Linger=yes'
-    fail_msg: DOCKER_USER_LINGER_DISABLED
-
-- name: Check LXC network, target and user bridge are active
-  ansible.builtin.command:
-    argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
-  register: _platform_docker_system_units
-  changed_when: false
-
-- name: Require active system-side dependency chain
-  ansible.builtin.assert:
-    that: _platform_docker_system_units.stdout_lines == ['active', 'active', 'active']
-    fail_msg: DOCKER_LXC_TARGET_NOT_ACTIVE
-
-- name: Check exact user Docker service is active
-  ansible.builtin.command:
-    argv: [systemctl, --user, is-active, docker.service]
-  become: true
-  become_user: "{{ platform_docker_account_name }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
-    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_uid }}/bus"
-  register: _platform_docker_user_unit
-  changed_when: false
-
-- name: Require active rootless user service
-  ansible.builtin.assert:
-    that: _platform_docker_user_unit.stdout == 'active'
-    fail_msg: DOCKER_USER_SERVICE_NOT_ACTIVE
-
-- name: Inspect Docker daemon through the account-local Unix socket
-  ansible.builtin.command:
-    argv: [docker, -H, "unix:///run/user/{{ _platform_docker_uid }}/docker.sock", info, --format, json]
-  become: true
-  become_user: "{{ platform_docker_account_name }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
-  register: _platform_docker_info
-  changed_when: false
-  failed_when: false
-  until: _platform_docker_info.rc == 0
-  retries: 20
-  delay: 2
-  no_log: true
-
-- name: Require a reachable account-local Docker daemon
-  ansible.builtin.assert:
-    that: _platform_docker_info.rc == 0
-    fail_msg: DOCKER_ROOTLESS_DAEMON_UNAVAILABLE
-
-- name: Require rootless non-Swarm daemon
-  ansible.builtin.assert:
-    that:
-      - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
-      - (_platform_docker_info.stdout | from_json).Swarm.LocalNodeState == 'inactive'
-    fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
-
-- name: Verify exact Docker Compose CLI plugin
-  ansible.builtin.command:
-    argv: [docker, compose, version, --short]
-  become: true
-  become_user: "{{ platform_docker_account_name }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
-  register: _platform_docker_compose_version
-  changed_when: false
-
-- name: Require installed Compose plugin
-  ansible.builtin.assert:
-    that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
-    fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
-
-- name: Verify mutual TLS on the externally published Docker API
-  ansible.builtin.command:
-    argv:
-      - docker
-      - --tlsverify
-      - "--tlscacert={{ _platform_docker_private_tls_dir }}/ca-chain.pem"
-      - "--tlscert={{ _platform_docker_private_tls_dir }}/certificate.pem"
-      - "--tlskey={{ _platform_docker_private_tls_dir }}/private-key.pem"
-      - -H
-      - "tcp://{{ ansible_host | default(inventory_hostname) }}:{{ platform_docker_api_port }}"
-      - version
-      - --format
-      - json
-  become: true
-  become_user: "{{ platform_docker_account_name }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
-  register: _platform_docker_tls_api_version
-  changed_when: false
-  no_log: true
-
-- name: Require valid remote Docker API response
-  ansible.builtin.assert:
-    that:
-      - (_platform_docker_tls_api_version.stdout | from_json).Server.Version is string
-      - (_platform_docker_tls_api_version.stdout | from_json).Server.Version | length > 0
-    fail_msg: DOCKER_TLS_API_UNAVAILABLE
-
-- name: Check system daemon/socket remain inactive
-  ansible.builtin.command:
-    argv: [systemctl, is-active, docker.service, docker.socket]
-  register: _platform_docker_rootful_verify
-  changed_when: false
-  failed_when: false
-
-- name: Forbid active rootful Docker path
-  ansible.builtin.assert:
-    that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
-    fail_msg: DOCKER_ROOTFUL_CONFLICT
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/templates/docker.service.j2","mode":420,"size":1188,"sha256":"cb8d815617efb8174f4a65f227800ce793371e1ae4796c9351b7e37cc36ad0ee","index":0,"count":1,"encoding":"utf-8","payloadBytes":1188}
-# Platform Installer V2 managed rootless Docker user unit
-[Unit]
-Description=Platform Installer rootless Docker
-Documentation=https://docs.docker.com/engine/security/rootless/
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-Environment=PATH=/usr/libexec/lxc:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=lxc-user-nic
-Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=builtin
-Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_DETACH_NETNS=false
-Environment="DOCKERD_ROOTLESS_ROOTLESSKIT_FLAGS=-p {{ platform_docker_api_bind_address }}:{{ platform_docker_api_port }}:{{ platform_docker_internal_api_port }}/tcp"
-ExecStartPre=/usr/bin/systemctl is-active --quiet {{ platform_docker_name }}-lxc-ready.target
-ExecStart=/usr/bin/dockerd-rootless.sh -H unix:///run/user/{{ _platform_docker_uid }}/docker.sock -H tcp://0.0.0.0:{{ platform_docker_internal_api_port }} --tlsverify --tlscacert={{ _platform_docker_private_tls_dir }}/ca-chain.pem --tlscert={{ _platform_docker_private_tls_dir }}/certificate.pem --tlskey={{ _platform_docker_private_tls_dir }}/private-key.pem
-Restart=on-failure
-RestartSec=5
-TimeoutStartSec=120
-KillMode=mixed
-
-[Install]
-WantedBy=default.target
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/templates/platform-docker-lxc-ready.target.j2","mode":420,"size":211,"sha256":"bfd63437b2d373e7553c11e372e9b163dd0e0ea72f9828d94555e650aa07af53","index":0,"count":1,"encoding":"utf-8","payloadBytes":211}
-# Platform Installer V2 managed LXC readiness target
-[Unit]
-Description=LXC network ready for Platform Installer rootless Docker
-BindsTo=lxc-net.service
-After=lxc-net.service
-
-[Install]
-WantedBy=lxc-net.service
-
-@@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/templates/platform-docker-rootless-bridge.service.j2","mode":420,"size":780,"sha256":"9de9cc516a657825ff42b30cb453a7937d8fc63bf2d6f43f24f430d4f9582c82","index":0,"count":1,"encoding":"utf-8","payloadBytes":780}
-# Platform Installer V2 managed rootless Docker system/user bridge
-[Unit]
-Description=Start rootless Docker for {{ platform_docker_account_name }} after LXC network
-BindsTo={{ platform_docker_name }}-lxc-ready.target
-After={{ platform_docker_name }}-lxc-ready.target user@{{ _platform_docker_uid }}.service
-Requires=user@{{ _platform_docker_uid }}.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-User={{ platform_docker_account_name }}
-Environment=XDG_RUNTIME_DIR=/run/user/{{ _platform_docker_uid }}
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ _platform_docker_uid }}/bus
-ExecStart=/usr/bin/systemctl --user start docker.service
-ExecStop=/usr/bin/systemctl --user stop docker.service
-TimeoutStartSec=180
-TimeoutStopSec=180
-
-[Install]
-WantedBy=lxc-net.service
-
-@@END
-@@PORTABLE {"path":"services/docker/artifacts.yml","mode":420,"size":320,"sha256":"14abe45fd8b62aac4c7061b6604a2d1c720812cda443c34f5e8ed3362acd45f9","index":0,"count":1,"encoding":"utf-8","payloadBytes":320}
-apiVersion: platform.installer/artifacts/v1alpha1
-service: docker
-artifacts: []
-packageSource:
-  kind: system-repository
-  distribution: RED OS
-  packages: [docker-ce, docker-ce-cli, docker-ce-rootless-extras, docker-compose, lxc, fuse-overlayfs]
-  offlineBundle: deferred
-status: candidate-system-repository-acceptance
-
-@@END
-@@PORTABLE {"path":"services/docker/compatibility.yml","mode":420,"size":444,"sha256":"2bc8cc50525e80113d462ac1c215b32ab9ad4e1fb75f3ad7d0eb23933703d96d","index":0,"count":1,"encoding":"utf-8","payloadBytes":444}
-apiVersion: platform.installer/compatibility/v1alpha1
-service: docker
-combinations:
-  - os: redos
-    osVersion: "7.3"
-    architecture: x86_64
-    source: system-repository
-    status: runtime-verified-redos73-support-01
-  - os: redos
-    osVersion: "8.0"
-    architecture: x86_64
-    source: system-repository
-    status: candidate-service-install-10
-  - os: altlinux
-    status: deferred
-status: requires-service-install-10-runtime-evidence
-
-@@END
-@@PORTABLE {"path":"services/docker/configuration.schema.json","mode":420,"size":924,"sha256":"011e56aed5a373dbff0684f391928ab9e73f4c7119f4f0c9f69f7c7e2d7e76d0","index":0,"count":1,"encoding":"utf-8","payloadBytes":924}
-{
-  "$id": "https://platform.installer/schemas/services/docker/configuration-v1alpha1.schema.json",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "accountCredential": {
-      "additionalProperties": false,
-      "properties": {
-        "passwordSecretRef": {
-          "minLength": 1,
-          "type": "string"
-        }
-      },
-      "required": [
-        "passwordSecretRef"
-      ],
-      "type": "object"
-    },
-    "accountName": {
-      "maxLength": 32,
-      "minLength": 1,
-      "type": "string"
-    },
-    "apiBindAddress": {
-      "maxLength": 64,
-      "minLength": 1,
-      "type": "string"
-    },
-    "apiPort": {
-      "maximum": 65535,
-      "minimum": 1,
-      "type": "integer"
-    },
-    "tlsProfile": {
-      "minLength": 1,
-      "type": "string"
-    }
-  },
-  "title": "Docker rootless desired configuration",
-  "type": "object"
-}
-
-@@END
-@@PORTABLE {"path":"services/docker/playbooks/apply.yml","mode":420,"size":549,"sha256":"1fa2b0e4d043c7b30307399995b6f0601a1ff238c66f32171222330a77103b29","index":0,"count":1,"encoding":"utf-8","payloadBytes":549}
----
-- import_playbook: ../../../ansible-core/playbooks/validate.yml
-
-- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
-
-- name: Apply rootless Docker and Compose
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  pre_tasks:
-    - name: Apply trusted runtime Docker settings
-      ansible.builtin.include_role:
-        name: platform.core.runtime_role_variables
-      when: platform_execution_role_variables_by_host is defined
-  roles:
-    - role: platform.docker.docker_rootless
-      platform_docker_verify_only: false
-
-@@END
-@@PORTABLE {"path":"services/docker/playbooks/clear.yml","mode":420,"size":339,"sha256":"eb2f422dde15f4eea2b991be74cfcd220e6ba38692d1862934c8e046cf918077","index":0,"count":1,"encoding":"utf-8","payloadBytes":339}
----
-- name: Deactivate only the selected managed rootless Docker service
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  tasks:
-    - name: Clear the selected managed Docker account without deleting its data
-      ansible.builtin.include_role:
-        name: platform.docker.docker_rootless
-        tasks_from: clear_entry
-
-@@END
-@@PORTABLE {"path":"services/docker/playbooks/verify.yml","mode":420,"size":495,"sha256":"6903f62d5e5e3b4c2eadb62f9383a5325c6fa7ae9cdf2912ed5ad62ed8971600","index":0,"count":1,"encoding":"utf-8","payloadBytes":495}
----
-- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
-
-- name: Verify rootless Docker and Compose read-only
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  pre_tasks:
-    - name: Apply trusted runtime Docker settings
-      ansible.builtin.include_role:
-        name: platform.core.runtime_role_variables
-      when: platform_execution_role_variables_by_host is defined
-  roles:
-    - role: platform.docker.docker_rootless
-      platform_docker_verify_only: true
 
 @@END

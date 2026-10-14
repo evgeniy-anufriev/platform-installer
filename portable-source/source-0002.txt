@@ -1,3 +1,543 @@
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/resolve_tls.yml","mode":420,"size":4029,"sha256":"017275148451e7666e087a2929b40f40c484b0105daab2558d9025b39d1210d4","index":0,"count":1,"encoding":"utf-8","payloadBytes":4029}
+---
+- name: Select Core PKI consumer plan when available
+  ansible.builtin.include_role:
+    name: platform.core.pki_materialize
+    tasks_from: select_consumer_plan.yml
+  vars:
+    platform_pki_consumer_tls_profile_id: "{{ platform_docker_tls_profile }}"
+  when: >-
+    platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)
+    | selectattr('hostId', 'equalto', inventory_hostname)
+    | selectattr('tlsProfileId', 'equalto', platform_docker_tls_profile)
+    | list | length > 0
+
+- name: Resolve approved Docker TLS directory
+  ansible.builtin.set_fact:
+    _platform_docker_tls_source: >-
+      {{ platform_pki_selected_consumer_plan.targetDirectory
+         if platform_pki_selected_consumer_plan is defined
+         else platform_docker_tls_directory }}
+  changed_when: false
+
+- name: Reject missing or unsafe PKI directory
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_tls_source is match('^/[A-Za-z0-9_./-]{1,240}$')
+      - "'..' not in _platform_docker_tls_source.split('/')"
+    fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
+
+- name: Inspect exact Docker TLS files
+  ansible.builtin.stat:
+    path: "{{ _platform_docker_tls_source }}/{{ item }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  loop: [ca-chain.pem, certificate.pem, private-key.pem]
+  register: _platform_docker_tls_files
+  no_log: true
+
+- name: Require regular, non-symlink TLS material
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_tls_files.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
+      - _platform_docker_tls_files.results | selectattr('stat.islnk', 'equalto', true) | list | length == 0
+    fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
+  no_log: true
+
+- name: Require the selected Core PKI request to declare both Docker usages
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_selected_requests | length == 1
+      - "'serverAuth' in (_platform_docker_selected_requests[0].usages | default([]))"
+      - "'clientAuth' in (_platform_docker_selected_requests[0].usages | default([]))"
+    fail_msg: DOCKER_PKI_USAGES_INVALID
+  vars:
+    _platform_docker_selected_requests: >-
+      {{ _platform_pki_consumer_requests
+         | selectattr('id', 'equalto', platform_pki_selected_consumer_plan.requestId)
+         | list }}
+  when: platform_pki_selected_consumer_plan is defined
+
+- name: Read explicit certificate extended key usage
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, extendedKeyUsage]
+  register: _platform_docker_certificate_eku
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Reject absent or incomplete explicit Docker certificate EKU
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_certificate_eku.rc == 0
+      - _platform_docker_certificate_eku.stdout is search('X509v3 Extended Key Usage:')
+      - _platform_docker_certificate_eku.stdout is search('(?m)(?:^|[,\n])\s*TLS Web Server Authentication\s*(?:,|$)')
+      - _platform_docker_certificate_eku.stdout is search('(?m)(?:^|[,\n])\s*TLS Web Client Authentication\s*(?:,|$)')
+    fail_msg: DOCKER_PKI_USAGES_INVALID
+
+- name: Inspect Docker API certificate SAN
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, subjectAltName]
+  register: _platform_docker_certificate_san
+  changed_when: false
+  no_log: true
+
+- name: Require certificate identity for the target API address
+  ansible.builtin.assert:
+    that:
+      - >-
+        _platform_docker_certificate_san.stdout is search(
+          '(^|[,\\s])IP Address:' ~ ((ansible_host | default(inventory_hostname)) | regex_escape) ~ '([,\\s]|$)')
+        or _platform_docker_certificate_san.stdout is search(
+          '(^|[,\\s])DNS:' ~ ((ansible_host | default(inventory_hostname)) | regex_escape) ~ '([,\\s]|$)')
+    fail_msg: DOCKER_PKI_API_IDENTITY_MISSING
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/shell_environment.yml","mode":420,"size":1203,"sha256":"23e515cc48f887d2a3229957f8f768fb3553e45fee57ad2fc3fbec8dfc5e60e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":1203}
+---
+- name: Inspect Docker account Bash profiles
+  ansible.builtin.stat:
+    path: "{{ _platform_docker_home }}/{{ item }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  loop: [.bashrc, .bash_profile]
+  register: _platform_docker_shell_profiles
+
+- name: Reject unsafe Docker account profile paths
+  ansible.builtin.assert:
+    that: >-
+      not item.stat.exists or
+      (item.stat.isreg | default(false) and not (item.stat.islnk | default(false)))
+    fail_msg: DOCKER_SHELL_PROFILE_PATH_UNSAFE
+  loop: "{{ _platform_docker_shell_profiles.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Persist rootless Docker environment for Bash sessions
+  ansible.builtin.blockinfile:
+    path: "{{ _platform_docker_home }}/{{ item }}"
+    create: true
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0644'
+    marker: "# {mark} Platform Installer rootless Docker environment"
+    block: |
+      export XDG_RUNTIME_DIR=/run/user/$(id -u)
+      export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+      export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock
+  loop: [.bashrc, .bash_profile]
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":3354,"sha256":"152aff8c7f84439329566b588da28a9ff8a97123ea0aff90b65ce66caccc0585","index":0,"count":1,"encoding":"utf-8","payloadBytes":3354}
+---
+- name: Validate bounded Docker desired inputs
+  ansible.builtin.assert:
+    that:
+      - platform_docker_mode in ['create-user', 'existing-user']
+      - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
+      - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
+      - platform_docker_tls_profile is string
+      - platform_docker_tls_profile | length > 0 or platform_docker_tls_directory | length > 0
+      - platform_docker_api_port | int >= 1
+      - platform_docker_api_port | int <= 65535
+      - platform_docker_internal_api_port | int == 12376
+      - (platform_docker_api_port | int) != (platform_docker_internal_api_port | int)
+      - platform_docker_api_bind_address == '0.0.0.0' or platform_docker_api_bind_address == (ansible_host | default(inventory_hostname))
+      - platform_docker_lxc_bridge == 'lxcbr0'
+      - platform_docker_lxc_veth_limit | int >= 1
+      - platform_docker_lxc_veth_limit | int <= 64
+    fail_msg: DOCKER_ROOTLESS_INPUT_INVALID
+
+- name: Inspect target RED OS identity
+  ansible.builtin.slurp:
+    src: /etc/os-release
+  register: _platform_docker_os_release
+
+- name: Inspect target machine architecture
+  ansible.builtin.command:
+    argv: [uname, -m]
+  register: _platform_docker_architecture
+  changed_when: false
+
+- name: Require supported RED OS architecture
+  ansible.builtin.assert:
+    that:
+      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
+      - _platform_docker_architecture.stdout == 'x86_64'
+    fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
+
+- name: Inspect rootful Docker daemon and socket
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service, docker.socket]
+  register: _platform_docker_rootful_units
+  changed_when: false
+  failed_when: false
+
+- name: Refuse active rootful Docker ownership conflict
+  ansible.builtin.assert:
+    that: "'active' not in _platform_docker_rootful_units.stdout_lines"
+    fail_msg: DOCKER_ROOTFUL_CONFLICT
+
+- name: Validate create-user runtime SecretRef
+  ansible.builtin.assert:
+    that:
+      - platform_docker_account_credential is mapping
+      - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
+      - platform_docker_secret_files is mapping
+      - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
+  when: platform_docker_mode == 'create-user'
+  no_log: true
+
+- name: Inspect create-user runtime password file on the controller
+  ansible.builtin.stat:
+    path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  register: _platform_docker_password_file
+  when: platform_docker_mode == 'create-user'
+  no_log: true
+
+- name: Require bounded regular runtime password file
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_password_file.stat.isreg
+      - not _platform_docker_password_file.stat.islnk
+      - _platform_docker_password_file.stat.size >= 1
+      - _platform_docker_password_file.stat.size <= 4096
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
+  when: platform_docker_mode == 'create-user'
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":4983,"sha256":"dd46b6229aa9bfb7031a429b4366062dbcb3bb432f2b1fc123c75c266d145caa","index":0,"count":1,"encoding":"utf-8","payloadBytes":4983}
+---
+- name: Resolve selected Docker account for read-only verification
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ platform_docker_account_name }}"
+    fail_key: true
+
+- name: Bind verified UID and private TLS path
+  ansible.builtin.set_fact:
+    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
+  changed_when: false
+
+- name: Check Docker account linger state
+  ansible.builtin.command:
+    argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
+  register: _platform_docker_linger
+  changed_when: false
+
+- name: Require user manager availability without a login session
+  ansible.builtin.assert:
+    that: _platform_docker_linger.stdout == 'Linger=yes'
+    fail_msg: DOCKER_USER_LINGER_DISABLED
+
+- name: Check LXC network, target and user bridge are active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
+  register: _platform_docker_system_units
+  changed_when: false
+
+- name: Require active system-side dependency chain
+  ansible.builtin.assert:
+    that: _platform_docker_system_units.stdout_lines == ['active', 'active', 'active']
+    fail_msg: DOCKER_LXC_TARGET_NOT_ACTIVE
+
+- name: Check exact user Docker service is active
+  ansible.builtin.command:
+    argv: [systemctl, --user, is-active, docker.service]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_uid }}/bus"
+  register: _platform_docker_user_unit
+  changed_when: false
+
+- name: Require active rootless user service
+  ansible.builtin.assert:
+    that: _platform_docker_user_unit.stdout == 'active'
+    fail_msg: DOCKER_USER_SERVICE_NOT_ACTIVE
+
+- name: Inspect Docker daemon through the account-local Unix socket
+  ansible.builtin.command:
+    argv: [docker, -H, "unix:///run/user/{{ _platform_docker_uid }}/docker.sock", info, --format, json]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+  register: _platform_docker_info
+  changed_when: false
+  failed_when: false
+  until: _platform_docker_info.rc == 0
+  retries: 20
+  delay: 2
+  no_log: true
+
+- name: Require a reachable account-local Docker daemon
+  ansible.builtin.assert:
+    that: _platform_docker_info.rc == 0
+    fail_msg: DOCKER_ROOTLESS_DAEMON_UNAVAILABLE
+
+- name: Require rootless non-Swarm daemon
+  ansible.builtin.assert:
+    that:
+      - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
+      - (_platform_docker_info.stdout | from_json).Swarm.LocalNodeState == 'inactive'
+    fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
+
+- name: Verify exact Docker Compose CLI plugin
+  ansible.builtin.command:
+    argv: [docker, compose, version, --short]
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+  register: _platform_docker_compose_version
+  changed_when: false
+
+- name: Require installed Compose plugin
+  ansible.builtin.assert:
+    that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
+    fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
+
+- name: Verify mutual TLS on the externally published Docker API
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --tlsverify
+      - "--tlscacert={{ _platform_docker_private_tls_dir }}/ca-chain.pem"
+      - "--tlscert={{ _platform_docker_private_tls_dir }}/certificate.pem"
+      - "--tlskey={{ _platform_docker_private_tls_dir }}/private-key.pem"
+      - -H
+      - "tcp://{{ ansible_host | default(inventory_hostname) }}:{{ platform_docker_api_port }}"
+      - version
+      - --format
+      - json
+  become: true
+  become_user: "{{ platform_docker_account_name }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+  register: _platform_docker_tls_api_version
+  changed_when: false
+  no_log: true
+
+- name: Require valid remote Docker API response
+  ansible.builtin.assert:
+    that:
+      - (_platform_docker_tls_api_version.stdout | from_json).Server.Version is string
+      - (_platform_docker_tls_api_version.stdout | from_json).Server.Version | length > 0
+    fail_msg: DOCKER_TLS_API_UNAVAILABLE
+
+- name: Check system daemon/socket remain inactive
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service, docker.socket]
+  register: _platform_docker_rootful_verify
+  changed_when: false
+  failed_when: false
+
+- name: Forbid active rootful Docker path
+  ansible.builtin.assert:
+    that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
+    fail_msg: DOCKER_ROOTFUL_CONFLICT
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/templates/docker.service.j2","mode":420,"size":1188,"sha256":"cb8d815617efb8174f4a65f227800ce793371e1ae4796c9351b7e37cc36ad0ee","index":0,"count":1,"encoding":"utf-8","payloadBytes":1188}
+# Platform Installer V2 managed rootless Docker user unit
+[Unit]
+Description=Platform Installer rootless Docker
+Documentation=https://docs.docker.com/engine/security/rootless/
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PATH=/usr/libexec/lxc:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=lxc-user-nic
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=builtin
+Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_DETACH_NETNS=false
+Environment="DOCKERD_ROOTLESS_ROOTLESSKIT_FLAGS=-p {{ platform_docker_api_bind_address }}:{{ platform_docker_api_port }}:{{ platform_docker_internal_api_port }}/tcp"
+ExecStartPre=/usr/bin/systemctl is-active --quiet {{ platform_docker_name }}-lxc-ready.target
+ExecStart=/usr/bin/dockerd-rootless.sh -H unix:///run/user/{{ _platform_docker_uid }}/docker.sock -H tcp://0.0.0.0:{{ platform_docker_internal_api_port }} --tlsverify --tlscacert={{ _platform_docker_private_tls_dir }}/ca-chain.pem --tlscert={{ _platform_docker_private_tls_dir }}/certificate.pem --tlskey={{ _platform_docker_private_tls_dir }}/private-key.pem
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+KillMode=mixed
+
+[Install]
+WantedBy=default.target
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/templates/platform-docker-lxc-ready.target.j2","mode":420,"size":211,"sha256":"bfd63437b2d373e7553c11e372e9b163dd0e0ea72f9828d94555e650aa07af53","index":0,"count":1,"encoding":"utf-8","payloadBytes":211}
+# Platform Installer V2 managed LXC readiness target
+[Unit]
+Description=LXC network ready for Platform Installer rootless Docker
+BindsTo=lxc-net.service
+After=lxc-net.service
+
+[Install]
+WantedBy=lxc-net.service
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/templates/platform-docker-rootless-bridge.service.j2","mode":420,"size":780,"sha256":"9de9cc516a657825ff42b30cb453a7937d8fc63bf2d6f43f24f430d4f9582c82","index":0,"count":1,"encoding":"utf-8","payloadBytes":780}
+# Platform Installer V2 managed rootless Docker system/user bridge
+[Unit]
+Description=Start rootless Docker for {{ platform_docker_account_name }} after LXC network
+BindsTo={{ platform_docker_name }}-lxc-ready.target
+After={{ platform_docker_name }}-lxc-ready.target user@{{ _platform_docker_uid }}.service
+Requires=user@{{ _platform_docker_uid }}.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User={{ platform_docker_account_name }}
+Environment=XDG_RUNTIME_DIR=/run/user/{{ _platform_docker_uid }}
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ _platform_docker_uid }}/bus
+ExecStart=/usr/bin/systemctl --user start docker.service
+ExecStop=/usr/bin/systemctl --user stop docker.service
+TimeoutStartSec=180
+TimeoutStopSec=180
+
+[Install]
+WantedBy=lxc-net.service
+
+@@END
+@@PORTABLE {"path":"services/docker/artifacts.yml","mode":420,"size":320,"sha256":"14abe45fd8b62aac4c7061b6604a2d1c720812cda443c34f5e8ed3362acd45f9","index":0,"count":1,"encoding":"utf-8","payloadBytes":320}
+apiVersion: platform.installer/artifacts/v1alpha1
+service: docker
+artifacts: []
+packageSource:
+  kind: system-repository
+  distribution: RED OS
+  packages: [docker-ce, docker-ce-cli, docker-ce-rootless-extras, docker-compose, lxc, fuse-overlayfs]
+  offlineBundle: deferred
+status: candidate-system-repository-acceptance
+
+@@END
+@@PORTABLE {"path":"services/docker/compatibility.yml","mode":420,"size":444,"sha256":"2bc8cc50525e80113d462ac1c215b32ab9ad4e1fb75f3ad7d0eb23933703d96d","index":0,"count":1,"encoding":"utf-8","payloadBytes":444}
+apiVersion: platform.installer/compatibility/v1alpha1
+service: docker
+combinations:
+  - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    source: system-repository
+    status: runtime-verified-redos73-support-01
+  - os: redos
+    osVersion: "8.0"
+    architecture: x86_64
+    source: system-repository
+    status: candidate-service-install-10
+  - os: altlinux
+    status: deferred
+status: requires-service-install-10-runtime-evidence
+
+@@END
+@@PORTABLE {"path":"services/docker/configuration.schema.json","mode":420,"size":924,"sha256":"011e56aed5a373dbff0684f391928ab9e73f4c7119f4f0c9f69f7c7e2d7e76d0","index":0,"count":1,"encoding":"utf-8","payloadBytes":924}
+{
+  "$id": "https://platform.installer/schemas/services/docker/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accountCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "accountName": {
+      "maxLength": 32,
+      "minLength": 1,
+      "type": "string"
+    },
+    "apiBindAddress": {
+      "maxLength": 64,
+      "minLength": 1,
+      "type": "string"
+    },
+    "apiPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "Docker rootless desired configuration",
+  "type": "object"
+}
+
+@@END
+@@PORTABLE {"path":"services/docker/playbooks/apply.yml","mode":420,"size":549,"sha256":"1fa2b0e4d043c7b30307399995b6f0601a1ff238c66f32171222330a77103b29","index":0,"count":1,"encoding":"utf-8","payloadBytes":549}
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+
+- name: Apply rootless Docker and Compose
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime Docker settings
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+  roles:
+    - role: platform.docker.docker_rootless
+      platform_docker_verify_only: false
+
+@@END
+@@PORTABLE {"path":"services/docker/playbooks/clear.yml","mode":420,"size":339,"sha256":"eb2f422dde15f4eea2b991be74cfcd220e6ba38692d1862934c8e046cf918077","index":0,"count":1,"encoding":"utf-8","payloadBytes":339}
+---
+- name: Deactivate only the selected managed rootless Docker service
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Clear the selected managed Docker account without deleting its data
+      ansible.builtin.include_role:
+        name: platform.docker.docker_rootless
+        tasks_from: clear_entry
+
+@@END
+@@PORTABLE {"path":"services/docker/playbooks/verify.yml","mode":420,"size":495,"sha256":"6903f62d5e5e3b4c2eadb62f9383a5325c6fa7ae9cdf2912ed5ad62ed8971600","index":0,"count":1,"encoding":"utf-8","payloadBytes":495}
+---
+- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
+
+- name: Verify rootless Docker and Compose read-only
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime Docker settings
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+  roles:
+    - role: platform.docker.docker_rootless
+      platform_docker_verify_only: true
+
+@@END
 @@PORTABLE {"path":"services/docker/service.yml","mode":420,"size":3499,"sha256":"e2cdd5dc4a30a44b81d448ed5172d3d5ff4b513dd2d22ef5ff2749eea4276292","index":0,"count":1,"encoding":"utf-8","payloadBytes":3499}
 apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
