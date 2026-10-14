@@ -146,3 +146,14 @@ func readLocalInfrastructureVerification(store, projectRoot, projectID, nodeBind
 	}
 	return &r, nil
 }
+
+// An offline/reopened observation stays UNKNOWN until a fresh Core Build.
+func (a *App) GetInfrastructureVerification() InfrastructureVerificationView {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.binding == nil {
+		return InfrastructureVerificationView{Availability: "UNKNOWN"}
+	}
+	bundle, _ := a.binding.reader.runtimeRelease["bundleDigest"].(string)
+	return cachedInfrastructureVerification(a.infrastructureVerificationRoot, a.current.Root, a.current.Project.ID, a.binding.node, bundle)
+}

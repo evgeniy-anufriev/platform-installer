@@ -231,39 +231,40 @@ type App struct {
 	reader           interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	projectRevision            func(string) (string, error)
-	lifecycle                  projectLifecycle
-	current                    ProjectOpenResult
-	sessions                   *installer.EditSessionStore
-	editor                     *installer.Backend
-	activeSession              string
-	editMu                     sync.Mutex
-	config                     appconfig.Config
-	configErr                  error
-	secrets                    *runtimesecret.Broker
-	execution                  *executionNodeContextStore
-	binding                    *executionNodeBinding
-	availableBundleRoot        string
-	bundleCacheRoot            string
-	bundlePublisher            func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
-	localRunRecordRoot         string
-	bundlePreview              *runtimeBundlePreview
-	orphanRecovery             *orphanRunRecovery
-	recoveredRun               *localRunRecord
-	recoveredCancelUnconfirmed bool
-	pendingServerInformation   *serverInformationProbe
-	pendingHostKey             *pendingExecutionHostKey
-	pendingTargetHostKey       *pendingTargetHostKey
-	approvedTargetHostKeys     map[string]approvedTargetHostKey
-	continuation               *verificationContinuation
-	export                     *installer.ProjectExport
-	installationPlanID         string
-	installationRuns           *installationRunRegistry
-	installationGeneration     uint64
-	startInFlight              bool
-	startOutcomeUnknown        bool
-	runtimeUpdateInFlight      bool
-	runtimeSecretEvidence      *runtimeSecretDescriptorEvidence
+	projectRevision                func(string) (string, error)
+	lifecycle                      projectLifecycle
+	current                        ProjectOpenResult
+	sessions                       *installer.EditSessionStore
+	editor                         *installer.Backend
+	activeSession                  string
+	editMu                         sync.Mutex
+	config                         appconfig.Config
+	configErr                      error
+	secrets                        *runtimesecret.Broker
+	execution                      *executionNodeContextStore
+	binding                        *executionNodeBinding
+	availableBundleRoot            string
+	bundleCacheRoot                string
+	bundlePublisher                func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
+	localRunRecordRoot             string
+	infrastructureVerificationRoot string
+	bundlePreview                  *runtimeBundlePreview
+	orphanRecovery                 *orphanRunRecovery
+	recoveredRun                   *localRunRecord
+	recoveredCancelUnconfirmed     bool
+	pendingServerInformation       *serverInformationProbe
+	pendingHostKey                 *pendingExecutionHostKey
+	pendingTargetHostKey           *pendingTargetHostKey
+	approvedTargetHostKeys         map[string]approvedTargetHostKey
+	continuation                   *verificationContinuation
+	export                         *installer.ProjectExport
+	installationPlanID             string
+	installationRuns               *installationRunRegistry
+	installationGeneration         uint64
+	startInFlight                  bool
+	startOutcomeUnknown            bool
+	runtimeUpdateInFlight          bool
+	runtimeSecretEvidence          *runtimeSecretDescriptorEvidence
 }
 
 type AppOption func(*App)
@@ -318,7 +319,7 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry(), approvedTargetHostKeys: map[string]approvedTargetHostKey{}, localRunRecordRoot: defaultLocalRunRecordRoot(), events: noopEventPublisher{}}
+	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry(), approvedTargetHostKeys: map[string]approvedTargetHostKey{}, localRunRecordRoot: defaultLocalRunRecordRoot(), infrastructureVerificationRoot: defaultInfrastructureVerificationRoot(), events: noopEventPublisher{}}
 	for _, option := range options {
 		option(app)
 	}
@@ -2049,4 +2050,8 @@ func projectErrorMessage(code string) string {
 	default:
 		return "Не удалось открыть проект в режиме только чтения. Проект на диске не изменён."
 	}
+}
+
+func WithInfrastructureVerificationRoot(root string) AppOption {
+	return func(app *App) { app.infrastructureVerificationRoot = root }
 }

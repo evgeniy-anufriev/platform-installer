@@ -21,21 +21,31 @@ type InstallationPlanOperation struct {
 	Error  *ProjectOpenError     `json:"error,omitempty"`
 }
 
+type InstallationPlanRequest struct {
+	ExecutionMode           executionnode.ExecutionMode `json:"executionMode"`
+	DeploymentOrder         []string                    `json:"deploymentOrder"`
+	ApplicationVaultSources map[string]string           `json:"applicationVaultSources"`
+}
+
 type InstallationPlanView struct {
-	ID                                    string                        `json:"id"`
-	Status                                string                        `json:"status"`
-	ProjectRevision                       string                        `json:"projectRevision"`
-	PlanFingerprint                       string                        `json:"planFingerprint"`
-	ExecutionNodeID                       string                        `json:"executionNodeId"`
-	Runtime                               InstallationRuntimeBinding    `json:"runtime"`
-	ExpiresAt                             string                        `json:"expiresAt"`
-	Approved                              bool                          `json:"approved"`
-	Acknowledgements                      []InstallationAcknowledgement `json:"acknowledgements"`
-	Phases                                []InstallationPlanPhase       `json:"phases"`
-	Findings                              []InstallationPlanFinding     `json:"findings,omitempty"`
-	PKIStorePasswordRequired              bool                          `json:"pkiStorePasswordRequired"`
-	SecretOutputEncryptionRequired        bool                          `json:"secretOutputEncryptionRequired"`
-	SecretOutputEncryptionPasswordPresent bool                          `json:"secretOutputEncryptionPasswordPresent"`
+	ExecutionMode                         executionnode.ExecutionMode               `json:"executionMode"`
+	InfrastructureVerification            *executionnode.InfrastructureVerification `json:"infrastructureVerification,omitempty"`
+	InfrastructureObservedAt              string                                    `json:"infrastructureObservedAt,omitempty"`
+	InfrastructureCacheWarning            bool                                      `json:"infrastructureCacheWarning,omitempty"`
+	ID                                    string                                    `json:"id"`
+	Status                                string                                    `json:"status"`
+	ProjectRevision                       string                                    `json:"projectRevision"`
+	PlanFingerprint                       string                                    `json:"planFingerprint"`
+	ExecutionNodeID                       string                                    `json:"executionNodeId"`
+	Runtime                               InstallationRuntimeBinding                `json:"runtime"`
+	ExpiresAt                             string                                    `json:"expiresAt"`
+	Approved                              bool                                      `json:"approved"`
+	Acknowledgements                      []InstallationAcknowledgement             `json:"acknowledgements"`
+	Phases                                []InstallationPlanPhase                   `json:"phases"`
+	Findings                              []InstallationPlanFinding                 `json:"findings,omitempty"`
+	PKIStorePasswordRequired              bool                                      `json:"pkiStorePasswordRequired"`
+	SecretOutputEncryptionRequired        bool                                      `json:"secretOutputEncryptionRequired"`
+	SecretOutputEncryptionPasswordPresent bool                                      `json:"secretOutputEncryptionPasswordPresent"`
 }
 
 type InstallationRuntimeBinding struct {
@@ -73,6 +83,17 @@ type InstallationPlanFinding struct {
 }
 
 func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanOperation {
+	return a.createInstallationPlan(InstallationPlanRequest{DeploymentOrder: deploymentOrder})
+}
+
+func (a *App) CreateInstallationPlanForMode(request InstallationPlanRequest) InstallationPlanOperation {
+	if request.ExecutionMode != executionnode.FullProject && request.ExecutionMode != executionnode.ApplicationLibrariesOnly && request.ExecutionMode != executionnode.InfrastructureVerifyOnly {
+		return installationPlanFailure(errors.New("DEPLOYMENT_PLAN_INPUT_INVALID"))
+	}
+	return a.createInstallationPlan(request)
+}
+
+func (a *App) createInstallationPlan(request InstallationPlanRequest) InstallationPlanOperation {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.reconcileEditSessionLocked()
@@ -98,7 +119,12 @@ func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanO
 	}
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
-	record, err := binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, deploymentOrder)
+	var record executionnode.PlanRecord
+	if request.ExecutionMode == "" {
+		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)
+	} else {
+		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources)
+	}
 	if err != nil {
 		if binding.dynamic {
 			a.invalidateDynamicBindingLocked()
@@ -116,6 +142,11 @@ func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanO
 	if err != nil {
 		a.installationPlanID = ""
 		return installationPlanFailure(err)
+	}
+	if record.Plan.InfrastructureVerification != nil {
+		observedAt := record.CreatedAt.UTC()
+		view.InfrastructureObservedAt = observedAt.Format(time.RFC3339Nano)
+		view.InfrastructureCacheWarning = cacheInfrastructurePlan(a.infrastructureVerificationRoot, a.current.Root, binding.node, record.Plan, observedAt) != nil
 	}
 	view.SecretOutputEncryptionRequired = a.secretOutputEncryptionRequiredLocked()
 	view.SecretOutputEncryptionPasswordPresent = a.secretOutputEncryptionPasswordPresentLocked()
@@ -312,12 +343,19 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 	if !ok || record.ID == "" || record.Plan.PlanFingerprint == "" || record.Plan.ProjectRevision == "" {
 		return InstallationPlanView{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	view := InstallationPlanView{ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
+	mode := record.Plan.ExecutionMode
+	if mode == "" {
+		mode = executionnode.FullProject
+	}
+	view := InstallationPlanView{ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
 		PlanFingerprint: record.Plan.PlanFingerprint, ExecutionNodeID: binding.node.ID, Runtime: runtime,
 		ExpiresAt: record.ExpiresAt.UTC().Format(time.RFC3339), Approved: record.Approved,
 		Acknowledgements: make([]InstallationAcknowledgement, 0, len(record.Plan.AcknowledgementDetails)),
 		Phases:           make([]InstallationPlanPhase, 0, len(record.Plan.Phases)), Findings: safeInstallationPlanFindings(record.Plan.Findings),
 		PKIStorePasswordRequired: executionnodePlanRequiresPKIStorePassword(record.Plan)}
+	if record.Plan.InfrastructureVerification != nil {
+		view.InfrastructureObservedAt = record.CreatedAt.UTC().Format(time.RFC3339Nano)
+	}
 	for _, acknowledgement := range record.Plan.AcknowledgementDetails {
 		view.Acknowledgements = append(view.Acknowledgements, InstallationAcknowledgement{Code: acknowledgement.Code, Summary: acknowledgement.Summary})
 	}

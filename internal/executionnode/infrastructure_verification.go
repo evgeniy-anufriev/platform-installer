@@ -108,13 +108,8 @@ func (t OpenSSHTransport) ReadApplicationLibraries(ctx context.Context, node Nod
 // BuildDeploymentPlanForMode reuses ordinary staging and the fixed Core operation.
 // Unsupported runtimes fail before staging; there is no full-project fallback.
 func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order []string, mode ExecutionMode, vaultSources map[string]string) (DeploymentPlan, error) {
-	if projectRoot == "" || len(release) == 0 || order == nil || len(order) > 256 || !mode.valid() || len(vaultSources) > 16 {
+	if projectRoot == "" || len(release) == 0 || !validModePlanInput(order, mode, vaultSources) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
-	}
-	for id, source := range vaultSources {
-		if len(id) > 128 || !runtimeSecretDeploymentPattern.MatchString(id) || (source != "RUNTIME_INPUT" && source != "CURRENT_RUN_BOOTSTRAP") {
-			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
-		}
 	}
 	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
 	if err != nil {
@@ -132,4 +127,16 @@ func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node N
 func validExecutionModes(raw any) bool {
 	values, ok := raw.([]any)
 	return ok && len(values) == 3 && values[0] == string(FullProject) && values[1] == string(ApplicationLibrariesOnly) && values[2] == string(InfrastructureVerifyOnly)
+}
+
+func validModePlanInput(order []string, mode ExecutionMode, sources map[string]string) bool {
+	if order == nil || len(order) > 256 || !mode.valid() || len(sources) > 16 {
+		return false
+	}
+	for id, source := range sources {
+		if len(id) > 128 || !runtimeSecretDeploymentPattern.MatchString(id) || (source != "RUNTIME_INPUT" && source != "CURRENT_RUN_BOOTSTRAP") {
+			return false
+		}
+	}
+	return true
 }

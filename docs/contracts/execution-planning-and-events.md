@@ -27,6 +27,45 @@ fictional serviceDeployment. Repeats require fresh Build/approval/run.
 Current status and authorization remain in [CURRENT_STATE](../../CURRENT_STATE.md).
 Implementation audit and milestone gates are retained separately.
 
+## B3 shared Go lifecycle and presentation
+
+The existing CreateInstallationPlan(order) retains its legacy request behavior.
+CreateInstallationPlanForMode accepts an InstallationPlanRequest with explicit
+executionMode, deploymentOrder and applicationVaultSources (source policy only,
+never values). FULL_PROJECT, APPLICATION_LIBRARIES_ONLY and the existing
+INFRASTRUCTURE_VERIFY_ONLY capability reuse the same plan store, approval,
+StartApprovedInstallation, trust staging, typed lease, Cancel and reconnect.
+Unsupported mode runtimes fail without a full-install fallback. No frontend
+command/playbook or parallel execution lifecycle is introduced.
+
+ExecutionService keeps the mode/source request privately with the reviewed plan
+and clones caller-owned maps. Before Start it rebuilds that exact request through
+the B1 mode-aware adapter, requiring executable current revision/identity and the
+approved fingerprint. Core owns evidence freshness, admission and operation scope;
+its Start lock and controller checks remain authoritative. PENDING intent is still
+written by the ordinary desktop Start before remote dispatch; uncertain Start
+reuses the existing start attempt/lease and existing recovery protocol.
+
+InstallationPlanView adds executionMode and the validated Core infrastructure
+verification observation (coverage, source run IDs, dates and safe reason code),
+separate from the current execution run ID. Phases/actions are actual Core output;
+Go never fabricates successful skipped infrastructure actions. The observation time
+is the Build record timestamp. Cache failure is a warning on initial publication,
+not execution permission or a replacement Core result.
+
+The B1 bounded local observation cache is updated only from a fresh Core plan.
+GetInfrastructureVerification returns previously observed data with current
+availability UNKNOWN, including after reopen/offline; cache cannot grant admission.
+Binding includes project/root, host identity and runtime, not operator account.
+Failed/corrupt/unavailable cache remains UNKNOWN. A library run does not erase this
+separate observation. No cache-only readiness predicate or Start branch exists.
+
+UI design/mockups currently describe the common mixed flow. The approved B plan
+records mode selection/summary as a later UI amendment: B3 supplies backend types
+and lifecycle only; B4 production transport integration/real bridge acceptance and
+C visual screen implementation remain separate gates. Browser RPC/frontend
+bindings and visuals are not claimed as accepted by Go unit harnesses.
+
 ## B0 cross-run infrastructure verification
 
 Owner-approved [B plan](../work/application-libraries/milestones/b/b-technical-plan.md)

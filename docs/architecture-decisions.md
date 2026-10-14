@@ -638,3 +638,19 @@ from names or assignment text. Explicit Installer credential source descriptors
 and runtime private-key custody remain separate. D03: reject overlapping
 parent/child edit writes while retaining independent slot edits. Reuse existing
 writer and Core validators; no new secret classification framework.
+
+
+## ADR-041: B3 modes reuse the existing installation lifecycle
+
+Owner authorized B3 from the approved B plan on2026-10-14. Explicit mode Build
+uses the existing B1 transport and ExecutionService plan store; approval,
+credential/trust staging, PENDING start intent, uncertain response recovery,
+Cancel and reconnect are shared. Mode/source policy metadata is retained in the
+in-memory plan record solely to repeat the same fresh Build before Start. No
+second desired-state store, infrastructure resolver or execution API is added.
+
+Core remains owner of all infrastructure equivalence, evidence and Start admission.
+Local infrastructure observations are display-only UNKNOWN on reload. Backend
+presentation exposes mode and actual Core verification/operation output without
+synthetic infrastructure success. Legacy CreateInstallationPlan remains compatible;
+production transport/UI integration and real bridge acceptance belong to B4.
