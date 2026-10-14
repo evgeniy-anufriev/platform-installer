@@ -1,3 +1,2120 @@
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/dock_topleft.png","mode":420,"size":1927,"sha256":"83cab3a98df24f74318ea7e216487d527129116ab94a123937d74a63e57a8266","index":0,"count":1,"encoding":"base64","payloadBytes":2572}
+iVBORw0KGgoAAAANSUhEUgAAAcIAAAEGCAMAAADBv2XVAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAsVBMVEXDw8MAAAD//////9uQOgBmtv///7ZmAAD/tmYAOpDb///bkDoAZrZmADqQ2//b/7YAAGa2//86kNuQOjr/25A6ADo6AAAAADo6ZraQ27ZmOpDb/9s6AGa2ZgBmkJBmtrbDw6huLABOi8PDw4tOAADDi04ALG6ow8OLTgAATouobixOACxuqMMsbqhuLCwAAE6Lw8PDqG4sAAAAACwsTotOLG6ow6gsAE4AZpBObm4sACzB3uYxAAAAAWJLR0QCZgt8ZAAAAAlwSFlzAAAOwgAADsIBFShKgAAAAAd0SU1FB+YIHw4rOo4hV+YAAAW+SURBVHja7dx5UxNJGAfgTG4IsjBEcD12AcWDNavo3t//g22fqWTAKhWRxHp+VdaE6e5R5/F9eyZ/2Os1stXp9RAiFISCEGFMX7YwCBEKQkGIECFCQSgIESJEeJ8ZDEdfNH88GU13dr9mEOHtreIfcfTZhLO99WNVerA/3flpkv6+B4ddwjiI8O4I235/2rS3JBwcZaX5w/0bfo8jhHdN2J+Gyon1GAtofhyqMhJOTxLHrGnChzyaarYttdsulySl+aN+JSznB0c/T9LaMojwDgnDbjUYhrqaHRyOJ21//PjJcFQE50+T0bM4GkpptQrrkpXLJcJ6fjAMl5hd66sI74gwUcVdK93ywfCX0hLnx6NKE0bXCOuSLmE9n7rx+jjCOyRMdOGm510rtMKTcutDY21Td00NdZWwLukS1vOZcDJC+H32wm4VjmbLJ5Bao93HGVW4OYTz47ZsYDu7y70wnaiPp1m6n/fDeqxLbt4Ld3bzXrh1z6Jb+V6YeuY4vNWl94Lj8HMsoIgZXziaZq/MC8Oprdb2Wpd0COv5wfDXSbOlTzO+YPuqr3gQIkSIEOGPFIQIBaEgRIgQoSAUhAgRIhSEghCh/y7B/3ghCAUhQjdh6wll6+MfGUKECBEiRIjwRyDc6K8ABSFChAgRIhSECBEiRIhQECJEiBAhQkGIECFChAgFIUKECBEiFIQIESJEiFAQIkSIECFCQYgQIUKECAUhQoQIESIUhAgRIkSIUBAiRIgQIUJBiBAhQoQIBSFChAgRIhSECBEiRIhQECJEiBAhQkGIECFChAgRIkSIECFChAgRIkSIECFChAgRIkSIECFChAgRIkSIECFChAgRIkSIECHCbSU8PTv/ovnPX5xfvHy1eub1m/Tr+gDC5ltbxWuefzbh5Zv1YyX87W2Uep0v9jp+LIR5YKMJB8PRFzGMJ6Ppzu61izT53I2jd0u46PUumsUtCU9/z4SLbhWWgc0gDLc5ZPTZhLO99WMlfLAfkDqrpgeHeWIe/d6EvYt371M9hkPv6kMopEh48fFtwmqa8CGPpppdlNpdLJckwqs/epWw8BXCOLAphG241017S8LB0U2EkS1OzKPfnTDsWKdn4Z5fvnv//MWi9/zPv87Oi+DV3++rymUop9UqrEtWNsBrhBv1OJMIU73EeoxlMz8OVRkxpif7Catpwoc8mmq2LbXbLpckpPmjCl9Oh4XNP2liHr0PwkQVd65Ecnr2739JMBRlbKlX8acwukZYl6wQNqksN5swbFaDYSiX2cHheNL2x4+fDEdFcP40GT2Lo6GSVquwLunWbp27rMJ7eJwphIku9M+8c4UW+bHQhMa6SN01NdRVwrpky6owECaquGklksHwl4dJMBRlZJnHn8LoGmFd0iFczr1vwoDRrcLzy+VTSK3R7uPMDVW4JYSJLhjkTSv0wpNCExprm7praqirhHVJl7DOvWfCqw+LsrG9fLXcC9OJ+niapXt5P6zHumT79sJuFY5myweQWqPdx5lPVWGde5+EuUHGWmuayBF65se3sT1GzPjC0TRvyrwwnNpqba91yVYRzo/bsrHt7C73wnSiymTpft7j6rEu6RAu52bCTz+K+oLt270Xpp45njTpTTz0wZP9iBEx4wtH0+yVeWE4tdXaXuuSzsXq3Gm5XIvQF2yCECFChAgRCkKECBEiRCgIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiFAQIkSIECFCQYgQIUKECAUhQoQIESIUhAgRIkSIUBAiRIgQIUJBiBAhQoQIBSFChAgRIhSECBEiRIhQECJEuJmEmxtACBEiRIgQocgPnv8BULzq3LTG6G4AAAAldEVYdGRhdGU6Y3JlYXRlADIwMjItMDgtMzFUMTQ6NDE6MzgrMDA6MDBpUqI6AAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIyLTA4LTMxVDE0OjQxOjM0KzAwOjAw369w8gAAAABJRU5ErkJggg==
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/edit.go","mode":420,"size":2633,"sha256":"5b94e6fd7dbcfa6e575d62fafcf2210f7cb73a388b5dcf7503341bf80f3b2773","index":0,"count":1,"encoding":"utf-8","payloadBytes":2633}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+
+type Edit struct {
+	ControlBase
+	onChange EventManager
+}
+
+const passwordChar = '*'
+const nopasswordChar = ' '
+
+func NewEdit(parent Controller) *Edit {
+	edt := new(Edit)
+
+	edt.InitControl("EDIT", parent, w32.WS_EX_CLIENTEDGE, w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.ES_LEFT|
+		w32.ES_AUTOHSCROLL)
+	RegMsgHandler(edt)
+
+	edt.SetFont(DefaultFont)
+	edt.SetSize(200, 22)
+	return edt
+}
+
+// Events.
+func (ed *Edit) OnChange() *EventManager {
+	return &ed.onChange
+}
+
+// Public methods.
+func (ed *Edit) SetReadOnly(isReadOnly bool) {
+	w32.SendMessage(ed.hwnd, w32.EM_SETREADONLY, uintptr(w32.BoolToBOOL(isReadOnly)), 0)
+}
+
+// Public methods
+func (ed *Edit) SetPassword(isPassword bool) {
+	if isPassword {
+		w32.SendMessage(ed.hwnd, w32.EM_SETPASSWORDCHAR, uintptr(passwordChar), 0)
+	} else {
+		w32.SendMessage(ed.hwnd, w32.EM_SETPASSWORDCHAR, 0, 0)
+	}
+}
+
+func (ed *Edit) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_COMMAND:
+		switch w32.HIWORD(uint32(wparam)) {
+		case w32.EN_CHANGE:
+			ed.onChange.Fire(NewEvent(ed, nil))
+		}
+		/*case w32.WM_GETDLGCODE:
+		println("Edit")
+		if wparam == w32.VK_RETURN {
+			return w32.DLGC_WANTALLKEYS
+		}*/
+	}
+	return w32.DefWindowProc(ed.hwnd, msg, wparam, lparam)
+}
+
+// MultiEdit is multiline text edit.
+type MultiEdit struct {
+	ControlBase
+	onChange EventManager
+}
+
+func NewMultiEdit(parent Controller) *MultiEdit {
+	med := new(MultiEdit)
+
+	med.InitControl("EDIT", parent, w32.WS_EX_CLIENTEDGE, w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.ES_LEFT|
+		w32.WS_VSCROLL|w32.WS_HSCROLL|w32.ES_MULTILINE|w32.ES_WANTRETURN|w32.ES_AUTOHSCROLL|w32.ES_AUTOVSCROLL)
+	RegMsgHandler(med)
+
+	med.SetFont(DefaultFont)
+	med.SetSize(200, 400)
+	return med
+}
+
+// Events
+func (med *MultiEdit) OnChange() *EventManager {
+	return &med.onChange
+}
+
+// Public methods
+func (med *MultiEdit) SetReadOnly(isReadOnly bool) {
+	w32.SendMessage(med.hwnd, w32.EM_SETREADONLY, uintptr(w32.BoolToBOOL(isReadOnly)), 0)
+}
+
+func (med *MultiEdit) AddLine(text string) {
+	if len(med.Text()) == 0 {
+		med.SetText(text)
+	} else {
+		med.SetText(med.Text() + "\r\n" + text)
+	}
+}
+
+func (med *MultiEdit) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+
+	case w32.WM_COMMAND:
+		switch w32.HIWORD(uint32(wparam)) {
+		case w32.EN_CHANGE:
+			med.onChange.Fire(NewEvent(med, nil))
+		}
+	}
+	return w32.DefWindowProc(med.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/event.go","mode":420,"size":330,"sha256":"e1182fcc6c2297545837e814b2e35ebd18350be5f48315afa124de8a71ac1015","index":0,"count":1,"encoding":"utf-8","payloadBytes":330}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+type Event struct {
+	Sender Controller
+	Data   interface{}
+}
+
+func NewEvent(sender Controller, data interface{}) *Event {
+	return &Event{Sender: sender, Data: data}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/eventdata.go","mode":420,"size":776,"sha256":"deb8203ce8105361660bc20ac75a1e16b35e2909746304be1aad72314b7e3a4c","index":0,"count":1,"encoding":"utf-8","payloadBytes":776}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type RawMsg struct {
+	Hwnd           w32.HWND
+	Msg            uint32
+	WParam, LParam uintptr
+}
+
+type MouseEventData struct {
+	X, Y   int
+	Button int
+	Wheel  int
+}
+
+type DropFilesEventData struct {
+	X, Y  int
+	Files []string
+}
+
+type PaintEventData struct {
+	Canvas *Canvas
+}
+
+type LabelEditEventData struct {
+	Item ListItem
+	Text string
+	//PszText *uint16
+}
+
+/*type LVDBLClickEventData struct {
+	NmItem *w32.NMITEMACTIVATE
+}*/
+
+type KeyUpEventData struct {
+	VKey, Code int
+}
+
+type SizeEventData struct {
+	Type uint
+	X, Y int
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/eventmanager.go","mode":420,"size":424,"sha256":"f7f870f10998067c95c0004a5aa2fc16acc39fee1076929595dacb20c5281274","index":0,"count":1,"encoding":"utf-8","payloadBytes":424}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+type EventHandler func(arg *Event)
+
+type EventManager struct {
+	handler EventHandler
+}
+
+func (evm *EventManager) Fire(arg *Event) {
+	if evm.handler != nil {
+		evm.handler(arg)
+	}
+}
+
+func (evm *EventManager) Bind(handler EventHandler) {
+	evm.handler = handler
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/font.go","mode":420,"size":2300,"sha256":"b1b107b2bc9f458526c7decd6fb275a4cbe625f292d7da6e2d2581dc6b20cddc","index":0,"count":1,"encoding":"utf-8","payloadBytes":2300}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"syscall"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+const (
+	FontBold      byte = 0x01
+	FontItalic    byte = 0x02
+	FontUnderline byte = 0x04
+	FontStrikeOut byte = 0x08
+)
+
+func init() {
+	DefaultFont = NewFont("MS Shell Dlg 2", 8, 0)
+}
+
+type Font struct {
+	hfont     w32.HFONT
+	family    string
+	pointSize int
+	style     byte
+}
+
+func NewFont(family string, pointSize int, style byte) *Font {
+	if style > FontBold|FontItalic|FontUnderline|FontStrikeOut {
+		panic("Invalid font style")
+	}
+
+	//Retrive screen DPI
+	hDC := w32.GetDC(0)
+	defer w32.ReleaseDC(0, hDC)
+	screenDPIY := w32.GetDeviceCaps(hDC, w32.LOGPIXELSY)
+
+	font := Font{
+		family:    family,
+		pointSize: pointSize,
+		style:     style,
+	}
+
+	font.hfont = font.createForDPI(screenDPIY)
+	if font.hfont == 0 {
+		panic("CreateFontIndirect failed")
+	}
+
+	return &font
+}
+
+func (fnt *Font) createForDPI(dpi int) w32.HFONT {
+	var lf w32.LOGFONT
+
+	lf.Height = int32(-w32.MulDiv(fnt.pointSize, dpi, 72))
+	if fnt.style&FontBold > 0 {
+		lf.Weight = w32.FW_BOLD
+	} else {
+		lf.Weight = w32.FW_NORMAL
+	}
+	if fnt.style&FontItalic > 0 {
+		lf.Italic = 1
+	}
+	if fnt.style&FontUnderline > 0 {
+		lf.Underline = 1
+	}
+	if fnt.style&FontStrikeOut > 0 {
+		lf.StrikeOut = 1
+	}
+	lf.CharSet = w32.DEFAULT_CHARSET
+	lf.OutPrecision = w32.OUT_TT_PRECIS
+	lf.ClipPrecision = w32.CLIP_DEFAULT_PRECIS
+	lf.Quality = w32.CLEARTYPE_QUALITY
+	lf.PitchAndFamily = w32.VARIABLE_PITCH | w32.FF_SWISS
+
+	src := syscall.StringToUTF16(fnt.family)
+	dest := lf.FaceName[:]
+	copy(dest, src)
+
+	return w32.CreateFontIndirect(&lf)
+}
+
+func (fnt *Font) GetHFONT() w32.HFONT {
+	return fnt.hfont
+}
+
+func (fnt *Font) Bold() bool {
+	return fnt.style&FontBold > 0
+}
+
+func (fnt *Font) Dispose() {
+	if fnt.hfont != 0 {
+		w32.DeleteObject(w32.HGDIOBJ(fnt.hfont))
+	}
+}
+
+func (fnt *Font) Family() string {
+	return fnt.family
+}
+
+func (fnt *Font) Italic() bool {
+	return fnt.style&FontItalic > 0
+}
+
+func (fnt *Font) StrikeOut() bool {
+	return fnt.style&FontStrikeOut > 0
+}
+
+func (fnt *Font) Underline() bool {
+	return fnt.style&FontUnderline > 0
+}
+
+func (fnt *Font) Style() byte {
+	return fnt.style
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/form.go","mode":420,"size":8124,"sha256":"83abed5381c6a1f1a6c30d60c12cf9ad2f9b85cfecc391c1c06503570d86c786","index":0,"count":1,"encoding":"utf-8","payloadBytes":8124}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type LayoutManager interface {
+	Update()
+}
+
+// A Form is main window of the application.
+type Form struct {
+	ControlBase
+
+	layoutMng LayoutManager
+
+	// Fullscreen / Unfullscreen
+	isFullscreen            bool
+	previousWindowStyle     uint32
+	previousWindowExStyle   uint32
+	previousWindowPlacement w32.WINDOWPLACEMENT
+}
+
+func NewCustomForm(parent Controller, exStyle int, dwStyle uint) *Form {
+	fm := new(Form)
+
+	RegClassOnlyOnce("winc_Form")
+
+	fm.isForm = true
+
+	if exStyle == 0 {
+		exStyle = w32.WS_EX_CONTROLPARENT | w32.WS_EX_APPWINDOW
+	}
+
+	if dwStyle == 0 {
+		dwStyle = w32.WS_OVERLAPPEDWINDOW
+	}
+
+	fm.hwnd = CreateWindow("winc_Form", parent, uint(exStyle), dwStyle)
+	fm.parent = parent
+
+	// this might fail if icon resource is not embedded in the binary
+	if ico, err := NewIconFromResource(GetAppInstance(), uint16(AppIconID)); err == nil {
+		fm.SetIcon(0, ico)
+	}
+
+	// This forces display of focus rectangles, as soon as the user starts to type.
+	w32.SendMessage(fm.hwnd, w32.WM_CHANGEUISTATE, w32.UIS_INITIALIZE, 0)
+
+	RegMsgHandler(fm)
+
+	fm.SetFont(DefaultFont)
+	fm.SetText("Form")
+	return fm
+}
+
+func NewForm(parent Controller) *Form {
+	fm := new(Form)
+
+	RegClassOnlyOnce("winc_Form")
+
+	fm.isForm = true
+	fm.hwnd = CreateWindow("winc_Form", parent, w32.WS_EX_CONTROLPARENT|w32.WS_EX_APPWINDOW, w32.WS_OVERLAPPEDWINDOW)
+	fm.parent = parent
+
+	// this might fail if icon resource is not embedded in the binary
+	if ico, err := NewIconFromResource(GetAppInstance(), uint16(AppIconID)); err == nil {
+		fm.SetIcon(0, ico)
+	}
+
+	// This forces display of focus rectangles, as soon as the user starts to type.
+	w32.SendMessage(fm.hwnd, w32.WM_CHANGEUISTATE, w32.UIS_INITIALIZE, 0)
+
+	RegMsgHandler(fm)
+
+	fm.SetFont(DefaultFont)
+	fm.SetText("Form")
+	return fm
+}
+
+func (fm *Form) SetLayout(mng LayoutManager) {
+	fm.layoutMng = mng
+}
+
+// UpdateLayout refresh layout.
+func (fm *Form) UpdateLayout() {
+	if fm.layoutMng != nil {
+		fm.layoutMng.Update()
+	}
+}
+
+func (fm *Form) NewMenu() *Menu {
+	hMenu := w32.CreateMenu()
+	if hMenu == 0 {
+		panic("failed CreateMenu")
+	}
+	m := &Menu{hMenu: hMenu, hwnd: fm.hwnd}
+	if !w32.SetMenu(fm.hwnd, hMenu) {
+		panic("failed SetMenu")
+	}
+	return m
+}
+
+func (fm *Form) DisableIcon() {
+	windowInfo := getWindowInfo(fm.hwnd)
+	frameless := windowInfo.IsPopup()
+	if frameless {
+		return
+	}
+	exStyle := w32.GetWindowLong(fm.hwnd, w32.GWL_EXSTYLE)
+	w32.SetWindowLong(fm.hwnd, w32.GWL_EXSTYLE, uint32(exStyle|w32.WS_EX_DLGMODALFRAME))
+	w32.SetWindowPos(fm.hwnd, 0, 0, 0, 0, 0,
+		uint(
+			w32.SWP_FRAMECHANGED|
+				w32.SWP_NOMOVE|
+				w32.SWP_NOSIZE|
+				w32.SWP_NOZORDER),
+	)
+}
+
+func (fm *Form) Maximise() {
+	w32.ShowWindow(fm.hwnd, w32.SW_MAXIMIZE)
+}
+
+func (fm *Form) Minimise() {
+	w32.ShowWindow(fm.hwnd, w32.SW_MINIMIZE)
+}
+
+func (fm *Form) Restore() {
+	// SC_RESTORE param for WM_SYSCOMMAND to restore app if it is minimized
+	const SC_RESTORE = 0xF120
+	// restore the minimized window, if it is
+	w32.SendMessage(
+		fm.hwnd,
+		w32.WM_SYSCOMMAND,
+		SC_RESTORE,
+		0,
+	)
+	w32.ShowWindow(fm.hwnd, w32.SW_SHOW)
+}
+
+// Public methods
+func (fm *Form) Center() {
+
+	windowInfo := getWindowInfo(fm.hwnd)
+	frameless := windowInfo.IsPopup()
+
+	info := getMonitorInfo(fm.hwnd)
+	workRect := info.RcWork
+	screenMiddleW := workRect.Left + (workRect.Right-workRect.Left)/2
+	screenMiddleH := workRect.Top + (workRect.Bottom-workRect.Top)/2
+	var winRect *w32.RECT
+	if !frameless {
+		winRect = w32.GetWindowRect(fm.hwnd)
+	} else {
+		winRect = w32.GetClientRect(fm.hwnd)
+	}
+	winWidth := winRect.Right - winRect.Left
+	winHeight := winRect.Bottom - winRect.Top
+	windowX := screenMiddleW - (winWidth / 2)
+	windowY := screenMiddleH - (winHeight / 2)
+	w32.SetWindowPos(fm.hwnd, w32.HWND_TOP, int(windowX), int(windowY), int(winWidth), int(winHeight), w32.SWP_NOSIZE|w32.SWP_NOACTIVATE)
+}
+
+func (fm *Form) Fullscreen() {
+	if fm.isFullscreen {
+		return
+	}
+
+	fm.previousWindowStyle = uint32(w32.GetWindowLongPtr(fm.hwnd, w32.GWL_STYLE))
+	fm.previousWindowExStyle = uint32(w32.GetWindowLong(fm.hwnd, w32.GWL_EXSTYLE))
+
+	monitor := w32.MonitorFromWindow(fm.hwnd, w32.MONITOR_DEFAULTTOPRIMARY)
+	var monitorInfo w32.MONITORINFO
+	monitorInfo.CbSize = uint32(unsafe.Sizeof(monitorInfo))
+	if !w32.GetMonitorInfo(monitor, &monitorInfo) {
+		return
+	}
+	if !w32.GetWindowPlacement(fm.hwnd, &fm.previousWindowPlacement) {
+		return
+	}
+	// According to https://devblogs.microsoft.com/oldnewthing/20050505-04/?p=35703 one should use w32.WS_POPUP | w32.WS_VISIBLE
+	w32.SetWindowLong(fm.hwnd, w32.GWL_STYLE, fm.previousWindowStyle & ^uint32(w32.WS_OVERLAPPEDWINDOW) | (w32.WS_POPUP|w32.WS_VISIBLE))
+	w32.SetWindowLong(fm.hwnd, w32.GWL_EXSTYLE, fm.previousWindowExStyle & ^uint32(w32.WS_EX_DLGMODALFRAME))
+	fm.isFullscreen = true
+	w32.SetWindowPos(fm.hwnd, w32.HWND_TOP,
+		int(monitorInfo.RcMonitor.Left),
+		int(monitorInfo.RcMonitor.Top),
+		int(monitorInfo.RcMonitor.Right-monitorInfo.RcMonitor.Left),
+		int(monitorInfo.RcMonitor.Bottom-monitorInfo.RcMonitor.Top),
+		w32.SWP_NOOWNERZORDER|w32.SWP_FRAMECHANGED)
+}
+
+func (fm *Form) UnFullscreen() {
+	if !fm.isFullscreen {
+		return
+	}
+	w32.SetWindowLong(fm.hwnd, w32.GWL_STYLE, fm.previousWindowStyle)
+	w32.SetWindowLong(fm.hwnd, w32.GWL_EXSTYLE, fm.previousWindowExStyle)
+	w32.SetWindowPlacement(fm.hwnd, &fm.previousWindowPlacement)
+	fm.isFullscreen = false
+	w32.SetWindowPos(fm.hwnd, 0, 0, 0, 0, 0,
+		w32.SWP_NOMOVE|w32.SWP_NOSIZE|w32.SWP_NOZORDER|w32.SWP_NOOWNERZORDER|w32.SWP_FRAMECHANGED)
+}
+
+func (fm *Form) IsFullScreen() bool {
+	return fm.isFullscreen
+}
+
+// IconType: 1 - ICON_BIG; 0 - ICON_SMALL
+func (fm *Form) SetIcon(iconType int, icon *Icon) {
+	if iconType > 1 {
+		panic("IconType is invalid")
+	}
+	w32.SendMessage(fm.hwnd, w32.WM_SETICON, uintptr(iconType), uintptr(icon.Handle()))
+}
+
+func (fm *Form) EnableMaxButton(b bool) {
+	SetStyle(fm.hwnd, b, w32.WS_MAXIMIZEBOX)
+}
+
+func (fm *Form) EnableMinButton(b bool) {
+	SetStyle(fm.hwnd, b, w32.WS_MINIMIZEBOX)
+}
+
+func (fm *Form) EnableSizable(b bool) {
+	SetStyle(fm.hwnd, b, w32.WS_THICKFRAME)
+}
+
+func (fm *Form) EnableDragMove(_ bool) {
+	//fm.isDragMove = b
+}
+
+func (fm *Form) EnableTopMost(b bool) {
+	tag := w32.HWND_NOTOPMOST
+	if b {
+		tag = w32.HWND_TOPMOST
+	}
+	w32.SetWindowPos(fm.hwnd, tag, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE)
+}
+
+func (fm *Form) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+
+	switch msg {
+	case w32.WM_COMMAND:
+		if lparam == 0 && w32.HIWORD(uint32(wparam)) == 0 {
+			// Menu support.
+			actionID := uint16(w32.LOWORD(uint32(wparam)))
+			if action, ok := actionsByID[actionID]; ok {
+				action.onClick.Fire(NewEvent(fm, nil))
+			}
+		}
+	case w32.WM_KEYDOWN:
+		// Accelerator support.
+		key := Key(wparam)
+		if uint32(lparam)>>30 == 0 {
+			// Using TranslateAccelerators refused to work, so we handle them
+			// ourselves, at least for now.
+			shortcut := Shortcut{ModifiersDown(), key}
+			if action, ok := shortcut2Action[shortcut]; ok {
+				if action.Enabled() {
+					action.onClick.Fire(NewEvent(fm, nil))
+				}
+			}
+		}
+
+	case w32.WM_CLOSE:
+		return 0
+	case w32.WM_DESTROY:
+		w32.PostQuitMessage(0)
+		return 0
+
+	case w32.WM_SIZE, w32.WM_PAINT:
+		if fm.layoutMng != nil {
+			fm.layoutMng.Update()
+		}
+	case w32.WM_GETMINMAXINFO:
+		mmi := (*w32.MINMAXINFO)(unsafe.Pointer(lparam))
+		hasConstraints := false
+		if fm.minWidth > 0 || fm.minHeight > 0 {
+			hasConstraints = true
+
+			width, height := fm.scaleWithWindowDPI(fm.minWidth, fm.minHeight)
+			if width > 0 {
+				mmi.PtMinTrackSize.X = int32(width)
+			}
+			if height > 0 {
+				mmi.PtMinTrackSize.Y = int32(height)
+			}
+		}
+		if fm.maxWidth > 0 || fm.maxHeight > 0 {
+			hasConstraints = true
+
+			width, height := fm.scaleWithWindowDPI(fm.maxWidth, fm.maxHeight)
+			if width > 0 {
+				mmi.PtMaxTrackSize.X = int32(width)
+			}
+			if height > 0 {
+				mmi.PtMaxTrackSize.Y = int32(height)
+			}
+		}
+		if hasConstraints {
+			return 0
+		}
+	}
+
+	return w32.DefWindowProc(fm.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/globalvars.go","mode":420,"size":538,"sha256":"807927560abf10dd66b32979280399331b433a6ba9c5efcbbd1bfae6f20a9bae","index":0,"count":1,"encoding":"utf-8","payloadBytes":538}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"syscall"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+// Private global variables.
+var (
+	gAppInstance        w32.HINSTANCE
+	gControllerRegistry map[w32.HWND]Controller
+	gRegisteredClasses  []string
+)
+
+// Public global variables.
+var (
+	GeneralWndprocCallBack = syscall.NewCallback(generalWndProc)
+	DefaultFont            *Font
+)
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/icon.go","mode":420,"size":5499,"sha256":"9a5a911ea204520160138ded7964b5c2fd13068920b151ef2f0366f43d8a8ab8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5499}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"errors"
+	"fmt"
+	"image"
+	"image/png"
+	"os"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+var (
+	user32                 = syscall.NewLazyDLL("user32.dll")
+	gdi32                  = syscall.NewLazyDLL("gdi32.dll")
+	procGetIconInfo        = user32.NewProc("GetIconInfo")
+	procDeleteObject       = gdi32.NewProc("DeleteObject")
+	procGetObject          = gdi32.NewProc("GetObjectW")
+	procGetDIBits          = gdi32.NewProc("GetDIBits")
+	procCreateCompatibleDC = gdi32.NewProc("CreateCompatibleDC")
+	procSelectObject       = gdi32.NewProc("SelectObject")
+	procDeleteDC           = gdi32.NewProc("DeleteDC")
+)
+
+func init() {
+	// Validate DLL loads at initialization time to surface missing APIs early
+	if err := user32.Load(); err != nil {
+		panic(fmt.Sprintf("failed to load user32.dll: %v", err))
+	}
+	if err := gdi32.Load(); err != nil {
+		panic(fmt.Sprintf("failed to load gdi32.dll: %v", err))
+	}
+}
+
+// ICONINFO mirrors the Win32 ICONINFO struct
+type ICONINFO struct {
+	FIcon    int32
+	XHotspot uint32
+	YHotspot uint32
+	HbmMask  uintptr
+	HbmColor uintptr
+}
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/dd183376.aspx
+type BITMAPINFOHEADER struct {
+	BiSize          uint32
+	BiWidth         int32
+	BiHeight        int32
+	BiPlanes        uint16
+	BiBitCount      uint16
+	BiCompression   uint32
+	BiSizeImage     uint32
+	BiXPelsPerMeter int32
+	BiYPelsPerMeter int32
+	BiClrUsed       uint32
+	BiClrImportant  uint32
+}
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/dd162938.aspx
+type RGBQUAD struct {
+	RgbBlue     byte
+	RgbGreen    byte
+	RgbRed      byte
+	RgbReserved byte
+}
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/dd183375.aspx
+type BITMAPINFO struct {
+	BmiHeader BITMAPINFOHEADER
+	BmiColors *RGBQUAD
+}
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/dd183371.aspx
+type BITMAP struct {
+	BmType       int32
+	BmWidth      int32
+	BmHeight     int32
+	BmWidthBytes int32
+	BmPlanes     uint16
+	BmBitsPixel  uint16
+	BmBits       unsafe.Pointer
+}
+
+type Icon struct {
+	handle w32.HICON
+}
+
+func NewIconFromFile(path string) (*Icon, error) {
+	ico := new(Icon)
+	var err error
+	if ico.handle = w32.LoadIcon(0, syscall.StringToUTF16Ptr(path)); ico.handle == 0 {
+		err = errors.New(fmt.Sprintf("Cannot load icon from %s", path))
+	}
+	return ico, err
+}
+
+func NewIconFromResource(instance w32.HINSTANCE, resId uint16) (*Icon, error) {
+	ico := new(Icon)
+	var err error
+	if ico.handle = w32.LoadIconWithResourceID(instance, resId); ico.handle == 0 {
+		err = errors.New(fmt.Sprintf("Cannot load icon from resource with id %v", resId))
+	}
+	return ico, err
+}
+
+func ExtractIcon(fileName string, index int) (*Icon, error) {
+	ico := new(Icon)
+	var err error
+	if ico.handle = w32.ExtractIcon(fileName, index); ico.handle == 0 || ico.handle == 1 {
+		err = errors.New(fmt.Sprintf("Cannot extract icon from %s at index %v", fileName, index))
+	}
+	return ico, err
+}
+
+func SaveHIconAsPNG(hIcon w32.HICON, filePath string) error {
+	// Get icon info
+	var iconInfo ICONINFO
+	ret, _, err := procGetIconInfo.Call(
+		uintptr(hIcon),
+		uintptr(unsafe.Pointer(&iconInfo)),
+	)
+	if ret == 0 {
+		return err
+	}
+	defer procDeleteObject.Call(uintptr(iconInfo.HbmMask))
+	defer procDeleteObject.Call(uintptr(iconInfo.HbmColor))
+
+	// Get bitmap info
+	var bmp BITMAP
+	ret, _, err = procGetObject.Call(
+		uintptr(iconInfo.HbmColor),
+		unsafe.Sizeof(bmp),
+		uintptr(unsafe.Pointer(&bmp)),
+	)
+	if ret == 0 {
+		return err
+	}
+
+	// Get screen DC for GetDIBits (bitmap must not be selected into a DC)
+	screenDC := w32.GetDC(0)
+	if screenDC == 0 {
+		return fmt.Errorf("failed to get screen DC")
+	}
+	defer w32.ReleaseDC(0, screenDC)
+
+	// Prepare bitmap info header
+	var bi BITMAPINFO
+	bi.BmiHeader.BiSize = uint32(unsafe.Sizeof(bi.BmiHeader))
+	bi.BmiHeader.BiWidth = bmp.BmWidth
+	bi.BmiHeader.BiHeight = bmp.BmHeight
+	bi.BmiHeader.BiPlanes = 1
+	bi.BmiHeader.BiBitCount = 32
+	bi.BmiHeader.BiCompression = w32.BI_RGB
+
+	// Allocate memory for bitmap bits
+	width, height := int(bmp.BmWidth), int(bmp.BmHeight)
+	bufferSize := width * height * 4
+	bits := make([]byte, bufferSize)
+
+	// Get bitmap bits using screen DC (bitmap must not be selected into any DC)
+	ret, _, err = procGetDIBits.Call(
+		uintptr(screenDC),
+		uintptr(iconInfo.HbmColor),
+		0,
+		uintptr(bmp.BmHeight),
+		uintptr(unsafe.Pointer(&bits[0])),
+		uintptr(unsafe.Pointer(&bi)),
+		w32.DIB_RGB_COLORS,
+	)
+	if ret == 0 {
+		return fmt.Errorf("failed to get bitmap bits: %w", err)
+	}
+
+	// Create Go image
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	// Convert DIB to RGBA
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// DIB is bottom-up, so we need to invert Y
+			dibIndex := ((height-1-y)*width + x) * 4
+			// RGBA image is top-down
+			imgIndex := (y*width + x) * 4
+
+			// BGRA to RGBA
+			img.Pix[imgIndex] = bits[dibIndex+2]   // R
+			img.Pix[imgIndex+1] = bits[dibIndex+1] // G
+			img.Pix[imgIndex+2] = bits[dibIndex]   // B
+			img.Pix[imgIndex+3] = bits[dibIndex+3] // A
+		}
+	}
+
+	// Create output file
+	outFile, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	// Encode and save the image
+	return png.Encode(outFile, img)
+}
+
+func (ic *Icon) Destroy() bool {
+	return w32.DestroyIcon(ic.handle)
+}
+
+func (ic *Icon) Handle() w32.HICON {
+	return ic.handle
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/imagelist.go","mode":420,"size":1447,"sha256":"2110ac8333d6cee651272d0bb37959ea186a7ccbcc3037d1b8aa84c11d1c0b97","index":0,"count":1,"encoding":"utf-8","payloadBytes":1447}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type ImageList struct {
+	handle w32.HIMAGELIST
+}
+
+func NewImageList(cx, cy int) *ImageList {
+	return newImageList(cx, cy, w32.ILC_COLOR32, 0, 0)
+}
+
+func newImageList(cx, cy int, flags uint, cInitial, cGrow int) *ImageList {
+	imgl := new(ImageList)
+	imgl.handle = w32.ImageList_Create(cx, cy, flags, cInitial, cGrow)
+	return imgl
+}
+
+func (im *ImageList) Handle() w32.HIMAGELIST {
+	return im.handle
+}
+
+func (im *ImageList) Destroy() bool {
+	return w32.ImageList_Destroy(im.handle)
+}
+
+func (im *ImageList) SetImageCount(uNewCount uint) bool {
+	return w32.ImageList_SetImageCount(im.handle, uNewCount)
+}
+
+func (im *ImageList) ImageCount() int {
+	return w32.ImageList_GetImageCount(im.handle)
+}
+
+func (im *ImageList) AddIcon(icon *Icon) int {
+	return w32.ImageList_AddIcon(im.handle, icon.Handle())
+}
+
+func (im *ImageList) AddResIcon(iconID uint16) {
+	if ico, err := NewIconFromResource(GetAppInstance(), iconID); err == nil {
+		im.AddIcon(ico)
+		return
+	}
+	panic(fmt.Sprintf("missing icon with icon ID: %d", iconID))
+}
+
+func (im *ImageList) RemoveAll() bool {
+	return w32.ImageList_RemoveAll(im.handle)
+}
+
+func (im *ImageList) Remove(i int) bool {
+	return w32.ImageList_Remove(im.handle, i)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/imageview.go","mode":420,"size":1179,"sha256":"51237bbbec70394f59f282b9148bb2de26691dce3cd813263b30f42cf2e8478a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1179}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+
+type ImageView struct {
+	ControlBase
+
+	bmp *Bitmap
+}
+
+func NewImageView(parent Controller) *ImageView {
+	iv := new(ImageView)
+
+	iv.InitWindow("winc_ImageView", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	RegMsgHandler(iv)
+
+	iv.SetFont(DefaultFont)
+	iv.SetText("")
+	iv.SetSize(200, 65)
+	return iv
+}
+
+func (iv *ImageView) DrawImageFile(filepath string) error {
+	bmp, err := NewBitmapFromFile(filepath, RGB(255, 255, 0))
+	if err != nil {
+		return err
+	}
+	iv.bmp = bmp
+	return nil
+}
+
+func (iv *ImageView) DrawImage(bmp *Bitmap) {
+	iv.bmp = bmp
+}
+
+func (iv *ImageView) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_SIZE, w32.WM_SIZING:
+		iv.Invalidate(true)
+
+	case w32.WM_ERASEBKGND:
+		return 1 // important
+
+	case w32.WM_PAINT:
+		if iv.bmp != nil {
+			canvas := NewCanvasFromHwnd(iv.hwnd)
+			defer canvas.Dispose()
+			iv.SetSize(iv.bmp.Size())
+			canvas.DrawBitmap(iv.bmp, 0, 0)
+		}
+	}
+	return w32.DefWindowProc(iv.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/imageviewbox.go","mode":420,"size":7474,"sha256":"47fbf31de9c61f0f2c3da4a8eacbb0503a3edec84089932c41c3674df3f80f90","index":0,"count":1,"encoding":"utf-8","payloadBytes":7474}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type direction int
+
+const (
+	DirNone direction = iota
+	DirX
+	DirY
+	DirX2
+	DirY2
+)
+
+var ImageBoxPen = NewPen(w32.PS_GEOMETRIC, 2, NewSolidColorBrush(RGB(140, 140, 220)))
+var ImageBoxHiPen = NewPen(w32.PS_GEOMETRIC, 2, NewSolidColorBrush(RGB(220, 140, 140)))
+var ImageBoxMarkBrush = NewSolidColorBrush(RGB(40, 40, 40))
+var ImageBoxMarkPen = NewPen(w32.PS_GEOMETRIC, 2, ImageBoxMarkBrush)
+
+type ImageBox struct {
+	Name         string
+	Type         int
+	X, Y, X2, Y2 int
+
+	underMouse bool // dynamic value
+}
+
+func (b *ImageBox) Rect() *Rect {
+	return NewRect(b.X, b.Y, b.X2, b.Y2)
+}
+
+// ImageViewBox is image view with boxes.
+type ImageViewBox struct {
+	ControlBase
+
+	bmp       *Bitmap
+	mouseLeft bool
+	modified  bool // used by GUI to see if any image box modified
+
+	add bool
+
+	Boxes   []*ImageBox // might be persisted to file
+	dragBox *ImageBox
+	selBox  *ImageBox
+
+	dragStartX, dragStartY int
+	resize                 direction
+
+	onSelectedChange EventManager
+	onAdd            EventManager
+	onModify         EventManager
+}
+
+func NewImageViewBox(parent Controller) *ImageViewBox {
+	iv := new(ImageViewBox)
+
+	iv.InitWindow("winc_ImageViewBox", parent, w32.WS_EX_CONTROLPARENT, w32.WS_CHILD|w32.WS_VISIBLE)
+	RegMsgHandler(iv)
+
+	iv.SetFont(DefaultFont)
+	iv.SetText("")
+	iv.SetSize(200, 65)
+
+	return iv
+}
+
+func (iv *ImageViewBox) OnSelectedChange() *EventManager {
+	return &iv.onSelectedChange
+}
+
+func (iv *ImageViewBox) OnAdd() *EventManager {
+	return &iv.onAdd
+}
+
+func (iv *ImageViewBox) OnModify() *EventManager {
+	return &iv.onModify
+}
+
+func (iv *ImageViewBox) IsModified() bool          { return iv.modified }
+func (iv *ImageViewBox) SetModified(modified bool) { iv.modified = modified }
+func (iv *ImageViewBox) IsLoaded() bool            { return iv.bmp != nil }
+func (iv *ImageViewBox) AddMode() bool             { return iv.add }
+func (iv *ImageViewBox) SetAddMode(add bool)       { iv.add = add }
+func (iv *ImageViewBox) HasSelected() bool         { return iv.selBox != nil && iv.bmp != nil }
+
+func (iv *ImageViewBox) wasModified() {
+	iv.modified = true
+	iv.onModify.Fire(NewEvent(iv, nil))
+}
+
+func (iv *ImageViewBox) DeleteSelected() {
+	if iv.selBox != nil {
+		for i, b := range iv.Boxes {
+			if b == iv.selBox {
+				iv.Boxes = append(iv.Boxes[:i], iv.Boxes[i+1:]...)
+				iv.selBox = nil
+				iv.Invalidate(true)
+				iv.wasModified()
+				iv.onSelectedChange.Fire(NewEvent(iv, nil))
+				return
+			}
+		}
+	}
+}
+
+func (iv *ImageViewBox) NameSelected() string {
+	if iv.selBox != nil {
+		return iv.selBox.Name
+	}
+	return ""
+}
+
+func (iv *ImageViewBox) SetNameSelected(name string) {
+	if iv.selBox != nil {
+		iv.selBox.Name = name
+		iv.wasModified()
+	}
+}
+
+func (iv *ImageViewBox) TypeSelected() int {
+	if iv.selBox != nil {
+		return iv.selBox.Type
+	}
+	return 0
+}
+
+func (iv *ImageViewBox) SetTypeSelected(typ int) {
+	if iv.selBox != nil {
+		iv.selBox.Type = typ
+		iv.wasModified()
+	}
+}
+
+func (ib *ImageViewBox) updateHighlight(x, y int) bool {
+	var changed bool
+	for _, b := range ib.Boxes {
+		under := x >= b.X && y >= b.Y && x <= b.X2 && y <= b.Y2
+		if b.underMouse != under {
+			changed = true
+		}
+		b.underMouse = under
+		/*if sel {
+			break // allow only one to be underMouse
+		}*/
+	}
+	return changed
+}
+
+func (ib *ImageViewBox) isUnderMouse(x, y int) *ImageBox {
+	for _, b := range ib.Boxes {
+		if x >= b.X && y >= b.Y && x <= b.X2 && y <= b.Y2 {
+			return b
+		}
+	}
+	return nil
+}
+
+func (ib *ImageViewBox) getCursor(x, y int) uint16 {
+	for _, b := range ib.Boxes {
+		switch d := ib.resizingDirection(b, x, y); d {
+		case DirY, DirY2:
+			return w32.IDC_SIZENS
+		case DirX, DirX2:
+			return w32.IDC_SIZEWE
+		}
+		// w32.IDC_SIZEALL or w32.IDC_SIZE for resize
+	}
+	return w32.IDC_ARROW
+}
+
+func (ib *ImageViewBox) resizingDirection(b *ImageBox, x, y int) direction {
+	if b == nil {
+		return DirNone
+	}
+	switch {
+	case b.X == x || b.X == x-1 || b.X == x+1:
+		return DirX
+	case b.X2 == x || b.X2 == x-1 || b.X2 == x+1:
+		return DirX2
+	case b.Y == y || b.Y == y-1 || b.Y == y+1:
+		return DirY
+	case b.Y2 == y || b.Y2 == y-1 || b.Y2 == y+1:
+		return DirY2
+	}
+	return DirNone
+}
+
+func (ib *ImageViewBox) resizeToDirection(b *ImageBox, x, y int) {
+	switch ib.resize {
+	case DirX:
+		b.X = x
+	case DirY:
+		b.Y = y
+	case DirX2:
+		b.X2 = x
+	case DirY2:
+		b.Y2 = y
+	}
+}
+
+func (ib *ImageViewBox) drag(b *ImageBox, x, y int) {
+	w, h := b.X2-b.X, b.Y2-b.Y
+
+	nx := ib.dragStartX - b.X
+	ny := ib.dragStartY - b.Y
+
+	b.X = x - nx
+	b.Y = y - ny
+	b.X2 = b.X + w
+	b.Y2 = b.Y + h
+
+	ib.dragStartX, ib.dragStartY = x, y
+}
+
+func (iv *ImageViewBox) DrawImageFile(filepath string) (err error) {
+	iv.bmp, err = NewBitmapFromFile(filepath, RGB(255, 255, 0))
+	iv.selBox = nil
+	iv.modified = false
+	iv.onSelectedChange.Fire(NewEvent(iv, nil))
+	iv.onModify.Fire(NewEvent(iv, nil))
+	return
+}
+
+func (iv *ImageViewBox) DrawImage(bmp *Bitmap) {
+	iv.bmp = bmp
+	iv.selBox = nil
+	iv.modified = false
+	iv.onSelectedChange.Fire(NewEvent(iv, nil))
+	iv.onModify.Fire(NewEvent(iv, nil))
+}
+
+func (iv *ImageViewBox) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_SIZE, w32.WM_SIZING:
+		iv.Invalidate(true)
+
+	case w32.WM_ERASEBKGND:
+		return 1 // important
+
+	case w32.WM_CREATE:
+		internalTrackMouseEvent(iv.hwnd)
+
+	case w32.WM_PAINT:
+		if iv.bmp != nil {
+			canvas := NewCanvasFromHwnd(iv.hwnd)
+			defer canvas.Dispose()
+			iv.SetSize(iv.bmp.Size())
+			canvas.DrawBitmap(iv.bmp, 0, 0)
+
+			for _, b := range iv.Boxes {
+				// old code used NewSystemColorBrush(w32.COLOR_BTNFACE) w32.COLOR_WINDOW
+				pen := ImageBoxPen
+				if b.underMouse {
+					pen = ImageBoxHiPen
+				}
+				canvas.DrawRect(b.Rect(), pen)
+
+				if b == iv.selBox {
+					x1 := []int{b.X, b.X2, b.X2, b.X}
+					y1 := []int{b.Y, b.Y, b.Y2, b.Y2}
+
+					for i := 0; i < len(x1); i++ {
+						r := NewRect(x1[i]-2, y1[i]-2, x1[i]+2, y1[i]+2)
+						canvas.DrawFillRect(r, ImageBoxMarkPen, ImageBoxMarkBrush)
+					}
+
+				}
+			}
+		}
+
+	case w32.WM_MOUSEMOVE:
+		x, y := genPoint(lparam)
+
+		if iv.dragBox != nil {
+			if iv.resize == DirNone {
+				iv.drag(iv.dragBox, x, y)
+				iv.wasModified()
+			} else {
+				iv.resizeToDirection(iv.dragBox, x, y)
+				iv.wasModified()
+			}
+			iv.Invalidate(true)
+
+		} else {
+			if !iv.add {
+				w32.SetCursor(w32.LoadCursorWithResourceID(0, iv.getCursor(x, y)))
+			}
+			//  do not call repaint if underMouse item did not change.
+			if iv.updateHighlight(x, y) {
+				iv.Invalidate(true)
+			}
+		}
+
+		if iv.mouseLeft {
+			internalTrackMouseEvent(iv.hwnd)
+			iv.mouseLeft = false
+		}
+
+	case w32.WM_MOUSELEAVE:
+		iv.dragBox = nil
+		iv.mouseLeft = true
+		iv.updateHighlight(-1, -1)
+		iv.Invalidate(true)
+
+	case w32.WM_LBUTTONUP:
+		iv.dragBox = nil
+
+	case w32.WM_LBUTTONDOWN:
+		x, y := genPoint(lparam)
+		if iv.add {
+			now := time.Now()
+			s := fmt.Sprintf("field%s", now.Format("020405"))
+			b := &ImageBox{Name: s, underMouse: true, X: x, Y: y, X2: x + 150, Y2: y + 30}
+			iv.Boxes = append(iv.Boxes, b)
+			iv.selBox = b
+			iv.wasModified()
+			iv.onAdd.Fire(NewEvent(iv, nil))
+		} else {
+			iv.dragBox = iv.isUnderMouse(x, y)
+			iv.selBox = iv.dragBox
+			iv.dragStartX, iv.dragStartY = x, y
+			iv.resize = iv.resizingDirection(iv.dragBox, x, y)
+		}
+		iv.Invalidate(true)
+		iv.onSelectedChange.Fire(NewEvent(iv, nil))
+
+	case w32.WM_RBUTTONDOWN:
+
+	}
+	return w32.DefWindowProc(iv.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/init.go","mode":420,"size":445,"sha256":"d95d90a40d436cf5b669b3fcaa92de79dd62480d70d1f58e8cbbdddbc138040c","index":0,"count":1,"encoding":"utf-8","payloadBytes":445}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+func init() {
+	gControllerRegistry = make(map[w32.HWND]Controller)
+	gRegisteredClasses = make([]string, 0)
+
+	var si w32.GdiplusStartupInput
+	si.GdiplusVersion = 1
+	w32.GdiplusStartup(&si, nil)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/keyboard.go","mode":420,"size":14063,"sha256":"cd4dc63197f8186e36c9fe136062ae4d840e8d0cfee7aabe6c9c0c5295e3fa45","index":0,"count":1,"encoding":"utf-8","payloadBytes":14063}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"bytes"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Key uint16
+
+func (k Key) String() string {
+	return key2string[k]
+}
+
+const (
+	KeyLButton           Key = w32.VK_LBUTTON
+	KeyRButton           Key = w32.VK_RBUTTON
+	KeyCancel            Key = w32.VK_CANCEL
+	KeyMButton           Key = w32.VK_MBUTTON
+	KeyXButton1          Key = w32.VK_XBUTTON1
+	KeyXButton2          Key = w32.VK_XBUTTON2
+	KeyBack              Key = w32.VK_BACK
+	KeyTab               Key = w32.VK_TAB
+	KeyClear             Key = w32.VK_CLEAR
+	KeyReturn            Key = w32.VK_RETURN
+	KeyShift             Key = w32.VK_SHIFT
+	KeyControl           Key = w32.VK_CONTROL
+	KeyAlt               Key = w32.VK_MENU
+	KeyMenu              Key = w32.VK_MENU
+	KeyPause             Key = w32.VK_PAUSE
+	KeyCapital           Key = w32.VK_CAPITAL
+	KeyKana              Key = w32.VK_KANA
+	KeyHangul            Key = w32.VK_HANGUL
+	KeyJunja             Key = w32.VK_JUNJA
+	KeyFinal             Key = w32.VK_FINAL
+	KeyHanja             Key = w32.VK_HANJA
+	KeyKanji             Key = w32.VK_KANJI
+	KeyEscape            Key = w32.VK_ESCAPE
+	KeyConvert           Key = w32.VK_CONVERT
+	KeyNonconvert        Key = w32.VK_NONCONVERT
+	KeyAccept            Key = w32.VK_ACCEPT
+	KeyModeChange        Key = w32.VK_MODECHANGE
+	KeySpace             Key = w32.VK_SPACE
+	KeyPrior             Key = w32.VK_PRIOR
+	KeyNext              Key = w32.VK_NEXT
+	KeyEnd               Key = w32.VK_END
+	KeyHome              Key = w32.VK_HOME
+	KeyLeft              Key = w32.VK_LEFT
+	KeyUp                Key = w32.VK_UP
+	KeyRight             Key = w32.VK_RIGHT
+	KeyDown              Key = w32.VK_DOWN
+	KeySelect            Key = w32.VK_SELECT
+	KeyPrint             Key = w32.VK_PRINT
+	KeyExecute           Key = w32.VK_EXECUTE
+	KeySnapshot          Key = w32.VK_SNAPSHOT
+	KeyInsert            Key = w32.VK_INSERT
+	KeyDelete            Key = w32.VK_DELETE
+	KeyHelp              Key = w32.VK_HELP
+	Key0                 Key = 0x30
+	Key1                 Key = 0x31
+	Key2                 Key = 0x32
+	Key3                 Key = 0x33
+	Key4                 Key = 0x34
+	Key5                 Key = 0x35
+	Key6                 Key = 0x36
+	Key7                 Key = 0x37
+	Key8                 Key = 0x38
+	Key9                 Key = 0x39
+	KeyA                 Key = 0x41
+	KeyB                 Key = 0x42
+	KeyC                 Key = 0x43
+	KeyD                 Key = 0x44
+	KeyE                 Key = 0x45
+	KeyF                 Key = 0x46
+	KeyG                 Key = 0x47
+	KeyH                 Key = 0x48
+	KeyI                 Key = 0x49
+	KeyJ                 Key = 0x4A
+	KeyK                 Key = 0x4B
+	KeyL                 Key = 0x4C
+	KeyM                 Key = 0x4D
+	KeyN                 Key = 0x4E
+	KeyO                 Key = 0x4F
+	KeyP                 Key = 0x50
+	KeyQ                 Key = 0x51
+	KeyR                 Key = 0x52
+	KeyS                 Key = 0x53
+	KeyT                 Key = 0x54
+	KeyU                 Key = 0x55
+	KeyV                 Key = 0x56
+	KeyW                 Key = 0x57
+	KeyX                 Key = 0x58
+	KeyY                 Key = 0x59
+	KeyZ                 Key = 0x5A
+	KeyLWIN              Key = w32.VK_LWIN
+	KeyRWIN              Key = w32.VK_RWIN
+	KeyApps              Key = w32.VK_APPS
+	KeySleep             Key = w32.VK_SLEEP
+	KeyNumpad0           Key = w32.VK_NUMPAD0
+	KeyNumpad1           Key = w32.VK_NUMPAD1
+	KeyNumpad2           Key = w32.VK_NUMPAD2
+	KeyNumpad3           Key = w32.VK_NUMPAD3
+	KeyNumpad4           Key = w32.VK_NUMPAD4
+	KeyNumpad5           Key = w32.VK_NUMPAD5
+	KeyNumpad6           Key = w32.VK_NUMPAD6
+	KeyNumpad7           Key = w32.VK_NUMPAD7
+	KeyNumpad8           Key = w32.VK_NUMPAD8
+	KeyNumpad9           Key = w32.VK_NUMPAD9
+	KeyMultiply          Key = w32.VK_MULTIPLY
+	KeyAdd               Key = w32.VK_ADD
+	KeySeparator         Key = w32.VK_SEPARATOR
+	KeySubtract          Key = w32.VK_SUBTRACT
+	KeyDecimal           Key = w32.VK_DECIMAL
+	KeyDivide            Key = w32.VK_DIVIDE
+	KeyF1                Key = w32.VK_F1
+	KeyF2                Key = w32.VK_F2
+	KeyF3                Key = w32.VK_F3
+	KeyF4                Key = w32.VK_F4
+	KeyF5                Key = w32.VK_F5
+	KeyF6                Key = w32.VK_F6
+	KeyF7                Key = w32.VK_F7
+	KeyF8                Key = w32.VK_F8
+	KeyF9                Key = w32.VK_F9
+	KeyF10               Key = w32.VK_F10
+	KeyF11               Key = w32.VK_F11
+	KeyF12               Key = w32.VK_F12
+	KeyF13               Key = w32.VK_F13
+	KeyF14               Key = w32.VK_F14
+	KeyF15               Key = w32.VK_F15
+	KeyF16               Key = w32.VK_F16
+	KeyF17               Key = w32.VK_F17
+	KeyF18               Key = w32.VK_F18
+	KeyF19               Key = w32.VK_F19
+	KeyF20               Key = w32.VK_F20
+	KeyF21               Key = w32.VK_F21
+	KeyF22               Key = w32.VK_F22
+	KeyF23               Key = w32.VK_F23
+	KeyF24               Key = w32.VK_F24
+	KeyNumlock           Key = w32.VK_NUMLOCK
+	KeyScroll            Key = w32.VK_SCROLL
+	KeyLShift            Key = w32.VK_LSHIFT
+	KeyRShift            Key = w32.VK_RSHIFT
+	KeyLControl          Key = w32.VK_LCONTROL
+	KeyRControl          Key = w32.VK_RCONTROL
+	KeyLAlt              Key = w32.VK_LMENU
+	KeyLMenu             Key = w32.VK_LMENU
+	KeyRAlt              Key = w32.VK_RMENU
+	KeyRMenu             Key = w32.VK_RMENU
+	KeyBrowserBack       Key = w32.VK_BROWSER_BACK
+	KeyBrowserForward    Key = w32.VK_BROWSER_FORWARD
+	KeyBrowserRefresh    Key = w32.VK_BROWSER_REFRESH
+	KeyBrowserStop       Key = w32.VK_BROWSER_STOP
+	KeyBrowserSearch     Key = w32.VK_BROWSER_SEARCH
+	KeyBrowserFavorites  Key = w32.VK_BROWSER_FAVORITES
+	KeyBrowserHome       Key = w32.VK_BROWSER_HOME
+	KeyVolumeMute        Key = w32.VK_VOLUME_MUTE
+	KeyVolumeDown        Key = w32.VK_VOLUME_DOWN
+	KeyVolumeUp          Key = w32.VK_VOLUME_UP
+	KeyMediaNextTrack    Key = w32.VK_MEDIA_NEXT_TRACK
+	KeyMediaPrevTrack    Key = w32.VK_MEDIA_PREV_TRACK
+	KeyMediaStop         Key = w32.VK_MEDIA_STOP
+	KeyMediaPlayPause    Key = w32.VK_MEDIA_PLAY_PAUSE
+	KeyLaunchMail        Key = w32.VK_LAUNCH_MAIL
+	KeyLaunchMediaSelect Key = w32.VK_LAUNCH_MEDIA_SELECT
+	KeyLaunchApp1        Key = w32.VK_LAUNCH_APP1
+	KeyLaunchApp2        Key = w32.VK_LAUNCH_APP2
+	KeyOEM1              Key = w32.VK_OEM_1
+	KeyOEMPlus           Key = w32.VK_OEM_PLUS
+	KeyOEMComma          Key = w32.VK_OEM_COMMA
+	KeyOEMMinus          Key = w32.VK_OEM_MINUS
+	KeyOEMPeriod         Key = w32.VK_OEM_PERIOD
+	KeyOEM2              Key = w32.VK_OEM_2
+	KeyOEM3              Key = w32.VK_OEM_3
+	KeyOEM4              Key = w32.VK_OEM_4
+	KeyOEM5              Key = w32.VK_OEM_5
+	KeyOEM6              Key = w32.VK_OEM_6
+	KeyOEM7              Key = w32.VK_OEM_7
+	KeyOEM8              Key = w32.VK_OEM_8
+	KeyOEM102            Key = w32.VK_OEM_102
+	KeyProcessKey        Key = w32.VK_PROCESSKEY
+	KeyPacket            Key = w32.VK_PACKET
+	KeyAttn              Key = w32.VK_ATTN
+	KeyCRSel             Key = w32.VK_CRSEL
+	KeyEXSel             Key = w32.VK_EXSEL
+	KeyErEOF             Key = w32.VK_EREOF
+	KeyPlay              Key = w32.VK_PLAY
+	KeyZoom              Key = w32.VK_ZOOM
+	KeyNoName            Key = w32.VK_NONAME
+	KeyPA1               Key = w32.VK_PA1
+	KeyOEMClear          Key = w32.VK_OEM_CLEAR
+)
+
+var key2string = map[Key]string{
+	KeyLButton:           "LButton",
+	KeyRButton:           "RButton",
+	KeyCancel:            "Cancel",
+	KeyMButton:           "MButton",
+	KeyXButton1:          "XButton1",
+	KeyXButton2:          "XButton2",
+	KeyBack:              "Back",
+	KeyTab:               "Tab",
+	KeyClear:             "Clear",
+	KeyReturn:            "Return",
+	KeyShift:             "Shift",
+	KeyControl:           "Control",
+	KeyAlt:               "Alt / Menu",
+	KeyPause:             "Pause",
+	KeyCapital:           "Capital",
+	KeyKana:              "Kana / Hangul",
+	KeyJunja:             "Junja",
+	KeyFinal:             "Final",
+	KeyHanja:             "Hanja / Kanji",
+	KeyEscape:            "Escape",
+	KeyConvert:           "Convert",
+	KeyNonconvert:        "Nonconvert",
+	KeyAccept:            "Accept",
+	KeyModeChange:        "ModeChange",
+	KeySpace:             "Space",
+	KeyPrior:             "Prior",
+	KeyNext:              "Next",
+	KeyEnd:               "End",
+	KeyHome:              "Home",
+	KeyLeft:              "Left",
+	KeyUp:                "Up",
+	KeyRight:             "Right",
+	KeyDown:              "Down",
+	KeySelect:            "Select",
+	KeyPrint:             "Print",
+	KeyExecute:           "Execute",
+	KeySnapshot:          "Snapshot",
+	KeyInsert:            "Insert",
+	KeyDelete:            "Delete",
+	KeyHelp:              "Help",
+	Key0:                 "0",
+	Key1:                 "1",
+	Key2:                 "2",
+	Key3:                 "3",
+	Key4:                 "4",
+	Key5:                 "5",
+	Key6:                 "6",
+	Key7:                 "7",
+	Key8:                 "8",
+	Key9:                 "9",
+	KeyA:                 "A",
+	KeyB:                 "B",
+	KeyC:                 "C",
+	KeyD:                 "D",
+	KeyE:                 "E",
+	KeyF:                 "F",
+	KeyG:                 "G",
+	KeyH:                 "H",
+	KeyI:                 "I",
+	KeyJ:                 "J",
+	KeyK:                 "K",
+	KeyL:                 "L",
+	KeyM:                 "M",
+	KeyN:                 "N",
+	KeyO:                 "O",
+	KeyP:                 "P",
+	KeyQ:                 "Q",
+	KeyR:                 "R",
+	KeyS:                 "S",
+	KeyT:                 "T",
+	KeyU:                 "U",
+	KeyV:                 "V",
+	KeyW:                 "W",
+	KeyX:                 "X",
+	KeyY:                 "Y",
+	KeyZ:                 "Z",
+	KeyLWIN:              "LWIN",
+	KeyRWIN:              "RWIN",
+	KeyApps:              "Apps",
+	KeySleep:             "Sleep",
+	KeyNumpad0:           "Numpad0",
+	KeyNumpad1:           "Numpad1",
+	KeyNumpad2:           "Numpad2",
+	KeyNumpad3:           "Numpad3",
+	KeyNumpad4:           "Numpad4",
+	KeyNumpad5:           "Numpad5",
+	KeyNumpad6:           "Numpad6",
+	KeyNumpad7:           "Numpad7",
+	KeyNumpad8:           "Numpad8",
+	KeyNumpad9:           "Numpad9",
+	KeyMultiply:          "Multiply",
+	KeyAdd:               "Add",
+	KeySeparator:         "Separator",
+	KeySubtract:          "Subtract",
+	KeyDecimal:           "Decimal",
+	KeyDivide:            "Divide",
+	KeyF1:                "F1",
+	KeyF2:                "F2",
+	KeyF3:                "F3",
+	KeyF4:                "F4",
+	KeyF5:                "F5",
+	KeyF6:                "F6",
+	KeyF7:                "F7",
+	KeyF8:                "F8",
+	KeyF9:                "F9",
+	KeyF10:               "F10",
+	KeyF11:               "F11",
+	KeyF12:               "F12",
+	KeyF13:               "F13",
+	KeyF14:               "F14",
+	KeyF15:               "F15",
+	KeyF16:               "F16",
+	KeyF17:               "F17",
+	KeyF18:               "F18",
+	KeyF19:               "F19",
+	KeyF20:               "F20",
+	KeyF21:               "F21",
+	KeyF22:               "F22",
+	KeyF23:               "F23",
+	KeyF24:               "F24",
+	KeyNumlock:           "Numlock",
+	KeyScroll:            "Scroll",
+	KeyLShift:            "LShift",
+	KeyRShift:            "RShift",
+	KeyLControl:          "LControl",
+	KeyRControl:          "RControl",
+	KeyLMenu:             "LMenu",
+	KeyRMenu:             "RMenu",
+	KeyBrowserBack:       "BrowserBack",
+	KeyBrowserForward:    "BrowserForward",
+	KeyBrowserRefresh:    "BrowserRefresh",
+	KeyBrowserStop:       "BrowserStop",
+	KeyBrowserSearch:     "BrowserSearch",
+	KeyBrowserFavorites:  "BrowserFavorites",
+	KeyBrowserHome:       "BrowserHome",
+	KeyVolumeMute:        "VolumeMute",
+	KeyVolumeDown:        "VolumeDown",
+	KeyVolumeUp:          "VolumeUp",
+	KeyMediaNextTrack:    "MediaNextTrack",
+	KeyMediaPrevTrack:    "MediaPrevTrack",
+	KeyMediaStop:         "MediaStop",
+	KeyMediaPlayPause:    "MediaPlayPause",
+	KeyLaunchMail:        "LaunchMail",
+	KeyLaunchMediaSelect: "LaunchMediaSelect",
+	KeyLaunchApp1:        "LaunchApp1",
+	KeyLaunchApp2:        "LaunchApp2",
+	KeyOEM1:              "OEM1",
+	KeyOEMPlus:           "OEMPlus",
+	KeyOEMComma:          "OEMComma",
+	KeyOEMMinus:          "OEMMinus",
+	KeyOEMPeriod:         "OEMPeriod",
+	KeyOEM2:              "OEM2",
+	KeyOEM3:              "OEM3",
+	KeyOEM4:              "OEM4",
+	KeyOEM5:              "OEM5",
+	KeyOEM6:              "OEM6",
+	KeyOEM7:              "OEM7",
+	KeyOEM8:              "OEM8",
+	KeyOEM102:            "OEM102",
+	KeyProcessKey:        "ProcessKey",
+	KeyPacket:            "Packet",
+	KeyAttn:              "Attn",
+	KeyCRSel:             "CRSel",
+	KeyEXSel:             "EXSel",
+	KeyErEOF:             "ErEOF",
+	KeyPlay:              "Play",
+	KeyZoom:              "Zoom",
+	KeyNoName:            "NoName",
+	KeyPA1:               "PA1",
+	KeyOEMClear:          "OEMClear",
+}
+
+type Modifiers byte
+
+func (m Modifiers) String() string {
+	return modifiers2string[m]
+}
+
+var modifiers2string = map[Modifiers]string{
+	ModShift:                       "Shift",
+	ModControl:                     "Ctrl",
+	ModControl | ModShift:          "Ctrl+Shift",
+	ModAlt:                         "Alt",
+	ModAlt | ModShift:              "Alt+Shift",
+	ModAlt | ModControl | ModShift: "Alt+Ctrl+Shift",
+}
+
+const (
+	ModShift Modifiers = 1 << iota
+	ModControl
+	ModAlt
+)
+
+func ModifiersDown() Modifiers {
+	var m Modifiers
+
+	if ShiftDown() {
+		m |= ModShift
+	}
+	if ControlDown() {
+		m |= ModControl
+	}
+	if AltDown() {
+		m |= ModAlt
+	}
+
+	return m
+}
+
+type Shortcut struct {
+	Modifiers Modifiers
+	Key       Key
+}
+
+func (s Shortcut) String() string {
+	m := s.Modifiers.String()
+	if m == "" {
+		return s.Key.String()
+	}
+
+	b := new(bytes.Buffer)
+
+	b.WriteString(m)
+	b.WriteRune('+')
+	b.WriteString(s.Key.String())
+
+	return b.String()
+}
+
+func AltDown() bool {
+	return w32.GetKeyState(int32(KeyAlt))>>15 != 0
+}
+
+func ControlDown() bool {
+	return w32.GetKeyState(int32(KeyControl))>>15 != 0
+}
+
+func ShiftDown() bool {
+	return w32.GetKeyState(int32(KeyShift))>>15 != 0
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/label.go","mode":420,"size":605,"sha256":"9db53fa3d4d7d3d137fba9b5e66b458c2b1cb67d5a590daaa48f88ab80a47faa","index":0,"count":1,"encoding":"utf-8","payloadBytes":605}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Label struct {
+	ControlBase
+}
+
+func NewLabel(parent Controller) *Label {
+	lb := new(Label)
+
+	lb.InitControl("STATIC", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|w32.SS_LEFTNOWORDWRAP)
+	RegMsgHandler(lb)
+
+	lb.SetFont(DefaultFont)
+	lb.SetText("Label")
+	lb.SetSize(100, 25)
+	return lb
+}
+
+func (lb *Label) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	return w32.DefWindowProc(lb.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/layout.go","mode":420,"size":5141,"sha256":"efd589c1efbb804e1f4336f40947dea0fc9cec9c4269582ae0954316fbb2c17c","index":0,"count":1,"encoding":"utf-8","payloadBytes":5141}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"sort"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+// Dockable component must satisfy interface to be docked.
+type Dockable interface {
+	Handle() w32.HWND
+
+	Pos() (x, y int)
+	Width() int
+	Height() int
+	Visible() bool
+
+	SetPos(x, y int)
+	SetSize(width, height int)
+
+	OnMouseMove() *EventManager
+	OnLBUp() *EventManager
+}
+
+// DockAllow is window, panel or other component that satisfies interface.
+type DockAllow interface {
+	Handle() w32.HWND
+	ClientWidth() int
+	ClientHeight() int
+	SetLayout(mng LayoutManager)
+}
+
+// Various layout managers
+type Direction int
+
+const (
+	Top Direction = iota
+	Bottom
+	Left
+	Right
+	Fill
+)
+
+type LayoutControl struct {
+	child Dockable
+	dir   Direction
+}
+
+type LayoutControls []*LayoutControl
+
+type SimpleDock struct {
+	parent      DockAllow
+	layoutCtl   LayoutControls
+	loadedState bool
+}
+
+// CtlState gets saved and loaded from json
+type CtlState struct {
+	X, Y, Width, Height int
+}
+
+type LayoutState struct {
+	WindowState string
+	Controls    []*CtlState
+}
+
+func (lc LayoutControls) Len() int           { return len(lc) }
+func (lc LayoutControls) Swap(i, j int)      { lc[i], lc[j] = lc[j], lc[i] }
+func (lc LayoutControls) Less(i, j int) bool { return lc[i].dir < lc[j].dir }
+
+func NewSimpleDock(parent DockAllow) *SimpleDock {
+	d := &SimpleDock{parent: parent}
+	parent.SetLayout(d)
+	return d
+}
+
+// Layout management for the child controls.
+func (sd *SimpleDock) Dock(child Dockable, dir Direction) {
+	sd.layoutCtl = append(sd.layoutCtl, &LayoutControl{child, dir})
+}
+
+// SaveState of the layout. Only works for Docks with parent set to main form.
+func (sd *SimpleDock) SaveState(w io.Writer) error {
+	var ls LayoutState
+
+	var wp w32.WINDOWPLACEMENT
+	wp.Length = uint32(unsafe.Sizeof(wp))
+	if !w32.GetWindowPlacement(sd.parent.Handle(), &wp) {
+		return fmt.Errorf("GetWindowPlacement failed")
+	}
+
+	ls.WindowState = fmt.Sprint(
+		wp.Flags, wp.ShowCmd,
+		wp.PtMinPosition.X, wp.PtMinPosition.Y,
+		wp.PtMaxPosition.X, wp.PtMaxPosition.Y,
+		wp.RcNormalPosition.Left, wp.RcNormalPosition.Top,
+		wp.RcNormalPosition.Right, wp.RcNormalPosition.Bottom)
+
+	for _, c := range sd.layoutCtl {
+		x, y := c.child.Pos()
+		w, h := c.child.Width(), c.child.Height()
+
+		ctl := &CtlState{X: x, Y: y, Width: w, Height: h}
+		ls.Controls = append(ls.Controls, ctl)
+	}
+
+	if err := json.NewEncoder(w).Encode(ls); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// LoadState of the layout. Only works for Docks with parent set to main form.
+func (sd *SimpleDock) LoadState(r io.Reader) error {
+	var ls LayoutState
+
+	if err := json.NewDecoder(r).Decode(&ls); err != nil {
+		return err
+	}
+
+	var wp w32.WINDOWPLACEMENT
+	if _, err := fmt.Sscan(ls.WindowState,
+		&wp.Flags, &wp.ShowCmd,
+		&wp.PtMinPosition.X, &wp.PtMinPosition.Y,
+		&wp.PtMaxPosition.X, &wp.PtMaxPosition.Y,
+		&wp.RcNormalPosition.Left, &wp.RcNormalPosition.Top,
+		&wp.RcNormalPosition.Right, &wp.RcNormalPosition.Bottom); err != nil {
+		return err
+	}
+	wp.Length = uint32(unsafe.Sizeof(wp))
+
+	if !w32.SetWindowPlacement(sd.parent.Handle(), &wp) {
+		return fmt.Errorf("SetWindowPlacement failed")
+	}
+
+	// if number of controls in the saved layout does not match
+	// current number on screen - something changed and we do not reload
+	// rest of control sizes from json
+	if len(sd.layoutCtl) != len(ls.Controls) {
+		return nil
+	}
+
+	for i, c := range sd.layoutCtl {
+		c.child.SetPos(ls.Controls[i].X, ls.Controls[i].Y)
+		c.child.SetSize(ls.Controls[i].Width, ls.Controls[i].Height)
+	}
+	return nil
+}
+
+// SaveStateFile convenience function.
+func (sd *SimpleDock) SaveStateFile(file string) error {
+	f, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	return sd.SaveState(f)
+}
+
+// LoadStateFile loads state ignores error if file is not found.
+func (sd *SimpleDock) LoadStateFile(file string) error {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil // if file is not found or not accessible ignore it
+	}
+	return sd.LoadState(f)
+}
+
+// Update is called to resize child items based on layout directions.
+func (sd *SimpleDock) Update() {
+	sort.Stable(sd.layoutCtl)
+
+	x, y := 0, 0
+	w, h := sd.parent.ClientWidth(), sd.parent.ClientHeight()
+	winw, winh := w, h
+
+	for _, c := range sd.layoutCtl {
+		// Non visible controls do not preserve space.
+		if !c.child.Visible() {
+			continue
+		}
+
+		switch c.dir {
+		case Top:
+			c.child.SetPos(x, y)
+			c.child.SetSize(w, c.child.Height())
+			h -= c.child.Height()
+			y += c.child.Height()
+		case Bottom:
+			c.child.SetPos(x, winh-c.child.Height())
+			c.child.SetSize(w, c.child.Height())
+			h -= c.child.Height()
+			winh -= c.child.Height()
+		case Left:
+			c.child.SetPos(x, y)
+			c.child.SetSize(c.child.Width(), h)
+			w -= c.child.Width()
+			x += c.child.Width()
+		case Right:
+			c.child.SetPos(winw-c.child.Width(), y)
+			c.child.SetSize(c.child.Width(), h)
+			w -= c.child.Width()
+			winw -= c.child.Width()
+		case Fill:
+			// fill available space
+			c.child.SetPos(x, y)
+			c.child.SetSize(w, h)
+		}
+		//c.child.Invalidate(true)
+	}
+}
+
+@@END
 @@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/listview.go","mode":420,"size":14657,"sha256":"214cf0d1f761c7dc3363f20544d8244bac9fa5920ebbf2ec6cd8be6f93086406","index":0,"count":1,"encoding":"utf-8","payloadBytes":14657}
 //go:build windows
 
@@ -52215,2709 +54332,6 @@ func (i NodeType) String() string {
 		return "NodeType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _NodeType_name[_NodeType_index[idx]:_NodeType_index[idx+1]]
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/parse.go","mode":420,"size":58321,"sha256":"ab68a3276498d29551d38faebd93a622c4d1d908f6f1dad00bce438e74110726","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
-// Copyright 2010 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import (
-	"cmp"
-	"errors"
-	"fmt"
-	"io"
-	"slices"
-	"strings"
-
-	a "golang.org/x/net/html/atom"
-)
-
-// A parser implements the HTML5 parsing algorithm:
-// https://html.spec.whatwg.org/multipage/syntax.html#tree-construction
-type parser struct {
-	// tokenizer provides the tokens for the parser.
-	tokenizer *Tokenizer
-	// tok is the most recently read token.
-	tok Token
-	// Self-closing tags like <hr/> are treated as start tags, except that
-	// hasSelfClosingToken is set while they are being processed.
-	hasSelfClosingToken bool
-	// doc is the document root element.
-	doc *Node
-	// The stack of open elements (section 12.2.4.2) and active formatting
-	// elements (section 12.2.4.3).
-	oe, afe nodeStack
-	// Element pointers (section 12.2.4.4).
-	head, form *Node
-	// Other parsing state flags (section 12.2.4.5).
-	scripting, framesetOK bool
-	// The stack of template insertion modes
-	templateStack insertionModeStack
-	// im is the current insertion mode.
-	im insertionMode
-	// originalIM is the insertion mode to go back to after completing a text
-	// or inTableText insertion mode.
-	originalIM insertionMode
-	// fosterParenting is whether new elements should be inserted according to
-	// the foster parenting rules (section 12.2.6.1).
-	fosterParenting bool
-	// quirks is whether the parser is operating in "quirks mode."
-	quirks bool
-	// fragment is whether the parser is parsing an HTML fragment.
-	fragment bool
-	// context is the context element when parsing an HTML fragment
-	// (section 12.4).
-	context *Node
-}
-
-func (p *parser) top() *Node {
-	if n := p.oe.top(); n != nil {
-		return n
-	}
-	return p.doc
-}
-
-// Stop tags for use in popUntil. These come from section 12.2.4.2.
-var (
-	defaultScopeStopTags = map[string][]a.Atom{
-		"":     {a.Applet, a.Caption, a.Html, a.Table, a.Td, a.Th, a.Marquee, a.Object, a.Template, a.Select},
-		"math": {a.AnnotationXml, a.Mi, a.Mn, a.Mo, a.Ms, a.Mtext},
-		"svg":  {a.Desc, a.ForeignObject, a.Title},
-	}
-)
-
-type scope int
-
-const (
-	defaultScope scope = iota
-	listItemScope
-	buttonScope
-	tableScope
-	tableRowScope
-	tableBodyScope
-)
-
-// popUntil pops the stack of open elements at the highest element whose tag
-// is in matchTags, provided there is no higher element in the scope's stop
-// tags (as defined in section 12.2.4.2). It returns whether or not there was
-// such an element. If there was not, popUntil leaves the stack unchanged.
-//
-// For example, the set of stop tags for table scope is: "html", "table". If
-// the stack was:
-// ["html", "body", "font", "table", "b", "i", "u"]
-// then popUntil(tableScope, "font") would return false, but
-// popUntil(tableScope, "i") would return true and the stack would become:
-// ["html", "body", "font", "table", "b"]
-//
-// If an element's tag is in both the stop tags and matchTags, then the stack
-// will be popped and the function returns true (provided, of course, there was
-// no higher element in the stack that was also in the stop tags). For example,
-// popUntil(tableScope, "table") returns true and leaves:
-// ["html", "body", "font"]
-func (p *parser) popUntil(s scope, matchTags ...a.Atom) bool {
-	if i := p.indexOfElementInScope(s, matchTags...); i != -1 {
-		p.oe = p.oe[:i]
-		return true
-	}
-	return false
-}
-
-// indexOfElementInScope returns the index in p.oe of the highest element whose
-// tag is in matchTags that is in scope. If no matching element is in scope, it
-// returns -1.
-func (p *parser) indexOfElementInScope(s scope, matchTags ...a.Atom) int {
-	for i := len(p.oe) - 1; i >= 0; i-- {
-		tagAtom := p.oe[i].DataAtom
-		if p.oe[i].Namespace == "" {
-			for _, t := range matchTags {
-				if t == tagAtom {
-					return i
-				}
-			}
-			switch s {
-			case defaultScope:
-				// No-op.
-			case listItemScope:
-				if tagAtom == a.Ol || tagAtom == a.Ul {
-					return -1
-				}
-			case buttonScope:
-				if tagAtom == a.Button {
-					return -1
-				}
-			case tableScope:
-				if tagAtom == a.Html || tagAtom == a.Table || tagAtom == a.Template {
-					return -1
-				}
-			default:
-				panic(fmt.Sprintf("html: internal error: indexOfElementInScope unknown scope: %d", s))
-			}
-		}
-		switch s {
-		case defaultScope, listItemScope, buttonScope:
-			for _, t := range defaultScopeStopTags[p.oe[i].Namespace] {
-				if t == tagAtom {
-					return -1
-				}
-			}
-		}
-	}
-	return -1
-}
-
-// elementInScope is like popUntil, except that it doesn't modify the stack of
-// open elements.
-func (p *parser) elementInScope(s scope, matchTags ...a.Atom) bool {
-	return p.indexOfElementInScope(s, matchTags...) != -1
-}
-
-// clearStackToContext pops elements off the stack of open elements until a
-// scope-defined element is found.
-func (p *parser) clearStackToContext(s scope) {
-	for i := len(p.oe) - 1; i >= 0; i-- {
-		tagAtom := p.oe[i].DataAtom
-		switch s {
-		case tableScope:
-			if tagAtom == a.Html || tagAtom == a.Table || tagAtom == a.Template {
-				p.oe = p.oe[:i+1]
-				return
-			}
-		case tableRowScope:
-			if tagAtom == a.Html || tagAtom == a.Tr || tagAtom == a.Template {
-				p.oe = p.oe[:i+1]
-				return
-			}
-		case tableBodyScope:
-			if tagAtom == a.Html || tagAtom == a.Tbody || tagAtom == a.Tfoot || tagAtom == a.Thead || tagAtom == a.Template {
-				p.oe = p.oe[:i+1]
-				return
-			}
-		default:
-			panic(fmt.Sprintf("html: internal error: clearStackToContext unknown scope: %d", s))
-		}
-	}
-}
-
-// parseGenericRawTextElement implements the generic raw text element parsing
-// algorithm defined in 12.2.6.2.
-// https://html.spec.whatwg.org/multipage/parsing.html#parsing-elements-that-contain-only-text
-// TODO: Since both RAWTEXT and RCDATA states are treated as tokenizer's part
-// officially, need to make tokenizer consider both states.
-func (p *parser) parseGenericRawTextElement() {
-	p.addElement()
-	p.originalIM = p.im
-	p.im = textIM
-}
-
-// generateImpliedEndTags pops nodes off the stack of open elements as long as
-// the top node has a tag name of dd, dt, li, optgroup, option, p, rb, rp, rt or rtc.
-// If exceptions are specified, nodes with that name will not be popped off.
-func (p *parser) generateImpliedEndTags(exceptions ...string) {
-	var i int
-loop:
-	for i = len(p.oe) - 1; i >= 0; i-- {
-		n := p.oe[i]
-		if n.Type != ElementNode {
-			break
-		}
-		switch n.DataAtom {
-		case a.Dd, a.Dt, a.Li, a.Optgroup, a.Option, a.P, a.Rb, a.Rp, a.Rt, a.Rtc:
-			for _, except := range exceptions {
-				if n.Data == except {
-					break loop
-				}
-			}
-			continue
-		}
-		break
-	}
-
-	p.oe = p.oe[:i+1]
-}
-
-// addChild adds a child node n to the top element, and pushes n onto the stack
-// of open elements if it is an element node.
-func (p *parser) addChild(n *Node) {
-	if p.shouldFosterParent() {
-		p.fosterParent(n)
-	} else {
-		p.top().AppendChild(n)
-	}
-
-	if n.Type == ElementNode {
-		p.insertOpenElement(n)
-	}
-}
-
-func (p *parser) insertOpenElement(n *Node) {
-	p.oe = append(p.oe, n)
-	if len(p.oe) > 512 {
-		panic("html: open stack of elements exceeds 512 nodes")
-	}
-}
-
-// shouldFosterParent returns whether the next node to be added should be
-// foster parented.
-func (p *parser) shouldFosterParent() bool {
-	if p.fosterParenting {
-		switch p.top().DataAtom {
-		case a.Table, a.Tbody, a.Tfoot, a.Thead, a.Tr:
-			return true
-		}
-	}
-	return false
-}
-
-// fosterParent adds a child node according to the foster parenting rules.
-// Section 12.2.6.1, "foster parenting".
-func (p *parser) fosterParent(n *Node) {
-	var table, parent, prev, template *Node
-	var i int
-	for i = len(p.oe) - 1; i >= 0; i-- {
-		if p.oe[i].DataAtom == a.Table {
-			table = p.oe[i]
-			break
-		}
-	}
-
-	var j int
-	for j = len(p.oe) - 1; j >= 0; j-- {
-		if p.oe[j].DataAtom == a.Template {
-			template = p.oe[j]
-			break
-		}
-	}
-
-	if template != nil && (table == nil || j > i) {
-		template.AppendChild(n)
-		return
-	}
-
-	if table == nil {
-		// The foster parent is the html element.
-		parent = p.oe[0]
-	} else {
-		parent = table.Parent
-	}
-	if parent == nil {
-		parent = p.oe[i-1]
-	}
-
-	if table != nil {
-		prev = table.PrevSibling
-	} else {
-		prev = parent.LastChild
-	}
-	if prev != nil && prev.Type == TextNode && n.Type == TextNode {
-		prev.Data += n.Data
-		return
-	}
-
-	parent.InsertBefore(n, table)
-}
-
-// addText adds text to the preceding node if it is a text node, or else it
-// calls addChild with a new text node.
-func (p *parser) addText(text string) {
-	if text == "" {
-		return
-	}
-
-	if p.shouldFosterParent() {
-		p.fosterParent(&Node{
-			Type: TextNode,
-			Data: text,
-		})
-		return
-	}
-
-	t := p.top()
-	if n := t.LastChild; n != nil && n.Type == TextNode {
-		n.Data += text
-		return
-	}
-	p.addChild(&Node{
-		Type: TextNode,
-		Data: text,
-	})
-}
-
-func attrCompare(a, b Attribute) int {
-	return cmp.Or(
-		cmp.Compare(a.Namespace, b.Namespace),
-		cmp.Compare(a.Key, b.Key),
-		cmp.Compare(a.Val, b.Val),
-	)
-}
-
-// addElement adds a child element based on the current token.
-func (p *parser) addElement() {
-	p.addChild(&Node{
-		Type:     ElementNode,
-		DataAtom: p.tok.DataAtom,
-		Data:     p.tok.Data,
-		Attr:     p.tok.Attr,
-	})
-}
-
-// Section 12.2.4.3.
-func (p *parser) addFormattingElement() {
-	tagAtom, attr := p.tok.DataAtom, p.tok.Attr
-	p.addElement()
-
-	// In order to optimize the search, we need the attributes to be sorted, so we
-	// can just use slices.Equal.
-	slices.SortFunc(attr, attrCompare)
-
-	// Implement the Noah's Ark clause, but with three per family instead of two.
-	identicalElements := 0
-findIdenticalElements:
-	for i := len(p.afe) - 1; i >= 0; i-- {
-		n := p.afe[i]
-		if n.Type == scopeMarkerNode {
-			break
-		}
-		if n.Type != ElementNode {
-			continue
-		}
-		if n.Namespace != "" {
-			continue
-		}
-		if n.DataAtom != tagAtom {
-			continue
-		}
-		if !slices.Equal(n.Attr, attr) {
-			continue findIdenticalElements
-		}
-
-		identicalElements++
-		if identicalElements >= 3 {
-			p.afe.remove(n)
-		}
-	}
-
-	// Sort the attributes to optimize future identical-element searches.
-	top := p.top()
-	slices.SortFunc(top.Attr, attrCompare)
-
-	p.afe = append(p.afe, top)
-}
-
-// Section 12.2.4.3.
-func (p *parser) clearActiveFormattingElements() {
-	for {
-		if n := p.afe.pop(); len(p.afe) == 0 || n.Type == scopeMarkerNode {
-			return
-		}
-	}
-}
-
-// Section 12.2.4.3.
-func (p *parser) reconstructActiveFormattingElements() {
-	n := p.afe.top()
-	if n == nil {
-		return
-	}
-	if n.Type == scopeMarkerNode || p.oe.index(n) != -1 {
-		return
-	}
-	i := len(p.afe) - 1
-	for n.Type != scopeMarkerNode && p.oe.index(n) == -1 {
-		if i == 0 {
-			i = -1
-			break
-		}
-		i--
-		n = p.afe[i]
-	}
-	for {
-		i++
-		clone := p.afe[i].clone()
-		p.addChild(clone)
-		p.afe[i] = clone
-		if i == len(p.afe)-1 {
-			break
-		}
-	}
-}
-
-// Section 12.2.5.
-func (p *parser) acknowledgeSelfClosingTag() {
-	p.hasSelfClosingToken = false
-}
-
-// An insertion mode (section 12.2.4.1) is the state transition function from
-// a particular state in the HTML5 parser's state machine. It updates the
-// parser's fields depending on parser.tok (where ErrorToken means EOF).
-// It returns whether the token was consumed.
-type insertionMode func(*parser) bool
-
-// setOriginalIM sets the insertion mode to return to after completing a text or
-// inTableText insertion mode.
-// Section 12.2.4.1, "using the rules for".
-func (p *parser) setOriginalIM() {
-	if p.originalIM != nil {
-		panic("html: bad parser state: originalIM was set twice")
-	}
-	p.originalIM = p.im
-}
-
-// Section 12.2.4.1, "reset the insertion mode".
-func (p *parser) resetInsertionMode() {
-	for i := len(p.oe) - 1; i >= 0; i-- {
-		n := p.oe[i]
-		last := i == 0
-		if last && p.context != nil {
-			n = p.context
-		}
-
-		switch n.DataAtom {
-		case a.Td, a.Th:
-			// TODO: remove this divergence from the HTML5 spec.
-			//
-			// See https://bugs.chromium.org/p/chromium/issues/detail?id=829668
-			p.im = inCellIM
-		case a.Tr:
-			p.im = inRowIM
-		case a.Tbody, a.Thead, a.Tfoot:
-			p.im = inTableBodyIM
-		case a.Caption:
-			p.im = inCaptionIM
-		case a.Colgroup:
-			p.im = inColumnGroupIM
-		case a.Table:
-			p.im = inTableIM
-		case a.Template:
-			// TODO: remove this divergence from the HTML5 spec.
-			if n.Namespace != "" {
-				continue
-			}
-			p.im = p.templateStack.top()
-		case a.Head:
-			// TODO: remove this divergence from the HTML5 spec.
-			//
-			// See https://bugs.chromium.org/p/chromium/issues/detail?id=829668
-			p.im = inHeadIM
-		case a.Body:
-			p.im = inBodyIM
-		case a.Frameset:
-			p.im = inFramesetIM
-		case a.Html:
-			if p.head == nil {
-				p.im = beforeHeadIM
-			} else {
-				p.im = afterHeadIM
-			}
-		default:
-			if last {
-				p.im = inBodyIM
-				return
-			}
-			continue
-		}
-		return
-	}
-}
-
-const whitespace = " \t\r\n\f"
-
-// Section 12.2.6.4.1.
-func initialIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		p.tok.Data = strings.TrimLeft(p.tok.Data, whitespace)
-		if len(p.tok.Data) == 0 {
-			// It was all whitespace, so ignore it.
-			return true
-		}
-	case CommentToken:
-		p.doc.AppendChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		n, quirks := parseDoctype(p.tok.Data)
-		p.doc.AppendChild(n)
-		p.quirks = quirks
-		p.im = beforeHTMLIM
-		return true
-	}
-	p.quirks = true
-	p.im = beforeHTMLIM
-	return false
-}
-
-// Section 12.2.6.4.2.
-func beforeHTMLIM(p *parser) bool {
-	switch p.tok.Type {
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	case TextToken:
-		p.tok.Data = strings.TrimLeft(p.tok.Data, whitespace)
-		if len(p.tok.Data) == 0 {
-			// It was all whitespace, so ignore it.
-			return true
-		}
-	case StartTagToken:
-		if p.tok.DataAtom == a.Html {
-			p.addElement()
-			p.im = beforeHeadIM
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Head, a.Body, a.Html, a.Br:
-			p.parseImpliedToken(StartTagToken, a.Html, a.Html.String())
-			return false
-		default:
-			// Ignore the token.
-			return true
-		}
-	case CommentToken:
-		p.doc.AppendChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	}
-	p.parseImpliedToken(StartTagToken, a.Html, a.Html.String())
-	return false
-}
-
-// Section 12.2.6.4.3.
-func beforeHeadIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		p.tok.Data = strings.TrimLeft(p.tok.Data, whitespace)
-		if len(p.tok.Data) == 0 {
-			// It was all whitespace, so ignore it.
-			return true
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Head:
-			p.addElement()
-			p.head = p.top()
-			p.im = inHeadIM
-			return true
-		case a.Html:
-			return inBodyIM(p)
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Head, a.Body, a.Html, a.Br:
-			p.parseImpliedToken(StartTagToken, a.Head, a.Head.String())
-			return false
-		default:
-			// Ignore the token.
-			return true
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	}
-
-	p.parseImpliedToken(StartTagToken, a.Head, a.Head.String())
-	return false
-}
-
-// Section 12.2.6.4.4.
-func inHeadIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) < len(p.tok.Data) {
-			// Add the initial whitespace to the current node.
-			p.addText(p.tok.Data[:len(p.tok.Data)-len(s)])
-			if s == "" {
-				return true
-			}
-			p.tok.Data = s
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Base, a.Basefont, a.Bgsound, a.Link, a.Meta:
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-			return true
-		case a.Noscript:
-			if p.scripting {
-				p.parseGenericRawTextElement()
-				return true
-			}
-			p.addElement()
-			p.im = inHeadNoscriptIM
-			// Don't let the tokenizer go into raw text mode when scripting is disabled.
-			p.tokenizer.NextIsNotRawText()
-			return true
-		case a.Script, a.Title:
-			p.addElement()
-			p.setOriginalIM()
-			p.im = textIM
-			return true
-		case a.Noframes, a.Style:
-			p.parseGenericRawTextElement()
-			return true
-		case a.Head:
-			// Ignore the token.
-			return true
-		case a.Template:
-			// TODO: remove this divergence from the HTML5 spec.
-			//
-			// We don't handle all of the corner cases when mixing foreign
-			// content (i.e. <math> or <svg>) with <template>. Without this
-			// early return, we can get into an infinite loop, possibly because
-			// of the "TODO... further divergence" a little below.
-			//
-			// As a workaround, if we are mixing foreign content and templates,
-			// just ignore the rest of the HTML. Foreign content is rare and a
-			// relatively old HTML feature. Templates are also rare and a
-			// relatively new HTML feature. Their combination is very rare.
-			for _, e := range p.oe {
-				if e.Namespace != "" {
-					p.im = ignoreTheRemainingTokens
-					return true
-				}
-			}
-
-			p.addElement()
-			p.afe = append(p.afe, &scopeMarker)
-			p.framesetOK = false
-			p.im = inTemplateIM
-			p.templateStack = append(p.templateStack, inTemplateIM)
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Head:
-			p.oe.pop()
-			p.im = afterHeadIM
-			return true
-		case a.Body, a.Html, a.Br:
-			p.parseImpliedToken(EndTagToken, a.Head, a.Head.String())
-			return false
-		case a.Template:
-			if !p.oe.contains(a.Template) {
-				return true
-			}
-			// TODO: remove this further divergence from the HTML5 spec.
-			//
-			// See https://bugs.chromium.org/p/chromium/issues/detail?id=829668
-			p.generateImpliedEndTags()
-			for i := len(p.oe) - 1; i >= 0; i-- {
-				if n := p.oe[i]; n.Namespace == "" && n.DataAtom == a.Template {
-					p.oe = p.oe[:i]
-					break
-				}
-			}
-			p.clearActiveFormattingElements()
-			p.templateStack.pop()
-			p.resetInsertionMode()
-			return true
-		default:
-			// Ignore the token.
-			return true
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	}
-
-	p.parseImpliedToken(EndTagToken, a.Head, a.Head.String())
-	return false
-}
-
-// Section 12.2.6.4.5.
-func inHeadNoscriptIM(p *parser) bool {
-	switch p.tok.Type {
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Basefont, a.Bgsound, a.Link, a.Meta, a.Noframes, a.Style:
-			return inHeadIM(p)
-		case a.Head:
-			// Ignore the token.
-			return true
-		case a.Noscript:
-			// Don't let the tokenizer go into raw text mode even when a <noscript>
-			// tag is in "in head noscript" insertion mode.
-			p.tokenizer.NextIsNotRawText()
-			// Ignore the token.
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Noscript, a.Br:
-		default:
-			// Ignore the token.
-			return true
-		}
-	case TextToken:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) == 0 {
-			// It was all whitespace.
-			return inHeadIM(p)
-		}
-	case CommentToken:
-		return inHeadIM(p)
-	}
-	p.oe.pop()
-	if p.top().DataAtom != a.Head {
-		panic("html: the new current node will be a head element.")
-	}
-	p.im = inHeadIM
-	if p.tok.DataAtom == a.Noscript {
-		return true
-	}
-	return false
-}
-
-// Section 12.2.6.4.6.
-func afterHeadIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) < len(p.tok.Data) {
-			// Add the initial whitespace to the current node.
-			p.addText(p.tok.Data[:len(p.tok.Data)-len(s)])
-			if s == "" {
-				return true
-			}
-			p.tok.Data = s
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Body:
-			p.addElement()
-			p.framesetOK = false
-			p.im = inBodyIM
-			return true
-		case a.Frameset:
-			p.addElement()
-			p.im = inFramesetIM
-			return true
-		case a.Base, a.Basefont, a.Bgsound, a.Link, a.Meta, a.Noframes, a.Script, a.Style, a.Template, a.Title:
-			p.insertOpenElement(p.head)
-			defer p.oe.remove(p.head)
-			return inHeadIM(p)
-		case a.Head:
-			// Ignore the token.
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Body, a.Html, a.Br:
-			// Drop down to creating an implied <body> tag.
-		case a.Template:
-			return inHeadIM(p)
-		default:
-			// Ignore the token.
-			return true
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	}
-
-	p.parseImpliedToken(StartTagToken, a.Body, a.Body.String())
-	p.framesetOK = true
-	if p.tok.Type == ErrorToken {
-		// Stop parsing.
-		return true
-	}
-	return false
-}
-
-// copyAttributes copies attributes of src not found on dst to dst.
-func copyAttributes(dst *Node, src Token) {
-	if len(src.Attr) == 0 {
-		return
-	}
-	attr := map[string]string{}
-	for _, t := range dst.Attr {
-		attr[t.Key] = t.Val
-	}
-	for _, t := range src.Attr {
-		if _, ok := attr[t.Key]; !ok {
-			dst.Attr = append(dst.Attr, t)
-			attr[t.Key] = t.Val
-		}
-	}
-}
-
-// Section 12.2.6.4.7.
-func inBodyIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		d := p.tok.Data
-		switch n := p.oe.top(); n.DataAtom {
-		case a.Pre, a.Listing:
-			if n.FirstChild == nil {
-				// Ignore a newline at the start of a <pre> block.
-				if d != "" && d[0] == '\r' {
-					d = d[1:]
-				}
-				if d != "" && d[0] == '\n' {
-					d = d[1:]
-				}
-			}
-		}
-		d = strings.Replace(d, "\x00", "", -1)
-		if d == "" {
-			return true
-		}
-		p.reconstructActiveFormattingElements()
-		p.addText(d)
-		if p.framesetOK && strings.TrimLeft(d, whitespace) != "" {
-			// There were non-whitespace characters inserted.
-			p.framesetOK = false
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			if p.oe.contains(a.Template) {
-				return true
-			}
-			copyAttributes(p.oe[0], p.tok)
-		case a.Base, a.Basefont, a.Bgsound, a.Link, a.Meta, a.Noframes, a.Script, a.Style, a.Template, a.Title:
-			return inHeadIM(p)
-		case a.Body:
-			if p.oe.contains(a.Template) {
-				return true
-			}
-			if len(p.oe) >= 2 {
-				body := p.oe[1]
-				if body.Type == ElementNode && body.DataAtom == a.Body {
-					p.framesetOK = false
-					copyAttributes(body, p.tok)
-				}
-			}
-		case a.Frameset:
-			if !p.framesetOK || len(p.oe) < 2 || p.oe[1].DataAtom != a.Body {
-				// Ignore the token.
-				return true
-			}
-			body := p.oe[1]
-			if body.Parent != nil {
-				body.Parent.RemoveChild(body)
-			}
-			p.oe = p.oe[:1]
-			p.addElement()
-			p.im = inFramesetIM
-			return true
-		case a.Address, a.Article, a.Aside, a.Blockquote, a.Center, a.Details, a.Dialog, a.Dir, a.Div, a.Dl, a.Fieldset, a.Figcaption, a.Figure, a.Footer, a.Header, a.Hgroup, a.Main, a.Menu, a.Nav, a.Ol, a.P, a.Search, a.Section, a.Summary, a.Ul:
-			p.popUntil(buttonScope, a.P)
-			p.addElement()
-		case a.H1, a.H2, a.H3, a.H4, a.H5, a.H6:
-			p.popUntil(buttonScope, a.P)
-			switch n := p.top(); n.DataAtom {
-			case a.H1, a.H2, a.H3, a.H4, a.H5, a.H6:
-				p.oe.pop()
-			}
-			p.addElement()
-		case a.Pre, a.Listing:
-			p.popUntil(buttonScope, a.P)
-			p.addElement()
-			// The newline, if any, will be dealt with by the TextToken case.
-			p.framesetOK = false
-		case a.Form:
-			if p.form != nil && !p.oe.contains(a.Template) {
-				// Ignore the token
-				return true
-			}
-			p.popUntil(buttonScope, a.P)
-			p.addElement()
-			if !p.oe.contains(a.Template) {
-				p.form = p.top()
-			}
-		case a.Li:
-			p.framesetOK = false
-			for i := len(p.oe) - 1; i >= 0; i-- {
-				node := p.oe[i]
-				switch node.DataAtom {
-				case a.Li:
-					p.oe = p.oe[:i]
-				case a.Address, a.Div, a.P:
-					continue
-				default:
-					if !isSpecialElement(node) {
-						continue
-					}
-				}
-				break
-			}
-			p.popUntil(buttonScope, a.P)
-			p.addElement()
-		case a.Dd, a.Dt:
-			p.framesetOK = false
-			for i := len(p.oe) - 1; i >= 0; i-- {
-				node := p.oe[i]
-				switch node.DataAtom {
-				case a.Dd, a.Dt:
-					p.oe = p.oe[:i]
-				case a.Address, a.Div, a.P:
-					continue
-				default:
-					if !isSpecialElement(node) {
-						continue
-					}
-				}
-				break
-			}
-			p.popUntil(buttonScope, a.P)
-			p.addElement()
-		case a.Plaintext:
-			p.popUntil(buttonScope, a.P)
-			p.addElement()
-		case a.Button:
-			if p.elementInScope(defaultScope, a.Button) {
-				p.generateImpliedEndTags()
-				p.popUntil(defaultScope, a.Button)
-			}
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			p.framesetOK = false
-		case a.A:
-			for i := len(p.afe) - 1; i >= 0 && p.afe[i].Type != scopeMarkerNode; i-- {
-				if n := p.afe[i]; n.Type == ElementNode && n.DataAtom == a.A {
-					p.inBodyEndTagFormatting(a.A, "a")
-					p.oe.remove(n)
-					p.afe.remove(n)
-					break
-				}
-			}
-			p.reconstructActiveFormattingElements()
-			p.addFormattingElement()
-		case a.B, a.Big, a.Code, a.Em, a.Font, a.I, a.S, a.Small, a.Strike, a.Strong, a.Tt, a.U:
-			p.reconstructActiveFormattingElements()
-			p.addFormattingElement()
-		case a.Nobr:
-			p.reconstructActiveFormattingElements()
-			if p.elementInScope(defaultScope, a.Nobr) {
-				p.inBodyEndTagFormatting(a.Nobr, "nobr")
-				p.reconstructActiveFormattingElements()
-			}
-			p.addFormattingElement()
-		case a.Applet, a.Marquee, a.Object:
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			p.afe = append(p.afe, &scopeMarker)
-			p.framesetOK = false
-		case a.Table:
-			if !p.quirks {
-				p.popUntil(buttonScope, a.P)
-			}
-			p.addElement()
-			p.framesetOK = false
-			p.im = inTableIM
-			return true
-		case a.Area, a.Br, a.Embed, a.Img, a.Keygen, a.Wbr:
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-			p.framesetOK = false
-		case a.Input:
-			if p.fragment && p.context.DataAtom == a.Select {
-				// Ignore the token.
-				return true
-			}
-			p.popUntil(defaultScope, a.Select)
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-			if p.tok.DataAtom == a.Input {
-				for _, t := range p.tok.Attr {
-					if t.Key == "type" {
-						if strings.EqualFold(t.Val, "hidden") {
-							// Skip setting framesetOK = false
-							return true
-						}
-					}
-				}
-			}
-			p.framesetOK = false
-		case a.Param, a.Source, a.Track:
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-		case a.Hr:
-			if p.elementInScope(buttonScope, a.P) {
-				p.generateImpliedEndTags("p")
-				p.popUntil(defaultScope, a.P)
-			}
-			if p.elementInScope(defaultScope, a.Select) {
-				p.generateImpliedEndTags()
-			}
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-			p.framesetOK = false
-		case a.Image:
-			p.tok.DataAtom = a.Img
-			p.tok.Data = a.Img.String()
-			return false
-		case a.Textarea:
-			p.addElement()
-			p.setOriginalIM()
-			p.framesetOK = false
-			p.im = textIM
-		case a.Xmp:
-			p.popUntil(buttonScope, a.P)
-			p.reconstructActiveFormattingElements()
-			p.framesetOK = false
-			p.parseGenericRawTextElement()
-		case a.Iframe:
-			p.framesetOK = false
-			p.parseGenericRawTextElement()
-		case a.Noembed:
-			p.parseGenericRawTextElement()
-		case a.Noscript:
-			if p.scripting {
-				p.parseGenericRawTextElement()
-				return true
-			}
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			// Don't let the tokenizer go into raw text mode when scripting is disabled.
-			p.tokenizer.NextIsNotRawText()
-		case a.Select:
-			if p.fragment && p.context.DataAtom == a.Select {
-				// Ignore the token.
-				return true
-			} else if p.popUntil(defaultScope, a.Select) {
-				return true
-			}
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			p.framesetOK = false
-			return true
-		case a.Option:
-			if p.elementInScope(defaultScope, a.Select) {
-				p.generateImpliedEndTags("optgroup")
-				// If oe has option element in scope, parse error?
-			} else if p.top().DataAtom == a.Option {
-				p.oe.pop()
-			}
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-		case a.Optgroup:
-			if p.elementInScope(defaultScope, a.Select) {
-				p.generateImpliedEndTags()
-				// If oe has option or optgroup element in scope, parse error?
-			} else if p.top().DataAtom == a.Option {
-				p.oe.pop()
-			}
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-		case a.Rb, a.Rtc:
-			if p.elementInScope(defaultScope, a.Ruby) {
-				p.generateImpliedEndTags()
-			}
-			p.addElement()
-		case a.Rp, a.Rt:
-			if p.elementInScope(defaultScope, a.Ruby) {
-				p.generateImpliedEndTags("rtc")
-			}
-			p.addElement()
-		case a.Math, a.Svg:
-			p.reconstructActiveFormattingElements()
-			if p.tok.DataAtom == a.Math {
-				adjustAttributeNames(p.tok.Attr, mathMLAttributeAdjustments)
-			} else {
-				adjustAttributeNames(p.tok.Attr, svgAttributeAdjustments)
-			}
-			adjustForeignAttributes(p.tok.Attr)
-			p.addElement()
-			p.top().Namespace = p.tok.Data
-			if p.hasSelfClosingToken {
-				p.oe.pop()
-				p.acknowledgeSelfClosingTag()
-			}
-			return true
-		case a.Caption, a.Col, a.Colgroup, a.Frame, a.Head, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
-			// Ignore the token.
-		default:
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Body:
-			if p.elementInScope(defaultScope, a.Body) {
-				p.im = afterBodyIM
-			}
-		case a.Html:
-			if p.elementInScope(defaultScope, a.Body) {
-				p.parseImpliedToken(EndTagToken, a.Body, a.Body.String())
-				return false
-			}
-			return true
-		case a.Address, a.Article, a.Aside, a.Blockquote, a.Button, a.Center, a.Details, a.Dialog, a.Dir, a.Div, a.Dl, a.Fieldset, a.Figcaption, a.Figure, a.Footer, a.Header, a.Hgroup, a.Listing, a.Main, a.Menu, a.Nav, a.Ol, a.Pre, a.Search, a.Section, a.Select, a.Summary, a.Ul:
-			if !p.elementInScope(defaultScope, p.tok.DataAtom) {
-				// Ignore the token.
-				return true
-			}
-			p.generateImpliedEndTags()
-			p.popUntil(defaultScope, p.tok.DataAtom)
-		case a.Form:
-			if p.oe.contains(a.Template) {
-				i := p.indexOfElementInScope(defaultScope, a.Form)
-				if i == -1 {
-					// Ignore the token.
-					return true
-				}
-				p.generateImpliedEndTags()
-				if p.oe[i].DataAtom != a.Form {
-					// Ignore the token.
-					return true
-				}
-				p.popUntil(defaultScope, a.Form)
-			} else {
-				node := p.form
-				p.form = nil
-				i := p.indexOfElementInScope(defaultScope, a.Form)
-				if node == nil || i == -1 || p.oe[i] != node {
-					// Ignore the token.
-					return true
-				}
-				p.generateImpliedEndTags()
-				p.oe.remove(node)
-			}
-		case a.P:
-			if !p.elementInScope(buttonScope, a.P) {
-				p.parseImpliedToken(StartTagToken, a.P, a.P.String())
-			}
-			p.popUntil(buttonScope, a.P)
-		case a.Li:
-			p.popUntil(listItemScope, a.Li)
-		case a.Dd, a.Dt:
-			p.popUntil(defaultScope, p.tok.DataAtom)
-		case a.H1, a.H2, a.H3, a.H4, a.H5, a.H6:
-			p.popUntil(defaultScope, a.H1, a.H2, a.H3, a.H4, a.H5, a.H6)
-		case a.A, a.B, a.Big, a.Code, a.Em, a.Font, a.I, a.Nobr, a.S, a.Small, a.Strike, a.Strong, a.Tt, a.U:
-			p.inBodyEndTagFormatting(p.tok.DataAtom, p.tok.Data)
-		case a.Applet, a.Marquee, a.Object:
-			if p.popUntil(defaultScope, p.tok.DataAtom) {
-				p.clearActiveFormattingElements()
-			}
-		case a.Br:
-			p.tok.Type = StartTagToken
-			return false
-		case a.Template:
-			return inHeadIM(p)
-		default:
-			p.inBodyEndTagOther(p.tok.DataAtom, p.tok.Data)
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-	case ErrorToken:
-		// TODO: remove this divergence from the HTML5 spec.
-		if len(p.templateStack) > 0 {
-			p.im = inTemplateIM
-			return false
-		}
-		for _, e := range p.oe {
-			switch e.DataAtom {
-			case a.Dd, a.Dt, a.Li, a.Optgroup, a.Option, a.P, a.Rb, a.Rp, a.Rt, a.Rtc, a.Tbody, a.Td, a.Tfoot, a.Th,
-				a.Thead, a.Tr, a.Body, a.Html:
-			default:
-				return true
-			}
-		}
-	}
-
-	return true
-}
-
-func (p *parser) inBodyEndTagFormatting(tagAtom a.Atom, tagName string) {
-	// This is the "adoption agency" algorithm, described at
-	// https://html.spec.whatwg.org/multipage/syntax.html#adoptionAgency
-
-	// TODO: this is a fairly literal line-by-line translation of that algorithm.
-	// Once the code successfully parses the comprehensive test suite, we should
-	// refactor this code to be more idiomatic.
-
-	// Steps 1-2
-	if current := p.oe.top(); current.Data == tagName && p.afe.index(current) == -1 {
-		p.oe.pop()
-		return
-	}
-
-	// Steps 3-5. The outer loop.
-	for i := 0; i < 8; i++ {
-		// Step 6. Find the formatting element.
-		var formattingElement *Node
-		for j := len(p.afe) - 1; j >= 0; j-- {
-			if p.afe[j].Type == scopeMarkerNode {
-				break
-			}
-			if p.afe[j].DataAtom == tagAtom {
-				formattingElement = p.afe[j]
-				break
-			}
-		}
-		if formattingElement == nil {
-			p.inBodyEndTagOther(tagAtom, tagName)
-			return
-		}
-
-		// Step 7. Ignore the tag if formatting element is not in the stack of open elements.
-		feIndex := p.oe.index(formattingElement)
-		if feIndex == -1 {
-			p.afe.remove(formattingElement)
-			return
-		}
-		// Step 8. Ignore the tag if formatting element is not in the scope.
-		if !p.elementInScope(defaultScope, tagAtom) {
-			// Ignore the tag.
-			return
-		}
-
-		// Step 9. This step is omitted because it's just a parse error but no need to return.
-
-		// Steps 10-11. Find the furthest block.
-		var furthestBlock *Node
-		for _, e := range p.oe[feIndex:] {
-			if isSpecialElement(e) {
-				furthestBlock = e
-				break
-			}
-		}
-		if furthestBlock == nil {
-			e := p.oe.pop()
-			for e != formattingElement {
-				e = p.oe.pop()
-			}
-			p.afe.remove(e)
-			return
-		}
-
-		// Steps 12-13. Find the common ancestor and bookmark node.
-		commonAncestor := p.oe[feIndex-1]
-		bookmark := p.afe.index(formattingElement)
-
-		// Step 14. The inner loop. Find the lastNode to reparent.
-		lastNode := furthestBlock
-		node := furthestBlock
-		x := p.oe.index(node)
-		// Step 14.1.
-		j := 0
-		for {
-			// Step 14.2.
-			j++
-			// Step. 14.3.
-			x--
-			node = p.oe[x]
-			// Step 14.4. Go to the next step if node is formatting element.
-			if node == formattingElement {
-				break
-			}
-			// Step 14.5. Remove node from the list of active formatting elements if
-			// inner loop counter is greater than three and node is in the list of
-			// active formatting elements.
-			if ni := p.afe.index(node); j > 3 && ni > -1 {
-				p.afe.remove(node)
-				// If any element of the list of active formatting elements is removed,
-				// we need to take care whether bookmark should be decremented or not.
-				// This is because the value of bookmark may exceed the size of the
-				// list by removing elements from the list.
-				if ni <= bookmark {
-					bookmark--
-				}
-				continue
-			}
-			// Step 14.6. Continue the next inner loop if node is not in the list of
-			// active formatting elements.
-			if p.afe.index(node) == -1 {
-				p.oe.remove(node)
-				continue
-			}
-			// Step 14.7.
-			clone := node.clone()
-			p.afe[p.afe.index(node)] = clone
-			p.oe[p.oe.index(node)] = clone
-			node = clone
-			// Step 14.8.
-			if lastNode == furthestBlock {
-				bookmark = p.afe.index(node) + 1
-			}
-			// Step 14.9.
-			if lastNode.Parent != nil {
-				lastNode.Parent.RemoveChild(lastNode)
-			}
-			node.AppendChild(lastNode)
-			// Step 14.10.
-			lastNode = node
-		}
-
-		// Step 15. Reparent lastNode to the common ancestor,
-		// or for misnested table nodes, to the foster parent.
-		if lastNode.Parent != nil {
-			lastNode.Parent.RemoveChild(lastNode)
-		}
-		switch commonAncestor.DataAtom {
-		case a.Table, a.Tbody, a.Tfoot, a.Thead, a.Tr:
-			p.fosterParent(lastNode)
-		default:
-			commonAncestor.AppendChild(lastNode)
-		}
-
-		// Steps 16-18. Reparent nodes from the furthest block's children
-		// to a clone of the formatting element.
-		clone := formattingElement.clone()
-		reparentChildren(clone, furthestBlock)
-		furthestBlock.AppendChild(clone)
-
-		// Step 19. Fix up the list of active formatting elements.
-		if oldLoc := p.afe.index(formattingElement); oldLoc != -1 && oldLoc < bookmark {
-			// Move the bookmark with the rest of the list.
-			bookmark--
-		}
-		p.afe.remove(formattingElement)
-		p.afe.insert(bookmark, clone)
-
-		// Step 20. Fix up the stack of open elements.
-		p.oe.remove(formattingElement)
-		p.oe.insert(p.oe.index(furthestBlock)+1, clone)
-	}
-}
-
-// inBodyEndTagOther performs the "any other end tag" algorithm for inBodyIM.
-func (p *parser) inBodyEndTagOther(tagAtom a.Atom, tagName string) {
-	for i := len(p.oe) - 1; i >= 0; i-- {
-		// Two element nodes have the same tag if they have the same Data (a
-		// string-typed field). As an optimization, for common HTML tags, each
-		// Data string is assigned a unique, non-zero DataAtom (a uint32-typed
-		// field), since integer comparison is faster than string comparison.
-		// Uncommon (custom) tags get a zero DataAtom.
-		//
-		// The if condition here is equivalent to (p.oe[i].Data == tagName).
-		if p.oe[i].Namespace == "" && (p.oe[i].DataAtom == tagAtom) &&
-			((tagAtom != 0) || (p.oe[i].Data == tagName)) {
-			p.oe = p.oe[:i]
-			break
-		}
-		if isSpecialElement(p.oe[i]) {
-			break
-		}
-	}
-}
-
-// Section 12.2.6.4.8.
-func textIM(p *parser) bool {
-	switch p.tok.Type {
-	case ErrorToken:
-		p.oe.pop()
-	case TextToken:
-		d := p.tok.Data
-		if n := p.oe.top(); n.DataAtom == a.Textarea && n.FirstChild == nil {
-			// Ignore a newline at the start of a <textarea> block.
-			if d != "" && d[0] == '\r' {
-				d = d[1:]
-			}
-			if d != "" && d[0] == '\n' {
-				d = d[1:]
-			}
-		}
-		if d == "" {
-			return true
-		}
-		p.addText(d)
-		return true
-	case EndTagToken:
-		p.oe.pop()
-	}
-	p.im = p.originalIM
-	p.originalIM = nil
-	return p.tok.Type == EndTagToken
-}
-
-// Section 12.2.6.4.9.
-func inTableIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		p.tok.Data = strings.Replace(p.tok.Data, "\x00", "", -1)
-		switch p.oe.top().DataAtom {
-		case a.Table, a.Tbody, a.Tfoot, a.Thead, a.Tr:
-			if strings.Trim(p.tok.Data, whitespace) == "" {
-				p.addText(p.tok.Data)
-				return true
-			}
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Caption:
-			p.clearStackToContext(tableScope)
-			p.afe = append(p.afe, &scopeMarker)
-			p.addElement()
-			p.im = inCaptionIM
-			return true
-		case a.Colgroup:
-			p.clearStackToContext(tableScope)
-			p.addElement()
-			p.im = inColumnGroupIM
-			return true
-		case a.Col:
-			p.parseImpliedToken(StartTagToken, a.Colgroup, a.Colgroup.String())
-			return false
-		case a.Tbody, a.Tfoot, a.Thead:
-			p.clearStackToContext(tableScope)
-			p.addElement()
-			p.im = inTableBodyIM
-			return true
-		case a.Td, a.Th, a.Tr:
-			p.parseImpliedToken(StartTagToken, a.Tbody, a.Tbody.String())
-			return false
-		case a.Table:
-			if p.popUntil(tableScope, a.Table) {
-				p.resetInsertionMode()
-				return false
-			}
-			// Ignore the token.
-			return true
-		case a.Style, a.Script, a.Template:
-			return inHeadIM(p)
-		case a.Input:
-			for _, t := range p.tok.Attr {
-				if t.Key == "type" && strings.EqualFold(t.Val, "hidden") {
-					p.addElement()
-					p.oe.pop()
-					return true
-				}
-			}
-			// Otherwise drop down to the default action.
-		case a.Form:
-			if p.oe.contains(a.Template) || p.form != nil {
-				// Ignore the token.
-				return true
-			}
-			p.addElement()
-			p.form = p.oe.pop()
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Table:
-			if p.popUntil(tableScope, a.Table) {
-				p.resetInsertionMode()
-				return true
-			}
-			// Ignore the token.
-			return true
-		case a.Body, a.Caption, a.Col, a.Colgroup, a.Html, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
-			// Ignore the token.
-			return true
-		case a.Template:
-			return inHeadIM(p)
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	case ErrorToken:
-		return inBodyIM(p)
-	}
-
-	p.fosterParenting = true
-	defer func() { p.fosterParenting = false }()
-
-	return inBodyIM(p)
-}
-
-// Section 12.2.6.4.11.
-func inCaptionIM(p *parser) bool {
-	switch p.tok.Type {
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Caption, a.Col, a.Colgroup, a.Tbody, a.Td, a.Tfoot, a.Thead, a.Tr:
-			if !p.popUntil(tableScope, a.Caption) {
-				// Ignore the token.
-				return true
-			}
-			p.clearActiveFormattingElements()
-			p.im = inTableIM
-			return false
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Caption:
-			if p.popUntil(tableScope, a.Caption) {
-				p.clearActiveFormattingElements()
-				p.im = inTableIM
-			}
-			return true
-		case a.Table:
-			if !p.popUntil(tableScope, a.Caption) {
-				// Ignore the token.
-				return true
-			}
-			p.clearActiveFormattingElements()
-			p.im = inTableIM
-			return false
-		case a.Body, a.Col, a.Colgroup, a.Html, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
-			// Ignore the token.
-			return true
-		}
-	}
-	return inBodyIM(p)
-}
-
-// Section 12.2.6.4.12.
-func inColumnGroupIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) < len(p.tok.Data) {
-			// Add the initial whitespace to the current node.
-			p.addText(p.tok.Data[:len(p.tok.Data)-len(s)])
-			if s == "" {
-				return true
-			}
-			p.tok.Data = s
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		// Ignore the token.
-		return true
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Col:
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-			return true
-		case a.Template:
-			return inHeadIM(p)
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Colgroup:
-			if p.oe.top().DataAtom == a.Colgroup {
-				p.oe.pop()
-				p.im = inTableIM
-			}
-			return true
-		case a.Col:
-			// Ignore the token.
-			return true
-		case a.Template:
-			return inHeadIM(p)
-		}
-	case ErrorToken:
-		return inBodyIM(p)
-	}
-	if p.oe.top().DataAtom != a.Colgroup {
-		return true
-	}
-	p.oe.pop()
-	p.im = inTableIM
-	return false
-}
-
-// Section 12.2.6.4.13.
-func inTableBodyIM(p *parser) bool {
-	switch p.tok.Type {
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Tr:
-			p.clearStackToContext(tableBodyScope)
-			p.addElement()
-			p.im = inRowIM
-			return true
-		case a.Td, a.Th:
-			p.parseImpliedToken(StartTagToken, a.Tr, a.Tr.String())
-			return false
-		case a.Caption, a.Col, a.Colgroup, a.Tbody, a.Tfoot, a.Thead:
-			if p.popUntil(tableScope, a.Tbody, a.Thead, a.Tfoot) {
-				p.im = inTableIM
-				return false
-			}
-			// Ignore the token.
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Tbody, a.Tfoot, a.Thead:
-			if p.elementInScope(tableScope, p.tok.DataAtom) {
-				p.clearStackToContext(tableBodyScope)
-				p.oe.pop()
-				p.im = inTableIM
-			}
-			return true
-		case a.Table:
-			if p.popUntil(tableScope, a.Tbody, a.Thead, a.Tfoot) {
-				p.im = inTableIM
-				return false
-			}
-			// Ignore the token.
-			return true
-		case a.Body, a.Caption, a.Col, a.Colgroup, a.Html, a.Td, a.Th, a.Tr:
-			// Ignore the token.
-			return true
-		}
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	}
-
-	return inTableIM(p)
-}
-
-// Section 13.2.6.4.14.
-func inRowIM(p *parser) bool {
-	switch p.tok.Type {
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Td, a.Th:
-			p.clearStackToContext(tableRowScope)
-			p.addElement()
-			p.afe = append(p.afe, &scopeMarker)
-			p.im = inCellIM
-			return true
-		case a.Caption, a.Col, a.Colgroup, a.Tbody, a.Tfoot, a.Thead, a.Tr:
-			if p.elementInScope(tableScope, a.Tr) {
-				p.clearStackToContext(tableRowScope)
-				p.oe.pop()
-				p.im = inTableBodyIM
-				return false
-			}
-			// Ignore the token.
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Tr:
-			if p.elementInScope(tableScope, a.Tr) {
-				p.clearStackToContext(tableRowScope)
-				p.oe.pop()
-				p.im = inTableBodyIM
-				return true
-			}
-			// Ignore the token.
-			return true
-		case a.Table:
-			if p.elementInScope(tableScope, a.Tr) {
-				p.clearStackToContext(tableRowScope)
-				p.oe.pop()
-				p.im = inTableBodyIM
-				return false
-			}
-			// Ignore the token.
-			return true
-		case a.Tbody, a.Tfoot, a.Thead:
-			if p.elementInScope(tableScope, p.tok.DataAtom) && p.elementInScope(tableScope, a.Tr) {
-				p.clearStackToContext(tableRowScope)
-				p.oe.pop()
-				p.im = inTableBodyIM
-				return false
-			}
-			// Ignore the token.
-			return true
-		case a.Body, a.Caption, a.Col, a.Colgroup, a.Html, a.Td, a.Th:
-			// Ignore the token.
-			return true
-		}
-	}
-
-	return inTableIM(p)
-}
-
-// Section 12.2.6.4.15.
-func inCellIM(p *parser) bool {
-	switch p.tok.Type {
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Caption, a.Col, a.Colgroup, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
-			if p.popUntil(tableScope, a.Td, a.Th) {
-				// Close the cell and reprocess.
-				p.clearActiveFormattingElements()
-				p.im = inRowIM
-				return false
-			}
-			// Ignore the token.
-			return true
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Td, a.Th:
-			if !p.popUntil(tableScope, p.tok.DataAtom) {
-				// Ignore the token.
-				return true
-			}
-			p.clearActiveFormattingElements()
-			p.im = inRowIM
-			return true
-		case a.Body, a.Caption, a.Col, a.Colgroup, a.Html:
-			// Ignore the token.
-			return true
-		case a.Table, a.Tbody, a.Tfoot, a.Thead, a.Tr:
-			if !p.elementInScope(tableScope, p.tok.DataAtom) {
-				// Ignore the token.
-				return true
-			}
-			// Close the cell and reprocess.
-			if p.popUntil(tableScope, a.Td, a.Th) {
-				p.clearActiveFormattingElements()
-			}
-			p.im = inRowIM
-			return false
-		}
-	}
-	return inBodyIM(p)
-}
-
-// Section 12.2.6.4.18.
-func inTemplateIM(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken, CommentToken, DoctypeToken:
-		return inBodyIM(p)
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Base, a.Basefont, a.Bgsound, a.Link, a.Meta, a.Noframes, a.Script, a.Style, a.Template, a.Title:
-			return inHeadIM(p)
-		case a.Caption, a.Colgroup, a.Tbody, a.Tfoot, a.Thead:
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inTableIM)
-			p.im = inTableIM
-			return false
-		case a.Col:
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inColumnGroupIM)
-			p.im = inColumnGroupIM
-			return false
-		case a.Tr:
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inTableBodyIM)
-			p.im = inTableBodyIM
-			return false
-		case a.Td, a.Th:
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inRowIM)
-			p.im = inRowIM
-			return false
-		default:
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inBodyIM)
-			p.im = inBodyIM
-			return false
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Template:
-			return inHeadIM(p)
-		default:
-			// Ignore the token.
-			return true
-		}
-	case ErrorToken:
-		if !p.oe.contains(a.Template) {
-			// Ignore the token.
-			return true
-		}
-		// TODO: remove this divergence from the HTML5 spec.
-		//
-		// See https://bugs.chromium.org/p/chromium/issues/detail?id=829668
-		p.generateImpliedEndTags()
-		for i := len(p.oe) - 1; i >= 0; i-- {
-			if n := p.oe[i]; n.Namespace == "" && n.DataAtom == a.Template {
-				p.oe = p.oe[:i]
-				break
-			}
-		}
-		p.clearActiveFormattingElements()
-		p.templateStack.pop()
-		p.resetInsertionMode()
-		return false
-	}
-	return false
-}
-
-// Section 12.2.6.4.19.
-func afterBodyIM(p *parser) bool {
-	switch p.tok.Type {
-	case ErrorToken:
-		// Stop parsing.
-		return true
-	case TextToken:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) == 0 {
-			// It was all whitespace.
-			return inBodyIM(p)
-		}
-	case StartTagToken:
-		if p.tok.DataAtom == a.Html {
-			return inBodyIM(p)
-		}
-	case EndTagToken:
-		if p.tok.DataAtom == a.Html {
-			if !p.fragment {
-				p.im = afterAfterBodyIM
-			}
-			return true
-		}
-	case CommentToken:
-		// The comment is attached to the <html> element.
-		if len(p.oe) < 1 || p.oe[0].DataAtom != a.Html {
-			panic("html: bad parser state: <html> element not found, in the after-body insertion mode")
-		}
-		p.oe[0].AppendChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	}
-	p.im = inBodyIM
-	return false
-}
-
-// Section 12.2.6.4.20.
-func inFramesetIM(p *parser) bool {
-	switch p.tok.Type {
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-	case TextToken:
-		// Ignore all text but whitespace.
-		s := strings.Map(func(c rune) rune {
-			switch c {
-			case ' ', '\t', '\n', '\f', '\r':
-				return c
-			}
-			return -1
-		}, p.tok.Data)
-		if s != "" {
-			p.addText(s)
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Frameset:
-			p.addElement()
-		case a.Frame:
-			p.addElement()
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-		case a.Noframes:
-			return inHeadIM(p)
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.F
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/parse.go","mode":420,"size":58321,"sha256":"ab68a3276498d29551d38faebd93a622c4d1d908f6f1dad00bce438e74110726","index":1,"count":2,"encoding":"utf-8","payloadBytes":10321}
-rameset:
-			if p.oe.top().DataAtom != a.Html {
-				p.oe.pop()
-				if p.oe.top().DataAtom != a.Frameset {
-					p.im = afterFramesetIM
-					return true
-				}
-			}
-		}
-	default:
-		// Ignore the token.
-	}
-	return true
-}
-
-// Section 12.2.6.4.21.
-func afterFramesetIM(p *parser) bool {
-	switch p.tok.Type {
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-	case TextToken:
-		// Ignore all text but whitespace.
-		s := strings.Map(func(c rune) rune {
-			switch c {
-			case ' ', '\t', '\n', '\f', '\r':
-				return c
-			}
-			return -1
-		}, p.tok.Data)
-		if s != "" {
-			p.addText(s)
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Noframes:
-			return inHeadIM(p)
-		}
-	case EndTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			p.im = afterAfterFramesetIM
-			return true
-		}
-	default:
-		// Ignore the token.
-	}
-	return true
-}
-
-// Section 12.2.6.4.22.
-func afterAfterBodyIM(p *parser) bool {
-	switch p.tok.Type {
-	case ErrorToken:
-		// Stop parsing.
-		return true
-	case TextToken:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) == 0 {
-			// It was all whitespace.
-			return inBodyIM(p)
-		}
-	case StartTagToken:
-		if p.tok.DataAtom == a.Html {
-			return inBodyIM(p)
-		}
-	case CommentToken:
-		p.doc.AppendChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-		return true
-	case DoctypeToken:
-		return inBodyIM(p)
-	}
-	p.im = inBodyIM
-	return false
-}
-
-// Section 12.2.6.4.23.
-func afterAfterFramesetIM(p *parser) bool {
-	switch p.tok.Type {
-	case CommentToken:
-		p.doc.AppendChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-	case TextToken:
-		// Ignore all text but whitespace.
-		s := strings.Map(func(c rune) rune {
-			switch c {
-			case ' ', '\t', '\n', '\f', '\r':
-				return c
-			}
-			return -1
-		}, p.tok.Data)
-		if s != "" {
-			p.tok.Data = s
-			return inBodyIM(p)
-		}
-	case StartTagToken:
-		switch p.tok.DataAtom {
-		case a.Html:
-			return inBodyIM(p)
-		case a.Noframes:
-			return inHeadIM(p)
-		}
-	case DoctypeToken:
-		return inBodyIM(p)
-	default:
-		// Ignore the token.
-	}
-	return true
-}
-
-func ignoreTheRemainingTokens(p *parser) bool {
-	return true
-}
-
-const whitespaceOrNUL = whitespace + "\x00"
-
-// Section 13.2.6.5
-func parseForeignContent(p *parser) bool {
-	switch p.tok.Type {
-	case TextToken:
-		if p.framesetOK {
-			p.framesetOK = strings.TrimLeft(p.tok.Data, whitespaceOrNUL) == ""
-		}
-		p.tok.Data = strings.Replace(p.tok.Data, "\x00", "\ufffd", -1)
-		p.addText(p.tok.Data)
-	case CommentToken:
-		p.addChild(&Node{
-			Type: CommentNode,
-			Data: p.tok.Data,
-		})
-	case StartTagToken:
-		b := breakout[p.tok.Data]
-		if p.tok.DataAtom == a.Font {
-		loop:
-			for _, attr := range p.tok.Attr {
-				switch attr.Key {
-				case "color", "face", "size":
-					b = true
-					break loop
-				}
-			}
-		}
-		if b {
-			for i := len(p.oe) - 1; i >= 0; i-- {
-				n := p.oe[i]
-				if n.Namespace == "" || htmlIntegrationPoint(n) || mathMLTextIntegrationPoint(n) {
-					p.oe = p.oe[:i+1]
-					break
-				}
-			}
-			return p.im(p)
-		}
-		current := p.adjustedCurrentNode()
-		switch current.Namespace {
-		case "math":
-			adjustAttributeNames(p.tok.Attr, mathMLAttributeAdjustments)
-		case "svg":
-			// Adjust SVG tag names. The tokenizer lower-cases tag names, but
-			// SVG wants e.g. "foreignObject" with a capital second "O".
-			if x := svgTagNameAdjustments[p.tok.Data]; x != "" {
-				p.tok.DataAtom = a.Lookup([]byte(x))
-				p.tok.Data = x
-			}
-			adjustAttributeNames(p.tok.Attr, svgAttributeAdjustments)
-		default:
-			panic("html: bad parser state: unexpected namespace")
-		}
-		adjustForeignAttributes(p.tok.Attr)
-		namespace := current.Namespace
-		p.addElement()
-		p.top().Namespace = namespace
-		if namespace != "" {
-			// Don't let the tokenizer go into raw text mode in foreign content
-			// (e.g. in an SVG <title> tag).
-			p.tokenizer.NextIsNotRawText()
-		}
-		if p.hasSelfClosingToken {
-			p.oe.pop()
-			p.acknowledgeSelfClosingTag()
-		}
-	case EndTagToken:
-		if strings.EqualFold(p.oe[len(p.oe)-1].Data, p.tok.Data) {
-			p.oe = p.oe[:len(p.oe)-1]
-			return true
-		}
-		for i := len(p.oe) - 1; i >= 0; i-- {
-			if strings.EqualFold(p.oe[i].Data, p.tok.Data) {
-				p.oe = p.oe[:i]
-				return true
-			}
-			if i > 0 && p.oe[i-1].Namespace == "" {
-				break
-			}
-		}
-		return p.im(p)
-	default:
-		// Ignore the token.
-	}
-	return true
-}
-
-// Section 12.2.4.2.
-func (p *parser) adjustedCurrentNode() *Node {
-	if len(p.oe) == 1 && p.fragment && p.context != nil {
-		return p.context
-	}
-	return p.oe.top()
-}
-
-// Section 12.2.6.
-func (p *parser) inForeignContent() bool {
-	if len(p.oe) == 0 {
-		return false
-	}
-	n := p.adjustedCurrentNode()
-	if n.Namespace == "" {
-		return false
-	}
-	if mathMLTextIntegrationPoint(n) {
-		if p.tok.Type == StartTagToken && p.tok.DataAtom != a.Mglyph && p.tok.DataAtom != a.Malignmark {
-			return false
-		}
-		if p.tok.Type == TextToken {
-			return false
-		}
-	}
-	if n.Namespace == "math" && n.DataAtom == a.AnnotationXml && p.tok.Type == StartTagToken && p.tok.DataAtom == a.Svg {
-		return false
-	}
-	if htmlIntegrationPoint(n) && (p.tok.Type == StartTagToken || p.tok.Type == TextToken) {
-		return false
-	}
-	if p.tok.Type == ErrorToken {
-		return false
-	}
-	return true
-}
-
-// parseImpliedToken parses a token as though it had appeared in the parser's
-// input.
-func (p *parser) parseImpliedToken(t TokenType, dataAtom a.Atom, data string) {
-	realToken, selfClosing := p.tok, p.hasSelfClosingToken
-	p.tok = Token{
-		Type:     t,
-		DataAtom: dataAtom,
-		Data:     data,
-	}
-	p.hasSelfClosingToken = false
-	p.parseCurrentToken()
-	p.tok, p.hasSelfClosingToken = realToken, selfClosing
-}
-
-// parseCurrentToken runs the current token through the parsing routines
-// until it is consumed.
-func (p *parser) parseCurrentToken() {
-	if p.tok.Type == SelfClosingTagToken {
-		p.hasSelfClosingToken = true
-		p.tok.Type = StartTagToken
-	}
-
-	consumed := false
-	for !consumed {
-		if p.inForeignContent() {
-			consumed = parseForeignContent(p)
-		} else {
-			consumed = p.im(p)
-		}
-	}
-
-	if p.hasSelfClosingToken {
-		// This is a parse error, but ignore it.
-		p.hasSelfClosingToken = false
-	}
-}
-
-func (p *parser) parse() (err error) {
-	defer func() {
-		if panicErr := recover(); panicErr != nil {
-			err = fmt.Errorf("%s", panicErr)
-		}
-	}()
-	// Iterate until EOF. Any other error will cause an early return.
-	for err != io.EOF {
-		// CDATA sections are allowed only in foreign content.
-		n := p.oe.top()
-		p.tokenizer.AllowCDATA(n != nil && n.Namespace != "")
-		// Read and parse the next token.
-		p.tokenizer.Next()
-		p.tok = p.tokenizer.Token()
-		if p.tok.Type == ErrorToken {
-			err = p.tokenizer.Err()
-			if err != nil && err != io.EOF {
-				return err
-			}
-		}
-		p.parseCurrentToken()
-	}
-	return nil
-}
-
-// Parse returns the parse tree for the HTML from the given Reader.
-//
-// It implements the HTML5 parsing algorithm
-// (https://html.spec.whatwg.org/multipage/syntax.html#tree-construction),
-// which is very complicated. The resultant tree can contain implicitly created
-// nodes that have no explicit <tag> listed in r's data, and nodes' parents can
-// differ from the nesting implied by a naive processing of start and end
-// <tag>s. Conversely, explicit <tag>s in r's data can be silently dropped,
-// with no corresponding node in the resulting tree.
-//
-// Parse will reject HTML that is nested deeper than 512 elements.
-//
-// The input is assumed to be UTF-8 encoded.
-func Parse(r io.Reader) (*Node, error) {
-	return ParseWithOptions(r)
-}
-
-// ParseFragment parses a fragment of HTML and returns the nodes that were
-// found. If the fragment is the InnerHTML for an existing element, pass that
-// element in context.
-//
-// It has the same intricacies as Parse.
-func ParseFragment(r io.Reader, context *Node) ([]*Node, error) {
-	return ParseFragmentWithOptions(r, context)
-}
-
-// ParseOption configures a parser.
-type ParseOption func(p *parser)
-
-// ParseOptionEnableScripting configures the scripting flag.
-// https://html.spec.whatwg.org/multipage/webappapis.html#enabling-and-disabling-scripting
-//
-// By default, scripting is enabled.
-func ParseOptionEnableScripting(enable bool) ParseOption {
-	return func(p *parser) {
-		p.scripting = enable
-	}
-}
-
-// ParseWithOptions is like Parse, with options.
-func ParseWithOptions(r io.Reader, opts ...ParseOption) (*Node, error) {
-	p := &parser{
-		tokenizer: NewTokenizer(r),
-		doc: &Node{
-			Type: DocumentNode,
-		},
-		scripting:  true,
-		framesetOK: true,
-		im:         initialIM,
-	}
-
-	for _, f := range opts {
-		f(p)
-	}
-
-	if err := p.parse(); err != nil {
-		return nil, err
-	}
-	return p.doc, nil
-}
-
-// ParseFragmentWithOptions is like ParseFragment, with options.
-func ParseFragmentWithOptions(r io.Reader, context *Node, opts ...ParseOption) ([]*Node, error) {
-	contextTag := ""
-	if context != nil {
-		if context.Type != ElementNode {
-			return nil, errors.New("html: ParseFragment of non-element Node")
-		}
-		// The next check isn't just context.DataAtom.String() == context.Data because
-		// it is valid to pass an element whose tag isn't a known atom. For example,
-		// DataAtom == 0 and Data = "tagfromthefuture" is perfectly consistent.
-		if context.DataAtom != a.Lookup([]byte(context.Data)) {
-			return nil, fmt.Errorf("html: inconsistent Node: DataAtom=%q, Data=%q", context.DataAtom, context.Data)
-		}
-		contextTag = context.DataAtom.String()
-	}
-	p := &parser{
-		doc: &Node{
-			Type: DocumentNode,
-		},
-		scripting: true,
-		fragment:  true,
-		context:   context,
-	}
-	if context != nil && context.Namespace != "" {
-		p.tokenizer = NewTokenizer(r)
-	} else {
-		p.tokenizer = NewTokenizerFragment(r, contextTag)
-	}
-
-	for _, f := range opts {
-		f(p)
-	}
-
-	root := &Node{
-		Type:     ElementNode,
-		DataAtom: a.Html,
-		Data:     a.Html.String(),
-	}
-	p.doc.AppendChild(root)
-	p.oe = nodeStack{root}
-	if context != nil && context.DataAtom == a.Template {
-		p.templateStack = append(p.templateStack, inTemplateIM)
-	}
-	p.resetInsertionMode()
-
-	for n := context; n != nil; n = n.Parent {
-		if n.Type == ElementNode && n.DataAtom == a.Form {
-			p.form = n
-			break
-		}
-	}
-
-	if err := p.parse(); err != nil {
-		return nil, err
-	}
-
-	parent := p.doc
-	if context != nil {
-		parent = root
-	}
-
-	var result []*Node
-	for c := parent.FirstChild; c != nil; {
-		next := c.NextSibling
-		parent.RemoveChild(c)
-		result = append(result, c)
-		c = next
-	}
-	return result, nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/render.go","mode":420,"size":8990,"sha256":"c53cd811db01490a88a3932ad97e0d0622fa87a8533662fb9810bc06814c4af8","index":0,"count":1,"encoding":"utf-8","payloadBytes":8990}
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import (
-	"bufio"
-	"errors"
-	"fmt"
-	"io"
-	"strings"
-)
-
-type writer interface {
-	io.Writer
-	io.ByteWriter
-	WriteString(string) (int, error)
-}
-
-// Render renders the parse tree n to the given writer.
-//
-// Rendering is done on a 'best effort' basis: calling Parse on the output of
-// Render will always result in something similar to the original tree, but it
-// is not necessarily an exact clone unless the original tree was 'well-formed'.
-// 'Well-formed' is not easily specified; the HTML5 specification is
-// complicated.
-//
-// Calling Parse on arbitrary input typically results in a 'well-formed' parse
-// tree. However, it is possible for Parse to yield a 'badly-formed' parse tree.
-// For example, in a 'well-formed' parse tree, no <a> element is a child of
-// another <a> element: parsing "<a><a>" results in two sibling elements.
-// Similarly, in a 'well-formed' parse tree, no <a> element is a child of a
-// <table> element: parsing "<p><table><a>" results in a <p> with two sibling
-// children; the <a> is reparented to the <table>'s parent. However, calling
-// Parse on "<a><table><a>" does not return an error, but the result has an <a>
-// element with an <a> child, and is therefore not 'well-formed'.
-//
-// Programmatically constructed trees are typically also 'well-formed', but it
-// is possible to construct a tree that looks innocuous but, when rendered and
-// re-parsed, results in a different tree. A simple example is that a solitary
-// text node would become a tree containing <html>, <head> and <body> elements.
-// Another example is that the programmatic equivalent of "a<head>b</head>c"
-// becomes "<html><head><head/><body>abc</body></html>".
-func Render(w io.Writer, n *Node) error {
-	if x, ok := w.(writer); ok {
-		return render(x, n)
-	}
-	buf := bufio.NewWriter(w)
-	if err := render(buf, n); err != nil {
-		return err
-	}
-	return buf.Flush()
-}
-
-// plaintextAbort is returned from render1 when a <plaintext> element
-// has been rendered. No more end tags should be rendered after that.
-var plaintextAbort = errors.New("html: internal error (plaintext abort)")
-
-func render(w writer, n *Node) error {
-	err := render1(w, n)
-	if err == plaintextAbort {
-		err = nil
-	}
-	return err
-}
-
-func render1(w writer, n *Node) error {
-	// Render non-element nodes; these are the easy cases.
-	switch n.Type {
-	case ErrorNode:
-		return errors.New("html: cannot render an ErrorNode node")
-	case TextNode:
-		return escape(w, n.Data)
-	case DocumentNode:
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if err := render1(w, c); err != nil {
-				return err
-			}
-		}
-		return nil
-	case ElementNode:
-		// No-op.
-	case CommentNode:
-		if _, err := w.WriteString("<!--"); err != nil {
-			return err
-		}
-		if err := escapeComment(w, n.Data); err != nil {
-			return err
-		}
-		if _, err := w.WriteString("-->"); err != nil {
-			return err
-		}
-		return nil
-	case DoctypeNode:
-		if _, err := w.WriteString("<!DOCTYPE "); err != nil {
-			return err
-		}
-		if err := escape(w, n.Data); err != nil {
-			return err
-		}
-		if n.Attr != nil {
-			var p, s string
-			for _, a := range n.Attr {
-				switch a.Key {
-				case "public":
-					p = a.Val
-				case "system":
-					s = a.Val
-				}
-			}
-			if p != "" {
-				if _, err := w.WriteString(" PUBLIC "); err != nil {
-					return err
-				}
-				if err := writeDoctypeQuoted(w, p); err != nil {
-					return err
-				}
-				if s != "" {
-					if err := w.WriteByte(' '); err != nil {
-						return err
-					}
-					if err := writeDoctypeQuoted(w, s); err != nil {
-						return err
-					}
-				}
-			} else if s != "" {
-				if _, err := w.WriteString(" SYSTEM "); err != nil {
-					return err
-				}
-				if err := writeDoctypeQuoted(w, s); err != nil {
-					return err
-				}
-			}
-		}
-		return w.WriteByte('>')
-	case RawNode:
-		_, err := w.WriteString(n.Data)
-		return err
-	default:
-		return errors.New("html: unknown node type")
-	}
-
-	// Render the <xxx> opening tag.
-	if err := w.WriteByte('<'); err != nil {
-		return err
-	}
-	if _, err := w.WriteString(n.Data); err != nil {
-		return err
-	}
-	for _, a := range n.Attr {
-		if err := w.WriteByte(' '); err != nil {
-			return err
-		}
-		if a.Namespace != "" {
-			if _, err := w.WriteString(a.Namespace); err != nil {
-				return err
-			}
-			if err := w.WriteByte(':'); err != nil {
-				return err
-			}
-		}
-		if _, err := w.WriteString(a.Key); err != nil {
-			return err
-		}
-		if _, err := w.WriteString(`="`); err != nil {
-			return err
-		}
-		if err := escape(w, a.Val); err != nil {
-			return err
-		}
-		if err := w.WriteByte('"'); err != nil {
-			return err
-		}
-	}
-	if voidElements[n.Data] {
-		if n.FirstChild != nil {
-			return fmt.Errorf("html: void element <%s> has child nodes", n.Data)
-		}
-		_, err := w.WriteString("/>")
-		return err
-	}
-	if err := w.WriteByte('>'); err != nil {
-		return err
-	}
-
-	// Add initial newline where there is danger of a newline being ignored.
-	if c := n.FirstChild; c != nil && c.Type == TextNode && strings.HasPrefix(c.Data, "\n") {
-		switch n.Data {
-		case "pre", "listing", "textarea":
-			if err := w.WriteByte('\n'); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Render any child nodes
-	if childTextNodesAreLiteral(n) {
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if c.Type == TextNode {
-				if _, err := w.WriteString(c.Data); err != nil {
-					return err
-				}
-			} else {
-				if err := render1(w, c); err != nil {
-					return err
-				}
-			}
-		}
-		if n.Data == "plaintext" {
-			// Don't render anything else. <plaintext> must be the
-			// last element in the file, with no closing tag.
-			return plaintextAbort
-		}
-	} else {
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if err := render1(w, c); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Render the </xxx> closing tag.
-	if _, err := w.WriteString("</"); err != nil {
-		return err
-	}
-	if _, err := w.WriteString(n.Data); err != nil {
-		return err
-	}
-	return w.WriteByte('>')
-}
-
-func childTextNodesAreLiteral(n *Node) bool {
-	// Per WHATWG HTML 13.3, if the parent of the current node is a style,
-	// script, xmp, iframe, noembed, noframes, or plaintext element, and the
-	// current node is a text node, append the value of the node's data
-	// literally. The specification is not explicit about it, but we only
-	// enforce this if we are in the HTML namespace (i.e. when the namespace is
-	// "").
-	// NOTE: we also always include noscript elements, although the
-	// specification states that they should only be rendered as such if
-	// scripting is enabled for the node (which is not something we track).
-	if n.Namespace != "" {
-		return false
-	}
-
-	switch n.Data {
-	case "iframe", "noembed", "noframes", "noscript", "plaintext", "script", "style", "xmp":
-		// We need to check if n is a node that was fostered from a HTML namespace
-		// into a non-HTML namespace (in which case, different rules apply to it).
-		// We do this by walking up the tree until we find a node with a non-empty
-		// namespace. If we find such a node, we also have to check if it's
-		// an HTML integration point. If it isn't, then the node we're currently
-		// looking at is foster-parented and we should return false.
-		for p := n.Parent; p != nil; p = p.Parent {
-			if p.Namespace != "" {
-				if !htmlIntegrationPoint(p) {
-					return false
-				}
-				break
-			}
-		}
-
-		return true
-	default:
-		return false
-	}
-}
-
-// writeDoctypeQuoted writes s to w surrounded by quotes. Normally it will use double
-// quotes, but if s contains a double quote, it will use single quotes.
-// If s contains any '>' characters, they are replaced with &gt; in order
-// to prevent triggering an abrupt-doctype-system-identifier parse error.
-// It is used for writing the identifiers in a doctype declaration.
-// In valid HTML, they can't contain both types of quotes.
-func writeDoctypeQuoted(w writer, s string) error {
-	var q byte = '"'
-	if strings.Contains(s, `"`) {
-		// parseDoctype will never produce a Node with both quote types, but a user
-		// can construct their own Node that violates this assumption.
-		if strings.Contains(s, `'`) {
-			return errors.New("doctype contains both quote types, cannot be safely rendered")
-		}
-		q = '\''
-	}
-	if err := w.WriteByte(q); err != nil {
-		return err
-	}
-	if _, err := w.WriteString(strings.ReplaceAll(s, ">", "&gt;")); err != nil {
-		return err
-	}
-	if err := w.WriteByte(q); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Section 12.1.2, "Elements", gives this list of void elements. Void elements
-// are those that can't have any contents.
-var voidElements = map[string]bool{
-	"area":   true,
-	"base":   true,
-	"br":     true,
-	"col":    true,
-	"embed":  true,
-	"hr":     true,
-	"img":    true,
-	"input":  true,
-	"keygen": true, // "keygen" has been removed from the spec, but are kept here for backwards compatibility.
-	"link":   true,
-	"meta":   true,
-	"param":  true,
-	"source": true,
-	"track":  true,
-	"wbr":    true,
 }
 
 @@END

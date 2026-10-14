@@ -1,3 +1,2549 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/context.go","mode":420,"size":759,"sha256":"d088d9ef795bed34ea9bafc8aed3865bf0d55252f9a7c299aed0bf50262374c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":759}
+package ansi
+
+import (
+	"html"
+	"strings"
+
+	"github.com/microcosm-cc/bluemonday"
+)
+
+// RenderContext holds the current rendering options and state.
+type RenderContext struct {
+	options Options
+
+	blockStack *BlockStack
+	table      *TableElement
+
+	stripper *bluemonday.Policy
+}
+
+// NewRenderContext returns a new RenderContext.
+func NewRenderContext(options Options) RenderContext {
+	return RenderContext{
+		options:    options,
+		blockStack: &BlockStack{},
+		table:      &TableElement{},
+		stripper:   bluemonday.StrictPolicy(),
+	}
+}
+
+// SanitizeHTML sanitizes HTML content.
+func (ctx RenderContext) SanitizeHTML(s string, trimSpaces bool) string {
+	s = ctx.stripper.Sanitize(s)
+	if trimSpaces {
+		s = strings.TrimSpace(s)
+	}
+
+	return html.UnescapeString(s)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/elements.go","mode":420,"size":8901,"sha256":"bd0863b5fbb686980e36e44239d660724fc318614deee428bfc46f39e5954b00","index":0,"count":1,"encoding":"utf-8","payloadBytes":8901}
+package ansi
+
+import (
+	"bytes"
+	"fmt"
+	"html"
+	"io"
+	"strings"
+
+	east "github.com/yuin/goldmark-emoji/ast"
+	"github.com/yuin/goldmark/ast"
+	astext "github.com/yuin/goldmark/extension/ast"
+)
+
+// ElementRenderer is called when entering a markdown node.
+type ElementRenderer interface {
+	Render(w io.Writer, ctx RenderContext) error
+}
+
+type StyleOverriderElementRenderer interface {
+	StyleOverrideRender(w io.Writer, ctx RenderContext, style StylePrimitive) error
+}
+
+// ElementFinisher is called when leaving a markdown node.
+type ElementFinisher interface {
+	Finish(w io.Writer, ctx RenderContext) error
+}
+
+// An Element is used to instruct the renderer how to handle individual markdown
+// nodes.
+type Element struct {
+	Entering string
+	Exiting  string
+	Renderer ElementRenderer
+	Finisher ElementFinisher
+}
+
+// NewElement returns the appropriate render Element for a given node.
+func (tr *ANSIRenderer) NewElement(node ast.Node, source []byte) Element {
+	ctx := tr.context
+
+	switch node.Kind() {
+	// Document
+	case ast.KindDocument:
+		e := &BlockElement{
+			Block:  &bytes.Buffer{},
+			Style:  ctx.options.Styles.Document,
+			Margin: true,
+		}
+		return Element{
+			Renderer: e,
+			Finisher: e,
+		}
+
+	// Heading
+	case ast.KindHeading:
+		n := node.(*ast.Heading)
+		he := &HeadingElement{
+			Level: n.Level,
+			First: node.PreviousSibling() == nil,
+		}
+		return Element{
+			Exiting:  "",
+			Renderer: he,
+			Finisher: he,
+		}
+
+	// Paragraph
+	case ast.KindParagraph:
+		if node.Parent() != nil {
+			kind := node.Parent().Kind()
+			if kind == ast.KindListItem {
+				return Element{}
+			}
+		}
+		return Element{
+			Renderer: &ParagraphElement{
+				First: node.PreviousSibling() == nil,
+			},
+			Finisher: &ParagraphElement{},
+		}
+
+	// Blockquote
+	case ast.KindBlockquote:
+		e := &BlockElement{
+			Block:  &bytes.Buffer{},
+			Style:  cascadeStyle(ctx.blockStack.Current().Style, ctx.options.Styles.BlockQuote, false),
+			Margin: true,
+		}
+		return Element{
+			Entering: "\n",
+			Renderer: e,
+			Finisher: e,
+		}
+
+	// Lists
+	case ast.KindList:
+		s := ctx.options.Styles.List.StyleBlock
+		if s.Indent == nil {
+			var i uint
+			s.Indent = &i
+		}
+		n := node.Parent()
+		for n != nil {
+			if n.Kind() == ast.KindList {
+				i := ctx.options.Styles.List.LevelIndent
+				s.Indent = &i
+				break
+			}
+			n = n.Parent()
+		}
+
+		e := &BlockElement{
+			Block:   &bytes.Buffer{},
+			Style:   cascadeStyle(ctx.blockStack.Current().Style, s, false),
+			Margin:  true,
+			Newline: true,
+		}
+		return Element{
+			Entering: "\n",
+			Renderer: e,
+			Finisher: e,
+		}
+
+	case ast.KindListItem:
+		var l uint
+		var e uint
+		l = 1
+		n := node
+		for n.PreviousSibling() != nil && (n.PreviousSibling().Kind() == ast.KindListItem) {
+			l++
+			n = n.PreviousSibling()
+		}
+		if node.Parent().(*ast.List).IsOrdered() {
+			e = l
+			if node.Parent().(*ast.List).Start != 1 {
+				e += uint(node.Parent().(*ast.List).Start) - 1
+			}
+		}
+
+		post := "\n"
+		if (node.LastChild() != nil && node.LastChild().Kind() == ast.KindList) ||
+			node.NextSibling() == nil {
+			post = ""
+		}
+
+		if node.FirstChild() != nil &&
+			node.FirstChild().FirstChild() != nil &&
+			node.FirstChild().FirstChild().Kind() == astext.KindTaskCheckBox {
+			nc := node.FirstChild().FirstChild().(*astext.TaskCheckBox)
+
+			return Element{
+				Exiting: post,
+				Renderer: &TaskElement{
+					Checked: nc.IsChecked,
+				},
+			}
+		}
+
+		return Element{
+			Exiting: post,
+			Renderer: &ItemElement{
+				IsOrdered:   node.Parent().(*ast.List).IsOrdered(),
+				Enumeration: e,
+			},
+		}
+
+	// Text Elements
+	case ast.KindText:
+		n := node.(*ast.Text)
+		s := string(n.Segment.Value(source))
+
+		if n.HardLineBreak() || (n.SoftLineBreak()) {
+			s += "\n"
+		}
+		return Element{
+			Renderer: &BaseElement{
+				Token: html.UnescapeString(s),
+				Style: ctx.options.Styles.Text,
+			},
+		}
+
+	case ast.KindEmphasis:
+		n := node.(*ast.Emphasis)
+		var children []ElementRenderer
+		nn := n.FirstChild()
+		for nn != nil {
+			children = append(children, tr.NewElement(nn, source).Renderer)
+			nn = nn.NextSibling()
+		}
+		return Element{
+			Renderer: &EmphasisElement{
+				Level:    n.Level,
+				Children: children,
+			},
+		}
+
+	case astext.KindStrikethrough:
+		n := node.(*astext.Strikethrough)
+		s := string(n.Text(source))
+		style := ctx.options.Styles.Strikethrough
+
+		return Element{
+			Renderer: &BaseElement{
+				Token: html.UnescapeString(s),
+				Style: style,
+			},
+		}
+
+	case ast.KindThematicBreak:
+		return Element{
+			Entering: "",
+			Exiting:  "",
+			Renderer: &BaseElement{
+				Style: ctx.options.Styles.HorizontalRule,
+			},
+		}
+
+	// Links
+	case ast.KindLink:
+		n := node.(*ast.Link)
+		var children []ElementRenderer
+		nn := n.FirstChild()
+		for nn != nil {
+			children = append(children, tr.NewElement(nn, source).Renderer)
+			nn = nn.NextSibling()
+		}
+		return Element{
+			Renderer: &LinkElement{
+				BaseURL:  ctx.options.BaseURL,
+				URL:      string(n.Destination),
+				Children: children,
+			},
+		}
+	case ast.KindAutoLink:
+		n := node.(*ast.AutoLink)
+		u := string(n.URL(source))
+
+		var children []ElementRenderer
+		nn := n.FirstChild()
+		for nn != nil {
+			children = append(children, tr.NewElement(nn, source).Renderer)
+			nn = nn.NextSibling()
+		}
+
+		if len(children) == 0 {
+			children = append(children, &BaseElement{
+				Token: u,
+			})
+		}
+
+		if n.AutoLinkType == ast.AutoLinkEmail && !strings.HasPrefix(strings.ToLower(u), "mailto:") {
+			u = "mailto:" + u
+		}
+
+		return Element{
+			Renderer: &LinkElement{
+				Children: children,
+				BaseURL:  ctx.options.BaseURL,
+				URL:      u,
+			},
+		}
+
+	// Images
+	case ast.KindImage:
+		n := node.(*ast.Image)
+		text := string(n.Text(source))
+		return Element{
+			Renderer: &ImageElement{
+				Text:    text,
+				BaseURL: ctx.options.BaseURL,
+				URL:     string(n.Destination),
+			},
+		}
+
+	// Code
+	case ast.KindFencedCodeBlock:
+		n := node.(*ast.FencedCodeBlock)
+		l := n.Lines().Len()
+		s := ""
+		for i := 0; i < l; i++ {
+			line := n.Lines().At(i)
+			s += string(line.Value(source))
+		}
+		return Element{
+			Entering: "\n",
+			Renderer: &CodeBlockElement{
+				Code:     s,
+				Language: string(n.Language(source)),
+			},
+		}
+
+	case ast.KindCodeBlock:
+		n := node.(*ast.CodeBlock)
+		l := n.Lines().Len()
+		s := ""
+		for i := 0; i < l; i++ {
+			line := n.Lines().At(i)
+			s += string(line.Value(source))
+		}
+		return Element{
+			Entering: "\n",
+			Renderer: &CodeBlockElement{
+				Code: s,
+			},
+		}
+
+	case ast.KindCodeSpan:
+		n := node.(*ast.CodeSpan)
+		s := string(n.Text(source))
+		return Element{
+			Renderer: &CodeSpanElement{
+				Text:  html.UnescapeString(s),
+				Style: cascadeStyle(ctx.blockStack.Current().Style, ctx.options.Styles.Code, false).StylePrimitive,
+			},
+		}
+
+	// Tables
+	case astext.KindTable:
+		table := node.(*astext.Table)
+		te := &TableElement{
+			table: table,
+		}
+		return Element{
+			Entering: "\n",
+			Exiting:  "\n",
+			Renderer: te,
+			Finisher: te,
+		}
+
+	case astext.KindTableCell:
+		n := node.(*astext.TableCell)
+		var children []ElementRenderer
+		nn := n.FirstChild()
+		for nn != nil {
+			children = append(children, tr.NewElement(nn, source).Renderer)
+			nn = nn.NextSibling()
+		}
+
+		r := &TableCellElement{
+			Children: children,
+			Head:     node.Parent().Kind() == astext.KindTableHeader,
+		}
+		return Element{
+			Renderer: r,
+		}
+
+	case astext.KindTableHeader:
+		return Element{
+			Finisher: &TableHeadElement{},
+		}
+	case astext.KindTableRow:
+		return Element{
+			Finisher: &TableRowElement{},
+		}
+
+	// HTML Elements
+	case ast.KindHTMLBlock:
+		n := node.(*ast.HTMLBlock)
+		return Element{
+			Renderer: &BaseElement{
+				Token: ctx.SanitizeHTML(string(n.Text(source)), true),
+				Style: ctx.options.Styles.HTMLBlock.StylePrimitive,
+			},
+		}
+	case ast.KindRawHTML:
+		n := node.(*ast.RawHTML)
+		return Element{
+			Renderer: &BaseElement{
+				Token: ctx.SanitizeHTML(string(n.Text(source)), true),
+				Style: ctx.options.Styles.HTMLSpan.StylePrimitive,
+			},
+		}
+
+	// Definition Lists
+	case astext.KindDefinitionList:
+		e := &BlockElement{
+			Block:   &bytes.Buffer{},
+			Style:   cascadeStyle(ctx.blockStack.Current().Style, ctx.options.Styles.DefinitionList, false),
+			Margin:  true,
+			Newline: true,
+		}
+		return Element{
+			Renderer: e,
+			Finisher: e,
+		}
+
+	case astext.KindDefinitionTerm:
+		return Element{
+			Entering: "\n",
+			Renderer: &BaseElement{
+				Style: ctx.options.Styles.DefinitionTerm,
+			},
+		}
+
+	case astext.KindDefinitionDescription:
+		return Element{
+			Exiting: "\n",
+			Renderer: &BaseElement{
+				Style: ctx.options.Styles.DefinitionDescription,
+			},
+		}
+
+	// Handled by parents
+	case astext.KindTaskCheckBox:
+		// handled by KindListItem
+		return Element{}
+	case ast.KindTextBlock:
+		return Element{}
+
+	case east.KindEmoji:
+		n := node.(*east.Emoji)
+		return Element{
+			Renderer: &BaseElement{
+				Token: string(n.Value.Unicode),
+			},
+		}
+
+	// Unknown case
+	default:
+		fmt.Println("Warning: unhandled element", node.Kind().String())
+		return Element{}
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/emphasis.go","mode":420,"size":998,"sha256":"5e93c2dac31379da46fd33194dd971bbc08d8d92d4cd13d2e97419b01170474c","index":0,"count":1,"encoding":"utf-8","payloadBytes":998}
+package ansi
+
+import (
+	"io"
+)
+
+// A EmphasisElement is used to render emphasis.
+type EmphasisElement struct {
+	Children []ElementRenderer
+	Level    int
+}
+
+func (e *EmphasisElement) Render(w io.Writer, ctx RenderContext) error {
+	style := ctx.options.Styles.Emph
+	if e.Level > 1 {
+		style = ctx.options.Styles.Strong
+	}
+
+	return e.doRender(w, ctx, style)
+}
+
+func (e *EmphasisElement) StyleOverrideRender(w io.Writer, ctx RenderContext, style StylePrimitive) error {
+	base := ctx.options.Styles.Emph
+	if e.Level > 1 {
+		base = ctx.options.Styles.Strong
+	}
+	return e.doRender(w, ctx, cascadeStylePrimitives(base, style))
+}
+
+func (e *EmphasisElement) doRender(w io.Writer, ctx RenderContext, style StylePrimitive) error {
+	for _, child := range e.Children {
+		if r, ok := child.(StyleOverriderElementRenderer); ok {
+			if err := r.StyleOverrideRender(w, ctx, style); err != nil {
+				return err
+			}
+		} else {
+			if err := child.Render(w, ctx); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/heading.go","mode":420,"size":2150,"sha256":"c3dfcc2ae7ae84dea5315eb2649103f0a62ffd9b818c86ee024f15edcba16f1e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2150}
+package ansi
+
+import (
+	"bytes"
+	"io"
+
+	"github.com/muesli/reflow/indent"
+	"github.com/muesli/reflow/wordwrap"
+)
+
+// A HeadingElement is used to render headings.
+type HeadingElement struct {
+	Level int
+	First bool
+}
+
+const (
+	h1 = iota + 1
+	h2
+	h3
+	h4
+	h5
+	h6
+)
+
+func (e *HeadingElement) Render(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+	rules := ctx.options.Styles.Heading
+
+	switch e.Level {
+	case h1:
+		rules = cascadeStyles(rules, ctx.options.Styles.H1)
+	case h2:
+		rules = cascadeStyles(rules, ctx.options.Styles.H2)
+	case h3:
+		rules = cascadeStyles(rules, ctx.options.Styles.H3)
+	case h4:
+		rules = cascadeStyles(rules, ctx.options.Styles.H4)
+	case h5:
+		rules = cascadeStyles(rules, ctx.options.Styles.H5)
+	case h6:
+		rules = cascadeStyles(rules, ctx.options.Styles.H6)
+	}
+
+	if !e.First {
+		renderText(w, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, "\n")
+	}
+
+	be := BlockElement{
+		Block: &bytes.Buffer{},
+		Style: cascadeStyle(bs.Current().Style, rules, false),
+	}
+	bs.Push(be)
+
+	renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, rules.BlockPrefix)
+	renderText(bs.Current().Block, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.Prefix)
+	return nil
+}
+
+func (e *HeadingElement) Finish(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+	rules := bs.Current().Style
+
+	var indentation uint
+	var margin uint
+	if rules.Indent != nil {
+		indentation = *rules.Indent
+	}
+	if rules.Margin != nil {
+		margin = *rules.Margin
+	}
+
+	iw := indent.NewWriterPipe(w, indentation+margin, func(wr io.Writer) {
+		renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, " ")
+	})
+
+	flow := wordwrap.NewWriter(int(bs.Width(ctx) - indentation - margin*2))
+	_, err := flow.Write(bs.Current().Block.Bytes())
+	if err != nil {
+		return err
+	}
+	flow.Close()
+
+	_, err = iw.Write(flow.Bytes())
+	if err != nil {
+		return err
+	}
+
+	renderText(w, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.Suffix)
+	renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, rules.BlockSuffix)
+
+	bs.Current().Block.Reset()
+	bs.Pop()
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/image.go","mode":420,"size":661,"sha256":"5c685c962942fa2e0f8d2d66f3863da155301b6f0f91128d625655d452ddef1c","index":0,"count":1,"encoding":"utf-8","payloadBytes":661}
+package ansi
+
+import (
+	"io"
+)
+
+// An ImageElement is used to render images elements.
+type ImageElement struct {
+	Text    string
+	BaseURL string
+	URL     string
+	Child   ElementRenderer
+}
+
+func (e *ImageElement) Render(w io.Writer, ctx RenderContext) error {
+	if len(e.Text) > 0 {
+		el := &BaseElement{
+			Token: e.Text,
+			Style: ctx.options.Styles.ImageText,
+		}
+		err := el.Render(w, ctx)
+		if err != nil {
+			return err
+		}
+	}
+	if len(e.URL) > 0 {
+		el := &BaseElement{
+			Token:  resolveRelativeURL(e.BaseURL, e.URL),
+			Prefix: " ",
+			Style:  ctx.options.Styles.Image,
+		}
+		err := el.Render(w, ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/link.go","mode":420,"size":1068,"sha256":"03bc81599788dd616c171739c8583e0c4815226ddec66ab568e1eab39d22a903","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
+package ansi
+
+import (
+	"bytes"
+	"io"
+	"net/url"
+)
+
+// A LinkElement is used to render hyperlinks.
+type LinkElement struct {
+	BaseURL  string
+	URL      string
+	Children []ElementRenderer
+}
+
+func (e *LinkElement) Render(w io.Writer, ctx RenderContext) error {
+	for _, child := range e.Children {
+		if r, ok := child.(StyleOverriderElementRenderer); ok {
+			st := ctx.options.Styles.LinkText
+			if err := r.StyleOverrideRender(w, ctx, st); err != nil {
+				return err
+			}
+		} else {
+			var b bytes.Buffer
+			if err := child.Render(&b, ctx); err != nil {
+				return err
+			}
+			el := &BaseElement{
+				Token: b.String(),
+				Style: ctx.options.Styles.LinkText,
+			}
+			if err := el.Render(w, ctx); err != nil {
+				return err
+			}
+		}
+	}
+
+	u, err := url.Parse(e.URL)
+	if err == nil && "#"+u.Fragment != e.URL { // if the URL only consists of an anchor, ignore it
+		el := &BaseElement{
+			Token:  resolveRelativeURL(e.BaseURL, e.URL),
+			Prefix: " ",
+			Style:  ctx.options.Styles.Link,
+		}
+		if err := el.Render(w, ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/listitem.go","mode":420,"size":499,"sha256":"3968067bc754dfad55ca5ec9873566f8de01a14560362b3ec8bbfc03aff174e2","index":0,"count":1,"encoding":"utf-8","payloadBytes":499}
+package ansi
+
+import (
+	"io"
+	"strconv"
+)
+
+// An ItemElement is used to render items inside a list.
+type ItemElement struct {
+	IsOrdered   bool
+	Enumeration uint
+}
+
+func (e *ItemElement) Render(w io.Writer, ctx RenderContext) error {
+	var el *BaseElement
+	if e.IsOrdered {
+		el = &BaseElement{
+			Style:  ctx.options.Styles.Enumeration,
+			Prefix: strconv.FormatInt(int64(e.Enumeration), 10),
+		}
+	} else {
+		el = &BaseElement{
+			Style: ctx.options.Styles.Item,
+		}
+	}
+
+	return el.Render(w, ctx)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/margin.go","mode":420,"size":1105,"sha256":"84d653171c536a1603f1655e8013141c7b6b22fdb67b1b6ab2dbb0ed0f318a27","index":0,"count":1,"encoding":"utf-8","payloadBytes":1105}
+package ansi
+
+import (
+	"io"
+
+	"github.com/muesli/reflow/indent"
+	"github.com/muesli/reflow/padding"
+)
+
+// MarginWriter is a Writer that applies indentation and padding around
+// whatever you write to it.
+type MarginWriter struct {
+	w  io.Writer
+	pw *padding.Writer
+	iw *indent.Writer
+}
+
+// NewMarginWriter returns a new MarginWriter.
+func NewMarginWriter(ctx RenderContext, w io.Writer, rules StyleBlock) *MarginWriter {
+	bs := ctx.blockStack
+
+	var indentation uint
+	var margin uint
+	if rules.Indent != nil {
+		indentation = *rules.Indent
+	}
+	if rules.Margin != nil {
+		margin = *rules.Margin
+	}
+
+	pw := padding.NewWriterPipe(w, bs.Width(ctx), func(wr io.Writer) {
+		renderText(w, ctx.options.ColorProfile, rules.StylePrimitive, " ")
+	})
+
+	ic := " "
+	if rules.IndentToken != nil {
+		ic = *rules.IndentToken
+	}
+	iw := indent.NewWriterPipe(pw, indentation+margin, func(wr io.Writer) {
+		renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, ic)
+	})
+
+	return &MarginWriter{
+		w:  w,
+		pw: pw,
+		iw: iw,
+	}
+}
+
+func (w *MarginWriter) Write(b []byte) (int, error) {
+	return w.iw.Write(b)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/paragraph.go","mode":420,"size":1459,"sha256":"633344dd69b1d472b7145c9d5573a501cff5d8582ed19148bb51f09538eef998","index":0,"count":1,"encoding":"utf-8","payloadBytes":1459}
+package ansi
+
+import (
+	"bytes"
+	"io"
+	"strings"
+
+	"github.com/muesli/reflow/wordwrap"
+)
+
+// A ParagraphElement is used to render individual paragraphs.
+type ParagraphElement struct {
+	First bool
+}
+
+func (e *ParagraphElement) Render(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+	rules := ctx.options.Styles.Paragraph
+
+	if !e.First {
+		_, _ = io.WriteString(w, "\n")
+	}
+	be := BlockElement{
+		Block: &bytes.Buffer{},
+		Style: cascadeStyle(bs.Current().Style, rules, false),
+	}
+	bs.Push(be)
+
+	renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, rules.BlockPrefix)
+	renderText(bs.Current().Block, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.Prefix)
+	return nil
+}
+
+func (e *ParagraphElement) Finish(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+	rules := bs.Current().Style
+
+	mw := NewMarginWriter(ctx, w, rules)
+	if len(strings.TrimSpace(bs.Current().Block.String())) > 0 {
+		flow := wordwrap.NewWriter(int(bs.Width(ctx)))
+		flow.KeepNewlines = ctx.options.PreserveNewLines
+		_, _ = flow.Write(bs.Current().Block.Bytes())
+		flow.Close()
+
+		_, err := mw.Write(flow.Bytes())
+		if err != nil {
+			return err
+		}
+		_, _ = io.WriteString(mw, "\n")
+	}
+
+	renderText(w, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.Suffix)
+	renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, rules.BlockSuffix)
+
+	bs.Current().Block.Reset()
+	bs.Pop()
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/renderer.go","mode":420,"size":4505,"sha256":"fc723e4ed4b6ba879279656e5e964f2801715e9a0c5e6ee4335d034b0c441a89","index":0,"count":1,"encoding":"utf-8","payloadBytes":4505}
+package ansi
+
+import (
+	"io"
+	"net/url"
+	"strings"
+
+	"github.com/muesli/termenv"
+	east "github.com/yuin/goldmark-emoji/ast"
+	"github.com/yuin/goldmark/ast"
+	astext "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
+)
+
+// Options is used to configure an ANSIRenderer.
+type Options struct {
+	BaseURL          string
+	WordWrap         int
+	PreserveNewLines bool
+	ColorProfile     termenv.Profile
+	Styles           StyleConfig
+}
+
+// ANSIRenderer renders markdown content as ANSI escaped sequences.
+type ANSIRenderer struct {
+	context RenderContext
+}
+
+// NewRenderer returns a new ANSIRenderer with style and options set.
+func NewRenderer(options Options) *ANSIRenderer {
+	return &ANSIRenderer{
+		context: NewRenderContext(options),
+	}
+}
+
+// RegisterFuncs implements NodeRenderer.RegisterFuncs.
+func (r *ANSIRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	// blocks
+	reg.Register(ast.KindDocument, r.renderNode)
+	reg.Register(ast.KindHeading, r.renderNode)
+	reg.Register(ast.KindBlockquote, r.renderNode)
+	reg.Register(ast.KindCodeBlock, r.renderNode)
+	reg.Register(ast.KindFencedCodeBlock, r.renderNode)
+	reg.Register(ast.KindHTMLBlock, r.renderNode)
+	reg.Register(ast.KindList, r.renderNode)
+	reg.Register(ast.KindListItem, r.renderNode)
+	reg.Register(ast.KindParagraph, r.renderNode)
+	reg.Register(ast.KindTextBlock, r.renderNode)
+	reg.Register(ast.KindThematicBreak, r.renderNode)
+
+	// inlines
+	reg.Register(ast.KindAutoLink, r.renderNode)
+	reg.Register(ast.KindCodeSpan, r.renderNode)
+	reg.Register(ast.KindEmphasis, r.renderNode)
+	reg.Register(ast.KindImage, r.renderNode)
+	reg.Register(ast.KindLink, r.renderNode)
+	reg.Register(ast.KindRawHTML, r.renderNode)
+	reg.Register(ast.KindText, r.renderNode)
+	reg.Register(ast.KindString, r.renderNode)
+
+	// tables
+	reg.Register(astext.KindTable, r.renderNode)
+	reg.Register(astext.KindTableHeader, r.renderNode)
+	reg.Register(astext.KindTableRow, r.renderNode)
+	reg.Register(astext.KindTableCell, r.renderNode)
+
+	// definitions
+	reg.Register(astext.KindDefinitionList, r.renderNode)
+	reg.Register(astext.KindDefinitionTerm, r.renderNode)
+	reg.Register(astext.KindDefinitionDescription, r.renderNode)
+
+	// footnotes
+	reg.Register(astext.KindFootnote, r.renderNode)
+	reg.Register(astext.KindFootnoteList, r.renderNode)
+	reg.Register(astext.KindFootnoteLink, r.renderNode)
+	reg.Register(astext.KindFootnoteBacklink, r.renderNode)
+
+	// checkboxes
+	reg.Register(astext.KindTaskCheckBox, r.renderNode)
+
+	// strikethrough
+	reg.Register(astext.KindStrikethrough, r.renderNode)
+
+	// emoji
+	reg.Register(east.KindEmoji, r.renderNode)
+}
+
+func (r *ANSIRenderer) renderNode(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	// _, _ = w.Write([]byte(node.Type.String()))
+	writeTo := io.Writer(w)
+	bs := r.context.blockStack
+
+	// children get rendered by their parent
+	if isChild(node) {
+		return ast.WalkContinue, nil
+	}
+
+	e := r.NewElement(node, source)
+	if entering {
+		// everything below the Document element gets rendered into a block buffer
+		if bs.Len() > 0 {
+			writeTo = io.Writer(bs.Current().Block)
+		}
+
+		_, _ = io.WriteString(writeTo, e.Entering)
+		if e.Renderer != nil {
+			err := e.Renderer.Render(writeTo, r.context)
+			if err != nil {
+				return ast.WalkStop, err
+			}
+		}
+	} else {
+		// everything below the Document element gets rendered into a block buffer
+		if bs.Len() > 0 {
+			writeTo = io.Writer(bs.Parent().Block)
+		}
+
+		// if we're finished rendering the entire document,
+		// flush to the real writer
+		if node.Type() == ast.TypeDocument {
+			writeTo = w
+		}
+
+		if e.Finisher != nil {
+			err := e.Finisher.Finish(writeTo, r.context)
+			if err != nil {
+				return ast.WalkStop, err
+			}
+		}
+
+		_, _ = io.WriteString(bs.Current().Block, e.Exiting)
+	}
+
+	return ast.WalkContinue, nil
+}
+
+func isChild(node ast.Node) bool {
+	for n := node.Parent(); n != nil; n = n.Parent() {
+		// These types are already rendered by their parent
+		switch n.Kind() {
+		case ast.KindCodeSpan, ast.KindAutoLink, ast.KindLink, ast.KindImage, ast.KindEmphasis, astext.KindStrikethrough, astext.KindTableCell:
+			return true
+		}
+	}
+
+	return false
+}
+
+func resolveRelativeURL(baseURL string, rel string) string {
+	u, err := url.Parse(rel)
+	if err != nil {
+		return rel
+	}
+	if u.IsAbs() {
+		return rel
+	}
+	u.Path = strings.TrimPrefix(u.Path, "/")
+
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return rel
+	}
+	return base.ResolveReference(u).String()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/style.go","mode":420,"size":8454,"sha256":"86ed14e528a101d86a027d69d6ecfd34915ef055c8e899dd48a6519d5f22a847","index":0,"count":1,"encoding":"utf-8","payloadBytes":8454}
+package ansi
+
+// Chroma holds all the chroma settings.
+type Chroma struct {
+	Text                StylePrimitive `json:"text,omitempty"`
+	Error               StylePrimitive `json:"error,omitempty"`
+	Comment             StylePrimitive `json:"comment,omitempty"`
+	CommentPreproc      StylePrimitive `json:"comment_preproc,omitempty"`
+	Keyword             StylePrimitive `json:"keyword,omitempty"`
+	KeywordReserved     StylePrimitive `json:"keyword_reserved,omitempty"`
+	KeywordNamespace    StylePrimitive `json:"keyword_namespace,omitempty"`
+	KeywordType         StylePrimitive `json:"keyword_type,omitempty"`
+	Operator            StylePrimitive `json:"operator,omitempty"`
+	Punctuation         StylePrimitive `json:"punctuation,omitempty"`
+	Name                StylePrimitive `json:"name,omitempty"`
+	NameBuiltin         StylePrimitive `json:"name_builtin,omitempty"`
+	NameTag             StylePrimitive `json:"name_tag,omitempty"`
+	NameAttribute       StylePrimitive `json:"name_attribute,omitempty"`
+	NameClass           StylePrimitive `json:"name_class,omitempty"`
+	NameConstant        StylePrimitive `json:"name_constant,omitempty"`
+	NameDecorator       StylePrimitive `json:"name_decorator,omitempty"`
+	NameException       StylePrimitive `json:"name_exception,omitempty"`
+	NameFunction        StylePrimitive `json:"name_function,omitempty"`
+	NameOther           StylePrimitive `json:"name_other,omitempty"`
+	Literal             StylePrimitive `json:"literal,omitempty"`
+	LiteralNumber       StylePrimitive `json:"literal_number,omitempty"`
+	LiteralDate         StylePrimitive `json:"literal_date,omitempty"`
+	LiteralString       StylePrimitive `json:"literal_string,omitempty"`
+	LiteralStringEscape StylePrimitive `json:"literal_string_escape,omitempty"`
+	GenericDeleted      StylePrimitive `json:"generic_deleted,omitempty"`
+	GenericEmph         StylePrimitive `json:"generic_emph,omitempty"`
+	GenericInserted     StylePrimitive `json:"generic_inserted,omitempty"`
+	GenericStrong       StylePrimitive `json:"generic_strong,omitempty"`
+	GenericSubheading   StylePrimitive `json:"generic_subheading,omitempty"`
+	Background          StylePrimitive `json:"background,omitempty"`
+}
+
+// StylePrimitive holds all the basic style settings.
+type StylePrimitive struct {
+	BlockPrefix     string  `json:"block_prefix,omitempty"`
+	BlockSuffix     string  `json:"block_suffix,omitempty"`
+	Prefix          string  `json:"prefix,omitempty"`
+	Suffix          string  `json:"suffix,omitempty"`
+	Color           *string `json:"color,omitempty"`
+	BackgroundColor *string `json:"background_color,omitempty"`
+	Underline       *bool   `json:"underline,omitempty"`
+	Bold            *bool   `json:"bold,omitempty"`
+	Upper           *bool   `json:"upper,omitempty"`
+	Lower           *bool   `json:"lower,omitempty"`
+	Title           *bool   `json:"title,omitempty"`
+	Italic          *bool   `json:"italic,omitempty"`
+	CrossedOut      *bool   `json:"crossed_out,omitempty"`
+	Faint           *bool   `json:"faint,omitempty"`
+	Conceal         *bool   `json:"conceal,omitempty"`
+	Overlined       *bool   `json:"overlined,omitempty"`
+	Inverse         *bool   `json:"inverse,omitempty"`
+	Blink           *bool   `json:"blink,omitempty"`
+	Format          string  `json:"format,omitempty"`
+}
+
+// StyleTask holds the style settings for a task item.
+type StyleTask struct {
+	StylePrimitive
+	Ticked   string `json:"ticked,omitempty"`
+	Unticked string `json:"unticked,omitempty"`
+}
+
+// StyleBlock holds the basic style settings for block elements.
+type StyleBlock struct {
+	StylePrimitive
+	Indent      *uint   `json:"indent,omitempty"`
+	IndentToken *string `json:"indent_token,omitempty"`
+	Margin      *uint   `json:"margin,omitempty"`
+}
+
+// StyleCodeBlock holds the style settings for a code block.
+type StyleCodeBlock struct {
+	StyleBlock
+	Theme  string  `json:"theme,omitempty"`
+	Chroma *Chroma `json:"chroma,omitempty"`
+}
+
+// StyleList holds the style settings for a list.
+type StyleList struct {
+	StyleBlock
+	LevelIndent uint `json:"level_indent,omitempty"`
+}
+
+// StyleTable holds the style settings for a table.
+type StyleTable struct {
+	StyleBlock
+	CenterSeparator *string `json:"center_separator,omitempty"`
+	ColumnSeparator *string `json:"column_separator,omitempty"`
+	RowSeparator    *string `json:"row_separator,omitempty"`
+}
+
+// StyleConfig is used to configure the styling behavior of an ANSIRenderer.
+type StyleConfig struct {
+	Document   StyleBlock `json:"document,omitempty"`
+	BlockQuote StyleBlock `json:"block_quote,omitempty"`
+	Paragraph  StyleBlock `json:"paragraph,omitempty"`
+	List       StyleList  `json:"list,omitempty"`
+
+	Heading StyleBlock `json:"heading,omitempty"`
+	H1      StyleBlock `json:"h1,omitempty"`
+	H2      StyleBlock `json:"h2,omitempty"`
+	H3      StyleBlock `json:"h3,omitempty"`
+	H4      StyleBlock `json:"h4,omitempty"`
+	H5      StyleBlock `json:"h5,omitempty"`
+	H6      StyleBlock `json:"h6,omitempty"`
+
+	Text           StylePrimitive `json:"text,omitempty"`
+	Strikethrough  StylePrimitive `json:"strikethrough,omitempty"`
+	Emph           StylePrimitive `json:"emph,omitempty"`
+	Strong         StylePrimitive `json:"strong,omitempty"`
+	HorizontalRule StylePrimitive `json:"hr,omitempty"`
+
+	Item        StylePrimitive `json:"item,omitempty"`
+	Enumeration StylePrimitive `json:"enumeration,omitempty"`
+	Task        StyleTask      `json:"task,omitempty"`
+
+	Link     StylePrimitive `json:"link,omitempty"`
+	LinkText StylePrimitive `json:"link_text,omitempty"`
+
+	Image     StylePrimitive `json:"image,omitempty"`
+	ImageText StylePrimitive `json:"image_text,omitempty"`
+
+	Code      StyleBlock     `json:"code,omitempty"`
+	CodeBlock StyleCodeBlock `json:"code_block,omitempty"`
+
+	Table StyleTable `json:"table,omitempty"`
+
+	DefinitionList        StyleBlock     `json:"definition_list,omitempty"`
+	DefinitionTerm        StylePrimitive `json:"definition_term,omitempty"`
+	DefinitionDescription StylePrimitive `json:"definition_description,omitempty"`
+
+	HTMLBlock StyleBlock `json:"html_block,omitempty"`
+	HTMLSpan  StyleBlock `json:"html_span,omitempty"`
+}
+
+func cascadeStyles(s ...StyleBlock) StyleBlock {
+	var r StyleBlock
+	for _, v := range s {
+		r = cascadeStyle(r, v, true)
+	}
+	return r
+}
+
+func cascadeStylePrimitives(s ...StylePrimitive) StylePrimitive {
+	var r StylePrimitive
+	for _, v := range s {
+		r = cascadeStylePrimitive(r, v, true)
+	}
+	return r
+}
+
+func cascadeStylePrimitive(parent, child StylePrimitive, toBlock bool) StylePrimitive {
+	s := child
+
+	s.Color = parent.Color
+	s.BackgroundColor = parent.BackgroundColor
+	s.Underline = parent.Underline
+	s.Bold = parent.Bold
+	s.Upper = parent.Upper
+	s.Title = parent.Title
+	s.Lower = parent.Lower
+	s.Italic = parent.Italic
+	s.CrossedOut = parent.CrossedOut
+	s.Faint = parent.Faint
+	s.Conceal = parent.Conceal
+	s.Overlined = parent.Overlined
+	s.Inverse = parent.Inverse
+	s.Blink = parent.Blink
+
+	if toBlock {
+		s.BlockPrefix = parent.BlockPrefix
+		s.BlockSuffix = parent.BlockSuffix
+		s.Prefix = parent.Prefix
+		s.Suffix = parent.Suffix
+	}
+
+	if child.Color != nil {
+		s.Color = child.Color
+	}
+	if child.BackgroundColor != nil {
+		s.BackgroundColor = child.BackgroundColor
+	}
+	if child.Underline != nil {
+		s.Underline = child.Underline
+	}
+	if child.Bold != nil {
+		s.Bold = child.Bold
+	}
+	if child.Upper != nil {
+		s.Upper = child.Upper
+	}
+	if child.Lower != nil {
+		s.Lower = child.Lower
+	}
+	if child.Title != nil {
+		s.Title = child.Title
+	}
+	if child.Italic != nil {
+		s.Italic = child.Italic
+	}
+	if child.CrossedOut != nil {
+		s.CrossedOut = child.CrossedOut
+	}
+	if child.Faint != nil {
+		s.Faint = child.Faint
+	}
+	if child.Conceal != nil {
+		s.Conceal = child.Conceal
+	}
+	if child.Overlined != nil {
+		s.Overlined = child.Overlined
+	}
+	if child.Inverse != nil {
+		s.Inverse = child.Inverse
+	}
+	if child.Blink != nil {
+		s.Blink = child.Blink
+	}
+	if child.BlockPrefix != "" {
+		s.BlockPrefix = child.BlockPrefix
+	}
+	if child.BlockSuffix != "" {
+		s.BlockSuffix = child.BlockSuffix
+	}
+	if child.Prefix != "" {
+		s.Prefix = child.Prefix
+	}
+	if child.Suffix != "" {
+		s.Suffix = child.Suffix
+	}
+	if child.Format != "" {
+		s.Format = child.Format
+	}
+
+	return s
+}
+
+func cascadeStyle(parent StyleBlock, child StyleBlock, toBlock bool) StyleBlock {
+	s := child
+	s.StylePrimitive = cascadeStylePrimitive(parent.StylePrimitive, child.StylePrimitive, toBlock)
+
+	if toBlock {
+		s.Indent = parent.Indent
+		s.Margin = parent.Margin
+	}
+
+	if child.Indent != nil {
+		s.Indent = child.Indent
+	}
+
+	return s
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/table.go","mode":420,"size":4274,"sha256":"88f46c175d22c1e0a11b24c1351a84e8094083983e3f32cc0f750b5d0e023303","index":0,"count":1,"encoding":"utf-8","payloadBytes":4274}
+package ansi
+
+import (
+	"bytes"
+	"io"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
+	"github.com/muesli/reflow/indent"
+	astext "github.com/yuin/goldmark/extension/ast"
+)
+
+// A TableElement is used to render tables.
+type TableElement struct {
+	lipgloss *table.Table
+	table    *astext.Table
+	header   []string
+	row      []string
+}
+
+// A TableRowElement is used to render a single row in a table.
+type TableRowElement struct{}
+
+// A TableHeadElement is used to render a table's head element.
+type TableHeadElement struct{}
+
+// A TableCellElement is used to render a single cell in a row.
+type TableCellElement struct {
+	Children []ElementRenderer
+	Head     bool
+}
+
+func (e *TableElement) Render(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+
+	var indentation uint
+	var margin uint
+	rules := ctx.options.Styles.Table
+	if rules.Indent != nil {
+		indentation = *rules.Indent
+	}
+	if rules.Margin != nil {
+		margin = *rules.Margin
+	}
+
+	iw := indent.NewWriterPipe(w, indentation+margin, func(wr io.Writer) {
+		renderText(w, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, " ")
+	})
+
+	style := bs.With(rules.StylePrimitive)
+
+	renderText(iw, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.BlockPrefix)
+	renderText(iw, ctx.options.ColorProfile, style, rules.Prefix)
+	width := int(ctx.blockStack.Width(ctx))
+	ctx.table.lipgloss = table.New().Width(width)
+
+	return nil
+}
+
+func (e *TableElement) setStyles(ctx RenderContext) {
+	ctx.table.lipgloss = ctx.table.lipgloss.StyleFunc(func(row, col int) lipgloss.Style {
+		st := lipgloss.NewStyle().Inline(true)
+		if m := ctx.options.Styles.Table.Margin; m != nil {
+			st = st.Padding(0, int(*m))
+		}
+		if row == 0 {
+			st = st.Bold(true)
+		}
+
+		switch e.table.Alignments[col] {
+		case astext.AlignLeft:
+			st = st.Align(lipgloss.Left).PaddingRight(0)
+		case astext.AlignCenter:
+			st = st.Align(lipgloss.Center)
+		case astext.AlignRight:
+			st = st.Align(lipgloss.Right).PaddingLeft(0)
+		}
+
+		return st
+	})
+}
+
+func (e *TableElement) setBorders(ctx RenderContext) {
+	rules := ctx.options.Styles.Table
+	border := lipgloss.NormalBorder()
+
+	if rules.RowSeparator != nil && rules.ColumnSeparator != nil {
+		border = lipgloss.Border{
+			Top:    *rules.RowSeparator,
+			Bottom: *rules.RowSeparator,
+			Left:   *rules.ColumnSeparator,
+			Right:  *rules.ColumnSeparator,
+			Middle: *rules.CenterSeparator,
+		}
+	}
+	ctx.table.lipgloss.Border(border)
+	ctx.table.lipgloss.BorderTop(false)
+	ctx.table.lipgloss.BorderLeft(false)
+	ctx.table.lipgloss.BorderRight(false)
+	ctx.table.lipgloss.BorderBottom(false)
+}
+
+func (e *TableElement) Finish(_ io.Writer, ctx RenderContext) error {
+	rules := ctx.options.Styles.Table
+
+	e.setStyles(ctx)
+	e.setBorders(ctx)
+
+	ow := ctx.blockStack.Current().Block
+	if _, err := ow.WriteString(ctx.table.lipgloss.String()); err != nil {
+		return err
+	}
+
+	renderText(ow, ctx.options.ColorProfile, ctx.blockStack.With(rules.StylePrimitive), rules.Suffix)
+	renderText(ow, ctx.options.ColorProfile, ctx.blockStack.Current().Style.StylePrimitive, rules.BlockSuffix)
+	ctx.table.lipgloss = nil
+	return nil
+}
+
+func (e *TableRowElement) Finish(_ io.Writer, ctx RenderContext) error {
+	if ctx.table.lipgloss == nil {
+		return nil
+	}
+
+	ctx.table.lipgloss.Row(ctx.table.row...)
+	ctx.table.row = []string{}
+	return nil
+}
+
+func (e *TableHeadElement) Finish(_ io.Writer, ctx RenderContext) error {
+	if ctx.table.lipgloss == nil {
+		return nil
+	}
+
+	ctx.table.lipgloss.Headers(ctx.table.header...)
+	ctx.table.header = []string{}
+	return nil
+}
+
+func (e *TableCellElement) Render(_ io.Writer, ctx RenderContext) error {
+	var b bytes.Buffer
+	style := ctx.options.Styles.Table.StylePrimitive
+	for _, child := range e.Children {
+		if r, ok := child.(StyleOverriderElementRenderer); ok {
+			if err := r.StyleOverrideRender(&b, ctx, style); err != nil {
+				return err
+			}
+		} else {
+			var bb bytes.Buffer
+			if err := child.Render(&bb, ctx); err != nil {
+				return err
+			}
+			el := &BaseElement{
+				Token: bb.String(),
+				Style: style,
+			}
+			if err := el.Render(&b, ctx); err != nil {
+				return err
+			}
+		}
+	}
+
+	if e.Head {
+		ctx.table.header = append(ctx.table.header, b.String())
+	} else {
+		ctx.table.row = append(ctx.table.row, b.String())
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/task.go","mode":420,"size":444,"sha256":"2088d6c5802720b2a7680a5bb05ef72838b3afc4a23d3f567e08f292cc9fa411","index":0,"count":1,"encoding":"utf-8","payloadBytes":444}
+package ansi
+
+import (
+	"io"
+)
+
+// A TaskElement is used to render tasks inside a todo-list.
+type TaskElement struct {
+	Checked bool
+}
+
+func (e *TaskElement) Render(w io.Writer, ctx RenderContext) error {
+	var el *BaseElement
+
+	pre := ctx.options.Styles.Task.Unticked
+	if e.Checked {
+		pre = ctx.options.Styles.Task.Ticked
+	}
+
+	el = &BaseElement{
+		Prefix: pre,
+		Style:  ctx.options.Styles.Task.StylePrimitive,
+	}
+
+	return el.Render(w, ctx)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/templatehelper.go","mode":420,"size":2065,"sha256":"b5870f3e9ef85a10635b4d6c9f64a457a9f8292a754805c3f12bffc64e4f0bb5","index":0,"count":1,"encoding":"utf-8","payloadBytes":2065}
+package ansi
+
+import (
+	"regexp"
+	"strings"
+	"text/template"
+)
+
+// TemplateFuncMap contains a few useful template helpers.
+var (
+	TemplateFuncMap = template.FuncMap{
+		"Left": func(values ...interface{}) string {
+			s := values[0].(string)
+			n := values[1].(int)
+			if n > len(s) {
+				n = len(s)
+			}
+
+			return s[:n]
+		},
+		"Matches": func(values ...interface{}) bool {
+			ok, _ := regexp.MatchString(values[1].(string), values[0].(string))
+			return ok
+		},
+		"Mid": func(values ...interface{}) string {
+			s := values[0].(string)
+			l := values[1].(int)
+			if l > len(s) {
+				l = len(s)
+			}
+
+			//nolint:gomnd
+			if len(values) > 2 {
+				r := values[2].(int)
+				if r > len(s) {
+					r = len(s)
+				}
+				return s[l:r]
+			}
+			return s[l:]
+		},
+		"Right": func(values ...interface{}) string {
+			s := values[0].(string)
+			n := len(s) - values[1].(int)
+			if n < 0 {
+				n = 0
+			}
+
+			return s[n:]
+		},
+		"Last": func(values ...interface{}) string {
+			return values[0].([]string)[len(values[0].([]string))-1]
+		},
+		// strings functions
+		"Compare":      strings.Compare, // 1.5+ only
+		"Contains":     strings.Contains,
+		"ContainsAny":  strings.ContainsAny,
+		"Count":        strings.Count,
+		"EqualFold":    strings.EqualFold,
+		"HasPrefix":    strings.HasPrefix,
+		"HasSuffix":    strings.HasSuffix,
+		"Index":        strings.Index,
+		"IndexAny":     strings.IndexAny,
+		"Join":         strings.Join,
+		"LastIndex":    strings.LastIndex,
+		"LastIndexAny": strings.LastIndexAny,
+		"Repeat":       strings.Repeat,
+		"Replace":      strings.Replace,
+		"Split":        strings.Split,
+		"SplitAfter":   strings.SplitAfter,
+		"SplitAfterN":  strings.SplitAfterN,
+		"SplitN":       strings.SplitN,
+		"Title":        strings.Title,
+		"ToLower":      strings.ToLower,
+		"ToTitle":      strings.ToTitle,
+		"ToUpper":      strings.ToUpper,
+		"Trim":         strings.Trim,
+		"TrimLeft":     strings.TrimLeft,
+		"TrimPrefix":   strings.TrimPrefix,
+		"TrimRight":    strings.TrimRight,
+		"TrimSpace":    strings.TrimSpace,
+		"TrimSuffix":   strings.TrimSuffix,
+	}
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/examples.sh","mode":493,"size":553,"sha256":"efe3590b5f0f5dda3ef7529b766e361c21fe1b7d96b13d2e8f7674d4624a88ef","index":0,"count":1,"encoding":"utf-8","payloadBytes":553}
+#!/bin/bash
+
+set -e
+
+for element in ./styles/examples/*.md; do
+    echo "Generating screenshot for element ${element}"
+    basename="`basename -s .md ${element}`"
+    stylename="${basename}.style"
+    filename="${basename}.png"
+
+    # take screenshot
+    ./termshot -o ./styles/examples/ -f "$filename" glow -s ./styles/examples/${stylename} ${element}
+
+    # add border
+    convert -bordercolor black -border 16x16 "./styles/examples/$filename" "./styles/examples/$filename"
+
+    # optimize filesize
+    pngcrush -ow "./styles/examples/$filename"
+done
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/gallery.sh","mode":493,"size":751,"sha256":"a4cfc1b1b7d3a372501cfc4aa52e0645e9ded4e853675020b868a8da9ae51dbb","index":0,"count":1,"encoding":"utf-8","payloadBytes":751}
+#!/bin/bash
+
+if ! command -v freeze &> /dev/null; then
+    echo "freeze not found. Please install freeze to capture images."
+    echo "https://github.com/charmbracelet/freeze/"
+    exit 1
+fi
+
+defaultStyles=("ascii" "auto" "dark" "dracula" "light" "notty" "pink")
+
+for style in "${defaultStyles[@]}"; do
+    echo "Generating screenshot for ${style}"
+    # take screenshot
+    if [[ $style == *"light"* ]]; then
+        # Provide a light background to images
+        freeze  -x "go run ./examples/artichokes ${style}" -b "#FAFAFA" -o "./styles/gallery/${style}.png"
+    else
+        freeze  -x "go run ./examples/artichokes ${style}" -o "./styles/gallery/${style}.png"
+    fi
+
+    # optimize filesize
+    pngcrush -ow "./styles/gallery/$style.png"
+done
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/glamour.go","mode":420,"size":6938,"sha256":"f23866a499033c05d8adff95f69e85f798c4b8eb108d224add876f5258ce606e","index":0,"count":1,"encoding":"utf-8","payloadBytes":6938}
+package glamour
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/muesli/termenv"
+	"github.com/yuin/goldmark"
+	emoji "github.com/yuin/goldmark-emoji"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
+	"golang.org/x/term"
+
+	"github.com/charmbracelet/glamour/ansi"
+	styles "github.com/charmbracelet/glamour/styles"
+)
+
+const (
+	defaultWidth = 80
+	highPriority = 1000
+)
+
+// A TermRendererOption sets an option on a TermRenderer.
+type TermRendererOption func(*TermRenderer) error
+
+// TermRenderer can be used to render markdown content, posing a depth of
+// customization and styles to fit your needs.
+type TermRenderer struct {
+	md          goldmark.Markdown
+	ansiOptions ansi.Options
+	buf         bytes.Buffer
+	renderBuf   bytes.Buffer
+}
+
+// Render initializes a new TermRenderer and renders a markdown with a specific
+// style.
+func Render(in string, stylePath string) (string, error) {
+	b, err := RenderBytes([]byte(in), stylePath)
+	return string(b), err
+}
+
+// RenderWithEnvironmentConfig initializes a new TermRenderer and renders a
+// markdown with a specific style defined by the GLAMOUR_STYLE environment variable.
+func RenderWithEnvironmentConfig(in string) (string, error) {
+	b, err := RenderBytes([]byte(in), getEnvironmentStyle())
+	return string(b), err
+}
+
+// RenderBytes initializes a new TermRenderer and renders a markdown with a
+// specific style.
+func RenderBytes(in []byte, stylePath string) ([]byte, error) {
+	r, err := NewTermRenderer(
+		WithStylePath(stylePath),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return r.RenderBytes(in)
+}
+
+// NewTermRenderer returns a new TermRenderer the given options.
+func NewTermRenderer(options ...TermRendererOption) (*TermRenderer, error) {
+	tr := &TermRenderer{
+		md: goldmark.New(
+			goldmark.WithExtensions(
+				extension.GFM,
+				extension.DefinitionList,
+			),
+			goldmark.WithParserOptions(
+				parser.WithAutoHeadingID(),
+			),
+		),
+		ansiOptions: ansi.Options{
+			WordWrap:     defaultWidth,
+			ColorProfile: termenv.TrueColor,
+		},
+	}
+	for _, o := range options {
+		if err := o(tr); err != nil {
+			return nil, err
+		}
+	}
+	ar := ansi.NewRenderer(tr.ansiOptions)
+	tr.md.SetRenderer(
+		renderer.NewRenderer(
+			renderer.WithNodeRenderers(
+				util.Prioritized(ar, highPriority),
+			),
+		),
+	)
+	return tr, nil
+}
+
+// WithBaseURL sets a TermRenderer's base URL.
+func WithBaseURL(baseURL string) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		tr.ansiOptions.BaseURL = baseURL
+		return nil
+	}
+}
+
+// WithColorProfile sets the TermRenderer's color profile
+// (TrueColor / ANSI256 / ANSI).
+func WithColorProfile(profile termenv.Profile) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		tr.ansiOptions.ColorProfile = profile
+		return nil
+	}
+}
+
+// WithStandardStyle sets a TermRenderer's styles with a standard (builtin)
+// style.
+func WithStandardStyle(style string) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		styles, err := getDefaultStyle(style)
+		if err != nil {
+			return err
+		}
+		tr.ansiOptions.Styles = *styles
+		return nil
+	}
+}
+
+// WithAutoStyle sets a TermRenderer's styles with either the standard dark
+// or light style, depending on the terminal's background color at run-time.
+func WithAutoStyle() TermRendererOption {
+	return WithStandardStyle(styles.AutoStyle)
+}
+
+// WithEnvironmentConfig sets a TermRenderer's styles based on the
+// GLAMOUR_STYLE environment variable.
+func WithEnvironmentConfig() TermRendererOption {
+	return WithStylePath(getEnvironmentStyle())
+}
+
+// WithStylePath sets a TermRenderer's style from stylePath. stylePath is first
+// interpreted as a filename. If no such file exists, it is re-interpreted as a
+// standard style.
+func WithStylePath(stylePath string) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		styles, err := getDefaultStyle(stylePath)
+		if err != nil {
+			jsonBytes, err := os.ReadFile(stylePath)
+			if err != nil {
+				return err
+			}
+
+			return json.Unmarshal(jsonBytes, &tr.ansiOptions.Styles)
+		}
+		tr.ansiOptions.Styles = *styles
+		return nil
+	}
+}
+
+// WithStyles sets a TermRenderer's styles.
+func WithStyles(styles ansi.StyleConfig) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		tr.ansiOptions.Styles = styles
+		return nil
+	}
+}
+
+// WithStylesFromJSONBytes sets a TermRenderer's styles by parsing styles from
+// jsonBytes.
+func WithStylesFromJSONBytes(jsonBytes []byte) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		return json.Unmarshal(jsonBytes, &tr.ansiOptions.Styles)
+	}
+}
+
+// WithStylesFromJSONFile sets a TermRenderer's styles from a JSON file.
+func WithStylesFromJSONFile(filename string) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		jsonBytes, err := os.ReadFile(filename)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(jsonBytes, &tr.ansiOptions.Styles)
+	}
+}
+
+// WithWordWrap sets a TermRenderer's word wrap.
+func WithWordWrap(wordWrap int) TermRendererOption {
+	return func(tr *TermRenderer) error {
+		tr.ansiOptions.WordWrap = wordWrap
+		return nil
+	}
+}
+
+// WithPreservedNewlines preserves newlines from being replaced.
+func WithPreservedNewLines() TermRendererOption {
+	return func(tr *TermRenderer) error {
+		tr.ansiOptions.PreserveNewLines = true
+		return nil
+	}
+}
+
+// WithEmoji sets a TermRenderer's emoji rendering.
+func WithEmoji() TermRendererOption {
+	return func(tr *TermRenderer) error {
+		emoji.New().Extend(tr.md)
+		return nil
+	}
+}
+
+func (tr *TermRenderer) Read(b []byte) (int, error) {
+	return tr.renderBuf.Read(b)
+}
+
+func (tr *TermRenderer) Write(b []byte) (int, error) {
+	return tr.buf.Write(b)
+}
+
+// Close must be called after writing to TermRenderer. You can then retrieve
+// the rendered markdown by calling Read.
+func (tr *TermRenderer) Close() error {
+	err := tr.md.Convert(tr.buf.Bytes(), &tr.renderBuf)
+	if err != nil {
+		return err
+	}
+
+	tr.buf.Reset()
+	return nil
+}
+
+// Render returns the markdown rendered into a string.
+func (tr *TermRenderer) Render(in string) (string, error) {
+	b, err := tr.RenderBytes([]byte(in))
+	return string(b), err
+}
+
+// RenderBytes returns the markdown rendered into a byte slice.
+func (tr *TermRenderer) RenderBytes(in []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	err := tr.md.Convert(in, &buf)
+	return buf.Bytes(), err
+}
+
+func getEnvironmentStyle() string {
+	glamourStyle := os.Getenv("GLAMOUR_STYLE")
+	if len(glamourStyle) == 0 {
+		glamourStyle = styles.AutoStyle
+	}
+
+	return glamourStyle
+}
+
+func getDefaultStyle(style string) (*ansi.StyleConfig, error) {
+	if style == styles.AutoStyle {
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			return &styles.NoTTYStyleConfig, nil
+		}
+		if termenv.HasDarkBackground() {
+			return &styles.DarkStyleConfig, nil
+		}
+		return &styles.LightStyleConfig, nil
+	}
+
+	styles, ok := styles.DefaultStyles[style]
+	if !ok {
+		return nil, fmt.Errorf("%s: style not found", style)
+	}
+	return styles, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/README.md","mode":420,"size":10575,"sha256":"dd7c3d64182bf6c410578d8f6584262162266eaf2973276541ab7230d7e0ab28","index":0,"count":1,"encoding":"utf-8","payloadBytes":10575}
+# Glamour Style Guide
+
+The JSON files in this directory are generated from the default styles. To
+re-generate them, run:
+
+    go generate ..
+
+## Block Elements
+
+Block elements contain other elements and are rendered around them. All block
+elements support the following style settings:
+
+| Attribute        | Value  | Description                                                  |
+| ---------------- | ------ | ------------------------------------------------------------ |
+| block_prefix     | string | Printed before the block's first element (in parent's style) |
+| block_suffix     | string | Printed after the block's last element (in parent's style)   |
+| prefix           | string | Printed before the block's first element                     |
+| suffix           | string | Printed after the block's last element                       |
+| indent           | number | Specifies the indentation of the block                       |
+| indent_token     | string | Specifies the indentation format                             |
+| margin           | number | Specifies the margin around the block                        |
+| color            | color  | Defines the default text color for the block                 |
+| background_color | color  | Defines the default background color for the block           |
+
+Elements inside a block inherit the block's following style settings:
+
+| Attribute        | Value | Description                                        |
+| ---------------- | ----- | -------------------------------------------------- |
+| color            | color | Defines the default text color for the block       |
+| background_color | color | Defines the default background color for the block |
+| bold             | bool  | Increases text intensity                           |
+| faint            | bool  | Decreases text intensity                           |
+| italic           | bool  | Prints the text in italic                          |
+| crossed_out      | bool  | Enables strikethrough as text decoration           |
+| underline        | bool  | Enables underline as text decoration               |
+| overlined        | bool  | Enables overline as text decoration                |
+| blink            | bool  | Enables blinking text                              |
+| conceal          | bool  | Conceals / hides the text                          |
+| inverse          | bool  | Swaps fore- & background colors                    |
+
+### document
+
+The `document` element represents the markdown's body.
+
+#### Example
+
+Style:
+
+```json
+"document": {
+    "indent": 2,
+    "background_color": "234",
+    "block_prefix": "\n",
+    "block_suffix": "\n"
+}
+```
+
+---
+
+### paragraph
+
+The `paragraph` element represents a paragraph in the document.
+
+#### Example
+
+Style:
+
+```json
+"paragraph": {
+    "margin": 4,
+    "color": "15",
+    "background_color": "235"
+}
+```
+
+---
+
+### heading
+
+The `heading` element represents a heading.
+
+### h1 - h6
+
+The `h1` to `h6` elements represent headings. `h1` defines the most important
+heading, `h6` the least important heading. Undefined attributes are inherited
+from the `heading` element.
+
+#### Example
+
+Markdown:
+
+```markdown
+# h1
+
+## h2
+
+### h3
+```
+
+Style:
+
+```json
+"heading": {
+    "color": "15",
+    "background_color": "57"
+},
+"h1": {
+    "prefix": "=> ",
+    "suffix": " <=",
+    "margin": 2,
+    "bold": true,
+    "background_color": "69"
+},
+"h2": {
+    "prefix": "## ",
+    "margin": 4
+},
+"h3": {
+    "prefix": "### ",
+    "margin": 6
+}
+```
+
+Output:
+
+![Heading Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/heading.png)
+
+---
+
+### block_quote
+
+The `block_quote` element represents a quote.
+
+#### Example
+
+Style:
+
+```json
+"block_quote": {
+    "color": "200",
+    "indent": 1,
+    "indent_token": "=> "
+}
+```
+
+Output:
+
+![Block Quote Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/block_quote.png)
+
+---
+
+### list
+
+The `list` element represents a list in the document.
+
+| Attribute    | Value  | Description                                |
+| ------------ | ------ | ------------------------------------------ |
+| level_indent | number | Specifies the indentation for nested lists |
+
+#### Example
+
+Style:
+
+```json
+"list": {
+    "color": "15",
+    "background_color": "52",
+    "level_indent": 4
+}
+```
+
+---
+
+### code_block
+
+The `code_block` element represents a block of code.
+
+| Attribute | Value  | Description                                                     |
+| --------- | ------ | --------------------------------------------------------------- |
+| theme     | string | Defines the [Chroma][chroma] theme used for syntax highlighting |
+
+[chroma]: https://github.com/alecthomas/chroma
+
+#### Example
+
+Style:
+
+```json
+"code_block": {
+    "color": "200",
+    "theme": "solarized-dark"
+}
+```
+
+Output:
+
+![Code Block Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/code_block.png)
+
+---
+
+### table
+
+The `table` element represents a table of data.
+
+#### Example
+
+Markdown:
+
+```markdown
+| Label  | Value |
+| ------ | ----- |
+| First  | foo   |
+| Second | bar   |
+```
+
+Style:
+
+```json
+"table": {
+    "margin": 4
+}
+```
+
+Output:
+
+![Table Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/table.png)
+
+## Inline Elements
+
+All inline elements support the following style settings:
+
+| Attribute        | Value  | Description                                           |
+| ---------------- | ------ | ----------------------------------------------------- |
+| block_prefix     | string | Printed before the element (in parent's style)        |
+| block_suffix     | string | Printed after the element (in parent's style)         |
+| prefix           | string | Printed before the element                            |
+| suffix           | string | Printed after the element                             |
+| color            | color  | Defines the default text color for the document       |
+| background_color | color  | Defines the default background color for the document |
+| bold             | bool   | Increases text intensity                              |
+| faint            | bool   | Decreases text intensity                              |
+| italic           | bool   | Prints the text in italic                             |
+| crossed_out      | bool   | Enables strikethrough as text decoration              |
+| underline        | bool   | Enables underline as text decoration                  |
+| overlined        | bool   | Enables overline as text decoration                   |
+| blink            | bool   | Enables blinking text                                 |
+| conceal          | bool   | Conceals / hides the text                             |
+| inverse          | bool   | Swaps fore- & background colors                       |
+
+### text
+
+The `text` element represents a block of text.
+
+#### Example
+
+Style:
+
+```json
+"text": {
+    "bold": true,
+    "color": "15",
+    "background_color": "57"
+}
+```
+
+---
+
+### item
+
+The `item` element represents an item in a list.
+
+#### Example
+
+Markdown:
+
+```markdown
+- First Item
+    - Nested List Item
+- Second Item
+```
+
+Style:
+
+```json
+"item": {
+    "block_prefix": "• "
+}
+```
+
+Output:
+
+![List Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/list.png)
+
+---
+
+### enumeration
+
+The `enumeration` element represents an item in an ordered list.
+
+#### Example
+
+Markdown:
+
+```markdown
+1. First Item
+2. Second Item
+```
+
+Style:
+
+```json
+"enumeration": {
+    "block_prefix": ". "
+}
+```
+
+Output:
+
+![Enumeration Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/enumeration.png)
+
+---
+
+### task
+
+The `task` element represents a task item.
+
+| Attribute | Value  | Description                 |
+| --------- | ------ | --------------------------- |
+| ticked    | string | Prefix for finished tasks   |
+| unticked  | string | Prefix for unfinished tasks |
+
+#### Example
+
+Markdown:
+
+```markdown
+- [x] Finished Task
+- [ ] Outstanding Task
+```
+
+Style:
+
+```json
+"task": {
+    "ticked": "✓ ",
+    "unticked": "✗ "
+}
+```
+
+Output:
+
+![Task Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/task.png)
+
+---
+
+### link
+
+The `link` element represents a link.
+
+#### Example
+
+Markdown:
+
+```markdown
+This is a [link](https://charm.sh).
+```
+
+Style:
+
+```json
+"link": {
+    "color": "123",
+    "underline": true,
+    "block_prefix": "(",
+    "block_suffix": ")"
+}
+```
+
+Output:
+
+![Link Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/link.png)
+
+---
+
+### link_text
+
+The `link_text` element represents the text associated with a link.
+
+#### Example
+
+Style:
+
+```json
+"link_text": {
+    "color": "123",
+    "bold": true
+}
+```
+
+---
+
+### image
+
+The `image` element represents an image.
+
+#### Example
+
+Markdown:
+
+```markdown
+![Image](https://charm.sh/logo.png).
+```
+
+Style:
+
+```json
+"image": {
+    "color": "123",
+    "block_prefix": "[Image: ",
+    "block_suffix": "]"
+}
+```
+
+Output:
+
+![Image Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/image.png)
+
+---
+
+### image_text
+
+The `image_text` element represents the text associated with an image.
+
+#### Example
+
+Style:
+
+```json
+"image_text": {
+    "color": "8"
+}
+```
+
+---
+
+### code
+
+The `code` element represents an inline code segment.
+
+#### Example
+
+Style:
+
+```json
+"code": {
+    "color": "200"
+}
+```
+
+Output:
+
+![Code Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/code.png)
+
+---
+
+### emph
+
+The `emph` element represents an emphasized text.
+
+#### Example
+
+Markdown:
+
+```markdown
+This text is *emphasized*.
+```
+
+Style:
+
+```json
+"emph": {
+    "italic": true
+}
+```
+
+Output:
+
+![Emph Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/emph.png)
+
+---
+
+### strong
+
+The `strong` element represents important text.
+
+#### Example
+
+Markdown:
+
+```markdown
+This text is **strong**.
+```
+
+Style:
+
+```json
+"strong": {
+    "bold": true
+}
+```
+
+Output:
+
+![Strong Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/strong.png)
+
+---
+
+### strikethrough
+
+The `strikethrough` element represents strikethrough text.
+
+#### Example
+
+Markdown:
+
+```markdown
+~~Scratch this~~.
+```
+
+Style:
+
+```json
+"strikethrough": {
+    "crossed_out": true
+}
+```
+
+Output:
+
+![Strikethrough Example](https://github.com/charmbracelet/glamour/raw/master/styles/examples/strikethrough.png)
+
+---
+
+### hr
+
+The `hr` element represents a horizontal rule.
+
+#### Example
+
+Markdown:
+
+```markdown
+---
+```
+
+Style:
+
+```json
+"hr": {
+    "block_prefix": "---"
+}
+```
+
+## html_block
+## html_span
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/ascii.json","mode":420,"size":1285,"sha256":"323c20c0a6c47adc66867346c6ff4018594cae54a7ac3942f58b8f83c2a32a09","index":0,"count":1,"encoding":"utf-8","payloadBytes":1285}
+{
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "margin": 2
+  },
+  "block_quote": {
+    "indent": 1,
+    "indent_token": "| "
+  },
+  "paragraph": {},
+  "list": {
+    "level_indent": 4
+  },
+  "heading": {
+    "block_suffix": "\n"
+  },
+  "h1": {
+    "prefix": "# "
+  },
+  "h2": {
+    "prefix": "## "
+  },
+  "h3": {
+    "prefix": "### "
+  },
+  "h4": {
+    "prefix": "#### "
+  },
+  "h5": {
+    "prefix": "##### "
+  },
+  "h6": {
+    "prefix": "###### "
+  },
+  "text": {},
+  "strikethrough": {
+    "block_prefix": "~~",
+    "block_suffix": "~~"
+  },
+  "emph": {
+    "block_prefix": "*",
+    "block_suffix": "*"
+  },
+  "strong": {
+    "block_prefix": "**",
+    "block_suffix": "**"
+  },
+  "hr": {
+    "format": "\n--------\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". "
+  },
+  "task": {
+    "ticked": "[x] ",
+    "unticked": "[ ] "
+  },
+  "link": {},
+  "link_text": {},
+  "image": {},
+  "image_text": {
+    "format": "Image: {{.text}} →"
+  },
+  "code": {
+    "block_prefix": "`",
+    "block_suffix": "`"
+  },
+  "code_block": {
+    "margin": 2
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": {
+    "block_prefix": "\n* "
+  },
+  "html_block": {},
+  "html_span": {}
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/styles/dark.json","mode":420,"size":3405,"sha256":"8997ef4f7024816f7c30a42acfd3b5356892988679e43c6f74310b7d5d879578","index":0,"count":1,"encoding":"utf-8","payloadBytes":3405}
 {
   "document": {
@@ -162735,1578 +165281,5 @@ func (s *InterfaceSlicer) Join(separator string) string {
 	result := builder.String()
 	return result
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/logo.png","mode":420,"size":28473,"sha256":"38b6ec67484c836514161696b3db89c27c8e7291afa7f328474e17016c71e1c2","index":0,"count":1,"encoding":"base64","payloadBytes":37964}
-iVBORw0KGgoAAAANSUhEUgAABAYAAAD5CAYAAAC00TcGAAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAABCdpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDUuNC4wIj4KICAgPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICAgICAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIgogICAgICAgICAgICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgICAgICAgICAgIHhtbG5zOnhtcD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLyI+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDx0aWZmOkNvbXByZXNzaW9uPjA8L3RpZmY6Q29tcHJlc3Npb24+CiAgICAgICAgIDx0aWZmOlhSZXNvbHV0aW9uPjcyPC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICAgICA8dGlmZjpZUmVzb2x1dGlvbj43MjwvdGlmZjpZUmVzb2x1dGlvbj4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjEwMzA8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpDb2xvclNwYWNlPjE8L2V4aWY6Q29sb3JTcGFjZT4KICAgICAgICAgPGV4aWY6UGl4ZWxZRGltZW5zaW9uPjI0OTwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgICAgIDxkYzpzdWJqZWN0PgogICAgICAgICAgICA8cmRmOkJhZy8+CiAgICAgICAgIDwvZGM6c3ViamVjdD4KICAgICAgICAgPHhtcDpNb2RpZnlEYXRlPjIwMTktMDEtMTBUMjE6MDE6MzY8L3htcDpNb2RpZnlEYXRlPgogICAgICAgICA8eG1wOkNyZWF0b3JUb29sPlBpeGVsbWF0b3IgMy43LjU8L3htcDpDcmVhdG9yVG9vbD4KICAgICAgPC9yZGY6RGVzY3JpcHRpb24+CiAgIDwvcmRmOlJERj4KPC94OnhtcG1ldGE+Cn2k3uoAAEAASURBVHgB7Z0HnBxl+cdnd+8uvRcSCCSB0JJQg4jUAKICAraAooIVBBFF8U+xXbBhAcRGUSkqxZxio0lLAGnSS0KA0BJy6blccv1ud/6/39xOcil3W2bmnbK/55NfdnZ35n2e97t7OzPPPO87liUTAREQgRgSsG17T4aNx3QMw1fIIhAIAffvIpDG1agIiIAIiIAIiIAIiIAIiIAIRI0AToJSUYtJ8YiACIiACIiACIiACIiACIiACIiACBggoEoBA5DlInYE9HcRu49MAYuACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIhAuQRS5W6o7URABERABCqTgG3bqaeffrpqwIABqZUrV+aOPPLIrsokoV6LgAiIgAiIgAiIgAiIgAiIgAiIQIURQFIgXVtbW9Wz29dcc011z+daFgEREAEREAEREAEREIFKIJBGJwdAI6HtoUnQBGg0NBjSQTIgyERABJJFgEkBt0dYHtfc3DwDjzV8bc6cORn3PT2KQAgEuE8eA02E3P3xICxv/M5iWSYCIiACIiACItAL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
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/string.go","mode":420,"size":2623,"sha256":"58f941ee8b272e84eac52d434a312f0e3523a58ead16607ce29dd00cb93ccce1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2623}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "strings"
-
-// StringSlicer handles slices of string
-type StringSlicer struct {
-	slice []string
-}
-
-// String creates a new StringSlicer
-func String(slice ...[]string) *StringSlicer {
-	if len(slice) > 0 {
-		return &StringSlicer{slice: slice[0]}
-	}
-	return &StringSlicer{}
-}
-
-// Add a string value to the slicer
-func (s *StringSlicer) Add(value string, additional ...string) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a string value to the slicer if it does not already exist
-func (s *StringSlicer) AddUnique(value string, additional ...string) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a string slice to the slicer
-func (s *StringSlicer) AddSlice(value []string) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *StringSlicer) AsSlice() []string {
-	return s.slice
-}
-
-// AddSlicer appends a StringSlicer to the slicer
-func (s *StringSlicer) AddSlicer(value *StringSlicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *StringSlicer) Filter(fn func(string) bool) *StringSlicer {
-	result := &StringSlicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *StringSlicer) Each(fn func(string)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *StringSlicer) Contains(matcher string) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *StringSlicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *StringSlicer) Clear() {
-	s.slice = []string{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *StringSlicer) Deduplicate() {
-
-	result := &StringSlicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *StringSlicer) Join(separator string) string {
-	return strings.Join(s.slice, separator)
-}
-
-// Sort the slice values
-func (s *StringSlicer) Sort() {
-	sort.Strings(s.slice)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/uint.go","mode":420,"size":2922,"sha256":"0f03548da1be1241aaab34d7e9aa48cbffac4d957497cff011105ea6348244ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":2922}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// UintSlicer handles slices of uint
-type UintSlicer struct {
-	slice []uint
-}
-
-// Uint creates a new UintSlicer
-func Uint(slice ...[]uint) *UintSlicer {
-	if len(slice) > 0 {
-		return &UintSlicer{slice: slice[0]}
-	}
-	return &UintSlicer{}
-}
-
-// Add a uint value to the slicer
-func (s *UintSlicer) Add(value uint, additional ...uint) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a uint value to the slicer if it does not already exist
-func (s *UintSlicer) AddUnique(value uint, additional ...uint) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a uint slice to the slicer
-func (s *UintSlicer) AddSlice(value []uint) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *UintSlicer) AsSlice() []uint {
-	return s.slice
-}
-
-// AddSlicer appends a UintSlicer to the slicer
-func (s *UintSlicer) AddSlicer(value *UintSlicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *UintSlicer) Filter(fn func(uint) bool) *UintSlicer {
-	result := &UintSlicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *UintSlicer) Each(fn func(uint)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *UintSlicer) Contains(matcher uint) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *UintSlicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *UintSlicer) Clear() {
-	s.slice = []uint{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *UintSlicer) Deduplicate() {
-
-	result := &UintSlicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *UintSlicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *UintSlicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/uint16.go","mode":420,"size":3006,"sha256":"ebc81665cc7f1c4764f636af619a9dceec41c71287c6ef35dfb31e29e270e028","index":0,"count":1,"encoding":"utf-8","payloadBytes":3006}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Uint16Slicer handles slices of uint16
-type Uint16Slicer struct {
-	slice []uint16
-}
-
-// Uint16 creates a new Uint16Slicer
-func Uint16(slice ...[]uint16) *Uint16Slicer {
-	if len(slice) > 0 {
-		return &Uint16Slicer{slice: slice[0]}
-	}
-	return &Uint16Slicer{}
-}
-
-// Add a uint16 value to the slicer
-func (s *Uint16Slicer) Add(value uint16, additional ...uint16) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a uint16 value to the slicer if it does not already exist
-func (s *Uint16Slicer) AddUnique(value uint16, additional ...uint16) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a uint16 slice to the slicer
-func (s *Uint16Slicer) AddSlice(value []uint16) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Uint16Slicer) AsSlice() []uint16 {
-	return s.slice
-}
-
-// AddSlicer appends a Uint16Slicer to the slicer
-func (s *Uint16Slicer) AddSlicer(value *Uint16Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Uint16Slicer) Filter(fn func(uint16) bool) *Uint16Slicer {
-	result := &Uint16Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Uint16Slicer) Each(fn func(uint16)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Uint16Slicer) Contains(matcher uint16) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Uint16Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Uint16Slicer) Clear() {
-	s.slice = []uint16{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Uint16Slicer) Deduplicate() {
-
-	result := &Uint16Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Uint16Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Uint16Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/uint32.go","mode":420,"size":3006,"sha256":"6e1abc958786b93b80d527297650312389a2d1366dcee7b2bdfd27b435131bee","index":0,"count":1,"encoding":"utf-8","payloadBytes":3006}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Uint32Slicer handles slices of uint32
-type Uint32Slicer struct {
-	slice []uint32
-}
-
-// Uint32 creates a new Uint32Slicer
-func Uint32(slice ...[]uint32) *Uint32Slicer {
-	if len(slice) > 0 {
-		return &Uint32Slicer{slice: slice[0]}
-	}
-	return &Uint32Slicer{}
-}
-
-// Add a uint32 value to the slicer
-func (s *Uint32Slicer) Add(value uint32, additional ...uint32) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a uint32 value to the slicer if it does not already exist
-func (s *Uint32Slicer) AddUnique(value uint32, additional ...uint32) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a uint32 slice to the slicer
-func (s *Uint32Slicer) AddSlice(value []uint32) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Uint32Slicer) AsSlice() []uint32 {
-	return s.slice
-}
-
-// AddSlicer appends a Uint32Slicer to the slicer
-func (s *Uint32Slicer) AddSlicer(value *Uint32Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Uint32Slicer) Filter(fn func(uint32) bool) *Uint32Slicer {
-	result := &Uint32Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Uint32Slicer) Each(fn func(uint32)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Uint32Slicer) Contains(matcher uint32) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Uint32Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Uint32Slicer) Clear() {
-	s.slice = []uint32{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Uint32Slicer) Deduplicate() {
-
-	result := &Uint32Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Uint32Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Uint32Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/uint64.go","mode":420,"size":3006,"sha256":"106e504e004153f271ef5964dd3aa858da97e56eb3168fcf87340c1dd4a5ea5c","index":0,"count":1,"encoding":"utf-8","payloadBytes":3006}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Uint64Slicer handles slices of uint64
-type Uint64Slicer struct {
-	slice []uint64
-}
-
-// Uint64 creates a new Uint64Slicer
-func Uint64(slice ...[]uint64) *Uint64Slicer {
-	if len(slice) > 0 {
-		return &Uint64Slicer{slice: slice[0]}
-	}
-	return &Uint64Slicer{}
-}
-
-// Add a uint64 value to the slicer
-func (s *Uint64Slicer) Add(value uint64, additional ...uint64) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a uint64 value to the slicer if it does not already exist
-func (s *Uint64Slicer) AddUnique(value uint64, additional ...uint64) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a uint64 slice to the slicer
-func (s *Uint64Slicer) AddSlice(value []uint64) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Uint64Slicer) AsSlice() []uint64 {
-	return s.slice
-}
-
-// AddSlicer appends a Uint64Slicer to the slicer
-func (s *Uint64Slicer) AddSlicer(value *Uint64Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Uint64Slicer) Filter(fn func(uint64) bool) *Uint64Slicer {
-	result := &Uint64Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Uint64Slicer) Each(fn func(uint64)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Uint64Slicer) Contains(matcher uint64) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Uint64Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Uint64Slicer) Clear() {
-	s.slice = []uint64{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Uint64Slicer) Deduplicate() {
-
-	result := &Uint64Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Uint64Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Uint64Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/uint8.go","mode":420,"size":2964,"sha256":"e272b8e448d3a4f394dc8aaca8a5cf9100a3061b71f72ba986102d51a8db9f10","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Uint8Slicer handles slices of uint8
-type Uint8Slicer struct {
-	slice []uint8
-}
-
-// Uint8 creates a new Uint8Slicer
-func Uint8(slice ...[]uint8) *Uint8Slicer {
-	if len(slice) > 0 {
-		return &Uint8Slicer{slice: slice[0]}
-	}
-	return &Uint8Slicer{}
-}
-
-// Add a uint8 value to the slicer
-func (s *Uint8Slicer) Add(value uint8, additional ...uint8) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a uint8 value to the slicer if it does not already exist
-func (s *Uint8Slicer) AddUnique(value uint8, additional ...uint8) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a uint8 slice to the slicer
-func (s *Uint8Slicer) AddSlice(value []uint8) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Uint8Slicer) AsSlice() []uint8 {
-	return s.slice
-}
-
-// AddSlicer appends a Uint8Slicer to the slicer
-func (s *Uint8Slicer) AddSlicer(value *Uint8Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Uint8Slicer) Filter(fn func(uint8) bool) *Uint8Slicer {
-	result := &Uint8Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Uint8Slicer) Each(fn func(uint8)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Uint8Slicer) Contains(matcher uint8) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Uint8Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Uint8Slicer) Clear() {
-	s.slice = []uint8{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Uint8Slicer) Deduplicate() {
-
-	result := &Uint8Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Uint8Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Uint8Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/u/.gitignore","mode":420,"size":6,"sha256":"4073be0dd9e3ae38beba97eed085d5f023a5f2cdc101ec35f2877b185b1f1193","index":0,"count":1,"encoding":"utf-8","payloadBytes":6}
-.idea/
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/u/LICENSE","mode":420,"size":1076,"sha256":"ff3448b5ffd013b261466bb5d7898094a845756f8a69773331ebbf66518f4109","index":0,"count":1,"encoding":"utf-8","payloadBytes":1076}
-MIT License
-
-Copyright (c) 2023-Present Lea Anthony
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/u/README.md","mode":420,"size":3034,"sha256":"52b64b218bbf1042804bee23767ed8c676f00d798e09abb9bdd800850dec6aec","index":0,"count":1,"encoding":"utf-8","payloadBytes":3034}
-# u
-
-u provides a simple way to create variables that are "unset" by default.
-
-u is dependency free and has 100% test coverage.
-
-## Why?
-
-Go's default values are great most of the time, but sometimes you want to know if a value has been set or not. This is especially true when you want to know if a value has been set to its zero value or not.
-
-For example, let's say you had a preferences struct like this:
-
-```go
-type Preferences struct {
-    UseFeatureX bool
-    Threshold int
-}
-
-func processPreferences(prefs Preferences) {
-    // Uh oh...we're in a heap of trouble here...
-    thirdPartyLibrary.EnableFeatureX(prefs.UseFeatureX)
-    thirdPartyLibrary.SetThreshold(prefs.Threshold)
-}
-
-func main() {
-    var prefs Preferences
-    processPreferences(prefs)
-}
-```
-
-There is no real way to know if `UseFeatureX` or `Threshold` have been set or not.
-
-Using this library we can *eliminate* this problem:
-
-```go
-type Preferences struct {
-    UseFeatureX u.Bool
-    Threshold u.Int
-}
-
-func processPreferences(prefs Preferences) {
-    // #winning
-    if prefs.UseFeatureX.IsSet() {
-        thirdPartyLibrary.EnableFeatureX(prefs.UseFeatureX.Get())
-    }
-    if prefs.Threshold.IsSet() {
-        thirdPartyLibrary.SetThreshold(prefs.Threshold.Get())
-    }
-}
-
-func main() {
-    var prefs Preferences
-    processPreferences(prefs)
-}
-
-```
-
-## Why should any of this matter? 
-
-It matters when you are working with third party libraries or frameworks that have default values that may not be the same as the Zero Go values. 
-Perhaps the default value for a preference is `true` and you only want to set it if an explicit value has been specified.
-
-## Usage
-
-### Basic Usage
-
-```go
-var myVar u.Int
-
-// Set the value
-myVar.Set(10)
-
-// Get the value
-fmt.Println(myVar.Get()) // 10
-
-// Check if the value has been set
-fmt.Println(myVar.IsSet()) // true
-
-// Unset the value
-myVar.Unset()
-
-// Check if the value has been set
-fmt.Println(myVar.IsSet()) // false
-```
-
-### Structs
-
-`New` methods are provided for setting values in structs.
-
-```go
-    type MyStruct struct {
-        MyVar u.Int
-        MyOption u.Bool
-    }
-	
-    myStruct := MyStruct{
-        MyVar: u.NewInt(42),
-        MyOption: u.True,
-    }
-```
-
-## Why not use pointer values?
-
-Yes, that's one way you can solve this issue. Personally, I try to avoid having pointer values as it increases the chance of dereferencing errors. It also feels like a hacky approach to the problem which is one missed test away from a runtime error. 
-
-## Supported types
-
-- `u.Bool`
-- `u.Int`
-- `u.Int8`
-- `u.Int16`
-- `u.Int32`
-- `u.Int64`
-- `u.Uint`
-- `u.Uint8`
-- `u.Uint16`
-- `u.Uint32`
-- `u.Uint64`
-- `u.Float32`
-- `u.Float64`
-- `u.Complex64`
-- `u.Complex128`
-- `u.String`
-- `u.Byte`
-- `u.Rune`
-
-## Values
-
-- `u.True`
-- `u.False`
-
-## Custom types
-
-Any type can be used with this library by creating a `u.Var` of that type. For example:
-
-```go
-
-type MyCustomType struct {
-    value string
-}
-
-var myVar u.Var[MyCustomType]
-
-// Set the value
-myVar.Set(MyCustomType{value: "hello"})
-```
-
-## License
-
-MIT
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/u/u.go","mode":420,"size":4062,"sha256":"1c47db29a83c332a2851dc534ada31c32fddbdaa71632e2201dd13be8516de13","index":0,"count":1,"encoding":"utf-8","payloadBytes":4062}
-package u
-
-// True is a `bool` that is set to true
-var True = NewBool(true)
-
-// False is a `bool` that is set to false
-var False = NewBool(false)
-
-// Bool is a `bool` that can be unset
-type Bool = Var[bool]
-
-// NewBool creates a new Bool with the given value
-func NewBool(val bool) Bool {
-	return NewVar(val)
-}
-
-// String is a `string` that can be unset
-type String = Var[string]
-
-// NewString creates a new String with the given value
-func NewString(val string) String {
-	return NewVar(val)
-}
-
-// Float64 is a `float64` that can be unset
-type Float64 = Var[float64]
-
-// NewFloat64 creates a new Float64 with the given value
-func NewFloat64(val float64) Float64 {
-	return NewVar(val)
-}
-
-// Float32 is a `float32` that can be unset
-type Float32 = Var[float32]
-
-// NewFloat32 creates a new Float32 with the given value
-func NewFloat32(val float32) Float32 {
-	return NewVar(val)
-}
-
-// Uint is a `uint` that can be unset
-type Uint = Var[uint]
-
-// NewUint creates a new Uint with the given value
-func NewUint(val uint) Uint {
-	return NewVar(val)
-}
-
-// Uint8 is a `uint8` that can be unset
-type Uint8 = Var[uint8]
-
-// NewUint8 creates a new Uint8 with the given value
-func NewUint8(val uint8) Uint8 {
-	return NewVar(val)
-}
-
-// Uint16 is a `uint16` that can be unset
-type Uint16 = Var[uint16]
-
-// NewUint16 creates a new Uint16 with the given value
-func NewUint16(val uint16) Uint16 {
-	return NewVar(val)
-}
-
-// Uint32 is a `uint32` that can be unset
-type Uint32 = Var[uint32]
-
-// NewUint32 creates a new Uint32 with the given value
-func NewUint32(val uint32) Uint32 {
-	return NewVar(val)
-}
-
-// Uint64 is a `uint64` that can be unset
-type Uint64 = Var[uint64]
-
-// NewUint64 creates a new Uint64 with the given value
-func NewUint64(val uint64) Uint64 {
-	return NewVar(val)
-}
-
-// Byte is a `byte` that can be unset
-type Byte = Var[byte]
-
-// NewByte creates a new Byte with the given value
-func NewByte(val byte) Byte {
-	return NewVar(val)
-}
-
-// Rune is a `rune` that can be unset
-type Rune = Var[rune]
-
-// NewRune creates a new Rune with the given value
-func NewRune(val rune) Rune {
-	return NewVar(val)
-}
-
-// Complex64 is a `complex64` that can be unset
-type Complex64 = Var[complex64]
-
-// NewComplex64 creates a new Complex64 with the given value
-func NewComplex64(val complex64) Complex64 {
-	return NewVar(val)
-}
-
-// Complex128 is a `complex128` that can be unset
-type Complex128 = Var[complex128]
-
-// NewComplex128 creates a new Complex128 with the given value
-func NewComplex128(val complex128) Complex128 {
-	return NewVar(val)
-}
-
-// Int is an `int` that can be unset
-type Int = Var[int]
-
-// NewInt creates a new Int with the given value
-func NewInt(val int) Int {
-	return NewVar(val)
-}
-
-// Int8 is an `int8` that can be unset
-type Int8 = Var[int8]
-
-// NewInt8 creates a new Int8 with the given value
-func NewInt8(val int8) Int8 {
-	return NewVar(val)
-}
-
-// Int16 is an `int16` that can be unset
-type Int16 = Var[int16]
-
-// NewInt16 creates a new Int16 with the given value
-func NewInt16(val int16) Int16 {
-	return NewVar(val)
-}
-
-// Int32 is an `int32` that can be unset
-type Int32 = Var[int32]
-
-// NewInt32 creates a new Int32 with the given value
-func NewInt32(val int32) Int32 {
-	return NewVar(val)
-}
-
-// Int64 is an `int64` that can be unset
-type Int64 = Var[int64]
-
-// NewInt64 creates a new Int64 with the given value
-func NewInt64(val int64) Int64 {
-	return NewVar(val)
-}
-
-// Var is a variable that can be set, unset and queried for its state.
-type Var[T any] struct {
-	val T
-	set bool
-}
-
-// Get the value of the variable
-// Returns the zero value if unset
-func (v *Var[T]) Get() T {
-	return v.val
-}
-
-// Set the value of the variable
-func (v *Var[T]) Set(val T) {
-	v.val = val
-	v.set = true
-}
-
-// IsSet returns true when a value has been set
-func (v *Var[T]) IsSet() bool {
-	return v.set
-}
-
-// Unset resets the value to the zero value and sets the variable to "unset"
-func (v *Var[T]) Unset() {
-	v.set = false
-	var temp T
-	v.val = temp
-}
-
-// NewVar creates a new Var with the given value
-func NewVar[T any](val T) Var[T] {
-	return Var[T]{val: val, set: true}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/.gitignore","mode":420,"size":310,"sha256":"da866292d877f47e12922fa813022cf61ce723f35dbd5e5d0c226686e84fb224","index":0,"count":1,"encoding":"utf-8","payloadBytes":310}
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-cmd/winicon/icon.ico
-cmd/winicon/winicon
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/LICENSE","mode":420,"size":1068,"sha256":"6a7f27c96cea5c27269731cdf448f912624ec1475db0651ef48d61b75c28d71c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
-MIT License
-
-Copyright (c) 2020 Lea Anthony
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/README.md","mode":420,"size":4999,"sha256":"26fbff4f0578d78b49482b4bc0f8f75b63e5546c31b74182e3c9f04187280225","index":0,"count":1,"encoding":"utf-8","payloadBytes":4999}
-<p align="center" style="text-align: center">
-   <img src="logo.png" width="40%"><br/>
-</p>
-<p align="center">
-   Windows .ico file generation library + cli. Works on all platforms supported by Go.<br/><br/>
-   <a href="https://github.com/leaanthony/winicon/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
-   <a href="https://goreportcard.com/report/github.com/leaanthony/winicon"><img src="https://goreportcard.com/badge/github.com/leaanthony/winicon"/></a>
-   <a href="http://godoc.org/github.com/leaanthony/winicon"><img src="https://img.shields.io/badge/godoc-reference-blue.svg"/></a>
-   <a href="https://www.codefactor.io/repository/github/leaanthony/winicon"><img src="https://www.codefactor.io/repository/github/leaanthony/winicon/badge" alt="CodeFactor" /></a>
-   <a href="https://github.com/leaanthony/winicon/issues"><img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat" /></a>
-   <a href="https://app.fossa.io/projects/git%2Bgithub.com%2Fleaanthony%2Fwinicon?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2Fleaanthony%2Fwinicon.svg?type=shield"/></a>
-</p>
-
-Features:
-
-* Provide information about an .ico file
-* Generate an .ico file at multiple sizes from a PNG 
-* Extract PNG images from an existing .ico file
-
-## Installation
-
-To install the cli tool:
-`go get github.com/leaanthony/winicon/cmd/winicon`
-
-To use the library:
-`go get github.com/leaanthony/winicon`
-
-## CLI Usage
-
-The cli has 3 commands: info (i), generate (g) and extract (x).
-
-### Info
-
-You can get information about an .ico file by issuing the following command:
-
-`winicon i <myicon.png>`. 
-
-Example:
-
-```bash
-$ winicon i wails.ico 
-WinIcon v1.0.0  (c) 2020-Present Lea Anthony
-
-Filename:        /home/lea/Data/projects/winicon/examples/wails.ico
-File Size:       322799 bytes
-Icon Count:      9
-
-Icon 1: Size: 16x16     Format: BMP     Bits Per Pixel: 32      Offset: 150
-Icon 2: Size: 24x24     Format: BMP     Bits Per Pixel: 32      Offset: 1278
-Icon 3: Size: 32x32     Format: BMP     Bits Per Pixel: 32      Offset: 3718
-Icon 4: Size: 48x48     Format: BMP     Bits Per Pixel: 32      Offset: 7982
-Icon 5: Size: 64x64     Format: BMP     Bits Per Pixel: 32      Offset: 17622
-Icon 6: Size: 96x96     Format: BMP     Bits Per Pixel: 32      Offset: 34558
-Icon 7: Size: 128x128   Format: BMP     Bits Per Pixel: 32      Offset: 72614
-Icon 8: Size: 192x192   Format: BMP     Bits Per Pixel: 32      Offset: 140238
-Icon 9: Size: 256x256   Format: PNG     Bits Per Pixel: 32      Offset: 292342
-```
-
-Winicon can return you detailed information in json format using the `-json` flag:
-
-```bash
-$ winicon i -json wails.ico 
-{"Filename":"/home/lea/Data/projects/winicon/examples/wails.ico","FileSize":322799,"NumberOfIcons":9,"Icons":[{"Width":16,"Height":16,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":150},{"Width":24,"Height":24,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":1278},{"Width":32,"Height":32,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":3718},{"Width":48,"Height":48,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":7982},{"Width":64,"Height":64,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":17622},{"Width":96,"Height":96,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":34558},{"Width":128,"Height":128,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":72614},{"Width":192,"Height":192,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"BMP","Offset":140238},{"Width":256,"Height":256,"Colours":0,"Planes":1,"BitsPerPixel":32,"Format":"PNG","Offset":292342}]}
-```
-
-### Generate
-
-Generate an .ico file from a PNG image:
-
-```
-$ winicon g icon.png 
-WinIcon v0.0.1  (c) 2020-Present Lea Anthony
-
-Generated icon file: icon.ico at sizes [256]
-```
-
-By default, this will generate an .ico with a single icon at 256x256. To set other sizes, use the `-sizes` flag:
-
-```
-$ winicon g -sizes 16,32,48 icon.png 
-WinIcon v0.0.1  (c) 2020-Present Lea Anthony
-
-Generated icon file: icon.ico at sizes [16 32 48]
-```
-
-Running `winicon i icon.ico` produces the following results:
-
-```
-$ winicon i icon.ico 
-WinIcon v0.0.1  (c) 2020-Present Lea Anthony
-
-Filename:        /home/lea/Data/projects/winicon/testdata/icon.ico
-File Size:       4670 bytes
-Icon Count:      3
-
-Icon 1: Size: 16x16     Format: PNG     Bits Per Pixel: 32      Offset: 54
-Icon 2: Size: 32x32     Format: PNG     Bits Per Pixel: 32      Offset: 774
-Icon 3: Size: 48x48     Format: PNG     Bits Per Pixel: 32      Offset: 2266
-```
-
-### Extract images
-
-You can extract images from .ico files using the following command:
-
-```
-$ winicon x icon.ico 
-WinIcon v0.0.1  (c) 2020-Present Lea Anthony
-
-Extracted 16x16 image to file: icon.16x16.png
-Extracted 32x32 image to file: icon.32x32.png
-Extracted 48x48 image to file: icon.48x48.png
-
-Extracted 3 images
-```
-
-NOTE: Currently BMP images are not supported.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/generate.go","mode":420,"size":2245,"sha256":"7303d8087e5332072793899605e6d4acbc61228cf3336731682a5d207a6804c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":2245}
-package winicon
-
-import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"image"
-	"image/png"
-	"io"
-
-	"github.com/leaanthony/winicon/internal/winicon"
-	"golang.org/x/image/draw"
-)
-
-// GenerateIcon reads image data from the given reader and generates
-// a .ico file that is written to the given writer. The .ico file will include
-// a number of icons at the sizes given.
-func GenerateIcon(r io.Reader, w io.Writer, sizes []int) error {
-	header := &winicon.IconFileHeader{
-		ImageType:  1,
-		ImageCount: uint16(len(sizes)),
-	}
-
-	iconheaders := make([]winicon.IconHeader, len(sizes))
-
-	var imageData bytes.Buffer
-
-	// Decode to internal image
-	imagedata, _, err := image.Decode(r)
-	if err != nil {
-		return err
-	}
-
-	// Loop over sizes desired
-	for index, size := range sizes {
-
-		// Check target size
-		if size == 0 {
-			return fmt.Errorf("a size of 0 is not valid")
-		}
-
-		// Scale image
-		rect := image.Rect(0, 0, size, size)
-		rawdata := image.NewRGBA(rect)
-		scale := draw.CatmullRom
-		scale.Scale(rawdata, rect, imagedata, imagedata.Bounds(), draw.Over, nil)
-
-		// Convert back to PNG
-		icondata := new(bytes.Buffer)
-		writer := bufio.NewWriter(icondata)
-		err = png.Encode(writer, rawdata)
-		if err != nil {
-			return err
-		}
-		err = writer.Flush()
-		if err != nil {
-			return err
-		}
-
-		// Save image data
-		imageData.Write(icondata.Bytes())
-
-		// Save header information
-		if size >= 256 {
-			size = 0
-		}
-		iconheaders[index].Width = (uint8)(size)
-		iconheaders[index].Height = (uint8)(size)
-		iconheaders[index].BitsPerPixel = 32
-		iconheaders[index].Size = uint32(len(icondata.Bytes()))
-	}
-
-	// Update the offsets. Start by skipping header+icon headers
-	var currentOffset uint32 = (uint32)(6 + (16 * len(iconheaders)))
-
-	for index := range iconheaders {
-		iconheaders[index].Offset = currentOffset
-		currentOffset += iconheaders[index].Size
-	}
-
-	// Write out the header
-	err = binary.Write(w, binary.LittleEndian, header)
-	if err != nil {
-		return err
-	}
-
-	// Write out the icon headers
-	for _, iconheader := range iconheaders {
-		err = binary.Write(w, binary.LittleEndian, iconheader)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Write out the image data
-	_, err = w.Write(imageData.Bytes())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/info.go","mode":420,"size":1689,"sha256":"372eea4acef52d191a5deaa237de48629b64b06fcba467d8f4b83320dfff1143","index":0,"count":1,"encoding":"utf-8","payloadBytes":1689}
-package winicon
-
-import (
-	"encoding/binary"
-	"io"
-
-	"github.com/leaanthony/winicon/internal/winicon"
-)
-
-// Icon stores the data for a single icon
-type Icon struct {
-	Width        uint16
-	Height       uint16
-	Colours      uint8
-	Planes       uint16
-	BitsPerPixel uint16
-	Data         []byte `json:"-"`
-	Format       string
-	Offset       uint32
-	size         uint32
-}
-
-// GetFileData reads in the given .ico filename and returns information
-// about the icon/icons
-func GetFileData(r io.Reader) ([]*Icon, error) {
-
-	var result []*Icon
-
-	// Parse the .ico file
-	var header winicon.IconFileHeader
-	err := binary.Read(r, binary.LittleEndian, &header)
-	if err != nil {
-		return nil, err
-	}
-
-	// Loop over icons
-	for index := 0; index < (int)(header.ImageCount); index++ {
-		// Read in icon headers
-		var iconHeader winicon.IconHeader
-		err = binary.Read(r, binary.LittleEndian, &iconHeader)
-		if err != nil {
-			return nil, err
-		}
-		icon := Icon{
-			Width:        (uint16)(iconHeader.Width),
-			Height:       (uint16)(iconHeader.Height),
-			BitsPerPixel: iconHeader.BitsPerPixel,
-			Planes:       iconHeader.Planes,
-			Offset:       iconHeader.Offset,
-			size:         iconHeader.Size,
-		}
-
-		// Width/Height of 256 is encoded as 0 in the icon header
-		if icon.Width == 0 {
-			icon.Width = 256
-		}
-		if icon.Height == 0 {
-			icon.Height = 256
-		}
-
-		result = append(result, &icon)
-	}
-
-	// Loop over Icons to read in image data
-	for _, icon := range result {
-		icon.Data = make([]byte, icon.size)
-		_, err := r.Read(icon.Data)
-		if err != nil {
-			return nil, err
-		}
-		if string(icon.Data[1:4]) == "PNG" {
-			icon.Format = "PNG"
-		} else {
-			icon.Format = "BMP"
-		}
-	}
-
-	return result, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/internal/winicon/structs.go","mode":420,"size":393,"sha256":"87aef8425ec412a5391a40915918746eb87b17e9b118e8004b98485dc0f05286","index":0,"count":1,"encoding":"utf-8","payloadBytes":393}
-package winicon
-
-// IconFileHeader is the icon file's 48bit header
-type IconFileHeader struct {
-	_          uint16
-	ImageType  uint16
-	ImageCount uint16
-}
-
-// IconHeader is the header for the icon data
-type IconHeader struct {
-	Width        uint8
-	Height       uint8
-	Colours      uint8
-	_            uint8
-	Planes       uint16
-	BitsPerPixel uint16
-	Size         uint32
-	Offset       uint32
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/winicon/logo.png","mode":420,"size":3579,"sha256":"5c735aed85d65a05145545ae0f0d69118b166cb1325945ad2cb85f6b452b6c6c","index":0,"count":1,"encoding":"base64","payloadBytes":4772}
-iVBORw0KGgoAAAANSUhEUgAAAXoAAABoCAMAAADIF8uGAAAC91BMVEUkKS4lKi8mKzAnLDEoLTIpLjIqLjMqLzQrMDUsMTYtMjcuMzcvMzgwNToxNjsyNzszODw0OD01OT42Oj82O0A3PEA4PUE5PUI6PkM7P0Q8QEQ8QUU9QkY+Q0c/Q0hARElBRUlCRkpCR0tDSExESE1FSU1GSk5HS09ITFBITVFJTVJKTlJLT1NMUFRNUVVOUlZOUldPU1dQVFhRVVlSVlpTV1tUWFtUWFxVWV1WWl5XW19YXGBZXWBaXWFbXmJbX2NcPEFcYGRdYWReYmVfYmZgY2dhZGhhZWliZmljZ2pkZ2tlaGxmaW1nam1obG9pbXBqbXFrbnJsb3JtcHNtcXRvcnZwc3dxdHdydXhzdnlzd3p0d3t1eHt2eXx3en14e355fH95fIB6fYB7foF8f4J9gIN+gYR/goR/goWAg4aBhIeChYiDhomEh4mFNjuFh4qFiIuGiYyHio2Ii42JjI6KjI+LjZCLjpGMj5KNkJKOkZOPkZSQkpWRk5aSlJeSlZeTlpiUl5mVl5qWmJuXmZuYmpyYm52ZnJ6anJ+bnaCcnqCdn6GeoKKeoaOfoaSgoqSho6WiMTWipKajpaekpqikpqmlp6mmqKqnqauoqqyqrK2qrK6rra+srrCtr7GusLKvsbKwsbOytLaztba0tre2t7m2uLq3ubu4uru5u7y6u727vL68vb+8vsC9v8C+wMG/wcLAwcPBwsTCw8TCxMXDxcbExsfFxsjGx8nHyMnIycrJysvJy8zKy83LzM3Mzc7Nzs/OIyfOJCfOz9DP0NLR0tPS09TT1NXU1dbV1tbW19jX2NnY2drZ2tva29vb29zb3N3cGLDc3d7d3t/e3+Df4ODgGx7g4OHh4eLh4uPi4+Tj5OTk5eXl5ebm5ufn5+jn6Ono6enp6urq6+vr6+zs7O3t7e3t7u7u7+/v8PDw8PHx8fLy8vLz8/Pz9PT09fX19fb29vb39/f4+Pj5+fn5+vr6+vv7+/v8/Pz9/f3+/v7/AAD////wS8THAAAKv0lEQVR42u2de0AVVRrArwSZkbqbkJXKipaPtARSfLK7FmVorQ8iU1LbdcnwbZm6iChrsUqutcVmiIq2srmSWGptvtbnWiTmLi6RuCCJTxAIRC4y548l4N75zmvmDIwzrJ3vv/u97pnfvcyc853zXRxIik3ikAgkeoleikQv0UuR6CV6KRK9RC9FopfopUj0Er0UiV6ilyLR/xjQf5uxaeNHp2608JS3IPrUbo56uS/BaV5KpV5MTHkrok90uCXCrJSKWyIkeq4Ut1HRO/aYk1IBskei58kHgLwj2pyUEH20RM+ThRB9iDkpIfoQiZ4nL0H0fc1JCdH3leh5Mh2iDzInJUQfJNHzZAVEP8qclBD9KImeJ0cg+gRzUkL0CRI9VwJU8t4XTEoJ0F+Q6Lly8l4X+bY7zEr5Szf5HUii58vl10N8vLx8hv3+vJkpDyvKYTNT3pLopUj0Er0UiV6il+hvQan6Im3lK9MmTZm+YFX6iWqBgNrsjKRFM34TOXXm4uSdZ3506J37Fz/Trb1H67sfCV+R1Yw8x2MGKJgMX/ovzYBvVwzHAw4/k3zR4Jt+nfhcnw5eXu16hMXsdhpHn7ZElVW0/4cuWxr9LQORca53nvuyKpegdz4wxLiUWdHtYeWhdwpr+5Wb0i3VGx5SGPLIe9c5FG5sGcQKUEYfYfuzhlC0vCscu8+SUqPoE2D8FWqMHd2pa0jbARD4kEt5J1DmQu9jwHBfgypzpIOUftn0kCGbXNY1ffIzhSNdUpkQDvThBSgj81gB9FUVRXuRY/f9yCD6L2H0NtK6W7Xt1PrQZhlHX/KigyHee4yir5igaMiYYvoeN0srQFkrgL4msQ1r8CuNoa/tAGJfJa1TVVskaXsaBG43jH7HPQ6mtMkyhr6wnyZIxb+QCCgdrh2gzKjVQ58bxB67I8XYYzYChAaTN9Gfqra7KgkjsHmWG0RfG9+KM3pHz2oj6Iu664BUup/DAiqH6gUo03XQZ7Tjjb11riH0KSDUswK3fQzzEg/abGAagoyhd4538GW1AfQVfXVBKiHYs3uMfoCyQhP9uxpj/5Uh9Gdh6G7cNkEj7VpgijOG3mekxugdnWvE0b8gAFJJBAHviAQoRzXQT9Yau+M/hub1PUDkUsxy7S6Y9fYSzDgJmA4YQ68ju4TRp4lwHFagBvxXiLzyYDUfvbYsNIQebmWH4pN6PC3+7O8OHgNOU9FHiaL//n4BjMvg/WasGHrlzaai72EIfQac22GLsrF42uHQdhEYnkZNR991cFBHQtVLFP0yAlhQ3L6cEmdpdvrMP7lUftgiKZMIODQl/cTF6qLjaRP/TVgqRND79h/UldRdMIK+3BNEHgOGsjvwrK3gXGErMLzVVPSDUurXhl+F4+oyMfSV32C0Hj4IpmaN9/SIq1iq8Tjf2Cr1D+gV3JSki77r8vrBFMbchqkzDNVwhoJIWEvYSL4bNM4D+pNNQ99fXT7NxwzHxNC/j8GagD+dc/zrdOvwC72E4/0CM36O2XrpoL93vZM5DdRYVrHQx4PI0UAfRr4fPIAUDIaBmoLe+z1wE67pDU2bxdAPgZYRZP2q8P7AHEK1BqP7GWHdjFmzNNFPh3+Yv9V4UOmgPwoiO6jqK57UZ61eyzVQwpjYFPRBOJdV0Pa2EPoCDBV9j82jCsePw4DXqIBwaF6sgd4XL6pkQtsYQ+hrYPlQrV+9T98i1Pn7fqBNbQL6yCqi6AuNsULok7HbtkhBH/us6OJOFjQP4qMPPMtf1zuGGavXw5lMslv7Cxr9g27jG0D7nXH0b1Af/+3cUhIPfQQ0FAqg3wcDfs1weBQ6VPLQj66k/pqA9VFj6Nc4GHePc6wqi/vJNJIzFxRC77GeHkMvYJ8hhL4T0A8W2dlYCTPtYjgshw4HOVc1laqeo2lCx6uZ6PNAqJ9LuZo1G5zrqnf+hAPKSL0ek1Bgf1kEfYnR+w2axPtSu+QgdEgWuarGjwxu9xjcIPQHsWepKYwvgNY4KznJK/I3GX2EUfQHoD5DBD3cQgxgOXwPU84RR7+mGeijQOwHDaozqiY+gKqvJaua28pMQR9lFP1GqM8TQT8bBEQyPboAj7Hi6Dc3A/0WEPsS9Rw9DdoCG59OkWBFikxBP9co+j9AvUhXZ63+HWoo5/Ghg35bM9Bf9aC2WR8G+yeF6hO3/XXyDhVrDvrXjKKfA08TiHzpsbXsn5kusLrWTRz9jmagh2tTRzGxEVK3wAlRX6X/YD0P3Pebg36RUfSTgbqHCPozMNFmpsuLwGO2OPpPm4N+MVkAilVnghew1dWzxA3Ku9oc9L8zih6WwvqJoD8FE7FPD0RDF3H0nzUH/T9A8PwfFA+4Xz5R96pYLRvcUY7fmMOQTejhzaG/CHpssfoJ02WODeidYD9qIH5EJJU4fbCx7mV/9eUfWwJ6ocbCr2Gi7UyXmTagh2w961Ybr6rf8vq5419U8wiEKkFh7QRqATccoXbaXJjob0wX2KN7yCr072C/bVDb2f0ivGHn31udx19Ee1Xfe5Bd6KcAtZ8I+rMw0Qamy/PAo5NV6E+B6GXwTN/WxkGpmnfhwvl529Dz7stcKdPYfG2Up+Cml1XoUWe4Nx5NzuPRdriGekp9sd429Fgrc4kIexgwi+nRG3g8aRl6cALSu8qXXL0i592qPa8dXfGxHv0mqP+nCHp/eKyV5XADppxsGXpYh3idcSYK1FjGswr4lqPHusjXiKAPBQGsIaAcXmP6zUV/GZTnvalKJb4txYNkKfpSqH9OBD12wvg0wyEFOmyzDD0KZKGdpxafOrPs6fahR37QINLAsxYGvK1TwlHyrUO/gIX2S9U+n2H2uGojeuxc/V8F0GfDgEDafkXhzVdvMvrPHVp7sQh9xbAHIxvRb4CGAEYrUK1WwV75lPJfAs0vWIj+OqNRYilv97RRYuxEX6RoT9SP9j6itUPYs1zrIatstRA9GkGjxd4mnrbvtRM9ehJjRbZNZR5SlDh8C3sXFvA43uR2Du/IqrIS/Zv0yTzMfpqy33ndVvT4cTFlPtbCl1qvG4hNZGpm46e/Yc/cXrw9ZRqyEv0Jvf6OAaR9BLIVfY0/cW540f7GjcKTSYHMP4YE4jxx1K6GL0/5lnGEJcdS9Ig8bO1RhNvfItEn2oserWN0Tg0M+znemvlsCWct0CAPDA4b6E9pI5C16CcSZEMJ+3kPwuG4zehvBIu0KXQC/aBJgq0NBRaj30SQpc6IheJ2n1qb0eO7H3zJNPhhUX1sNx19EdGJSHWer8MdWKt3a9Hjh3F4Ao9X5h8SCHii1mr0qA9GdixlL22t26BrMXoUqw9yyDUYsE8/oNdlZDn6eRhZxh7aGMwhvwWgR/F6IIcSS6fdegHdvkPWo98Jwbatoh2wlsLuqCWg12vgjKwgA45rN5g/dgXZgL4SHnKfwnC41pY+IWg3epQ3SgMk4zg5Kp2m9YStQXagR4+BHH9nOcA+5S0tBH3dpfN+cWIuZ+MwaxwnIKoAIXvQg99Z6cj8pyzgiFurkhaDvm6WuaAnhTE46Sr/SvPjA+inwupLHG8L0P8/S8GHC8cNqG8f/8Zv8MS4j8v0AorSY8KDG1pTugwZv2xn8U0eoPzFP9tEopfoJXopEr1EL0Wil+ilSPQSvRSJXqKXItFL9FIkeoleilv+B/VDY61tzDfVAAAAAElFTkSuQmCC
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lithammer/fuzzysearch/LICENSE","mode":420,"size":1082,"sha256":"d2e98cf1530c13d97df36a890831a2a1adb0a4580af192b6477bdac7f7af2461","index":0,"count":1,"encoding":"utf-8","payloadBytes":1082}
-The MIT License (MIT)
-
-Copyright (c) 2018 Peter Lithammer
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 
 @@END

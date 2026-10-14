@@ -80453,7 +80453,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":100949,"sha256":"b571b03148736e31e20766696256bf1b36b4b3a708b1984c577c9d4bdb7c1a54","index":0,"count":2,"encoding":"utf-8","payloadBytes":48248}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":101330,"sha256":"fac3245ad7a01c1fef75b1de3e35542571c042571f52b550099e0ba728d8df38","index":0,"count":2,"encoding":"utf-8","payloadBytes":48248}
 package desktop
 
 import (
@@ -80687,39 +80687,40 @@ type App struct {
 	reader           interface {
 		BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 	}
-	projectRevision            func(string) (string, error)
-	lifecycle                  projectLifecycle
-	current                    ProjectOpenResult
-	sessions                   *installer.EditSessionStore
-	editor                     *installer.Backend
-	activeSession              string
-	editMu                     sync.Mutex
-	config                     appconfig.Config
-	configErr                  error
-	secrets                    *runtimesecret.Broker
-	execution                  *executionNodeContextStore
-	binding                    *executionNodeBinding
-	availableBundleRoot        string
-	bundleCacheRoot            string
-	bundlePublisher            func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
-	localRunRecordRoot         string
-	bundlePreview              *runtimeBundlePreview
-	orphanRecovery             *orphanRunRecovery
-	recoveredRun               *localRunRecord
-	recoveredCancelUnconfirmed bool
-	pendingServerInformation   *serverInformationProbe
-	pendingHostKey             *pendingExecutionHostKey
-	pendingTargetHostKey       *pendingTargetHostKey
-	approvedTargetHostKeys     map[string]approvedTargetHostKey
-	continuation               *verificationContinuation
-	export                     *installer.ProjectExport
-	installationPlanID         string
-	installationRuns           *installationRunRegistry
-	installationGeneration     uint64
-	startInFlight              bool
-	startOutcomeUnknown        bool
-	runtimeUpdateInFlight      bool
-	runtimeSecretEvidence      *runtimeSecretDescriptorEvidence
+	projectRevision                func(string) (string, error)
+	lifecycle                      projectLifecycle
+	current                        ProjectOpenResult
+	sessions                       *installer.EditSessionStore
+	editor                         *installer.Backend
+	activeSession                  string
+	editMu                         sync.Mutex
+	config                         appconfig.Config
+	configErr                      error
+	secrets                        *runtimesecret.Broker
+	execution                      *executionNodeContextStore
+	binding                        *executionNodeBinding
+	availableBundleRoot            string
+	bundleCacheRoot                string
+	bundlePublisher                func(string) (executionbundle.Verified, error) // nil uses the verified cache publisher
+	localRunRecordRoot             string
+	infrastructureVerificationRoot string
+	bundlePreview                  *runtimeBundlePreview
+	orphanRecovery                 *orphanRunRecovery
+	recoveredRun                   *localRunRecord
+	recoveredCancelUnconfirmed     bool
+	pendingServerInformation       *serverInformationProbe
+	pendingHostKey                 *pendingExecutionHostKey
+	pendingTargetHostKey           *pendingTargetHostKey
+	approvedTargetHostKeys         map[string]approvedTargetHostKey
+	continuation                   *verificationContinuation
+	export                         *installer.ProjectExport
+	installationPlanID             string
+	installationRuns               *installationRunRegistry
+	installationGeneration         uint64
+	startInFlight                  bool
+	startOutcomeUnknown            bool
+	runtimeUpdateInFlight          bool
+	runtimeSecretEvidence          *runtimeSecretDescriptorEvidence
 }
 
 type AppOption func(*App)
@@ -80774,7 +80775,7 @@ type projectLifecycle interface {
 func NewApp(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, lifecycle projectLifecycle, options ...AppOption) *App {
-	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry(), approvedTargetHostKeys: map[string]approvedTargetHostKey{}, localRunRecordRoot: defaultLocalRunRecordRoot(), events: noopEventPublisher{}}
+	app := &App{reader: reader, lifecycle: lifecycle, projectRevision: installer.ProjectRevision, sessions: installer.NewEditSessionStore(), current: ProjectOpenResult{Status: "NO_PROJECT"}, configErr: errors.New("APPLICATION_CONFIG_NOT_FOUND"), secrets: runtimesecret.NewBroker(), execution: newExecutionNodeContextStore(nil, probeLocalExecutionNodeCandidate()), installationRuns: newInstallationRunRegistry(), approvedTargetHostKeys: map[string]approvedTargetHostKey{}, localRunRecordRoot: defaultLocalRunRecordRoot(), infrastructureVerificationRoot: defaultInfrastructureVerificationRoot(), events: noopEventPublisher{}}
 	for _, option := range options {
 		option(app)
 	}
@@ -81562,14 +81563,14 @@ func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOpera
 	// Recover its identity from the bound local receipt at known managed paths.
 	if cursor == nil && a.current.Managed != nil {
 		seen := map[string]bool{}
+
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":101330,"sha256":"fac3245ad7a01c1fef75b1de3e35542571c042571f52b550099e0ba728d8df38","index":1,"count":2,"encoding":"utf-8","payloadBytes":53082}
 		for _, item := range listed.Packages {
 			seen[item.PackageID] = true
 		}
 		for deployment := range a.current.Managed.Deployments {
-			receipt, encrypted, readErr := installer.ReadSecretOutputReceipt(root, projectID, deployment, runtimeDigest
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":100949,"sha256":"b571b03148736e31e20766696256bf1b36b4b3a708b1984c577c9d4bdb7c1a54","index":1,"count":2,"encoding":"utf-8","payloadBytes":52701}
-)
+			receipt, encrypted, readErr := installer.ReadSecretOutputReceipt(root, projectID, deployment, runtimeDigest)
 			for _, data := range encrypted {
 				clear(data)
 			}
@@ -82508,6 +82509,10 @@ func projectErrorMessage(code string) string {
 	default:
 		return "Не удалось открыть проект в режиме только чтения. Проект на диске не изменён."
 	}
+}
+
+func WithInfrastructureVerificationRoot(root string) AppOption {
+	return func(app *App) { app.infrastructureVerificationRoot = root }
 }
 
 @@END
@@ -86270,7 +86275,7 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":17920,"sha256":"e41c897cdab029cbfea4bc4ecddc5f9114c74687148e43c9cba798ffed30789f","index":0,"count":1,"encoding":"utf-8","payloadBytes":17920}
+@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":20390,"sha256":"86eb5569e24f341efed921e1c67f4be6363aeaa74835dcd334c264ccb7ad6f8c","index":0,"count":1,"encoding":"utf-8","payloadBytes":20390}
 package desktop
 
 import (
@@ -86294,21 +86299,31 @@ type InstallationPlanOperation struct {
 	Error  *ProjectOpenError     `json:"error,omitempty"`
 }
 
+type InstallationPlanRequest struct {
+	ExecutionMode           executionnode.ExecutionMode `json:"executionMode"`
+	DeploymentOrder         []string                    `json:"deploymentOrder"`
+	ApplicationVaultSources map[string]string           `json:"applicationVaultSources"`
+}
+
 type InstallationPlanView struct {
-	ID                                    string                        `json:"id"`
-	Status                                string                        `json:"status"`
-	ProjectRevision                       string                        `json:"projectRevision"`
-	PlanFingerprint                       string                        `json:"planFingerprint"`
-	ExecutionNodeID                       string                        `json:"executionNodeId"`
-	Runtime                               InstallationRuntimeBinding    `json:"runtime"`
-	ExpiresAt                             string                        `json:"expiresAt"`
-	Approved                              bool                          `json:"approved"`
-	Acknowledgements                      []InstallationAcknowledgement `json:"acknowledgements"`
-	Phases                                []InstallationPlanPhase       `json:"phases"`
-	Findings                              []InstallationPlanFinding     `json:"findings,omitempty"`
-	PKIStorePasswordRequired              bool                          `json:"pkiStorePasswordRequired"`
-	SecretOutputEncryptionRequired        bool                          `json:"secretOutputEncryptionRequired"`
-	SecretOutputEncryptionPasswordPresent bool                          `json:"secretOutputEncryptionPasswordPresent"`
+	ExecutionMode                         executionnode.ExecutionMode               `json:"executionMode"`
+	InfrastructureVerification            *executionnode.InfrastructureVerification `json:"infrastructureVerification,omitempty"`
+	InfrastructureObservedAt              string                                    `json:"infrastructureObservedAt,omitempty"`
+	InfrastructureCacheWarning            bool                                      `json:"infrastructureCacheWarning,omitempty"`
+	ID                                    string                                    `json:"id"`
+	Status                                string                                    `json:"status"`
+	ProjectRevision                       string                                    `json:"projectRevision"`
+	PlanFingerprint                       string                                    `json:"planFingerprint"`
+	ExecutionNodeID                       string                                    `json:"executionNodeId"`
+	Runtime                               InstallationRuntimeBinding                `json:"runtime"`
+	ExpiresAt                             string                                    `json:"expiresAt"`
+	Approved                              bool                                      `json:"approved"`
+	Acknowledgements                      []InstallationAcknowledgement             `json:"acknowledgements"`
+	Phases                                []InstallationPlanPhase                   `json:"phases"`
+	Findings                              []InstallationPlanFinding                 `json:"findings,omitempty"`
+	PKIStorePasswordRequired              bool                                      `json:"pkiStorePasswordRequired"`
+	SecretOutputEncryptionRequired        bool                                      `json:"secretOutputEncryptionRequired"`
+	SecretOutputEncryptionPasswordPresent bool                                      `json:"secretOutputEncryptionPasswordPresent"`
 }
 
 type InstallationRuntimeBinding struct {
@@ -86346,6 +86361,17 @@ type InstallationPlanFinding struct {
 }
 
 func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanOperation {
+	return a.createInstallationPlan(InstallationPlanRequest{DeploymentOrder: deploymentOrder})
+}
+
+func (a *App) CreateInstallationPlanForMode(request InstallationPlanRequest) InstallationPlanOperation {
+	if request.ExecutionMode != executionnode.FullProject && request.ExecutionMode != executionnode.ApplicationLibrariesOnly && request.ExecutionMode != executionnode.InfrastructureVerifyOnly {
+		return installationPlanFailure(errors.New("DEPLOYMENT_PLAN_INPUT_INVALID"))
+	}
+	return a.createInstallationPlan(request)
+}
+
+func (a *App) createInstallationPlan(request InstallationPlanRequest) InstallationPlanOperation {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.reconcileEditSessionLocked()
@@ -86371,7 +86397,12 @@ func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanO
 	}
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
-	record, err := binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, deploymentOrder)
+	var record executionnode.PlanRecord
+	if request.ExecutionMode == "" {
+		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)
+	} else {
+		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources)
+	}
 	if err != nil {
 		if binding.dynamic {
 			a.invalidateDynamicBindingLocked()
@@ -86389,6 +86420,11 @@ func (a *App) CreateInstallationPlan(deploymentOrder []string) InstallationPlanO
 	if err != nil {
 		a.installationPlanID = ""
 		return installationPlanFailure(err)
+	}
+	if record.Plan.InfrastructureVerification != nil {
+		observedAt := record.CreatedAt.UTC()
+		view.InfrastructureObservedAt = observedAt.Format(time.RFC3339Nano)
+		view.InfrastructureCacheWarning = cacheInfrastructurePlan(a.infrastructureVerificationRoot, a.current.Root, binding.node, record.Plan, observedAt) != nil
 	}
 	view.SecretOutputEncryptionRequired = a.secretOutputEncryptionRequiredLocked()
 	view.SecretOutputEncryptionPasswordPresent = a.secretOutputEncryptionPasswordPresentLocked()
@@ -86585,12 +86621,19 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 	if !ok || record.ID == "" || record.Plan.PlanFingerprint == "" || record.Plan.ProjectRevision == "" {
 		return InstallationPlanView{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	view := InstallationPlanView{ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
+	mode := record.Plan.ExecutionMode
+	if mode == "" {
+		mode = executionnode.FullProject
+	}
+	view := InstallationPlanView{ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
 		PlanFingerprint: record.Plan.PlanFingerprint, ExecutionNodeID: binding.node.ID, Runtime: runtime,
 		ExpiresAt: record.ExpiresAt.UTC().Format(time.RFC3339), Approved: record.Approved,
 		Acknowledgements: make([]InstallationAcknowledgement, 0, len(record.Plan.AcknowledgementDetails)),
 		Phases:           make([]InstallationPlanPhase, 0, len(record.Plan.Phases)), Findings: safeInstallationPlanFindings(record.Plan.Findings),
 		PKIStorePasswordRequired: executionnodePlanRequiresPKIStorePassword(record.Plan)}
+	if record.Plan.InfrastructureVerification != nil {
+		view.InfrastructureObservedAt = record.CreatedAt.UTC().Format(time.RFC3339Nano)
+	}
 	for _, acknowledgement := range record.Plan.AcknowledgementDetails {
 		view.Acknowledgements = append(view.Acknowledgements, InstallationAcknowledgement{Code: acknowledgement.Code, Summary: acknowledgement.Summary})
 	}
@@ -86832,7 +86875,7 @@ func (state InstallationState) withPrerequisite(code, destination, message strin
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/local_infrastructure_verification.go","mode":420,"size":6034,"sha256":"41199d421e8945b3027c2f1caaabc26bb5248be41fba8915a7a26b068458d713","index":0,"count":1,"encoding":"utf-8","payloadBytes":6034}
+@@PORTABLE {"path":"internal/desktop/local_infrastructure_verification.go","mode":420,"size":6590,"sha256":"7ade898a5953ecaaefba329f9fd41be72e2c2388d5ed3905cfe0bd0bf0764bd0","index":0,"count":1,"encoding":"utf-8","payloadBytes":6590}
 package desktop
 
 import (
@@ -86980,6 +87023,17 @@ func readLocalInfrastructureVerification(store, projectRoot, projectID, nodeBind
 		return nil, invalid
 	}
 	return &r, nil
+}
+
+// An offline/reopened observation stays UNKNOWN until a fresh Core Build.
+func (a *App) GetInfrastructureVerification() InfrastructureVerificationView {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.binding == nil {
+		return InfrastructureVerificationView{Availability: "UNKNOWN"}
+	}
+	bundle, _ := a.binding.reader.runtimeRelease["bundleDigest"].(string)
+	return cachedInfrastructureVerification(a.infrastructureVerificationRoot, a.current.Root, a.current.Project.ID, a.binding.node, bundle)
 }
 
 @@END
@@ -90768,7 +90822,7 @@ func hardenMirrorHandle(file *os.File) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/execution_service.go","mode":420,"size":30695,"sha256":"d9a142bbdb44eefc6e5477decd268ca38e88450ab36b163dd7b28561e055717a","index":0,"count":1,"encoding":"utf-8","payloadBytes":30695}
+@@PORTABLE {"path":"internal/executionnode/execution_service.go","mode":420,"size":33645,"sha256":"066e9789f657c9450c49723101e796f956178610157a0ec9a2cc07c5f45e8f2f","index":0,"count":1,"encoding":"utf-8","payloadBytes":33645}
 package executionnode
 
 import (
@@ -90901,6 +90955,8 @@ type TargetHostTrustStager interface {
 type TargetHostTrustProvider func(DeploymentPlan) ([]TargetHostKeyApproval, error)
 
 type PlanRecord struct {
+	mode            ExecutionMode
+	vaultSources    map[string]string
 	ID              string
 	Plan            DeploymentPlan
 	DeploymentOrder []string
@@ -90912,6 +90968,10 @@ type PlanRecord struct {
 
 type PlanBuilder interface {
 	BuildDeploymentPlan(context.Context, Node, string, map[string]any, []string) (DeploymentPlan, error)
+}
+
+type ModePlanBuilder interface {
+	BuildDeploymentPlanForMode(context.Context, Node, string, map[string]any, []string, ExecutionMode, map[string]string) (DeploymentPlan, error)
 }
 
 type ExecutionClient interface {
@@ -91046,10 +91106,46 @@ func (s *ExecutionService) CreatePlan(ctx context.Context, node Node, projectRoo
 }
 
 func (s *ExecutionService) CreatePlanWithOrder(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string) (PlanRecord, error) {
+	return s.createPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, "", nil)
+}
+
+// Explicit modes share the ordinary approval/Start lifecycle. An older builder
+// is never silently substituted for a mode-aware request.
+func (s *ExecutionService) CreatePlanForMode(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string, mode ExecutionMode, vaultSources map[string]string) (PlanRecord, error) {
+	if !validModePlanInput(append([]string{}, deploymentOrder...), mode, vaultSources) {
+		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
+	}
+	return s.createPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, mode, vaultSources)
+}
+
+func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string, release map[string]any, order []string, mode ExecutionMode, sources map[string]string) (DeploymentPlan, error) {
+	if mode == "" {
+		return s.builder.BuildDeploymentPlan(ctx, node, root, release, slices.Clone(order))
+	}
+	builder, ok := s.builder.(ModePlanBuilder)
+	if !ok {
+		return DeploymentPlan{}, errors.New("EXECUTION_MODE_RUNTIME_UNSUPPORTED")
+	}
+	plan, err := builder.BuildDeploymentPlanForMode(ctx, node, root, release, append([]string{}, order...), mode, cloneVaultSources(sources))
+	if err == nil && (plan.ExecutionMode != mode || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	return plan, err
+}
+
+func cloneVaultSources(source map[string]string) map[string]string {
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func (s *ExecutionService) createPlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string, mode ExecutionMode, vaultSources map[string]string) (PlanRecord, error) {
 	if s == nil || s.builder == nil || projectRoot == "" {
 		return PlanRecord{}, errors.New("EXECUTION_PLAN_INPUT_INVALID")
 	}
-	plan, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, runtimeRelease, slices.Clone(deploymentOrder))
+	plan, err := s.buildPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, mode, vaultSources)
 	if err != nil {
 		return PlanRecord{}, err
 	}
@@ -91057,7 +91153,7 @@ func (s *ExecutionService) CreatePlanWithOrder(ctx context.Context, node Node, p
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INVALID")
 	}
 	now := s.now().UTC()
-	record := PlanRecord{ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
+	record := PlanRecord{mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	s.mu.Lock()
 	s.plans[record.ID] = record
 	s.projectRoots[record.ID] = projectRoot
@@ -91202,11 +91298,11 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if len(record.Plan.RuntimeRelease) == 0 {
 		return ExecutionRun{}, errors.New("EXECUTION_PLAN_RUNTIME_RELEASE_MISSING")
 	}
-	fresh, err := s.builder.BuildDeploymentPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease, slices.Clone(record.DeploymentOrder))
+	fresh, err := s.buildPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.mode, record.vaultSources)
 	if err != nil {
 		return ExecutionRun{}, err
 	}
-	if fresh.PlanFingerprint != record.Plan.PlanFingerprint {
+	if fresh.Status != "EXECUTABLE" || fresh.ProjectIdentity != record.Plan.ProjectIdentity || fresh.ProjectRevision != record.Plan.ProjectRevision || fresh.PlanFingerprint != record.Plan.PlanFingerprint {
 		s.invalidate(planID)
 		return ExecutionRun{}, &ExecutionError{Code: PlanStale}
 	}
@@ -91572,6 +91668,23 @@ func sameStrings(a, b []string) bool {
 	return true
 }
 func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
+	if p.InfrastructureVerification != nil {
+		value := *p.InfrastructureVerification
+		value.Deployments = append([]InfrastructureDeploymentVerification{}, value.Deployments...)
+		if value.Code != nil {
+			v := *value.Code
+			value.Code = &v
+		}
+		if value.InfrastructureFingerprint != nil {
+			v := *value.InfrastructureFingerprint
+			value.InfrastructureFingerprint = &v
+		}
+		if value.EvidenceRevision != nil {
+			v := *value.EvidenceRevision
+			value.EvidenceRevision = &v
+		}
+		p.InfrastructureVerification = &value
+	}
 	p.Acknowledgements = append([]string(nil), p.Acknowledgements...)
 	p.AcknowledgementDetails = append([]PlanAcknowledgement(nil), p.AcknowledgementDetails...)
 	p.Phases = clonePlanPhases(p.Phases)
@@ -91624,6 +91737,7 @@ func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
 }
 func clonePlanRecord(p PlanRecord) PlanRecord {
 	p.Plan = cloneDeploymentPlan(p.Plan)
+	p.vaultSources = cloneVaultSources(p.vaultSources)
 	p.DeploymentOrder = slices.Clone(p.DeploymentOrder)
 	return p
 }
@@ -91648,7 +91762,7 @@ func newStartAttemptID() (string, error) {
 func NewRequestID() (string, error) { return newStartAttemptID() }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":6615,"sha256":"b70e0895571d8f7a0ce78450432aba06ed2323a82124f9cd5cc2151783cb93e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":6615}
+@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":6730,"sha256":"32918bb6832271909e89c405819eaac08908562adeeb08442b0dae8b46268cf3","index":0,"count":1,"encoding":"utf-8","payloadBytes":6730}
 package executionnode
 
 import (
@@ -91759,13 +91873,8 @@ func (t OpenSSHTransport) ReadApplicationLibraries(ctx context.Context, node Nod
 // BuildDeploymentPlanForMode reuses ordinary staging and the fixed Core operation.
 // Unsupported runtimes fail before staging; there is no full-project fallback.
 func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order []string, mode ExecutionMode, vaultSources map[string]string) (DeploymentPlan, error) {
-	if projectRoot == "" || len(release) == 0 || order == nil || len(order) > 256 || !mode.valid() || len(vaultSources) > 16 {
+	if projectRoot == "" || len(release) == 0 || !validModePlanInput(order, mode, vaultSources) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
-	}
-	for id, source := range vaultSources {
-		if len(id) > 128 || !runtimeSecretDeploymentPattern.MatchString(id) || (source != "RUNTIME_INPUT" && source != "CURRENT_RUN_BOOTSTRAP") {
-			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
-		}
 	}
 	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
 	if err != nil {
@@ -91783,6 +91892,18 @@ func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node N
 func validExecutionModes(raw any) bool {
 	values, ok := raw.([]any)
 	return ok && len(values) == 3 && values[0] == string(FullProject) && values[1] == string(ApplicationLibrariesOnly) && values[2] == string(InfrastructureVerifyOnly)
+}
+
+func validModePlanInput(order []string, mode ExecutionMode, sources map[string]string) bool {
+	if order == nil || len(order) > 256 || !mode.valid() || len(sources) > 16 {
+		return false
+	}
+	for id, source := range sources {
+		if len(id) > 128 || !runtimeSecretDeploymentPattern.MatchString(id) || (source != "RUNTIME_INPUT" && source != "CURRENT_RUN_BOOTSTRAP") {
+			return false
+		}
+	}
+	return true
 }
 
 @@END
@@ -114931,166 +115052,5 @@ platform_dns_client_phase: apply
     name: systemd-resolved.service
     state: restarted
   when: _platform_dns_client_resolved_dropin.changed
-
-@@END
-@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/verify.yml","mode":420,"size":2821,"sha256":"51743c787118ae6bb1bde7d6354d3497270de1dac50d4665a72ed0776ee4b95a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2821}
----
-- name: Verify systemd-resolved is active
-  ansible.builtin.command:
-    argv: [systemctl, is-active, --quiet, systemd-resolved.service]
-  changed_when: false
-  when: platform_dns_client_backend == 'systemd-resolved'
-
-- name: Inspect effective systemd-resolved state read-only
-  ansible.builtin.command:
-    argv: [resolvectl, status]
-  register: _platform_dns_client_resolvectl_status
-  changed_when: false
-  when: platform_dns_client_backend == 'systemd-resolved'
-
-- name: Read Platform systemd-resolved drop-in without mutation
-  ansible.builtin.slurp:
-    src: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
-  register: _platform_dns_client_resolved_dropin
-  when: platform_dns_client_backend == 'systemd-resolved'
-
-- name: Verify Platform systemd-resolved drop-in matches derived projection
-  ansible.builtin.assert:
-    that:
-      - "('DNS=' ~ (platform_dns_client_local.servers | join(' '))) in (_platform_dns_client_resolved_dropin.content | b64decode)"
-      - "('Domains=~' ~ platform_dns_client_local.managedZone) in (_platform_dns_client_resolved_dropin.content | b64decode)"
-      - "'FallbackDNS=' not in (_platform_dns_client_resolved_dropin.content | b64decode)"
-    fail_msg: DNS_CLIENT_RESOLVED_DROPIN_INVALID
-  when: platform_dns_client_backend == 'systemd-resolved'
-
-- name: Verify effective split DNS servers and route domain
-  ansible.builtin.assert:
-    that:
-      - item in _platform_dns_client_resolvectl_status.stdout
-      - "('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_resolvectl_status.stdout"
-    fail_msg: DNS_CLIENT_RESOLVED_EFFECTIVE_STATE_INVALID
-  loop: "{{ platform_dns_client_local.servers }}"
-  when: platform_dns_client_backend == 'systemd-resolved'
-
-- name: Inspect NetworkManager split DNS profile read-only
-  ansible.builtin.command:
-    argv: [nmcli, -g, ipv4.dns,ipv4.dns-search,ipv4.ignore-auto-dns, connection, show, "{{ platform_dns_client_nm_connection | default('') }}"]
-  register: _platform_dns_client_nm_verify
-  changed_when: false
-  when: platform_dns_client_backend == 'NetworkManager'
-
-- name: Verify NetworkManager split DNS profile is effective
-  ansible.builtin.assert:
-    that:
-      - item in _platform_dns_client_nm_verify.stdout
-      - "('~' ~ platform_dns_client_local.managedZone) in _platform_dns_client_nm_verify.stdout"
-      - "'no' in _platform_dns_client_nm_verify.stdout"
-    fail_msg: DNS_CLIENT_NM_EFFECTIVE_STATE_INVALID
-  loop: "{{ platform_dns_client_local.servers }}"
-  when: platform_dns_client_backend == 'NetworkManager'
-
-- name: Resolve managed project host through normal system resolver
-  ansible.builtin.command:
-    argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
-  changed_when: false
-
-@@END
-@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/templates/platform-installer.conf.j2","mode":420,"size":177,"sha256":"0ed6b34ba1393f172d363c5a19a5de1467107aa49a6d3491028d2a29b0d8d645","index":0,"count":1,"encoding":"utf-8","payloadBytes":177}
-# Managed by Platform Installer V2 NET-03.1. Do not edit.
-[Resolve]
-DNS={{ platform_dns_client_local.servers | join(' ') }}
-Domains=~{{ platform_dns_client_local.managedZone }}
-
-@@END
-@@PORTABLE {"path":"services/dns-client/compatibility.yml","mode":420,"size":260,"sha256":"b4e1d3e50bed2443301f3b68974b84277be2a125a59a708a0f2f3c665d62cc10","index":0,"count":1,"encoding":"utf-8","payloadBytes":260}
-apiVersion: platform.installer/service-compatibility/v1alpha1
-kind: ServiceCompatibility
-metadata: {id: dns-client, version: "1.0.0-alpha.1"}
-platforms:
-  redos:
-    packages: []
-    adapters: [systemd-resolved, NetworkManager]
-    testedOSVersions: ["7.3.7"]
-
-@@END
-@@PORTABLE {"path":"services/dns-client/configuration.schema.json","mode":420,"size":362,"sha256":"e173572c0128ea61338d840f4be281565cf50f0a4e33da502c70ce371a1f01b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":362}
-{
-  "$id": "https://platform.installer/schemas/services/dns-client/configuration-v1alpha1.schema.json",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "dnsServerRef": {
-      "minLength": 1,
-      "type": "string"
-    }
-  },
-  "title": "DNS client desired configuration",
-  "type": "object"
-}
-
-@@END
-@@PORTABLE {"path":"services/dns-client/playbooks/apply.yml","mode":420,"size":258,"sha256":"77f4bd221285a9ea5b819399e0e57a3b455ebefbf50aa03ea4f8249f1e99eca5","index":0,"count":1,"encoding":"utf-8","payloadBytes":258}
----
-- import_playbook: projection.yml
-
-- name: Apply split DNS client adapters
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  any_errors_fatal: true
-  roles:
-    - role: platform.dns_client.dns_client
-      platform_dns_client_phase: apply
-
-@@END
-@@PORTABLE {"path":"services/dns-client/playbooks/projection.yml","mode":420,"size":2729,"sha256":"4832e1bfe3ba24f6f778515e2270534e386edfa4100d7db2f46d8cd6de58bd47","index":0,"count":1,"encoding":"utf-8","payloadBytes":2729}
----
-- import_playbook: ../../../ansible-core/playbooks/validate.yml
-
-- name: Resolve DNS client runtime projection without generated state
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  tasks:
-    - name: Load published service catalog for DNS client projection
-      ansible.builtin.include_vars:
-        file: "{{ platform_service_catalog_path }}"
-        name: _platform_dns_client_catalog_file
-
-    - name: Collect canonical DNS client inventory projections
-      ansible.builtin.set_fact:
-        _platform_dns_client_inventory_hosts: >-
-          {{ _platform_dns_client_inventory_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
-        _platform_dns_client_inventory_deployments: >-
-          {{ _platform_dns_client_inventory_deployments | default({}) | combine({item: (hostvars[item].platform_deployments | default({}))}) }}
-      loop: "{{ groups['platform_targets'] | default([]) | sort }}"
-      no_log: true
-
-    - name: Resolve existing authoritative DNS projection
-      platform.core.resolve_dns_zones:
-        desired_state: "{{ platform_desired_state }}"
-        service_catalog: "{{ _platform_dns_client_catalog_file.platform_service_catalog | default(_platform_dns_client_catalog_file, true) }}"
-        inventory_hosts: "{{ _platform_dns_client_inventory_hosts }}"
-        inventory_deployments: "{{ _platform_dns_client_inventory_deployments }}"
-      register: _platform_dns_client_dns
-
-    - name: Initialize DNS client runtime projection
-      ansible.builtin.set_fact:
-        platform_dns_client_runtime_projection: {clients: {}}
-
-    - name: Publish deterministic DNS client runtime projection
-      ansible.builtin.set_fact:
-        platform_dns_client_runtime_projection: >-
-          {{ platform_dns_client_runtime_projection | combine({'clients': {
-               item.key: {
-                 'dnsServerRef': item.value.configuration.dnsServerRef,
-                 'managedZone': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].zone,
-                 'servers': (([_platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary] + _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].secondaries) | map(attribute='address') | list),
-                 'hostRecord': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary.fqdn
-               }
-             }}, recursive=True) }}
-      loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'dns-client') | list }}"
-      loop_control:
-        label: "{{ item.key }}"
 
 @@END

@@ -1,3 +1,3139 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/rule.go","mode":420,"size":51919,"sha256":"f8c2300b20509d28eb58a1a55d10b035d8b84d1c3344238eacf4b457a979698e","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package modfile implements a parser and formatter for go.mod files.
+//
+// The go.mod syntax is described in
+// https://pkg.go.dev/cmd/go/#hdr-The_go_mod_file.
+//
+// The [Parse] and [ParseLax] functions both parse a go.mod file and return an
+// abstract syntax tree. ParseLax ignores unknown statements and may be used to
+// parse go.mod files that may have been developed with newer versions of Go.
+//
+// The [File] struct returned by Parse and ParseLax represent an abstract
+// go.mod file. File has several methods like [File.AddNewRequire] and
+// [File.DropReplace] that can be used to programmatically edit a file.
+//
+// The [Format] function formats a File back to a byte slice which can be
+// written to a file.
+package modfile
+
+import (
+	"cmp"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"unicode"
+
+	"golang.org/x/mod/internal/lazyregexp"
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
+)
+
+// A File is the parsed, interpreted form of a go.mod file.
+type File struct {
+	Module    *Module
+	Go        *Go
+	Toolchain *Toolchain
+	Godebug   []*Godebug
+	Require   []*Require
+	Exclude   []*Exclude
+	Replace   []*Replace
+	Retract   []*Retract
+	Tool      []*Tool
+	Ignore    []*Ignore
+
+	Syntax *FileSyntax
+}
+
+// A Module is the module statement.
+type Module struct {
+	Mod        module.Version
+	Deprecated string
+	Syntax     *Line
+}
+
+// A Go is the go statement.
+type Go struct {
+	Version string // "1.23"
+	Syntax  *Line
+}
+
+// A Toolchain is the toolchain statement.
+type Toolchain struct {
+	Name   string // "go1.21rc1"
+	Syntax *Line
+}
+
+// A Godebug is a single godebug key=value statement.
+type Godebug struct {
+	Key    string
+	Value  string
+	Syntax *Line
+}
+
+// An Exclude is a single exclude statement.
+type Exclude struct {
+	Mod    module.Version
+	Syntax *Line
+}
+
+// A Replace is a single replace statement.
+type Replace struct {
+	Old    module.Version
+	New    module.Version
+	Syntax *Line
+}
+
+// A Retract is a single retract statement.
+type Retract struct {
+	VersionInterval
+	Rationale string
+	Syntax    *Line
+}
+
+// A Tool is a single tool statement.
+type Tool struct {
+	Path   string
+	Syntax *Line
+}
+
+// An Ignore is a single ignore statement.
+type Ignore struct {
+	Path   string
+	Syntax *Line
+}
+
+// A VersionInterval represents a range of versions with upper and lower bounds.
+// Intervals are closed: both bounds are included. When Low is equal to High,
+// the interval may refer to a single version ('v1.2.3') or an interval
+// ('[v1.2.3, v1.2.3]'); both have the same representation.
+type VersionInterval struct {
+	Low, High string
+}
+
+// A Require is a single require statement.
+type Require struct {
+	Mod      module.Version
+	Indirect bool // has "// indirect" comment
+	Syntax   *Line
+}
+
+func (r *Require) markRemoved() {
+	r.Syntax.markRemoved()
+	*r = Require{}
+}
+
+func (r *Require) setVersion(v string) {
+	r.Mod.Version = v
+
+	if line := r.Syntax; len(line.Token) > 0 {
+		if line.InBlock {
+			// If the line is preceded by an empty line, remove it; see
+			// https://golang.org/issue/33779.
+			if len(line.Comments.Before) == 1 && len(line.Comments.Before[0].Token) == 0 {
+				line.Comments.Before = line.Comments.Before[:0]
+			}
+			if len(line.Token) >= 2 { // example.com v1.2.3
+				line.Token[1] = v
+			}
+		} else {
+			if len(line.Token) >= 3 { // require example.com v1.2.3
+				line.Token[2] = v
+			}
+		}
+	}
+}
+
+// setIndirect sets line to have (or not have) a "// indirect" comment.
+func (r *Require) setIndirect(indirect bool) {
+	r.Indirect = indirect
+	line := r.Syntax
+	if isIndirect(line) == indirect {
+		return
+	}
+	if indirect {
+		// Adding comment.
+		if len(line.Suffix) == 0 {
+			// New comment.
+			line.Suffix = []Comment{{Token: "// indirect", Suffix: true}}
+			return
+		}
+
+		com := &line.Suffix[0]
+		text := strings.TrimSpace(strings.TrimPrefix(com.Token, string(slashSlash)))
+		if text == "" {
+			// Empty comment.
+			com.Token = "// indirect"
+			return
+		}
+
+		// Insert at beginning of existing comment.
+		com.Token = "// indirect; " + text
+		return
+	}
+
+	// Removing comment.
+	f := strings.TrimSpace(strings.TrimPrefix(line.Suffix[0].Token, string(slashSlash)))
+	if f == "indirect" {
+		// Remove whole comment.
+		line.Suffix = nil
+		return
+	}
+
+	// Remove comment prefix.
+	com := &line.Suffix[0]
+	i := strings.Index(com.Token, "indirect;")
+	com.Token = "//" + com.Token[i+len("indirect;"):]
+}
+
+// isIndirect reports whether line has a "// indirect" comment,
+// meaning it is in go.mod only for its effect on indirect dependencies,
+// so that it can be dropped entirely once the effective version of the
+// indirect dependency reaches the given minimum version.
+func isIndirect(line *Line) bool {
+	if len(line.Suffix) == 0 {
+		return false
+	}
+	f := strings.Fields(strings.TrimPrefix(line.Suffix[0].Token, string(slashSlash)))
+	return (len(f) == 1 && f[0] == "indirect" || len(f) > 1 && f[0] == "indirect;")
+}
+
+func (f *File) AddModuleStmt(path string) error {
+	if f.Syntax == nil {
+		f.Syntax = new(FileSyntax)
+	}
+	if f.Module == nil {
+		f.Module = &Module{
+			Mod:    module.Version{Path: path},
+			Syntax: f.Syntax.addLine(nil, "module", AutoQuote(path)),
+		}
+	} else {
+		f.Module.Mod.Path = path
+		f.Syntax.updateLine(f.Module.Syntax, "module", AutoQuote(path))
+	}
+	return nil
+}
+
+func (f *File) AddComment(text string) {
+	if f.Syntax == nil {
+		f.Syntax = new(FileSyntax)
+	}
+	f.Syntax.Stmt = append(f.Syntax.Stmt, &CommentBlock{
+		Comments: Comments{
+			Before: []Comment{
+				{
+					Token: text,
+				},
+			},
+		},
+	})
+}
+
+type VersionFixer func(path, version string) (string, error)
+
+// errDontFix is returned by a VersionFixer to indicate the version should be
+// left alone, even if it's not canonical.
+var dontFixRetract VersionFixer = func(_, vers string) (string, error) {
+	return vers, nil
+}
+
+// Parse parses and returns a go.mod file.
+//
+// file is the name of the file, used in positions and errors.
+//
+// data is the content of the file.
+//
+// fix is an optional function that canonicalizes module versions.
+// If fix is nil, all module versions must be canonical ([module.CanonicalVersion]
+// must return the same string).
+func Parse(file string, data []byte, fix VersionFixer) (*File, error) {
+	return parseToFile(file, data, fix, true)
+}
+
+// ParseLax is like Parse but ignores unknown statements.
+// It is used when parsing go.mod files other than the main module,
+// under the theory that most statement types we add in the future will
+// only apply in the main module, like exclude and replace,
+// and so we get better gradual deployments if old go commands
+// simply ignore those statements when found in go.mod files
+// in dependencies.
+func ParseLax(file string, data []byte, fix VersionFixer) (*File, error) {
+	return parseToFile(file, data, fix, false)
+}
+
+func parseToFile(file string, data []byte, fix VersionFixer, strict bool) (parsed *File, err error) {
+	fs, err := parse(file, data)
+	if err != nil {
+		return nil, err
+	}
+	f := &File{
+		Syntax: fs,
+	}
+	var errs ErrorList
+
+	// fix versions in retract directives after the file is parsed.
+	// We need the module path to fix versions, and it might be at the end.
+	defer func() {
+		oldLen := len(errs)
+		f.fixRetract(fix, &errs)
+		if len(errs) > oldLen {
+			parsed, err = nil, errs
+		}
+	}()
+
+	for _, x := range fs.Stmt {
+		switch x := x.(type) {
+		case *Line:
+			f.add(&errs, nil, x, x.Token[0], x.Token[1:], fix, strict)
+
+		case *LineBlock:
+			if len(x.Token) > 1 {
+				if strict {
+					errs = append(errs, Error{
+						Filename: file,
+						Pos:      x.Start,
+						Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
+					})
+				}
+				continue
+			}
+			switch x.Token[0] {
+			default:
+				if strict {
+					errs = append(errs, Error{
+						Filename: file,
+						Pos:      x.Start,
+						Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
+					})
+				}
+				continue
+			case "module", "godebug", "require", "exclude", "replace", "retract", "tool", "ignore":
+				for _, l := range x.Line {
+					f.add(&errs, x, l, x.Token[0], l.Token, fix, strict)
+				}
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	return f, nil
+}
+
+var GoVersionRE = lazyregexp.New(`^([1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?([a-z]+[0-9]+)?$`)
+
+var laxGoVersionRE = lazyregexp.New(`^v?(([1-9][0-9]*)\.(0|[1-9][0-9]*))([^0-9].*)$`)
+
+// Toolchains must be named beginning with `go1`,
+// like "go1.20.3" or "go1.20.3-gccgo". As a special case, "default" is also permitted.
+// Note that this regexp is a much looser condition than go/version.IsValid,
+// for forward compatibility.
+// (This code has to be work to identify new toolchains even if we tweak the syntax in the future.)
+var ToolchainRE = lazyregexp.New(`^default$|^go1($|\.)`)
+
+func (f *File) add(errs *ErrorList, block *LineBlock, line *Line, verb string, args []string, fix VersionFixer, strict bool) {
+	// If strict is false, this module is a dependency.
+	// We ignore all unknown directives as well as main-module-only
+	// directives like replace and exclude. It will work better for
+	// forward compatibility if we can depend on modules that have unknown
+	// statements (presumed relevant only when acting as the main module)
+	// and simply ignore those statements.
+	if !strict {
+		switch verb {
+		case "go", "module", "retract", "require", "ignore":
+			// want these even for dependency go.mods
+		default:
+			return
+		}
+	}
+
+	wrapModPathError := func(modPath string, err error) {
+		*errs = append(*errs, Error{
+			Filename: f.Syntax.Name,
+			Pos:      line.Start,
+			ModPath:  modPath,
+			Verb:     verb,
+			Err:      err,
+		})
+	}
+	wrapError := func(err error) {
+		*errs = append(*errs, Error{
+			Filename: f.Syntax.Name,
+			Pos:      line.Start,
+			Err:      err,
+		})
+	}
+	errorf := func(format string, args ...any) {
+		wrapError(fmt.Errorf(format, args...))
+	}
+
+	switch verb {
+	default:
+		errorf("unknown directive: %s", verb)
+
+	case "go":
+		if f.Go != nil {
+			errorf("repeated go statement")
+			return
+		}
+		if len(args) != 1 {
+			errorf("go directive expects exactly one argument")
+			return
+		} else if !GoVersionRE.MatchString(args[0]) {
+			fixed := false
+			if !strict {
+				if m := laxGoVersionRE.FindStringSubmatch(args[0]); m != nil {
+					args[0] = m[1]
+					fixed = true
+				}
+			}
+			if !fixed {
+				errorf("invalid go version '%s': must match format 1.23.0", args[0])
+				return
+			}
+		}
+
+		f.Go = &Go{Syntax: line}
+		f.Go.Version = args[0]
+
+	case "toolchain":
+		if f.Toolchain != nil {
+			errorf("repeated toolchain statement")
+			return
+		}
+		if len(args) != 1 {
+			errorf("toolchain directive expects exactly one argument")
+			return
+		} else if !ToolchainRE.MatchString(args[0]) {
+			errorf("invalid toolchain version '%s': must match format go1.23.0 or default", args[0])
+			return
+		}
+		f.Toolchain = &Toolchain{Syntax: line}
+		f.Toolchain.Name = args[0]
+
+	case "module":
+		if f.Module != nil {
+			errorf("repeated module statement")
+			return
+		}
+		deprecated := parseDeprecation(block, line)
+		f.Module = &Module{
+			Syntax:     line,
+			Deprecated: deprecated,
+		}
+		if len(args) != 1 {
+			errorf("usage: module module/path")
+			return
+		}
+		s, err := parseString(&args[0])
+		if err != nil {
+			errorf("invalid quoted string: %v", err)
+			return
+		}
+		f.Module.Mod = module.Version{Path: s}
+
+	case "godebug":
+		if len(args) != 1 || strings.ContainsAny(args[0], "\"`',") {
+			errorf("usage: godebug key=value")
+			return
+		}
+		key, value, ok := strings.Cut(args[0], "=")
+		if !ok {
+			errorf("usage: godebug key=value")
+			return
+		}
+		f.Godebug = append(f.Godebug, &Godebug{
+			Key:    key,
+			Value:  value,
+			Syntax: line,
+		})
+
+	case "require", "exclude":
+		if len(args) != 2 {
+			errorf("usage: %s module/path v1.2.3", verb)
+			return
+		}
+		s, err := parseString(&args[0])
+		if err != nil {
+			errorf("invalid quoted string: %v", err)
+			return
+		}
+		v, err := parseVersion(verb, s, &args[1], fix)
+		if err != nil {
+			wrapError(err)
+			return
+		}
+		pathMajor, err := modulePathMajor(s)
+		if err != nil {
+			wrapError(err)
+			return
+		}
+		if err := module.CheckPathMajor(v, pathMajor); err != nil {
+			wrapModPathError(s, err)
+			return
+		}
+		if verb == "require" {
+			f.Require = append(f.Require, &Require{
+				Mod:      module.Version{Path: s, Version: v},
+				Syntax:   line,
+				Indirect: isIndirect(line),
+			})
+		} else {
+			f.Exclude = append(f.Exclude, &Exclude{
+				Mod:    module.Version{Path: s, Version: v},
+				Syntax: line,
+			})
+		}
+
+	case "replace":
+		replace, wrappederr := parseReplace(f.Syntax.Name, line, verb, args, fix)
+		if wrappederr != nil {
+			*errs = append(*errs, *wrappederr)
+			return
+		}
+		f.Replace = append(f.Replace, replace)
+
+	case "retract":
+		rationale := parseDirectiveComment(block, line)
+		vi, err := parseVersionInterval(verb, "", &args, dontFixRetract)
+		if err != nil {
+			if strict {
+				wrapError(err)
+				return
+			} else {
+				// Only report errors parsing intervals in the main module. We may
+				// support additional syntax in the future, such as open and half-open
+				// intervals. Those can't be supported now, because they break the
+				// go.mod parser, even in lax mode.
+				return
+			}
+		}
+		if len(args) > 0 && strict {
+			// In the future, there may be additional information after the version.
+			errorf("unexpected token after version: %q", args[0])
+			return
+		}
+		retract := &Retract{
+			VersionInterval: vi,
+			Rationale:       rationale,
+			Syntax:          line,
+		}
+		f.Retract = append(f.Retract, retract)
+
+	case "tool":
+		if len(args) != 1 {
+			errorf("tool directive expects exactly one argument")
+			return
+		}
+		s, err := parseString(&args[0])
+		if err != nil {
+			errorf("invalid quoted string: %v", err)
+			return
+		}
+		f.Tool = append(f.Tool, &Tool{
+			Path:   s,
+			Syntax: line,
+		})
+
+	case "ignore":
+		if len(args) != 1 {
+			errorf("ignore directive expects exactly one argument")
+			return
+		}
+		s, err := parseString(&args[0])
+		if err != nil {
+			errorf("invalid quoted string: %v", err)
+			return
+		}
+		f.Ignore = append(f.Ignore, &Ignore{
+			Path:   s,
+			Syntax: line,
+		})
+	}
+}
+
+func parseReplace(filename string, line *Line, verb string, args []string, fix VersionFixer) (*Replace, *Error) {
+	wrapModPathError := func(modPath string, err error) *Error {
+		return &Error{
+			Filename: filename,
+			Pos:      line.Start,
+			ModPath:  modPath,
+			Verb:     verb,
+			Err:      err,
+		}
+	}
+	wrapError := func(err error) *Error {
+		return &Error{
+			Filename: filename,
+			Pos:      line.Start,
+			Err:      err,
+		}
+	}
+	errorf := func(format string, args ...any) *Error {
+		return wrapError(fmt.Errorf(format, args...))
+	}
+
+	arrow := 2
+	if len(args) >= 2 && args[1] == "=>" {
+		arrow = 1
+	}
+	if len(args) < arrow+2 || len(args) > arrow+3 || args[arrow] != "=>" {
+		return nil, errorf("usage: %s module/path [v1.2.3] => other/module v1.4\n\t or %s module/path [v1.2.3] => ../local/directory", verb, verb)
+	}
+	s, err := parseString(&args[0])
+	if err != nil {
+		return nil, errorf("invalid quoted string: %v", err)
+	}
+	pathMajor, err := modulePathMajor(s)
+	if err != nil {
+		return nil, wrapModPathError(s, err)
+
+	}
+	var v string
+	if arrow == 2 {
+		v, err = parseVersion(verb, s, &args[1], fix)
+		if err != nil {
+			return nil, wrapError(err)
+		}
+		if err := module.CheckPathMajor(v, pathMajor); err != nil {
+			return nil, wrapModPathError(s, err)
+		}
+	}
+	ns, err := parseString(&args[arrow+1])
+	if err != nil {
+		return nil, errorf("invalid quoted string: %v", err)
+	}
+	nv := ""
+	if len(args) == arrow+2 {
+		if !IsDirectoryPath(ns) {
+			if strings.Contains(ns, "@") {
+				return nil, errorf("replacement module must match format 'path version', not 'path@version'")
+			}
+			return nil, errorf("replacement module without version must be directory path (rooted or starting with . or ..)")
+		}
+		if filepath.Separator == '/' && strings.Contains(ns, `\`) {
+			return nil, errorf("replacement directory appears to be Windows path (on a non-windows system)")
+		}
+	}
+	if len(args) == arrow+3 {
+		nv, err = parseVersion(verb, ns, &args[arrow+2], fix)
+		if err != nil {
+			return nil, wrapError(err)
+		}
+		if IsDirectoryPath(ns) {
+			return nil, errorf("replacement module directory path %q cannot have version", ns)
+		}
+	}
+	return &Replace{
+		Old:    module.Version{Path: s, Version: v},
+		New:    module.Version{Path: ns, Version: nv},
+		Syntax: line,
+	}, nil
+}
+
+// fixRetract applies fix to each retract directive in f, appending any errors
+// to errs.
+//
+// Most versions are fixed as we parse the file, but for retract directives,
+// the relevant module path is the one specified with the module directive,
+// and that might appear at the end of the file (or not at all).
+func (f *File) fixRetract(fix VersionFixer, errs *ErrorList) {
+	if fix == nil {
+		return
+	}
+	path := ""
+	if f.Module != nil {
+		path = f.Module.Mod.Path
+	}
+	var r *Retract
+	wrapError := func(err error) {
+		*errs = append(*errs, Error{
+			Filename: f.Syntax.Name,
+			Pos:      r.Syntax.Start,
+			Err:      err,
+		})
+	}
+
+	for _, r = range f.Retract {
+		if path == "" {
+			wrapError(errors.New("no module directive found, so retract cannot be used"))
+			return // only print the first one of these
+		}
+
+		args := r.Syntax.Token
+		if args[0] == "retract" {
+			args = args[1:]
+		}
+		vi, err := parseVersionInterval("retract", path, &args, fix)
+		if err != nil {
+			wrapError(err)
+		}
+		r.VersionInterval = vi
+	}
+}
+
+func (f *WorkFile) add(errs *ErrorList, line *Line, verb string, args []string, fix VersionFixer) {
+	wrapError := func(err error) {
+		*errs = append(*errs, Error{
+			Filename: f.Syntax.Name,
+			Pos:      line.Start,
+			Err:      err,
+		})
+	}
+	errorf := func(format string, args ...any) {
+		wrapError(fmt.Errorf(format, args...))
+	}
+
+	switch verb {
+	default:
+		errorf("unknown directive: %s", verb)
+
+	case "go":
+		if f.Go != nil {
+			errorf("repeated go statement")
+			return
+		}
+		if len(args) != 1 {
+			errorf("go directive expects exactly one argument")
+			return
+		} else if !GoVersionRE.MatchString(args[0]) {
+			errorf("invalid go version '%s': must match format 1.23.0", args[0])
+			return
+		}
+
+		f.Go = &Go{Syntax: line}
+		f.Go.Version = args[0]
+
+	case "toolchain":
+		if f.Toolchain != nil {
+			errorf("repeated toolchain statement")
+			return
+		}
+		if len(args) != 1 {
+			errorf("toolchain directive expects exactly one argument")
+			return
+		} else if !ToolchainRE.MatchString(args[0]) {
+			errorf("invalid toolchain version '%s': must match format go1.23.0 or default", args[0])
+			return
+		}
+
+		f.Toolchain = &Toolchain{Syntax: line}
+		f.Toolchain.Name = args[0]
+
+	case "godebug":
+		if len(args) != 1 || strings.ContainsAny(args[0], "\"`',") {
+			errorf("usage: godebug key=value")
+			return
+		}
+		key, value, ok := strings.Cut(args[0], "=")
+		if !ok {
+			errorf("usage: godebug key=value")
+			return
+		}
+		f.Godebug = append(f.Godebug, &Godebug{
+			Key:    key,
+			Value:  value,
+			Syntax: line,
+		})
+
+	case "use":
+		if len(args) != 1 {
+			errorf("usage: %s local/dir", verb)
+			return
+		}
+		s, err := parseString(&args[0])
+		if err != nil {
+			errorf("invalid quoted string: %v", err)
+			return
+		}
+		f.Use = append(f.Use, &Use{
+			Path:   s,
+			Syntax: line,
+		})
+
+	case "replace":
+		replace, wrappederr := parseReplace(f.Syntax.Name, line, verb, args, fix)
+		if wrappederr != nil {
+			*errs = append(*errs, *wrappederr)
+			return
+		}
+		f.Replace = append(f.Replace, replace)
+	}
+}
+
+// IsDirectoryPath reports whether the given path should be interpreted as a directory path.
+// Just like on the go command line, relative paths starting with a '.' or '..' path component
+// and rooted paths are directory paths; the rest are module paths.
+func IsDirectoryPath(ns string) bool {
+	// Because go.mod files can move from one system to another,
+	// we check all known path syntaxes, both Unix and Windows.
+	return ns == "." || strings.HasPrefix(ns, "./") || strings.HasPrefix(ns, `.\`) ||
+		ns == ".." || strings.HasPrefix(ns, "../") || strings.HasPrefix(ns, `..\`) ||
+		strings.HasPrefix(ns, "/") || strings.HasPrefix(ns, `\`) ||
+		len(ns) >= 2 && ('A' <= ns[0] && ns[0] <= 'Z' || 'a' <= ns[0] && ns[0] <= 'z') && ns[1] == ':'
+}
+
+// MustQuote reports whether s must be quoted in order to appear as
+// a single token in a go.mod line.
+func MustQuote(s string) bool {
+	for _, r := range s {
+		switch r {
+		case ' ', '"', '\'', '`':
+			return true
+
+		case '(', ')', '[', ']', '{', '}', ',':
+			if len(s) > 1 {
+				return true
+			}
+
+		default:
+			if !unicode.IsPrint(r) {
+				return true
+			}
+		}
+	}
+	return s == "" || strings.Contains(s, "//") || strings.Contains(s, "/*")
+}
+
+// AutoQuote returns s or, if quoting is required for s to appear in a go.mod,
+// the quotation of s.
+func AutoQuote(s string) string {
+	if MustQuote(s) {
+		return strconv.Quote(s)
+	}
+	return s
+}
+
+func parseVersionInterval(verb string, path string, args *[]string, fix VersionFixer) (VersionInterval, error) {
+	toks := *args
+	if len(toks) == 0 || toks[0] == "(" {
+		return VersionInterval{}, fmt.Errorf("expected '[' or version")
+	}
+	if toks[0] != "[" {
+		v, err := parseVersion(verb, path, &toks[0], fix)
+		if err != nil {
+			return VersionInterval{}, err
+		}
+		*args = toks[1:]
+		return VersionInterval{Low: v, High: v}, nil
+	}
+	toks = toks[1:]
+
+	if len(toks) == 0 {
+		return VersionInterval{}, fmt.Errorf("expected version after '['")
+	}
+	low, err := parseVersion(verb, path, &toks[0], fix)
+	if err != nil {
+		return VersionInterval{}, err
+	}
+	toks = toks[1:]
+
+	if len(toks) == 0 || toks[0] != "," {
+		return VersionInterval{}, fmt.Errorf("expected ',' after version")
+	}
+	toks = toks[1:]
+
+	if len(toks) == 0 {
+		return VersionInterval{}, fmt.Errorf("expected version after ','")
+	}
+	high, err := parseVersion(verb, path, &toks[0], fix)
+	if err != nil {
+		return VersionInterval{}, err
+	}
+	toks = toks[1:]
+
+	if len(toks) == 0 || toks[0] != "]" {
+		return VersionInterval{}, fmt.Errorf("expected ']' after version")
+	}
+	toks = toks[1:]
+
+	*args = toks
+	return VersionInterval{Low: low, High: high}, nil
+}
+
+func parseString(s *string) (string, error) {
+	t := *s
+	if strings.HasPrefix(t, `"`) {
+		var err error
+		if t, err = strconv.Unquote(t); err != nil {
+			return "", err
+		}
+	} else if strings.ContainsAny(t, "\"'`") {
+		// Other quotes are reserved both for possible future expansion
+		// and to avoid confusion. For example if someone types 'x'
+		// we want that to be a syntax error and not a literal x in literal quotation marks.
+		return "", fmt.Errorf("unquoted string cannot contain quote")
+	}
+	*s = AutoQuote(t)
+	return t, nil
+}
+
+var deprecatedRE = lazyregexp.New(`(?s)(?:^|\n\n)Deprecated: *(.*?)(?:$|\n\n)`)
+
+// parseDeprecation extracts the text of comments on a "module" directive and
+// extracts a deprecation message from that.
+//
+// A deprecation message is contained in a paragraph within a block of comments
+// that starts with "Deprecated:" (case sensitive). The message runs until the
+// end of the paragraph and does not include the "Deprecated:" prefix. If the
+// comment block has multiple paragraphs that start with "Deprecated:",
+// parseDeprecation returns the message from the first.
+func parseDeprecation(block *LineBlock, line *Line) string {
+	text := parseDirectiveComment(block, line)
+	m := deprecatedRE.FindStringSubmatch(text)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// parseDirectiveComment extracts the text of comments on a directive.
+// If the directive's line does not have comments and is part of a block that
+// does have comments, the block's comments are used.
+func parseDirectiveComment(block *LineBlock, line *Line) string {
+	comments := line.Comment()
+	if block != nil && len(comments.Before) == 0 && len(comments.Suffix) == 0 {
+		comments = block.Comment()
+	}
+	groups := [][]Comment{comments.Before, comments.Suffix}
+	var lines []string
+	for _, g := range groups {
+		for _, c := range g {
+			if !strings.HasPrefix(c.Token, "//") {
+				continue // blank line
+			}
+			lines = append(lines, strings.TrimSpace(strings.TrimPrefix(c.Token, "//")))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+type ErrorList []Error
+
+func (e ErrorList) Error() string {
+	errStrs := make([]string, len(e))
+	for i, err := range e {
+		errStrs[i] = err.Error()
+	}
+	return strings.Join(errStrs, "\n")
+}
+
+type Error struct {
+	Filename string
+	Pos      Position
+	Verb     string
+	ModPath  string
+	Err      error
+}
+
+func (e *Error) Error() string {
+	var pos string
+	if e.Pos.LineRune > 1 {
+		// Don't print LineRune if it's 1 (beginning of line).
+		// It's always 1 except in scanner errors, which are rare.
+		pos = fmt.Sprintf("%s:%d:%d: ", e.Filename, e.Pos.Line, e.Pos.LineRune)
+	} else if e.Pos.Line > 0 {
+		pos = fmt.Sprintf("%s:%d: ", e.Filename, e.Pos.Line)
+	} else if e.Filename != "" {
+		pos = fmt.Sprintf("%s: ", e.Filename)
+	}
+
+	var directive string
+	if e.ModPath != "" {
+		directive = fmt.Sprintf("%s %s: ", e.Verb, e.ModPath)
+	} else if e.Verb != "" {
+		directive = fmt.Sprintf("%s: ", e.Verb)
+	}
+
+	return pos + directive + e.Err.Error()
+}
+
+func (e *Error) Unwrap() error { return e.Err }
+
+func parseVersion(verb string, path string, s *string, fix VersionFixer) (string, error) {
+	t, err := parseString(s)
+	if err != nil {
+		return "", &Error{
+			Verb:    verb,
+			ModPath: path,
+			Err: &module.InvalidVersionError{
+				Version: *s,
+				Err:     err,
+			},
+		}
+	}
+	if fix != nil {
+		fixed, err := fix(path, t)
+		if err != nil {
+			if err, ok := err.(*module.ModuleError); ok {
+				return "", &Error{
+					Verb:    verb,
+					ModPath: path,
+					Err:     err.Err,
+				}
+			}
+			return "", err
+		}
+		t = fixed
+	} else {
+		cv := module.CanonicalVersion(t)
+		if cv == "" {
+			return "", &Error{
+				Verb:    verb,
+				ModPath: path,
+				Err: &module.InvalidVersionError{
+					Version: t,
+					Err:     errors.New("must be of the form v1.2.3"),
+				},
+			}
+		}
+		t = cv
+	}
+	*s = t
+	return *s, nil
+}
+
+func modulePathMajor(path string) (string, error) {
+	_, major, ok := module.SplitPathVersion(path)
+	if !ok {
+		return "", fmt.Errorf("invalid module path")
+	}
+	return major, nil
+}
+
+func (f *File) Format() ([]byte, error) {
+	return Format(f.Syntax), nil
+}
+
+// Cleanup cleans up the file f after any edit operations.
+// To avoid quadratic behavior, modifications like [File.DropRequire]
+// clear the entry but do not remove it from the slice.
+// Cleanup cleans out all the cleared entries.
+func (f *File) Cleanup() {
+	w := 0
+	for _, g := range f.Godebug {
+		if g.Key != "" {
+			f.Godebug[w] = g
+			w++
+		}
+	}
+	f.Godebug = f.Godebug[:w]
+
+	w = 0
+	for _, r := range f.Require {
+		if r.Mod.Path != "" {
+			f.Require[w] = r
+			w++
+		}
+	}
+	f.Require = f.Require[:w]
+
+	w = 0
+	for _, x := range f.Exclude {
+		if x.Mod.Path != "" {
+			f.Exclude[w] = x
+			w++
+		}
+	}
+	f.Exclude = f.Exclude[:w]
+
+	w = 0
+	for _, r := range f.Replace {
+		if r.Old.Path != "" {
+			f.Replace[w] = r
+			w++
+		}
+	}
+	f.Replace = f.Replace[:w]
+
+	w = 0
+	for _, r := range f.Retract {
+		if r.Low != "" || r.High != "" {
+			f.Retract[w] = r
+			w++
+		}
+	}
+	f.Retract = f.Retract[:w]
+
+	f.Syntax.Cleanup()
+}
+
+func (f *File) AddGoStmt(version string) error {
+	if !GoVersionRE.MatchString(version) {
+		return fmt.Errorf("invalid language version %q", version)
+	}
+	if f.Go == nil {
+		var hint Expr
+		if f.Module != nil && f.Module.Syntax != nil {
+			hint = f.Module.Syntax
+		} else if f.Syntax == nil {
+			f.Syntax = new(FileSyntax)
+		}
+		f.Go = &Go{
+			Version: version,
+			Syntax:  f.Syntax.addLine(hint, "go", version),
+		}
+	} else {
+		f.Go.Version = version
+		f.Syntax.updateLine(f.Go.Syntax, "go", version)
+	}
+	return nil
+}
+
+// DropGoStmt deletes the go statement from the file.
+func (f *File) DropGoStmt() {
+	if f.Go != nil {
+		f.Go.Syntax.markRemoved()
+		f.Go = nil
+	}
+}
+
+// DropToolchainStmt deletes the toolchain statement from the file.
+func (f *File) DropToolchainStmt() {
+	if f.Toolchain != nil {
+		f.Toolchain.Syntax.markRemoved()
+		f.Toolchain = nil
+	}
+}
+
+func (f *File) AddToolchainStmt(name string) error {
+	if !ToolchainRE.MatchString(name) {
+		return fmt.Errorf("invalid toolchain name %q", name)
+	}
+	if f.Toolchain == nil {
+		var hint Expr
+		if f.Go != nil && f.Go.Syntax != nil {
+			hint = f.Go.Syntax
+		} else if f.Module != nil && f.Module.Syntax != nil {
+			hint = f.Module.Syntax
+		}
+		f.Toolchain = &Toolchain{
+			Name:   name,
+			Syntax: f.Syntax.addLine(hint, "toolchain", name),
+		}
+	} else {
+		f.Toolchain.Name = name
+		f.Syntax.updateLine(f.Toolchain.Syntax, "toolchain", name)
+	}
+	return nil
+}
+
+// AddGodebug sets the first godebug line for key to value,
+// preserving any existing comments for that line and removing all
+// other godebug lines for key.
+//
+// If no line currently exists for key, AddGodebug adds a new line
+// at the end of the last godebug block.
+func (f *File) AddGodebug(key, value string) error {
+	need := true
+	for _, g := range f.Godebug {
+		if g.Key == key {
+			if need {
+				g.Value = value
+				f.Syntax.updateLine(g.Syntax, "godebug", key+"="+value)
+				need = false
+			} else {
+				g.Syntax.markRemoved()
+				*g = Godebug{}
+			}
+		}
+	}
+
+	if need {
+		f.addNewGodebug(key, value)
+	}
+	return nil
+}
+
+// addNewGodebug adds a new godebug key=value line at the end
+// of the last godebug block, regardless of any existing godebug lines for key.
+func (f *File) addNewGodebug(key, value string) {
+	line := f.Syntax.addLine(nil, "godebug", key+"="+value)
+	g := &Godebug{
+		Key:    key,
+		Value:  value,
+		Syntax: line,
+	}
+	f.Godebug = append(f.Godebug, g)
+}
+
+// AddRequire sets the first require line for path to version vers,
+// preserving any existing comments for that line and removing all
+// other lines for path.
+//
+// If no line currently exists for path, AddRequire adds a new line
+// at the end of the last require block.
+func (f *File) AddRequire(path, vers string) error {
+	need := true
+	for _, r := range f.Require {
+		if r.Mod.Path == path {
+			if need {
+				r.Mod.Version = vers
+				f.Syntax.updateLine(r.Syntax, "require", AutoQuote(path), vers)
+				need = false
+			} else {
+				r.Syntax.markRemoved()
+				*r = Require{}
+			}
+		}
+	}
+
+	if need {
+		f.AddNewRequire(path, vers, false)
+	}
+	return nil
+}
+
+// AddNewRequire adds a new require line for path at version vers at the end of
+// the last require block, regardless of any existing require lines for path.
+func (f *File) AddNewRequire(path, vers string, indirect bool) {
+	line := f.Syntax.addLine(nil, "require", AutoQuote(path), vers)
+	r := &Require{
+		Mod:    module.Version{Path: path, Version: vers},
+		Syntax: line,
+	}
+	r.setIndirect(indirect)
+	f.Require = append(f.Require, r)
+}
+
+// SetRequire updates the requirements of f to contain exactly req, preserving
+// the existing block structure and line comment contents (except for 'indirect'
+// markings) for the first requirement on each named module path.
+//
+// The Syntax field is ignored for the requirements in req.
+//
+// Any requirements not already present in the file are added to the block
+// containing the last require line.
+//
+// The requirements in req must specify at most one distinct version for each
+// module path.
+//
+// If any existing requirements may be removed, the caller should call
+// [File.Cleanup] after all edits are complete.
+func (f *File) SetRequire(req []*Require) {
+	type elem struct {
+		version  string
+		indirect bool
+	}
+	need := make(map[string]elem)
+	for _, r := range req {
+		if prev, dup := need[r.Mod.Path]; dup && prev.version != r.Mod.Version {
+			panic(fmt.Errorf("SetRequire called with conflicting versions for path %s (%s and %s)", r.Mod.Path, prev.version, r.Mod.Version))
+		}
+		need[r.Mod.Path] = elem{r.Mod.Version, r.Indirect}
+	}
+
+	// Update or delete the existing Require entries to preserve
+	// only the first for each module path in req.
+	for _, r := range f.Require {
+		e, ok := need[r.Mod.Path]
+		if ok {
+			r.setVersion(e.version)
+			r.setIndirect(e.indirect)
+		} else {
+			r.markRemoved()
+		}
+		delete(need, r.Mod.Path)
+	}
+
+	// Add new entries in the last block of the file for any paths that weren't
+	// already present.
+	//
+	// This step is nondeterministic, but the final result will be deterministic
+	// because we will sort the block.
+	for path, e := range need {
+		f.AddNewRequire(path, e.version, e.indirect)
+	}
+
+	f.SortBlocks()
+}
+
+// SetRequireSeparateIndirect updates the requirements of f to contain the given
+// requirements. Comment contents (except for 'indirect' markings) are retained
+// from the first existing requirement for each module path. Like SetRequire,
+// SetRequireSeparateIndirect adds requirements for new paths in req,
+// updates the version and "// indirect" comment on existing requirements,
+// and deletes requirements on paths not in req. Existing duplicate requirements
+// are deleted.
+//
+// As its name suggests, SetRequireSeparateIndirect puts direct and indirect
+// requirements into two separate blocks, one containing only direct
+// requirements, and the other containing only indirect requirements.
+// SetRequireSeparateIndirect may move requirements between these two blocks
+// when their indirect markings change. However, SetRequireSeparateIndirect
+// won't move requirements from other blocks, especially blocks with comments.
+//
+// If the file initially has one uncommented block of requirements,
+// SetRequireSeparateIndirect will split it into a direct-only and indirect-only
+// block. This aids in the transition to separate blocks.
+func (f *File) SetRequireSeparateIndirect(req []*Require) {
+	f.setRequireSeparateIndirect(req, false)
+}
+
+// SetRequireAtMostTwo is like SetRequireSeparateIndirect but it aggressively
+// consolidates all requirements into at most two blocks (one direct, one indirect).
+// It ignores existing blocks and comments when deciding where to place requirements.
+func (f *File) SetRequireAtMostTwo(req []*Require) {
+	f.setRequireSeparateIndirect(req, true)
+}
+
+func (f *File) setRequireSeparateIndirect(req []*Require, simplify bool) {
+	// hasComments returns whether a line or block has comments
+	// other than "indirect".
+	hasComments := func(c Comments) bool {
+		return len(c.Before) > 0 || len(c.After) > 0 || len(c.Suffix) > 1 ||
+			(len(c.Suffix) == 1 &&
+				strings.TrimSpace(strings.TrimPrefix(c.Suffix[0].Token, string(slashSlash))) != "indirect")
+	}
+
+	// moveReq adds r to block. If r was in another block, moveReq deletes
+	// it from that block and transfers its comments.
+	moveReq := func(r *Require, block *LineBlock) {
+		var line *Line
+		if r.Syntax == nil {
+			line = &Line{Token: []string{AutoQuote(r.Mod.Path), r.Mod.Version}}
+			r.Syntax = line
+			if r.Indirect {
+				r.setIndirect(true)
+			}
+		} else {
+			line = new(Line)
+			*line = *r.Syntax
+			if !line.InBlock && len(line.Token) > 0 && line.Token[0] == "require" {
+				line.Token = line.Token[1:]
+			}
+			r.Syntax.Token = nil // Cleanup will delete the old line.
+			r.Syntax = line
+		}
+		line.InBlock = true
+		block.Line = append(block.Line, line)
+	}
+
+	// Examine existing require lines and blocks.
+	need := make(map[string]*Require)
+	for _, r := range req {
+		need[r.Mod.Path] = r
+	}
+	lineIndirect := make(map[*Line]bool)
+	for _, r := range f.Require {
+		if n := need[r.Mod.Path]; n != nil {
+			lineIndirect[r.Syntax] = n.Indirect
+		}
+	}
+
+	var (
+		// We may insert new requirements into the last uncommented
+		// direct-only and indirect-only blocks. We may also move requirements
+		// to the opposite block if their indirect markings change.
+		lastDirectIndex   = -1
+		lastIndirectIndex = -1
+
+		// If there are no direct-only or indirect-only blocks, a new block may
+		// be inserted after the last require line or block.
+		lastRequireIndex = -1
+
+		// If there's only one require line or block, and it's uncommented,
+		// we'll move its requirements to the direct-only or indirect-only blocks.
+		requireLineOrBlockCount = 0
+
+		// Track the block each requirement belongs to (if any) so we can
+		// move them later.
+		lineToBlock           = make(map[*Line]*LineBlock)
+		directBlockComments   []Comment
+		indirectBlockComments []Comment
+	)
+	for i, stmt := range f.Syntax.Stmt {
+		switch stmt := stmt.(type) {
+		case *Line:
+			if len(stmt.Token) == 0 || stmt.Token[0] != "require" {
+				continue
+			}
+			lastRequireIndex = i
+			requireLineOrBlockCount++
+			if !hasComments(stmt.Comments) {
+				if isIndirect(stmt) {
+					lastIndirectIndex = i
+				} else {
+					lastDirectIndex = i
+				}
+			}
+
+		case *LineBlock:
+			if len(stmt.Token) == 0 || stmt.Token[0] != "require" {
+				continue
+			}
+			lastRequireIndex = i
+			requireLineOrBlockCount++
+			allDirect := len(stmt.Line) > 0 && !hasComments(stmt.Comments)
+			allIndirect := len(stmt.Line) > 0 && !hasComments(stmt.Comments)
+			for _, line := range stmt.Line {
+				lineToBlock[line] = stmt
+				if hasComments(line.Comments) {
+					allDirect = false
+					allIndirect = false
+				} else if isIndirect(line) {
+					allDirect = false
+				} else {
+					allIndirect = false
+				}
+			}
+			if allDirect {
+				lastDirectIndex = i
+			}
+			if allIndirect {
+				lastIndirectIndex = i
+			}
+			if simplify {
+				anyDirect := false
+				for _, line := range stmt.Line {
+					if ind, ok := lineIndirect[line]; ok && !ind {
+						anyDirect = true
+						break
+					}
+				}
+				target := &directBlockComments
+				if !anyDirect && len(stmt.Line) > 0 {
+					target = &indirectBlockComments
+				}
+				if len(*target) > 0 && len(stmt.Comments.Before) > 0 {
+					*target = append(*target, Comment{Token: "//"})
+				}
+				*target = append(*target, stmt.Comments.Before...)
+				stmt.Comments.Before = nil
+			}
+		}
+	}
+
+	oneFlatUncommentedBlock := requireLineOrBlockCount == 1 &&
+		!hasComments(*f.Syntax.Stmt[lastRequireIndex].Comment())
+
+	// Create direct and indirect blocks if needed. Convert lines into blocks
+	// if needed. If we end up with an empty block or a one-line block,
+	// Cleanup will delete it or convert it to a line later.
+	insertBlock := func(i int) *LineBlock {
+		block := &LineBlock{Token: []string{"require"}}
+		f.Syntax.Stmt = append(f.Syntax.Stmt, nil)
+		copy(f.Syntax.Stmt[i+1:], f.Syntax.Stmt[i:])
+		f.Syntax.Stmt[i] = block
+		return block
+	}
+
+	ensureBlock := func(i int) *LineBlock {
+		switch stmt := f.Syntax.Stmt[i].(type) {
+		case *LineBlock:
+			return stmt
+		case *Line:
+			block := &LineBlock{
+				Token: []string{"require"},
+				Line:  []*Line{stmt},
+			}
+			stmt.Token = stmt.Token[1:] // remove "require"
+			stmt.InBlock = true
+			f.Syntax.Stmt[i] = block
+			return block
+		default:
+			panic(fmt.Sprintf("unexpected statement: %v", stmt))
+		}
+	}
+
+	var lastDirectBlock *LineBlock
+	if lastDirectIndex < 0 {
+		if lastIndirectIndex >= 0 {
+			lastDirectIndex = lastIndirectIndex
+			lastIndirectIndex++
+		} else if lastRequireIndex >= 0 {
+			lastDirectIndex = lastRequireIndex + 1
+		} else {
+			lastDirectIndex = len(f.Syntax.Stmt)
+		}
+		lastDirectBlock = insertBlock(lastDirectIndex)
+	} else {
+		lastDirectBlock = ensureBlock(lastDirectIndex)
+	}
+
+	var lastIndirectBlock *LineBlock
+	if lastIndirectIndex < 0 {
+		lastIndirectIndex = lastDirectIndex + 1
+		lastIndirectBlock = insertBlock(lastIndirectIndex)
+	} else {
+		lastIndirectBlock = ensureBlock(lastIndirectIndex)
+	}
+
+	if simplify {
+		if len(directBlockComments) > 0 {
+			lastDirectBlock.Comments.Before = append(lastDirectBlock.Comments.Before, directBlockComments...)
+		}
+		if len(indirectBlockComments) > 0 {
+			lastIndirectBlock.Comments.Before = append(lastIndirectBlock.Comments.Before, indirectBlockComments...)
+		}
+	}
+
+	// Delete requirements we don't want anymore.
+	// Update versions and indirect comments on requirements we want to keep.
+	// If a requirement is in last{Direct,Indirect}Block with the wrong
+	// indirect marking after this, or if the requirement is in an single
+	// uncommented mixed block (oneFlatUncommentedBlock), move it to the
+	// correct block.
+	//
+	// Some blocks may be empty after this. Cleanup will remove them.
+	have := make(map[string]*Require)
+	for _, r := range f.Require {
+		path := r.Mod.Path
+		if need[path] == nil || have[path] != nil {
+			// Requirement not needed, or duplicate requirement. Delete.
+			r.markRemoved()
+			continue
+		}
+		have[r.Mod.Path] = r
+		r.setVersion(need[path].Mod.Version)
+		r.setIndirect(need[path].Indirect)
+		if need[path].Indirect &&
+			(simplify || oneFlatUncommentedBlock || lineToBlock[r.Syntax] == lastDirectBlock) {
+			moveReq(r, lastIndirectBlock)
+		} else if !need[path].Indirect &&
+			(simplify || oneFlatUncommentedBlock || lineToBlock[r.Syntax] == lastIndirectBlock) {
+			moveReq(r, lastDirectBlock)
+		}
+	}
+
+	// Add new requirements.
+	for path, r := range need {
+		if have[path] == nil {
+			if r.Indirect {
+				moveReq(r, lastIndirectBlock)
+			} else {
+				moveReq(r, lastDirectBlock)
+			}
+			f.Require = append(f.Require, r)
+		}
+	}
+
+	f.SortBlocks()
+}
+
+func (f *File) DropGodebug(key string) error {
+	for _, g := range f.Godebug {
+		if g.Key == key {
+			g.Syntax.markRemoved()
+			*g = Godebug{}
+		}
+	}
+	return nil
+}
+
+func (f *File) DropRequire(path string) error {
+	for _, r := range f.Require {
+		if r.Mod.Path == path {
+			r.Syntax.markRemoved()
+			*r = Require{}
+		}
+	}
+	return nil
+}
+
+// AddExclude adds a exclude statement to the mod file. Errors if the provided
+// version is not a canonical version string
+func (f *File) AddExclude(path, vers string) error {
+	if err := checkCanonicalVersion(path, vers); err != nil {
+		return err
+	}
+
+	var hint *Line
+	for _, x := range f.Exclude {
+		if x.Mod.Path == path && x.Mod.Version == vers {
+			return nil
+		}
+		if x.Mod.Path == path {
+			hint = x.Syntax
+		}
+	}
+
+	f.Exclude = append(f.Exclude, &Exclude{Mod: module.Version{Path: path, Version: vers}, Syntax: f.Syntax.addLine(hint, "exclude", AutoQuote(path), vers)})
+	return nil
+}
+
+func (f *File) DropExclude(path, vers string) error {
+	for _, x := range f.Exclude {
+		if x.Mod.Path == path && x.Mod.Version == vers {
+			x.Syntax.markRemoved()
+			*x = Exclude{}
+		}
+	}
+	return nil
+}
+
+func (f *File) AddReplace(oldPath, oldVers, newPath, newVers string) error {
+	return addReplace(f.Syntax, &f.Replace, oldPath, oldVers, newPath, newVers)
+}
+
+func addReplace(syntax *FileSyntax, replace *[]*Replace, oldPath, oldVers, newPath, newVers string) error {
+	need := true
+	old := module.Version{Path: oldPath, Version: oldVers}
+	new := module.Version{Path: newPath, Version: newVers}
+	tokens := []string{"replace", AutoQuote(oldPath)}
+	if oldVers != "" {
+		tokens = append(tokens, oldVers)
+	}
+	tokens = append(tokens, "=>", AutoQuote(newPath))
+	if newVers != "" {
+		tokens = append(tokens, newVers)
+	}
+
+	var hint *Line
+	for _, r := range *replace {
+		if r.Old.Path == oldPath && (oldVers == "" || r.Old.Version == oldVers) {
+			if need {
+				// Found replacement for old; update to use new.
+				r.New = new
+				syntax.updateLine(r.Syntax, tokens...)
+				need = false
+				continue
+			}
+			// Already added; delete other replacements for same.
+			r.Syntax.markRemoved()
+			*r = Replace{}
+		}
+		if r.Old.Path == oldPath {
+			hint = r.Syntax
+		}
+	}
+	if need {
+		*replace = append(*replace, &Replace{Old: old, New: new, Syntax: syntax.addLine(hint, tokens...)})
+	}
+	return nil
+}
+
+func (f *File) DropReplace(oldPath, oldVers string) error {
+	for _, r := range f.Replace {
+		if r.Old.Path == oldPath && r.Old.Version == oldVers {
+			r.Syntax.markRemoved()
+			*r = Replace{}
+		}
+	}
+	return nil
+}
+
+// AddRetract adds a retract statement to the mod file. Errors if the provided
+// version interval does not consist of canonical version strings
+func (f *File) AddRetract(vi VersionInterval, rationale string) error {
+	var path string
+	if f.Module != nil {
+		path = f.Module.Mod.Path
+	}
+	if err := checkCanonicalVersion(path, vi.High); err != nil {
+		return err
+	}
+	if err := checkCanonicalVersion(path, vi.Low); err != nil {
+		return err
+	}
+
+	r := &Retract{
+		VersionInterval: vi,
+	}
+	if vi.Low == vi.High {
+		r.Syntax = f.Syntax.addLine(nil, "retract", AutoQuote(vi.Low))
+	} else {
+		r.Syntax = f.Syntax.addLine(nil, "retract", "[", AutoQuote(vi.Low), ",", AutoQuote(vi.High), "]")
+	}
+	if rationale != "" {
+		for line := range strings.SplitSeq(rationale, "\n") {
+			com := Comment{Token: "// " + line}
+			r.Syntax.Comment().Before = append(r.Syntax.Comment().Before, com)
+		}
+	}
+	return nil
+}
+
+func (f *File) DropRetract(vi VersionInterval) error {
+	for _, r := range f.Retract {
+		if r.VersionInterval == vi {
+			r.Syntax.markRemoved()
+			*r = Retract{}
+		}
+	}
+	return nil
+}
+
+// AddTool adds a new tool directive with the given path.
+// It does nothing if the tool line already exists.
+func (f *File) AddTool(path string) error {
+	for _, t := range f.Tool {
+		if t.Path == path {
+			return nil
+		}
+	}
+
+	f.Tool = append(f.Tool, &Tool{
+		Path:   path,
+		Syntax: f.Syntax.addLine(nil, "tool", path),
+	})
+
+	f.SortBlocks()
+	return nil
+}
+
+// RemoveTool removes a tool directive with the given path.
+// It does nothing if no such tool directive exists.
+func (f *File) DropTool(path string) error {
+	for _, t := range f.Tool {
+		if t.Path == path {
+			t.Syntax.markRemoved()
+			*t = Tool{}
+		}
+	}
+	return nil
+}
+
+// AddIgnore adds a new ignore directive with the given path.
+// It does nothing if the ignore line already exists.
+func (f *File) AddIgnore(path string) error {
+	for _, t := range f.Ignore {
+		if t.Path == path {
+			return nil
+		}
+	}
+
+	f.Ignore = append(f.Ignore, &Ignore{
+		Path:   path,
+		Syntax: f.Syntax.addLine(nil, "ignore", path),
+	})
+
+	f.SortBlocks()
+	return nil
+}
+
+// DropIgnore removes a ignore directive with the given path.
+// It does nothing if no such ignore directive exists.
+func (f *File) DropIgnore(path string) error {
+	for _, t := range f.Ignore {
+		if t.Path == path {
+			t.Syntax.markRemoved()
+			*t = Ignore{}
+		}
+	}
+	return nil
+}
+
+func (f *File) SortBlocks() {
+	f.removeDups() // otherwise sorting is unsafe
+
+	// semanticSortForExcludeVersionV is the Go version (plus leading "v") at which
+	// lines in exclude blocks start to use semantic sort instead of lexicographic sort.
+	// See go.dev/issue/60028.
+	const semanticSortForExcludeVersionV = "v1.21"
+	useSemanticSortForExclude := f.Go != nil && semver.Compare("v"+f.Go.Version, semanticSortForExcludeVersionV) >= 0
+
+	for _, stmt := range f.Syntax.Stmt {
+		block, ok := stmt.(*LineBlock)
+		if !ok {
+			continue
+		}
+		less := compareLine
+		if block.Token[0] == "exclude" && useSemanticSortForExclude {
+			less = compareLineExclude
+		} else if block.Token[0] == "retract" {
+			less = compareLineRetract
+		}
+		slices.SortStableFunc(block.Line, less)
+	}
+}
+
+// removeDups removes duplicate exclude, replace and tool directives.
+//
+// Earlier exclude and tool directives take priority.
+//
+// Later replace directives take priority.
+//
+// require directives are not de-duplicated. That's left up to higher-level
+// logic (MVS).
+//
+// retract directives are not de-duplicated since comments are
+// meaningful, and versions may be retracted multiple times.
+func (f *File) removeDups() {
+	removeDups(f.Syntax, &f.Exclude, &f.Replace, &f.Tool, &f.Ignore)
+}
+
+func removeDups(syntax *FileSyntax, exclude *[]*Exclude, replace *[]*Replace, tool *[]*Tool, ignore *[]*Ignore) {
+	kill := make(map[*Line]bool)
+
+	// Remove duplicate excludes.
+	if exclude != nil {
+		haveExclude := make(map[module.Version]bool)
+		for _, x := range *exclude {
+			if haveExclude[x.Mod] {
+				kill[x.Syntax] = true
+				continue
+			}
+			haveExclude[x.Mod] = true
+		}
+		var excl []*Exclude
+		for _, x := range *exclude {
+			if !kill[x.Syntax] {
+				excl = append(excl, x)
+			}
+		}
+		*exclude = excl
+	}
+
+	// Remove duplicate replacements.
+	// Later replacements take priority over earlier ones.
+	haveReplace := make(map[module.Version]bool)
+	for _, x := range slices.Backward(*replace) {
+		if haveReplace[x.Old] {
+			kill[x.Syntax] = true
+			continue
+		}
+		haveReplace[x.Old] = true
+	}
+	var repl []*Replace
+	for _, x := range *replace {
+		if !kill[x.Syntax] {
+			repl = append(repl, x)
+		}
+	}
+	*replace = repl
+
+	if tool != nil {
+		haveTool := make(map[string]bool)
+		for _, t := range *tool {
+			if haveTool[t.Path] {
+				kill[t.Syntax] = true
+				continue
+			}
+			haveTool[t.Path] = true
+		}
+		var newTool []*Tool
+		for _, t := range *tool {
+			if !kill[t.Syntax] {
+				newTool = ap
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/rule.go","mode":420,"size":51919,"sha256":"f8c2300b20509d28eb58a1a55d10b035d8b84d1c3344238eacf4b457a979698e","index":1,"count":2,"encoding":"utf-8","payloadBytes":3919}
+pend(newTool, t)
+			}
+		}
+		*tool = newTool
+	}
+
+	if ignore != nil {
+		haveIgnore := make(map[string]bool)
+		for _, i := range *ignore {
+			if haveIgnore[i.Path] {
+				kill[i.Syntax] = true
+				continue
+			}
+			haveIgnore[i.Path] = true
+		}
+		var newIgnore []*Ignore
+		for _, i := range *ignore {
+			if !kill[i.Syntax] {
+				newIgnore = append(newIgnore, i)
+			}
+		}
+		*ignore = newIgnore
+	}
+
+	// Duplicate require and retract directives are not removed.
+
+	// Drop killed statements from the syntax tree.
+	var stmts []Expr
+	for _, stmt := range syntax.Stmt {
+		switch stmt := stmt.(type) {
+		case *Line:
+			if kill[stmt] {
+				continue
+			}
+		case *LineBlock:
+			var lines []*Line
+			for _, line := range stmt.Line {
+				if !kill[line] {
+					lines = append(lines, line)
+				}
+			}
+			stmt.Line = lines
+			if len(lines) == 0 {
+				continue
+			}
+		}
+		stmts = append(stmts, stmt)
+	}
+	syntax.Stmt = stmts
+}
+
+// compareLine compares li and lj. It sorts lexicographically without assigning
+// any special meaning to tokens.
+func compareLine(li, lj *Line) int {
+	for k := 0; k < len(li.Token) && k < len(lj.Token); k++ {
+		if li.Token[k] != lj.Token[k] {
+			return cmp.Compare(li.Token[k], lj.Token[k])
+		}
+	}
+	return cmp.Compare(len(li.Token), len(lj.Token))
+}
+
+// compareLineExclude compares li and lj for lines in an "exclude" block.
+func compareLineExclude(li, lj *Line) int {
+	if len(li.Token) != 2 || len(lj.Token) != 2 {
+		// Not a known exclude specification.
+		// Fall back to sorting lexicographically.
+		return compareLine(li, lj)
+	}
+	// An exclude specification has two tokens: ModulePath and Version.
+	// Compare module path by string order and version by semver rules.
+	if pi, pj := li.Token[0], lj.Token[0]; pi != pj {
+		return cmp.Compare(pi, pj)
+	}
+	return semver.Compare(li.Token[1], lj.Token[1])
+}
+
+// compareLineRetract compares li and lj for lines in a "retract" block.
+// It treats each line as a version interval. Single versions are compared as
+// if they were intervals with the same low and high version.
+// Intervals are sorted in descending order, first by low version, then by
+// high version, using [semver.Compare].
+func compareLineRetract(li, lj *Line) int {
+	interval := func(l *Line) VersionInterval {
+		if len(l.Token) == 1 {
+			return VersionInterval{Low: l.Token[0], High: l.Token[0]}
+		} else if len(l.Token) == 5 && l.Token[0] == "[" && l.Token[2] == "," && l.Token[4] == "]" {
+			return VersionInterval{Low: l.Token[1], High: l.Token[3]}
+		} else {
+			// Line in unknown format. Treat as an invalid version.
+			return VersionInterval{}
+		}
+	}
+	vii := interval(li)
+	vij := interval(lj)
+	if cmp := semver.Compare(vii.Low, vij.Low); cmp != 0 {
+		return -cmp
+	}
+	return -semver.Compare(vii.High, vij.High)
+}
+
+// checkCanonicalVersion returns a non-nil error if vers is not a canonical
+// version string or does not match the major version of path.
+//
+// If path is non-empty, the error text suggests a format with a major version
+// corresponding to the path.
+func checkCanonicalVersion(path, vers string) error {
+	_, pathMajor, pathMajorOk := module.SplitPathVersion(path)
+
+	if vers == "" || vers != module.CanonicalVersion(vers) {
+		if pathMajor == "" {
+			return &module.InvalidVersionError{
+				Version: vers,
+				Err:     fmt.Errorf("must be of the form v1.2.3"),
+			}
+		}
+		return &module.InvalidVersionError{
+			Version: vers,
+			Err:     fmt.Errorf("must be of the form %s.2.3", module.PathMajorPrefix(pathMajor)),
+		}
+	}
+
+	if pathMajorOk {
+		if err := module.CheckPathMajor(vers, pathMajor); err != nil {
+			if pathMajor == "" {
+				// In this context, the user probably wrote "v2.3.4" when they meant
+				// "v2.3.4+incompatible". Suggest that instead of "v0 or v1".
+				return &module.InvalidVersionError{
+					Version: vers,
+					Err:     fmt.Errorf("should be %s+incompatible (or module %s/%v)", vers, path, semver.Major(vers)),
+				}
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/work.go","mode":420,"size":7829,"sha256":"ad31b233b102190481c0b6bb6a4b350c9b34ae8836f349431fe297687cb68fc5","index":0,"count":1,"encoding":"utf-8","payloadBytes":7829}
+// Copyright 2021 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package modfile
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
+
+// A WorkFile is the parsed, interpreted form of a go.work file.
+type WorkFile struct {
+	Go        *Go
+	Toolchain *Toolchain
+	Godebug   []*Godebug
+	Use       []*Use
+	Replace   []*Replace
+
+	Syntax *FileSyntax
+}
+
+// A Use is a single directory statement.
+type Use struct {
+	Path       string // Use path of module.
+	ModulePath string // Module path in the comment.
+	Syntax     *Line
+}
+
+// ParseWork parses and returns a go.work file.
+//
+// file is the name of the file, used in positions and errors.
+//
+// data is the content of the file.
+//
+// fix is an optional function that canonicalizes module versions.
+// If fix is nil, all module versions must be canonical ([module.CanonicalVersion]
+// must return the same string).
+func ParseWork(file string, data []byte, fix VersionFixer) (*WorkFile, error) {
+	fs, err := parse(file, data)
+	if err != nil {
+		return nil, err
+	}
+	f := &WorkFile{
+		Syntax: fs,
+	}
+	var errs ErrorList
+
+	for _, x := range fs.Stmt {
+		switch x := x.(type) {
+		case *Line:
+			f.add(&errs, x, x.Token[0], x.Token[1:], fix)
+
+		case *LineBlock:
+			if len(x.Token) > 1 {
+				errs = append(errs, Error{
+					Filename: file,
+					Pos:      x.Start,
+					Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
+				})
+				continue
+			}
+			switch x.Token[0] {
+			default:
+				errs = append(errs, Error{
+					Filename: file,
+					Pos:      x.Start,
+					Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
+				})
+				continue
+			case "godebug", "use", "replace":
+				for _, l := range x.Line {
+					f.add(&errs, l, x.Token[0], l.Token, fix)
+				}
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	return f, nil
+}
+
+// Cleanup cleans up the file f after any edit operations.
+// To avoid quadratic behavior, modifications like [WorkFile.DropRequire]
+// clear the entry but do not remove it from the slice.
+// Cleanup cleans out all the cleared entries.
+func (f *WorkFile) Cleanup() {
+	w := 0
+	for _, r := range f.Use {
+		if r.Path != "" {
+			f.Use[w] = r
+			w++
+		}
+	}
+	f.Use = f.Use[:w]
+
+	w = 0
+	for _, r := range f.Replace {
+		if r.Old.Path != "" {
+			f.Replace[w] = r
+			w++
+		}
+	}
+	f.Replace = f.Replace[:w]
+
+	f.Syntax.Cleanup()
+}
+
+func (f *WorkFile) AddGoStmt(version string) error {
+	if !GoVersionRE.MatchString(version) {
+		return fmt.Errorf("invalid language version %q", version)
+	}
+	if f.Go == nil {
+		stmt := &Line{Token: []string{"go", version}}
+		f.Go = &Go{
+			Version: version,
+			Syntax:  stmt,
+		}
+		// Find the first non-comment-only block and add
+		// the go statement before it. That will keep file comments at the top.
+		i := 0
+		for i = 0; i < len(f.Syntax.Stmt); i++ {
+			if _, ok := f.Syntax.Stmt[i].(*CommentBlock); !ok {
+				break
+			}
+		}
+		f.Syntax.Stmt = append(append(f.Syntax.Stmt[:i:i], stmt), f.Syntax.Stmt[i:]...)
+	} else {
+		f.Go.Version = version
+		f.Syntax.updateLine(f.Go.Syntax, "go", version)
+	}
+	return nil
+}
+
+func (f *WorkFile) AddToolchainStmt(name string) error {
+	if !ToolchainRE.MatchString(name) {
+		return fmt.Errorf("invalid toolchain name %q", name)
+	}
+	if f.Toolchain == nil {
+		stmt := &Line{Token: []string{"toolchain", name}}
+		f.Toolchain = &Toolchain{
+			Name:   name,
+			Syntax: stmt,
+		}
+		// Find the go line and add the toolchain line after it.
+		// Or else find the first non-comment-only block and add
+		// the toolchain line before it. That will keep file comments at the top.
+		i := 0
+		for i = 0; i < len(f.Syntax.Stmt); i++ {
+			if line, ok := f.Syntax.Stmt[i].(*Line); ok && len(line.Token) > 0 && line.Token[0] == "go" {
+				i++
+				goto Found
+			}
+		}
+		for i = 0; i < len(f.Syntax.Stmt); i++ {
+			if _, ok := f.Syntax.Stmt[i].(*CommentBlock); !ok {
+				break
+			}
+		}
+	Found:
+		f.Syntax.Stmt = append(append(f.Syntax.Stmt[:i:i], stmt), f.Syntax.Stmt[i:]...)
+	} else {
+		f.Toolchain.Name = name
+		f.Syntax.updateLine(f.Toolchain.Syntax, "toolchain", name)
+	}
+	return nil
+}
+
+// DropGoStmt deletes the go statement from the file.
+func (f *WorkFile) DropGoStmt() {
+	if f.Go != nil {
+		f.Go.Syntax.markRemoved()
+		f.Go = nil
+	}
+}
+
+// DropToolchainStmt deletes the toolchain statement from the file.
+func (f *WorkFile) DropToolchainStmt() {
+	if f.Toolchain != nil {
+		f.Toolchain.Syntax.markRemoved()
+		f.Toolchain = nil
+	}
+}
+
+// AddGodebug sets the first godebug line for key to value,
+// preserving any existing comments for that line and removing all
+// other godebug lines for key.
+//
+// If no line currently exists for key, AddGodebug adds a new line
+// at the end of the last godebug block.
+func (f *WorkFile) AddGodebug(key, value string) error {
+	need := true
+	for _, g := range f.Godebug {
+		if g.Key == key {
+			if need {
+				g.Value = value
+				f.Syntax.updateLine(g.Syntax, "godebug", key+"="+value)
+				need = false
+			} else {
+				g.Syntax.markRemoved()
+				*g = Godebug{}
+			}
+		}
+	}
+
+	if need {
+		f.addNewGodebug(key, value)
+	}
+	return nil
+}
+
+// addNewGodebug adds a new godebug key=value line at the end
+// of the last godebug block, regardless of any existing godebug lines for key.
+func (f *WorkFile) addNewGodebug(key, value string) {
+	line := f.Syntax.addLine(nil, "godebug", key+"="+value)
+	g := &Godebug{
+		Key:    key,
+		Value:  value,
+		Syntax: line,
+	}
+	f.Godebug = append(f.Godebug, g)
+}
+
+func (f *WorkFile) DropGodebug(key string) error {
+	for _, g := range f.Godebug {
+		if g.Key == key {
+			g.Syntax.markRemoved()
+			*g = Godebug{}
+		}
+	}
+	return nil
+}
+
+func (f *WorkFile) AddUse(diskPath, modulePath string) error {
+	need := true
+	for _, d := range f.Use {
+		if d.Path == diskPath {
+			if need {
+				d.ModulePath = modulePath
+				f.Syntax.updateLine(d.Syntax, "use", AutoQuote(diskPath))
+				need = false
+			} else {
+				d.Syntax.markRemoved()
+				*d = Use{}
+			}
+		}
+	}
+
+	if need {
+		f.AddNewUse(diskPath, modulePath)
+	}
+	return nil
+}
+
+func (f *WorkFile) AddNewUse(diskPath, modulePath string) {
+	line := f.Syntax.addLine(nil, "use", AutoQuote(diskPath))
+	f.Use = append(f.Use, &Use{Path: diskPath, ModulePath: modulePath, Syntax: line})
+}
+
+func (f *WorkFile) SetUse(dirs []*Use) {
+	need := make(map[string]string)
+	for _, d := range dirs {
+		need[d.Path] = d.ModulePath
+	}
+
+	for _, d := range f.Use {
+		if modulePath, ok := need[d.Path]; ok {
+			d.ModulePath = modulePath
+		} else {
+			d.Syntax.markRemoved()
+			*d = Use{}
+		}
+	}
+
+	// TODO(#45713): Add module path to comment.
+
+	for diskPath, modulePath := range need {
+		f.AddNewUse(diskPath, modulePath)
+	}
+	f.SortBlocks()
+}
+
+func (f *WorkFile) DropUse(path string) error {
+	for _, d := range f.Use {
+		if d.Path == path {
+			d.Syntax.markRemoved()
+			*d = Use{}
+		}
+	}
+	return nil
+}
+
+func (f *WorkFile) AddReplace(oldPath, oldVers, newPath, newVers string) error {
+	return addReplace(f.Syntax, &f.Replace, oldPath, oldVers, newPath, newVers)
+}
+
+func (f *WorkFile) DropReplace(oldPath, oldVers string) error {
+	for _, r := range f.Replace {
+		if r.Old.Path == oldPath && r.Old.Version == oldVers {
+			r.Syntax.markRemoved()
+			*r = Replace{}
+		}
+	}
+	return nil
+}
+
+func (f *WorkFile) SortBlocks() {
+	f.removeDups() // otherwise sorting is unsafe
+
+	for _, stmt := range f.Syntax.Stmt {
+		block, ok := stmt.(*LineBlock)
+		if !ok {
+			continue
+		}
+		slices.SortStableFunc(block.Line, compareLine)
+	}
+}
+
+// removeDups removes duplicate replace directives.
+//
+// Later replace directives take priority.
+//
+// require directives are not de-duplicated. That's left up to higher-level
+// logic (MVS).
+//
+// retract directives are not de-duplicated since comments are
+// meaningful, and versions may be retracted multiple times.
+func (f *WorkFile) removeDups() {
+	removeDups(f.Syntax, nil, &f.Replace, nil, nil)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/module/module.go","mode":420,"size":27529,"sha256":"aa2b672b6d0bbc701d46556d7d46399b2ef6ce1fb918687bd067bf8d5efd7741","index":0,"count":1,"encoding":"utf-8","payloadBytes":27529}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package module defines the module.Version type along with support code.
+//
+// The [module.Version] type is a simple Path, Version pair:
+//
+//	type Version struct {
+//		Path string
+//		Version string
+//	}
+//
+// There are no restrictions imposed directly by use of this structure,
+// but additional checking functions, most notably [Check], verify that
+// a particular path, version pair is valid.
+//
+// # Escaped Paths
+//
+// Module paths appear as substrings of file system paths
+// (in the download cache) and of web server URLs in the proxy protocol.
+// In general we cannot rely on file systems to be case-sensitive,
+// nor can we rely on web servers, since they read from file systems.
+// That is, we cannot rely on the file system to keep rsc.io/QUOTE
+// and rsc.io/quote separate. Windows and macOS don't.
+// Instead, we must never require two different casings of a file path.
+// Because we want the download cache to match the proxy protocol,
+// and because we want the proxy protocol to be possible to serve
+// from a tree of static files (which might be stored on a case-insensitive
+// file system), the proxy protocol must never require two different casings
+// of a URL path either.
+//
+// One possibility would be to make the escaped form be the lowercase
+// hexadecimal encoding of the actual path bytes. This would avoid ever
+// needing different casings of a file path, but it would be fairly illegible
+// to most programmers when those paths appeared in the file system
+// (including in file paths in compiler errors and stack traces)
+// in web server logs, and so on. Instead, we want a safe escaped form that
+// leaves most paths unaltered.
+//
+// The safe escaped form is to replace every uppercase letter
+// with an exclamation mark followed by the letter's lowercase equivalent.
+//
+// For example,
+//
+//	github.com/Azure/azure-sdk-for-go ->  github.com/!azure/azure-sdk-for-go.
+//	github.com/GoogleCloudPlatform/cloudsql-proxy -> github.com/!google!cloud!platform/cloudsql-proxy
+//	github.com/Sirupsen/logrus -> github.com/!sirupsen/logrus.
+//
+// Import paths that avoid upper-case letters are left unchanged.
+// Note that because import paths are ASCII-only and avoid various
+// problematic punctuation (like : < and >), the escaped form is also ASCII-only
+// and avoids the same problematic punctuation.
+//
+// Import paths have never allowed exclamation marks, so there is no
+// need to define how to escape a literal !.
+//
+// # Unicode Restrictions
+//
+// Today, paths are disallowed from using Unicode.
+//
+// Although paths are currently disallowed from using Unicode,
+// we would like at some point to allow Unicode letters as well, to assume that
+// file systems and URLs are Unicode-safe (storing UTF-8), and apply
+// the !-for-uppercase convention for escaping them in the file system.
+// But there are at least two subtle considerations.
+//
+// First, note that not all case-fold equivalent distinct runes
+// form an upper/lower pair.
+// For example, U+004B ('K'), U+006B ('k'), and U+212A ('K' for Kelvin)
+// are three distinct runes that case-fold to each other.
+// When we do add Unicode letters, we must not assume that upper/lower
+// are the only case-equivalent pairs.
+// Perhaps the Kelvin symbol would be disallowed entirely, for example.
+// Or perhaps it would escape as "!!k", or perhaps as "(212A)".
+//
+// Second, it would be nice to allow Unicode marks as well as letters,
+// but marks include combining marks, and then we must deal not
+// only with case folding but also normalization: both U+00E9 ('é')
+// and U+0065 U+0301 ('e' followed by combining acute accent)
+// look the same on the page and are treated by some file systems
+// as the same path. If we do allow Unicode marks in paths, there
+// must be some kind of normalization to allow only one canonical
+// encoding of any character used in an import path.
+package module
+
+// IMPORTANT NOTE
+//
+// This file essentially defines the set of valid import paths for the go command.
+// There are many subtle considerations, including Unicode ambiguity,
+// security, network, and file system representations.
+//
+// This file also defines the set of valid module path and version combinations,
+// another topic with many subtle considerations.
+//
+// Changes to the semantics in this file require approval from rsc.
+
+import (
+	"cmp"
+	"errors"
+	"fmt"
+	"path"
+	"slices"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"golang.org/x/mod/semver"
+)
+
+// A Version (for clients, a module.Version) is defined by a module path and version pair.
+// These are stored in their plain (unescaped) form.
+type Version struct {
+	// Path is a module path, like "golang.org/x/text" or "rsc.io/quote/v2".
+	Path string
+
+	// Version is usually a semantic version in canonical form.
+	// There are three exceptions to this general rule.
+	// First, the top-level target of a build has no specific version
+	// and uses Version = "".
+	// Second, during MVS calculations the version "none" is used
+	// to represent the decision to take no version of a given module.
+	// Third, filesystem paths found in "replace" directives are
+	// represented by a path with an empty version.
+	Version string `json:",omitempty"`
+}
+
+// String returns a representation of the Version suitable for logging
+// (Path@Version, or just Path if Version is empty).
+func (m Version) String() string {
+	if m.Version == "" {
+		return m.Path
+	}
+	return m.Path + "@" + m.Version
+}
+
+// A ModuleError indicates an error specific to a module.
+type ModuleError struct {
+	Path    string
+	Version string
+	Err     error
+}
+
+// VersionError returns a [ModuleError] derived from a [Version] and error,
+// or err itself if it is already such an error.
+func VersionError(v Version, err error) error {
+	var mErr *ModuleError
+	if errors.As(err, &mErr) && mErr.Path == v.Path && mErr.Version == v.Version {
+		return err
+	}
+	return &ModuleError{
+		Path:    v.Path,
+		Version: v.Version,
+		Err:     err,
+	}
+}
+
+func (e *ModuleError) Error() string {
+	if v, ok := e.Err.(*InvalidVersionError); ok {
+		return fmt.Sprintf("%s@%s: invalid %s: %v", e.Path, v.Version, v.noun(), v.Err)
+	}
+	if e.Version != "" {
+		return fmt.Sprintf("%s@%s: %v", e.Path, e.Version, e.Err)
+	}
+	return fmt.Sprintf("module %s: %v", e.Path, e.Err)
+}
+
+func (e *ModuleError) Unwrap() error { return e.Err }
+
+// An InvalidVersionError indicates an error specific to a version, with the
+// module path unknown or specified externally.
+//
+// A [ModuleError] may wrap an InvalidVersionError, but an InvalidVersionError
+// must not wrap a ModuleError.
+type InvalidVersionError struct {
+	Version string
+	Pseudo  bool
+	Err     error
+}
+
+// noun returns either "version" or "pseudo-version", depending on whether
+// e.Version is a pseudo-version.
+func (e *InvalidVersionError) noun() string {
+	if e.Pseudo {
+		return "pseudo-version"
+	}
+	return "version"
+}
+
+func (e *InvalidVersionError) Error() string {
+	return fmt.Sprintf("%s %q invalid: %s", e.noun(), e.Version, e.Err)
+}
+
+func (e *InvalidVersionError) Unwrap() error { return e.Err }
+
+// An InvalidPathError indicates a module, import, or file path doesn't
+// satisfy all naming constraints. See [CheckPath], [CheckImportPath],
+// and [CheckFilePath] for specific restrictions.
+type InvalidPathError struct {
+	Kind string // "module", "import", or "file"
+	Path string
+	Err  error
+}
+
+func (e *InvalidPathError) Error() string {
+	return fmt.Sprintf("malformed %s path %q: %v", e.Kind, e.Path, e.Err)
+}
+
+func (e *InvalidPathError) Unwrap() error { return e.Err }
+
+// Check checks that a given module path, version pair is valid.
+// In addition to the path being a valid module path
+// and the version being a valid semantic version,
+// the two must correspond.
+// For example, the path "yaml/v2" only corresponds to
+// semantic versions beginning with "v2.".
+func Check(path, version string) error {
+	if err := CheckPath(path); err != nil {
+		return err
+	}
+	if !semver.IsValid(version) {
+		return &ModuleError{
+			Path: path,
+			Err:  &InvalidVersionError{Version: version, Err: errors.New("not a semantic version")},
+		}
+	}
+	_, pathMajor, _ := SplitPathVersion(path)
+	if err := CheckPathMajor(version, pathMajor); err != nil {
+		return &ModuleError{Path: path, Err: err}
+	}
+	return nil
+}
+
+// firstPathOK reports whether r can appear in the first element of a module path.
+// The first element of the path must be an LDH domain name, at least for now.
+// To avoid case ambiguity, the domain name must be entirely lower case.
+func firstPathOK(r rune) bool {
+	return r == '-' || r == '.' ||
+		'0' <= r && r <= '9' ||
+		'a' <= r && r <= 'z'
+}
+
+// modPathOK reports whether r can appear in a module path element.
+// Paths can be ASCII letters, ASCII digits, and limited ASCII punctuation: - . _ and ~.
+//
+// This matches what "go get" has historically recognized in import paths,
+// and avoids confusing sequences like '%20' or '+' that would change meaning
+// if used in a URL.
+//
+// TODO(rsc): We would like to allow Unicode letters, but that requires additional
+// care in the safe encoding (see "escaped paths" above).
+func modPathOK(r rune) bool {
+	if r < utf8.RuneSelf {
+		return r == '-' || r == '.' || r == '_' || r == '~' ||
+			'0' <= r && r <= '9' ||
+			'A' <= r && r <= 'Z' ||
+			'a' <= r && r <= 'z'
+	}
+	return false
+}
+
+// importPathOK reports whether r can appear in a package import path element.
+//
+// Import paths are intermediate between module paths and file paths: we
+// disallow characters that would be confusing or ambiguous as arguments to
+// 'go get' (such as '@' and ' ' ), but allow certain characters that are
+// otherwise-unambiguous on the command line and historically used for some
+// binary names (such as '++' as a suffix for compiler binaries and wrappers).
+func importPathOK(r rune) bool {
+	return modPathOK(r) || r == '+'
+}
+
+// fileNameOK reports whether r can appear in a file name.
+// For now we allow all Unicode letters but otherwise limit to pathOK plus a few more punctuation characters.
+// If we expand the set of allowed characters here, we have to
+// work harder at detecting potential case-folding and normalization collisions.
+// See note about "escaped paths" above.
+func fileNameOK(r rune) bool {
+	if r < utf8.RuneSelf {
+		// Entire set of ASCII punctuation, from which we remove characters:
+		//     ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~
+		// We disallow some shell special characters: " ' * < > ? ` |
+		// (Note that some of those are disallowed by the Windows file system as well.)
+		// We also disallow path separators / : and \ (fileNameOK is only called on path element characters).
+		// We allow spaces (U+0020) in file names.
+		const allowed = "!#$%&()+,-.=@[]^_{}~ "
+		if '0' <= r && r <= '9' || 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' {
+			return true
+		}
+		return strings.ContainsRune(allowed, r)
+	}
+	// It may be OK to add more ASCII punctuation here, but only carefully.
+	// For example Windows disallows < > \, and macOS disallows :, so we must not allow those.
+	return unicode.IsLetter(r)
+}
+
+// CheckPath checks that a module path is valid.
+// A valid module path is a valid import path, as checked by [CheckImportPath],
+// with three additional constraints.
+// First, the leading path element (up to the first slash, if any),
+// by convention a domain name, must contain only lower-case ASCII letters,
+// ASCII digits, dots (U+002E), and dashes (U+002D);
+// it must contain at least one dot and cannot start with a dash.
+// Second, for a final path element of the form /vN, where N looks numeric
+// (ASCII digits and dots) must not begin with a leading zero, must not be /v1,
+// and must not contain any dots. For paths beginning with "gopkg.in/",
+// this second requirement is replaced by a requirement that the path
+// follow the gopkg.in server's conventions.
+// Third, no path element may begin with a dot.
+func CheckPath(path string) (err error) {
+	defer func() {
+		if err != nil {
+			err = &InvalidPathError{Kind: "module", Path: path, Err: err}
+		}
+	}()
+
+	if err := checkPath(path, modulePath); err != nil {
+		return err
+	}
+	i := strings.Index(path, "/")
+	if i < 0 {
+		i = len(path)
+	}
+	if i == 0 {
+		return fmt.Errorf("leading slash")
+	}
+	if !strings.Contains(path[:i], ".") {
+		return fmt.Errorf("missing dot in first path element")
+	}
+	if path[0] == '-' {
+		return fmt.Errorf("leading dash in first path element")
+	}
+	for _, r := range path[:i] {
+		if !firstPathOK(r) {
+			return fmt.Errorf("invalid char %q in first path element", r)
+		}
+	}
+	if _, _, ok := SplitPathVersion(path); !ok {
+		return fmt.Errorf("invalid version")
+	}
+	return nil
+}
+
+// CheckImportPath checks that an import path is valid.
+//
+// A valid import path consists of one or more valid path elements
+// separated by slashes (U+002F). (It must not begin with nor end in a slash.)
+//
+// A valid path element is a non-empty string made up of
+// ASCII letters, ASCII digits, and limited ASCII punctuation: - . _ and ~.
+// It must not end with a dot (U+002E), nor contain two dots in a row.
+//
+// The element prefix up to the first dot must not be a reserved file name
+// on Windows, regardless of case (CON, com1, NuL, and so on). The element
+// must not have a suffix of a tilde followed by one or more ASCII digits
+// (to exclude paths elements that look like Windows short-names).
+//
+// CheckImportPath may be less restrictive in the future, but see the
+// top-level package documentation for additional information about
+// subtleties of Unicode.
+func CheckImportPath(path string) error {
+	if err := checkPath(path, importPath); err != nil {
+		return &InvalidPathError{Kind: "import", Path: path, Err: err}
+	}
+	return nil
+}
+
+// pathKind indicates what kind of path we're checking. Module paths,
+// import paths, and file paths have different restrictions.
+type pathKind int
+
+const (
+	modulePath pathKind = iota
+	importPath
+	filePath
+)
+
+// checkPath checks that a general path is valid. kind indicates what
+// specific constraints should be applied.
+//
+// checkPath returns an error describing why the path is not valid.
+// Because these checks apply to module, import, and file paths,
+// and because other checks may be applied, the caller is expected to wrap
+// this error with [InvalidPathError].
+func checkPath(path string, kind pathKind) error {
+	if !utf8.ValidString(path) {
+		return fmt.Errorf("invalid UTF-8")
+	}
+	if path == "" {
+		return fmt.Errorf("empty string")
+	}
+	if path[0] == '-' && kind != filePath {
+		return fmt.Errorf("leading dash")
+	}
+	if strings.Contains(path, "//") {
+		return fmt.Errorf("double slash")
+	}
+	if path[len(path)-1] == '/' {
+		return fmt.Errorf("trailing slash")
+	}
+	elemStart := 0
+	for i, r := range path {
+		if r == '/' {
+			if err := checkElem(path[elemStart:i], kind); err != nil {
+				return err
+			}
+			elemStart = i + 1
+		}
+	}
+	if err := checkElem(path[elemStart:], kind); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkElem checks whether an individual path element is valid.
+func checkElem(elem string, kind pathKind) error {
+	if elem == "" {
+		return fmt.Errorf("empty path element")
+	}
+	if strings.Count(elem, ".") == len(elem) {
+		return fmt.Errorf("invalid path element %q", elem)
+	}
+	if elem[0] == '.' && kind == modulePath {
+		return fmt.Errorf("leading dot in path element")
+	}
+	if elem[len(elem)-1] == '.' {
+		return fmt.Errorf("trailing dot in path element")
+	}
+	for _, r := range elem {
+		ok := false
+		switch kind {
+		case modulePath:
+			ok = modPathOK(r)
+		case importPath:
+			ok = importPathOK(r)
+		case filePath:
+			ok = fileNameOK(r)
+		default:
+			panic(fmt.Sprintf("internal error: invalid kind %v", kind))
+		}
+		if !ok {
+			return fmt.Errorf("invalid char %q", r)
+		}
+	}
+
+	// Windows disallows a bunch of path elements, sadly.
+	// See https://docs.microsoft.com/en-us/windows/desktop/fileio/naming-a-file
+	short := elem
+	if i := strings.Index(short, "."); i >= 0 {
+		short = short[:i]
+	}
+	for _, bad := range badWindowsNames {
+		if strings.EqualFold(bad, short) {
+			return fmt.Errorf("%q disallowed as path element component on Windows", short)
+		}
+	}
+
+	if kind == filePath {
+		// don't check for Windows short-names in file names. They're
+		// only an issue for import paths.
+		return nil
+	}
+
+	// Reject path components that look like Windows short-names.
+	// Those usually end in a tilde followed by one or more ASCII digits.
+	if tilde := strings.LastIndexByte(short, '~'); tilde >= 0 && tilde < len(short)-1 {
+		suffix := short[tilde+1:]
+		suffixIsDigits := true
+		for _, r := range suffix {
+			if r < '0' || r > '9' {
+				suffixIsDigits = false
+				break
+			}
+		}
+		if suffixIsDigits {
+			return fmt.Errorf("trailing tilde and digits in path element")
+		}
+	}
+
+	return nil
+}
+
+// CheckFilePath checks that a slash-separated file path is valid.
+// The definition of a valid file path is the same as the definition
+// of a valid import path except that the set of allowed characters is larger:
+// all Unicode letters, ASCII digits, the ASCII space character (U+0020),
+// and the ASCII punctuation characters
+// “!#$%&()+,-.=@[]^_{}~”.
+// (The excluded punctuation characters, " * < > ? ` ' | / \ and :,
+// have special meanings in certain shells or operating systems.)
+//
+// CheckFilePath may be less restrictive in the future, but see the
+// top-level package documentation for additional information about
+// subtleties of Unicode.
+func CheckFilePath(path string) error {
+	if err := checkPath(path, filePath); err != nil {
+		return &InvalidPathError{Kind: "file", Path: path, Err: err}
+	}
+	return nil
+}
+
+// badWindowsNames are the reserved file path elements on Windows.
+// See https://docs.microsoft.com/en-us/windows/desktop/fileio/naming-a-file
+var badWindowsNames = []string{
+	"CON",
+	"PRN",
+	"AUX",
+	"NUL",
+	"COM1",
+	"COM2",
+	"COM3",
+	"COM4",
+	"COM5",
+	"COM6",
+	"COM7",
+	"COM8",
+	"COM9",
+	"LPT1",
+	"LPT2",
+	"LPT3",
+	"LPT4",
+	"LPT5",
+	"LPT6",
+	"LPT7",
+	"LPT8",
+	"LPT9",
+}
+
+// SplitPathVersion returns prefix and major version such that prefix+pathMajor == path
+// and version is either empty or "/vN" for N >= 2.
+// As a special case, gopkg.in paths are recognized directly;
+// they require ".vN" instead of "/vN", and for all N, not just N >= 2.
+// SplitPathVersion returns with ok = false when presented with
+// a path whose last path element does not satisfy the constraints
+// applied by [CheckPath], such as "example.com/pkg/v1" or "example.com/pkg/v1.2".
+func SplitPathVersion(path string) (prefix, pathMajor string, ok bool) {
+	if strings.HasPrefix(path, "gopkg.in/") {
+		return splitGopkgIn(path)
+	}
+
+	i := len(path)
+	dot := false
+	for i > 0 && ('0' <= path[i-1] && path[i-1] <= '9' || path[i-1] == '.') {
+		if path[i-1] == '.' {
+			dot = true
+		}
+		i--
+	}
+	if i <= 1 || i == len(path) || path[i-1] != 'v' || path[i-2] != '/' {
+		return path, "", true
+	}
+	prefix, pathMajor = path[:i-2], path[i-2:]
+	if dot || len(pathMajor) <= 2 || pathMajor[2] == '0' || pathMajor == "/v1" {
+		return path, "", false
+	}
+	return prefix, pathMajor, true
+}
+
+// splitGopkgIn is like SplitPathVersion but only for gopkg.in paths.
+func splitGopkgIn(path string) (prefix, pathMajor string, ok bool) {
+	if !strings.HasPrefix(path, "gopkg.in/") {
+		return path, "", false
+	}
+	i := len(path)
+	if strings.HasSuffix(path, "-unstable") {
+		i -= len("-unstable")
+	}
+	for i > 0 && ('0' <= path[i-1] && path[i-1] <= '9') {
+		i--
+	}
+	if i <= 1 || path[i-1] != 'v' || path[i-2] != '.' {
+		// All gopkg.in paths must end in vN for some N.
+		return path, "", false
+	}
+	prefix, pathMajor = path[:i-2], path[i-2:]
+	if len(pathMajor) <= 2 || pathMajor[2] == '0' && pathMajor != ".v0" {
+		return path, "", false
+	}
+	return prefix, pathMajor, true
+}
+
+// MatchPathMajor reports whether the semantic version v
+// matches the path major version pathMajor.
+//
+// MatchPathMajor returns true if and only if [CheckPathMajor] returns nil.
+func MatchPathMajor(v, pathMajor string) bool {
+	return CheckPathMajor(v, pathMajor) == nil
+}
+
+// CheckPathMajor returns a non-nil error if the semantic version v
+// does not match the path major version pathMajor.
+func CheckPathMajor(v, pathMajor string) error {
+	// TODO(jayconrod): return errors or panic for invalid inputs. This function
+	// (and others) was covered by integration tests for cmd/go, and surrounding
+	// code protected against invalid inputs like non-canonical versions.
+	if strings.HasPrefix(pathMajor, ".v") && strings.HasSuffix(pathMajor, "-unstable") {
+		pathMajor = strings.TrimSuffix(pathMajor, "-unstable")
+	}
+	if strings.HasPrefix(v, "v0.0.0-") && pathMajor == ".v1" {
+		// Allow old bug in pseudo-versions that generated v0.0.0- pseudoversion for gopkg .v1.
+		// For example, gopkg.in/yaml.v2@v2.2.1's go.mod requires gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405.
+		return nil
+	}
+	m := semver.Major(v)
+	if pathMajor == "" {
+		if m == "v0" || m == "v1" || semver.Build(v) == "+incompatible" {
+			return nil
+		}
+		pathMajor = "v0 or v1"
+	} else if pathMajor[0] == '/' || pathMajor[0] == '.' {
+		if m == pathMajor[1:] {
+			return nil
+		}
+		pathMajor = pathMajor[1:]
+	}
+	return &InvalidVersionError{
+		Version: v,
+		Err:     fmt.Errorf("should be %s, not %s", pathMajor, semver.Major(v)),
+	}
+}
+
+// PathMajorPrefix returns the major-version tag prefix implied by pathMajor.
+// An empty PathMajorPrefix allows either v0 or v1.
+//
+// Note that [MatchPathMajor] may accept some versions that do not actually begin
+// with this prefix: namely, it accepts a 'v0.0.0-' prefix for a '.v1'
+// pathMajor, even though that pathMajor implies 'v1' tagging.
+func PathMajorPrefix(pathMajor string) string {
+	if pathMajor == "" {
+		return ""
+	}
+	if pathMajor[0] != '/' && pathMajor[0] != '.' {
+		panic("pathMajor suffix " + pathMajor + " passed to PathMajorPrefix lacks separator")
+	}
+	if strings.HasPrefix(pathMajor, ".v") && strings.HasSuffix(pathMajor, "-unstable") {
+		pathMajor = strings.TrimSuffix(pathMajor, "-unstable")
+	}
+	m := pathMajor[1:]
+	if m != semver.Major(m) {
+		panic("pathMajor suffix " + pathMajor + "passed to PathMajorPrefix is not a valid major version")
+	}
+	return m
+}
+
+// CanonicalVersion returns the canonical form of the version string v.
+// It is the same as [semver.Canonical] except that it preserves the special build suffix "+incompatible".
+func CanonicalVersion(v string) string {
+	cv := semver.Canonical(v)
+	if semver.Build(v) == "+incompatible" {
+		cv += "+incompatible"
+	}
+	return cv
+}
+
+// Sort sorts the list by Path, breaking ties by comparing [Version] fields.
+// The Version fields are interpreted as semantic versions (using [semver.Compare])
+// optionally followed by a tie-breaking suffix introduced by a slash character,
+// like in "v0.0.1/go.mod".
+func Sort(list []Version) {
+	slices.SortFunc(list, func(i, j Version) int {
+		if i.Path != j.Path {
+			return strings.Compare(i.Path, j.Path)
+		}
+		// To help go.sum formatting, allow version/file.
+		// Compare semver prefix by semver rules,
+		// file by string order.
+		vi := i.Version
+		vj := j.Version
+		var fi, fj string
+		if k := strings.Index(vi, "/"); k >= 0 {
+			vi, fi = vi[:k], vi[k:]
+		}
+		if k := strings.Index(vj, "/"); k >= 0 {
+			vj, fj = vj[:k], vj[k:]
+		}
+		if vi != vj {
+			return semver.Compare(vi, vj)
+		}
+		return cmp.Compare(fi, fj)
+	})
+}
+
+// EscapePath returns the escaped form of the given module path.
+// It fails if the module path is invalid.
+func EscapePath(path string) (escaped string, err error) {
+	if err := CheckPath(path); err != nil {
+		return "", err
+	}
+
+	return escapeString(path)
+}
+
+// EscapeVersion returns the escaped form of the given module version.
+// Versions are allowed to be in non-semver form but must be valid file names
+// and not contain exclamation marks.
+func EscapeVersion(v string) (escaped string, err error) {
+	if err := checkElem(v, filePath); err != nil || strings.Contains(v, "!") {
+		return "", &InvalidVersionError{
+			Version: v,
+			Err:     fmt.Errorf("disallowed version string"),
+		}
+	}
+	return escapeString(v)
+}
+
+func escapeString(s string) (escaped string, err error) {
+	haveUpper := false
+	for _, r := range s {
+		if r == '!' || r >= utf8.RuneSelf {
+			// This should be disallowed by CheckPath, but diagnose anyway.
+			// The correctness of the escaping loop below depends on it.
+			return "", fmt.Errorf("internal error: inconsistency in EscapePath")
+		}
+		if 'A' <= r && r <= 'Z' {
+			haveUpper = true
+		}
+	}
+
+	if !haveUpper {
+		return s, nil
+	}
+
+	var buf []byte
+	for _, r := range s {
+		if 'A' <= r && r <= 'Z' {
+			buf = append(buf, '!', byte(r+'a'-'A'))
+		} else {
+			buf = append(buf, byte(r))
+		}
+	}
+	return string(buf), nil
+}
+
+// UnescapePath returns the module path for the given escaped path.
+// It fails if the escaped path is invalid or describes an invalid path.
+func UnescapePath(escaped string) (path string, err error) {
+	path, ok := unescapeString(escaped)
+	if !ok {
+		return "", fmt.Errorf("invalid escaped module path %q", escaped)
+	}
+	if err := CheckPath(path); err != nil {
+		return "", fmt.Errorf("invalid escaped module path %q: %v", escaped, err)
+	}
+	return path, nil
+}
+
+// UnescapeVersion returns the version string for the given escaped version.
+// It fails if the escaped form is invalid or describes an invalid version.
+// Versions are allowed to be in non-semver form but must be valid file names
+// and not contain exclamation marks.
+func UnescapeVersion(escaped string) (v string, err error) {
+	v, ok := unescapeString(escaped)
+	if !ok {
+		return "", fmt.Errorf("invalid escaped version %q", escaped)
+	}
+	if err := checkElem(v, filePath); err != nil {
+		return "", fmt.Errorf("invalid escaped version %q: %v", v, err)
+	}
+	return v, nil
+}
+
+func unescapeString(escaped string) (string, bool) {
+	var buf []byte
+
+	bang := false
+	for _, r := range escaped {
+		if r >= utf8.RuneSelf {
+			return "", false
+		}
+		if bang {
+			bang = false
+			if r < 'a' || 'z' < r {
+				return "", false
+			}
+			buf = append(buf, byte(r+'A'-'a'))
+			continue
+		}
+		if r == '!' {
+			bang = true
+			continue
+		}
+		if 'A' <= r && r <= 'Z' {
+			return "", false
+		}
+		buf = append(buf, byte(r))
+	}
+	if bang {
+		return "", false
+	}
+	return string(buf), true
+}
+
+// MatchPrefixPatterns reports whether any path prefix of target matches one of
+// the glob patterns (as defined by [path.Match]) in the comma-separated globs
+// list. This implements the algorithm used when matching a module path to the
+// GOPRIVATE environment variable, as described by 'go help module-private'.
+//
+// It ignores any empty or malformed patterns in the list.
+// Trailing slashes on patterns are ignored.
+func MatchPrefixPatterns(globs, target string) bool {
+	for globs != "" {
+		// Extract next non-empty glob in comma-separated list.
+		var glob string
+		if before, after, ok := strings.Cut(globs, ","); ok {
+			glob, globs = before, after
+		} else {
+			glob, globs = globs, ""
+		}
+		glob = strings.TrimSuffix(glob, "/")
+		if glob == "" {
+			continue
+		}
+
+		// A glob with N+1 path elements (N slashes) needs to be matched
+		// against the first N+1 path elements of target,
+		// which end just before the N+1'th slash.
+		n := strings.Count(glob, "/")
+		prefix := target
+		// Walk target, counting slashes, truncating at the N+1'th slash.
+		for i := 0; i < len(target); i++ {
+			if target[i] == '/' {
+				if n == 0 {
+					prefix = target[:i]
+					break
+				}
+				n--
+			}
+		}
+		if n > 0 {
+			// Not enough prefix elements.
+			continue
+		}
+		matched, _ := path.Match(glob, prefix)
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/module/pseudo.go","mode":420,"size":8630,"sha256":"55f36593e394a3595a52f636028442f6be9ed010a6a7e0403dac980b545a374d","index":0,"count":1,"encoding":"utf-8","payloadBytes":8630}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -125643,3079 +128779,6 @@ var signalList = [...]struct {
 	{39, "SIGJVM1", "reserved for JVM 1"},
 	{40, "SIGJVM2", "reserved for JVM 2"},
 	{41, "SIGINFO", "information Request"},
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zerrors_zos_s390x.go","mode":420,"size":40409,"sha256":"6b1582550a07dd39c5ea081520200cd94cf178d2ed83c488ea4a006ad9286627","index":0,"count":1,"encoding":"utf-8","payloadBytes":40409}
-// Copyright 2020 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:build zos && s390x
-
-// Hand edited based on zerrors_linux_s390x.go
-// TODO: auto-generate.
-
-package unix
-
-const (
-	BRKINT                   = 0x0001
-	CLOCAL                   = 0x1
-	CLOCK_MONOTONIC          = 0x1
-	CLOCK_PROCESS_CPUTIME_ID = 0x2
-	CLOCK_REALTIME           = 0x0
-	CLOCK_THREAD_CPUTIME_ID  = 0x3
-	CLONE_NEWIPC             = 0x08000000
-	CLONE_NEWNET             = 0x40000000
-	CLONE_NEWNS              = 0x00020000
-	CLONE_NEWPID             = 0x20000000
-	CLONE_NEWUTS             = 0x04000000
-	CLONE_PARENT             = 0x00008000
-	CS8                      = 0x0030
-	CSIZE                    = 0x0030
-	ECHO                     = 0x00000008
-	ECHONL                   = 0x00000001
-	EFD_SEMAPHORE            = 0x00002000
-	EFD_CLOEXEC              = 0x00001000
-	EFD_NONBLOCK             = 0x00000004
-	EPOLL_CLOEXEC            = 0x00001000
-	EPOLL_CTL_ADD            = 0
-	EPOLL_CTL_MOD            = 1
-	EPOLL_CTL_DEL            = 2
-	EPOLLRDNORM              = 0x0001
-	EPOLLRDBAND              = 0x0002
-	EPOLLIN                  = 0x0003
-	EPOLLOUT                 = 0x0004
-	EPOLLWRBAND              = 0x0008
-	EPOLLPRI                 = 0x0010
-	EPOLLERR                 = 0x0020
-	EPOLLHUP                 = 0x0040
-	EPOLLEXCLUSIVE           = 0x20000000
-	EPOLLONESHOT             = 0x40000000
-	FD_CLOEXEC               = 0x01
-	FD_CLOFORK               = 0x02
-	FD_SETSIZE               = 0x800
-	FNDELAY                  = 0x04
-	F_CLOSFD                 = 9
-	F_CONTROL_CVT            = 13
-	F_DUPFD                  = 0
-	F_DUPFD2                 = 8
-	F_GETFD                  = 1
-	F_GETFL                  = 259
-	F_GETLK                  = 5
-	F_GETOWN                 = 10
-	F_OK                     = 0x0
-	F_RDLCK                  = 1
-	F_SETFD                  = 2
-	F_SETFL                  = 4
-	F_SETLK                  = 6
-	F_SETLKW                 = 7
-	F_SETOWN                 = 11
-	F_SETTAG                 = 12
-	F_UNLCK                  = 3
-	F_WRLCK                  = 2
-	FSTYPE_ZFS               = 0xe9 //"Z"
-	FSTYPE_HFS               = 0xc8 //"H"
-	FSTYPE_NFS               = 0xd5 //"N"
-	FSTYPE_TFS               = 0xe3 //"T"
-	FSTYPE_AUTOMOUNT         = 0xc1 //"A"
-	GRND_NONBLOCK            = 1
-	GRND_RANDOM              = 2
-	HUPCL                    = 0x0100 // Hang up on last close
-	IN_CLOEXEC               = 0x00001000
-	IN_NONBLOCK              = 0x00000004
-	IN_ACCESS                = 0x00000001
-	IN_MODIFY                = 0x00000002
-	IN_ATTRIB                = 0x00000004
-	IN_CLOSE_WRITE           = 0x00000008
-	IN_CLOSE_NOWRITE         = 0x00000010
-	IN_OPEN                  = 0x00000020
-	IN_MOVED_FROM            = 0x00000040
-	IN_MOVED_TO              = 0x00000080
-	IN_CREATE                = 0x00000100
-	IN_DELETE                = 0x00000200
-	IN_DELETE_SELF           = 0x00000400
-	IN_MOVE_SELF             = 0x00000800
-	IN_UNMOUNT               = 0x00002000
-	IN_Q_OVERFLOW            = 0x00004000
-	IN_IGNORED               = 0x00008000
-	IN_CLOSE                 = (IN_CLOSE_WRITE | IN_CLOSE_NOWRITE)
-	IN_MOVE                  = (IN_MOVED_FROM | IN_MOVED_TO)
-	IN_ALL_EVENTS            = (IN_ACCESS | IN_MODIFY | IN_ATTRIB |
-		IN_CLOSE | IN_OPEN | IN_MOVE |
-		IN_CREATE | IN_DELETE | IN_DELETE_SELF |
-		IN_MOVE_SELF)
-	IN_ONLYDIR                      = 0x01000000
-	IN_DONT_FOLLOW                  = 0x02000000
-	IN_EXCL_UNLINK                  = 0x04000000
-	IN_MASK_CREATE                  = 0x10000000
-	IN_MASK_ADD                     = 0x20000000
-	IN_ISDIR                        = 0x40000000
-	IN_ONESHOT                      = 0x80000000
-	IP6F_MORE_FRAG                  = 0x0001
-	IP6F_OFF_MASK                   = 0xfff8
-	IP6F_RESERVED_MASK              = 0x0006
-	IP6OPT_JUMBO                    = 0xc2
-	IP6OPT_JUMBO_LEN                = 6
-	IP6OPT_MUTABLE                  = 0x20
-	IP6OPT_NSAP_ADDR                = 0xc3
-	IP6OPT_PAD1                     = 0x00
-	IP6OPT_PADN                     = 0x01
-	IP6OPT_ROUTER_ALERT             = 0x05
-	IP6OPT_TUNNEL_LIMIT             = 0x04
-	IP6OPT_TYPE_DISCARD             = 0x40
-	IP6OPT_TYPE_FORCEICMP           = 0x80
-	IP6OPT_TYPE_ICMP                = 0xc0
-	IP6OPT_TYPE_SKIP                = 0x00
-	IP6_ALERT_AN                    = 0x0002
-	IP6_ALERT_MLD                   = 0x0000
-	IP6_ALERT_RSVP                  = 0x0001
-	IPPORT_RESERVED                 = 1024
-	IPPORT_USERRESERVED             = 5000
-	IPPROTO_AH                      = 51
-	SOL_AH                          = 51
-	IPPROTO_DSTOPTS                 = 60
-	SOL_DSTOPTS                     = 60
-	IPPROTO_EGP                     = 8
-	SOL_EGP                         = 8
-	IPPROTO_ESP                     = 50
-	SOL_ESP                         = 50
-	IPPROTO_FRAGMENT                = 44
-	SOL_FRAGMENT                    = 44
-	IPPROTO_GGP                     = 2
-	SOL_GGP                         = 2
-	IPPROTO_HOPOPTS                 = 0
-	SOL_HOPOPTS                     = 0
-	IPPROTO_ICMP                    = 1
-	SOL_ICMP                        = 1
-	IPPROTO_ICMPV6                  = 58
-	SOL_ICMPV6                      = 58
-	IPPROTO_IDP                     = 22
-	SOL_IDP                         = 22
-	IPPROTO_IP                      = 0
-	SOL_IP                          = 0
-	IPPROTO_IPV6                    = 41
-	SOL_IPV6                        = 41
-	IPPROTO_MAX                     = 256
-	SOL_MAX                         = 256
-	IPPROTO_NONE                    = 59
-	SOL_NONE                        = 59
-	IPPROTO_PUP                     = 12
-	SOL_PUP                         = 12
-	IPPROTO_RAW                     = 255
-	SOL_RAW                         = 255
-	IPPROTO_ROUTING                 = 43
-	SOL_ROUTING                     = 43
-	IPPROTO_TCP                     = 6
-	SOL_TCP                         = 6
-	IPPROTO_UDP                     = 17
-	SOL_UDP                         = 17
-	IPV6_ADDR_PREFERENCES           = 32
-	IPV6_CHECKSUM                   = 19
-	IPV6_DONTFRAG                   = 29
-	IPV6_DSTOPTS                    = 23
-	IPV6_HOPLIMIT                   = 11
-	IPV6_HOPOPTS                    = 22
-	IPV6_JOIN_GROUP                 = 5
-	IPV6_LEAVE_GROUP                = 6
-	IPV6_MULTICAST_HOPS             = 9
-	IPV6_MULTICAST_IF               = 7
-	IPV6_MULTICAST_LOOP             = 4
-	IPV6_NEXTHOP                    = 20
-	IPV6_PATHMTU                    = 12
-	IPV6_PKTINFO                    = 13
-	IPV6_PREFER_SRC_CGA             = 0x10
-	IPV6_PREFER_SRC_COA             = 0x02
-	IPV6_PREFER_SRC_HOME            = 0x01
-	IPV6_PREFER_SRC_NONCGA          = 0x20
-	IPV6_PREFER_SRC_PUBLIC          = 0x08
-	IPV6_PREFER_SRC_TMP             = 0x04
-	IPV6_RECVDSTOPTS                = 28
-	IPV6_RECVHOPLIMIT               = 14
-	IPV6_RECVHOPOPTS                = 26
-	IPV6_RECVPATHMTU                = 16
-	IPV6_RECVPKTINFO                = 15
-	IPV6_RECVRTHDR                  = 25
-	IPV6_RECVTCLASS                 = 31
-	IPV6_RTHDR                      = 21
-	IPV6_RTHDRDSTOPTS               = 24
-	IPV6_RTHDR_TYPE_0               = 0
-	IPV6_TCLASS                     = 30
-	IPV6_UNICAST_HOPS               = 3
-	IPV6_USE_MIN_MTU                = 18
-	IPV6_V6ONLY                     = 10
-	IP_ADD_MEMBERSHIP               = 5
-	IP_ADD_SOURCE_MEMBERSHIP        = 12
-	IP_BLOCK_SOURCE                 = 10
-	IP_DEFAULT_MULTICAST_LOOP       = 1
-	IP_DEFAULT_MULTICAST_TTL        = 1
-	IP_DROP_MEMBERSHIP              = 6
-	IP_DROP_SOURCE_MEMBERSHIP       = 13
-	IP_MAX_MEMBERSHIPS              = 20
-	IP_MULTICAST_IF                 = 7
-	IP_MULTICAST_LOOP               = 4
-	IP_MULTICAST_TTL                = 3
-	IP_OPTIONS                      = 1
-	IP_PKTINFO                      = 101
-	IP_RECVPKTINFO                  = 102
-	IP_TOS                          = 2
-	IP_TTL                          = 14
-	IP_UNBLOCK_SOURCE               = 11
-	ICMP6_FILTER                    = 1
-	MCAST_INCLUDE                   = 0
-	MCAST_EXCLUDE                   = 1
-	MCAST_JOIN_GROUP                = 40
-	MCAST_LEAVE_GROUP               = 41
-	MCAST_JOIN_SOURCE_GROUP         = 42
-	MCAST_LEAVE_SOURCE_GROUP        = 43
-	MCAST_BLOCK_SOURCE              = 44
-	MCAST_UNBLOCK_SOURCE            = 46
-	ICANON                          = 0x0010
-	ICRNL                           = 0x0002
-	IEXTEN                          = 0x0020
-	IGNBRK                          = 0x0004
-	IGNCR                           = 0x0008
-	INLCR                           = 0x0020
-	ISIG                            = 0x0040
-	ISTRIP                          = 0x0080
-	IXON                            = 0x0200
-	IXOFF                           = 0x0100
-	LOCK_SH                         = 0x1
-	LOCK_EX                         = 0x2
-	LOCK_NB                         = 0x4
-	LOCK_UN                         = 0x8
-	POLLIN                          = 0x0003
-	POLLOUT                         = 0x0004
-	POLLPRI                         = 0x0010
-	POLLERR                         = 0x0020
-	POLLHUP                         = 0x0040
-	POLLNVAL                        = 0x0080
-	PROT_READ                       = 0x1 // mmap - page can be read
-	PROT_WRITE                      = 0x2 // page can be written
-	PROT_NONE                       = 0x4 // can't be accessed
-	PROT_EXEC                       = 0x8 // can be executed
-	MAP_PRIVATE                     = 0x1 // changes are private
-	MAP_SHARED                      = 0x2 // changes are shared
-	MAP_FIXED                       = 0x4 // place exactly
-	__MAP_MEGA                      = 0x8
-	__MAP_64                        = 0x10
-	MAP_ANON                        = 0x20
-	MAP_ANONYMOUS                   = 0x20
-	MS_SYNC                         = 0x1 // msync - synchronous writes
-	MS_ASYNC                        = 0x2 // asynchronous writes
-	MS_INVALIDATE                   = 0x4 // invalidate mappings
-	MS_BIND                         = 0x00001000
-	MS_MOVE                         = 0x00002000
-	MS_NOSUID                       = 0x00000002
-	MS_PRIVATE                      = 0x00040000
-	MS_REC                          = 0x00004000
-	MS_REMOUNT                      = 0x00008000
-	MS_RDONLY                       = 0x00000001
-	MS_UNBINDABLE                   = 0x00020000
-	MNT_DETACH                      = 0x00000004
-	ZOSDSFS_SUPER_MAGIC             = 0x44534653 // zOS DSFS
-	NFS_SUPER_MAGIC                 = 0x6969     // NFS
-	NSFS_MAGIC                      = 0x6e736673 // PROCNS
-	PROC_SUPER_MAGIC                = 0x9fa0     // proc FS
-	ZOSTFS_SUPER_MAGIC              = 0x544653   // zOS TFS
-	ZOSUFS_SUPER_MAGIC              = 0x554653   // zOS UFS
-	ZOSZFS_SUPER_MAGIC              = 0x5A4653   // zOS ZFS
-	MTM_RDONLY                      = 0x80000000
-	MTM_RDWR                        = 0x40000000
-	MTM_UMOUNT                      = 0x10000000
-	MTM_IMMED                       = 0x08000000
-	MTM_FORCE                       = 0x04000000
-	MTM_DRAIN                       = 0x02000000
-	MTM_RESET                       = 0x01000000
-	MTM_SAMEMODE                    = 0x00100000
-	MTM_UNQSEFORCE                  = 0x00040000
-	MTM_NOSUID                      = 0x00000400
-	MTM_SYNCHONLY                   = 0x00000200
-	MTM_REMOUNT                     = 0x00000100
-	MTM_NOSECURITY                  = 0x00000080
-	NFDBITS                         = 0x20
-	ONLRET                          = 0x0020 // NL performs CR function
-	O_ACCMODE                       = 0x03
-	O_APPEND                        = 0x08
-	O_ASYNCSIG                      = 0x0200
-	O_CREAT                         = 0x80
-	O_DIRECT                        = 0x00002000
-	O_NOFOLLOW                      = 0x00004000
-	O_DIRECTORY                     = 0x00008000
-	O_PATH                          = 0x00080000
-	O_CLOEXEC                       = 0x00001000
-	O_EXCL                          = 0x40
-	O_GETFL                         = 0x0F
-	O_LARGEFILE                     = 0x0400
-	O_NDELAY                        = 0x4
-	O_NONBLOCK                      = 0x04
-	O_RDONLY                        = 0x02
-	O_RDWR                          = 0x03
-	O_SYNC                          = 0x0100
-	O_TRUNC                         = 0x10
-	O_WRONLY                        = 0x01
-	O_NOCTTY                        = 0x20
-	OPOST                           = 0x0001
-	ONLCR                           = 0x0004
-	PARENB                          = 0x0200
-	PARMRK                          = 0x0400
-	QUERYCVT                        = 3
-	RUSAGE_CHILDREN                 = -0x1
-	RUSAGE_SELF                     = 0x0 // RUSAGE_THREAD unsupported on z/OS
-	SEEK_CUR                        = 1
-	SEEK_END                        = 2
-	SEEK_SET                        = 0
-	SETAUTOCVTALL                   = 5
-	SETAUTOCVTON                    = 2
-	SETCVTALL                       = 4
-	SETCVTOFF                       = 0
-	SETCVTON                        = 1
-	AF_APPLETALK                    = 16
-	AF_CCITT                        = 10
-	AF_CHAOS                        = 5
-	AF_DATAKIT                      = 9
-	AF_DLI                          = 13
-	AF_ECMA                         = 8
-	AF_HYLINK                       = 15
-	AF_IMPLINK                      = 3
-	AF_INET                         = 2
-	AF_INET6                        = 19
-	AF_INTF                         = 20
-	AF_IUCV                         = 17
-	AF_LAT                          = 14
-	AF_LINK                         = 18
-	AF_LOCAL                        = AF_UNIX // AF_LOCAL is an alias for AF_UNIX
-	AF_MAX                          = 30
-	AF_NBS                          = 7
-	AF_NDD                          = 23
-	AF_NETWARE                      = 22
-	AF_NS                           = 6
-	AF_PUP                          = 4
-	AF_RIF                          = 21
-	AF_ROUTE                        = 20
-	AF_SNA                          = 11
-	AF_UNIX                         = 1
-	AF_UNSPEC                       = 0
-	IBMTCP_IMAGE                    = 1
-	MSG_ACK_EXPECTED                = 0x10
-	MSG_ACK_GEN                     = 0x40
-	MSG_ACK_TIMEOUT                 = 0x20
-	MSG_CONNTERM                    = 0x80
-	MSG_CTRUNC                      = 0x20
-	MSG_DONTROUTE                   = 0x4
-	MSG_EOF                         = 0x8000
-	MSG_EOR                         = 0x8
-	MSG_MAXIOVLEN                   = 16
-	MSG_NONBLOCK                    = 0x4000
-	MSG_OOB                         = 0x1
-	MSG_PEEK                        = 0x2
-	MSG_TRUNC                       = 0x10
-	MSG_WAITALL                     = 0x40
-	PRIO_PROCESS                    = 1
-	PRIO_PGRP                       = 2
-	PRIO_USER                       = 3
-	RLIMIT_CPU                      = 0
-	RLIMIT_FSIZE                    = 1
-	RLIMIT_DATA                     = 2
-	RLIMIT_STACK                    = 3
-	RLIMIT_CORE                     = 4
-	RLIMIT_AS                       = 5
-	RLIMIT_NOFILE                   = 6
-	RLIMIT_MEMLIMIT                 = 7
-	RLIMIT_MEMLOCK                  = 0x8
-	RLIM_INFINITY                   = 2147483647
-	SCHED_FIFO                      = 0x2
-	SCM_CREDENTIALS                 = 0x2
-	SCM_RIGHTS                      = 0x01
-	SF_CLOSE                        = 0x00000002
-	SF_REUSE                        = 0x00000001
-	SHM_RND                         = 0x2
-	SHM_RDONLY                      = 0x1
-	SHMLBA                          = 0x1000
-	IPC_STAT                        = 0x3
-	IPC_SET                         = 0x2
-	IPC_RMID                        = 0x1
-	IPC_PRIVATE                     = 0x0
-	IPC_CREAT                       = 0x1000000
-	__IPC_MEGA                      = 0x4000000
-	__IPC_SHAREAS                   = 0x20000000
-	__IPC_BELOWBAR                  = 0x10000000
-	IPC_EXCL                        = 0x2000000
-	__IPC_GIGA                      = 0x8000000
-	SHUT_RD                         = 0
-	SHUT_RDWR                       = 2
-	SHUT_WR                         = 1
-	SOCK_CLOEXEC                    = 0x00001000
-	SOCK_CONN_DGRAM                 = 6
-	SOCK_DGRAM                      = 2
-	SOCK_NONBLOCK                   = 0x800
-	SOCK_RAW                        = 3
-	SOCK_RDM                        = 4
-	SOCK_SEQPACKET                  = 5
-	SOCK_STREAM                     = 1
-	SOL_SOCKET                      = 0xffff
-	SOMAXCONN                       = 10
-	SO_ACCEPTCONN                   = 0x0002
-	SO_ACCEPTECONNABORTED           = 0x0006
-	SO_ACKNOW                       = 0x7700
-	SO_BROADCAST                    = 0x0020
-	SO_BULKMODE                     = 0x8000
-	SO_CKSUMRECV                    = 0x0800
-	SO_CLOSE                        = 0x01
-	SO_CLUSTERCONNTYPE              = 0x00004001
-	SO_CLUSTERCONNTYPE_INTERNAL     = 8
-	SO_CLUSTERCONNTYPE_NOCONN       = 0
-	SO_CLUSTERCONNTYPE_NONE         = 1
-	SO_CLUSTERCONNTYPE_SAME_CLUSTER = 2
-	SO_CLUSTERCONNTYPE_SAME_IMAGE   = 4
-	SO_DEBUG                        = 0x0001
-	SO_DONTROUTE                    = 0x0010
-	SO_ERROR                        = 0x1007
-	SO_IGNOREINCOMINGPUSH           = 0x1
-	SO_IGNORESOURCEVIPA             = 0x0002
-	SO_KEEPALIVE                    = 0x0008
-	SO_LINGER                       = 0x0080
-	SO_NONBLOCKLOCAL                = 0x8001
-	SO_NOREUSEADDR                  = 0x1000
-	SO_OOBINLINE                    = 0x0100
-	SO_OPTACK                       = 0x8004
-	SO_OPTMSS                       = 0x8003
-	SO_RCVBUF                       = 0x1002
-	SO_RCVLOWAT                     = 0x1004
-	SO_RCVTIMEO                     = 0x1006
-	SO_REUSEADDR                    = 0x0004
-	SO_REUSEPORT                    = 0x0200
-	SO_SECINFO                      = 0x00004002
-	SO_SET                          = 0x0200
-	SO_SNDBUF                       = 0x1001
-	SO_SNDLOWAT                     = 0x1003
-	SO_SNDTIMEO                     = 0x1005
-	SO_TYPE                         = 0x1008
-	SO_UNSET                        = 0x0400
-	SO_USELOOPBACK                  = 0x0040
-	SO_USE_IFBUFS                   = 0x0400
-	S_ISUID                         = 0x0800
-	S_ISGID                         = 0x0400
-	S_ISVTX                         = 0x0200
-	S_IRUSR                         = 0x0100
-	S_IWUSR                         = 0x0080
-	S_IXUSR                         = 0x0040
-	S_IRWXU                         = 0x01C0
-	S_IRGRP                         = 0x0020
-	S_IWGRP                         = 0x0010
-	S_IXGRP                         = 0x0008
-	S_IRWXG                         = 0x0038
-	S_IROTH                         = 0x0004
-	S_IWOTH                         = 0x0002
-	S_IXOTH                         = 0x0001
-	S_IRWXO                         = 0x0007
-	S_IREAD                         = S_IRUSR
-	S_IWRITE                        = S_IWUSR
-	S_IEXEC                         = S_IXUSR
-	S_IFDIR                         = 0x01000000
-	S_IFCHR                         = 0x02000000
-	S_IFREG                         = 0x03000000
-	S_IFFIFO                        = 0x04000000
-	S_IFIFO                         = 0x04000000
-	S_IFLNK                         = 0x05000000
-	S_IFBLK                         = 0x06000000
-	S_IFSOCK                        = 0x07000000
-	S_IFVMEXTL                      = 0xFE000000
-	S_IFVMEXTL_EXEC                 = 0x00010000
-	S_IFVMEXTL_DATA                 = 0x00020000
-	S_IFVMEXTL_MEL                  = 0x00030000
-	S_IFEXTL                        = 0x00000001
-	S_IFPROGCTL                     = 0x00000002
-	S_IFAPFCTL                      = 0x00000004
-	S_IFNOSHARE                     = 0x00000008
-	S_IFSHARELIB                    = 0x00000010
-	S_IFMT                          = 0xFF000000
-	S_IFMST                         = 0x00FF0000
-	TCP_KEEPALIVE                   = 0x8
-	TCP_NODELAY                     = 0x1
-	TIOCGWINSZ                      = 0x4008a368
-	TIOCSWINSZ                      = 0x8008a367
-	TIOCSBRK                        = 0x2000a77b
-	TIOCCBRK                        = 0x2000a77a
-	TIOCSTI                         = 0x8001a772
-	TIOCGPGRP                       = 0x4004a777 // _IOR(167, 119, int)
-	TCSANOW                         = 0
-	TCSETS                          = 0 // equivalent to TCSANOW for tcsetattr
-	TCSADRAIN                       = 1
-	TCSETSW                         = 1 // equivalent to TCSADRAIN for tcsetattr
-	TCSAFLUSH                       = 2
-	TCSETSF                         = 2 // equivalent to TCSAFLUSH for tcsetattr
-	TCGETS                          = 3 // not defined in ioctl.h -- zos golang only
-	TCIFLUSH                        = 0
-	TCOFLUSH                        = 1
-	TCIOFLUSH                       = 2
-	TCOOFF                          = 0
-	TCOON                           = 1
-	TCIOFF                          = 2
-	TCION                           = 3
-	TIOCSPGRP                       = 0x8004a776
-	TIOCNOTTY                       = 0x2000a771
-	TIOCEXCL                        = 0x2000a70d
-	TIOCNXCL                        = 0x2000a70e
-	TIOCGETD                        = 0x4004a700
-	TIOCSETD                        = 0x8004a701
-	TIOCPKT                         = 0x8004a770
-	TIOCSTOP                        = 0x2000a76f
-	TIOCSTART                       = 0x2000a76e
-	TIOCUCNTL                       = 0x8004a766
-	TIOCREMOTE                      = 0x8004a769
-	TIOCMGET                        = 0x4004a76a
-	TIOCMSET                        = 0x8004a76d
-	TIOCMBIC                        = 0x8004a76b
-	TIOCMBIS                        = 0x8004a76c
-	VINTR                           = 0
-	VQUIT                           = 1
-	VERASE                          = 2
-	VKILL                           = 3
-	VEOF                            = 4
-	VEOL                            = 5
-	VMIN                            = 6
-	VSTART                          = 7
-	VSTOP                           = 8
-	VSUSP                           = 9
-	VTIME                           = 10
-	WCONTINUED                      = 0x4
-	WEXITED                         = 0x8
-	WNOHANG                         = 0x1
-	WNOWAIT                         = 0x20
-	WSTOPPED                        = 0x10
-	WUNTRACED                       = 0x2
-	_BPX_SWAP                       = 1
-	_BPX_NONSWAP                    = 2
-	MCL_CURRENT                     = 1  // for Linux compatibility -- no zos semantics
-	MCL_FUTURE                      = 2  // for Linux compatibility -- no zos semantics
-	MCL_ONFAULT                     = 3  // for Linux compatibility -- no zos semantics
-	MADV_NORMAL                     = 0  // for Linux compatibility -- no zos semantics
-	MADV_RANDOM                     = 1  // for Linux compatibility -- no zos semantics
-	MADV_SEQUENTIAL                 = 2  // for Linux compatibility -- no zos semantics
-	MADV_WILLNEED                   = 3  // for Linux compatibility -- no zos semantics
-	MADV_REMOVE                     = 4  // for Linux compatibility -- no zos semantics
-	MADV_DONTFORK                   = 5  // for Linux compatibility -- no zos semantics
-	MADV_DOFORK                     = 6  // for Linux compatibility -- no zos semantics
-	MADV_HWPOISON                   = 7  // for Linux compatibility -- no zos semantics
-	MADV_MERGEABLE                  = 8  // for Linux compatibility -- no zos semantics
-	MADV_UNMERGEABLE                = 9  // for Linux compatibility -- no zos semantics
-	MADV_SOFT_OFFLINE               = 10 // for Linux compatibility -- no zos semantics
-	MADV_HUGEPAGE                   = 11 // for Linux compatibility -- no zos semantics
-	MADV_NOHUGEPAGE                 = 12 // for Linux compatibility -- no zos semantics
-	MADV_DONTDUMP                   = 13 // for Linux compatibility -- no zos semantics
-	MADV_DODUMP                     = 14 // for Linux compatibility -- no zos semantics
-	MADV_FREE                       = 15 // for Linux compatibility -- no zos semantics
-	MADV_WIPEONFORK                 = 16 // for Linux compatibility -- no zos semantics
-	MADV_KEEPONFORK                 = 17 // for Linux compatibility -- no zos semantics
-	AT_SYMLINK_FOLLOW               = 0x400
-	AT_SYMLINK_NOFOLLOW             = 0x100
-	XATTR_CREATE                    = 0x1
-	XATTR_REPLACE                   = 0x2
-	P_PID                           = 0
-	P_PGID                          = 1
-	P_ALL                           = 2
-	PR_SET_NAME                     = 15
-	PR_GET_NAME                     = 16
-	PR_SET_NO_NEW_PRIVS             = 38
-	PR_GET_NO_NEW_PRIVS             = 39
-	PR_SET_DUMPABLE                 = 4
-	PR_GET_DUMPABLE                 = 3
-	PR_SET_PDEATHSIG                = 1
-	PR_GET_PDEATHSIG                = 2
-	PR_SET_CHILD_SUBREAPER          = 36
-	PR_GET_CHILD_SUBREAPER          = 37
-	AT_FDCWD                        = -100
-	AT_EACCESS                      = 0x200
-	AT_EMPTY_PATH                   = 0x1000
-	AT_REMOVEDIR                    = 0x200
-	RENAME_NOREPLACE                = 1 << 0
-	ST_RDONLY                       = 1
-	ST_NOSUID                       = 2
-)
-
-const (
-	EDOM               = Errno(1)
-	ERANGE             = Errno(2)
-	EACCES             = Errno(111)
-	EAGAIN             = Errno(112)
-	EBADF              = Errno(113)
-	EBUSY              = Errno(114)
-	ECHILD             = Errno(115)
-	EDEADLK            = Errno(116)
-	EEXIST             = Errno(117)
-	EFAULT             = Errno(118)
-	EFBIG              = Errno(119)
-	EINTR              = Errno(120)
-	EINVAL             = Errno(121)
-	EIO                = Errno(122)
-	EISDIR             = Errno(123)
-	EMFILE             = Errno(124)
-	EMLINK             = Errno(125)
-	ENAMETOOLONG       = Errno(126)
-	ENFILE             = Errno(127)
-	ENOATTR            = Errno(265)
-	ENODEV             = Errno(128)
-	ENOENT             = Errno(129)
-	ENOEXEC            = Errno(130)
-	ENOLCK             = Errno(131)
-	ENOMEM             = Errno(132)
-	ENOSPC             = Errno(133)
-	ENOSYS             = Errno(134)
-	ENOTDIR            = Errno(135)
-	ENOTEMPTY          = Errno(136)
-	ENOTTY             = Errno(137)
-	ENXIO              = Errno(138)
-	EPERM              = Errno(139)
-	EPIPE              = Errno(140)
-	EROFS              = Errno(141)
-	ESPIPE             = Errno(142)
-	ESRCH              = Errno(143)
-	EXDEV              = Errno(144)
-	E2BIG              = Errno(145)
-	ELOOP              = Errno(146)
-	EILSEQ             = Errno(147)
-	ENODATA            = Errno(148)
-	EOVERFLOW          = Errno(149)
-	EMVSNOTUP          = Errno(150)
-	ECMSSTORAGE        = Errno(151)
-	EMVSDYNALC         = Errno(151)
-	EMVSCVAF           = Errno(152)
-	EMVSCATLG          = Errno(153)
-	ECMSINITIAL        = Errno(156)
-	EMVSINITIAL        = Errno(156)
-	ECMSERR            = Errno(157)
-	EMVSERR            = Errno(157)
-	EMVSPARM           = Errno(158)
-	ECMSPFSFILE        = Errno(159)
-	EMVSPFSFILE        = Errno(159)
-	EMVSBADCHAR        = Errno(160)
-	ECMSPFSPERM        = Errno(162)
-	EMVSPFSPERM        = Errno(162)
-	EMVSSAFEXTRERR     = Errno(163)
-	EMVSSAF2ERR        = Errno(164)
-	EMVSTODNOTSET      = Errno(165)
-	EMVSPATHOPTS       = Errno(166)
-	EMVSNORTL          = Errno(167)
-	EMVSEXPIRE         = Errno(168)
-	EMVSPASSWORD       = Errno(169)
-	EMVSWLMERROR       = Errno(170)
-	EMVSCPLERROR       = Errno(171)
-	EMVSARMERROR       = Errno(172)
-	ELENOFORK          = Errno(200)
-	ELEMSGERR          = Errno(201)
-	EFPMASKINV         = Errno(202)
-	EFPMODEINV         = Errno(203)
-	EBUFLEN            = Errno(227)
-	EEXTLINK           = Errno(228)
-	ENODD              = Errno(229)
-	ECMSESMERR         = Errno(230)
-	ECPERR             = Errno(231)
-	ELEMULTITHREAD     = Errno(232)
-	ELEFENCE           = Errno(244)
-	EBADDATA           = Errno(245)
-	EUNKNOWN           = Errno(246)
-	ENOTSUP            = Errno(247)
-	EBADNAME           = Errno(248)
-	ENOTSAFE           = Errno(249)
-	ELEMULTITHREADFORK = Errno(257)
-	ECUNNOENV          = Errno(258)
-	ECUNNOCONV         = Errno(259)
-	ECUNNOTALIGNED     = Errno(260)
-	ECUNERR            = Errno(262)
-	EIBMBADCALL        = Errno(1000)
-	EIBMBADPARM        = Errno(1001)
-	EIBMSOCKOUTOFRANGE = Errno(1002)
-	EIBMSOCKINUSE      = Errno(1003)
-	EIBMIUCVERR        = Errno(1004)
-	EOFFLOADboxERROR   = Errno(1005)
-	EOFFLOADboxRESTART = Errno(1006)
-	EOFFLOADboxDOWN    = Errno(1007)
-	EIBMCONFLICT       = Errno(1008)
-	EIBMCANCELLED      = Errno(1009)
-	EIBMBADTCPNAME     = Errno(1011)
-	ENOTBLK            = Errno(1100)
-	ETXTBSY            = Errno(1101)
-	EWOULDBLOCK        = Errno(1102)
-	EINPROGRESS        = Errno(1103)
-	EALREADY           = Errno(1104)
-	ENOTSOCK           = Errno(1105)
-	EDESTADDRREQ       = Errno(1106)
-	EMSGSIZE           = Errno(1107)
-	EPROTOTYPE         = Errno(1108)
-	ENOPROTOOPT        = Errno(1109)
-	EPROTONOSUPPORT    = Errno(1110)
-	ESOCKTNOSUPPORT    = Errno(1111)
-	EOPNOTSUPP         = Errno(1112)
-	EPFNOSUPPORT       = Errno(1113)
-	EAFNOSUPPORT       = Errno(1114)
-	EADDRINUSE         = Errno(1115)
-	EADDRNOTAVAIL      = Errno(1116)
-	ENETDOWN           = Errno(1117)
-	ENETUNREACH        = Errno(1118)
-	ENETRESET          = Errno(1119)
-	ECONNABORTED       = Errno(1120)
-	ECONNRESET         = Errno(1121)
-	ENOBUFS            = Errno(1122)
-	EISCONN            = Errno(1123)
-	ENOTCONN           = Errno(1124)
-	ESHUTDOWN          = Errno(1125)
-	ETOOMANYREFS       = Errno(1126)
-	ETIMEDOUT          = Errno(1127)
-	ECONNREFUSED       = Errno(1128)
-	EHOSTDOWN          = Errno(1129)
-	EHOSTUNREACH       = Errno(1130)
-	EPROCLIM           = Errno(1131)
-	EUSERS             = Errno(1132)
-	EDQUOT             = Errno(1133)
-	ESTALE             = Errno(1134)
-	EREMOTE            = Errno(1135)
-	ENOSTR             = Errno(1136)
-	ETIME              = Errno(1137)
-	ENOSR              = Errno(1138)
-	ENOMSG             = Errno(1139)
-	EBADMSG            = Errno(1140)
-	EIDRM              = Errno(1141)
-	ENONET             = Errno(1142)
-	ERREMOTE           = Errno(1143)
-	ENOLINK            = Errno(1144)
-	EADV               = Errno(1145)
-	ESRMNT             = Errno(1146)
-	ECOMM              = Errno(1147)
-	EPROTO             = Errno(1148)
-	EMULTIHOP          = Errno(1149)
-	EDOTDOT            = Errno(1150)
-	EREMCHG            = Errno(1151)
-	ECANCELED          = Errno(1152)
-	EINTRNODATA        = Errno(1159)
-	ENOREUSE           = Errno(1160)
-	ENOMOVE            = Errno(1161)
-)
-
-// Signals
-const (
-	SIGHUP    = Signal(1)
-	SIGINT    = Signal(2)
-	SIGABRT   = Signal(3)
-	SIGILL    = Signal(4)
-	SIGPOLL   = Signal(5)
-	SIGURG    = Signal(6)
-	SIGSTOP   = Signal(7)
-	SIGFPE    = Signal(8)
-	SIGKILL   = Signal(9)
-	SIGBUS    = Signal(10)
-	SIGSEGV   = Signal(11)
-	SIGSYS    = Signal(12)
-	SIGPIPE   = Signal(13)
-	SIGALRM   = Signal(14)
-	SIGTERM   = Signal(15)
-	SIGUSR1   = Signal(16)
-	SIGUSR2   = Signal(17)
-	SIGABND   = Signal(18)
-	SIGCONT   = Signal(19)
-	SIGCHLD   = Signal(20)
-	SIGTTIN   = Signal(21)
-	SIGTTOU   = Signal(22)
-	SIGIO     = Signal(23)
-	SIGQUIT   = Signal(24)
-	SIGTSTP   = Signal(25)
-	SIGTRAP   = Signal(26)
-	SIGIOERR  = Signal(27)
-	SIGWINCH  = Signal(28)
-	SIGXCPU   = Signal(29)
-	SIGXFSZ   = Signal(30)
-	SIGVTALRM = Signal(31)
-	SIGPROF   = Signal(32)
-	SIGDANGER = Signal(33)
-	SIGTHSTOP = Signal(34)
-	SIGTHCONT = Signal(35)
-	SIGTRACE  = Signal(37)
-	SIGDCE    = Signal(38)
-	SIGDUMP   = Signal(39)
-)
-
-// Error table
-var errorList = [...]struct {
-	num  Errno
-	name string
-	desc string
-}{
-	{1, "EDC5001I", "A domain error occurred."},
-	{2, "EDC5002I", "A range error occurred."},
-	{111, "EDC5111I", "Permission denied."},
-	{112, "EDC5112I", "Resource temporarily unavailable."},
-	{113, "EDC5113I", "Bad file descriptor."},
-	{114, "EDC5114I", "Resource busy."},
-	{115, "EDC5115I", "No child processes."},
-	{116, "EDC5116I", "Resource deadlock avoided."},
-	{117, "EDC5117I", "File exists."},
-	{118, "EDC5118I", "Incorrect address."},
-	{119, "EDC5119I", "File too large."},
-	{120, "EDC5120I", "Interrupted function call."},
-	{121, "EDC5121I", "Invalid argument."},
-	{122, "EDC5122I", "Input/output error."},
-	{123, "EDC5123I", "Is a directory."},
-	{124, "EDC5124I", "Too many open files."},
-	{125, "EDC5125I", "Too many links."},
-	{126, "EDC5126I", "Filename too long."},
-	{127, "EDC5127I", "Too many open files in system."},
-	{128, "EDC5128I", "No such device."},
-	{129, "EDC5129I", "No such file or directory."},
-	{130, "EDC5130I", "Exec format error."},
-	{131, "EDC5131I", "No locks available."},
-	{132, "EDC5132I", "Not enough memory."},
-	{133, "EDC5133I", "No space left on device."},
-	{134, "EDC5134I", "Function not implemented."},
-	{135, "EDC5135I", "Not a directory."},
-	{136, "EDC5136I", "Directory not empty."},
-	{137, "EDC5137I", "Inappropriate I/O control operation."},
-	{138, "EDC5138I", "No such device or address."},
-	{139, "EDC5139I", "Operation not permitted."},
-	{140, "EDC5140I", "Broken pipe."},
-	{141, "EDC5141I", "Read-only file system."},
-	{142, "EDC5142I", "Invalid seek."},
-	{143, "EDC5143I", "No such process."},
-	{144, "EDC5144I", "Improper link."},
-	{145, "EDC5145I", "The parameter list is too long, or the message to receive was too large for the buffer."},
-	{146, "EDC5146I", "Too many levels of symbolic links."},
-	{147, "EDC5147I", "Illegal byte sequence."},
-	{148, "EDC5148I", "The named attribute or data not available."},
-	{149, "EDC5149I", "Value Overflow Error."},
-	{150, "EDC5150I", "UNIX System Services is not active."},
-	{151, "EDC5151I", "Dynamic allocation error."},
-	{152, "EDC5152I", "Common VTOC access facility (CVAF) error."},
-	{153, "EDC5153I", "Catalog obtain error."},
-	{156, "EDC5156I", "Process initialization error."},
-	{157, "EDC5157I", "An internal error has occurred."},
-	{158, "EDC5158I", "Bad parameters were passed to the service."},
-	{159, "EDC5159I", "The Physical File System encountered a permanent file error."},
-	{160, "EDC5160I", "Bad character in environment variable name."},
-	{162, "EDC5162I", "The Physical File System encountered a system error."},
-	{163, "EDC5163I", "SAF/RACF extract error."},
-	{164, "EDC5164I", "SAF/RACF error."},
-	{165, "EDC5165I", "System TOD clock not set."},
-	{166, "EDC5166I", "Access mode argument on function call conflicts with PATHOPTS parameter on JCL DD statement."},
-	{167, "EDC5167I", "Access to the UNIX System Services version of the C RTL is denied."},
-	{168, "EDC5168I", "Password has expired."},
-	{169, "EDC5169I", "Password is invalid."},
-	{170, "EDC5170I", "An error was encountered with WLM."},
-	{171, "EDC5171I", "An error was encountered with CPL."},
-	{172, "EDC5172I", "An error was encountered with Application Response Measurement (ARM) component."},
-	{200, "EDC5200I", "The application contains a Language Environment member language that cannot tolerate a fork()."},
-	{201, "EDC5201I", "The Language Environment message file was not found in the hierarchical file system."},
-	{202, "EDC5202E", "DLL facilities are not supported under SPC environment."},
-	{203, "EDC5203E", "DLL facilities are not supported under POSIX environment."},
-	{227, "EDC5227I", "Buffer is not long enough to contain a path definition"},
-	{228, "EDC5228I", "The file referred to is an external link"},
-	{229, "EDC5229I", "No path definition for ddname in effect"},
-	{230, "EDC5230I", "ESM error."},
-	{231, "EDC5231I", "CP or the external security manager had an error"},
-	{232, "EDC5232I", "The function failed because it was invoked from a multithread environment."},
-	{244, "EDC5244I", "The program, module or DLL is not supported in this environment."},
-	{245, "EDC5245I", "Data is not valid."},
-	{246, "EDC5246I", "Unknown system state."},
-	{247, "EDC5247I", "Operation not supported."},
-	{248, "EDC5248I", "The object name specified is not correct."},
-	{249, "EDC5249I", "The function is not allowed."},
-	{257, "EDC5257I", "Function cannot be called in the child process of a fork() from a multithreaded process until exec() is called."},
-	{258, "EDC5258I", "A CUN_RS_NO_UNI_ENV error was issued by Unicode Services."},
-	{259, "EDC5259I", "A CUN_RS_NO_CONVERSION error was issued by Unicode Services."},
-	{260, "EDC5260I", "A CUN_RS_TABLE_NOT_ALIGNED error was issued by Unicode Services."},
-	{262, "EDC5262I", "An iconv() function encountered an unexpected error while using Unicode Services."},
-	{265, "EDC5265I", "The named attribute not available."},
-	{1000, "EDC8000I", "A bad socket-call constant was found in the IUCV header."},
-	{1001, "EDC8001I", "An error was found in the IUCV header."},
-	{1002, "EDC8002I", "A socket descriptor is out of range."},
-	{1003, "EDC8003I", "A socket descriptor is in use."},
-	{1004, "EDC8004I", "Request failed because of an IUCV error."},
-	{1005, "EDC8005I", "Offload box error."},
-	{1006, "EDC8006I", "Offload box restarted."},
-	{1007, "EDC8007I", "Offload box down."},
-	{1008, "EDC8008I", "Already a conflicting call outstanding on socket."},
-	{1009, "EDC8009I", "Request cancelled using a SOCKcallCANCEL request."},
-	{1011, "EDC8011I", "A name of a PFS was specified that either is not configured or is not a Sockets PFS."},
-	{1100, "EDC8100I", "Block device required."},
-	{1101, "EDC8101I", "Text file busy."},
-	{1102, "EDC8102I", "Operation would block."},
-	{1103, "EDC8103I", "Operation now in progress."},
-	{1104, "EDC8104I", "Connection already in progress."},
-	{1105, "EDC8105I", "Socket operation on non-socket."},
-	{1106, "EDC8106I", "Destination address required."},
-	{1107, "EDC8107I", "Message too long."},
-	{1108, "EDC8108I", "Protocol wrong type for socket."},
-	{1109, "EDC8109I", "Protocol not available."},
-	{1110, "EDC8110I", "Protocol not supported."},
-	{1111, "EDC8111I", "Socket type not supported."},
-	{1112, "EDC8112I", "Operation not supported on socket."},
-	{1113, "EDC8113I", "Protocol family not supported."},
-	{1114, "EDC8114I", "Address family not supported."},
-	{1115, "EDC8115I", "Address already in use."},
-	{1116, "EDC8116I", "Address not available."},
-	{1117, "EDC8117I", "Network is down."},
-	{1118, "EDC8118I", "Network is unreachable."},
-	{1119, "EDC8119I", "Network dropped connection on reset."},
-	{1120, "EDC8120I", "Connection ended abnormally."},
-	{1121, "EDC8121I", "Connection reset."},
-	{1122, "EDC8122I", "No buffer space available."},
-	{1123, "EDC8123I", "Socket already connected."},
-	{1124, "EDC8124I", "Socket not connected."},
-	{1125, "EDC8125I", "Can't send after socket shutdown."},
-	{1126, "EDC8126I", "Too many references; can't splice."},
-	{1127, "EDC8127I", "Connection timed out."},
-	{1128, "EDC8128I", "Connection refused."},
-	{1129, "EDC8129I", "Host is not available."},
-	{1130, "EDC8130I", "Host cannot be reached."},
-	{1131, "EDC8131I", "Too many processes."},
-	{1132, "EDC8132I", "Too many users."},
-	{1133, "EDC8133I", "Disk quota exceeded."},
-	{1134, "EDC8134I", "Stale file handle."},
-	{1135, "", ""},
-	{1136, "EDC8136I", "File is not a STREAM."},
-	{1137, "EDC8137I", "STREAMS ioctl() timeout."},
-	{1138, "EDC8138I", "No STREAMS resources."},
-	{1139, "EDC8139I", "The message identified by set_id and msg_id is not in the message catalog."},
-	{1140, "EDC8140I", "Bad message."},
-	{1141, "EDC8141I", "Identifier removed."},
-	{1142, "", ""},
-	{1143, "", ""},
-	{1144, "EDC8144I", "The link has been severed."},
-	{1145, "", ""},
-	{1146, "", ""},
-	{1147, "", ""},
-	{1148, "EDC8148I", "Protocol error."},
-	{1149, "EDC8149I", "Multihop not allowed."},
-	{1150, "", ""},
-	{1151, "", ""},
-	{1152, "EDC8152I", "The asynchronous I/O request has been canceled."},
-	{1159, "EDC8159I", "Function call was interrupted before any data was received."},
-	{1160, "EDC8160I", "Socket reuse is not supported."},
-	{1161, "EDC8161I", "The file system cannot currently be moved."},
-}
-
-// Signal table
-var signalList = [...]struct {
-	num  Signal
-	name string
-	desc string
-}{
-	{1, "SIGHUP", "hangup"},
-	{2, "SIGINT", "interrupt"},
-	{3, "SIGABT", "aborted"},
-	{4, "SIGILL", "illegal instruction"},
-	{5, "SIGPOLL", "pollable event"},
-	{6, "SIGURG", "urgent I/O condition"},
-	{7, "SIGSTOP", "stop process"},
-	{8, "SIGFPE", "floating point exception"},
-	{9, "SIGKILL", "killed"},
-	{10, "SIGBUS", "bus error"},
-	{11, "SIGSEGV", "segmentation fault"},
-	{12, "SIGSYS", "bad argument to routine"},
-	{13, "SIGPIPE", "broken pipe"},
-	{14, "SIGALRM", "alarm clock"},
-	{15, "SIGTERM", "terminated"},
-	{16, "SIGUSR1", "user defined signal 1"},
-	{17, "SIGUSR2", "user defined signal 2"},
-	{18, "SIGABND", "abend"},
-	{19, "SIGCONT", "continued"},
-	{20, "SIGCHLD", "child exited"},
-	{21, "SIGTTIN", "stopped (tty input)"},
-	{22, "SIGTTOU", "stopped (tty output)"},
-	{23, "SIGIO", "I/O possible"},
-	{24, "SIGQUIT", "quit"},
-	{25, "SIGTSTP", "stopped"},
-	{26, "SIGTRAP", "trace/breakpoint trap"},
-	{27, "SIGIOER", "I/O error"},
-	{28, "SIGWINCH", "window changed"},
-	{29, "SIGXCPU", "CPU time limit exceeded"},
-	{30, "SIGXFSZ", "file size limit exceeded"},
-	{31, "SIGVTALRM", "virtual timer expired"},
-	{32, "SIGPROF", "profiling timer expired"},
-	{33, "SIGDANGER", "danger"},
-	{34, "SIGTHSTOP", "stop thread"},
-	{35, "SIGTHCONT", "continue thread"},
-	{37, "SIGTRACE", "trace"},
-	{38, "", "DCE"},
-	{39, "SIGDUMP", "dump"},
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_armnn_linux.go","mode":420,"size":1200,"sha256":"11dbfe9592da41fdb9689aed2903977c61f22a480bb054f4c9e3c8202df284b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":1200}
-// Code generated by linux/mkall.go generatePtracePair("arm", "arm64"). DO NOT EDIT.
-
-//go:build linux && (arm || arm64)
-
-package unix
-
-import "unsafe"
-
-// PtraceRegsArm is the registers used by arm binaries.
-type PtraceRegsArm struct {
-	Uregs [18]uint32
-}
-
-// PtraceGetRegsArm fetches the registers used by arm binaries.
-func PtraceGetRegsArm(pid int, regsout *PtraceRegsArm) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsArm sets the registers used by arm binaries.
-func PtraceSetRegsArm(pid int, regs *PtraceRegsArm) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-// PtraceRegsArm64 is the registers used by arm64 binaries.
-type PtraceRegsArm64 struct {
-	Regs   [31]uint64
-	Sp     uint64
-	Pc     uint64
-	Pstate uint64
-}
-
-// PtraceGetRegsArm64 fetches the registers used by arm64 binaries.
-func PtraceGetRegsArm64(pid int, regsout *PtraceRegsArm64) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsArm64 sets the registers used by arm64 binaries.
-func PtraceSetRegsArm64(pid int, regs *PtraceRegsArm64) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_linux_arm64.go","mode":420,"size":721,"sha256":"3148ef332ae164e19e447a3859d35c96dd56de0833f22f622d5e73f9a0d1c009","index":0,"count":1,"encoding":"utf-8","payloadBytes":721}
-// Code generated by linux/mkall.go generatePtraceRegSet("arm64"). DO NOT EDIT.
-
-package unix
-
-import "unsafe"
-
-// PtraceGetRegSetArm64 fetches the registers used by arm64 binaries.
-func PtraceGetRegSetArm64(pid, addr int, regsout *PtraceRegsArm64) error {
-	iovec := Iovec{(*byte)(unsafe.Pointer(regsout)), uint64(unsafe.Sizeof(*regsout))}
-	return ptracePtr(PTRACE_GETREGSET, pid, uintptr(addr), unsafe.Pointer(&iovec))
-}
-
-// PtraceSetRegSetArm64 sets the registers used by arm64 binaries.
-func PtraceSetRegSetArm64(pid, addr int, regs *PtraceRegsArm64) error {
-	iovec := Iovec{(*byte)(unsafe.Pointer(regs)), uint64(unsafe.Sizeof(*regs))}
-	return ptracePtr(PTRACE_SETREGSET, pid, uintptr(addr), unsafe.Pointer(&iovec))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_mipsnn_linux.go","mode":420,"size":1390,"sha256":"e9be9bf128adc6660fbb4680b449a4ed9fcda027f5ebf35cd42df4065ffc79a2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1390}
-// Code generated by linux/mkall.go generatePtracePair("mips", "mips64"). DO NOT EDIT.
-
-//go:build linux && (mips || mips64)
-
-package unix
-
-import "unsafe"
-
-// PtraceRegsMips is the registers used by mips binaries.
-type PtraceRegsMips struct {
-	Regs     [32]uint64
-	Lo       uint64
-	Hi       uint64
-	Epc      uint64
-	Badvaddr uint64
-	Status   uint64
-	Cause    uint64
-}
-
-// PtraceGetRegsMips fetches the registers used by mips binaries.
-func PtraceGetRegsMips(pid int, regsout *PtraceRegsMips) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsMips sets the registers used by mips binaries.
-func PtraceSetRegsMips(pid int, regs *PtraceRegsMips) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-// PtraceRegsMips64 is the registers used by mips64 binaries.
-type PtraceRegsMips64 struct {
-	Regs     [32]uint64
-	Lo       uint64
-	Hi       uint64
-	Epc      uint64
-	Badvaddr uint64
-	Status   uint64
-	Cause    uint64
-}
-
-// PtraceGetRegsMips64 fetches the registers used by mips64 binaries.
-func PtraceGetRegsMips64(pid int, regsout *PtraceRegsMips64) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsMips64 sets the registers used by mips64 binaries.
-func PtraceSetRegsMips64(pid int, regs *PtraceRegsMips64) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_mipsnnle_linux.go","mode":420,"size":1442,"sha256":"9869c8980e2f50432e76f44ff2681bd62ec524db1828551da2f9f2761262a05d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1442}
-// Code generated by linux/mkall.go generatePtracePair("mipsle", "mips64le"). DO NOT EDIT.
-
-//go:build linux && (mipsle || mips64le)
-
-package unix
-
-import "unsafe"
-
-// PtraceRegsMipsle is the registers used by mipsle binaries.
-type PtraceRegsMipsle struct {
-	Regs     [32]uint64
-	Lo       uint64
-	Hi       uint64
-	Epc      uint64
-	Badvaddr uint64
-	Status   uint64
-	Cause    uint64
-}
-
-// PtraceGetRegsMipsle fetches the registers used by mipsle binaries.
-func PtraceGetRegsMipsle(pid int, regsout *PtraceRegsMipsle) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsMipsle sets the registers used by mipsle binaries.
-func PtraceSetRegsMipsle(pid int, regs *PtraceRegsMipsle) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-// PtraceRegsMips64le is the registers used by mips64le binaries.
-type PtraceRegsMips64le struct {
-	Regs     [32]uint64
-	Lo       uint64
-	Hi       uint64
-	Epc      uint64
-	Badvaddr uint64
-	Status   uint64
-	Cause    uint64
-}
-
-// PtraceGetRegsMips64le fetches the registers used by mips64le binaries.
-func PtraceGetRegsMips64le(pid int, regsout *PtraceRegsMips64le) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsMips64le sets the registers used by mips64le binaries.
-func PtraceSetRegsMips64le(pid int, regs *PtraceRegsMips64le) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_x86_linux.go","mode":420,"size":1849,"sha256":"dc4b1c692caaaab1e50e386776a08ce44e3a4d2def73513bb4fa8d04332ac631","index":0,"count":1,"encoding":"utf-8","payloadBytes":1849}
-// Code generated by linux/mkall.go generatePtracePair("386", "amd64"). DO NOT EDIT.
-
-//go:build linux && (386 || amd64)
-
-package unix
-
-import "unsafe"
-
-// PtraceRegs386 is the registers used by 386 binaries.
-type PtraceRegs386 struct {
-	Ebx      int32
-	Ecx      int32
-	Edx      int32
-	Esi      int32
-	Edi      int32
-	Ebp      int32
-	Eax      int32
-	Xds      int32
-	Xes      int32
-	Xfs      int32
-	Xgs      int32
-	Orig_eax int32
-	Eip      int32
-	Xcs      int32
-	Eflags   int32
-	Esp      int32
-	Xss      int32
-}
-
-// PtraceGetRegs386 fetches the registers used by 386 binaries.
-func PtraceGetRegs386(pid int, regsout *PtraceRegs386) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegs386 sets the registers used by 386 binaries.
-func PtraceSetRegs386(pid int, regs *PtraceRegs386) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-// PtraceRegsAmd64 is the registers used by amd64 binaries.
-type PtraceRegsAmd64 struct {
-	R15      uint64
-	R14      uint64
-	R13      uint64
-	R12      uint64
-	Rbp      uint64
-	Rbx      uint64
-	R11      uint64
-	R10      uint64
-	R9       uint64
-	R8       uint64
-	Rax      uint64
-	Rcx      uint64
-	Rdx      uint64
-	Rsi      uint64
-	Rdi      uint64
-	Orig_rax uint64
-	Rip      uint64
-	Cs       uint64
-	Eflags   uint64
-	Rsp      uint64
-	Ss       uint64
-	Fs_base  uint64
-	Gs_base  uint64
-	Ds       uint64
-	Es       uint64
-	Fs       uint64
-	Gs       uint64
-}
-
-// PtraceGetRegsAmd64 fetches the registers used by amd64 binaries.
-func PtraceGetRegsAmd64(pid int, regsout *PtraceRegsAmd64) error {
-	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
-}
-
-// PtraceSetRegsAmd64 sets the registers used by amd64 binaries.
-func PtraceSetRegsAmd64(pid int, regs *PtraceRegsAmd64) error {
-	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsymaddr_zos_s390x.s","mode":420,"size":9011,"sha256":"15f6a988dbda1b91bb91d3204ebf9b51424fa3b89cf36284e1084ba0983441f2","index":0,"count":1,"encoding":"utf-8","payloadBytes":9011}
-// go run mksyscall_zos_s390x.go -o_sysnum zsysnum_zos_s390x.go -o_syscall zsyscall_zos_s390x.go -i_syscall syscall_zos_s390x.go -o_asm zsymaddr_zos_s390x.s
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build zos && s390x
-#include "textflag.h"
-
-//  provide the address of function variable to be fixed up.
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FlistxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Flistxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FremovexattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fremovexattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FgetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fgetxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FsetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fsetxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_accept4Addr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·accept4(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_RemovexattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Removexattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_Dup3Addr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Dup3(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_DirfdAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Dirfd(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_EpollCreateAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·EpollCreate(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_EpollCreate1Addr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·EpollCreate1(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_EpollCtlAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·EpollCtl(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_EpollPwaitAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·EpollPwait(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_EpollWaitAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·EpollWait(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_EventfdAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Eventfd(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FaccessatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Faccessat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FchmodatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fchmodat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FchownatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fchownat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FdatasyncAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fdatasync(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_fstatatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·fstatat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_LgetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Lgetxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_LsetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Lsetxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FstatfsAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Fstatfs(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FutimesAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Futimes(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_FutimesatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Futimesat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_GetrandomAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Getrandom(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_InotifyInitAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·InotifyInit(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_InotifyInit1Addr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·InotifyInit1(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_InotifyAddWatchAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·InotifyAddWatch(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_InotifyRmWatchAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·InotifyRmWatch(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_ListxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Listxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_LlistxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Llistxattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_LremovexattrAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Lremovexattr(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_LutimesAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Lutimes(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_StatfsAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Statfs(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_SyncfsAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Syncfs(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_UnshareAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Unshare(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_LinkatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Linkat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_MkdiratAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Mkdirat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_MknodatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Mknodat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_PivotRootAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·PivotRoot(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_PrctlAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Prctl(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_PrlimitAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Prlimit(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_RenameatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Renameat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_Renameat2Addr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Renameat2(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_SethostnameAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Sethostname(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_SetnsAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Setns(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_SymlinkatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Symlinkat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_UnlinkatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·Unlinkat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_openatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·openat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_openat2Addr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·openat2(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-TEXT ·get_utimensatAddr(SB), NOSPLIT|NOFRAME, $0-8
-	MOVD $·utimensat(SB), R8
-	MOVD R8, ret+0(FP)
-	RET
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_aix_ppc.go","mode":420,"size":36534,"sha256":"d097275c6bb77738a93bf819430a440fd17968bb57b969cd28932c9ae03ff978","index":0,"count":1,"encoding":"utf-8","payloadBytes":36534}
-// go run mksyscall_aix_ppc.go -aix -tags aix,ppc syscall_aix.go syscall_aix_ppc.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build aix && ppc
-
-package unix
-
-/*
-#include <stdint.h>
-#include <stddef.h>
-int utimes(uintptr_t, uintptr_t);
-int utimensat(int, uintptr_t, uintptr_t, int);
-int getcwd(uintptr_t, size_t);
-int accept(int, uintptr_t, uintptr_t);
-int getdirent(int, uintptr_t, size_t);
-int wait4(int, uintptr_t, int, uintptr_t);
-int ioctl(int, int, uintptr_t);
-int fcntl(uintptr_t, int, uintptr_t);
-int fsync_range(int, int, long long, long long);
-int acct(uintptr_t);
-int chdir(uintptr_t);
-int chroot(uintptr_t);
-int close(int);
-int dup(int);
-void exit(int);
-int faccessat(int, uintptr_t, unsigned int, int);
-int fchdir(int);
-int fchmod(int, unsigned int);
-int fchmodat(int, uintptr_t, unsigned int, int);
-int fchownat(int, uintptr_t, int, int, int);
-int fdatasync(int);
-int getpgid(int);
-int getpgrp();
-int getpid();
-int getppid();
-int getpriority(int, int);
-int getrusage(int, uintptr_t);
-int getsid(int);
-int kill(int, int);
-int syslog(int, uintptr_t, size_t);
-int mkdir(int, uintptr_t, unsigned int);
-int mkdirat(int, uintptr_t, unsigned int);
-int mkfifo(uintptr_t, unsigned int);
-int mknod(uintptr_t, unsigned int, int);
-int mknodat(int, uintptr_t, unsigned int, int);
-int nanosleep(uintptr_t, uintptr_t);
-int open64(uintptr_t, int, unsigned int);
-int openat(int, uintptr_t, int, unsigned int);
-int read(int, uintptr_t, size_t);
-int readlink(uintptr_t, uintptr_t, size_t);
-int renameat(int, uintptr_t, int, uintptr_t);
-int setdomainname(uintptr_t, size_t);
-int sethostname(uintptr_t, size_t);
-int setpgid(int, int);
-int setsid();
-int settimeofday(uintptr_t);
-int setuid(int);
-int setgid(int);
-int setpriority(int, int, int);
-int statx(int, uintptr_t, int, int, uintptr_t);
-int sync();
-uintptr_t times(uintptr_t);
-int umask(int);
-int uname(uintptr_t);
-int unlink(uintptr_t);
-int unlinkat(int, uintptr_t, int);
-int ustat(int, uintptr_t);
-int write(int, uintptr_t, size_t);
-int dup2(int, int);
-int posix_fadvise64(int, long long, long long, int);
-int fchown(int, int, int);
-int fstat(int, uintptr_t);
-int fstatat(int, uintptr_t, uintptr_t, int);
-int fstatfs(int, uintptr_t);
-int ftruncate(int, long long);
-int getegid();
-int geteuid();
-int getgid();
-int getuid();
-int lchown(uintptr_t, int, int);
-int listen(int, int);
-int lstat(uintptr_t, uintptr_t);
-int pause();
-int pread64(int, uintptr_t, size_t, long long);
-int pwrite64(int, uintptr_t, size_t, long long);
-#define c_select select
-int select(int, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-int pselect(int, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-int setregid(int, int);
-int setreuid(int, int);
-int shutdown(int, int);
-long long splice(int, uintptr_t, int, uintptr_t, int, int);
-int stat(uintptr_t, uintptr_t);
-int statfs(uintptr_t, uintptr_t);
-int truncate(uintptr_t, long long);
-int bind(int, uintptr_t, uintptr_t);
-int connect(int, uintptr_t, uintptr_t);
-int getgroups(int, uintptr_t);
-int setgroups(int, uintptr_t);
-int getsockopt(int, int, int, uintptr_t, uintptr_t);
-int setsockopt(int, int, int, uintptr_t, uintptr_t);
-int socket(int, int, int);
-int socketpair(int, int, int, uintptr_t);
-int getpeername(int, uintptr_t, uintptr_t);
-int getsockname(int, uintptr_t, uintptr_t);
-int recvfrom(int, uintptr_t, size_t, int, uintptr_t, uintptr_t);
-int sendto(int, uintptr_t, size_t, int, uintptr_t, uintptr_t);
-int nrecvmsg(int, uintptr_t, int);
-int nsendmsg(int, uintptr_t, int);
-int munmap(uintptr_t, uintptr_t);
-int madvise(uintptr_t, size_t, int);
-int mprotect(uintptr_t, size_t, int);
-int mlock(uintptr_t, size_t);
-int mlockall(int);
-int msync(uintptr_t, size_t, int);
-int munlock(uintptr_t, size_t);
-int munlockall();
-int pipe(uintptr_t);
-int poll(uintptr_t, int, int);
-int gettimeofday(uintptr_t, uintptr_t);
-int time(uintptr_t);
-int utime(uintptr_t, uintptr_t);
-unsigned long long getsystemcfg(int);
-int umount(uintptr_t);
-int getrlimit64(int, uintptr_t);
-long long lseek64(int, long long, int);
-uintptr_t mmap(uintptr_t, uintptr_t, int, int, int, long long);
-
-*/
-import "C"
-import (
-	"unsafe"
-)
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimes(path string, times *[2]Timeval) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.utimes(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(times))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimensat(dirfd int, path string, times *[2]Timespec, flag int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.utimensat(C.int(dirfd), C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(times))), C.int(flag))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getcwd(buf []byte) (err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	var _p1 int
-	_p1 = len(buf)
-	r0, er := C.getcwd(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
-	r0, er := C.accept(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(rsa))), C.uintptr_t(uintptr(unsafe.Pointer(addrlen))))
-	fd = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getdirent(fd int, buf []byte) (n int, err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	var _p1 int
-	_p1 = len(buf)
-	r0, er := C.getdirent(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func wait4(pid Pid_t, status *_C_int, options int, rusage *Rusage) (wpid Pid_t, err error) {
-	r0, er := C.wait4(C.int(pid), C.uintptr_t(uintptr(unsafe.Pointer(status))), C.int(options), C.uintptr_t(uintptr(unsafe.Pointer(rusage))))
-	wpid = Pid_t(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctl(fd int, req int, arg uintptr) (err error) {
-	r0, er := C.ioctl(C.int(fd), C.int(req), C.uintptr_t(arg))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctlPtr(fd int, req int, arg unsafe.Pointer) (err error) {
-	r0, er := C.ioctl(C.int(fd), C.int(req), C.uintptr_t(uintptr(arg)))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func FcntlInt(fd uintptr, cmd int, arg int) (r int, err error) {
-	r0, er := C.fcntl(C.uintptr_t(fd), C.int(cmd), C.uintptr_t(arg))
-	r = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func FcntlFlock(fd uintptr, cmd int, lk *Flock_t) (err error) {
-	r0, er := C.fcntl(C.uintptr_t(fd), C.int(cmd), C.uintptr_t(uintptr(unsafe.Pointer(lk))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fcntl(fd int, cmd int, arg int) (val int, err error) {
-	r0, er := C.fcntl(C.uintptr_t(fd), C.int(cmd), C.uintptr_t(arg))
-	val = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fsyncRange(fd int, how int, start int64, length int64) (err error) {
-	r0, er := C.fsync_range(C.int(fd), C.int(how), C.longlong(start), C.longlong(length))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Acct(path string) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.acct(C.uintptr_t(_p0))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chdir(path string) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.chdir(C.uintptr_t(_p0))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chroot(path string) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.chroot(C.uintptr_t(_p0))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Close(fd int) (err error) {
-	r0, er := C.close(C.int(fd))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup(oldfd int) (fd int, err error) {
-	r0, er := C.dup(C.int(oldfd))
-	fd = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Exit(code int) {
-	C.exit(C.int(code))
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.faccessat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode), C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchdir(fd int) (err error) {
-	r0, er := C.fchdir(C.int(fd))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmod(fd int, mode uint32) (err error) {
-	r0, er := C.fchmod(C.int(fd), C.uint(mode))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.fchmodat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode), C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.fchownat(C.int(dirfd), C.uintptr_t(_p0), C.int(uid), C.int(gid), C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fdatasync(fd int) (err error) {
-	r0, er := C.fdatasync(C.int(fd))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgid(pid int) (pgid int, err error) {
-	r0, er := C.getpgid(C.int(pid))
-	pgid = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgrp() (pid int) {
-	r0, _ := C.getpgrp()
-	pid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpid() (pid int) {
-	r0, _ := C.getpid()
-	pid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getppid() (ppid int) {
-	r0, _ := C.getppid()
-	ppid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpriority(which int, who int) (prio int, err error) {
-	r0, er := C.getpriority(C.int(which), C.int(who))
-	prio = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrusage(who int, rusage *Rusage) (err error) {
-	r0, er := C.getrusage(C.int(who), C.uintptr_t(uintptr(unsafe.Pointer(rusage))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsid(pid int) (sid int, err error) {
-	r0, er := C.getsid(C.int(pid))
-	sid = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kill(pid int, sig Signal) (err error) {
-	r0, er := C.kill(C.int(pid), C.int(sig))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Klogctl(typ int, buf []byte) (n int, err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	var _p1 int
-	_p1 = len(buf)
-	r0, er := C.syslog(C.int(typ), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdir(dirfd int, path string, mode uint32) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.mkdir(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdirat(dirfd int, path string, mode uint32) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.mkdirat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifo(path string, mode uint32) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.mkfifo(C.uintptr_t(_p0), C.uint(mode))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknod(path string, mode uint32, dev int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.mknod(C.uintptr_t(_p0), C.uint(mode), C.int(dev))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknodat(dirfd int, path string, mode uint32, dev int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.mknodat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode), C.int(dev))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
-	r0, er := C.nanosleep(C.uintptr_t(uintptr(unsafe.Pointer(time))), C.uintptr_t(uintptr(unsafe.Pointer(leftover))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Open(path string, mode int, perm uint32) (fd int, err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.open64(C.uintptr_t(_p0), C.int(mode), C.uint(perm))
-	fd = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Openat(dirfd int, path string, flags int, mode uint32) (fd int, err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.openat(C.int(dirfd), C.uintptr_t(_p0), C.int(flags), C.uint(mode))
-	fd = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func read(fd int, p []byte) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.read(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlink(path string, buf []byte) (n int, err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	var _p1 *byte
-	if len(buf) > 0 {
-		_p1 = &buf[0]
-	}
-	var _p2 int
-	_p2 = len(buf)
-	r0, er := C.readlink(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(_p1))), C.size_t(_p2))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Renameat(olddirfd int, oldpath string, newdirfd int, newpath string) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(oldpath)))
-	_p1 := uintptr(unsafe.Pointer(C.CString(newpath)))
-	r0, er := C.renameat(C.int(olddirfd), C.uintptr_t(_p0), C.int(newdirfd), C.uintptr_t(_p1))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setdomainname(p []byte) (err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.setdomainname(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sethostname(p []byte) (err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.sethostname(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpgid(pid int, pgid int) (err error) {
-	r0, er := C.setpgid(C.int(pid), C.int(pgid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setsid() (pid int, err error) {
-	r0, er := C.setsid()
-	pid = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Settimeofday(tv *Timeval) (err error) {
-	r0, er := C.settimeofday(C.uintptr_t(uintptr(unsafe.Pointer(tv))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setuid(uid int) (err error) {
-	r0, er := C.setuid(C.int(uid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setgid(uid int) (err error) {
-	r0, er := C.setgid(C.int(uid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpriority(which int, who int, prio int) (err error) {
-	r0, er := C.setpriority(C.int(which), C.int(who), C.int(prio))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statx(dirfd int, path string, flags int, mask int, stat *Statx_t) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.statx(C.int(dirfd), C.uintptr_t(_p0), C.int(flags), C.int(mask), C.uintptr_t(uintptr(unsafe.Pointer(stat))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sync() {
-	C.sync()
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Times(tms *Tms) (ticks uintptr, err error) {
-	r0, er := C.times(C.uintptr_t(uintptr(unsafe.Pointer(tms))))
-	ticks = uintptr(r0)
-	if uintptr(r0) == ^uintptr(0) && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Umask(mask int) (oldmask int) {
-	r0, _ := C.umask(C.int(mask))
-	oldmask = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Uname(buf *Utsname) (err error) {
-	r0, er := C.uname(C.uintptr_t(uintptr(unsafe.Pointer(buf))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlink(path string) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.unlink(C.uintptr_t(_p0))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlinkat(dirfd int, path string, flags int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.unlinkat(C.int(dirfd), C.uintptr_t(_p0), C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ustat(dev int, ubuf *Ustat_t) (err error) {
-	r0, er := C.ustat(C.int(dev), C.uintptr_t(uintptr(unsafe.Pointer(ubuf))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func write(fd int, p []byte) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.write(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup2(oldfd int, newfd int) (err error) {
-	r0, er := C.dup2(C.int(oldfd), C.int(newfd))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fadvise(fd int, offset int64, length int64, advice int) (err error) {
-	r0, er := C.posix_fadvise64(C.int(fd), C.longlong(offset), C.longlong(length), C.int(advice))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchown(fd int, uid int, gid int) (err error) {
-	r0, er := C.fchown(C.int(fd), C.int(uid), C.int(gid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fstat(fd int, stat *Stat_t) (err error) {
-	r0, er := C.fstat(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(stat))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fstatat(dirfd int, path string, stat *Stat_t, flags int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.fstatat(C.int(dirfd), C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(stat))), C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatfs(fd int, buf *Statfs_t) (err error) {
-	r0, er := C.fstatfs(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(buf))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ftruncate(fd int, length int64) (err error) {
-	r0, er := C.ftruncate(C.int(fd), C.longlong(length))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getegid() (egid int) {
-	r0, _ := C.getegid()
-	egid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Geteuid() (euid int) {
-	r0, _ := C.geteuid()
-	euid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getgid() (gid int) {
-	r0, _ := C.getgid()
-	gid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getuid() (uid int) {
-	r0, _ := C.getuid()
-	uid = int(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lchown(path string, uid int, gid int) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.lchown(C.uintptr_t(_p0), C.int(uid), C.int(gid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Listen(s int, n int) (err error) {
-	r0, er := C.listen(C.int(s), C.int(n))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func lstat(path string, stat *Stat_t) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.lstat(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(stat))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pause() (err error) {
-	r0, er := C.pause()
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pread(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.pread64(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.longlong(offset))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.pwrite64(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.longlong(offset))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
-	r0, er := C.c_select(C.int(nfd), C.uintptr_t(uintptr(unsafe.Pointer(r))), C.uintptr_t(uintptr(unsafe.Pointer(w))), C.uintptr_t(uintptr(unsafe.Pointer(e))), C.uintptr_t(uintptr(unsafe.Pointer(timeout))))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pselect(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timespec, sigmask *Sigset_t) (n int, err error) {
-	r0, er := C.pselect(C.int(nfd), C.uintptr_t(uintptr(unsafe.Pointer(r))), C.uintptr_t(uintptr(unsafe.Pointer(w))), C.uintptr_t(uintptr(unsafe.Pointer(e))), C.uintptr_t(uintptr(unsafe.Pointer(timeout))), C.uintptr_t(uintptr(unsafe.Pointer(sigmask))))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setregid(rgid int, egid int) (err error) {
-	r0, er := C.setregid(C.int(rgid), C.int(egid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setreuid(ruid int, euid int) (err error) {
-	r0, er := C.setreuid(C.int(ruid), C.int(euid))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Shutdown(fd int, how int) (err error) {
-	r0, er := C.shutdown(C.int(fd), C.int(how))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Splice(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int64, err error) {
-	r0, er := C.splice(C.int(rfd), C.uintptr_t(uintptr(unsafe.Pointer(roff))), C.int(wfd), C.uintptr_t(uintptr(unsafe.Pointer(woff))), C.int(len), C.int(flags))
-	n = int64(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func stat(path string, statptr *Stat_t) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.stat(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(statptr))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statfs(path string, buf *Statfs_t) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.statfs(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(buf))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Truncate(path string, length int64) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.truncate(C.uintptr_t(_p0), C.longlong(length))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	r0, er := C.bind(C.int(s), C.uintptr_t(uintptr(addr)), C.uintptr_t(uintptr(addrlen)))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	r0, er := C.connect(C.int(s), C.uintptr_t(uintptr(addr)), C.uintptr_t(uintptr(addrlen)))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getgroups(n int, list *_Gid_t) (nn int, err error) {
-	r0, er := C.getgroups(C.int(n), C.uintptr_t(uintptr(unsafe.Pointer(list))))
-	nn = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setgroups(n int, list *_Gid_t) (err error) {
-	r0, er := C.setgroups(C.int(n), C.uintptr_t(uintptr(unsafe.Pointer(list))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
-	r0, er := C.getsockopt(C.int(s), C.int(level), C.int(name), C.uintptr_t(uintptr(val)), C.uintptr_t(uintptr(unsafe.Pointer(vallen))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
-	r0, er := C.setsockopt(C.int(s), C.int(level), C.int(name), C.uintptr_t(uintptr(val)), C.uintptr_t(vallen))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socket(domain int, typ int, proto int) (fd int, err error) {
-	r0, er := C.socket(C.int(domain), C.int(typ), C.int(proto))
-	fd = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
-	r0, er := C.socketpair(C.int(domain), C.int(typ), C.int(proto), C.uintptr_t(uintptr(unsafe.Pointer(fd))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	r0, er := C.getpeername(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(rsa))), C.uintptr_t(uintptr(unsafe.Pointer(addrlen))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	r0, er := C.getsockname(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(rsa))), C.uintptr_t(uintptr(unsafe.Pointer(addrlen))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
-	var _p0 *byte
-	if len(p) > 0 {
-		_p0 = &p[0]
-	}
-	var _p1 int
-	_p1 = len(p)
-	r0, er := C.recvfrom(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(flags), C.uintptr_t(uintptr(unsafe.Pointer(from))), C.uintptr_t(uintptr(unsafe.Pointer(fromlen))))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
-	var _p0 *byte
-	if len(buf) > 0 {
-		_p0 = &buf[0]
-	}
-	var _p1 int
-	_p1 = len(buf)
-	r0, er := C.sendto(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(flags), C.uintptr_t(uintptr(to)), C.uintptr_t(uintptr(addrlen)))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, er := C.nrecvmsg(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(msg))), C.int(flags))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, er := C.nsendmsg(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(msg))), C.int(flags))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func munmap(addr uintptr, length uintptr) (err error) {
-	r0, er := C.munmap(C.uintptr_t(addr), C.uintptr_t(length))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Madvise(b []byte, advice int) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	var _p1 int
-	_p1 = len(b)
-	r0, er := C.madvise(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(advice))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mprotect(b []byte, prot int) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	var _p1 int
-	_p1 = len(b)
-	r0, er := C.mprotect(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(prot))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlock(b []byte) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	var _p1 int
-	_p1 = len(b)
-	r0, er := C.mlock(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlockall(flags int) (err error) {
-	r0, er := C.mlockall(C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Msync(b []byte, flags int) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	var _p1 int
-	_p1 = len(b)
-	r0, er := C.msync(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(flags))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlock(b []byte) (err error) {
-	var _p0 *byte
-	if len(b) > 0 {
-		_p0 = &b[0]
-	}
-	var _p1 int
-	_p1 = len(b)
-	r0, er := C.munlock(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlockall() (err error) {
-	r0, er := C.munlockall()
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pipe(p *[2]_C_int) (err error) {
-	r0, er := C.pipe(C.uintptr_t(uintptr(unsafe.Pointer(p))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
-	r0, er := C.poll(C.uintptr_t(uintptr(unsafe.Pointer(fds))), C.int(nfds), C.int(timeout))
-	n = int(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func gettimeofday(tv *Timeval, tzp *Timezone) (err error) {
-	r0, er := C.gettimeofday(C.uintptr_t(uintptr(unsafe.Pointer(tv))), C.uintptr_t(uintptr(unsafe.Pointer(tzp))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Time(t *Time_t) (tt Time_t, err error) {
-	r0, er := C.time(C.uintptr_t(uintptr(unsafe.Pointer(t))))
-	tt = Time_t(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Utime(path string, buf *Utimbuf) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
-	r0, er := C.utime(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(buf))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsystemcfg(label int) (n uint64) {
-	r0, _ := C.getsystemcfg(C.int(label))
-	n = uint64(r0)
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func umount(target string) (err error) {
-	_p0 := uintptr(unsafe.Pointer(C.CString(target)))
-	r0, er := C.umount(C.uintptr_t(_p0))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrlimit(resource int, rlim *Rlimit) (err error) {
-	r0, er := C.getrlimit64(C.int(resource), C.uintptr_t(uintptr(unsafe.Pointer(rlim))))
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seek(fd int, offset int64, whence int) (off int64, err error) {
-	r0, er := C.lseek64(C.int(fd), C.longlong(offset), C.int(whence))
-	off = int64(r0)
-	if r0 == -1 && er != nil {
-		err = er
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func mmap(addr uintptr, length uintptr, prot int, flags int, fd int, offset int64) (xaddr uintptr, err error) {
-	r0, er := C.mmap(C.uintptr_t(addr), C.uintptr_t(length), C.int(prot), C.int(flags), C.int(fd), C.longlong(offset))
-	xaddr = uintptr(r0)
-	if uintptr(r0) == ^uintptr(0) && er != nil {
-		err = er
-	}
-	return
 }
 
 @@END

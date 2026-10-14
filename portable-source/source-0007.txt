@@ -1,3 +1,2031 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/capabilities.go","mode":420,"size":8563,"sha256":"d8bf2f6aeee2e263f313fcac2b519fbae127e632c2d6e35fd9010f17325c92c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8563}
+package edge
+
+import "github.com/wailsapp/go-webview2/webviewloader"
+
+type Capability string
+
+var UnsupportedCapabilityError = &unsupportedCapabilityError{}
+
+type unsupportedCapabilityError struct{}
+
+func (u *unsupportedCapabilityError) Error() string {
+	return "unsupported capability"
+}
+
+// Capabilities is a list of capabilities with their corresponding minimum runtime version
+// Internal Capabilities are not exposed to the user
+// Larger capabilities such as DragAndDrop should be exported with a capital letter
+
+// WebView2 Runtime Version 131.0.2903.40 (Released: September 2023)
+const (
+	ScreenCapture       = Capability("131.0.2903.40") // Screen capture support
+	NonClientRegion     = Capability("131.0.2903.40") // Non-client region customization
+	DownloadDialog      = Capability("131.0.2903.40") // Download dialog handling
+	BrowserExtension    = Capability("131.0.2903.40") // Browser extension support
+	BasicAuthentication = Capability("131.0.2903.40") // Basic authentication handling
+	SaveFileDialog      = Capability("131.0.2903.40") // Save file dialog support
+)
+
+// WebView2 Runtime Version 113.0.1774.30 (Released: Unknown)
+const (
+	GetAdditionalObjects = Capability("113.0.1774.30") // Additional objects support
+)
+
+// WebView2 Runtime Version 100.0.1185.39 (Released: April 2022)
+const (
+	AllowExternalDrop       = Capability("100.0.1185.39") // External drop support
+	GeneralAutofillEnabled  = Capability("100.0.1185.39") // General autofill features
+	PasswordAutosaveEnabled = Capability("100.0.1185.39") // Password autosave support
+)
+
+// WebView2 Runtime Version 98.0.1108.43 (Released: February 2022)
+const (
+	CustomScheme      = Capability("98.0.1108.43") // Custom scheme support
+	PrintToPdf        = Capability("98.0.1108.43") // Print to PDF functionality
+	SharedBuffer      = Capability("98.0.1108.43") // Shared buffer for performance
+	ServerCertificate = Capability("98.0.1108.43") // Server certificate handling
+	FrameNavigation   = Capability("98.0.1108.43") // Frame navigation events
+)
+
+// WebView2 Runtime Version 97.0.1072.69 (Released: January 2022)
+const (
+	ClientCertificate = Capability("97.0.1072.69") // Client certificate selection
+	ContextMenus      = Capability("97.0.1072.69") // Custom context menus
+	BackgroundColor   = Capability("97.0.1072.69") // Background color customization
+	ScriptEnabled     = Capability("97.0.1072.69") // JavaScript execution control
+	StatusBar         = Capability("97.0.1072.69") // Status bar customization
+)
+
+// WebView2 Runtime Version 95.0.1020.44 (Released: October 2021)
+const (
+	WebMessageReceived   = Capability("95.0.1020.44") // Web message handling
+	NewWindowRequested   = Capability("95.0.1020.44") // New window request handling
+	DocumentTitleChanged = Capability("95.0.1020.44") // Document title change events
+	ContainsFullScreen   = Capability("95.0.1020.44") // Fullscreen mode detection
+	WebResourceRequested = Capability("95.0.1020.44") // Web resource request handling
+)
+
+// WebView2 Runtime Version 94.0.992.31 (Released: September 2021)
+const (
+	NavigationStarting      = Capability("94.0.992.31") // Navigation start events
+	NavigationCompleted     = Capability("94.0.992.31") // Navigation completion events
+	FrameNavigationStarting = Capability("94.0.992.31") // Frame navigation start
+	SourceChanged           = Capability("94.0.992.31") // Source change detection
+	HistoryChanged          = Capability("94.0.992.31") // Browser history changes
+	SwipeNavigation         = Capability("94.0.992.31") // Swipe navigation support
+)
+
+// WebView2 Runtime Version 93.0.961.52 (Released: August 2021)
+const (
+	DOMContentLoaded    = Capability("93.0.961.52") // DOM content loaded events
+	WebResourceLoaded   = Capability("93.0.961.52") // Resource load events
+	ScriptDialogOpening = Capability("93.0.961.52") // Script dialog handling
+	PermissionRequested = Capability("93.0.961.52") // Permission request handling
+	ProcessFailed       = Capability("93.0.961.52") // Process failure detection
+)
+
+// WebView2 Runtime Version 92.0.902.78 (Released: July 2021)
+const (
+	AcceleratorKeyPressed = Capability("92.0.902.78") // Accelerator key handling
+	ZoomFactorChanged     = Capability("92.0.902.78") // Zoom factor change events
+	MoveFocusRequested    = Capability("92.0.902.78") // Focus movement handling
+	DevToolsProtocol      = Capability("92.0.902.78") // DevTools protocol support
+	BrowserProcessExited  = Capability("92.0.902.78") // Browser process exit handling
+)
+
+// WebView2 Runtime Version 91.0.864.41 (Released: June 2021)
+const (
+	DefaultDownloadDialog    = Capability("91.0.864.41") // Default download dialog
+	DefaultContextMenus      = Capability("91.0.864.41") // Default context menus
+	FaviconChanged           = Capability("91.0.864.41") // Favicon change events
+	WindowCloseRequested     = Capability("91.0.864.41") // Window close request handling
+	RasterizationScale       = Capability("91.0.864.41") // Display scaling support
+	SecurityUpdated          = Capability("91.0.864.41") // Security state updates
+	ProcessInfoReceived      = Capability("91.0.864.41") // Process info events
+	FramePermissionRequested = Capability("91.0.864.41") // Frame permission requests
+	ClearBrowsingData        = Capability("91.0.864.41") // Clear browsing data support
+	IsMutedChanged           = Capability("91.0.864.41") // Audio mute state changes
+)
+
+// WebView2 Runtime Version 90.0.818.41 (Released: May 2021)
+const (
+	WebResourceResponseReceived = Capability("90.0.818.41") // Web resource response handling
+	DOMContentLoaded90          = Capability("90.0.818.41") // DOM content loaded events (v90)
+	WebResourceRequested90      = Capability("90.0.818.41") // Web resource requests (v90)
+	NewWindowWithOptions        = Capability("90.0.818.41") // New window with options
+	CookieManagement            = Capability("90.0.818.41") // Cookie management support
+)
+
+// WebView2 Runtime Version 89.0.774.75 (Released: April 2021)
+const (
+	IsBuiltInErrorPageEnabled        = Capability("89.0.774.75") // Built-in error page support
+	WebResourceResponse              = Capability("89.0.774.75") // Web resource response handling
+	ScriptToExecuteOnDocumentCreated = Capability("89.0.774.75") // Document creation scripts
+	EnvironmentOptions               = Capability("89.0.774.75") // Environment options support
+	FrameNavigation89                = Capability("89.0.774.75") // Frame navigation (v89)
+)
+
+// WebView2 Runtime Version 88.0.705.74 (Released: March 2021)
+const (
+	WebResourceRequested88 = Capability("88.0.705.74") // Web resource requests (v88)
+	PermissionRequested88  = Capability("88.0.705.74") // Permission requests (v88)
+	ProcessFailed88        = Capability("88.0.705.74") // Process failure handling (v88)
+	AddHostObjectToScript  = Capability("88.0.705.74") // Host object scripting
+	IsMuted                = Capability("88.0.705.74") // Audio mute state
+)
+
+// WebView2 Runtime Version 87.0.664.75 (Released: February 2021)
+const (
+	WebMessageReceived87       = Capability("87.0.664.75") // Web message handling (v87)
+	CallDevToolsProtocolMethod = Capability("87.0.664.75") // DevTools protocol method calls
+	NewWindow87                = Capability("87.0.664.75") // New window creation (v87)
+	DocumentTitleChanged87     = Capability("87.0.664.75") // Document title changes (v87)
+	IsSuspended                = Capability("87.0.664.75") // Suspension state
+)
+
+// WebView2 Runtime Version 86.0.622.58 (Released: January 2021)
+const (
+	NavigationStarting86      = Capability("86.0.622.58") // Navigation start events (v86)
+	NavigationCompleted86     = Capability("86.0.622.58") // Navigation completion (v86)
+	FrameNavigationStarting86 = Capability("86.0.622.58") // Frame navigation start (v86)
+	BasicWebView              = Capability("86.0.622.58") // Basic WebView2 functionality
+	WindowBounds              = Capability("86.0.622.58") // Window bounds control
+)
+
+// WebView2 Runtime Version 85.0.564.70 (Released: December 2020)
+const (
+	WebView2Environment  = Capability("85.0.564.70") // WebView2 environment
+	WebView2Controller   = Capability("85.0.564.70") // WebView2 controller
+	BasicSettings        = Capability("85.0.564.70") // Basic settings support
+	UserDataFolder       = Capability("85.0.564.70") // User data folder
+	BrowserVersionString = Capability("85.0.564.70") // Browser version info
+)
+
+func HasCapability(webview2RuntimeVersion string, capability Capability) bool {
+	result, err := webviewloader.CompareBrowserVersions(webview2RuntimeVersion, string(capability))
+	if err != nil {
+		return false
+	}
+	return result >= 0
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/chromium.go","mode":420,"size":21225,"sha256":"6013bea6dc614888de282a37febebdfb31984377b317b3911671b20209b8b671","index":0,"count":1,"encoding":"utf-8","payloadBytes":21225}
+//go:build windows
+// +build windows
+
+package edge
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync/atomic"
+	"syscall"
+	"time"
+	"unsafe"
+
+	"github.com/wailsapp/go-webview2/internal/w32"
+	"github.com/wailsapp/go-webview2/webviewloader"
+	"golang.org/x/sys/windows"
+)
+
+type Rect = w32.Rect
+
+func globalErrorHandler(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Printf("[WebView2 Error] %v\n", err)
+
+	stackBuf := make([]uintptr, 64)
+	stackSize := runtime.Callers(2, stackBuf)
+	frames := runtime.CallersFrames(stackBuf[:stackSize])
+
+	fmt.Println("\nStack trace:")
+	stackIndex := 1
+	for {
+		frame, more := frames.Next()
+		if !more {
+			break
+		}
+		log.Printf("%d: %s\n\t%s:%d\n", stackIndex, frame.Function, frame.File, frame.Line)
+		stackIndex++
+	}
+}
+
+type Chromium struct {
+	hwnd    uintptr
+	padding struct {
+		Left   int32
+		Top    int32
+		Right  int32
+		Bottom int32
+	}
+
+	controller                       *ICoreWebView2Controller
+	webview                          *ICoreWebView2
+	inited                           uintptr
+	envCompleted                     *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+	controllerCompleted              *iCoreWebView2CreateCoreWebView2ControllerCompletedHandler
+	webMessageReceived               *iCoreWebView2WebMessageReceivedEventHandler
+	containsFullScreenElementChanged *ICoreWebView2ContainsFullScreenElementChangedEventHandler
+	permissionRequested              *iCoreWebView2PermissionRequestedEventHandler
+	webResourceRequested             *iCoreWebView2WebResourceRequestedEventHandler
+	acceleratorKeyPressed            *ICoreWebView2AcceleratorKeyPressedEventHandler
+	navigationCompleted              *ICoreWebView2NavigationCompletedEventHandler
+	processFailed                    *ICoreWebView2ProcessFailedEventHandler
+
+	environment            *ICoreWebView2Environment
+	webview2RuntimeVersion string
+
+	// Settings
+	Debug                 bool
+	DataPath              string
+	BrowserPath           string
+	AdditionalBrowserArgs []string
+
+	// permissions
+	permissions      map[CoreWebView2PermissionKind]CoreWebView2PermissionState
+	globalPermission *CoreWebView2PermissionState
+
+	// Callbacks
+	MessageCallback                          func(message string, sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs)
+	MessageWithAdditionalObjectsCallback     func(message string, sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs)
+	WebResourceRequestedCallback             func(request *ICoreWebView2WebResourceRequest, args *ICoreWebView2WebResourceRequestedEventArgs)
+	NavigationCompletedCallback              func(sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs)
+	ProcessFailedCallback                    func(sender *ICoreWebView2, args *ICoreWebView2ProcessFailedEventArgs)
+	ContainsFullScreenElementChangedCallback func(sender *ICoreWebView2, args *ICoreWebView2ContainsFullScreenElementChangedEventArgs)
+	AcceleratorKeyCallback                   func(uint) bool
+
+	// Error handling
+	globalErrorCallback func(error)
+
+	shuttingDown bool
+
+	// Resize debouncing
+	lastBounds  *w32.Rect
+	resizeTimer *time.Timer
+}
+
+func NewChromium() *Chromium {
+	e := &Chromium{}
+	/*
+	 All these handlers are passed to native code through syscalls with 'uintptr(unsafe.Pointer(handler))' and we know
+	 that a pointer to those will be kept in the native code. Furthermore these handlers als contain pointer to other Go
+	 structs like the vtable.
+	 This violates the unsafe.Pointer rule '(4) Conversion of a Pointer to a uintptr when calling syscall.Syscall.' because
+	 theres no guarantee that Go doesn't move these objects.
+	 AFAIK currently the Go runtime doesn't move HEAP objects, so we should be safe with these handlers. But they don't
+	 guarantee it, because in the future Go might use a compacting GC.
+	 There's a proposal to add a runtime.Pin function, to prevent moving pinned objects, which would allow to easily fix
+	 this issue by just pinning the handlers. The https://go-review.googlesource.com/c/go/+/367296/ should land in Go 1.19.
+	*/
+	e.envCompleted = newICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler(e)
+	e.controllerCompleted = newICoreWebView2CreateCoreWebView2ControllerCompletedHandler(e)
+	e.webMessageReceived = newICoreWebView2WebMessageReceivedEventHandler(e)
+	e.permissionRequested = newICoreWebView2PermissionRequestedEventHandler(e)
+	e.webResourceRequested = newICoreWebView2WebResourceRequestedEventHandler(e)
+	e.acceleratorKeyPressed = newICoreWebView2AcceleratorKeyPressedEventHandler(e)
+	e.navigationCompleted = newICoreWebView2NavigationCompletedEventHandler(e)
+	e.processFailed = newICoreWebView2ProcessFailedEventHandler(e)
+	e.containsFullScreenElementChanged = newICoreWebView2ContainsFullScreenElementChangedEventHandler(e)
+	/*
+		// Pinner seems to panic in some cases as reported on Discord, maybe during shutdown when GC detects pinned objects
+		// to be released that have not been unpinned.
+		// It would also be better to use our ComBridge for this event handlers implementation instead of pinning them.
+		// So all COM Implementations on the go-side use the same code.
+		var pinner runtime.Pinner
+		pinner.Pin(e.envCompleted)
+		pinner.Pin(e.controllerCompleted)
+		pinner.Pin(e.webMessageReceived)
+		pinner.Pin(e.permissionRequested)
+		pinner.Pin(e.webResourceRequested)
+		pinner.Pin(e.acceleratorKeyPressed)
+		pinner.Pin(e.navigationCompleted)
+		pinner.Pin(e.processFailed)
+		pinner.Pin(e.containsFullScreenElementChanged)
+	*/
+	e.permissions = make(map[CoreWebView2PermissionKind]CoreWebView2PermissionState)
+	e.globalErrorCallback = globalErrorHandler
+	return e
+}
+
+func (e *Chromium) ShuttingDown() {
+	e.shuttingDown = true
+}
+
+func (e *Chromium) errorCallback(err error) {
+	e.globalErrorCallback(err)
+	os.Exit(1)
+}
+
+func (e *Chromium) SetErrorCallback(callback func(error)) {
+	if callback != nil {
+		e.globalErrorCallback = callback
+	}
+}
+
+func (e *Chromium) Embed(hwnd uintptr) bool {
+
+	var err error
+
+	e.hwnd = hwnd
+
+	dataPath := e.DataPath
+	if dataPath == "" {
+		currentExePath := make([]uint16, windows.MAX_PATH)
+		_, err = windows.GetModuleFileName(windows.Handle(0), &currentExePath[0], windows.MAX_PATH)
+		if err != nil {
+			e.errorCallback(err)
+		}
+		currentExeName := filepath.Base(windows.UTF16ToString(currentExePath))
+		dataPath = filepath.Join(os.Getenv("AppData"), currentExeName)
+	}
+
+	if e.BrowserPath != "" {
+		if _, err = os.Stat(e.BrowserPath); errors.Is(err, os.ErrNotExist) {
+			e.errorCallback(fmt.Errorf("browser path '%s' does not exist", e.BrowserPath))
+		}
+	}
+
+	browserArgs := strings.Join(e.AdditionalBrowserArgs, " ")
+	if err := createCoreWebView2EnvironmentWithOptions(e.BrowserPath, dataPath, e.envCompleted, browserArgs); err != nil {
+		e.errorCallback(fmt.Errorf("error calling Webview2Loader: %s", err.Error()))
+	}
+
+	e.webview2RuntimeVersion, err = webviewloader.GetAvailableCoreWebView2BrowserVersionString(e.BrowserPath)
+	if err != nil {
+		e.errorCallback(fmt.Errorf("error getting Webview2 runtime version: %s", err.Error()))
+	}
+
+	var msg w32.Msg
+	for {
+		if atomic.LoadUintptr(&e.inited) != 0 {
+			break
+		}
+		r, _, _ := w32.User32GetMessageW.Call(
+			uintptr(unsafe.Pointer(&msg)),
+			0,
+			0,
+			0,
+		)
+		if r == 0 {
+			break
+		}
+		w32.User32TranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		w32.User32DispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
+	}
+	e.Init("window.external={invoke:s=>window.chrome.webview.postMessage(s)}")
+	return true
+}
+
+func (e *Chromium) SetPadding(padding Rect) {
+	if e.padding.Left == padding.Left && e.padding.Top == padding.Top &&
+		e.padding.Right == padding.Right && e.padding.Bottom == padding.Bottom {
+
+		return
+	}
+
+	e.padding.Left = padding.Left
+	e.padding.Top = padding.Top
+	e.padding.Right = padding.Right
+	e.padding.Bottom = padding.Bottom
+	e.Resize()
+}
+
+func (e *Chromium) ResizeWithBounds(bounds *Rect) {
+	if e.hwnd == 0 {
+		return
+	}
+
+	bounds.Top += e.padding.Top
+	bounds.Bottom -= e.padding.Bottom
+	bounds.Left += e.padding.Left
+	bounds.Right -= e.padding.Right
+
+	e.SetSize(*bounds)
+}
+
+func (e *Chromium) Resize() {
+	if e.hwnd == 0 {
+		return
+	}
+
+	bounds, err := w32.GetClientRect(e.hwnd)
+	if err != nil {
+		e.errorCallback(err)
+		return
+	}
+
+	e.ResizeWithBounds(&bounds)
+}
+
+func (e *Chromium) Navigate(url string) {
+	err := e.webview.Navigate(url)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) NavigateToString(content string) {
+	err := e.webview.NavigateToString(content)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) Init(script string) {
+	err := e.webview.AddScriptToExecuteOnDocumentCreated(script, nil)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) Eval(script string) {
+	if e.webview == nil || e.shuttingDown {
+		return
+	}
+
+	err := e.webview.ExecuteScript(script, nil)
+	if err != nil && !errors.Is(err, windows.ERROR_IO_PENDING) {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) Show() error {
+	return e.controller.PutIsVisible(true)
+}
+
+func (e *Chromium) Hide() error {
+	return e.controller.PutIsVisible(false)
+}
+
+func (e *Chromium) QueryInterface(_, _ uintptr) uintptr {
+	return 0
+}
+
+func (e *Chromium) AddRef() uintptr {
+	return 1
+}
+
+func (e *Chromium) Release() uintptr {
+	return 1
+}
+
+func (e *Chromium) EnvironmentCompleted(res uintptr, env *ICoreWebView2Environment) uintptr {
+	if env == nil {
+		err := syscall.Errno(res)
+		log.Printf("[WebView2] Environment creation failed with error code %v: %v\n", res, err)
+		if e.globalErrorCallback != nil {
+			e.globalErrorCallback(fmt.Errorf("failed to create WebView2 environment: %w", err))
+		}
+		return res
+	}
+
+	log.Printf("[WebView2] Environment created successfully\n")
+
+	env.vtbl.AddRef.Call(uintptr(unsafe.Pointer(env)))
+	e.environment = env
+
+	err := env.CreateCoreWebView2Controller(e.hwnd, e.controllerCompleted)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	return 0
+}
+
+func (e *Chromium) CreateCoreWebView2ControllerCompleted(res uintptr, controller *ICoreWebView2Controller) uintptr {
+	if int32(res) < 0 {
+		e.errorCallback(fmt.Errorf("error creating controller with %08x: %s", res, syscall.Errno(res)))
+	}
+
+	var err error
+
+	controller.vtbl.AddRef.Call(uintptr(unsafe.Pointer(controller)))
+	e.controller = controller
+
+	// Try to get ICoreWebView2Controller3 interface for better performance
+	if controller3 := e.controller.GetICoreWebView2Controller3(); controller3 != nil {
+		// Use raw pixels mode for better performance during resize
+		if err := controller3.PutBoundsMode(COREWEBVIEW2_BOUNDS_MODE_USE_RAW_PIXELS); err != nil {
+			e.errorCallback(err)
+		}
+
+		// Disable monitor scale changes since we're using raw pixels
+		if err := controller3.PutShouldDetectMonitorScaleChanges(false); err != nil {
+			e.errorCallback(err)
+		}
+	}
+	var token _EventRegistrationToken
+	e.webview, err = e.controller.GetCoreWebView2()
+	if err != nil {
+		e.errorCallback(err)
+	}
+
+	e.webview.vtbl.AddRef.Call(uintptr(unsafe.Pointer(e.webview)))
+	err = e.webview.AddWebMessageReceived(e.webMessageReceived, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	err = e.webview.AddPermissionRequested(e.permissionRequested, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	err = e.webview.AddWebResourceRequested(e.webResourceRequested, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	err = e.webview.AddNavigationCompleted(e.navigationCompleted, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	err = e.webview.AddProcessFailed(e.processFailed, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	err = e.webview.AddContainsFullScreenElementChanged(e.containsFullScreenElementChanged, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+
+	err = e.controller.AddAcceleratorKeyPressed(e.acceleratorKeyPressed, &token)
+	if err != nil {
+		e.errorCallback(err)
+	}
+
+	atomic.StoreUintptr(&e.inited, 1)
+
+	return 0
+}
+
+func (e *Chromium) ContainsFullScreenElementChanged(sender *ICoreWebView2, args *ICoreWebView2ContainsFullScreenElementChangedEventArgs) uintptr {
+	if e.ContainsFullScreenElementChangedCallback != nil {
+		e.ContainsFullScreenElementChangedCallback(sender, args)
+	}
+	return 0
+}
+
+func (e *Chromium) MessageReceived(sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs) uintptr {
+	message, err := args.TryGetWebMessageAsString()
+	if err != nil {
+		e.errorCallback(err)
+	}
+
+	if HasCapability(e.webview2RuntimeVersion, GetAdditionalObjects) {
+		obj, err := args.GetAdditionalObjects()
+		if err != nil {
+			e.errorCallback(err)
+		}
+
+		if obj != nil && e.MessageWithAdditionalObjectsCallback != nil {
+			defer obj.Release()
+			e.MessageWithAdditionalObjectsCallback(message, sender, args)
+		} else if e.MessageCallback != nil {
+			e.MessageCallback(message, sender, args)
+		}
+	} else if e.MessageCallback != nil {
+		e.MessageCallback(message, sender, args)
+	}
+
+	err = sender.PostWebMessageAsString(message)
+	if err != nil && !errors.Is(err, windows.ERROR_IO_PENDING) {
+		e.errorCallback(err)
+	}
+	return 0
+}
+
+func (e *Chromium) SetPermission(kind CoreWebView2PermissionKind, state CoreWebView2PermissionState) {
+	e.permissions[kind] = state
+}
+
+func (e *Chromium) SetBackgroundColour(R, G, B, A uint8) {
+	controller := e.GetController()
+	controller2 := controller.GetICoreWebView2Controller2()
+
+	backgroundCol := COREWEBVIEW2_COLOR{
+		A: A,
+		R: R,
+		G: G,
+		B: B,
+	}
+
+	// WebView2 only has 0 and 255 as valid values.
+	if backgroundCol.A > 0 && backgroundCol.A < 255 {
+		backgroundCol.A = 255
+	}
+
+	err := controller2.PutDefaultBackgroundColor(backgroundCol)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) SetGlobalPermission(state CoreWebView2PermissionState) {
+	e.globalPermission = &state
+}
+
+func (e *Chromium) PermissionRequested(_ *ICoreWebView2, args *iCoreWebView2PermissionRequestedEventArgs) uintptr {
+	kind, err := args.GetPermissionKind()
+	if err != nil {
+		e.errorCallback(err)
+	}
+	var result CoreWebView2PermissionState
+	if e.globalPermission != nil {
+		result = *e.globalPermission
+	} else {
+		var ok bool
+		result, ok = e.permissions[kind]
+		if !ok {
+			result = CoreWebView2PermissionStateDefault
+		}
+	}
+	err = args.PutState(result)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	return 0
+}
+
+func (e *Chromium) WebResourceRequested(sender *ICoreWebView2, args *ICoreWebView2WebResourceRequestedEventArgs) uintptr {
+	req, err := args.GetRequest()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer req.Release()
+
+	if e.WebResourceRequestedCallback != nil {
+		e.WebResourceRequestedCallback(req, args)
+	}
+	return 0
+}
+
+func (e *Chromium) AddWebResourceRequestedFilter(filter string, ctx COREWEBVIEW2_WEB_RESOURCE_CONTEXT) {
+	err := e.webview.AddWebResourceRequestedFilter(filter, ctx)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) Environment() *ICoreWebView2Environment {
+	return e.environment
+}
+
+// AcceleratorKeyPressed is called when an accelerator key is pressed.
+// If the AcceleratorKeyCallback method has been set, it will defer handling of the keypress
+// to the callback. That callback returns a bool indicating if the event was handled.
+func (e *Chromium) AcceleratorKeyPressed(sender *ICoreWebView2Controller, args *ICoreWebView2AcceleratorKeyPressedEventArgs) uintptr {
+	if e.AcceleratorKeyCallback == nil {
+		return 0
+	}
+	eventKind, _ := args.GetKeyEventKind()
+	if eventKind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN ||
+		eventKind == COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN {
+		virtualKey, _ := args.GetVirtualKey()
+		status, _ := args.GetPhysicalKeyStatus()
+		if !status.WasKeyDown {
+			err := args.PutHandled(e.AcceleratorKeyCallback(virtualKey))
+			if err != nil {
+				e.errorCallback(err)
+			}
+		} else {
+			return 0
+		}
+	}
+	err := args.PutHandled(false)
+	if err != nil {
+		e.errorCallback(err)
+	}
+	return 0
+}
+
+func (e *Chromium) GetSettings() (*ICoreWebViewSettings, error) {
+	return e.webview.GetSettings()
+}
+
+func (e *Chromium) GetController() *ICoreWebView2Controller {
+	return e.controller
+}
+
+func boolToInt(input bool) int {
+	if input {
+		return 1
+	}
+	return 0
+}
+
+func (e *Chromium) NavigationCompleted(sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs) uintptr {
+	if e.NavigationCompletedCallback != nil {
+		e.NavigationCompletedCallback(sender, args)
+	}
+	return 0
+}
+
+func (e *Chromium) ProcessFailed(sender *ICoreWebView2, args *ICoreWebView2ProcessFailedEventArgs) uintptr {
+	if e.ProcessFailedCallback != nil {
+		e.ProcessFailedCallback(sender, args)
+	}
+	return 0
+}
+
+func (e *Chromium) NotifyParentWindowPositionChanged() error {
+	//It looks like the wndproc function is called before the controller initialization is complete.
+	//Because of this the controller is nil
+	if e.controller == nil {
+		return nil
+	}
+	return e.controller.NotifyParentWindowPositionChanged()
+}
+
+func (e *Chromium) Focus() {
+	err := e.controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) PutZoomFactor(zoomFactor float64) {
+	err := e.controller.PutZoomFactor(zoomFactor)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) OpenDevToolsWindow() {
+	err := e.webview.OpenDevToolsWindow()
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+func (e *Chromium) HasCapability(c Capability) bool {
+	return HasCapability(e.webview2RuntimeVersion, c)
+}
+
+func (e *Chromium) GetIsSwipeNavigationEnabled() (bool, error) {
+	if !HasCapability(e.webview2RuntimeVersion, SwipeNavigation) {
+		return false, UnsupportedCapabilityError
+	}
+	webview2Settings, err := e.webview.GetSettings()
+	if err != nil {
+		return false, err
+	}
+	webview2Settings6 := webview2Settings.GetICoreWebView2Settings6()
+	var result bool
+	result, err = webview2Settings6.GetIsSwipeNavigationEnabled()
+	if err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+// PutIsGeneralAutofillEnabled controls whether autofill for information
+// like names, street and email addresses, phone numbers, and arbitrary input
+// is enabled. This excludes password and credit card information. When
+// IsGeneralAutofillEnabled is false, no suggestions appear, and no new information
+// is saved. When IsGeneralAutofillEnabled is true, information is saved, suggestions
+// appear and clicking on one will populate the form fields.
+// It will take effect immediately after setting.
+// The default value is `FALSE`.
+func (e *Chromium) PutIsGeneralAutofillEnabled(value bool) error {
+	if !HasCapability(e.webview2RuntimeVersion, GeneralAutofillEnabled) {
+		return UnsupportedCapabilityError
+	}
+	webview2Settings, err := e.webview.GetSettings()
+	if err != nil {
+		return err
+	}
+	webview2Settings4 := webview2Settings.GetICoreWebView2Settings4()
+	return webview2Settings4.PutIsGeneralAutofillEnabled(value)
+}
+
+// PutIsPasswordAutosaveEnabled sets whether the browser should offer to save passwords and other
+// identifying information entered into forms automatically.
+// The default value is `FALSE`.
+func (e *Chromium) PutIsPasswordAutosaveEnabled(value bool) error {
+	if !HasCapability(e.webview2RuntimeVersion, PasswordAutosaveEnabled) {
+		return UnsupportedCapabilityError
+	}
+	webview2Settings, err := e.webview.GetSettings()
+	if err != nil {
+		return err
+	}
+	webview2Settings4 := webview2Settings.GetICoreWebView2Settings4()
+	return webview2Settings4.PutIsPasswordAutosaveEnabled(value)
+}
+
+func (e *Chromium) PutIsSwipeNavigationEnabled(enabled bool) error {
+	if !HasCapability(e.webview2RuntimeVersion, SwipeNavigation) {
+		return UnsupportedCapabilityError
+	}
+	webview2Settings, err := e.webview.GetSettings()
+	if err != nil {
+		return err
+	}
+	webview2Settings6 := webview2Settings.GetICoreWebView2Settings6()
+	err = webview2Settings6.PutIsSwipeNavigationEnabled(enabled)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Chromium) AllowExternalDrag(allow bool) error {
+	if !HasCapability(e.webview2RuntimeVersion, AllowExternalDrop) {
+		return UnsupportedCapabilityError
+	}
+	controller := e.GetController()
+	controller4 := controller.GetICoreWebView2Controller4()
+	err := controller4.PutAllowExternalDrop(allow)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Chromium) GetAllowExternalDrag() (bool, error) {
+	if !HasCapability(e.webview2RuntimeVersion, AllowExternalDrop) {
+		return false, UnsupportedCapabilityError
+	}
+	controller := e.GetController()
+	controller4 := controller.GetICoreWebView2Controller4()
+	result, err := controller4.GetAllowExternalDrop()
+	if err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+func (e *Chromium) GetCookieManager() (*ICoreWebView2CookieManager, error) {
+	if e.webview == nil {
+		return nil, errors.New("webview not initialized")
+	}
+
+	// Check WebView2 version
+	if e.webview2RuntimeVersion == "" {
+		return nil, errors.New("WebView2 runtime version not available")
+	}
+
+	// Get ICoreWebView2_2 interface
+	webview2, err := e.webview.QueryInterface2()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ICoreWebView2_2: %w\nThis functionality requires WebView2 Runtime version 89.0.721.0 or later. Current version: %s", err, e.webview2RuntimeVersion)
+	}
+	defer webview2.Release()
+
+	// Get cookie manager
+	cookieManager, err := webview2.GetCookieManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cookie manager: %w", err)
+	}
+
+	// Note: The caller is responsible for calling Release() on the returned cookieManager
+	return cookieManager, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/chromium_386.go","mode":420,"size":508,"sha256":"ca192b38628fafd006ad11a32eeb927310024fb108d99e7b7ef702e91d3ddf97","index":0,"count":1,"encoding":"utf-8","payloadBytes":508}
+//go:build windows
+// +build windows
+
+package edge
+
+import (
+	"github.com/wailsapp/go-webview2/internal/w32"
+	"golang.org/x/sys/windows"
+	"unsafe"
+)
+
+func (e *Chromium) SetSize(bounds w32.Rect) {
+	if e.controller == nil {
+		return
+	}
+
+	hr, _, _ := e.controller.vtbl.PutBounds.Call(
+		uintptr(unsafe.Pointer(e.controller)),
+		uintptr(bounds.Left),
+		uintptr(bounds.Top),
+		uintptr(bounds.Right),
+		uintptr(bounds.Bottom),
+	)
+
+	if windows.Handle(hr) != windows.S_OK {
+		e.errorCallback(windows.Errno(hr))
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/chromium_amd64.go","mode":420,"size":281,"sha256":"94ce6d15a0af9c08d23b2ef56a88e78424cedbe2d858b7c32c6326210617a99c","index":0,"count":1,"encoding":"utf-8","payloadBytes":281}
+//go:build windows
+// +build windows
+
+package edge
+
+import (
+	"github.com/wailsapp/go-webview2/internal/w32"
+)
+
+func (e *Chromium) SetSize(bounds w32.Rect) {
+	if e.controller == nil {
+		return
+	}
+
+	err := e.controller.PutBounds(bounds)
+	if err != nil {
+		e.errorCallback(err)
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/chromium_arm64.go","mode":420,"size":483,"sha256":"f3988997a4b42d0c7fa0d80c70234f9d3a482f7a8177f121007809ea8002b866","index":0,"count":1,"encoding":"utf-8","payloadBytes":483}
+//go:build windows
+// +build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"github.com/wailsapp/go-webview2/internal/w32"
+	"golang.org/x/sys/windows"
+)
+
+func (e *Chromium) SetSize(bounds w32.Rect) {
+	if e.controller == nil {
+		return
+	}
+
+	words := (*[2]uintptr)(unsafe.Pointer(&bounds))
+	hr, _, _ := e.controller.vtbl.PutBounds.Call(
+		uintptr(unsafe.Pointer(e.controller)),
+		words[0],
+		words[1],
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		e.errorCallback(windows.Errno(hr))
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/com.go","mode":420,"size":1251,"sha256":"78ddf332cc1b3f468e802e574177c30dd7a9722d8073241cf42263515df40083","index":0,"count":1,"encoding":"utf-8","payloadBytes":1251}
+//go:build windows
+
+package edge
+
+import (
+	"golang.org/x/sys/windows"
+	"unsafe"
+)
+
+type EventRegistrationToken struct {
+	value int64
+}
+
+// IUnknown
+type IUnknown struct {
+	Vtbl *IUnknownVtbl
+}
+
+type IUnknownVtbl struct {
+	QueryInterface ComProc
+	AddRef         ComProc
+	Release        ComProc
+}
+
+func (i *IUnknownVtbl) CallRelease(this unsafe.Pointer) uint32 {
+	ret, _, _ := i.Release.Call(
+		uintptr(this),
+	)
+
+	return uint32(ret)
+}
+
+type IUnknownImpl interface {
+	QueryInterface(refiid, object uintptr) uintptr
+	AddRef() uintptr
+	Release() uintptr
+}
+
+type POINT struct {
+	X, Y int32
+}
+type RECT struct {
+	Left   int32
+	Top    int32
+	Right  int32
+	Bottom int32
+}
+type HANDLE uintptr
+type HBRUSH uintptr
+type HCURSOR uintptr
+type HICON uintptr
+type HINSTANCE uintptr
+type HMENU uintptr
+type HMODULE uintptr
+type HWND uintptr
+
+// NOTE: For sure, this is wrong!
+type VARIANT uintptr
+
+type IDataObject struct {
+	IUnknown
+}
+
+func ptr[T any](p T) *T {
+	return &p
+}
+
+const ERROR_SUCCESS = windows.ERROR_SUCCESS
+
+func UTF16PtrFromString(s string) (*uint16, error) {
+	return windows.UTF16PtrFromString(s)
+}
+
+func UTF16PtrToString(s *uint16) string {
+	return windows.UTF16PtrToString(s)
+}
+
+func CoTaskMemFree(pv unsafe.Pointer) {
+	windows.CoTaskMemFree(pv)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/corewebview2.go","mode":420,"size":20908,"sha256":"b9ab9be53b05cc7b6ead575a6d8072b876f6ffd3d938ec596ad8ef2ac0590f99","index":0,"count":1,"encoding":"utf-8","payloadBytes":20908}
+//go:build windows
+// +build windows
+
+package edge
+
+import (
+	"fmt"
+	"log"
+	"runtime"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/go-webview2/internal/w32"
+
+	"golang.org/x/sys/windows"
+)
+
+func init() {
+	runtime.LockOSThread()
+
+	r, _, _ := w32.Ole32CoInitializeEx.Call(0, uintptr(w32.COINIT_APARTMENTTHREADED))
+	if int(r) < 0 {
+		log.Printf("Warning: CoInitializeEx call failed: E=%08x", r)
+	}
+}
+
+type _EventRegistrationToken struct {
+	value int64
+}
+
+type CoreWebView2PermissionKind uint32
+
+const (
+	CoreWebView2PermissionKindUnknownPermission CoreWebView2PermissionKind = iota
+	CoreWebView2PermissionKindMicrophone
+	CoreWebView2PermissionKindCamera
+	CoreWebView2PermissionKindGeolocation
+	CoreWebView2PermissionKindNotifications
+	CoreWebView2PermissionKindOtherSensors
+	CoreWebView2PermissionKindClipboardRead
+)
+
+type CoreWebView2PermissionState uint32
+
+const (
+	CoreWebView2PermissionStateDefault CoreWebView2PermissionState = iota
+	CoreWebView2PermissionStateAllow
+	CoreWebView2PermissionStateDeny
+)
+
+// ComProc stores a COM procedure.
+type ComProc uintptr
+
+// NewComProc creates a new COM proc from a Go function.
+func NewComProc(fn interface{}) ComProc {
+	return ComProc(windows.NewCallback(fn))
+}
+
+// Call calls a COM procedure.
+//
+//go:uintptrescapes
+func (p ComProc) Call(a ...uintptr) (r1, r2 uintptr, lastErr error) {
+	// The magic uintptrescapes comment is needed to prevent moving uintptr(unsafe.Pointer(p)) so calls to .Call() also
+	// satisfy the unsafe.Pointer rule "(4) Conversion of a Pointer to a uintptr when calling syscall.Syscall."
+	// Otherwise it might be that pointers get moved, especially pointer onto the Go stack which might grow dynamically.
+	// See https://pkg.go.dev/unsafe#Pointer and https://github.com/golang/go/issues/34474
+	switch len(a) {
+	case 0:
+		return syscall.Syscall(uintptr(p), 0, 0, 0, 0)
+	case 1:
+		return syscall.Syscall(uintptr(p), 1, a[0], 0, 0)
+	case 2:
+		return syscall.Syscall(uintptr(p), 2, a[0], a[1], 0)
+	case 3:
+		return syscall.Syscall(uintptr(p), 3, a[0], a[1], a[2])
+	case 4:
+		return syscall.Syscall6(uintptr(p), 4, a[0], a[1], a[2], a[3], 0, 0)
+	case 5:
+		return syscall.Syscall6(uintptr(p), 5, a[0], a[1], a[2], a[3], a[4], 0)
+	case 6:
+		return syscall.Syscall6(uintptr(p), 6, a[0], a[1], a[2], a[3], a[4], a[5])
+	case 7:
+		return syscall.Syscall9(uintptr(p), 7, a[0], a[1], a[2], a[3], a[4], a[5], a[6], 0, 0)
+	case 8:
+		return syscall.Syscall9(uintptr(p), 8, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], 0)
+	case 9:
+		return syscall.Syscall9(uintptr(p), 9, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8])
+	case 10:
+		return syscall.Syscall12(uintptr(p), 10, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], 0, 0)
+	case 11:
+		return syscall.Syscall12(uintptr(p), 11, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], 0)
+	case 12:
+		return syscall.Syscall12(uintptr(p), 12, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11])
+	case 13:
+		return syscall.Syscall15(uintptr(p), 13, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], 0, 0)
+	case 14:
+		return syscall.Syscall15(uintptr(p), 14, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], 0)
+	case 15:
+		return syscall.Syscall15(uintptr(p), 15, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14])
+	default:
+		panic("too many arguments")
+	}
+}
+
+// IUnknown
+
+type _IUnknownVtbl struct {
+	QueryInterface ComProc
+	AddRef         ComProc
+	Release        ComProc
+}
+
+type _IUnknownImpl interface {
+	QueryInterface(refiid, object uintptr) uintptr
+	AddRef() uintptr
+	Release() uintptr
+}
+
+// ICoreWebView2
+
+type iCoreWebView2Vtbl struct {
+	_IUnknownVtbl
+	GetSettings                            ComProc
+	GetSource                              ComProc
+	Navigate                               ComProc
+	NavigateToString                       ComProc
+	AddNavigationStarting                  ComProc
+	RemoveNavigationStarting               ComProc
+	AddContentLoading                      ComProc
+	RemoveContentLoading                   ComProc
+	AddSourceChanged                       ComProc
+	RemoveSourceChanged                    ComProc
+	AddHistoryChanged                      ComProc
+	RemoveHistoryChanged                   ComProc
+	AddNavigationCompleted                 ComProc
+	RemoveNavigationCompleted              ComProc
+	AddFrameNavigationStarting             ComProc
+	RemoveFrameNavigationStarting          ComProc
+	AddFrameNavigationCompleted            ComProc
+	RemoveFrameNavigationCompleted         ComProc
+	AddScriptDialogOpening                 ComProc
+	RemoveScriptDialogOpening              ComProc
+	AddPermissionRequested                 ComProc
+	RemovePermissionRequested              ComProc
+	AddProcessFailed                       ComProc
+	RemoveProcessFailed                    ComProc
+	AddScriptToExecuteOnDocumentCreated    ComProc
+	RemoveScriptToExecuteOnDocumentCreated ComProc
+	ExecuteScript                          ComProc
+	CapturePreview                         ComProc
+	Reload                                 ComProc
+	PostWebMessageAsJSON                   ComProc
+	PostWebMessageAsString                 ComProc
+	AddWebMessageReceived                  ComProc
+	RemoveWebMessageReceived               ComProc
+	CallDevToolsProtocolMethod             ComProc
+	GetBrowserProcessID                    ComProc
+	GetCanGoBack                           ComProc
+	GetCanGoForward                        ComProc
+	GoBack                                 ComProc
+	GoForward                              ComProc
+	GetDevToolsProtocolEventReceiver       ComProc
+	Stop                                   ComProc
+	AddNewWindowRequested                  ComProc
+	RemoveNewWindowRequested               ComProc
+	AddDocumentTitleChanged                ComProc
+	RemoveDocumentTitleChanged             ComProc
+	GetDocumentTitle                       ComProc
+	AddHostObjectToScript                  ComProc
+	RemoveHostObjectFromScript             ComProc
+	OpenDevToolsWindow                     ComProc
+	AddContainsFullScreenElementChanged    ComProc
+	RemoveContainsFullScreenElementChanged ComProc
+	GetContainsFullScreenElement           ComProc
+	AddWebResourceRequested                ComProc
+	RemoveWebResourceRequested             ComProc
+	AddWebResourceRequestedFilter          ComProc
+	RemoveWebResourceRequestedFilter       ComProc
+	AddWindowCloseRequested                ComProc
+	RemoveWindowCloseRequested             ComProc
+}
+
+type ICoreWebView2 struct {
+	vtbl *iCoreWebView2Vtbl
+}
+
+func (i *ICoreWebView2) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2) AddContainsFullScreenElementChanged(eventHandler *ICoreWebView2ContainsFullScreenElementChangedEventHandler, token *_EventRegistrationToken) error {
+	hr, _, _ := i.vtbl.AddContainsFullScreenElementChanged.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(eventHandler)),
+		uintptr(unsafe.Pointer(token)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) AddNavigationCompleted(eventHandler *ICoreWebView2NavigationCompletedEventHandler, token *_EventRegistrationToken) error {
+	hr, _, _ := i.vtbl.AddNavigationCompleted.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(eventHandler)),
+		uintptr(unsafe.Pointer(token)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) AddPermissionRequested(handler *iCoreWebView2PermissionRequestedEventHandler, token *_EventRegistrationToken) error {
+	hr, _, _ := i.vtbl.AddPermissionRequested.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(handler)),
+		uintptr(unsafe.Pointer(token)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) AddProcessFailed(eventHandler *ICoreWebView2ProcessFailedEventHandler, token *_EventRegistrationToken) error {
+	hr, _, _ := i.vtbl.AddProcessFailed.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(eventHandler)),
+		uintptr(unsafe.Pointer(token)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) AddWebMessageReceived(handler *iCoreWebView2WebMessageReceivedEventHandler, token *_EventRegistrationToken) error {
+	hr, _, _ := i.vtbl.AddWebMessageReceived.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(handler)),
+		uintptr(unsafe.Pointer(token)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) AddWebResourceRequested(handler *iCoreWebView2WebResourceRequestedEventHandler, token *_EventRegistrationToken) error {
+	hr, _, _ := i.vtbl.AddWebResourceRequested.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(handler)),
+		uintptr(unsafe.Pointer(token)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) AddScriptToExecuteOnDocumentCreated(javaScript string, handler *iCoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler) error {
+	u16js, err := windows.UTF16PtrFromString(javaScript)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.AddScriptToExecuteOnDocumentCreated.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(u16js)),
+		uintptr(unsafe.Pointer(handler)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) ExecuteScript(javascript string, handler *iCoreWebView2ExecuteScriptCompletedHandler) error {
+	u16js, err := windows.UTF16PtrFromString(javascript)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.ExecuteScript.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(u16js)),
+		uintptr(unsafe.Pointer(handler)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) GetSettings() (*ICoreWebViewSettings, error) {
+
+	var settings *ICoreWebViewSettings
+	hr, _, _ := i.vtbl.GetSettings.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&settings)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+	return settings, nil
+}
+
+func (i *ICoreWebView2) GetSource() (string, error) {
+	var _source *uint16
+	hr, _, _ := i.vtbl.GetSource.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_source)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	}
+	source := windows.UTF16PtrToString(_source)
+	windows.CoTaskMemFree(unsafe.Pointer(_source))
+	return source, nil
+}
+
+func (i *ICoreWebView2) GetContainsFullScreenElement() (bool, error) {
+	var result bool
+	hr, _, _ := i.vtbl.GetContainsFullScreenElement.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&result)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return result, nil
+}
+
+func (i *ICoreWebView2) Navigate(url string) error {
+	u16url, err := windows.UTF16PtrFromString(url)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.Navigate.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(u16url)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) NavigateToString(htmlContent string) error {
+	u16Html, err := windows.UTF16PtrFromString(htmlContent)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.NavigateToString.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(u16Html)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) PostWebMessageAsString(webMessageAsString string) error {
+	u16msg, err := windows.UTF16PtrFromString(webMessageAsString)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.PostWebMessageAsString.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(u16msg)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) QueryInterface2() (*ICoreWebView2_2, error) {
+	var result *ICoreWebView2_2
+	iid := windows.GUID{
+		Data1: 0x9E8F0CF8,
+		Data2: 0xE670,
+		Data3: 0x4B5E,
+		Data4: [8]byte{0xB2, 0xBC, 0x73, 0xE0, 0x61, 0xE3, 0x18, 0x4C},
+	}
+	hr, _, _ := i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&iid)),
+		uintptr(unsafe.Pointer(&result)))
+	if hr != 0 {
+		return nil, windows.Errno(hr)
+	}
+	return result, nil
+}
+
+// ICoreWebView2EnvironmentVtbl
+type iCoreWebView2EnvironmentVtbl struct {
+	_IUnknownVtbl
+	CreateCoreWebView2Controller     ComProc
+	CreateWebResourceResponse        ComProc
+	GetBrowserVersionString          ComProc
+	AddNewBrowserVersionAvailable    ComProc
+	RemoveNewBrowserVersionAvailable ComProc
+}
+
+type ICoreWebView2Environment struct {
+	vtbl *iCoreWebView2EnvironmentVtbl
+}
+
+// CreateCoreWebView2Controller asynchronously creates a new WebView.
+func (e *ICoreWebView2Environment) CreateCoreWebView2Controller(parentWindow uintptr, handler *iCoreWebView2CreateCoreWebView2ControllerCompletedHandler) error {
+	hr, _, _ := e.vtbl.CreateCoreWebView2Controller.Call(
+		uintptr(unsafe.Pointer(e)),
+		parentWindow,
+		uintptr(unsafe.Pointer(handler)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+// CreateWebResourceResponse creates a new ICoreWebView2WebResourceResponse, it must be released after finishing using it.
+func (e *ICoreWebView2Environment) CreateWebResourceResponse(content []byte, statusCode int, reasonPhrase string, headers string) (*ICoreWebView2WebResourceResponse, error) {
+
+	var stream uintptr
+
+	if len(content) > 0 {
+		// Create stream for response
+		stream, err := w32.SHCreateMemStream(content)
+		if err != nil {
+			return nil, err
+		}
+
+		// Release the IStream after we are finished, CreateWebResourceResponse Call will increase the reference
+		// count on IStream and therefore it won't be freed until the reference count of the response is 0.
+		defer (*IStream)(unsafe.Pointer(stream)).Release()
+	}
+
+	// Convert string 'uri' to *uint16
+	_reason, err := windows.UTF16PtrFromString(reasonPhrase)
+	if err != nil {
+		return nil, err
+	}
+	// Convert string 'uri' to *uint16
+	_headers, err := windows.UTF16PtrFromString(headers)
+	if err != nil {
+		return nil, err
+	}
+	var response *ICoreWebView2WebResourceResponse
+	hr, _, _ := e.vtbl.CreateWebResourceResponse.Call(
+		uintptr(unsafe.Pointer(e)),
+		stream,
+		uintptr(statusCode),
+		uintptr(unsafe.Pointer(_reason)),
+		uintptr(unsafe.Pointer(_headers)),
+		uintptr(unsafe.Pointer(&response)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, syscall.Errno(hr)
+	}
+
+	if response == nil {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	return response, nil
+}
+
+// ICoreWebView2PermissionRequestedEventArgs
+
+type iCoreWebView2PermissionRequestedEventArgsVtbl struct {
+	_IUnknownVtbl
+	GetURI             ComProc
+	GetPermissionKind  ComProc
+	GetIsUserInitiated ComProc
+	GetState           ComProc
+	PutState           ComProc
+	GetDeferral        ComProc
+}
+
+type iCoreWebView2PermissionRequestedEventArgs struct {
+	vtbl *iCoreWebView2PermissionRequestedEventArgsVtbl
+}
+
+func (i *iCoreWebView2PermissionRequestedEventArgs) GetPermissionKind() (CoreWebView2PermissionKind, error) {
+	var kind CoreWebView2PermissionKind
+
+	hr, _, _ := i.vtbl.GetPermissionKind.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&kind)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return 0, windows.Errno(hr)
+	}
+
+	return kind, nil
+}
+
+func (i *iCoreWebView2PermissionRequestedEventArgs) PutState(state CoreWebView2PermissionState) error {
+	hr, _, _ := i.vtbl.PutState.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(state),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+// ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+
+type iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl interface {
+	_IUnknownImpl
+	EnvironmentCompleted(res uintptr, env *ICoreWebView2Environment) uintptr
+}
+
+type iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl struct {
+	_IUnknownVtbl
+	Invoke ComProc
+}
+
+type iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler struct {
+	vtbl *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl
+	impl iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl
+}
+
+func _ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerIUnknownQueryInterface(this *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func _ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerIUnknownAddRef(this *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func _ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerIUnknownRelease(this *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) uintptr {
+	return this.impl.Release()
+}
+
+func _ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerInvoke(this *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, res uintptr, env *ICoreWebView2Environment) uintptr {
+	return this.impl.EnvironmentCompleted(res, env)
+}
+
+var iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerFn = iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl{
+	_IUnknownVtbl{
+		NewComProc(_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerIUnknownQueryInterface),
+		NewComProc(_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerIUnknownAddRef),
+		NewComProc(_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerIUnknownRelease),
+	},
+	NewComProc(_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerInvoke),
+}
+
+func newICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler(impl iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerImpl) *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler {
+	return &iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler{
+		vtbl: &iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerFn,
+		impl: impl,
+	}
+}
+
+// ICoreWebView2PermissionRequestedEventHandler
+
+type iCoreWebView2PermissionRequestedEventHandlerImpl interface {
+	_IUnknownImpl
+	PermissionRequested(sender *ICoreWebView2, args *iCoreWebView2PermissionRequestedEventArgs) uintptr
+}
+
+type iCoreWebView2PermissionRequestedEventHandlerVtbl struct {
+	_IUnknownVtbl
+	Invoke ComProc
+}
+
+type iCoreWebView2PermissionRequestedEventHandler struct {
+	vtbl *iCoreWebView2PermissionRequestedEventHandlerVtbl
+	impl iCoreWebView2PermissionRequestedEventHandlerImpl
+}
+
+func _ICoreWebView2PermissionRequestedEventHandlerIUnknownQueryInterface(this *iCoreWebView2PermissionRequestedEventHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func _ICoreWebView2PermissionRequestedEventHandlerIUnknownAddRef(this *iCoreWebView2PermissionRequestedEventHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func _ICoreWebView2PermissionRequestedEventHandlerIUnknownRelease(this *iCoreWebView2PermissionRequestedEventHandler) uintptr {
+	return this.impl.Release()
+}
+
+func _ICoreWebView2PermissionRequestedEventHandlerInvoke(this *iCoreWebView2PermissionRequestedEventHandler, sender *ICoreWebView2, args *iCoreWebView2PermissionRequestedEventArgs) uintptr {
+	return this.impl.PermissionRequested(sender, args)
+}
+
+var iCoreWebView2PermissionRequestedEventHandlerFn = iCoreWebView2PermissionRequestedEventHandlerVtbl{
+	_IUnknownVtbl{
+		NewComProc(_ICoreWebView2PermissionRequestedEventHandlerIUnknownQueryInterface),
+		NewComProc(_ICoreWebView2PermissionRequestedEventHandlerIUnknownAddRef),
+		NewComProc(_ICoreWebView2PermissionRequestedEventHandlerIUnknownRelease),
+	},
+	NewComProc(_ICoreWebView2PermissionRequestedEventHandlerInvoke),
+}
+
+func newICoreWebView2PermissionRequestedEventHandler(impl iCoreWebView2PermissionRequestedEventHandlerImpl) *iCoreWebView2PermissionRequestedEventHandler {
+	return &iCoreWebView2PermissionRequestedEventHandler{
+		vtbl: &iCoreWebView2PermissionRequestedEventHandlerFn,
+		impl: impl,
+	}
+}
+
+func (i *ICoreWebView2) AddWebResourceRequestedFilter(uri string, resourceContext COREWEBVIEW2_WEB_RESOURCE_CONTEXT) error {
+
+	// Convert string 'uri' to *uint16
+	_uri, err := windows.UTF16PtrFromString(uri)
+	if err != nil {
+		return err
+	}
+	hr, _, _ := i.vtbl.AddWebResourceRequestedFilter.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_uri)),
+		uintptr(resourceContext),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2) OpenDevToolsWindow() error {
+
+	hr, _, _ := i.vtbl.OpenDevToolsWindow.Call(
+		uintptr(unsafe.Pointer(i)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/create_env_go.go","mode":420,"size":1161,"sha256":"c56b55d9050f28b53f8dee0e6aee6f830e09fa7ad4cf0a4def303273fbebf1b2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1161}
+//go:build windows && !native_webview2loader
+
+package edge
+
+import (
+	"unsafe"
+
+	"github.com/wailsapp/go-webview2/webviewloader"
+)
+
+func createCoreWebView2EnvironmentWithOptions(browserExecutableFolder, userDataFolder string, environmentCompletedHandle *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, additionalBrowserArgs string) error {
+	e := &environmentCreatedHandler{environmentCompletedHandle}
+	return webviewloader.CreateCoreWebView2EnvironmentWithOptions(
+		e,
+		webviewloader.WithBrowserExecutableFolder(browserExecutableFolder),
+		webviewloader.WithUserDataFolder(userDataFolder),
+		webviewloader.WithAdditionalBrowserArguments(additionalBrowserArgs),
+	)
+}
+
+type environmentCreatedHandler struct {
+	originalHandler *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+}
+
+func (r *environmentCreatedHandler) EnvironmentCompleted(errorCode webviewloader.HRESULT, createdEnvironment *webviewloader.ICoreWebView2Environment) webviewloader.HRESULT {
+	env := (*ICoreWebView2Environment)(unsafe.Pointer(createdEnvironment))
+	res := r.originalHandler.impl.EnvironmentCompleted(uintptr(errorCode), env)
+	return webviewloader.HRESULT(res)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/create_env_native.go","mode":420,"size":1116,"sha256":"c49792b51436ee8f566359237ee9f6cefc24e22dad3096a1c5fde480ea3886f5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1116}
+//go:build windows && native_webview2loader
+
+package edge
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/go-webview2/webviewloader"
+
+	"golang.org/x/sys/windows"
+)
+
+func createCoreWebView2EnvironmentWithOptions(browserExecutableFolder, userDataFolder string, environmentCompletedHandle *iCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, additionalBrowserArgs string) error {
+	browserPathPtr, err := windows.UTF16PtrFromString(browserExecutableFolder)
+	if err != nil {
+		return fmt.Errorf("Error calling UTF16PtrFromString for %s: %v", browserExecutableFolder, err)
+	}
+
+	userPathPtr, err := windows.UTF16PtrFromString(userDataFolder)
+	if err != nil {
+		return fmt.Errorf("Error calling UTF16PtrFromString for %s: %v", userDataFolder, err)
+	}
+
+	hr, err := webviewloader.CreateCoreWebView2EnvironmentWithOptions(
+		browserPathPtr,
+		userPathPtr,
+		uintptr(unsafe.Pointer(environmentCompletedHandle)),
+		additionalBrowserArgs,
+	)
+	if err != nil {
+		return fmt.Errorf("Error calling CreateCoreWebView2EnvironmentWithOptions: %v", err)
+	}
+
+	if hr != 0 {
+		return syscall.Errno(hr)
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/guid.go","mode":420,"size":6079,"sha256":"06f1900355283957ad34ffb7c72dd3278faaebf9ee88cfe036279a2696ed4a1f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6079}
+//go:build windows
+
+package edge
+
+// This code has been adapted from: https://github.com/go-ole/go-ole
+
+/*
+
+The MIT License (MIT)
+
+Copyright © 2013-2017 Yasuhiro Matsumoto, <mattn.jp@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the “Software”), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+
+const hextable = "0123456789ABCDEF"
+const emptyGUID = "{00000000-0000-0000-0000-000000000000}"
+
+// GUID is Windows API specific GUID type.
+//
+// This exists to match Windows GUID type for direct passing for COM.
+// Format is in xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx.
+type GUID struct {
+	Data1 uint32
+	Data2 uint16
+	Data3 uint16
+	Data4 [8]byte
+}
+
+// NewGUID converts the given string into a globally unique identifier that is
+// compliant with the Windows API.
+//
+// The supplied string may be in any of these formats:
+//
+//	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//	XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+//	{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
+//
+// The conversion of the supplied string is not case-sensitive.
+func NewGUID(guid string) *GUID {
+	d := []byte(guid)
+	var d1, d2, d3, d4a, d4b []byte
+
+	switch len(d) {
+	case 38:
+		if d[0] != '{' || d[37] != '}' {
+			return nil
+		}
+		d = d[1:37]
+		fallthrough
+	case 36:
+		if d[8] != '-' || d[13] != '-' || d[18] != '-' || d[23] != '-' {
+			return nil
+		}
+		d1 = d[0:8]
+		d2 = d[9:13]
+		d3 = d[14:18]
+		d4a = d[19:23]
+		d4b = d[24:36]
+	case 32:
+		d1 = d[0:8]
+		d2 = d[8:12]
+		d3 = d[12:16]
+		d4a = d[16:20]
+		d4b = d[20:32]
+	default:
+		return nil
+	}
+
+	var g GUID
+	var ok1, ok2, ok3, ok4 bool
+	g.Data1, ok1 = decodeHexUint32(d1)
+	g.Data2, ok2 = decodeHexUint16(d2)
+	g.Data3, ok3 = decodeHexUint16(d3)
+	g.Data4, ok4 = decodeHexByte64(d4a, d4b)
+	if ok1 && ok2 && ok3 && ok4 {
+		return &g
+	}
+	return nil
+}
+
+func decodeHexUint32(src []byte) (value uint32, ok bool) {
+	var b1, b2, b3, b4 byte
+	var ok1, ok2, ok3, ok4 bool
+	b1, ok1 = decodeHexByte(src[0], src[1])
+	b2, ok2 = decodeHexByte(src[2], src[3])
+	b3, ok3 = decodeHexByte(src[4], src[5])
+	b4, ok4 = decodeHexByte(src[6], src[7])
+	value = (uint32(b1) << 24) | (uint32(b2) << 16) | (uint32(b3) << 8) | uint32(b4)
+	ok = ok1 && ok2 && ok3 && ok4
+	return
+}
+
+func decodeHexUint16(src []byte) (value uint16, ok bool) {
+	var b1, b2 byte
+	var ok1, ok2 bool
+	b1, ok1 = decodeHexByte(src[0], src[1])
+	b2, ok2 = decodeHexByte(src[2], src[3])
+	value = (uint16(b1) << 8) | uint16(b2)
+	ok = ok1 && ok2
+	return
+}
+
+func decodeHexByte64(s1 []byte, s2 []byte) (value [8]byte, ok bool) {
+	var ok1, ok2, ok3, ok4, ok5, ok6, ok7, ok8 bool
+	value[0], ok1 = decodeHexByte(s1[0], s1[1])
+	value[1], ok2 = decodeHexByte(s1[2], s1[3])
+	value[2], ok3 = decodeHexByte(s2[0], s2[1])
+	value[3], ok4 = decodeHexByte(s2[2], s2[3])
+	value[4], ok5 = decodeHexByte(s2[4], s2[5])
+	value[5], ok6 = decodeHexByte(s2[6], s2[7])
+	value[6], ok7 = decodeHexByte(s2[8], s2[9])
+	value[7], ok8 = decodeHexByte(s2[10], s2[11])
+	ok = ok1 && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8
+	return
+}
+
+func decodeHexByte(c1, c2 byte) (value byte, ok bool) {
+	var n1, n2 byte
+	var ok1, ok2 bool
+	n1, ok1 = decodeHexChar(c1)
+	n2, ok2 = decodeHexChar(c2)
+	value = (n1 << 4) | n2
+	ok = ok1 && ok2
+	return
+}
+
+func decodeHexChar(c byte) (byte, bool) {
+	switch {
+	case '0' <= c && c <= '9':
+		return c - '0', true
+	case 'a' <= c && c <= 'f':
+		return c - 'a' + 10, true
+	case 'A' <= c && c <= 'F':
+		return c - 'A' + 10, true
+	}
+
+	return 0, false
+}
+
+// String converts the GUID to string form. It will adhere to this pattern:
+//
+//	{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
+//
+// If the GUID is nil, the string representation of an empty GUID is returned:
+//
+//	{00000000-0000-0000-0000-000000000000}
+func (guid *GUID) String() string {
+	if guid == nil {
+		return emptyGUID
+	}
+
+	var c [38]byte
+	c[0] = '{'
+	putUint32Hex(c[1:9], guid.Data1)
+	c[9] = '-'
+	putUint16Hex(c[10:14], guid.Data2)
+	c[14] = '-'
+	putUint16Hex(c[15:19], guid.Data3)
+	c[19] = '-'
+	putByteHex(c[20:24], guid.Data4[0:2])
+	c[24] = '-'
+	putByteHex(c[25:37], guid.Data4[2:8])
+	c[37] = '}'
+	return string(c[:])
+}
+
+func putUint32Hex(b []byte, v uint32) {
+	b[0] = hextable[byte(v>>24)>>4]
+	b[1] = hextable[byte(v>>24)&0x0f]
+	b[2] = hextable[byte(v>>16)>>4]
+	b[3] = hextable[byte(v>>16)&0x0f]
+	b[4] = hextable[byte(v>>8)>>4]
+	b[5] = hextable[byte(v>>8)&0x0f]
+	b[6] = hextable[byte(v)>>4]
+	b[7] = hextable[byte(v)&0x0f]
+}
+
+func putUint16Hex(b []byte, v uint16) {
+	b[0] = hextable[byte(v>>8)>>4]
+	b[1] = hextable[byte(v>>8)&0x0f]
+	b[2] = hextable[byte(v)>>4]
+	b[3] = hextable[byte(v)&0x0f]
+}
+
+func putByteHex(dst, src []byte) {
+	for i := 0; i < len(src); i++ {
+		dst[i*2] = hextable[src[i]>>4]
+		dst[i*2+1] = hextable[src[i]&0x0f]
+	}
+}
+
+// IsEqualGUID compares two GUID.
+//
+// Not constant time comparison.
+func IsEqualGUID(guid1 *GUID, guid2 *GUID) bool {
+	return guid1.Data1 == guid2.Data1 &&
+		guid1.Data2 == guid2.Data2 &&
+		guid1.Data3 == guid2.Data3 &&
+		guid1.Data4[0] == guid2.Data4[0] &&
+		guid1.Data4[1] == guid2.Data4[1] &&
+		guid1.Data4[2] == guid2.Data4[2] &&
+		guid1.Data4[3] == guid2.Data4[3] &&
+		guid1.Data4[4] == guid2.Data4[4] &&
+		guid1.Data4[5] == guid2.Data4[5] &&
+		guid1.Data4[6] == guid2.Data4[6] &&
+		guid1.Data4[7] == guid2.Data4[7]
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/version_map.go","mode":420,"size":79036,"sha256":"6af24de64d1095dbd04247b2417ecd698d87a8de996684cb18bac436103ba7e7","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 //go:build windows
 
@@ -78799,3142 +80827,6 @@ func ModulePath(mod []byte) string {
 		return string(line)
 	}
 	return "" // missing module path
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/rule.go","mode":420,"size":51919,"sha256":"f8c2300b20509d28eb58a1a55d10b035d8b84d1c3344238eacf4b457a979698e","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
-// Copyright 2018 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package modfile implements a parser and formatter for go.mod files.
-//
-// The go.mod syntax is described in
-// https://pkg.go.dev/cmd/go/#hdr-The_go_mod_file.
-//
-// The [Parse] and [ParseLax] functions both parse a go.mod file and return an
-// abstract syntax tree. ParseLax ignores unknown statements and may be used to
-// parse go.mod files that may have been developed with newer versions of Go.
-//
-// The [File] struct returned by Parse and ParseLax represent an abstract
-// go.mod file. File has several methods like [File.AddNewRequire] and
-// [File.DropReplace] that can be used to programmatically edit a file.
-//
-// The [Format] function formats a File back to a byte slice which can be
-// written to a file.
-package modfile
-
-import (
-	"cmp"
-	"errors"
-	"fmt"
-	"path/filepath"
-	"slices"
-	"strconv"
-	"strings"
-	"unicode"
-
-	"golang.org/x/mod/internal/lazyregexp"
-	"golang.org/x/mod/module"
-	"golang.org/x/mod/semver"
-)
-
-// A File is the parsed, interpreted form of a go.mod file.
-type File struct {
-	Module    *Module
-	Go        *Go
-	Toolchain *Toolchain
-	Godebug   []*Godebug
-	Require   []*Require
-	Exclude   []*Exclude
-	Replace   []*Replace
-	Retract   []*Retract
-	Tool      []*Tool
-	Ignore    []*Ignore
-
-	Syntax *FileSyntax
-}
-
-// A Module is the module statement.
-type Module struct {
-	Mod        module.Version
-	Deprecated string
-	Syntax     *Line
-}
-
-// A Go is the go statement.
-type Go struct {
-	Version string // "1.23"
-	Syntax  *Line
-}
-
-// A Toolchain is the toolchain statement.
-type Toolchain struct {
-	Name   string // "go1.21rc1"
-	Syntax *Line
-}
-
-// A Godebug is a single godebug key=value statement.
-type Godebug struct {
-	Key    string
-	Value  string
-	Syntax *Line
-}
-
-// An Exclude is a single exclude statement.
-type Exclude struct {
-	Mod    module.Version
-	Syntax *Line
-}
-
-// A Replace is a single replace statement.
-type Replace struct {
-	Old    module.Version
-	New    module.Version
-	Syntax *Line
-}
-
-// A Retract is a single retract statement.
-type Retract struct {
-	VersionInterval
-	Rationale string
-	Syntax    *Line
-}
-
-// A Tool is a single tool statement.
-type Tool struct {
-	Path   string
-	Syntax *Line
-}
-
-// An Ignore is a single ignore statement.
-type Ignore struct {
-	Path   string
-	Syntax *Line
-}
-
-// A VersionInterval represents a range of versions with upper and lower bounds.
-// Intervals are closed: both bounds are included. When Low is equal to High,
-// the interval may refer to a single version ('v1.2.3') or an interval
-// ('[v1.2.3, v1.2.3]'); both have the same representation.
-type VersionInterval struct {
-	Low, High string
-}
-
-// A Require is a single require statement.
-type Require struct {
-	Mod      module.Version
-	Indirect bool // has "// indirect" comment
-	Syntax   *Line
-}
-
-func (r *Require) markRemoved() {
-	r.Syntax.markRemoved()
-	*r = Require{}
-}
-
-func (r *Require) setVersion(v string) {
-	r.Mod.Version = v
-
-	if line := r.Syntax; len(line.Token) > 0 {
-		if line.InBlock {
-			// If the line is preceded by an empty line, remove it; see
-			// https://golang.org/issue/33779.
-			if len(line.Comments.Before) == 1 && len(line.Comments.Before[0].Token) == 0 {
-				line.Comments.Before = line.Comments.Before[:0]
-			}
-			if len(line.Token) >= 2 { // example.com v1.2.3
-				line.Token[1] = v
-			}
-		} else {
-			if len(line.Token) >= 3 { // require example.com v1.2.3
-				line.Token[2] = v
-			}
-		}
-	}
-}
-
-// setIndirect sets line to have (or not have) a "// indirect" comment.
-func (r *Require) setIndirect(indirect bool) {
-	r.Indirect = indirect
-	line := r.Syntax
-	if isIndirect(line) == indirect {
-		return
-	}
-	if indirect {
-		// Adding comment.
-		if len(line.Suffix) == 0 {
-			// New comment.
-			line.Suffix = []Comment{{Token: "// indirect", Suffix: true}}
-			return
-		}
-
-		com := &line.Suffix[0]
-		text := strings.TrimSpace(strings.TrimPrefix(com.Token, string(slashSlash)))
-		if text == "" {
-			// Empty comment.
-			com.Token = "// indirect"
-			return
-		}
-
-		// Insert at beginning of existing comment.
-		com.Token = "// indirect; " + text
-		return
-	}
-
-	// Removing comment.
-	f := strings.TrimSpace(strings.TrimPrefix(line.Suffix[0].Token, string(slashSlash)))
-	if f == "indirect" {
-		// Remove whole comment.
-		line.Suffix = nil
-		return
-	}
-
-	// Remove comment prefix.
-	com := &line.Suffix[0]
-	i := strings.Index(com.Token, "indirect;")
-	com.Token = "//" + com.Token[i+len("indirect;"):]
-}
-
-// isIndirect reports whether line has a "// indirect" comment,
-// meaning it is in go.mod only for its effect on indirect dependencies,
-// so that it can be dropped entirely once the effective version of the
-// indirect dependency reaches the given minimum version.
-func isIndirect(line *Line) bool {
-	if len(line.Suffix) == 0 {
-		return false
-	}
-	f := strings.Fields(strings.TrimPrefix(line.Suffix[0].Token, string(slashSlash)))
-	return (len(f) == 1 && f[0] == "indirect" || len(f) > 1 && f[0] == "indirect;")
-}
-
-func (f *File) AddModuleStmt(path string) error {
-	if f.Syntax == nil {
-		f.Syntax = new(FileSyntax)
-	}
-	if f.Module == nil {
-		f.Module = &Module{
-			Mod:    module.Version{Path: path},
-			Syntax: f.Syntax.addLine(nil, "module", AutoQuote(path)),
-		}
-	} else {
-		f.Module.Mod.Path = path
-		f.Syntax.updateLine(f.Module.Syntax, "module", AutoQuote(path))
-	}
-	return nil
-}
-
-func (f *File) AddComment(text string) {
-	if f.Syntax == nil {
-		f.Syntax = new(FileSyntax)
-	}
-	f.Syntax.Stmt = append(f.Syntax.Stmt, &CommentBlock{
-		Comments: Comments{
-			Before: []Comment{
-				{
-					Token: text,
-				},
-			},
-		},
-	})
-}
-
-type VersionFixer func(path, version string) (string, error)
-
-// errDontFix is returned by a VersionFixer to indicate the version should be
-// left alone, even if it's not canonical.
-var dontFixRetract VersionFixer = func(_, vers string) (string, error) {
-	return vers, nil
-}
-
-// Parse parses and returns a go.mod file.
-//
-// file is the name of the file, used in positions and errors.
-//
-// data is the content of the file.
-//
-// fix is an optional function that canonicalizes module versions.
-// If fix is nil, all module versions must be canonical ([module.CanonicalVersion]
-// must return the same string).
-func Parse(file string, data []byte, fix VersionFixer) (*File, error) {
-	return parseToFile(file, data, fix, true)
-}
-
-// ParseLax is like Parse but ignores unknown statements.
-// It is used when parsing go.mod files other than the main module,
-// under the theory that most statement types we add in the future will
-// only apply in the main module, like exclude and replace,
-// and so we get better gradual deployments if old go commands
-// simply ignore those statements when found in go.mod files
-// in dependencies.
-func ParseLax(file string, data []byte, fix VersionFixer) (*File, error) {
-	return parseToFile(file, data, fix, false)
-}
-
-func parseToFile(file string, data []byte, fix VersionFixer, strict bool) (parsed *File, err error) {
-	fs, err := parse(file, data)
-	if err != nil {
-		return nil, err
-	}
-	f := &File{
-		Syntax: fs,
-	}
-	var errs ErrorList
-
-	// fix versions in retract directives after the file is parsed.
-	// We need the module path to fix versions, and it might be at the end.
-	defer func() {
-		oldLen := len(errs)
-		f.fixRetract(fix, &errs)
-		if len(errs) > oldLen {
-			parsed, err = nil, errs
-		}
-	}()
-
-	for _, x := range fs.Stmt {
-		switch x := x.(type) {
-		case *Line:
-			f.add(&errs, nil, x, x.Token[0], x.Token[1:], fix, strict)
-
-		case *LineBlock:
-			if len(x.Token) > 1 {
-				if strict {
-					errs = append(errs, Error{
-						Filename: file,
-						Pos:      x.Start,
-						Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
-					})
-				}
-				continue
-			}
-			switch x.Token[0] {
-			default:
-				if strict {
-					errs = append(errs, Error{
-						Filename: file,
-						Pos:      x.Start,
-						Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
-					})
-				}
-				continue
-			case "module", "godebug", "require", "exclude", "replace", "retract", "tool", "ignore":
-				for _, l := range x.Line {
-					f.add(&errs, x, l, x.Token[0], l.Token, fix, strict)
-				}
-			}
-		}
-	}
-
-	if len(errs) > 0 {
-		return nil, errs
-	}
-	return f, nil
-}
-
-var GoVersionRE = lazyregexp.New(`^([1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?([a-z]+[0-9]+)?$`)
-
-var laxGoVersionRE = lazyregexp.New(`^v?(([1-9][0-9]*)\.(0|[1-9][0-9]*))([^0-9].*)$`)
-
-// Toolchains must be named beginning with `go1`,
-// like "go1.20.3" or "go1.20.3-gccgo". As a special case, "default" is also permitted.
-// Note that this regexp is a much looser condition than go/version.IsValid,
-// for forward compatibility.
-// (This code has to be work to identify new toolchains even if we tweak the syntax in the future.)
-var ToolchainRE = lazyregexp.New(`^default$|^go1($|\.)`)
-
-func (f *File) add(errs *ErrorList, block *LineBlock, line *Line, verb string, args []string, fix VersionFixer, strict bool) {
-	// If strict is false, this module is a dependency.
-	// We ignore all unknown directives as well as main-module-only
-	// directives like replace and exclude. It will work better for
-	// forward compatibility if we can depend on modules that have unknown
-	// statements (presumed relevant only when acting as the main module)
-	// and simply ignore those statements.
-	if !strict {
-		switch verb {
-		case "go", "module", "retract", "require", "ignore":
-			// want these even for dependency go.mods
-		default:
-			return
-		}
-	}
-
-	wrapModPathError := func(modPath string, err error) {
-		*errs = append(*errs, Error{
-			Filename: f.Syntax.Name,
-			Pos:      line.Start,
-			ModPath:  modPath,
-			Verb:     verb,
-			Err:      err,
-		})
-	}
-	wrapError := func(err error) {
-		*errs = append(*errs, Error{
-			Filename: f.Syntax.Name,
-			Pos:      line.Start,
-			Err:      err,
-		})
-	}
-	errorf := func(format string, args ...any) {
-		wrapError(fmt.Errorf(format, args...))
-	}
-
-	switch verb {
-	default:
-		errorf("unknown directive: %s", verb)
-
-	case "go":
-		if f.Go != nil {
-			errorf("repeated go statement")
-			return
-		}
-		if len(args) != 1 {
-			errorf("go directive expects exactly one argument")
-			return
-		} else if !GoVersionRE.MatchString(args[0]) {
-			fixed := false
-			if !strict {
-				if m := laxGoVersionRE.FindStringSubmatch(args[0]); m != nil {
-					args[0] = m[1]
-					fixed = true
-				}
-			}
-			if !fixed {
-				errorf("invalid go version '%s': must match format 1.23.0", args[0])
-				return
-			}
-		}
-
-		f.Go = &Go{Syntax: line}
-		f.Go.Version = args[0]
-
-	case "toolchain":
-		if f.Toolchain != nil {
-			errorf("repeated toolchain statement")
-			return
-		}
-		if len(args) != 1 {
-			errorf("toolchain directive expects exactly one argument")
-			return
-		} else if !ToolchainRE.MatchString(args[0]) {
-			errorf("invalid toolchain version '%s': must match format go1.23.0 or default", args[0])
-			return
-		}
-		f.Toolchain = &Toolchain{Syntax: line}
-		f.Toolchain.Name = args[0]
-
-	case "module":
-		if f.Module != nil {
-			errorf("repeated module statement")
-			return
-		}
-		deprecated := parseDeprecation(block, line)
-		f.Module = &Module{
-			Syntax:     line,
-			Deprecated: deprecated,
-		}
-		if len(args) != 1 {
-			errorf("usage: module module/path")
-			return
-		}
-		s, err := parseString(&args[0])
-		if err != nil {
-			errorf("invalid quoted string: %v", err)
-			return
-		}
-		f.Module.Mod = module.Version{Path: s}
-
-	case "godebug":
-		if len(args) != 1 || strings.ContainsAny(args[0], "\"`',") {
-			errorf("usage: godebug key=value")
-			return
-		}
-		key, value, ok := strings.Cut(args[0], "=")
-		if !ok {
-			errorf("usage: godebug key=value")
-			return
-		}
-		f.Godebug = append(f.Godebug, &Godebug{
-			Key:    key,
-			Value:  value,
-			Syntax: line,
-		})
-
-	case "require", "exclude":
-		if len(args) != 2 {
-			errorf("usage: %s module/path v1.2.3", verb)
-			return
-		}
-		s, err := parseString(&args[0])
-		if err != nil {
-			errorf("invalid quoted string: %v", err)
-			return
-		}
-		v, err := parseVersion(verb, s, &args[1], fix)
-		if err != nil {
-			wrapError(err)
-			return
-		}
-		pathMajor, err := modulePathMajor(s)
-		if err != nil {
-			wrapError(err)
-			return
-		}
-		if err := module.CheckPathMajor(v, pathMajor); err != nil {
-			wrapModPathError(s, err)
-			return
-		}
-		if verb == "require" {
-			f.Require = append(f.Require, &Require{
-				Mod:      module.Version{Path: s, Version: v},
-				Syntax:   line,
-				Indirect: isIndirect(line),
-			})
-		} else {
-			f.Exclude = append(f.Exclude, &Exclude{
-				Mod:    module.Version{Path: s, Version: v},
-				Syntax: line,
-			})
-		}
-
-	case "replace":
-		replace, wrappederr := parseReplace(f.Syntax.Name, line, verb, args, fix)
-		if wrappederr != nil {
-			*errs = append(*errs, *wrappederr)
-			return
-		}
-		f.Replace = append(f.Replace, replace)
-
-	case "retract":
-		rationale := parseDirectiveComment(block, line)
-		vi, err := parseVersionInterval(verb, "", &args, dontFixRetract)
-		if err != nil {
-			if strict {
-				wrapError(err)
-				return
-			} else {
-				// Only report errors parsing intervals in the main module. We may
-				// support additional syntax in the future, such as open and half-open
-				// intervals. Those can't be supported now, because they break the
-				// go.mod parser, even in lax mode.
-				return
-			}
-		}
-		if len(args) > 0 && strict {
-			// In the future, there may be additional information after the version.
-			errorf("unexpected token after version: %q", args[0])
-			return
-		}
-		retract := &Retract{
-			VersionInterval: vi,
-			Rationale:       rationale,
-			Syntax:          line,
-		}
-		f.Retract = append(f.Retract, retract)
-
-	case "tool":
-		if len(args) != 1 {
-			errorf("tool directive expects exactly one argument")
-			return
-		}
-		s, err := parseString(&args[0])
-		if err != nil {
-			errorf("invalid quoted string: %v", err)
-			return
-		}
-		f.Tool = append(f.Tool, &Tool{
-			Path:   s,
-			Syntax: line,
-		})
-
-	case "ignore":
-		if len(args) != 1 {
-			errorf("ignore directive expects exactly one argument")
-			return
-		}
-		s, err := parseString(&args[0])
-		if err != nil {
-			errorf("invalid quoted string: %v", err)
-			return
-		}
-		f.Ignore = append(f.Ignore, &Ignore{
-			Path:   s,
-			Syntax: line,
-		})
-	}
-}
-
-func parseReplace(filename string, line *Line, verb string, args []string, fix VersionFixer) (*Replace, *Error) {
-	wrapModPathError := func(modPath string, err error) *Error {
-		return &Error{
-			Filename: filename,
-			Pos:      line.Start,
-			ModPath:  modPath,
-			Verb:     verb,
-			Err:      err,
-		}
-	}
-	wrapError := func(err error) *Error {
-		return &Error{
-			Filename: filename,
-			Pos:      line.Start,
-			Err:      err,
-		}
-	}
-	errorf := func(format string, args ...any) *Error {
-		return wrapError(fmt.Errorf(format, args...))
-	}
-
-	arrow := 2
-	if len(args) >= 2 && args[1] == "=>" {
-		arrow = 1
-	}
-	if len(args) < arrow+2 || len(args) > arrow+3 || args[arrow] != "=>" {
-		return nil, errorf("usage: %s module/path [v1.2.3] => other/module v1.4\n\t or %s module/path [v1.2.3] => ../local/directory", verb, verb)
-	}
-	s, err := parseString(&args[0])
-	if err != nil {
-		return nil, errorf("invalid quoted string: %v", err)
-	}
-	pathMajor, err := modulePathMajor(s)
-	if err != nil {
-		return nil, wrapModPathError(s, err)
-
-	}
-	var v string
-	if arrow == 2 {
-		v, err = parseVersion(verb, s, &args[1], fix)
-		if err != nil {
-			return nil, wrapError(err)
-		}
-		if err := module.CheckPathMajor(v, pathMajor); err != nil {
-			return nil, wrapModPathError(s, err)
-		}
-	}
-	ns, err := parseString(&args[arrow+1])
-	if err != nil {
-		return nil, errorf("invalid quoted string: %v", err)
-	}
-	nv := ""
-	if len(args) == arrow+2 {
-		if !IsDirectoryPath(ns) {
-			if strings.Contains(ns, "@") {
-				return nil, errorf("replacement module must match format 'path version', not 'path@version'")
-			}
-			return nil, errorf("replacement module without version must be directory path (rooted or starting with . or ..)")
-		}
-		if filepath.Separator == '/' && strings.Contains(ns, `\`) {
-			return nil, errorf("replacement directory appears to be Windows path (on a non-windows system)")
-		}
-	}
-	if len(args) == arrow+3 {
-		nv, err = parseVersion(verb, ns, &args[arrow+2], fix)
-		if err != nil {
-			return nil, wrapError(err)
-		}
-		if IsDirectoryPath(ns) {
-			return nil, errorf("replacement module directory path %q cannot have version", ns)
-		}
-	}
-	return &Replace{
-		Old:    module.Version{Path: s, Version: v},
-		New:    module.Version{Path: ns, Version: nv},
-		Syntax: line,
-	}, nil
-}
-
-// fixRetract applies fix to each retract directive in f, appending any errors
-// to errs.
-//
-// Most versions are fixed as we parse the file, but for retract directives,
-// the relevant module path is the one specified with the module directive,
-// and that might appear at the end of the file (or not at all).
-func (f *File) fixRetract(fix VersionFixer, errs *ErrorList) {
-	if fix == nil {
-		return
-	}
-	path := ""
-	if f.Module != nil {
-		path = f.Module.Mod.Path
-	}
-	var r *Retract
-	wrapError := func(err error) {
-		*errs = append(*errs, Error{
-			Filename: f.Syntax.Name,
-			Pos:      r.Syntax.Start,
-			Err:      err,
-		})
-	}
-
-	for _, r = range f.Retract {
-		if path == "" {
-			wrapError(errors.New("no module directive found, so retract cannot be used"))
-			return // only print the first one of these
-		}
-
-		args := r.Syntax.Token
-		if args[0] == "retract" {
-			args = args[1:]
-		}
-		vi, err := parseVersionInterval("retract", path, &args, fix)
-		if err != nil {
-			wrapError(err)
-		}
-		r.VersionInterval = vi
-	}
-}
-
-func (f *WorkFile) add(errs *ErrorList, line *Line, verb string, args []string, fix VersionFixer) {
-	wrapError := func(err error) {
-		*errs = append(*errs, Error{
-			Filename: f.Syntax.Name,
-			Pos:      line.Start,
-			Err:      err,
-		})
-	}
-	errorf := func(format string, args ...any) {
-		wrapError(fmt.Errorf(format, args...))
-	}
-
-	switch verb {
-	default:
-		errorf("unknown directive: %s", verb)
-
-	case "go":
-		if f.Go != nil {
-			errorf("repeated go statement")
-			return
-		}
-		if len(args) != 1 {
-			errorf("go directive expects exactly one argument")
-			return
-		} else if !GoVersionRE.MatchString(args[0]) {
-			errorf("invalid go version '%s': must match format 1.23.0", args[0])
-			return
-		}
-
-		f.Go = &Go{Syntax: line}
-		f.Go.Version = args[0]
-
-	case "toolchain":
-		if f.Toolchain != nil {
-			errorf("repeated toolchain statement")
-			return
-		}
-		if len(args) != 1 {
-			errorf("toolchain directive expects exactly one argument")
-			return
-		} else if !ToolchainRE.MatchString(args[0]) {
-			errorf("invalid toolchain version '%s': must match format go1.23.0 or default", args[0])
-			return
-		}
-
-		f.Toolchain = &Toolchain{Syntax: line}
-		f.Toolchain.Name = args[0]
-
-	case "godebug":
-		if len(args) != 1 || strings.ContainsAny(args[0], "\"`',") {
-			errorf("usage: godebug key=value")
-			return
-		}
-		key, value, ok := strings.Cut(args[0], "=")
-		if !ok {
-			errorf("usage: godebug key=value")
-			return
-		}
-		f.Godebug = append(f.Godebug, &Godebug{
-			Key:    key,
-			Value:  value,
-			Syntax: line,
-		})
-
-	case "use":
-		if len(args) != 1 {
-			errorf("usage: %s local/dir", verb)
-			return
-		}
-		s, err := parseString(&args[0])
-		if err != nil {
-			errorf("invalid quoted string: %v", err)
-			return
-		}
-		f.Use = append(f.Use, &Use{
-			Path:   s,
-			Syntax: line,
-		})
-
-	case "replace":
-		replace, wrappederr := parseReplace(f.Syntax.Name, line, verb, args, fix)
-		if wrappederr != nil {
-			*errs = append(*errs, *wrappederr)
-			return
-		}
-		f.Replace = append(f.Replace, replace)
-	}
-}
-
-// IsDirectoryPath reports whether the given path should be interpreted as a directory path.
-// Just like on the go command line, relative paths starting with a '.' or '..' path component
-// and rooted paths are directory paths; the rest are module paths.
-func IsDirectoryPath(ns string) bool {
-	// Because go.mod files can move from one system to another,
-	// we check all known path syntaxes, both Unix and Windows.
-	return ns == "." || strings.HasPrefix(ns, "./") || strings.HasPrefix(ns, `.\`) ||
-		ns == ".." || strings.HasPrefix(ns, "../") || strings.HasPrefix(ns, `..\`) ||
-		strings.HasPrefix(ns, "/") || strings.HasPrefix(ns, `\`) ||
-		len(ns) >= 2 && ('A' <= ns[0] && ns[0] <= 'Z' || 'a' <= ns[0] && ns[0] <= 'z') && ns[1] == ':'
-}
-
-// MustQuote reports whether s must be quoted in order to appear as
-// a single token in a go.mod line.
-func MustQuote(s string) bool {
-	for _, r := range s {
-		switch r {
-		case ' ', '"', '\'', '`':
-			return true
-
-		case '(', ')', '[', ']', '{', '}', ',':
-			if len(s) > 1 {
-				return true
-			}
-
-		default:
-			if !unicode.IsPrint(r) {
-				return true
-			}
-		}
-	}
-	return s == "" || strings.Contains(s, "//") || strings.Contains(s, "/*")
-}
-
-// AutoQuote returns s or, if quoting is required for s to appear in a go.mod,
-// the quotation of s.
-func AutoQuote(s string) string {
-	if MustQuote(s) {
-		return strconv.Quote(s)
-	}
-	return s
-}
-
-func parseVersionInterval(verb string, path string, args *[]string, fix VersionFixer) (VersionInterval, error) {
-	toks := *args
-	if len(toks) == 0 || toks[0] == "(" {
-		return VersionInterval{}, fmt.Errorf("expected '[' or version")
-	}
-	if toks[0] != "[" {
-		v, err := parseVersion(verb, path, &toks[0], fix)
-		if err != nil {
-			return VersionInterval{}, err
-		}
-		*args = toks[1:]
-		return VersionInterval{Low: v, High: v}, nil
-	}
-	toks = toks[1:]
-
-	if len(toks) == 0 {
-		return VersionInterval{}, fmt.Errorf("expected version after '['")
-	}
-	low, err := parseVersion(verb, path, &toks[0], fix)
-	if err != nil {
-		return VersionInterval{}, err
-	}
-	toks = toks[1:]
-
-	if len(toks) == 0 || toks[0] != "," {
-		return VersionInterval{}, fmt.Errorf("expected ',' after version")
-	}
-	toks = toks[1:]
-
-	if len(toks) == 0 {
-		return VersionInterval{}, fmt.Errorf("expected version after ','")
-	}
-	high, err := parseVersion(verb, path, &toks[0], fix)
-	if err != nil {
-		return VersionInterval{}, err
-	}
-	toks = toks[1:]
-
-	if len(toks) == 0 || toks[0] != "]" {
-		return VersionInterval{}, fmt.Errorf("expected ']' after version")
-	}
-	toks = toks[1:]
-
-	*args = toks
-	return VersionInterval{Low: low, High: high}, nil
-}
-
-func parseString(s *string) (string, error) {
-	t := *s
-	if strings.HasPrefix(t, `"`) {
-		var err error
-		if t, err = strconv.Unquote(t); err != nil {
-			return "", err
-		}
-	} else if strings.ContainsAny(t, "\"'`") {
-		// Other quotes are reserved both for possible future expansion
-		// and to avoid confusion. For example if someone types 'x'
-		// we want that to be a syntax error and not a literal x in literal quotation marks.
-		return "", fmt.Errorf("unquoted string cannot contain quote")
-	}
-	*s = AutoQuote(t)
-	return t, nil
-}
-
-var deprecatedRE = lazyregexp.New(`(?s)(?:^|\n\n)Deprecated: *(.*?)(?:$|\n\n)`)
-
-// parseDeprecation extracts the text of comments on a "module" directive and
-// extracts a deprecation message from that.
-//
-// A deprecation message is contained in a paragraph within a block of comments
-// that starts with "Deprecated:" (case sensitive). The message runs until the
-// end of the paragraph and does not include the "Deprecated:" prefix. If the
-// comment block has multiple paragraphs that start with "Deprecated:",
-// parseDeprecation returns the message from the first.
-func parseDeprecation(block *LineBlock, line *Line) string {
-	text := parseDirectiveComment(block, line)
-	m := deprecatedRE.FindStringSubmatch(text)
-	if m == nil {
-		return ""
-	}
-	return m[1]
-}
-
-// parseDirectiveComment extracts the text of comments on a directive.
-// If the directive's line does not have comments and is part of a block that
-// does have comments, the block's comments are used.
-func parseDirectiveComment(block *LineBlock, line *Line) string {
-	comments := line.Comment()
-	if block != nil && len(comments.Before) == 0 && len(comments.Suffix) == 0 {
-		comments = block.Comment()
-	}
-	groups := [][]Comment{comments.Before, comments.Suffix}
-	var lines []string
-	for _, g := range groups {
-		for _, c := range g {
-			if !strings.HasPrefix(c.Token, "//") {
-				continue // blank line
-			}
-			lines = append(lines, strings.TrimSpace(strings.TrimPrefix(c.Token, "//")))
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-type ErrorList []Error
-
-func (e ErrorList) Error() string {
-	errStrs := make([]string, len(e))
-	for i, err := range e {
-		errStrs[i] = err.Error()
-	}
-	return strings.Join(errStrs, "\n")
-}
-
-type Error struct {
-	Filename string
-	Pos      Position
-	Verb     string
-	ModPath  string
-	Err      error
-}
-
-func (e *Error) Error() string {
-	var pos string
-	if e.Pos.LineRune > 1 {
-		// Don't print LineRune if it's 1 (beginning of line).
-		// It's always 1 except in scanner errors, which are rare.
-		pos = fmt.Sprintf("%s:%d:%d: ", e.Filename, e.Pos.Line, e.Pos.LineRune)
-	} else if e.Pos.Line > 0 {
-		pos = fmt.Sprintf("%s:%d: ", e.Filename, e.Pos.Line)
-	} else if e.Filename != "" {
-		pos = fmt.Sprintf("%s: ", e.Filename)
-	}
-
-	var directive string
-	if e.ModPath != "" {
-		directive = fmt.Sprintf("%s %s: ", e.Verb, e.ModPath)
-	} else if e.Verb != "" {
-		directive = fmt.Sprintf("%s: ", e.Verb)
-	}
-
-	return pos + directive + e.Err.Error()
-}
-
-func (e *Error) Unwrap() error { return e.Err }
-
-func parseVersion(verb string, path string, s *string, fix VersionFixer) (string, error) {
-	t, err := parseString(s)
-	if err != nil {
-		return "", &Error{
-			Verb:    verb,
-			ModPath: path,
-			Err: &module.InvalidVersionError{
-				Version: *s,
-				Err:     err,
-			},
-		}
-	}
-	if fix != nil {
-		fixed, err := fix(path, t)
-		if err != nil {
-			if err, ok := err.(*module.ModuleError); ok {
-				return "", &Error{
-					Verb:    verb,
-					ModPath: path,
-					Err:     err.Err,
-				}
-			}
-			return "", err
-		}
-		t = fixed
-	} else {
-		cv := module.CanonicalVersion(t)
-		if cv == "" {
-			return "", &Error{
-				Verb:    verb,
-				ModPath: path,
-				Err: &module.InvalidVersionError{
-					Version: t,
-					Err:     errors.New("must be of the form v1.2.3"),
-				},
-			}
-		}
-		t = cv
-	}
-	*s = t
-	return *s, nil
-}
-
-func modulePathMajor(path string) (string, error) {
-	_, major, ok := module.SplitPathVersion(path)
-	if !ok {
-		return "", fmt.Errorf("invalid module path")
-	}
-	return major, nil
-}
-
-func (f *File) Format() ([]byte, error) {
-	return Format(f.Syntax), nil
-}
-
-// Cleanup cleans up the file f after any edit operations.
-// To avoid quadratic behavior, modifications like [File.DropRequire]
-// clear the entry but do not remove it from the slice.
-// Cleanup cleans out all the cleared entries.
-func (f *File) Cleanup() {
-	w := 0
-	for _, g := range f.Godebug {
-		if g.Key != "" {
-			f.Godebug[w] = g
-			w++
-		}
-	}
-	f.Godebug = f.Godebug[:w]
-
-	w = 0
-	for _, r := range f.Require {
-		if r.Mod.Path != "" {
-			f.Require[w] = r
-			w++
-		}
-	}
-	f.Require = f.Require[:w]
-
-	w = 0
-	for _, x := range f.Exclude {
-		if x.Mod.Path != "" {
-			f.Exclude[w] = x
-			w++
-		}
-	}
-	f.Exclude = f.Exclude[:w]
-
-	w = 0
-	for _, r := range f.Replace {
-		if r.Old.Path != "" {
-			f.Replace[w] = r
-			w++
-		}
-	}
-	f.Replace = f.Replace[:w]
-
-	w = 0
-	for _, r := range f.Retract {
-		if r.Low != "" || r.High != "" {
-			f.Retract[w] = r
-			w++
-		}
-	}
-	f.Retract = f.Retract[:w]
-
-	f.Syntax.Cleanup()
-}
-
-func (f *File) AddGoStmt(version string) error {
-	if !GoVersionRE.MatchString(version) {
-		return fmt.Errorf("invalid language version %q", version)
-	}
-	if f.Go == nil {
-		var hint Expr
-		if f.Module != nil && f.Module.Syntax != nil {
-			hint = f.Module.Syntax
-		} else if f.Syntax == nil {
-			f.Syntax = new(FileSyntax)
-		}
-		f.Go = &Go{
-			Version: version,
-			Syntax:  f.Syntax.addLine(hint, "go", version),
-		}
-	} else {
-		f.Go.Version = version
-		f.Syntax.updateLine(f.Go.Syntax, "go", version)
-	}
-	return nil
-}
-
-// DropGoStmt deletes the go statement from the file.
-func (f *File) DropGoStmt() {
-	if f.Go != nil {
-		f.Go.Syntax.markRemoved()
-		f.Go = nil
-	}
-}
-
-// DropToolchainStmt deletes the toolchain statement from the file.
-func (f *File) DropToolchainStmt() {
-	if f.Toolchain != nil {
-		f.Toolchain.Syntax.markRemoved()
-		f.Toolchain = nil
-	}
-}
-
-func (f *File) AddToolchainStmt(name string) error {
-	if !ToolchainRE.MatchString(name) {
-		return fmt.Errorf("invalid toolchain name %q", name)
-	}
-	if f.Toolchain == nil {
-		var hint Expr
-		if f.Go != nil && f.Go.Syntax != nil {
-			hint = f.Go.Syntax
-		} else if f.Module != nil && f.Module.Syntax != nil {
-			hint = f.Module.Syntax
-		}
-		f.Toolchain = &Toolchain{
-			Name:   name,
-			Syntax: f.Syntax.addLine(hint, "toolchain", name),
-		}
-	} else {
-		f.Toolchain.Name = name
-		f.Syntax.updateLine(f.Toolchain.Syntax, "toolchain", name)
-	}
-	return nil
-}
-
-// AddGodebug sets the first godebug line for key to value,
-// preserving any existing comments for that line and removing all
-// other godebug lines for key.
-//
-// If no line currently exists for key, AddGodebug adds a new line
-// at the end of the last godebug block.
-func (f *File) AddGodebug(key, value string) error {
-	need := true
-	for _, g := range f.Godebug {
-		if g.Key == key {
-			if need {
-				g.Value = value
-				f.Syntax.updateLine(g.Syntax, "godebug", key+"="+value)
-				need = false
-			} else {
-				g.Syntax.markRemoved()
-				*g = Godebug{}
-			}
-		}
-	}
-
-	if need {
-		f.addNewGodebug(key, value)
-	}
-	return nil
-}
-
-// addNewGodebug adds a new godebug key=value line at the end
-// of the last godebug block, regardless of any existing godebug lines for key.
-func (f *File) addNewGodebug(key, value string) {
-	line := f.Syntax.addLine(nil, "godebug", key+"="+value)
-	g := &Godebug{
-		Key:    key,
-		Value:  value,
-		Syntax: line,
-	}
-	f.Godebug = append(f.Godebug, g)
-}
-
-// AddRequire sets the first require line for path to version vers,
-// preserving any existing comments for that line and removing all
-// other lines for path.
-//
-// If no line currently exists for path, AddRequire adds a new line
-// at the end of the last require block.
-func (f *File) AddRequire(path, vers string) error {
-	need := true
-	for _, r := range f.Require {
-		if r.Mod.Path == path {
-			if need {
-				r.Mod.Version = vers
-				f.Syntax.updateLine(r.Syntax, "require", AutoQuote(path), vers)
-				need = false
-			} else {
-				r.Syntax.markRemoved()
-				*r = Require{}
-			}
-		}
-	}
-
-	if need {
-		f.AddNewRequire(path, vers, false)
-	}
-	return nil
-}
-
-// AddNewRequire adds a new require line for path at version vers at the end of
-// the last require block, regardless of any existing require lines for path.
-func (f *File) AddNewRequire(path, vers string, indirect bool) {
-	line := f.Syntax.addLine(nil, "require", AutoQuote(path), vers)
-	r := &Require{
-		Mod:    module.Version{Path: path, Version: vers},
-		Syntax: line,
-	}
-	r.setIndirect(indirect)
-	f.Require = append(f.Require, r)
-}
-
-// SetRequire updates the requirements of f to contain exactly req, preserving
-// the existing block structure and line comment contents (except for 'indirect'
-// markings) for the first requirement on each named module path.
-//
-// The Syntax field is ignored for the requirements in req.
-//
-// Any requirements not already present in the file are added to the block
-// containing the last require line.
-//
-// The requirements in req must specify at most one distinct version for each
-// module path.
-//
-// If any existing requirements may be removed, the caller should call
-// [File.Cleanup] after all edits are complete.
-func (f *File) SetRequire(req []*Require) {
-	type elem struct {
-		version  string
-		indirect bool
-	}
-	need := make(map[string]elem)
-	for _, r := range req {
-		if prev, dup := need[r.Mod.Path]; dup && prev.version != r.Mod.Version {
-			panic(fmt.Errorf("SetRequire called with conflicting versions for path %s (%s and %s)", r.Mod.Path, prev.version, r.Mod.Version))
-		}
-		need[r.Mod.Path] = elem{r.Mod.Version, r.Indirect}
-	}
-
-	// Update or delete the existing Require entries to preserve
-	// only the first for each module path in req.
-	for _, r := range f.Require {
-		e, ok := need[r.Mod.Path]
-		if ok {
-			r.setVersion(e.version)
-			r.setIndirect(e.indirect)
-		} else {
-			r.markRemoved()
-		}
-		delete(need, r.Mod.Path)
-	}
-
-	// Add new entries in the last block of the file for any paths that weren't
-	// already present.
-	//
-	// This step is nondeterministic, but the final result will be deterministic
-	// because we will sort the block.
-	for path, e := range need {
-		f.AddNewRequire(path, e.version, e.indirect)
-	}
-
-	f.SortBlocks()
-}
-
-// SetRequireSeparateIndirect updates the requirements of f to contain the given
-// requirements. Comment contents (except for 'indirect' markings) are retained
-// from the first existing requirement for each module path. Like SetRequire,
-// SetRequireSeparateIndirect adds requirements for new paths in req,
-// updates the version and "// indirect" comment on existing requirements,
-// and deletes requirements on paths not in req. Existing duplicate requirements
-// are deleted.
-//
-// As its name suggests, SetRequireSeparateIndirect puts direct and indirect
-// requirements into two separate blocks, one containing only direct
-// requirements, and the other containing only indirect requirements.
-// SetRequireSeparateIndirect may move requirements between these two blocks
-// when their indirect markings change. However, SetRequireSeparateIndirect
-// won't move requirements from other blocks, especially blocks with comments.
-//
-// If the file initially has one uncommented block of requirements,
-// SetRequireSeparateIndirect will split it into a direct-only and indirect-only
-// block. This aids in the transition to separate blocks.
-func (f *File) SetRequireSeparateIndirect(req []*Require) {
-	f.setRequireSeparateIndirect(req, false)
-}
-
-// SetRequireAtMostTwo is like SetRequireSeparateIndirect but it aggressively
-// consolidates all requirements into at most two blocks (one direct, one indirect).
-// It ignores existing blocks and comments when deciding where to place requirements.
-func (f *File) SetRequireAtMostTwo(req []*Require) {
-	f.setRequireSeparateIndirect(req, true)
-}
-
-func (f *File) setRequireSeparateIndirect(req []*Require, simplify bool) {
-	// hasComments returns whether a line or block has comments
-	// other than "indirect".
-	hasComments := func(c Comments) bool {
-		return len(c.Before) > 0 || len(c.After) > 0 || len(c.Suffix) > 1 ||
-			(len(c.Suffix) == 1 &&
-				strings.TrimSpace(strings.TrimPrefix(c.Suffix[0].Token, string(slashSlash))) != "indirect")
-	}
-
-	// moveReq adds r to block. If r was in another block, moveReq deletes
-	// it from that block and transfers its comments.
-	moveReq := func(r *Require, block *LineBlock) {
-		var line *Line
-		if r.Syntax == nil {
-			line = &Line{Token: []string{AutoQuote(r.Mod.Path), r.Mod.Version}}
-			r.Syntax = line
-			if r.Indirect {
-				r.setIndirect(true)
-			}
-		} else {
-			line = new(Line)
-			*line = *r.Syntax
-			if !line.InBlock && len(line.Token) > 0 && line.Token[0] == "require" {
-				line.Token = line.Token[1:]
-			}
-			r.Syntax.Token = nil // Cleanup will delete the old line.
-			r.Syntax = line
-		}
-		line.InBlock = true
-		block.Line = append(block.Line, line)
-	}
-
-	// Examine existing require lines and blocks.
-	need := make(map[string]*Require)
-	for _, r := range req {
-		need[r.Mod.Path] = r
-	}
-	lineIndirect := make(map[*Line]bool)
-	for _, r := range f.Require {
-		if n := need[r.Mod.Path]; n != nil {
-			lineIndirect[r.Syntax] = n.Indirect
-		}
-	}
-
-	var (
-		// We may insert new requirements into the last uncommented
-		// direct-only and indirect-only blocks. We may also move requirements
-		// to the opposite block if their indirect markings change.
-		lastDirectIndex   = -1
-		lastIndirectIndex = -1
-
-		// If there are no direct-only or indirect-only blocks, a new block may
-		// be inserted after the last require line or block.
-		lastRequireIndex = -1
-
-		// If there's only one require line or block, and it's uncommented,
-		// we'll move its requirements to the direct-only or indirect-only blocks.
-		requireLineOrBlockCount = 0
-
-		// Track the block each requirement belongs to (if any) so we can
-		// move them later.
-		lineToBlock           = make(map[*Line]*LineBlock)
-		directBlockComments   []Comment
-		indirectBlockComments []Comment
-	)
-	for i, stmt := range f.Syntax.Stmt {
-		switch stmt := stmt.(type) {
-		case *Line:
-			if len(stmt.Token) == 0 || stmt.Token[0] != "require" {
-				continue
-			}
-			lastRequireIndex = i
-			requireLineOrBlockCount++
-			if !hasComments(stmt.Comments) {
-				if isIndirect(stmt) {
-					lastIndirectIndex = i
-				} else {
-					lastDirectIndex = i
-				}
-			}
-
-		case *LineBlock:
-			if len(stmt.Token) == 0 || stmt.Token[0] != "require" {
-				continue
-			}
-			lastRequireIndex = i
-			requireLineOrBlockCount++
-			allDirect := len(stmt.Line) > 0 && !hasComments(stmt.Comments)
-			allIndirect := len(stmt.Line) > 0 && !hasComments(stmt.Comments)
-			for _, line := range stmt.Line {
-				lineToBlock[line] = stmt
-				if hasComments(line.Comments) {
-					allDirect = false
-					allIndirect = false
-				} else if isIndirect(line) {
-					allDirect = false
-				} else {
-					allIndirect = false
-				}
-			}
-			if allDirect {
-				lastDirectIndex = i
-			}
-			if allIndirect {
-				lastIndirectIndex = i
-			}
-			if simplify {
-				anyDirect := false
-				for _, line := range stmt.Line {
-					if ind, ok := lineIndirect[line]; ok && !ind {
-						anyDirect = true
-						break
-					}
-				}
-				target := &directBlockComments
-				if !anyDirect && len(stmt.Line) > 0 {
-					target = &indirectBlockComments
-				}
-				if len(*target) > 0 && len(stmt.Comments.Before) > 0 {
-					*target = append(*target, Comment{Token: "//"})
-				}
-				*target = append(*target, stmt.Comments.Before...)
-				stmt.Comments.Before = nil
-			}
-		}
-	}
-
-	oneFlatUncommentedBlock := requireLineOrBlockCount == 1 &&
-		!hasComments(*f.Syntax.Stmt[lastRequireIndex].Comment())
-
-	// Create direct and indirect blocks if needed. Convert lines into blocks
-	// if needed. If we end up with an empty block or a one-line block,
-	// Cleanup will delete it or convert it to a line later.
-	insertBlock := func(i int) *LineBlock {
-		block := &LineBlock{Token: []string{"require"}}
-		f.Syntax.Stmt = append(f.Syntax.Stmt, nil)
-		copy(f.Syntax.Stmt[i+1:], f.Syntax.Stmt[i:])
-		f.Syntax.Stmt[i] = block
-		return block
-	}
-
-	ensureBlock := func(i int) *LineBlock {
-		switch stmt := f.Syntax.Stmt[i].(type) {
-		case *LineBlock:
-			return stmt
-		case *Line:
-			block := &LineBlock{
-				Token: []string{"require"},
-				Line:  []*Line{stmt},
-			}
-			stmt.Token = stmt.Token[1:] // remove "require"
-			stmt.InBlock = true
-			f.Syntax.Stmt[i] = block
-			return block
-		default:
-			panic(fmt.Sprintf("unexpected statement: %v", stmt))
-		}
-	}
-
-	var lastDirectBlock *LineBlock
-	if lastDirectIndex < 0 {
-		if lastIndirectIndex >= 0 {
-			lastDirectIndex = lastIndirectIndex
-			lastIndirectIndex++
-		} else if lastRequireIndex >= 0 {
-			lastDirectIndex = lastRequireIndex + 1
-		} else {
-			lastDirectIndex = len(f.Syntax.Stmt)
-		}
-		lastDirectBlock = insertBlock(lastDirectIndex)
-	} else {
-		lastDirectBlock = ensureBlock(lastDirectIndex)
-	}
-
-	var lastIndirectBlock *LineBlock
-	if lastIndirectIndex < 0 {
-		lastIndirectIndex = lastDirectIndex + 1
-		lastIndirectBlock = insertBlock(lastIndirectIndex)
-	} else {
-		lastIndirectBlock = ensureBlock(lastIndirectIndex)
-	}
-
-	if simplify {
-		if len(directBlockComments) > 0 {
-			lastDirectBlock.Comments.Before = append(lastDirectBlock.Comments.Before, directBlockComments...)
-		}
-		if len(indirectBlockComments) > 0 {
-			lastIndirectBlock.Comments.Before = append(lastIndirectBlock.Comments.Before, indirectBlockComments...)
-		}
-	}
-
-	// Delete requirements we don't want anymore.
-	// Update versions and indirect comments on requirements we want to keep.
-	// If a requirement is in last{Direct,Indirect}Block with the wrong
-	// indirect marking after this, or if the requirement is in an single
-	// uncommented mixed block (oneFlatUncommentedBlock), move it to the
-	// correct block.
-	//
-	// Some blocks may be empty after this. Cleanup will remove them.
-	have := make(map[string]*Require)
-	for _, r := range f.Require {
-		path := r.Mod.Path
-		if need[path] == nil || have[path] != nil {
-			// Requirement not needed, or duplicate requirement. Delete.
-			r.markRemoved()
-			continue
-		}
-		have[r.Mod.Path] = r
-		r.setVersion(need[path].Mod.Version)
-		r.setIndirect(need[path].Indirect)
-		if need[path].Indirect &&
-			(simplify || oneFlatUncommentedBlock || lineToBlock[r.Syntax] == lastDirectBlock) {
-			moveReq(r, lastIndirectBlock)
-		} else if !need[path].Indirect &&
-			(simplify || oneFlatUncommentedBlock || lineToBlock[r.Syntax] == lastIndirectBlock) {
-			moveReq(r, lastDirectBlock)
-		}
-	}
-
-	// Add new requirements.
-	for path, r := range need {
-		if have[path] == nil {
-			if r.Indirect {
-				moveReq(r, lastIndirectBlock)
-			} else {
-				moveReq(r, lastDirectBlock)
-			}
-			f.Require = append(f.Require, r)
-		}
-	}
-
-	f.SortBlocks()
-}
-
-func (f *File) DropGodebug(key string) error {
-	for _, g := range f.Godebug {
-		if g.Key == key {
-			g.Syntax.markRemoved()
-			*g = Godebug{}
-		}
-	}
-	return nil
-}
-
-func (f *File) DropRequire(path string) error {
-	for _, r := range f.Require {
-		if r.Mod.Path == path {
-			r.Syntax.markRemoved()
-			*r = Require{}
-		}
-	}
-	return nil
-}
-
-// AddExclude adds a exclude statement to the mod file. Errors if the provided
-// version is not a canonical version string
-func (f *File) AddExclude(path, vers string) error {
-	if err := checkCanonicalVersion(path, vers); err != nil {
-		return err
-	}
-
-	var hint *Line
-	for _, x := range f.Exclude {
-		if x.Mod.Path == path && x.Mod.Version == vers {
-			return nil
-		}
-		if x.Mod.Path == path {
-			hint = x.Syntax
-		}
-	}
-
-	f.Exclude = append(f.Exclude, &Exclude{Mod: module.Version{Path: path, Version: vers}, Syntax: f.Syntax.addLine(hint, "exclude", AutoQuote(path), vers)})
-	return nil
-}
-
-func (f *File) DropExclude(path, vers string) error {
-	for _, x := range f.Exclude {
-		if x.Mod.Path == path && x.Mod.Version == vers {
-			x.Syntax.markRemoved()
-			*x = Exclude{}
-		}
-	}
-	return nil
-}
-
-func (f *File) AddReplace(oldPath, oldVers, newPath, newVers string) error {
-	return addReplace(f.Syntax, &f.Replace, oldPath, oldVers, newPath, newVers)
-}
-
-func addReplace(syntax *FileSyntax, replace *[]*Replace, oldPath, oldVers, newPath, newVers string) error {
-	need := true
-	old := module.Version{Path: oldPath, Version: oldVers}
-	new := module.Version{Path: newPath, Version: newVers}
-	tokens := []string{"replace", AutoQuote(oldPath)}
-	if oldVers != "" {
-		tokens = append(tokens, oldVers)
-	}
-	tokens = append(tokens, "=>", AutoQuote(newPath))
-	if newVers != "" {
-		tokens = append(tokens, newVers)
-	}
-
-	var hint *Line
-	for _, r := range *replace {
-		if r.Old.Path == oldPath && (oldVers == "" || r.Old.Version == oldVers) {
-			if need {
-				// Found replacement for old; update to use new.
-				r.New = new
-				syntax.updateLine(r.Syntax, tokens...)
-				need = false
-				continue
-			}
-			// Already added; delete other replacements for same.
-			r.Syntax.markRemoved()
-			*r = Replace{}
-		}
-		if r.Old.Path == oldPath {
-			hint = r.Syntax
-		}
-	}
-	if need {
-		*replace = append(*replace, &Replace{Old: old, New: new, Syntax: syntax.addLine(hint, tokens...)})
-	}
-	return nil
-}
-
-func (f *File) DropReplace(oldPath, oldVers string) error {
-	for _, r := range f.Replace {
-		if r.Old.Path == oldPath && r.Old.Version == oldVers {
-			r.Syntax.markRemoved()
-			*r = Replace{}
-		}
-	}
-	return nil
-}
-
-// AddRetract adds a retract statement to the mod file. Errors if the provided
-// version interval does not consist of canonical version strings
-func (f *File) AddRetract(vi VersionInterval, rationale string) error {
-	var path string
-	if f.Module != nil {
-		path = f.Module.Mod.Path
-	}
-	if err := checkCanonicalVersion(path, vi.High); err != nil {
-		return err
-	}
-	if err := checkCanonicalVersion(path, vi.Low); err != nil {
-		return err
-	}
-
-	r := &Retract{
-		VersionInterval: vi,
-	}
-	if vi.Low == vi.High {
-		r.Syntax = f.Syntax.addLine(nil, "retract", AutoQuote(vi.Low))
-	} else {
-		r.Syntax = f.Syntax.addLine(nil, "retract", "[", AutoQuote(vi.Low), ",", AutoQuote(vi.High), "]")
-	}
-	if rationale != "" {
-		for line := range strings.SplitSeq(rationale, "\n") {
-			com := Comment{Token: "// " + line}
-			r.Syntax.Comment().Before = append(r.Syntax.Comment().Before, com)
-		}
-	}
-	return nil
-}
-
-func (f *File) DropRetract(vi VersionInterval) error {
-	for _, r := range f.Retract {
-		if r.VersionInterval == vi {
-			r.Syntax.markRemoved()
-			*r = Retract{}
-		}
-	}
-	return nil
-}
-
-// AddTool adds a new tool directive with the given path.
-// It does nothing if the tool line already exists.
-func (f *File) AddTool(path string) error {
-	for _, t := range f.Tool {
-		if t.Path == path {
-			return nil
-		}
-	}
-
-	f.Tool = append(f.Tool, &Tool{
-		Path:   path,
-		Syntax: f.Syntax.addLine(nil, "tool", path),
-	})
-
-	f.SortBlocks()
-	return nil
-}
-
-// RemoveTool removes a tool directive with the given path.
-// It does nothing if no such tool directive exists.
-func (f *File) DropTool(path string) error {
-	for _, t := range f.Tool {
-		if t.Path == path {
-			t.Syntax.markRemoved()
-			*t = Tool{}
-		}
-	}
-	return nil
-}
-
-// AddIgnore adds a new ignore directive with the given path.
-// It does nothing if the ignore line already exists.
-func (f *File) AddIgnore(path string) error {
-	for _, t := range f.Ignore {
-		if t.Path == path {
-			return nil
-		}
-	}
-
-	f.Ignore = append(f.Ignore, &Ignore{
-		Path:   path,
-		Syntax: f.Syntax.addLine(nil, "ignore", path),
-	})
-
-	f.SortBlocks()
-	return nil
-}
-
-// DropIgnore removes a ignore directive with the given path.
-// It does nothing if no such ignore directive exists.
-func (f *File) DropIgnore(path string) error {
-	for _, t := range f.Ignore {
-		if t.Path == path {
-			t.Syntax.markRemoved()
-			*t = Ignore{}
-		}
-	}
-	return nil
-}
-
-func (f *File) SortBlocks() {
-	f.removeDups() // otherwise sorting is unsafe
-
-	// semanticSortForExcludeVersionV is the Go version (plus leading "v") at which
-	// lines in exclude blocks start to use semantic sort instead of lexicographic sort.
-	// See go.dev/issue/60028.
-	const semanticSortForExcludeVersionV = "v1.21"
-	useSemanticSortForExclude := f.Go != nil && semver.Compare("v"+f.Go.Version, semanticSortForExcludeVersionV) >= 0
-
-	for _, stmt := range f.Syntax.Stmt {
-		block, ok := stmt.(*LineBlock)
-		if !ok {
-			continue
-		}
-		less := compareLine
-		if block.Token[0] == "exclude" && useSemanticSortForExclude {
-			less = compareLineExclude
-		} else if block.Token[0] == "retract" {
-			less = compareLineRetract
-		}
-		slices.SortStableFunc(block.Line, less)
-	}
-}
-
-// removeDups removes duplicate exclude, replace and tool directives.
-//
-// Earlier exclude and tool directives take priority.
-//
-// Later replace directives take priority.
-//
-// require directives are not de-duplicated. That's left up to higher-level
-// logic (MVS).
-//
-// retract directives are not de-duplicated since comments are
-// meaningful, and versions may be retracted multiple times.
-func (f *File) removeDups() {
-	removeDups(f.Syntax, &f.Exclude, &f.Replace, &f.Tool, &f.Ignore)
-}
-
-func removeDups(syntax *FileSyntax, exclude *[]*Exclude, replace *[]*Replace, tool *[]*Tool, ignore *[]*Ignore) {
-	kill := make(map[*Line]bool)
-
-	// Remove duplicate excludes.
-	if exclude != nil {
-		haveExclude := make(map[module.Version]bool)
-		for _, x := range *exclude {
-			if haveExclude[x.Mod] {
-				kill[x.Syntax] = true
-				continue
-			}
-			haveExclude[x.Mod] = true
-		}
-		var excl []*Exclude
-		for _, x := range *exclude {
-			if !kill[x.Syntax] {
-				excl = append(excl, x)
-			}
-		}
-		*exclude = excl
-	}
-
-	// Remove duplicate replacements.
-	// Later replacements take priority over earlier ones.
-	haveReplace := make(map[module.Version]bool)
-	for _, x := range slices.Backward(*replace) {
-		if haveReplace[x.Old] {
-			kill[x.Syntax] = true
-			continue
-		}
-		haveReplace[x.Old] = true
-	}
-	var repl []*Replace
-	for _, x := range *replace {
-		if !kill[x.Syntax] {
-			repl = append(repl, x)
-		}
-	}
-	*replace = repl
-
-	if tool != nil {
-		haveTool := make(map[string]bool)
-		for _, t := range *tool {
-			if haveTool[t.Path] {
-				kill[t.Syntax] = true
-				continue
-			}
-			haveTool[t.Path] = true
-		}
-		var newTool []*Tool
-		for _, t := range *tool {
-			if !kill[t.Syntax] {
-				newTool = ap
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/rule.go","mode":420,"size":51919,"sha256":"f8c2300b20509d28eb58a1a55d10b035d8b84d1c3344238eacf4b457a979698e","index":1,"count":2,"encoding":"utf-8","payloadBytes":3919}
-pend(newTool, t)
-			}
-		}
-		*tool = newTool
-	}
-
-	if ignore != nil {
-		haveIgnore := make(map[string]bool)
-		for _, i := range *ignore {
-			if haveIgnore[i.Path] {
-				kill[i.Syntax] = true
-				continue
-			}
-			haveIgnore[i.Path] = true
-		}
-		var newIgnore []*Ignore
-		for _, i := range *ignore {
-			if !kill[i.Syntax] {
-				newIgnore = append(newIgnore, i)
-			}
-		}
-		*ignore = newIgnore
-	}
-
-	// Duplicate require and retract directives are not removed.
-
-	// Drop killed statements from the syntax tree.
-	var stmts []Expr
-	for _, stmt := range syntax.Stmt {
-		switch stmt := stmt.(type) {
-		case *Line:
-			if kill[stmt] {
-				continue
-			}
-		case *LineBlock:
-			var lines []*Line
-			for _, line := range stmt.Line {
-				if !kill[line] {
-					lines = append(lines, line)
-				}
-			}
-			stmt.Line = lines
-			if len(lines) == 0 {
-				continue
-			}
-		}
-		stmts = append(stmts, stmt)
-	}
-	syntax.Stmt = stmts
-}
-
-// compareLine compares li and lj. It sorts lexicographically without assigning
-// any special meaning to tokens.
-func compareLine(li, lj *Line) int {
-	for k := 0; k < len(li.Token) && k < len(lj.Token); k++ {
-		if li.Token[k] != lj.Token[k] {
-			return cmp.Compare(li.Token[k], lj.Token[k])
-		}
-	}
-	return cmp.Compare(len(li.Token), len(lj.Token))
-}
-
-// compareLineExclude compares li and lj for lines in an "exclude" block.
-func compareLineExclude(li, lj *Line) int {
-	if len(li.Token) != 2 || len(lj.Token) != 2 {
-		// Not a known exclude specification.
-		// Fall back to sorting lexicographically.
-		return compareLine(li, lj)
-	}
-	// An exclude specification has two tokens: ModulePath and Version.
-	// Compare module path by string order and version by semver rules.
-	if pi, pj := li.Token[0], lj.Token[0]; pi != pj {
-		return cmp.Compare(pi, pj)
-	}
-	return semver.Compare(li.Token[1], lj.Token[1])
-}
-
-// compareLineRetract compares li and lj for lines in a "retract" block.
-// It treats each line as a version interval. Single versions are compared as
-// if they were intervals with the same low and high version.
-// Intervals are sorted in descending order, first by low version, then by
-// high version, using [semver.Compare].
-func compareLineRetract(li, lj *Line) int {
-	interval := func(l *Line) VersionInterval {
-		if len(l.Token) == 1 {
-			return VersionInterval{Low: l.Token[0], High: l.Token[0]}
-		} else if len(l.Token) == 5 && l.Token[0] == "[" && l.Token[2] == "," && l.Token[4] == "]" {
-			return VersionInterval{Low: l.Token[1], High: l.Token[3]}
-		} else {
-			// Line in unknown format. Treat as an invalid version.
-			return VersionInterval{}
-		}
-	}
-	vii := interval(li)
-	vij := interval(lj)
-	if cmp := semver.Compare(vii.Low, vij.Low); cmp != 0 {
-		return -cmp
-	}
-	return -semver.Compare(vii.High, vij.High)
-}
-
-// checkCanonicalVersion returns a non-nil error if vers is not a canonical
-// version string or does not match the major version of path.
-//
-// If path is non-empty, the error text suggests a format with a major version
-// corresponding to the path.
-func checkCanonicalVersion(path, vers string) error {
-	_, pathMajor, pathMajorOk := module.SplitPathVersion(path)
-
-	if vers == "" || vers != module.CanonicalVersion(vers) {
-		if pathMajor == "" {
-			return &module.InvalidVersionError{
-				Version: vers,
-				Err:     fmt.Errorf("must be of the form v1.2.3"),
-			}
-		}
-		return &module.InvalidVersionError{
-			Version: vers,
-			Err:     fmt.Errorf("must be of the form %s.2.3", module.PathMajorPrefix(pathMajor)),
-		}
-	}
-
-	if pathMajorOk {
-		if err := module.CheckPathMajor(vers, pathMajor); err != nil {
-			if pathMajor == "" {
-				// In this context, the user probably wrote "v2.3.4" when they meant
-				// "v2.3.4+incompatible". Suggest that instead of "v0 or v1".
-				return &module.InvalidVersionError{
-					Version: vers,
-					Err:     fmt.Errorf("should be %s+incompatible (or module %s/%v)", vers, path, semver.Major(vers)),
-				}
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/work.go","mode":420,"size":7829,"sha256":"ad31b233b102190481c0b6bb6a4b350c9b34ae8836f349431fe297687cb68fc5","index":0,"count":1,"encoding":"utf-8","payloadBytes":7829}
-// Copyright 2021 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package modfile
-
-import (
-	"fmt"
-	"slices"
-	"strings"
-)
-
-// A WorkFile is the parsed, interpreted form of a go.work file.
-type WorkFile struct {
-	Go        *Go
-	Toolchain *Toolchain
-	Godebug   []*Godebug
-	Use       []*Use
-	Replace   []*Replace
-
-	Syntax *FileSyntax
-}
-
-// A Use is a single directory statement.
-type Use struct {
-	Path       string // Use path of module.
-	ModulePath string // Module path in the comment.
-	Syntax     *Line
-}
-
-// ParseWork parses and returns a go.work file.
-//
-// file is the name of the file, used in positions and errors.
-//
-// data is the content of the file.
-//
-// fix is an optional function that canonicalizes module versions.
-// If fix is nil, all module versions must be canonical ([module.CanonicalVersion]
-// must return the same string).
-func ParseWork(file string, data []byte, fix VersionFixer) (*WorkFile, error) {
-	fs, err := parse(file, data)
-	if err != nil {
-		return nil, err
-	}
-	f := &WorkFile{
-		Syntax: fs,
-	}
-	var errs ErrorList
-
-	for _, x := range fs.Stmt {
-		switch x := x.(type) {
-		case *Line:
-			f.add(&errs, x, x.Token[0], x.Token[1:], fix)
-
-		case *LineBlock:
-			if len(x.Token) > 1 {
-				errs = append(errs, Error{
-					Filename: file,
-					Pos:      x.Start,
-					Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
-				})
-				continue
-			}
-			switch x.Token[0] {
-			default:
-				errs = append(errs, Error{
-					Filename: file,
-					Pos:      x.Start,
-					Err:      fmt.Errorf("unknown block type: %s", strings.Join(x.Token, " ")),
-				})
-				continue
-			case "godebug", "use", "replace":
-				for _, l := range x.Line {
-					f.add(&errs, l, x.Token[0], l.Token, fix)
-				}
-			}
-		}
-	}
-
-	if len(errs) > 0 {
-		return nil, errs
-	}
-	return f, nil
-}
-
-// Cleanup cleans up the file f after any edit operations.
-// To avoid quadratic behavior, modifications like [WorkFile.DropRequire]
-// clear the entry but do not remove it from the slice.
-// Cleanup cleans out all the cleared entries.
-func (f *WorkFile) Cleanup() {
-	w := 0
-	for _, r := range f.Use {
-		if r.Path != "" {
-			f.Use[w] = r
-			w++
-		}
-	}
-	f.Use = f.Use[:w]
-
-	w = 0
-	for _, r := range f.Replace {
-		if r.Old.Path != "" {
-			f.Replace[w] = r
-			w++
-		}
-	}
-	f.Replace = f.Replace[:w]
-
-	f.Syntax.Cleanup()
-}
-
-func (f *WorkFile) AddGoStmt(version string) error {
-	if !GoVersionRE.MatchString(version) {
-		return fmt.Errorf("invalid language version %q", version)
-	}
-	if f.Go == nil {
-		stmt := &Line{Token: []string{"go", version}}
-		f.Go = &Go{
-			Version: version,
-			Syntax:  stmt,
-		}
-		// Find the first non-comment-only block and add
-		// the go statement before it. That will keep file comments at the top.
-		i := 0
-		for i = 0; i < len(f.Syntax.Stmt); i++ {
-			if _, ok := f.Syntax.Stmt[i].(*CommentBlock); !ok {
-				break
-			}
-		}
-		f.Syntax.Stmt = append(append(f.Syntax.Stmt[:i:i], stmt), f.Syntax.Stmt[i:]...)
-	} else {
-		f.Go.Version = version
-		f.Syntax.updateLine(f.Go.Syntax, "go", version)
-	}
-	return nil
-}
-
-func (f *WorkFile) AddToolchainStmt(name string) error {
-	if !ToolchainRE.MatchString(name) {
-		return fmt.Errorf("invalid toolchain name %q", name)
-	}
-	if f.Toolchain == nil {
-		stmt := &Line{Token: []string{"toolchain", name}}
-		f.Toolchain = &Toolchain{
-			Name:   name,
-			Syntax: stmt,
-		}
-		// Find the go line and add the toolchain line after it.
-		// Or else find the first non-comment-only block and add
-		// the toolchain line before it. That will keep file comments at the top.
-		i := 0
-		for i = 0; i < len(f.Syntax.Stmt); i++ {
-			if line, ok := f.Syntax.Stmt[i].(*Line); ok && len(line.Token) > 0 && line.Token[0] == "go" {
-				i++
-				goto Found
-			}
-		}
-		for i = 0; i < len(f.Syntax.Stmt); i++ {
-			if _, ok := f.Syntax.Stmt[i].(*CommentBlock); !ok {
-				break
-			}
-		}
-	Found:
-		f.Syntax.Stmt = append(append(f.Syntax.Stmt[:i:i], stmt), f.Syntax.Stmt[i:]...)
-	} else {
-		f.Toolchain.Name = name
-		f.Syntax.updateLine(f.Toolchain.Syntax, "toolchain", name)
-	}
-	return nil
-}
-
-// DropGoStmt deletes the go statement from the file.
-func (f *WorkFile) DropGoStmt() {
-	if f.Go != nil {
-		f.Go.Syntax.markRemoved()
-		f.Go = nil
-	}
-}
-
-// DropToolchainStmt deletes the toolchain statement from the file.
-func (f *WorkFile) DropToolchainStmt() {
-	if f.Toolchain != nil {
-		f.Toolchain.Syntax.markRemoved()
-		f.Toolchain = nil
-	}
-}
-
-// AddGodebug sets the first godebug line for key to value,
-// preserving any existing comments for that line and removing all
-// other godebug lines for key.
-//
-// If no line currently exists for key, AddGodebug adds a new line
-// at the end of the last godebug block.
-func (f *WorkFile) AddGodebug(key, value string) error {
-	need := true
-	for _, g := range f.Godebug {
-		if g.Key == key {
-			if need {
-				g.Value = value
-				f.Syntax.updateLine(g.Syntax, "godebug", key+"="+value)
-				need = false
-			} else {
-				g.Syntax.markRemoved()
-				*g = Godebug{}
-			}
-		}
-	}
-
-	if need {
-		f.addNewGodebug(key, value)
-	}
-	return nil
-}
-
-// addNewGodebug adds a new godebug key=value line at the end
-// of the last godebug block, regardless of any existing godebug lines for key.
-func (f *WorkFile) addNewGodebug(key, value string) {
-	line := f.Syntax.addLine(nil, "godebug", key+"="+value)
-	g := &Godebug{
-		Key:    key,
-		Value:  value,
-		Syntax: line,
-	}
-	f.Godebug = append(f.Godebug, g)
-}
-
-func (f *WorkFile) DropGodebug(key string) error {
-	for _, g := range f.Godebug {
-		if g.Key == key {
-			g.Syntax.markRemoved()
-			*g = Godebug{}
-		}
-	}
-	return nil
-}
-
-func (f *WorkFile) AddUse(diskPath, modulePath string) error {
-	need := true
-	for _, d := range f.Use {
-		if d.Path == diskPath {
-			if need {
-				d.ModulePath = modulePath
-				f.Syntax.updateLine(d.Syntax, "use", AutoQuote(diskPath))
-				need = false
-			} else {
-				d.Syntax.markRemoved()
-				*d = Use{}
-			}
-		}
-	}
-
-	if need {
-		f.AddNewUse(diskPath, modulePath)
-	}
-	return nil
-}
-
-func (f *WorkFile) AddNewUse(diskPath, modulePath string) {
-	line := f.Syntax.addLine(nil, "use", AutoQuote(diskPath))
-	f.Use = append(f.Use, &Use{Path: diskPath, ModulePath: modulePath, Syntax: line})
-}
-
-func (f *WorkFile) SetUse(dirs []*Use) {
-	need := make(map[string]string)
-	for _, d := range dirs {
-		need[d.Path] = d.ModulePath
-	}
-
-	for _, d := range f.Use {
-		if modulePath, ok := need[d.Path]; ok {
-			d.ModulePath = modulePath
-		} else {
-			d.Syntax.markRemoved()
-			*d = Use{}
-		}
-	}
-
-	// TODO(#45713): Add module path to comment.
-
-	for diskPath, modulePath := range need {
-		f.AddNewUse(diskPath, modulePath)
-	}
-	f.SortBlocks()
-}
-
-func (f *WorkFile) DropUse(path string) error {
-	for _, d := range f.Use {
-		if d.Path == path {
-			d.Syntax.markRemoved()
-			*d = Use{}
-		}
-	}
-	return nil
-}
-
-func (f *WorkFile) AddReplace(oldPath, oldVers, newPath, newVers string) error {
-	return addReplace(f.Syntax, &f.Replace, oldPath, oldVers, newPath, newVers)
-}
-
-func (f *WorkFile) DropReplace(oldPath, oldVers string) error {
-	for _, r := range f.Replace {
-		if r.Old.Path == oldPath && r.Old.Version == oldVers {
-			r.Syntax.markRemoved()
-			*r = Replace{}
-		}
-	}
-	return nil
-}
-
-func (f *WorkFile) SortBlocks() {
-	f.removeDups() // otherwise sorting is unsafe
-
-	for _, stmt := range f.Syntax.Stmt {
-		block, ok := stmt.(*LineBlock)
-		if !ok {
-			continue
-		}
-		slices.SortStableFunc(block.Line, compareLine)
-	}
-}
-
-// removeDups removes duplicate replace directives.
-//
-// Later replace directives take priority.
-//
-// require directives are not de-duplicated. That's left up to higher-level
-// logic (MVS).
-//
-// retract directives are not de-duplicated since comments are
-// meaningful, and versions may be retracted multiple times.
-func (f *WorkFile) removeDups() {
-	removeDups(f.Syntax, nil, &f.Replace, nil, nil)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/module/module.go","mode":420,"size":27529,"sha256":"aa2b672b6d0bbc701d46556d7d46399b2ef6ce1fb918687bd067bf8d5efd7741","index":0,"count":1,"encoding":"utf-8","payloadBytes":27529}
-// Copyright 2018 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package module defines the module.Version type along with support code.
-//
-// The [module.Version] type is a simple Path, Version pair:
-//
-//	type Version struct {
-//		Path string
-//		Version string
-//	}
-//
-// There are no restrictions imposed directly by use of this structure,
-// but additional checking functions, most notably [Check], verify that
-// a particular path, version pair is valid.
-//
-// # Escaped Paths
-//
-// Module paths appear as substrings of file system paths
-// (in the download cache) and of web server URLs in the proxy protocol.
-// In general we cannot rely on file systems to be case-sensitive,
-// nor can we rely on web servers, since they read from file systems.
-// That is, we cannot rely on the file system to keep rsc.io/QUOTE
-// and rsc.io/quote separate. Windows and macOS don't.
-// Instead, we must never require two different casings of a file path.
-// Because we want the download cache to match the proxy protocol,
-// and because we want the proxy protocol to be possible to serve
-// from a tree of static files (which might be stored on a case-insensitive
-// file system), the proxy protocol must never require two different casings
-// of a URL path either.
-//
-// One possibility would be to make the escaped form be the lowercase
-// hexadecimal encoding of the actual path bytes. This would avoid ever
-// needing different casings of a file path, but it would be fairly illegible
-// to most programmers when those paths appeared in the file system
-// (including in file paths in compiler errors and stack traces)
-// in web server logs, and so on. Instead, we want a safe escaped form that
-// leaves most paths unaltered.
-//
-// The safe escaped form is to replace every uppercase letter
-// with an exclamation mark followed by the letter's lowercase equivalent.
-//
-// For example,
-//
-//	github.com/Azure/azure-sdk-for-go ->  github.com/!azure/azure-sdk-for-go.
-//	github.com/GoogleCloudPlatform/cloudsql-proxy -> github.com/!google!cloud!platform/cloudsql-proxy
-//	github.com/Sirupsen/logrus -> github.com/!sirupsen/logrus.
-//
-// Import paths that avoid upper-case letters are left unchanged.
-// Note that because import paths are ASCII-only and avoid various
-// problematic punctuation (like : < and >), the escaped form is also ASCII-only
-// and avoids the same problematic punctuation.
-//
-// Import paths have never allowed exclamation marks, so there is no
-// need to define how to escape a literal !.
-//
-// # Unicode Restrictions
-//
-// Today, paths are disallowed from using Unicode.
-//
-// Although paths are currently disallowed from using Unicode,
-// we would like at some point to allow Unicode letters as well, to assume that
-// file systems and URLs are Unicode-safe (storing UTF-8), and apply
-// the !-for-uppercase convention for escaping them in the file system.
-// But there are at least two subtle considerations.
-//
-// First, note that not all case-fold equivalent distinct runes
-// form an upper/lower pair.
-// For example, U+004B ('K'), U+006B ('k'), and U+212A ('K' for Kelvin)
-// are three distinct runes that case-fold to each other.
-// When we do add Unicode letters, we must not assume that upper/lower
-// are the only case-equivalent pairs.
-// Perhaps the Kelvin symbol would be disallowed entirely, for example.
-// Or perhaps it would escape as "!!k", or perhaps as "(212A)".
-//
-// Second, it would be nice to allow Unicode marks as well as letters,
-// but marks include combining marks, and then we must deal not
-// only with case folding but also normalization: both U+00E9 ('é')
-// and U+0065 U+0301 ('e' followed by combining acute accent)
-// look the same on the page and are treated by some file systems
-// as the same path. If we do allow Unicode marks in paths, there
-// must be some kind of normalization to allow only one canonical
-// encoding of any character used in an import path.
-package module
-
-// IMPORTANT NOTE
-//
-// This file essentially defines the set of valid import paths for the go command.
-// There are many subtle considerations, including Unicode ambiguity,
-// security, network, and file system representations.
-//
-// This file also defines the set of valid module path and version combinations,
-// another topic with many subtle considerations.
-//
-// Changes to the semantics in this file require approval from rsc.
-
-import (
-	"cmp"
-	"errors"
-	"fmt"
-	"path"
-	"slices"
-	"strings"
-	"unicode"
-	"unicode/utf8"
-
-	"golang.org/x/mod/semver"
-)
-
-// A Version (for clients, a module.Version) is defined by a module path and version pair.
-// These are stored in their plain (unescaped) form.
-type Version struct {
-	// Path is a module path, like "golang.org/x/text" or "rsc.io/quote/v2".
-	Path string
-
-	// Version is usually a semantic version in canonical form.
-	// There are three exceptions to this general rule.
-	// First, the top-level target of a build has no specific version
-	// and uses Version = "".
-	// Second, during MVS calculations the version "none" is used
-	// to represent the decision to take no version of a given module.
-	// Third, filesystem paths found in "replace" directives are
-	// represented by a path with an empty version.
-	Version string `json:",omitempty"`
-}
-
-// String returns a representation of the Version suitable for logging
-// (Path@Version, or just Path if Version is empty).
-func (m Version) String() string {
-	if m.Version == "" {
-		return m.Path
-	}
-	return m.Path + "@" + m.Version
-}
-
-// A ModuleError indicates an error specific to a module.
-type ModuleError struct {
-	Path    string
-	Version string
-	Err     error
-}
-
-// VersionError returns a [ModuleError] derived from a [Version] and error,
-// or err itself if it is already such an error.
-func VersionError(v Version, err error) error {
-	var mErr *ModuleError
-	if errors.As(err, &mErr) && mErr.Path == v.Path && mErr.Version == v.Version {
-		return err
-	}
-	return &ModuleError{
-		Path:    v.Path,
-		Version: v.Version,
-		Err:     err,
-	}
-}
-
-func (e *ModuleError) Error() string {
-	if v, ok := e.Err.(*InvalidVersionError); ok {
-		return fmt.Sprintf("%s@%s: invalid %s: %v", e.Path, v.Version, v.noun(), v.Err)
-	}
-	if e.Version != "" {
-		return fmt.Sprintf("%s@%s: %v", e.Path, e.Version, e.Err)
-	}
-	return fmt.Sprintf("module %s: %v", e.Path, e.Err)
-}
-
-func (e *ModuleError) Unwrap() error { return e.Err }
-
-// An InvalidVersionError indicates an error specific to a version, with the
-// module path unknown or specified externally.
-//
-// A [ModuleError] may wrap an InvalidVersionError, but an InvalidVersionError
-// must not wrap a ModuleError.
-type InvalidVersionError struct {
-	Version string
-	Pseudo  bool
-	Err     error
-}
-
-// noun returns either "version" or "pseudo-version", depending on whether
-// e.Version is a pseudo-version.
-func (e *InvalidVersionError) noun() string {
-	if e.Pseudo {
-		return "pseudo-version"
-	}
-	return "version"
-}
-
-func (e *InvalidVersionError) Error() string {
-	return fmt.Sprintf("%s %q invalid: %s", e.noun(), e.Version, e.Err)
-}
-
-func (e *InvalidVersionError) Unwrap() error { return e.Err }
-
-// An InvalidPathError indicates a module, import, or file path doesn't
-// satisfy all naming constraints. See [CheckPath], [CheckImportPath],
-// and [CheckFilePath] for specific restrictions.
-type InvalidPathError struct {
-	Kind string // "module", "import", or "file"
-	Path string
-	Err  error
-}
-
-func (e *InvalidPathError) Error() string {
-	return fmt.Sprintf("malformed %s path %q: %v", e.Kind, e.Path, e.Err)
-}
-
-func (e *InvalidPathError) Unwrap() error { return e.Err }
-
-// Check checks that a given module path, version pair is valid.
-// In addition to the path being a valid module path
-// and the version being a valid semantic version,
-// the two must correspond.
-// For example, the path "yaml/v2" only corresponds to
-// semantic versions beginning with "v2.".
-func Check(path, version string) error {
-	if err := CheckPath(path); err != nil {
-		return err
-	}
-	if !semver.IsValid(version) {
-		return &ModuleError{
-			Path: path,
-			Err:  &InvalidVersionError{Version: version, Err: errors.New("not a semantic version")},
-		}
-	}
-	_, pathMajor, _ := SplitPathVersion(path)
-	if err := CheckPathMajor(version, pathMajor); err != nil {
-		return &ModuleError{Path: path, Err: err}
-	}
-	return nil
-}
-
-// firstPathOK reports whether r can appear in the first element of a module path.
-// The first element of the path must be an LDH domain name, at least for now.
-// To avoid case ambiguity, the domain name must be entirely lower case.
-func firstPathOK(r rune) bool {
-	return r == '-' || r == '.' ||
-		'0' <= r && r <= '9' ||
-		'a' <= r && r <= 'z'
-}
-
-// modPathOK reports whether r can appear in a module path element.
-// Paths can be ASCII letters, ASCII digits, and limited ASCII punctuation: - . _ and ~.
-//
-// This matches what "go get" has historically recognized in import paths,
-// and avoids confusing sequences like '%20' or '+' that would change meaning
-// if used in a URL.
-//
-// TODO(rsc): We would like to allow Unicode letters, but that requires additional
-// care in the safe encoding (see "escaped paths" above).
-func modPathOK(r rune) bool {
-	if r < utf8.RuneSelf {
-		return r == '-' || r == '.' || r == '_' || r == '~' ||
-			'0' <= r && r <= '9' ||
-			'A' <= r && r <= 'Z' ||
-			'a' <= r && r <= 'z'
-	}
-	return false
-}
-
-// importPathOK reports whether r can appear in a package import path element.
-//
-// Import paths are intermediate between module paths and file paths: we
-// disallow characters that would be confusing or ambiguous as arguments to
-// 'go get' (such as '@' and ' ' ), but allow certain characters that are
-// otherwise-unambiguous on the command line and historically used for some
-// binary names (such as '++' as a suffix for compiler binaries and wrappers).
-func importPathOK(r rune) bool {
-	return modPathOK(r) || r == '+'
-}
-
-// fileNameOK reports whether r can appear in a file name.
-// For now we allow all Unicode letters but otherwise limit to pathOK plus a few more punctuation characters.
-// If we expand the set of allowed characters here, we have to
-// work harder at detecting potential case-folding and normalization collisions.
-// See note about "escaped paths" above.
-func fileNameOK(r rune) bool {
-	if r < utf8.RuneSelf {
-		// Entire set of ASCII punctuation, from which we remove characters:
-		//     ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~
-		// We disallow some shell special characters: " ' * < > ? ` |
-		// (Note that some of those are disallowed by the Windows file system as well.)
-		// We also disallow path separators / : and \ (fileNameOK is only called on path element characters).
-		// We allow spaces (U+0020) in file names.
-		const allowed = "!#$%&()+,-.=@[]^_{}~ "
-		if '0' <= r && r <= '9' || 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' {
-			return true
-		}
-		return strings.ContainsRune(allowed, r)
-	}
-	// It may be OK to add more ASCII punctuation here, but only carefully.
-	// For example Windows disallows < > \, and macOS disallows :, so we must not allow those.
-	return unicode.IsLetter(r)
-}
-
-// CheckPath checks that a module path is valid.
-// A valid module path is a valid import path, as checked by [CheckImportPath],
-// with three additional constraints.
-// First, the leading path element (up to the first slash, if any),
-// by convention a domain name, must contain only lower-case ASCII letters,
-// ASCII digits, dots (U+002E), and dashes (U+002D);
-// it must contain at least one dot and cannot start with a dash.
-// Second, for a final path element of the form /vN, where N looks numeric
-// (ASCII digits and dots) must not begin with a leading zero, must not be /v1,
-// and must not contain any dots. For paths beginning with "gopkg.in/",
-// this second requirement is replaced by a requirement that the path
-// follow the gopkg.in server's conventions.
-// Third, no path element may begin with a dot.
-func CheckPath(path string) (err error) {
-	defer func() {
-		if err != nil {
-			err = &InvalidPathError{Kind: "module", Path: path, Err: err}
-		}
-	}()
-
-	if err := checkPath(path, modulePath); err != nil {
-		return err
-	}
-	i := strings.Index(path, "/")
-	if i < 0 {
-		i = len(path)
-	}
-	if i == 0 {
-		return fmt.Errorf("leading slash")
-	}
-	if !strings.Contains(path[:i], ".") {
-		return fmt.Errorf("missing dot in first path element")
-	}
-	if path[0] == '-' {
-		return fmt.Errorf("leading dash in first path element")
-	}
-	for _, r := range path[:i] {
-		if !firstPathOK(r) {
-			return fmt.Errorf("invalid char %q in first path element", r)
-		}
-	}
-	if _, _, ok := SplitPathVersion(path); !ok {
-		return fmt.Errorf("invalid version")
-	}
-	return nil
-}
-
-// CheckImportPath checks that an import path is valid.
-//
-// A valid import path consists of one or more valid path elements
-// separated by slashes (U+002F). (It must not begin with nor end in a slash.)
-//
-// A valid path element is a non-empty string made up of
-// ASCII letters, ASCII digits, and limited ASCII punctuation: - . _ and ~.
-// It must not end with a dot (U+002E), nor contain two dots in a row.
-//
-// The element prefix up to the first dot must not be a reserved file name
-// on Windows, regardless of case (CON, com1, NuL, and so on). The element
-// must not have a suffix of a tilde followed by one or more ASCII digits
-// (to exclude paths elements that look like Windows short-names).
-//
-// CheckImportPath may be less restrictive in the future, but see the
-// top-level package documentation for additional information about
-// subtleties of Unicode.
-func CheckImportPath(path string) error {
-	if err := checkPath(path, importPath); err != nil {
-		return &InvalidPathError{Kind: "import", Path: path, Err: err}
-	}
-	return nil
-}
-
-// pathKind indicates what kind of path we're checking. Module paths,
-// import paths, and file paths have different restrictions.
-type pathKind int
-
-const (
-	modulePath pathKind = iota
-	importPath
-	filePath
-)
-
-// checkPath checks that a general path is valid. kind indicates what
-// specific constraints should be applied.
-//
-// checkPath returns an error describing why the path is not valid.
-// Because these checks apply to module, import, and file paths,
-// and because other checks may be applied, the caller is expected to wrap
-// this error with [InvalidPathError].
-func checkPath(path string, kind pathKind) error {
-	if !utf8.ValidString(path) {
-		return fmt.Errorf("invalid UTF-8")
-	}
-	if path == "" {
-		return fmt.Errorf("empty string")
-	}
-	if path[0] == '-' && kind != filePath {
-		return fmt.Errorf("leading dash")
-	}
-	if strings.Contains(path, "//") {
-		return fmt.Errorf("double slash")
-	}
-	if path[len(path)-1] == '/' {
-		return fmt.Errorf("trailing slash")
-	}
-	elemStart := 0
-	for i, r := range path {
-		if r == '/' {
-			if err := checkElem(path[elemStart:i], kind); err != nil {
-				return err
-			}
-			elemStart = i + 1
-		}
-	}
-	if err := checkElem(path[elemStart:], kind); err != nil {
-		return err
-	}
-	return nil
-}
-
-// checkElem checks whether an individual path element is valid.
-func checkElem(elem string, kind pathKind) error {
-	if elem == "" {
-		return fmt.Errorf("empty path element")
-	}
-	if strings.Count(elem, ".") == len(elem) {
-		return fmt.Errorf("invalid path element %q", elem)
-	}
-	if elem[0] == '.' && kind == modulePath {
-		return fmt.Errorf("leading dot in path element")
-	}
-	if elem[len(elem)-1] == '.' {
-		return fmt.Errorf("trailing dot in path element")
-	}
-	for _, r := range elem {
-		ok := false
-		switch kind {
-		case modulePath:
-			ok = modPathOK(r)
-		case importPath:
-			ok = importPathOK(r)
-		case filePath:
-			ok = fileNameOK(r)
-		default:
-			panic(fmt.Sprintf("internal error: invalid kind %v", kind))
-		}
-		if !ok {
-			return fmt.Errorf("invalid char %q", r)
-		}
-	}
-
-	// Windows disallows a bunch of path elements, sadly.
-	// See https://docs.microsoft.com/en-us/windows/desktop/fileio/naming-a-file
-	short := elem
-	if i := strings.Index(short, "."); i >= 0 {
-		short = short[:i]
-	}
-	for _, bad := range badWindowsNames {
-		if strings.EqualFold(bad, short) {
-			return fmt.Errorf("%q disallowed as path element component on Windows", short)
-		}
-	}
-
-	if kind == filePath {
-		// don't check for Windows short-names in file names. They're
-		// only an issue for import paths.
-		return nil
-	}
-
-	// Reject path components that look like Windows short-names.
-	// Those usually end in a tilde followed by one or more ASCII digits.
-	if tilde := strings.LastIndexByte(short, '~'); tilde >= 0 && tilde < len(short)-1 {
-		suffix := short[tilde+1:]
-		suffixIsDigits := true
-		for _, r := range suffix {
-			if r < '0' || r > '9' {
-				suffixIsDigits = false
-				break
-			}
-		}
-		if suffixIsDigits {
-			return fmt.Errorf("trailing tilde and digits in path element")
-		}
-	}
-
-	return nil
-}
-
-// CheckFilePath checks that a slash-separated file path is valid.
-// The definition of a valid file path is the same as the definition
-// of a valid import path except that the set of allowed characters is larger:
-// all Unicode letters, ASCII digits, the ASCII space character (U+0020),
-// and the ASCII punctuation characters
-// “!#$%&()+,-.=@[]^_{}~”.
-// (The excluded punctuation characters, " * < > ? ` ' | / \ and :,
-// have special meanings in certain shells or operating systems.)
-//
-// CheckFilePath may be less restrictive in the future, but see the
-// top-level package documentation for additional information about
-// subtleties of Unicode.
-func CheckFilePath(path string) error {
-	if err := checkPath(path, filePath); err != nil {
-		return &InvalidPathError{Kind: "file", Path: path, Err: err}
-	}
-	return nil
-}
-
-// badWindowsNames are the reserved file path elements on Windows.
-// See https://docs.microsoft.com/en-us/windows/desktop/fileio/naming-a-file
-var badWindowsNames = []string{
-	"CON",
-	"PRN",
-	"AUX",
-	"NUL",
-	"COM1",
-	"COM2",
-	"COM3",
-	"COM4",
-	"COM5",
-	"COM6",
-	"COM7",
-	"COM8",
-	"COM9",
-	"LPT1",
-	"LPT2",
-	"LPT3",
-	"LPT4",
-	"LPT5",
-	"LPT6",
-	"LPT7",
-	"LPT8",
-	"LPT9",
-}
-
-// SplitPathVersion returns prefix and major version such that prefix+pathMajor == path
-// and version is either empty or "/vN" for N >= 2.
-// As a special case, gopkg.in paths are recognized directly;
-// they require ".vN" instead of "/vN", and for all N, not just N >= 2.
-// SplitPathVersion returns with ok = false when presented with
-// a path whose last path element does not satisfy the constraints
-// applied by [CheckPath], such as "example.com/pkg/v1" or "example.com/pkg/v1.2".
-func SplitPathVersion(path string) (prefix, pathMajor string, ok bool) {
-	if strings.HasPrefix(path, "gopkg.in/") {
-		return splitGopkgIn(path)
-	}
-
-	i := len(path)
-	dot := false
-	for i > 0 && ('0' <= path[i-1] && path[i-1] <= '9' || path[i-1] == '.') {
-		if path[i-1] == '.' {
-			dot = true
-		}
-		i--
-	}
-	if i <= 1 || i == len(path) || path[i-1] != 'v' || path[i-2] != '/' {
-		return path, "", true
-	}
-	prefix, pathMajor = path[:i-2], path[i-2:]
-	if dot || len(pathMajor) <= 2 || pathMajor[2] == '0' || pathMajor == "/v1" {
-		return path, "", false
-	}
-	return prefix, pathMajor, true
-}
-
-// splitGopkgIn is like SplitPathVersion but only for gopkg.in paths.
-func splitGopkgIn(path string) (prefix, pathMajor string, ok bool) {
-	if !strings.HasPrefix(path, "gopkg.in/") {
-		return path, "", false
-	}
-	i := len(path)
-	if strings.HasSuffix(path, "-unstable") {
-		i -= len("-unstable")
-	}
-	for i > 0 && ('0' <= path[i-1] && path[i-1] <= '9') {
-		i--
-	}
-	if i <= 1 || path[i-1] != 'v' || path[i-2] != '.' {
-		// All gopkg.in paths must end in vN for some N.
-		return path, "", false
-	}
-	prefix, pathMajor = path[:i-2], path[i-2:]
-	if len(pathMajor) <= 2 || pathMajor[2] == '0' && pathMajor != ".v0" {
-		return path, "", false
-	}
-	return prefix, pathMajor, true
-}
-
-// MatchPathMajor reports whether the semantic version v
-// matches the path major version pathMajor.
-//
-// MatchPathMajor returns true if and only if [CheckPathMajor] returns nil.
-func MatchPathMajor(v, pathMajor string) bool {
-	return CheckPathMajor(v, pathMajor) == nil
-}
-
-// CheckPathMajor returns a non-nil error if the semantic version v
-// does not match the path major version pathMajor.
-func CheckPathMajor(v, pathMajor string) error {
-	// TODO(jayconrod): return errors or panic for invalid inputs. This function
-	// (and others) was covered by integration tests for cmd/go, and surrounding
-	// code protected against invalid inputs like non-canonical versions.
-	if strings.HasPrefix(pathMajor, ".v") && strings.HasSuffix(pathMajor, "-unstable") {
-		pathMajor = strings.TrimSuffix(pathMajor, "-unstable")
-	}
-	if strings.HasPrefix(v, "v0.0.0-") && pathMajor == ".v1" {
-		// Allow old bug in pseudo-versions that generated v0.0.0- pseudoversion for gopkg .v1.
-		// For example, gopkg.in/yaml.v2@v2.2.1's go.mod requires gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405.
-		return nil
-	}
-	m := semver.Major(v)
-	if pathMajor == "" {
-		if m == "v0" || m == "v1" || semver.Build(v) == "+incompatible" {
-			return nil
-		}
-		pathMajor = "v0 or v1"
-	} else if pathMajor[0] == '/' || pathMajor[0] == '.' {
-		if m == pathMajor[1:] {
-			return nil
-		}
-		pathMajor = pathMajor[1:]
-	}
-	return &InvalidVersionError{
-		Version: v,
-		Err:     fmt.Errorf("should be %s, not %s", pathMajor, semver.Major(v)),
-	}
-}
-
-// PathMajorPrefix returns the major-version tag prefix implied by pathMajor.
-// An empty PathMajorPrefix allows either v0 or v1.
-//
-// Note that [MatchPathMajor] may accept some versions that do not actually begin
-// with this prefix: namely, it accepts a 'v0.0.0-' prefix for a '.v1'
-// pathMajor, even though that pathMajor implies 'v1' tagging.
-func PathMajorPrefix(pathMajor string) string {
-	if pathMajor == "" {
-		return ""
-	}
-	if pathMajor[0] != '/' && pathMajor[0] != '.' {
-		panic("pathMajor suffix " + pathMajor + " passed to PathMajorPrefix lacks separator")
-	}
-	if strings.HasPrefix(pathMajor, ".v") && strings.HasSuffix(pathMajor, "-unstable") {
-		pathMajor = strings.TrimSuffix(pathMajor, "-unstable")
-	}
-	m := pathMajor[1:]
-	if m != semver.Major(m) {
-		panic("pathMajor suffix " + pathMajor + "passed to PathMajorPrefix is not a valid major version")
-	}
-	return m
-}
-
-// CanonicalVersion returns the canonical form of the version string v.
-// It is the same as [semver.Canonical] except that it preserves the special build suffix "+incompatible".
-func CanonicalVersion(v string) string {
-	cv := semver.Canonical(v)
-	if semver.Build(v) == "+incompatible" {
-		cv += "+incompatible"
-	}
-	return cv
-}
-
-// Sort sorts the list by Path, breaking ties by comparing [Version] fields.
-// The Version fields are interpreted as semantic versions (using [semver.Compare])
-// optionally followed by a tie-breaking suffix introduced by a slash character,
-// like in "v0.0.1/go.mod".
-func Sort(list []Version) {
-	slices.SortFunc(list, func(i, j Version) int {
-		if i.Path != j.Path {
-			return strings.Compare(i.Path, j.Path)
-		}
-		// To help go.sum formatting, allow version/file.
-		// Compare semver prefix by semver rules,
-		// file by string order.
-		vi := i.Version
-		vj := j.Version
-		var fi, fj string
-		if k := strings.Index(vi, "/"); k >= 0 {
-			vi, fi = vi[:k], vi[k:]
-		}
-		if k := strings.Index(vj, "/"); k >= 0 {
-			vj, fj = vj[:k], vj[k:]
-		}
-		if vi != vj {
-			return semver.Compare(vi, vj)
-		}
-		return cmp.Compare(fi, fj)
-	})
-}
-
-// EscapePath returns the escaped form of the given module path.
-// It fails if the module path is invalid.
-func EscapePath(path string) (escaped string, err error) {
-	if err := CheckPath(path); err != nil {
-		return "", err
-	}
-
-	return escapeString(path)
-}
-
-// EscapeVersion returns the escaped form of the given module version.
-// Versions are allowed to be in non-semver form but must be valid file names
-// and not contain exclamation marks.
-func EscapeVersion(v string) (escaped string, err error) {
-	if err := checkElem(v, filePath); err != nil || strings.Contains(v, "!") {
-		return "", &InvalidVersionError{
-			Version: v,
-			Err:     fmt.Errorf("disallowed version string"),
-		}
-	}
-	return escapeString(v)
-}
-
-func escapeString(s string) (escaped string, err error) {
-	haveUpper := false
-	for _, r := range s {
-		if r == '!' || r >= utf8.RuneSelf {
-			// This should be disallowed by CheckPath, but diagnose anyway.
-			// The correctness of the escaping loop below depends on it.
-			return "", fmt.Errorf("internal error: inconsistency in EscapePath")
-		}
-		if 'A' <= r && r <= 'Z' {
-			haveUpper = true
-		}
-	}
-
-	if !haveUpper {
-		return s, nil
-	}
-
-	var buf []byte
-	for _, r := range s {
-		if 'A' <= r && r <= 'Z' {
-			buf = append(buf, '!', byte(r+'a'-'A'))
-		} else {
-			buf = append(buf, byte(r))
-		}
-	}
-	return string(buf), nil
-}
-
-// UnescapePath returns the module path for the given escaped path.
-// It fails if the escaped path is invalid or describes an invalid path.
-func UnescapePath(escaped string) (path string, err error) {
-	path, ok := unescapeString(escaped)
-	if !ok {
-		return "", fmt.Errorf("invalid escaped module path %q", escaped)
-	}
-	if err := CheckPath(path); err != nil {
-		return "", fmt.Errorf("invalid escaped module path %q: %v", escaped, err)
-	}
-	return path, nil
-}
-
-// UnescapeVersion returns the version string for the given escaped version.
-// It fails if the escaped form is invalid or describes an invalid version.
-// Versions are allowed to be in non-semver form but must be valid file names
-// and not contain exclamation marks.
-func UnescapeVersion(escaped string) (v string, err error) {
-	v, ok := unescapeString(escaped)
-	if !ok {
-		return "", fmt.Errorf("invalid escaped version %q", escaped)
-	}
-	if err := checkElem(v, filePath); err != nil {
-		return "", fmt.Errorf("invalid escaped version %q: %v", v, err)
-	}
-	return v, nil
-}
-
-func unescapeString(escaped string) (string, bool) {
-	var buf []byte
-
-	bang := false
-	for _, r := range escaped {
-		if r >= utf8.RuneSelf {
-			return "", false
-		}
-		if bang {
-			bang = false
-			if r < 'a' || 'z' < r {
-				return "", false
-			}
-			buf = append(buf, byte(r+'A'-'a'))
-			continue
-		}
-		if r == '!' {
-			bang = true
-			continue
-		}
-		if 'A' <= r && r <= 'Z' {
-			return "", false
-		}
-		buf = append(buf, byte(r))
-	}
-	if bang {
-		return "", false
-	}
-	return string(buf), true
-}
-
-// MatchPrefixPatterns reports whether any path prefix of target matches one of
-// the glob patterns (as defined by [path.Match]) in the comma-separated globs
-// list. This implements the algorithm used when matching a module path to the
-// GOPRIVATE environment variable, as described by 'go help module-private'.
-//
-// It ignores any empty or malformed patterns in the list.
-// Trailing slashes on patterns are ignored.
-func MatchPrefixPatterns(globs, target string) bool {
-	for globs != "" {
-		// Extract next non-empty glob in comma-separated list.
-		var glob string
-		if before, after, ok := strings.Cut(globs, ","); ok {
-			glob, globs = before, after
-		} else {
-			glob, globs = globs, ""
-		}
-		glob = strings.TrimSuffix(glob, "/")
-		if glob == "" {
-			continue
-		}
-
-		// A glob with N+1 path elements (N slashes) needs to be matched
-		// against the first N+1 path elements of target,
-		// which end just before the N+1'th slash.
-		n := strings.Count(glob, "/")
-		prefix := target
-		// Walk target, counting slashes, truncating at the N+1'th slash.
-		for i := 0; i < len(target); i++ {
-			if target[i] == '/' {
-				if n == 0 {
-					prefix = target[:i]
-					break
-				}
-				n--
-			}
-		}
-		if n > 0 {
-			// Not enough prefix elements.
-			continue
-		}
-		matched, _ := path.Match(glob, prefix)
-		if matched {
-			return true
-		}
-	}
-	return false
 }
 
 @@END

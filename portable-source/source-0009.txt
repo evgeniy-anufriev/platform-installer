@@ -1,3 +1,3076 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zerrors_zos_s390x.go","mode":420,"size":40409,"sha256":"6b1582550a07dd39c5ea081520200cd94cf178d2ed83c488ea4a006ad9286627","index":0,"count":1,"encoding":"utf-8","payloadBytes":40409}
+// Copyright 2020 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build zos && s390x
+
+// Hand edited based on zerrors_linux_s390x.go
+// TODO: auto-generate.
+
+package unix
+
+const (
+	BRKINT                   = 0x0001
+	CLOCAL                   = 0x1
+	CLOCK_MONOTONIC          = 0x1
+	CLOCK_PROCESS_CPUTIME_ID = 0x2
+	CLOCK_REALTIME           = 0x0
+	CLOCK_THREAD_CPUTIME_ID  = 0x3
+	CLONE_NEWIPC             = 0x08000000
+	CLONE_NEWNET             = 0x40000000
+	CLONE_NEWNS              = 0x00020000
+	CLONE_NEWPID             = 0x20000000
+	CLONE_NEWUTS             = 0x04000000
+	CLONE_PARENT             = 0x00008000
+	CS8                      = 0x0030
+	CSIZE                    = 0x0030
+	ECHO                     = 0x00000008
+	ECHONL                   = 0x00000001
+	EFD_SEMAPHORE            = 0x00002000
+	EFD_CLOEXEC              = 0x00001000
+	EFD_NONBLOCK             = 0x00000004
+	EPOLL_CLOEXEC            = 0x00001000
+	EPOLL_CTL_ADD            = 0
+	EPOLL_CTL_MOD            = 1
+	EPOLL_CTL_DEL            = 2
+	EPOLLRDNORM              = 0x0001
+	EPOLLRDBAND              = 0x0002
+	EPOLLIN                  = 0x0003
+	EPOLLOUT                 = 0x0004
+	EPOLLWRBAND              = 0x0008
+	EPOLLPRI                 = 0x0010
+	EPOLLERR                 = 0x0020
+	EPOLLHUP                 = 0x0040
+	EPOLLEXCLUSIVE           = 0x20000000
+	EPOLLONESHOT             = 0x40000000
+	FD_CLOEXEC               = 0x01
+	FD_CLOFORK               = 0x02
+	FD_SETSIZE               = 0x800
+	FNDELAY                  = 0x04
+	F_CLOSFD                 = 9
+	F_CONTROL_CVT            = 13
+	F_DUPFD                  = 0
+	F_DUPFD2                 = 8
+	F_GETFD                  = 1
+	F_GETFL                  = 259
+	F_GETLK                  = 5
+	F_GETOWN                 = 10
+	F_OK                     = 0x0
+	F_RDLCK                  = 1
+	F_SETFD                  = 2
+	F_SETFL                  = 4
+	F_SETLK                  = 6
+	F_SETLKW                 = 7
+	F_SETOWN                 = 11
+	F_SETTAG                 = 12
+	F_UNLCK                  = 3
+	F_WRLCK                  = 2
+	FSTYPE_ZFS               = 0xe9 //"Z"
+	FSTYPE_HFS               = 0xc8 //"H"
+	FSTYPE_NFS               = 0xd5 //"N"
+	FSTYPE_TFS               = 0xe3 //"T"
+	FSTYPE_AUTOMOUNT         = 0xc1 //"A"
+	GRND_NONBLOCK            = 1
+	GRND_RANDOM              = 2
+	HUPCL                    = 0x0100 // Hang up on last close
+	IN_CLOEXEC               = 0x00001000
+	IN_NONBLOCK              = 0x00000004
+	IN_ACCESS                = 0x00000001
+	IN_MODIFY                = 0x00000002
+	IN_ATTRIB                = 0x00000004
+	IN_CLOSE_WRITE           = 0x00000008
+	IN_CLOSE_NOWRITE         = 0x00000010
+	IN_OPEN                  = 0x00000020
+	IN_MOVED_FROM            = 0x00000040
+	IN_MOVED_TO              = 0x00000080
+	IN_CREATE                = 0x00000100
+	IN_DELETE                = 0x00000200
+	IN_DELETE_SELF           = 0x00000400
+	IN_MOVE_SELF             = 0x00000800
+	IN_UNMOUNT               = 0x00002000
+	IN_Q_OVERFLOW            = 0x00004000
+	IN_IGNORED               = 0x00008000
+	IN_CLOSE                 = (IN_CLOSE_WRITE | IN_CLOSE_NOWRITE)
+	IN_MOVE                  = (IN_MOVED_FROM | IN_MOVED_TO)
+	IN_ALL_EVENTS            = (IN_ACCESS | IN_MODIFY | IN_ATTRIB |
+		IN_CLOSE | IN_OPEN | IN_MOVE |
+		IN_CREATE | IN_DELETE | IN_DELETE_SELF |
+		IN_MOVE_SELF)
+	IN_ONLYDIR                      = 0x01000000
+	IN_DONT_FOLLOW                  = 0x02000000
+	IN_EXCL_UNLINK                  = 0x04000000
+	IN_MASK_CREATE                  = 0x10000000
+	IN_MASK_ADD                     = 0x20000000
+	IN_ISDIR                        = 0x40000000
+	IN_ONESHOT                      = 0x80000000
+	IP6F_MORE_FRAG                  = 0x0001
+	IP6F_OFF_MASK                   = 0xfff8
+	IP6F_RESERVED_MASK              = 0x0006
+	IP6OPT_JUMBO                    = 0xc2
+	IP6OPT_JUMBO_LEN                = 6
+	IP6OPT_MUTABLE                  = 0x20
+	IP6OPT_NSAP_ADDR                = 0xc3
+	IP6OPT_PAD1                     = 0x00
+	IP6OPT_PADN                     = 0x01
+	IP6OPT_ROUTER_ALERT             = 0x05
+	IP6OPT_TUNNEL_LIMIT             = 0x04
+	IP6OPT_TYPE_DISCARD             = 0x40
+	IP6OPT_TYPE_FORCEICMP           = 0x80
+	IP6OPT_TYPE_ICMP                = 0xc0
+	IP6OPT_TYPE_SKIP                = 0x00
+	IP6_ALERT_AN                    = 0x0002
+	IP6_ALERT_MLD                   = 0x0000
+	IP6_ALERT_RSVP                  = 0x0001
+	IPPORT_RESERVED                 = 1024
+	IPPORT_USERRESERVED             = 5000
+	IPPROTO_AH                      = 51
+	SOL_AH                          = 51
+	IPPROTO_DSTOPTS                 = 60
+	SOL_DSTOPTS                     = 60
+	IPPROTO_EGP                     = 8
+	SOL_EGP                         = 8
+	IPPROTO_ESP                     = 50
+	SOL_ESP                         = 50
+	IPPROTO_FRAGMENT                = 44
+	SOL_FRAGMENT                    = 44
+	IPPROTO_GGP                     = 2
+	SOL_GGP                         = 2
+	IPPROTO_HOPOPTS                 = 0
+	SOL_HOPOPTS                     = 0
+	IPPROTO_ICMP                    = 1
+	SOL_ICMP                        = 1
+	IPPROTO_ICMPV6                  = 58
+	SOL_ICMPV6                      = 58
+	IPPROTO_IDP                     = 22
+	SOL_IDP                         = 22
+	IPPROTO_IP                      = 0
+	SOL_IP                          = 0
+	IPPROTO_IPV6                    = 41
+	SOL_IPV6                        = 41
+	IPPROTO_MAX                     = 256
+	SOL_MAX                         = 256
+	IPPROTO_NONE                    = 59
+	SOL_NONE                        = 59
+	IPPROTO_PUP                     = 12
+	SOL_PUP                         = 12
+	IPPROTO_RAW                     = 255
+	SOL_RAW                         = 255
+	IPPROTO_ROUTING                 = 43
+	SOL_ROUTING                     = 43
+	IPPROTO_TCP                     = 6
+	SOL_TCP                         = 6
+	IPPROTO_UDP                     = 17
+	SOL_UDP                         = 17
+	IPV6_ADDR_PREFERENCES           = 32
+	IPV6_CHECKSUM                   = 19
+	IPV6_DONTFRAG                   = 29
+	IPV6_DSTOPTS                    = 23
+	IPV6_HOPLIMIT                   = 11
+	IPV6_HOPOPTS                    = 22
+	IPV6_JOIN_GROUP                 = 5
+	IPV6_LEAVE_GROUP                = 6
+	IPV6_MULTICAST_HOPS             = 9
+	IPV6_MULTICAST_IF               = 7
+	IPV6_MULTICAST_LOOP             = 4
+	IPV6_NEXTHOP                    = 20
+	IPV6_PATHMTU                    = 12
+	IPV6_PKTINFO                    = 13
+	IPV6_PREFER_SRC_CGA             = 0x10
+	IPV6_PREFER_SRC_COA             = 0x02
+	IPV6_PREFER_SRC_HOME            = 0x01
+	IPV6_PREFER_SRC_NONCGA          = 0x20
+	IPV6_PREFER_SRC_PUBLIC          = 0x08
+	IPV6_PREFER_SRC_TMP             = 0x04
+	IPV6_RECVDSTOPTS                = 28
+	IPV6_RECVHOPLIMIT               = 14
+	IPV6_RECVHOPOPTS                = 26
+	IPV6_RECVPATHMTU                = 16
+	IPV6_RECVPKTINFO                = 15
+	IPV6_RECVRTHDR                  = 25
+	IPV6_RECVTCLASS                 = 31
+	IPV6_RTHDR                      = 21
+	IPV6_RTHDRDSTOPTS               = 24
+	IPV6_RTHDR_TYPE_0               = 0
+	IPV6_TCLASS                     = 30
+	IPV6_UNICAST_HOPS               = 3
+	IPV6_USE_MIN_MTU                = 18
+	IPV6_V6ONLY                     = 10
+	IP_ADD_MEMBERSHIP               = 5
+	IP_ADD_SOURCE_MEMBERSHIP        = 12
+	IP_BLOCK_SOURCE                 = 10
+	IP_DEFAULT_MULTICAST_LOOP       = 1
+	IP_DEFAULT_MULTICAST_TTL        = 1
+	IP_DROP_MEMBERSHIP              = 6
+	IP_DROP_SOURCE_MEMBERSHIP       = 13
+	IP_MAX_MEMBERSHIPS              = 20
+	IP_MULTICAST_IF                 = 7
+	IP_MULTICAST_LOOP               = 4
+	IP_MULTICAST_TTL                = 3
+	IP_OPTIONS                      = 1
+	IP_PKTINFO                      = 101
+	IP_RECVPKTINFO                  = 102
+	IP_TOS                          = 2
+	IP_TTL                          = 14
+	IP_UNBLOCK_SOURCE               = 11
+	ICMP6_FILTER                    = 1
+	MCAST_INCLUDE                   = 0
+	MCAST_EXCLUDE                   = 1
+	MCAST_JOIN_GROUP                = 40
+	MCAST_LEAVE_GROUP               = 41
+	MCAST_JOIN_SOURCE_GROUP         = 42
+	MCAST_LEAVE_SOURCE_GROUP        = 43
+	MCAST_BLOCK_SOURCE              = 44
+	MCAST_UNBLOCK_SOURCE            = 46
+	ICANON                          = 0x0010
+	ICRNL                           = 0x0002
+	IEXTEN                          = 0x0020
+	IGNBRK                          = 0x0004
+	IGNCR                           = 0x0008
+	INLCR                           = 0x0020
+	ISIG                            = 0x0040
+	ISTRIP                          = 0x0080
+	IXON                            = 0x0200
+	IXOFF                           = 0x0100
+	LOCK_SH                         = 0x1
+	LOCK_EX                         = 0x2
+	LOCK_NB                         = 0x4
+	LOCK_UN                         = 0x8
+	POLLIN                          = 0x0003
+	POLLOUT                         = 0x0004
+	POLLPRI                         = 0x0010
+	POLLERR                         = 0x0020
+	POLLHUP                         = 0x0040
+	POLLNVAL                        = 0x0080
+	PROT_READ                       = 0x1 // mmap - page can be read
+	PROT_WRITE                      = 0x2 // page can be written
+	PROT_NONE                       = 0x4 // can't be accessed
+	PROT_EXEC                       = 0x8 // can be executed
+	MAP_PRIVATE                     = 0x1 // changes are private
+	MAP_SHARED                      = 0x2 // changes are shared
+	MAP_FIXED                       = 0x4 // place exactly
+	__MAP_MEGA                      = 0x8
+	__MAP_64                        = 0x10
+	MAP_ANON                        = 0x20
+	MAP_ANONYMOUS                   = 0x20
+	MS_SYNC                         = 0x1 // msync - synchronous writes
+	MS_ASYNC                        = 0x2 // asynchronous writes
+	MS_INVALIDATE                   = 0x4 // invalidate mappings
+	MS_BIND                         = 0x00001000
+	MS_MOVE                         = 0x00002000
+	MS_NOSUID                       = 0x00000002
+	MS_PRIVATE                      = 0x00040000
+	MS_REC                          = 0x00004000
+	MS_REMOUNT                      = 0x00008000
+	MS_RDONLY                       = 0x00000001
+	MS_UNBINDABLE                   = 0x00020000
+	MNT_DETACH                      = 0x00000004
+	ZOSDSFS_SUPER_MAGIC             = 0x44534653 // zOS DSFS
+	NFS_SUPER_MAGIC                 = 0x6969     // NFS
+	NSFS_MAGIC                      = 0x6e736673 // PROCNS
+	PROC_SUPER_MAGIC                = 0x9fa0     // proc FS
+	ZOSTFS_SUPER_MAGIC              = 0x544653   // zOS TFS
+	ZOSUFS_SUPER_MAGIC              = 0x554653   // zOS UFS
+	ZOSZFS_SUPER_MAGIC              = 0x5A4653   // zOS ZFS
+	MTM_RDONLY                      = 0x80000000
+	MTM_RDWR                        = 0x40000000
+	MTM_UMOUNT                      = 0x10000000
+	MTM_IMMED                       = 0x08000000
+	MTM_FORCE                       = 0x04000000
+	MTM_DRAIN                       = 0x02000000
+	MTM_RESET                       = 0x01000000
+	MTM_SAMEMODE                    = 0x00100000
+	MTM_UNQSEFORCE                  = 0x00040000
+	MTM_NOSUID                      = 0x00000400
+	MTM_SYNCHONLY                   = 0x00000200
+	MTM_REMOUNT                     = 0x00000100
+	MTM_NOSECURITY                  = 0x00000080
+	NFDBITS                         = 0x20
+	ONLRET                          = 0x0020 // NL performs CR function
+	O_ACCMODE                       = 0x03
+	O_APPEND                        = 0x08
+	O_ASYNCSIG                      = 0x0200
+	O_CREAT                         = 0x80
+	O_DIRECT                        = 0x00002000
+	O_NOFOLLOW                      = 0x00004000
+	O_DIRECTORY                     = 0x00008000
+	O_PATH                          = 0x00080000
+	O_CLOEXEC                       = 0x00001000
+	O_EXCL                          = 0x40
+	O_GETFL                         = 0x0F
+	O_LARGEFILE                     = 0x0400
+	O_NDELAY                        = 0x4
+	O_NONBLOCK                      = 0x04
+	O_RDONLY                        = 0x02
+	O_RDWR                          = 0x03
+	O_SYNC                          = 0x0100
+	O_TRUNC                         = 0x10
+	O_WRONLY                        = 0x01
+	O_NOCTTY                        = 0x20
+	OPOST                           = 0x0001
+	ONLCR                           = 0x0004
+	PARENB                          = 0x0200
+	PARMRK                          = 0x0400
+	QUERYCVT                        = 3
+	RUSAGE_CHILDREN                 = -0x1
+	RUSAGE_SELF                     = 0x0 // RUSAGE_THREAD unsupported on z/OS
+	SEEK_CUR                        = 1
+	SEEK_END                        = 2
+	SEEK_SET                        = 0
+	SETAUTOCVTALL                   = 5
+	SETAUTOCVTON                    = 2
+	SETCVTALL                       = 4
+	SETCVTOFF                       = 0
+	SETCVTON                        = 1
+	AF_APPLETALK                    = 16
+	AF_CCITT                        = 10
+	AF_CHAOS                        = 5
+	AF_DATAKIT                      = 9
+	AF_DLI                          = 13
+	AF_ECMA                         = 8
+	AF_HYLINK                       = 15
+	AF_IMPLINK                      = 3
+	AF_INET                         = 2
+	AF_INET6                        = 19
+	AF_INTF                         = 20
+	AF_IUCV                         = 17
+	AF_LAT                          = 14
+	AF_LINK                         = 18
+	AF_LOCAL                        = AF_UNIX // AF_LOCAL is an alias for AF_UNIX
+	AF_MAX                          = 30
+	AF_NBS                          = 7
+	AF_NDD                          = 23
+	AF_NETWARE                      = 22
+	AF_NS                           = 6
+	AF_PUP                          = 4
+	AF_RIF                          = 21
+	AF_ROUTE                        = 20
+	AF_SNA                          = 11
+	AF_UNIX                         = 1
+	AF_UNSPEC                       = 0
+	IBMTCP_IMAGE                    = 1
+	MSG_ACK_EXPECTED                = 0x10
+	MSG_ACK_GEN                     = 0x40
+	MSG_ACK_TIMEOUT                 = 0x20
+	MSG_CONNTERM                    = 0x80
+	MSG_CTRUNC                      = 0x20
+	MSG_DONTROUTE                   = 0x4
+	MSG_EOF                         = 0x8000
+	MSG_EOR                         = 0x8
+	MSG_MAXIOVLEN                   = 16
+	MSG_NONBLOCK                    = 0x4000
+	MSG_OOB                         = 0x1
+	MSG_PEEK                        = 0x2
+	MSG_TRUNC                       = 0x10
+	MSG_WAITALL                     = 0x40
+	PRIO_PROCESS                    = 1
+	PRIO_PGRP                       = 2
+	PRIO_USER                       = 3
+	RLIMIT_CPU                      = 0
+	RLIMIT_FSIZE                    = 1
+	RLIMIT_DATA                     = 2
+	RLIMIT_STACK                    = 3
+	RLIMIT_CORE                     = 4
+	RLIMIT_AS                       = 5
+	RLIMIT_NOFILE                   = 6
+	RLIMIT_MEMLIMIT                 = 7
+	RLIMIT_MEMLOCK                  = 0x8
+	RLIM_INFINITY                   = 2147483647
+	SCHED_FIFO                      = 0x2
+	SCM_CREDENTIALS                 = 0x2
+	SCM_RIGHTS                      = 0x01
+	SF_CLOSE                        = 0x00000002
+	SF_REUSE                        = 0x00000001
+	SHM_RND                         = 0x2
+	SHM_RDONLY                      = 0x1
+	SHMLBA                          = 0x1000
+	IPC_STAT                        = 0x3
+	IPC_SET                         = 0x2
+	IPC_RMID                        = 0x1
+	IPC_PRIVATE                     = 0x0
+	IPC_CREAT                       = 0x1000000
+	__IPC_MEGA                      = 0x4000000
+	__IPC_SHAREAS                   = 0x20000000
+	__IPC_BELOWBAR                  = 0x10000000
+	IPC_EXCL                        = 0x2000000
+	__IPC_GIGA                      = 0x8000000
+	SHUT_RD                         = 0
+	SHUT_RDWR                       = 2
+	SHUT_WR                         = 1
+	SOCK_CLOEXEC                    = 0x00001000
+	SOCK_CONN_DGRAM                 = 6
+	SOCK_DGRAM                      = 2
+	SOCK_NONBLOCK                   = 0x800
+	SOCK_RAW                        = 3
+	SOCK_RDM                        = 4
+	SOCK_SEQPACKET                  = 5
+	SOCK_STREAM                     = 1
+	SOL_SOCKET                      = 0xffff
+	SOMAXCONN                       = 10
+	SO_ACCEPTCONN                   = 0x0002
+	SO_ACCEPTECONNABORTED           = 0x0006
+	SO_ACKNOW                       = 0x7700
+	SO_BROADCAST                    = 0x0020
+	SO_BULKMODE                     = 0x8000
+	SO_CKSUMRECV                    = 0x0800
+	SO_CLOSE                        = 0x01
+	SO_CLUSTERCONNTYPE              = 0x00004001
+	SO_CLUSTERCONNTYPE_INTERNAL     = 8
+	SO_CLUSTERCONNTYPE_NOCONN       = 0
+	SO_CLUSTERCONNTYPE_NONE         = 1
+	SO_CLUSTERCONNTYPE_SAME_CLUSTER = 2
+	SO_CLUSTERCONNTYPE_SAME_IMAGE   = 4
+	SO_DEBUG                        = 0x0001
+	SO_DONTROUTE                    = 0x0010
+	SO_ERROR                        = 0x1007
+	SO_IGNOREINCOMINGPUSH           = 0x1
+	SO_IGNORESOURCEVIPA             = 0x0002
+	SO_KEEPALIVE                    = 0x0008
+	SO_LINGER                       = 0x0080
+	SO_NONBLOCKLOCAL                = 0x8001
+	SO_NOREUSEADDR                  = 0x1000
+	SO_OOBINLINE                    = 0x0100
+	SO_OPTACK                       = 0x8004
+	SO_OPTMSS                       = 0x8003
+	SO_RCVBUF                       = 0x1002
+	SO_RCVLOWAT                     = 0x1004
+	SO_RCVTIMEO                     = 0x1006
+	SO_REUSEADDR                    = 0x0004
+	SO_REUSEPORT                    = 0x0200
+	SO_SECINFO                      = 0x00004002
+	SO_SET                          = 0x0200
+	SO_SNDBUF                       = 0x1001
+	SO_SNDLOWAT                     = 0x1003
+	SO_SNDTIMEO                     = 0x1005
+	SO_TYPE                         = 0x1008
+	SO_UNSET                        = 0x0400
+	SO_USELOOPBACK                  = 0x0040
+	SO_USE_IFBUFS                   = 0x0400
+	S_ISUID                         = 0x0800
+	S_ISGID                         = 0x0400
+	S_ISVTX                         = 0x0200
+	S_IRUSR                         = 0x0100
+	S_IWUSR                         = 0x0080
+	S_IXUSR                         = 0x0040
+	S_IRWXU                         = 0x01C0
+	S_IRGRP                         = 0x0020
+	S_IWGRP                         = 0x0010
+	S_IXGRP                         = 0x0008
+	S_IRWXG                         = 0x0038
+	S_IROTH                         = 0x0004
+	S_IWOTH                         = 0x0002
+	S_IXOTH                         = 0x0001
+	S_IRWXO                         = 0x0007
+	S_IREAD                         = S_IRUSR
+	S_IWRITE                        = S_IWUSR
+	S_IEXEC                         = S_IXUSR
+	S_IFDIR                         = 0x01000000
+	S_IFCHR                         = 0x02000000
+	S_IFREG                         = 0x03000000
+	S_IFFIFO                        = 0x04000000
+	S_IFIFO                         = 0x04000000
+	S_IFLNK                         = 0x05000000
+	S_IFBLK                         = 0x06000000
+	S_IFSOCK                        = 0x07000000
+	S_IFVMEXTL                      = 0xFE000000
+	S_IFVMEXTL_EXEC                 = 0x00010000
+	S_IFVMEXTL_DATA                 = 0x00020000
+	S_IFVMEXTL_MEL                  = 0x00030000
+	S_IFEXTL                        = 0x00000001
+	S_IFPROGCTL                     = 0x00000002
+	S_IFAPFCTL                      = 0x00000004
+	S_IFNOSHARE                     = 0x00000008
+	S_IFSHARELIB                    = 0x00000010
+	S_IFMT                          = 0xFF000000
+	S_IFMST                         = 0x00FF0000
+	TCP_KEEPALIVE                   = 0x8
+	TCP_NODELAY                     = 0x1
+	TIOCGWINSZ                      = 0x4008a368
+	TIOCSWINSZ                      = 0x8008a367
+	TIOCSBRK                        = 0x2000a77b
+	TIOCCBRK                        = 0x2000a77a
+	TIOCSTI                         = 0x8001a772
+	TIOCGPGRP                       = 0x4004a777 // _IOR(167, 119, int)
+	TCSANOW                         = 0
+	TCSETS                          = 0 // equivalent to TCSANOW for tcsetattr
+	TCSADRAIN                       = 1
+	TCSETSW                         = 1 // equivalent to TCSADRAIN for tcsetattr
+	TCSAFLUSH                       = 2
+	TCSETSF                         = 2 // equivalent to TCSAFLUSH for tcsetattr
+	TCGETS                          = 3 // not defined in ioctl.h -- zos golang only
+	TCIFLUSH                        = 0
+	TCOFLUSH                        = 1
+	TCIOFLUSH                       = 2
+	TCOOFF                          = 0
+	TCOON                           = 1
+	TCIOFF                          = 2
+	TCION                           = 3
+	TIOCSPGRP                       = 0x8004a776
+	TIOCNOTTY                       = 0x2000a771
+	TIOCEXCL                        = 0x2000a70d
+	TIOCNXCL                        = 0x2000a70e
+	TIOCGETD                        = 0x4004a700
+	TIOCSETD                        = 0x8004a701
+	TIOCPKT                         = 0x8004a770
+	TIOCSTOP                        = 0x2000a76f
+	TIOCSTART                       = 0x2000a76e
+	TIOCUCNTL                       = 0x8004a766
+	TIOCREMOTE                      = 0x8004a769
+	TIOCMGET                        = 0x4004a76a
+	TIOCMSET                        = 0x8004a76d
+	TIOCMBIC                        = 0x8004a76b
+	TIOCMBIS                        = 0x8004a76c
+	VINTR                           = 0
+	VQUIT                           = 1
+	VERASE                          = 2
+	VKILL                           = 3
+	VEOF                            = 4
+	VEOL                            = 5
+	VMIN                            = 6
+	VSTART                          = 7
+	VSTOP                           = 8
+	VSUSP                           = 9
+	VTIME                           = 10
+	WCONTINUED                      = 0x4
+	WEXITED                         = 0x8
+	WNOHANG                         = 0x1
+	WNOWAIT                         = 0x20
+	WSTOPPED                        = 0x10
+	WUNTRACED                       = 0x2
+	_BPX_SWAP                       = 1
+	_BPX_NONSWAP                    = 2
+	MCL_CURRENT                     = 1  // for Linux compatibility -- no zos semantics
+	MCL_FUTURE                      = 2  // for Linux compatibility -- no zos semantics
+	MCL_ONFAULT                     = 3  // for Linux compatibility -- no zos semantics
+	MADV_NORMAL                     = 0  // for Linux compatibility -- no zos semantics
+	MADV_RANDOM                     = 1  // for Linux compatibility -- no zos semantics
+	MADV_SEQUENTIAL                 = 2  // for Linux compatibility -- no zos semantics
+	MADV_WILLNEED                   = 3  // for Linux compatibility -- no zos semantics
+	MADV_REMOVE                     = 4  // for Linux compatibility -- no zos semantics
+	MADV_DONTFORK                   = 5  // for Linux compatibility -- no zos semantics
+	MADV_DOFORK                     = 6  // for Linux compatibility -- no zos semantics
+	MADV_HWPOISON                   = 7  // for Linux compatibility -- no zos semantics
+	MADV_MERGEABLE                  = 8  // for Linux compatibility -- no zos semantics
+	MADV_UNMERGEABLE                = 9  // for Linux compatibility -- no zos semantics
+	MADV_SOFT_OFFLINE               = 10 // for Linux compatibility -- no zos semantics
+	MADV_HUGEPAGE                   = 11 // for Linux compatibility -- no zos semantics
+	MADV_NOHUGEPAGE                 = 12 // for Linux compatibility -- no zos semantics
+	MADV_DONTDUMP                   = 13 // for Linux compatibility -- no zos semantics
+	MADV_DODUMP                     = 14 // for Linux compatibility -- no zos semantics
+	MADV_FREE                       = 15 // for Linux compatibility -- no zos semantics
+	MADV_WIPEONFORK                 = 16 // for Linux compatibility -- no zos semantics
+	MADV_KEEPONFORK                 = 17 // for Linux compatibility -- no zos semantics
+	AT_SYMLINK_FOLLOW               = 0x400
+	AT_SYMLINK_NOFOLLOW             = 0x100
+	XATTR_CREATE                    = 0x1
+	XATTR_REPLACE                   = 0x2
+	P_PID                           = 0
+	P_PGID                          = 1
+	P_ALL                           = 2
+	PR_SET_NAME                     = 15
+	PR_GET_NAME                     = 16
+	PR_SET_NO_NEW_PRIVS             = 38
+	PR_GET_NO_NEW_PRIVS             = 39
+	PR_SET_DUMPABLE                 = 4
+	PR_GET_DUMPABLE                 = 3
+	PR_SET_PDEATHSIG                = 1
+	PR_GET_PDEATHSIG                = 2
+	PR_SET_CHILD_SUBREAPER          = 36
+	PR_GET_CHILD_SUBREAPER          = 37
+	AT_FDCWD                        = -100
+	AT_EACCESS                      = 0x200
+	AT_EMPTY_PATH                   = 0x1000
+	AT_REMOVEDIR                    = 0x200
+	RENAME_NOREPLACE                = 1 << 0
+	ST_RDONLY                       = 1
+	ST_NOSUID                       = 2
+)
+
+const (
+	EDOM               = Errno(1)
+	ERANGE             = Errno(2)
+	EACCES             = Errno(111)
+	EAGAIN             = Errno(112)
+	EBADF              = Errno(113)
+	EBUSY              = Errno(114)
+	ECHILD             = Errno(115)
+	EDEADLK            = Errno(116)
+	EEXIST             = Errno(117)
+	EFAULT             = Errno(118)
+	EFBIG              = Errno(119)
+	EINTR              = Errno(120)
+	EINVAL             = Errno(121)
+	EIO                = Errno(122)
+	EISDIR             = Errno(123)
+	EMFILE             = Errno(124)
+	EMLINK             = Errno(125)
+	ENAMETOOLONG       = Errno(126)
+	ENFILE             = Errno(127)
+	ENOATTR            = Errno(265)
+	ENODEV             = Errno(128)
+	ENOENT             = Errno(129)
+	ENOEXEC            = Errno(130)
+	ENOLCK             = Errno(131)
+	ENOMEM             = Errno(132)
+	ENOSPC             = Errno(133)
+	ENOSYS             = Errno(134)
+	ENOTDIR            = Errno(135)
+	ENOTEMPTY          = Errno(136)
+	ENOTTY             = Errno(137)
+	ENXIO              = Errno(138)
+	EPERM              = Errno(139)
+	EPIPE              = Errno(140)
+	EROFS              = Errno(141)
+	ESPIPE             = Errno(142)
+	ESRCH              = Errno(143)
+	EXDEV              = Errno(144)
+	E2BIG              = Errno(145)
+	ELOOP              = Errno(146)
+	EILSEQ             = Errno(147)
+	ENODATA            = Errno(148)
+	EOVERFLOW          = Errno(149)
+	EMVSNOTUP          = Errno(150)
+	ECMSSTORAGE        = Errno(151)
+	EMVSDYNALC         = Errno(151)
+	EMVSCVAF           = Errno(152)
+	EMVSCATLG          = Errno(153)
+	ECMSINITIAL        = Errno(156)
+	EMVSINITIAL        = Errno(156)
+	ECMSERR            = Errno(157)
+	EMVSERR            = Errno(157)
+	EMVSPARM           = Errno(158)
+	ECMSPFSFILE        = Errno(159)
+	EMVSPFSFILE        = Errno(159)
+	EMVSBADCHAR        = Errno(160)
+	ECMSPFSPERM        = Errno(162)
+	EMVSPFSPERM        = Errno(162)
+	EMVSSAFEXTRERR     = Errno(163)
+	EMVSSAF2ERR        = Errno(164)
+	EMVSTODNOTSET      = Errno(165)
+	EMVSPATHOPTS       = Errno(166)
+	EMVSNORTL          = Errno(167)
+	EMVSEXPIRE         = Errno(168)
+	EMVSPASSWORD       = Errno(169)
+	EMVSWLMERROR       = Errno(170)
+	EMVSCPLERROR       = Errno(171)
+	EMVSARMERROR       = Errno(172)
+	ELENOFORK          = Errno(200)
+	ELEMSGERR          = Errno(201)
+	EFPMASKINV         = Errno(202)
+	EFPMODEINV         = Errno(203)
+	EBUFLEN            = Errno(227)
+	EEXTLINK           = Errno(228)
+	ENODD              = Errno(229)
+	ECMSESMERR         = Errno(230)
+	ECPERR             = Errno(231)
+	ELEMULTITHREAD     = Errno(232)
+	ELEFENCE           = Errno(244)
+	EBADDATA           = Errno(245)
+	EUNKNOWN           = Errno(246)
+	ENOTSUP            = Errno(247)
+	EBADNAME           = Errno(248)
+	ENOTSAFE           = Errno(249)
+	ELEMULTITHREADFORK = Errno(257)
+	ECUNNOENV          = Errno(258)
+	ECUNNOCONV         = Errno(259)
+	ECUNNOTALIGNED     = Errno(260)
+	ECUNERR            = Errno(262)
+	EIBMBADCALL        = Errno(1000)
+	EIBMBADPARM        = Errno(1001)
+	EIBMSOCKOUTOFRANGE = Errno(1002)
+	EIBMSOCKINUSE      = Errno(1003)
+	EIBMIUCVERR        = Errno(1004)
+	EOFFLOADboxERROR   = Errno(1005)
+	EOFFLOADboxRESTART = Errno(1006)
+	EOFFLOADboxDOWN    = Errno(1007)
+	EIBMCONFLICT       = Errno(1008)
+	EIBMCANCELLED      = Errno(1009)
+	EIBMBADTCPNAME     = Errno(1011)
+	ENOTBLK            = Errno(1100)
+	ETXTBSY            = Errno(1101)
+	EWOULDBLOCK        = Errno(1102)
+	EINPROGRESS        = Errno(1103)
+	EALREADY           = Errno(1104)
+	ENOTSOCK           = Errno(1105)
+	EDESTADDRREQ       = Errno(1106)
+	EMSGSIZE           = Errno(1107)
+	EPROTOTYPE         = Errno(1108)
+	ENOPROTOOPT        = Errno(1109)
+	EPROTONOSUPPORT    = Errno(1110)
+	ESOCKTNOSUPPORT    = Errno(1111)
+	EOPNOTSUPP         = Errno(1112)
+	EPFNOSUPPORT       = Errno(1113)
+	EAFNOSUPPORT       = Errno(1114)
+	EADDRINUSE         = Errno(1115)
+	EADDRNOTAVAIL      = Errno(1116)
+	ENETDOWN           = Errno(1117)
+	ENETUNREACH        = Errno(1118)
+	ENETRESET          = Errno(1119)
+	ECONNABORTED       = Errno(1120)
+	ECONNRESET         = Errno(1121)
+	ENOBUFS            = Errno(1122)
+	EISCONN            = Errno(1123)
+	ENOTCONN           = Errno(1124)
+	ESHUTDOWN          = Errno(1125)
+	ETOOMANYREFS       = Errno(1126)
+	ETIMEDOUT          = Errno(1127)
+	ECONNREFUSED       = Errno(1128)
+	EHOSTDOWN          = Errno(1129)
+	EHOSTUNREACH       = Errno(1130)
+	EPROCLIM           = Errno(1131)
+	EUSERS             = Errno(1132)
+	EDQUOT             = Errno(1133)
+	ESTALE             = Errno(1134)
+	EREMOTE            = Errno(1135)
+	ENOSTR             = Errno(1136)
+	ETIME              = Errno(1137)
+	ENOSR              = Errno(1138)
+	ENOMSG             = Errno(1139)
+	EBADMSG            = Errno(1140)
+	EIDRM              = Errno(1141)
+	ENONET             = Errno(1142)
+	ERREMOTE           = Errno(1143)
+	ENOLINK            = Errno(1144)
+	EADV               = Errno(1145)
+	ESRMNT             = Errno(1146)
+	ECOMM              = Errno(1147)
+	EPROTO             = Errno(1148)
+	EMULTIHOP          = Errno(1149)
+	EDOTDOT            = Errno(1150)
+	EREMCHG            = Errno(1151)
+	ECANCELED          = Errno(1152)
+	EINTRNODATA        = Errno(1159)
+	ENOREUSE           = Errno(1160)
+	ENOMOVE            = Errno(1161)
+)
+
+// Signals
+const (
+	SIGHUP    = Signal(1)
+	SIGINT    = Signal(2)
+	SIGABRT   = Signal(3)
+	SIGILL    = Signal(4)
+	SIGPOLL   = Signal(5)
+	SIGURG    = Signal(6)
+	SIGSTOP   = Signal(7)
+	SIGFPE    = Signal(8)
+	SIGKILL   = Signal(9)
+	SIGBUS    = Signal(10)
+	SIGSEGV   = Signal(11)
+	SIGSYS    = Signal(12)
+	SIGPIPE   = Signal(13)
+	SIGALRM   = Signal(14)
+	SIGTERM   = Signal(15)
+	SIGUSR1   = Signal(16)
+	SIGUSR2   = Signal(17)
+	SIGABND   = Signal(18)
+	SIGCONT   = Signal(19)
+	SIGCHLD   = Signal(20)
+	SIGTTIN   = Signal(21)
+	SIGTTOU   = Signal(22)
+	SIGIO     = Signal(23)
+	SIGQUIT   = Signal(24)
+	SIGTSTP   = Signal(25)
+	SIGTRAP   = Signal(26)
+	SIGIOERR  = Signal(27)
+	SIGWINCH  = Signal(28)
+	SIGXCPU   = Signal(29)
+	SIGXFSZ   = Signal(30)
+	SIGVTALRM = Signal(31)
+	SIGPROF   = Signal(32)
+	SIGDANGER = Signal(33)
+	SIGTHSTOP = Signal(34)
+	SIGTHCONT = Signal(35)
+	SIGTRACE  = Signal(37)
+	SIGDCE    = Signal(38)
+	SIGDUMP   = Signal(39)
+)
+
+// Error table
+var errorList = [...]struct {
+	num  Errno
+	name string
+	desc string
+}{
+	{1, "EDC5001I", "A domain error occurred."},
+	{2, "EDC5002I", "A range error occurred."},
+	{111, "EDC5111I", "Permission denied."},
+	{112, "EDC5112I", "Resource temporarily unavailable."},
+	{113, "EDC5113I", "Bad file descriptor."},
+	{114, "EDC5114I", "Resource busy."},
+	{115, "EDC5115I", "No child processes."},
+	{116, "EDC5116I", "Resource deadlock avoided."},
+	{117, "EDC5117I", "File exists."},
+	{118, "EDC5118I", "Incorrect address."},
+	{119, "EDC5119I", "File too large."},
+	{120, "EDC5120I", "Interrupted function call."},
+	{121, "EDC5121I", "Invalid argument."},
+	{122, "EDC5122I", "Input/output error."},
+	{123, "EDC5123I", "Is a directory."},
+	{124, "EDC5124I", "Too many open files."},
+	{125, "EDC5125I", "Too many links."},
+	{126, "EDC5126I", "Filename too long."},
+	{127, "EDC5127I", "Too many open files in system."},
+	{128, "EDC5128I", "No such device."},
+	{129, "EDC5129I", "No such file or directory."},
+	{130, "EDC5130I", "Exec format error."},
+	{131, "EDC5131I", "No locks available."},
+	{132, "EDC5132I", "Not enough memory."},
+	{133, "EDC5133I", "No space left on device."},
+	{134, "EDC5134I", "Function not implemented."},
+	{135, "EDC5135I", "Not a directory."},
+	{136, "EDC5136I", "Directory not empty."},
+	{137, "EDC5137I", "Inappropriate I/O control operation."},
+	{138, "EDC5138I", "No such device or address."},
+	{139, "EDC5139I", "Operation not permitted."},
+	{140, "EDC5140I", "Broken pipe."},
+	{141, "EDC5141I", "Read-only file system."},
+	{142, "EDC5142I", "Invalid seek."},
+	{143, "EDC5143I", "No such process."},
+	{144, "EDC5144I", "Improper link."},
+	{145, "EDC5145I", "The parameter list is too long, or the message to receive was too large for the buffer."},
+	{146, "EDC5146I", "Too many levels of symbolic links."},
+	{147, "EDC5147I", "Illegal byte sequence."},
+	{148, "EDC5148I", "The named attribute or data not available."},
+	{149, "EDC5149I", "Value Overflow Error."},
+	{150, "EDC5150I", "UNIX System Services is not active."},
+	{151, "EDC5151I", "Dynamic allocation error."},
+	{152, "EDC5152I", "Common VTOC access facility (CVAF) error."},
+	{153, "EDC5153I", "Catalog obtain error."},
+	{156, "EDC5156I", "Process initialization error."},
+	{157, "EDC5157I", "An internal error has occurred."},
+	{158, "EDC5158I", "Bad parameters were passed to the service."},
+	{159, "EDC5159I", "The Physical File System encountered a permanent file error."},
+	{160, "EDC5160I", "Bad character in environment variable name."},
+	{162, "EDC5162I", "The Physical File System encountered a system error."},
+	{163, "EDC5163I", "SAF/RACF extract error."},
+	{164, "EDC5164I", "SAF/RACF error."},
+	{165, "EDC5165I", "System TOD clock not set."},
+	{166, "EDC5166I", "Access mode argument on function call conflicts with PATHOPTS parameter on JCL DD statement."},
+	{167, "EDC5167I", "Access to the UNIX System Services version of the C RTL is denied."},
+	{168, "EDC5168I", "Password has expired."},
+	{169, "EDC5169I", "Password is invalid."},
+	{170, "EDC5170I", "An error was encountered with WLM."},
+	{171, "EDC5171I", "An error was encountered with CPL."},
+	{172, "EDC5172I", "An error was encountered with Application Response Measurement (ARM) component."},
+	{200, "EDC5200I", "The application contains a Language Environment member language that cannot tolerate a fork()."},
+	{201, "EDC5201I", "The Language Environment message file was not found in the hierarchical file system."},
+	{202, "EDC5202E", "DLL facilities are not supported under SPC environment."},
+	{203, "EDC5203E", "DLL facilities are not supported under POSIX environment."},
+	{227, "EDC5227I", "Buffer is not long enough to contain a path definition"},
+	{228, "EDC5228I", "The file referred to is an external link"},
+	{229, "EDC5229I", "No path definition for ddname in effect"},
+	{230, "EDC5230I", "ESM error."},
+	{231, "EDC5231I", "CP or the external security manager had an error"},
+	{232, "EDC5232I", "The function failed because it was invoked from a multithread environment."},
+	{244, "EDC5244I", "The program, module or DLL is not supported in this environment."},
+	{245, "EDC5245I", "Data is not valid."},
+	{246, "EDC5246I", "Unknown system state."},
+	{247, "EDC5247I", "Operation not supported."},
+	{248, "EDC5248I", "The object name specified is not correct."},
+	{249, "EDC5249I", "The function is not allowed."},
+	{257, "EDC5257I", "Function cannot be called in the child process of a fork() from a multithreaded process until exec() is called."},
+	{258, "EDC5258I", "A CUN_RS_NO_UNI_ENV error was issued by Unicode Services."},
+	{259, "EDC5259I", "A CUN_RS_NO_CONVERSION error was issued by Unicode Services."},
+	{260, "EDC5260I", "A CUN_RS_TABLE_NOT_ALIGNED error was issued by Unicode Services."},
+	{262, "EDC5262I", "An iconv() function encountered an unexpected error while using Unicode Services."},
+	{265, "EDC5265I", "The named attribute not available."},
+	{1000, "EDC8000I", "A bad socket-call constant was found in the IUCV header."},
+	{1001, "EDC8001I", "An error was found in the IUCV header."},
+	{1002, "EDC8002I", "A socket descriptor is out of range."},
+	{1003, "EDC8003I", "A socket descriptor is in use."},
+	{1004, "EDC8004I", "Request failed because of an IUCV error."},
+	{1005, "EDC8005I", "Offload box error."},
+	{1006, "EDC8006I", "Offload box restarted."},
+	{1007, "EDC8007I", "Offload box down."},
+	{1008, "EDC8008I", "Already a conflicting call outstanding on socket."},
+	{1009, "EDC8009I", "Request cancelled using a SOCKcallCANCEL request."},
+	{1011, "EDC8011I", "A name of a PFS was specified that either is not configured or is not a Sockets PFS."},
+	{1100, "EDC8100I", "Block device required."},
+	{1101, "EDC8101I", "Text file busy."},
+	{1102, "EDC8102I", "Operation would block."},
+	{1103, "EDC8103I", "Operation now in progress."},
+	{1104, "EDC8104I", "Connection already in progress."},
+	{1105, "EDC8105I", "Socket operation on non-socket."},
+	{1106, "EDC8106I", "Destination address required."},
+	{1107, "EDC8107I", "Message too long."},
+	{1108, "EDC8108I", "Protocol wrong type for socket."},
+	{1109, "EDC8109I", "Protocol not available."},
+	{1110, "EDC8110I", "Protocol not supported."},
+	{1111, "EDC8111I", "Socket type not supported."},
+	{1112, "EDC8112I", "Operation not supported on socket."},
+	{1113, "EDC8113I", "Protocol family not supported."},
+	{1114, "EDC8114I", "Address family not supported."},
+	{1115, "EDC8115I", "Address already in use."},
+	{1116, "EDC8116I", "Address not available."},
+	{1117, "EDC8117I", "Network is down."},
+	{1118, "EDC8118I", "Network is unreachable."},
+	{1119, "EDC8119I", "Network dropped connection on reset."},
+	{1120, "EDC8120I", "Connection ended abnormally."},
+	{1121, "EDC8121I", "Connection reset."},
+	{1122, "EDC8122I", "No buffer space available."},
+	{1123, "EDC8123I", "Socket already connected."},
+	{1124, "EDC8124I", "Socket not connected."},
+	{1125, "EDC8125I", "Can't send after socket shutdown."},
+	{1126, "EDC8126I", "Too many references; can't splice."},
+	{1127, "EDC8127I", "Connection timed out."},
+	{1128, "EDC8128I", "Connection refused."},
+	{1129, "EDC8129I", "Host is not available."},
+	{1130, "EDC8130I", "Host cannot be reached."},
+	{1131, "EDC8131I", "Too many processes."},
+	{1132, "EDC8132I", "Too many users."},
+	{1133, "EDC8133I", "Disk quota exceeded."},
+	{1134, "EDC8134I", "Stale file handle."},
+	{1135, "", ""},
+	{1136, "EDC8136I", "File is not a STREAM."},
+	{1137, "EDC8137I", "STREAMS ioctl() timeout."},
+	{1138, "EDC8138I", "No STREAMS resources."},
+	{1139, "EDC8139I", "The message identified by set_id and msg_id is not in the message catalog."},
+	{1140, "EDC8140I", "Bad message."},
+	{1141, "EDC8141I", "Identifier removed."},
+	{1142, "", ""},
+	{1143, "", ""},
+	{1144, "EDC8144I", "The link has been severed."},
+	{1145, "", ""},
+	{1146, "", ""},
+	{1147, "", ""},
+	{1148, "EDC8148I", "Protocol error."},
+	{1149, "EDC8149I", "Multihop not allowed."},
+	{1150, "", ""},
+	{1151, "", ""},
+	{1152, "EDC8152I", "The asynchronous I/O request has been canceled."},
+	{1159, "EDC8159I", "Function call was interrupted before any data was received."},
+	{1160, "EDC8160I", "Socket reuse is not supported."},
+	{1161, "EDC8161I", "The file system cannot currently be moved."},
+}
+
+// Signal table
+var signalList = [...]struct {
+	num  Signal
+	name string
+	desc string
+}{
+	{1, "SIGHUP", "hangup"},
+	{2, "SIGINT", "interrupt"},
+	{3, "SIGABT", "aborted"},
+	{4, "SIGILL", "illegal instruction"},
+	{5, "SIGPOLL", "pollable event"},
+	{6, "SIGURG", "urgent I/O condition"},
+	{7, "SIGSTOP", "stop process"},
+	{8, "SIGFPE", "floating point exception"},
+	{9, "SIGKILL", "killed"},
+	{10, "SIGBUS", "bus error"},
+	{11, "SIGSEGV", "segmentation fault"},
+	{12, "SIGSYS", "bad argument to routine"},
+	{13, "SIGPIPE", "broken pipe"},
+	{14, "SIGALRM", "alarm clock"},
+	{15, "SIGTERM", "terminated"},
+	{16, "SIGUSR1", "user defined signal 1"},
+	{17, "SIGUSR2", "user defined signal 2"},
+	{18, "SIGABND", "abend"},
+	{19, "SIGCONT", "continued"},
+	{20, "SIGCHLD", "child exited"},
+	{21, "SIGTTIN", "stopped (tty input)"},
+	{22, "SIGTTOU", "stopped (tty output)"},
+	{23, "SIGIO", "I/O possible"},
+	{24, "SIGQUIT", "quit"},
+	{25, "SIGTSTP", "stopped"},
+	{26, "SIGTRAP", "trace/breakpoint trap"},
+	{27, "SIGIOER", "I/O error"},
+	{28, "SIGWINCH", "window changed"},
+	{29, "SIGXCPU", "CPU time limit exceeded"},
+	{30, "SIGXFSZ", "file size limit exceeded"},
+	{31, "SIGVTALRM", "virtual timer expired"},
+	{32, "SIGPROF", "profiling timer expired"},
+	{33, "SIGDANGER", "danger"},
+	{34, "SIGTHSTOP", "stop thread"},
+	{35, "SIGTHCONT", "continue thread"},
+	{37, "SIGTRACE", "trace"},
+	{38, "", "DCE"},
+	{39, "SIGDUMP", "dump"},
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_armnn_linux.go","mode":420,"size":1200,"sha256":"11dbfe9592da41fdb9689aed2903977c61f22a480bb054f4c9e3c8202df284b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":1200}
+// Code generated by linux/mkall.go generatePtracePair("arm", "arm64"). DO NOT EDIT.
+
+//go:build linux && (arm || arm64)
+
+package unix
+
+import "unsafe"
+
+// PtraceRegsArm is the registers used by arm binaries.
+type PtraceRegsArm struct {
+	Uregs [18]uint32
+}
+
+// PtraceGetRegsArm fetches the registers used by arm binaries.
+func PtraceGetRegsArm(pid int, regsout *PtraceRegsArm) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsArm sets the registers used by arm binaries.
+func PtraceSetRegsArm(pid int, regs *PtraceRegsArm) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+// PtraceRegsArm64 is the registers used by arm64 binaries.
+type PtraceRegsArm64 struct {
+	Regs   [31]uint64
+	Sp     uint64
+	Pc     uint64
+	Pstate uint64
+}
+
+// PtraceGetRegsArm64 fetches the registers used by arm64 binaries.
+func PtraceGetRegsArm64(pid int, regsout *PtraceRegsArm64) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsArm64 sets the registers used by arm64 binaries.
+func PtraceSetRegsArm64(pid int, regs *PtraceRegsArm64) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_linux_arm64.go","mode":420,"size":721,"sha256":"3148ef332ae164e19e447a3859d35c96dd56de0833f22f622d5e73f9a0d1c009","index":0,"count":1,"encoding":"utf-8","payloadBytes":721}
+// Code generated by linux/mkall.go generatePtraceRegSet("arm64"). DO NOT EDIT.
+
+package unix
+
+import "unsafe"
+
+// PtraceGetRegSetArm64 fetches the registers used by arm64 binaries.
+func PtraceGetRegSetArm64(pid, addr int, regsout *PtraceRegsArm64) error {
+	iovec := Iovec{(*byte)(unsafe.Pointer(regsout)), uint64(unsafe.Sizeof(*regsout))}
+	return ptracePtr(PTRACE_GETREGSET, pid, uintptr(addr), unsafe.Pointer(&iovec))
+}
+
+// PtraceSetRegSetArm64 sets the registers used by arm64 binaries.
+func PtraceSetRegSetArm64(pid, addr int, regs *PtraceRegsArm64) error {
+	iovec := Iovec{(*byte)(unsafe.Pointer(regs)), uint64(unsafe.Sizeof(*regs))}
+	return ptracePtr(PTRACE_SETREGSET, pid, uintptr(addr), unsafe.Pointer(&iovec))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_mipsnn_linux.go","mode":420,"size":1390,"sha256":"e9be9bf128adc6660fbb4680b449a4ed9fcda027f5ebf35cd42df4065ffc79a2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1390}
+// Code generated by linux/mkall.go generatePtracePair("mips", "mips64"). DO NOT EDIT.
+
+//go:build linux && (mips || mips64)
+
+package unix
+
+import "unsafe"
+
+// PtraceRegsMips is the registers used by mips binaries.
+type PtraceRegsMips struct {
+	Regs     [32]uint64
+	Lo       uint64
+	Hi       uint64
+	Epc      uint64
+	Badvaddr uint64
+	Status   uint64
+	Cause    uint64
+}
+
+// PtraceGetRegsMips fetches the registers used by mips binaries.
+func PtraceGetRegsMips(pid int, regsout *PtraceRegsMips) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsMips sets the registers used by mips binaries.
+func PtraceSetRegsMips(pid int, regs *PtraceRegsMips) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+// PtraceRegsMips64 is the registers used by mips64 binaries.
+type PtraceRegsMips64 struct {
+	Regs     [32]uint64
+	Lo       uint64
+	Hi       uint64
+	Epc      uint64
+	Badvaddr uint64
+	Status   uint64
+	Cause    uint64
+}
+
+// PtraceGetRegsMips64 fetches the registers used by mips64 binaries.
+func PtraceGetRegsMips64(pid int, regsout *PtraceRegsMips64) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsMips64 sets the registers used by mips64 binaries.
+func PtraceSetRegsMips64(pid int, regs *PtraceRegsMips64) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_mipsnnle_linux.go","mode":420,"size":1442,"sha256":"9869c8980e2f50432e76f44ff2681bd62ec524db1828551da2f9f2761262a05d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1442}
+// Code generated by linux/mkall.go generatePtracePair("mipsle", "mips64le"). DO NOT EDIT.
+
+//go:build linux && (mipsle || mips64le)
+
+package unix
+
+import "unsafe"
+
+// PtraceRegsMipsle is the registers used by mipsle binaries.
+type PtraceRegsMipsle struct {
+	Regs     [32]uint64
+	Lo       uint64
+	Hi       uint64
+	Epc      uint64
+	Badvaddr uint64
+	Status   uint64
+	Cause    uint64
+}
+
+// PtraceGetRegsMipsle fetches the registers used by mipsle binaries.
+func PtraceGetRegsMipsle(pid int, regsout *PtraceRegsMipsle) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsMipsle sets the registers used by mipsle binaries.
+func PtraceSetRegsMipsle(pid int, regs *PtraceRegsMipsle) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+// PtraceRegsMips64le is the registers used by mips64le binaries.
+type PtraceRegsMips64le struct {
+	Regs     [32]uint64
+	Lo       uint64
+	Hi       uint64
+	Epc      uint64
+	Badvaddr uint64
+	Status   uint64
+	Cause    uint64
+}
+
+// PtraceGetRegsMips64le fetches the registers used by mips64le binaries.
+func PtraceGetRegsMips64le(pid int, regsout *PtraceRegsMips64le) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsMips64le sets the registers used by mips64le binaries.
+func PtraceSetRegsMips64le(pid int, regs *PtraceRegsMips64le) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zptrace_x86_linux.go","mode":420,"size":1849,"sha256":"dc4b1c692caaaab1e50e386776a08ce44e3a4d2def73513bb4fa8d04332ac631","index":0,"count":1,"encoding":"utf-8","payloadBytes":1849}
+// Code generated by linux/mkall.go generatePtracePair("386", "amd64"). DO NOT EDIT.
+
+//go:build linux && (386 || amd64)
+
+package unix
+
+import "unsafe"
+
+// PtraceRegs386 is the registers used by 386 binaries.
+type PtraceRegs386 struct {
+	Ebx      int32
+	Ecx      int32
+	Edx      int32
+	Esi      int32
+	Edi      int32
+	Ebp      int32
+	Eax      int32
+	Xds      int32
+	Xes      int32
+	Xfs      int32
+	Xgs      int32
+	Orig_eax int32
+	Eip      int32
+	Xcs      int32
+	Eflags   int32
+	Esp      int32
+	Xss      int32
+}
+
+// PtraceGetRegs386 fetches the registers used by 386 binaries.
+func PtraceGetRegs386(pid int, regsout *PtraceRegs386) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegs386 sets the registers used by 386 binaries.
+func PtraceSetRegs386(pid int, regs *PtraceRegs386) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+// PtraceRegsAmd64 is the registers used by amd64 binaries.
+type PtraceRegsAmd64 struct {
+	R15      uint64
+	R14      uint64
+	R13      uint64
+	R12      uint64
+	Rbp      uint64
+	Rbx      uint64
+	R11      uint64
+	R10      uint64
+	R9       uint64
+	R8       uint64
+	Rax      uint64
+	Rcx      uint64
+	Rdx      uint64
+	Rsi      uint64
+	Rdi      uint64
+	Orig_rax uint64
+	Rip      uint64
+	Cs       uint64
+	Eflags   uint64
+	Rsp      uint64
+	Ss       uint64
+	Fs_base  uint64
+	Gs_base  uint64
+	Ds       uint64
+	Es       uint64
+	Fs       uint64
+	Gs       uint64
+}
+
+// PtraceGetRegsAmd64 fetches the registers used by amd64 binaries.
+func PtraceGetRegsAmd64(pid int, regsout *PtraceRegsAmd64) error {
+	return ptracePtr(PTRACE_GETREGS, pid, 0, unsafe.Pointer(regsout))
+}
+
+// PtraceSetRegsAmd64 sets the registers used by amd64 binaries.
+func PtraceSetRegsAmd64(pid int, regs *PtraceRegsAmd64) error {
+	return ptracePtr(PTRACE_SETREGS, pid, 0, unsafe.Pointer(regs))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsymaddr_zos_s390x.s","mode":420,"size":9011,"sha256":"15f6a988dbda1b91bb91d3204ebf9b51424fa3b89cf36284e1084ba0983441f2","index":0,"count":1,"encoding":"utf-8","payloadBytes":9011}
+// go run mksyscall_zos_s390x.go -o_sysnum zsysnum_zos_s390x.go -o_syscall zsyscall_zos_s390x.go -i_syscall syscall_zos_s390x.go -o_asm zsymaddr_zos_s390x.s
+// Code generated by the command above; see README.md. DO NOT EDIT.
+
+//go:build zos && s390x
+#include "textflag.h"
+
+//  provide the address of function variable to be fixed up.
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FlistxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Flistxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FremovexattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fremovexattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FgetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fgetxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FsetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fsetxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_accept4Addr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·accept4(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_RemovexattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Removexattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_Dup3Addr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Dup3(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_DirfdAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Dirfd(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_EpollCreateAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·EpollCreate(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_EpollCreate1Addr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·EpollCreate1(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_EpollCtlAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·EpollCtl(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_EpollPwaitAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·EpollPwait(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_EpollWaitAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·EpollWait(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_EventfdAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Eventfd(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FaccessatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Faccessat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FchmodatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fchmodat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FchownatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fchownat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FdatasyncAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fdatasync(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_fstatatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·fstatat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_LgetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Lgetxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_LsetxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Lsetxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FstatfsAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Fstatfs(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FutimesAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Futimes(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_FutimesatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Futimesat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_GetrandomAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Getrandom(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_InotifyInitAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·InotifyInit(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_InotifyInit1Addr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·InotifyInit1(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_InotifyAddWatchAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·InotifyAddWatch(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_InotifyRmWatchAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·InotifyRmWatch(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_ListxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Listxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_LlistxattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Llistxattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_LremovexattrAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Lremovexattr(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_LutimesAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Lutimes(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_StatfsAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Statfs(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_SyncfsAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Syncfs(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_UnshareAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Unshare(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_LinkatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Linkat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_MkdiratAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Mkdirat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_MknodatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Mknodat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_PivotRootAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·PivotRoot(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_PrctlAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Prctl(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_PrlimitAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Prlimit(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_RenameatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Renameat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_Renameat2Addr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Renameat2(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_SethostnameAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Sethostname(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_SetnsAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Setns(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_SymlinkatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Symlinkat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_UnlinkatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·Unlinkat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_openatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·openat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_openat2Addr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·openat2(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+TEXT ·get_utimensatAddr(SB), NOSPLIT|NOFRAME, $0-8
+	MOVD $·utimensat(SB), R8
+	MOVD R8, ret+0(FP)
+	RET
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_aix_ppc.go","mode":420,"size":36534,"sha256":"d097275c6bb77738a93bf819430a440fd17968bb57b969cd28932c9ae03ff978","index":0,"count":1,"encoding":"utf-8","payloadBytes":36534}
+// go run mksyscall_aix_ppc.go -aix -tags aix,ppc syscall_aix.go syscall_aix_ppc.go
+// Code generated by the command above; see README.md. DO NOT EDIT.
+
+//go:build aix && ppc
+
+package unix
+
+/*
+#include <stdint.h>
+#include <stddef.h>
+int utimes(uintptr_t, uintptr_t);
+int utimensat(int, uintptr_t, uintptr_t, int);
+int getcwd(uintptr_t, size_t);
+int accept(int, uintptr_t, uintptr_t);
+int getdirent(int, uintptr_t, size_t);
+int wait4(int, uintptr_t, int, uintptr_t);
+int ioctl(int, int, uintptr_t);
+int fcntl(uintptr_t, int, uintptr_t);
+int fsync_range(int, int, long long, long long);
+int acct(uintptr_t);
+int chdir(uintptr_t);
+int chroot(uintptr_t);
+int close(int);
+int dup(int);
+void exit(int);
+int faccessat(int, uintptr_t, unsigned int, int);
+int fchdir(int);
+int fchmod(int, unsigned int);
+int fchmodat(int, uintptr_t, unsigned int, int);
+int fchownat(int, uintptr_t, int, int, int);
+int fdatasync(int);
+int getpgid(int);
+int getpgrp();
+int getpid();
+int getppid();
+int getpriority(int, int);
+int getrusage(int, uintptr_t);
+int getsid(int);
+int kill(int, int);
+int syslog(int, uintptr_t, size_t);
+int mkdir(int, uintptr_t, unsigned int);
+int mkdirat(int, uintptr_t, unsigned int);
+int mkfifo(uintptr_t, unsigned int);
+int mknod(uintptr_t, unsigned int, int);
+int mknodat(int, uintptr_t, unsigned int, int);
+int nanosleep(uintptr_t, uintptr_t);
+int open64(uintptr_t, int, unsigned int);
+int openat(int, uintptr_t, int, unsigned int);
+int read(int, uintptr_t, size_t);
+int readlink(uintptr_t, uintptr_t, size_t);
+int renameat(int, uintptr_t, int, uintptr_t);
+int setdomainname(uintptr_t, size_t);
+int sethostname(uintptr_t, size_t);
+int setpgid(int, int);
+int setsid();
+int settimeofday(uintptr_t);
+int setuid(int);
+int setgid(int);
+int setpriority(int, int, int);
+int statx(int, uintptr_t, int, int, uintptr_t);
+int sync();
+uintptr_t times(uintptr_t);
+int umask(int);
+int uname(uintptr_t);
+int unlink(uintptr_t);
+int unlinkat(int, uintptr_t, int);
+int ustat(int, uintptr_t);
+int write(int, uintptr_t, size_t);
+int dup2(int, int);
+int posix_fadvise64(int, long long, long long, int);
+int fchown(int, int, int);
+int fstat(int, uintptr_t);
+int fstatat(int, uintptr_t, uintptr_t, int);
+int fstatfs(int, uintptr_t);
+int ftruncate(int, long long);
+int getegid();
+int geteuid();
+int getgid();
+int getuid();
+int lchown(uintptr_t, int, int);
+int listen(int, int);
+int lstat(uintptr_t, uintptr_t);
+int pause();
+int pread64(int, uintptr_t, size_t, long long);
+int pwrite64(int, uintptr_t, size_t, long long);
+#define c_select select
+int select(int, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+int pselect(int, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+int setregid(int, int);
+int setreuid(int, int);
+int shutdown(int, int);
+long long splice(int, uintptr_t, int, uintptr_t, int, int);
+int stat(uintptr_t, uintptr_t);
+int statfs(uintptr_t, uintptr_t);
+int truncate(uintptr_t, long long);
+int bind(int, uintptr_t, uintptr_t);
+int connect(int, uintptr_t, uintptr_t);
+int getgroups(int, uintptr_t);
+int setgroups(int, uintptr_t);
+int getsockopt(int, int, int, uintptr_t, uintptr_t);
+int setsockopt(int, int, int, uintptr_t, uintptr_t);
+int socket(int, int, int);
+int socketpair(int, int, int, uintptr_t);
+int getpeername(int, uintptr_t, uintptr_t);
+int getsockname(int, uintptr_t, uintptr_t);
+int recvfrom(int, uintptr_t, size_t, int, uintptr_t, uintptr_t);
+int sendto(int, uintptr_t, size_t, int, uintptr_t, uintptr_t);
+int nrecvmsg(int, uintptr_t, int);
+int nsendmsg(int, uintptr_t, int);
+int munmap(uintptr_t, uintptr_t);
+int madvise(uintptr_t, size_t, int);
+int mprotect(uintptr_t, size_t, int);
+int mlock(uintptr_t, size_t);
+int mlockall(int);
+int msync(uintptr_t, size_t, int);
+int munlock(uintptr_t, size_t);
+int munlockall();
+int pipe(uintptr_t);
+int poll(uintptr_t, int, int);
+int gettimeofday(uintptr_t, uintptr_t);
+int time(uintptr_t);
+int utime(uintptr_t, uintptr_t);
+unsigned long long getsystemcfg(int);
+int umount(uintptr_t);
+int getrlimit64(int, uintptr_t);
+long long lseek64(int, long long, int);
+uintptr_t mmap(uintptr_t, uintptr_t, int, int, int, long long);
+
+*/
+import "C"
+import (
+	"unsafe"
+)
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func utimes(path string, times *[2]Timeval) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.utimes(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(times))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func utimensat(dirfd int, path string, times *[2]Timespec, flag int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.utimensat(C.int(dirfd), C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(times))), C.int(flag))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func getcwd(buf []byte) (err error) {
+	var _p0 *byte
+	if len(buf) > 0 {
+		_p0 = &buf[0]
+	}
+	var _p1 int
+	_p1 = len(buf)
+	r0, er := C.getcwd(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
+	r0, er := C.accept(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(rsa))), C.uintptr_t(uintptr(unsafe.Pointer(addrlen))))
+	fd = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func getdirent(fd int, buf []byte) (n int, err error) {
+	var _p0 *byte
+	if len(buf) > 0 {
+		_p0 = &buf[0]
+	}
+	var _p1 int
+	_p1 = len(buf)
+	r0, er := C.getdirent(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func wait4(pid Pid_t, status *_C_int, options int, rusage *Rusage) (wpid Pid_t, err error) {
+	r0, er := C.wait4(C.int(pid), C.uintptr_t(uintptr(unsafe.Pointer(status))), C.int(options), C.uintptr_t(uintptr(unsafe.Pointer(rusage))))
+	wpid = Pid_t(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func ioctl(fd int, req int, arg uintptr) (err error) {
+	r0, er := C.ioctl(C.int(fd), C.int(req), C.uintptr_t(arg))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func ioctlPtr(fd int, req int, arg unsafe.Pointer) (err error) {
+	r0, er := C.ioctl(C.int(fd), C.int(req), C.uintptr_t(uintptr(arg)))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func FcntlInt(fd uintptr, cmd int, arg int) (r int, err error) {
+	r0, er := C.fcntl(C.uintptr_t(fd), C.int(cmd), C.uintptr_t(arg))
+	r = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func FcntlFlock(fd uintptr, cmd int, lk *Flock_t) (err error) {
+	r0, er := C.fcntl(C.uintptr_t(fd), C.int(cmd), C.uintptr_t(uintptr(unsafe.Pointer(lk))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func fcntl(fd int, cmd int, arg int) (val int, err error) {
+	r0, er := C.fcntl(C.uintptr_t(fd), C.int(cmd), C.uintptr_t(arg))
+	val = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func fsyncRange(fd int, how int, start int64, length int64) (err error) {
+	r0, er := C.fsync_range(C.int(fd), C.int(how), C.longlong(start), C.longlong(length))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Acct(path string) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.acct(C.uintptr_t(_p0))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Chdir(path string) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.chdir(C.uintptr_t(_p0))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Chroot(path string) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.chroot(C.uintptr_t(_p0))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Close(fd int) (err error) {
+	r0, er := C.close(C.int(fd))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Dup(oldfd int) (fd int, err error) {
+	r0, er := C.dup(C.int(oldfd))
+	fd = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Exit(code int) {
+	C.exit(C.int(code))
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.faccessat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode), C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fchdir(fd int) (err error) {
+	r0, er := C.fchdir(C.int(fd))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fchmod(fd int, mode uint32) (err error) {
+	r0, er := C.fchmod(C.int(fd), C.uint(mode))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.fchmodat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode), C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.fchownat(C.int(dirfd), C.uintptr_t(_p0), C.int(uid), C.int(gid), C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fdatasync(fd int) (err error) {
+	r0, er := C.fdatasync(C.int(fd))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getpgid(pid int) (pgid int, err error) {
+	r0, er := C.getpgid(C.int(pid))
+	pgid = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getpgrp() (pid int) {
+	r0, _ := C.getpgrp()
+	pid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getpid() (pid int) {
+	r0, _ := C.getpid()
+	pid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getppid() (ppid int) {
+	r0, _ := C.getppid()
+	ppid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getpriority(which int, who int) (prio int, err error) {
+	r0, er := C.getpriority(C.int(which), C.int(who))
+	prio = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getrusage(who int, rusage *Rusage) (err error) {
+	r0, er := C.getrusage(C.int(who), C.uintptr_t(uintptr(unsafe.Pointer(rusage))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getsid(pid int) (sid int, err error) {
+	r0, er := C.getsid(C.int(pid))
+	sid = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Kill(pid int, sig Signal) (err error) {
+	r0, er := C.kill(C.int(pid), C.int(sig))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Klogctl(typ int, buf []byte) (n int, err error) {
+	var _p0 *byte
+	if len(buf) > 0 {
+		_p0 = &buf[0]
+	}
+	var _p1 int
+	_p1 = len(buf)
+	r0, er := C.syslog(C.int(typ), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mkdir(dirfd int, path string, mode uint32) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.mkdir(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mkdirat(dirfd int, path string, mode uint32) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.mkdirat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mkfifo(path string, mode uint32) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.mkfifo(C.uintptr_t(_p0), C.uint(mode))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mknod(path string, mode uint32, dev int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.mknod(C.uintptr_t(_p0), C.uint(mode), C.int(dev))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mknodat(dirfd int, path string, mode uint32, dev int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.mknodat(C.int(dirfd), C.uintptr_t(_p0), C.uint(mode), C.int(dev))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
+	r0, er := C.nanosleep(C.uintptr_t(uintptr(unsafe.Pointer(time))), C.uintptr_t(uintptr(unsafe.Pointer(leftover))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Open(path string, mode int, perm uint32) (fd int, err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.open64(C.uintptr_t(_p0), C.int(mode), C.uint(perm))
+	fd = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Openat(dirfd int, path string, flags int, mode uint32) (fd int, err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.openat(C.int(dirfd), C.uintptr_t(_p0), C.int(flags), C.uint(mode))
+	fd = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func read(fd int, p []byte) (n int, err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.read(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Readlink(path string, buf []byte) (n int, err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	var _p1 *byte
+	if len(buf) > 0 {
+		_p1 = &buf[0]
+	}
+	var _p2 int
+	_p2 = len(buf)
+	r0, er := C.readlink(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(_p1))), C.size_t(_p2))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Renameat(olddirfd int, oldpath string, newdirfd int, newpath string) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(oldpath)))
+	_p1 := uintptr(unsafe.Pointer(C.CString(newpath)))
+	r0, er := C.renameat(C.int(olddirfd), C.uintptr_t(_p0), C.int(newdirfd), C.uintptr_t(_p1))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setdomainname(p []byte) (err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.setdomainname(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Sethostname(p []byte) (err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.sethostname(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setpgid(pid int, pgid int) (err error) {
+	r0, er := C.setpgid(C.int(pid), C.int(pgid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setsid() (pid int, err error) {
+	r0, er := C.setsid()
+	pid = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Settimeofday(tv *Timeval) (err error) {
+	r0, er := C.settimeofday(C.uintptr_t(uintptr(unsafe.Pointer(tv))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setuid(uid int) (err error) {
+	r0, er := C.setuid(C.int(uid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setgid(uid int) (err error) {
+	r0, er := C.setgid(C.int(uid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setpriority(which int, who int, prio int) (err error) {
+	r0, er := C.setpriority(C.int(which), C.int(who), C.int(prio))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Statx(dirfd int, path string, flags int, mask int, stat *Statx_t) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.statx(C.int(dirfd), C.uintptr_t(_p0), C.int(flags), C.int(mask), C.uintptr_t(uintptr(unsafe.Pointer(stat))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Sync() {
+	C.sync()
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Times(tms *Tms) (ticks uintptr, err error) {
+	r0, er := C.times(C.uintptr_t(uintptr(unsafe.Pointer(tms))))
+	ticks = uintptr(r0)
+	if uintptr(r0) == ^uintptr(0) && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Umask(mask int) (oldmask int) {
+	r0, _ := C.umask(C.int(mask))
+	oldmask = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Uname(buf *Utsname) (err error) {
+	r0, er := C.uname(C.uintptr_t(uintptr(unsafe.Pointer(buf))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Unlink(path string) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.unlink(C.uintptr_t(_p0))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Unlinkat(dirfd int, path string, flags int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.unlinkat(C.int(dirfd), C.uintptr_t(_p0), C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Ustat(dev int, ubuf *Ustat_t) (err error) {
+	r0, er := C.ustat(C.int(dev), C.uintptr_t(uintptr(unsafe.Pointer(ubuf))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func write(fd int, p []byte) (n int, err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.write(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Dup2(oldfd int, newfd int) (err error) {
+	r0, er := C.dup2(C.int(oldfd), C.int(newfd))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fadvise(fd int, offset int64, length int64, advice int) (err error) {
+	r0, er := C.posix_fadvise64(C.int(fd), C.longlong(offset), C.longlong(length), C.int(advice))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fchown(fd int, uid int, gid int) (err error) {
+	r0, er := C.fchown(C.int(fd), C.int(uid), C.int(gid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func fstat(fd int, stat *Stat_t) (err error) {
+	r0, er := C.fstat(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(stat))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func fstatat(dirfd int, path string, stat *Stat_t, flags int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.fstatat(C.int(dirfd), C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(stat))), C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Fstatfs(fd int, buf *Statfs_t) (err error) {
+	r0, er := C.fstatfs(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(buf))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Ftruncate(fd int, length int64) (err error) {
+	r0, er := C.ftruncate(C.int(fd), C.longlong(length))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getegid() (egid int) {
+	r0, _ := C.getegid()
+	egid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Geteuid() (euid int) {
+	r0, _ := C.geteuid()
+	euid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getgid() (gid int) {
+	r0, _ := C.getgid()
+	gid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getuid() (uid int) {
+	r0, _ := C.getuid()
+	uid = int(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Lchown(path string, uid int, gid int) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.lchown(C.uintptr_t(_p0), C.int(uid), C.int(gid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Listen(s int, n int) (err error) {
+	r0, er := C.listen(C.int(s), C.int(n))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func lstat(path string, stat *Stat_t) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.lstat(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(stat))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Pause() (err error) {
+	r0, er := C.pause()
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func pread(fd int, p []byte, offset int64) (n int, err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.pread64(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.longlong(offset))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func pwrite(fd int, p []byte, offset int64) (n int, err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.pwrite64(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.longlong(offset))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
+	r0, er := C.c_select(C.int(nfd), C.uintptr_t(uintptr(unsafe.Pointer(r))), C.uintptr_t(uintptr(unsafe.Pointer(w))), C.uintptr_t(uintptr(unsafe.Pointer(e))), C.uintptr_t(uintptr(unsafe.Pointer(timeout))))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Pselect(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timespec, sigmask *Sigset_t) (n int, err error) {
+	r0, er := C.pselect(C.int(nfd), C.uintptr_t(uintptr(unsafe.Pointer(r))), C.uintptr_t(uintptr(unsafe.Pointer(w))), C.uintptr_t(uintptr(unsafe.Pointer(e))), C.uintptr_t(uintptr(unsafe.Pointer(timeout))), C.uintptr_t(uintptr(unsafe.Pointer(sigmask))))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setregid(rgid int, egid int) (err error) {
+	r0, er := C.setregid(C.int(rgid), C.int(egid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Setreuid(ruid int, euid int) (err error) {
+	r0, er := C.setreuid(C.int(ruid), C.int(euid))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Shutdown(fd int, how int) (err error) {
+	r0, er := C.shutdown(C.int(fd), C.int(how))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Splice(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int64, err error) {
+	r0, er := C.splice(C.int(rfd), C.uintptr_t(uintptr(unsafe.Pointer(roff))), C.int(wfd), C.uintptr_t(uintptr(unsafe.Pointer(woff))), C.int(len), C.int(flags))
+	n = int64(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func stat(path string, statptr *Stat_t) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.stat(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(statptr))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Statfs(path string, buf *Statfs_t) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.statfs(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(buf))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Truncate(path string, length int64) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.truncate(C.uintptr_t(_p0), C.longlong(length))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
+	r0, er := C.bind(C.int(s), C.uintptr_t(uintptr(addr)), C.uintptr_t(uintptr(addrlen)))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
+	r0, er := C.connect(C.int(s), C.uintptr_t(uintptr(addr)), C.uintptr_t(uintptr(addrlen)))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func getgroups(n int, list *_Gid_t) (nn int, err error) {
+	r0, er := C.getgroups(C.int(n), C.uintptr_t(uintptr(unsafe.Pointer(list))))
+	nn = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func setgroups(n int, list *_Gid_t) (err error) {
+	r0, er := C.setgroups(C.int(n), C.uintptr_t(uintptr(unsafe.Pointer(list))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
+	r0, er := C.getsockopt(C.int(s), C.int(level), C.int(name), C.uintptr_t(uintptr(val)), C.uintptr_t(uintptr(unsafe.Pointer(vallen))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
+	r0, er := C.setsockopt(C.int(s), C.int(level), C.int(name), C.uintptr_t(uintptr(val)), C.uintptr_t(vallen))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func socket(domain int, typ int, proto int) (fd int, err error) {
+	r0, er := C.socket(C.int(domain), C.int(typ), C.int(proto))
+	fd = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
+	r0, er := C.socketpair(C.int(domain), C.int(typ), C.int(proto), C.uintptr_t(uintptr(unsafe.Pointer(fd))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
+	r0, er := C.getpeername(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(rsa))), C.uintptr_t(uintptr(unsafe.Pointer(addrlen))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
+	r0, er := C.getsockname(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(rsa))), C.uintptr_t(uintptr(unsafe.Pointer(addrlen))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
+	var _p0 *byte
+	if len(p) > 0 {
+		_p0 = &p[0]
+	}
+	var _p1 int
+	_p1 = len(p)
+	r0, er := C.recvfrom(C.int(fd), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(flags), C.uintptr_t(uintptr(unsafe.Pointer(from))), C.uintptr_t(uintptr(unsafe.Pointer(fromlen))))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
+	var _p0 *byte
+	if len(buf) > 0 {
+		_p0 = &buf[0]
+	}
+	var _p1 int
+	_p1 = len(buf)
+	r0, er := C.sendto(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(flags), C.uintptr_t(uintptr(to)), C.uintptr_t(uintptr(addrlen)))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
+	r0, er := C.nrecvmsg(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(msg))), C.int(flags))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
+	r0, er := C.nsendmsg(C.int(s), C.uintptr_t(uintptr(unsafe.Pointer(msg))), C.int(flags))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func munmap(addr uintptr, length uintptr) (err error) {
+	r0, er := C.munmap(C.uintptr_t(addr), C.uintptr_t(length))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Madvise(b []byte, advice int) (err error) {
+	var _p0 *byte
+	if len(b) > 0 {
+		_p0 = &b[0]
+	}
+	var _p1 int
+	_p1 = len(b)
+	r0, er := C.madvise(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(advice))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mprotect(b []byte, prot int) (err error) {
+	var _p0 *byte
+	if len(b) > 0 {
+		_p0 = &b[0]
+	}
+	var _p1 int
+	_p1 = len(b)
+	r0, er := C.mprotect(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(prot))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mlock(b []byte) (err error) {
+	var _p0 *byte
+	if len(b) > 0 {
+		_p0 = &b[0]
+	}
+	var _p1 int
+	_p1 = len(b)
+	r0, er := C.mlock(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Mlockall(flags int) (err error) {
+	r0, er := C.mlockall(C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Msync(b []byte, flags int) (err error) {
+	var _p0 *byte
+	if len(b) > 0 {
+		_p0 = &b[0]
+	}
+	var _p1 int
+	_p1 = len(b)
+	r0, er := C.msync(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1), C.int(flags))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Munlock(b []byte) (err error) {
+	var _p0 *byte
+	if len(b) > 0 {
+		_p0 = &b[0]
+	}
+	var _p1 int
+	_p1 = len(b)
+	r0, er := C.munlock(C.uintptr_t(uintptr(unsafe.Pointer(_p0))), C.size_t(_p1))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Munlockall() (err error) {
+	r0, er := C.munlockall()
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func pipe(p *[2]_C_int) (err error) {
+	r0, er := C.pipe(C.uintptr_t(uintptr(unsafe.Pointer(p))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
+	r0, er := C.poll(C.uintptr_t(uintptr(unsafe.Pointer(fds))), C.int(nfds), C.int(timeout))
+	n = int(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func gettimeofday(tv *Timeval, tzp *Timezone) (err error) {
+	r0, er := C.gettimeofday(C.uintptr_t(uintptr(unsafe.Pointer(tv))), C.uintptr_t(uintptr(unsafe.Pointer(tzp))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Time(t *Time_t) (tt Time_t, err error) {
+	r0, er := C.time(C.uintptr_t(uintptr(unsafe.Pointer(t))))
+	tt = Time_t(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Utime(path string, buf *Utimbuf) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(path)))
+	r0, er := C.utime(C.uintptr_t(_p0), C.uintptr_t(uintptr(unsafe.Pointer(buf))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getsystemcfg(label int) (n uint64) {
+	r0, _ := C.getsystemcfg(C.int(label))
+	n = uint64(r0)
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func umount(target string) (err error) {
+	_p0 := uintptr(unsafe.Pointer(C.CString(target)))
+	r0, er := C.umount(C.uintptr_t(_p0))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Getrlimit(resource int, rlim *Rlimit) (err error) {
+	r0, er := C.getrlimit64(C.int(resource), C.uintptr_t(uintptr(unsafe.Pointer(rlim))))
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func Seek(fd int, offset int64, whence int) (off int64, err error) {
+	r0, er := C.lseek64(C.int(fd), C.longlong(offset), C.int(whence))
+	off = int64(r0)
+	if r0 == -1 && er != nil {
+		err = er
+	}
+	return
+}
+
+// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
+
+func mmap(addr uintptr, length uintptr, prot int, flags int, fd int, offset int64) (xaddr uintptr, err error) {
+	r0, er := C.mmap(C.uintptr_t(addr), C.uintptr_t(length), C.int(prot), C.int(flags), C.int(fd), C.longlong(offset))
+	xaddr = uintptr(r0)
+	if uintptr(r0) == ^uintptr(0) && er != nil {
+		err = er
+	}
+	return
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_aix_ppc64.go","mode":420,"size":30758,"sha256":"d66e0f51215071990de1968d52e80be0d57c2d49b3ad0ca9cd9448859d04fff8","index":0,"count":1,"encoding":"utf-8","payloadBytes":30758}
 // go run mksyscall_aix_ppc64.go -aix -tags aix,ppc64 syscall_aix.go syscall_aix_ppc64.go
 // Code generated by the command above; see README.md. DO NOT EDIT.
@@ -137238,671 +140311,4 @@ s      = 0xC00002F1
 	STATUS_APPEXEC_UNKNOWN_USER                                               NTStatus      = 0xC0EC0007
 )
 
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zknownfolderids_windows.go","mode":420,"size":19145,"sha256":"3815bbaa8adf5400041954decc56e8889eb56eb20bfc30053e7799703af0fc95","index":0,"count":1,"encoding":"utf-8","payloadBytes":19145}
-// Code generated by 'mkknownfolderids.bash'; DO NOT EDIT.
-
-package windows
-
-type KNOWNFOLDERID GUID
-
-var (
-	FOLDERID_NetworkFolder          = &KNOWNFOLDERID{0xd20beec4, 0x5ca8, 0x4905, [8]byte{0xae, 0x3b, 0xbf, 0x25, 0x1e, 0xa0, 0x9b, 0x53}}
-	FOLDERID_ComputerFolder         = &KNOWNFOLDERID{0x0ac0837c, 0xbbf8, 0x452a, [8]byte{0x85, 0x0d, 0x79, 0xd0, 0x8e, 0x66, 0x7c, 0xa7}}
-	FOLDERID_InternetFolder         = &KNOWNFOLDERID{0x4d9f7874, 0x4e0c, 0x4904, [8]byte{0x96, 0x7b, 0x40, 0xb0, 0xd2, 0x0c, 0x3e, 0x4b}}
-	FOLDERID_ControlPanelFolder     = &KNOWNFOLDERID{0x82a74aeb, 0xaeb4, 0x465c, [8]byte{0xa0, 0x14, 0xd0, 0x97, 0xee, 0x34, 0x6d, 0x63}}
-	FOLDERID_PrintersFolder         = &KNOWNFOLDERID{0x76fc4e2d, 0xd6ad, 0x4519, [8]byte{0xa6, 0x63, 0x37, 0xbd, 0x56, 0x06, 0x81, 0x85}}
-	FOLDERID_SyncManagerFolder      = &KNOWNFOLDERID{0x43668bf8, 0xc14e, 0x49b2, [8]byte{0x97, 0xc9, 0x74, 0x77, 0x84, 0xd7, 0x84, 0xb7}}
-	FOLDERID_SyncSetupFolder        = &KNOWNFOLDERID{0x0f214138, 0xb1d3, 0x4a90, [8]byte{0xbb, 0xa9, 0x27, 0xcb, 0xc0, 0xc5, 0x38, 0x9a}}
-	FOLDERID_ConflictFolder         = &KNOWNFOLDERID{0x4bfefb45, 0x347d, 0x4006, [8]byte{0xa5, 0xbe, 0xac, 0x0c, 0xb0, 0x56, 0x71, 0x92}}
-	FOLDERID_SyncResultsFolder      = &KNOWNFOLDERID{0x289a9a43, 0xbe44, 0x4057, [8]byte{0xa4, 0x1b, 0x58, 0x7a, 0x76, 0xd7, 0xe7, 0xf9}}
-	FOLDERID_RecycleBinFolder       = &KNOWNFOLDERID{0xb7534046, 0x3ecb, 0x4c18, [8]byte{0xbe, 0x4e, 0x64, 0xcd, 0x4c, 0xb7, 0xd6, 0xac}}
-	FOLDERID_ConnectionsFolder      = &KNOWNFOLDERID{0x6f0cd92b, 0x2e97, 0x45d1, [8]byte{0x88, 0xff, 0xb0, 0xd1, 0x86, 0xb8, 0xde, 0xdd}}
-	FOLDERID_Fonts                  = &KNOWNFOLDERID{0xfd228cb7, 0xae11, 0x4ae3, [8]byte{0x86, 0x4c, 0x16, 0xf3, 0x91, 0x0a, 0xb8, 0xfe}}
-	FOLDERID_Desktop                = &KNOWNFOLDERID{0xb4bfcc3a, 0xdb2c, 0x424c, [8]byte{0xb0, 0x29, 0x7f, 0xe9, 0x9a, 0x87, 0xc6, 0x41}}
-	FOLDERID_Startup                = &KNOWNFOLDERID{0xb97d20bb, 0xf46a, 0x4c97, [8]byte{0xba, 0x10, 0x5e, 0x36, 0x08, 0x43, 0x08, 0x54}}
-	FOLDERID_Programs               = &KNOWNFOLDERID{0xa77f5d77, 0x2e2b, 0x44c3, [8]byte{0xa6, 0xa2, 0xab, 0xa6, 0x01, 0x05, 0x4a, 0x51}}
-	FOLDERID_StartMenu              = &KNOWNFOLDERID{0x625b53c3, 0xab48, 0x4ec1, [8]byte{0xba, 0x1f, 0xa1, 0xef, 0x41, 0x46, 0xfc, 0x19}}
-	FOLDERID_Recent                 = &KNOWNFOLDERID{0xae50c081, 0xebd2, 0x438a, [8]byte{0x86, 0x55, 0x8a, 0x09, 0x2e, 0x34, 0x98, 0x7a}}
-	FOLDERID_SendTo                 = &KNOWNFOLDERID{0x8983036c, 0x27c0, 0x404b, [8]byte{0x8f, 0x08, 0x10, 0x2d, 0x10, 0xdc, 0xfd, 0x74}}
-	FOLDERID_Documents              = &KNOWNFOLDERID{0xfdd39ad0, 0x238f, 0x46af, [8]byte{0xad, 0xb4, 0x6c, 0x85, 0x48, 0x03, 0x69, 0xc7}}
-	FOLDERID_Favorites              = &KNOWNFOLDERID{0x1777f761, 0x68ad, 0x4d8a, [8]byte{0x87, 0xbd, 0x30, 0xb7, 0x59, 0xfa, 0x33, 0xdd}}
-	FOLDERID_NetHood                = &KNOWNFOLDERID{0xc5abbf53, 0xe17f, 0x4121, [8]byte{0x89, 0x00, 0x86, 0x62, 0x6f, 0xc2, 0xc9, 0x73}}
-	FOLDERID_PrintHood              = &KNOWNFOLDERID{0x9274bd8d, 0xcfd1, 0x41c3, [8]byte{0xb3, 0x5e, 0xb1, 0x3f, 0x55, 0xa7, 0x58, 0xf4}}
-	FOLDERID_Templates              = &KNOWNFOLDERID{0xa63293e8, 0x664e, 0x48db, [8]byte{0xa0, 0x79, 0xdf, 0x75, 0x9e, 0x05, 0x09, 0xf7}}
-	FOLDERID_CommonStartup          = &KNOWNFOLDERID{0x82a5ea35, 0xd9cd, 0x47c5, [8]byte{0x96, 0x29, 0xe1, 0x5d, 0x2f, 0x71, 0x4e, 0x6e}}
-	FOLDERID_CommonPrograms         = &KNOWNFOLDERID{0x0139d44e, 0x6afe, 0x49f2, [8]byte{0x86, 0x90, 0x3d, 0xaf, 0xca, 0xe6, 0xff, 0xb8}}
-	FOLDERID_CommonStartMenu        = &KNOWNFOLDERID{0xa4115719, 0xd62e, 0x491d, [8]byte{0xaa, 0x7c, 0xe7, 0x4b, 0x8b, 0xe3, 0xb0, 0x67}}
-	FOLDERID_PublicDesktop          = &KNOWNFOLDERID{0xc4aa340d, 0xf20f, 0x4863, [8]byte{0xaf, 0xef, 0xf8, 0x7e, 0xf2, 0xe6, 0xba, 0x25}}
-	FOLDERID_ProgramData            = &KNOWNFOLDERID{0x62ab5d82, 0xfdc1, 0x4dc3, [8]byte{0xa9, 0xdd, 0x07, 0x0d, 0x1d, 0x49, 0x5d, 0x97}}
-	FOLDERID_CommonTemplates        = &KNOWNFOLDERID{0xb94237e7, 0x57ac, 0x4347, [8]byte{0x91, 0x51, 0xb0, 0x8c, 0x6c, 0x32, 0xd1, 0xf7}}
-	FOLDERID_PublicDocuments        = &KNOWNFOLDERID{0xed4824af, 0xdce4, 0x45a8, [8]byte{0x81, 0xe2, 0xfc, 0x79, 0x65, 0x08, 0x36, 0x34}}
-	FOLDERID_RoamingAppData         = &KNOWNFOLDERID{0x3eb685db, 0x65f9, 0x4cf6, [8]byte{0xa0, 0x3a, 0xe3, 0xef, 0x65, 0x72, 0x9f, 0x3d}}
-	FOLDERID_LocalAppData           = &KNOWNFOLDERID{0xf1b32785, 0x6fba, 0x4fcf, [8]byte{0x9d, 0x55, 0x7b, 0x8e, 0x7f, 0x15, 0x70, 0x91}}
-	FOLDERID_LocalAppDataLow        = &KNOWNFOLDERID{0xa520a1a4, 0x1780, 0x4ff6, [8]byte{0xbd, 0x18, 0x16, 0x73, 0x43, 0xc5, 0xaf, 0x16}}
-	FOLDERID_InternetCache          = &KNOWNFOLDERID{0x352481e8, 0x33be, 0x4251, [8]byte{0xba, 0x85, 0x60, 0x07, 0xca, 0xed, 0xcf, 0x9d}}
-	FOLDERID_Cookies                = &KNOWNFOLDERID{0x2b0f765d, 0xc0e9, 0x4171, [8]byte{0x90, 0x8e, 0x08, 0xa6, 0x11, 0xb8, 0x4f, 0xf6}}
-	FOLDERID_History                = &KNOWNFOLDERID{0xd9dc8a3b, 0xb784, 0x432e, [8]byte{0xa7, 0x81, 0x5a, 0x11, 0x30, 0xa7, 0x59, 0x63}}
-	FOLDERID_System                 = &KNOWNFOLDERID{0x1ac14e77, 0x02e7, 0x4e5d, [8]byte{0xb7, 0x44, 0x2e, 0xb1, 0xae, 0x51, 0x98, 0xb7}}
-	FOLDERID_SystemX86              = &KNOWNFOLDERID{0xd65231b0, 0xb2f1, 0x4857, [8]byte{0xa4, 0xce, 0xa8, 0xe7, 0xc6, 0xea, 0x7d, 0x27}}
-	FOLDERID_Windows                = &KNOWNFOLDERID{0xf38bf404, 0x1d43, 0x42f2, [8]byte{0x93, 0x05, 0x67, 0xde, 0x0b, 0x28, 0xfc, 0x23}}
-	FOLDERID_Profile                = &KNOWNFOLDERID{0x5e6c858f, 0x0e22, 0x4760, [8]byte{0x9a, 0xfe, 0xea, 0x33, 0x17, 0xb6, 0x71, 0x73}}
-	FOLDERID_Pictures               = &KNOWNFOLDERID{0x33e28130, 0x4e1e, 0x4676, [8]byte{0x83, 0x5a, 0x98, 0x39, 0x5c, 0x3b, 0xc3, 0xbb}}
-	FOLDERID_ProgramFilesX86        = &KNOWNFOLDERID{0x7c5a40ef, 0xa0fb, 0x4bfc, [8]byte{0x87, 0x4a, 0xc0, 0xf2, 0xe0, 0xb9, 0xfa, 0x8e}}
-	FOLDERID_ProgramFilesCommonX86  = &KNOWNFOLDERID{0xde974d24, 0xd9c6, 0x4d3e, [8]byte{0xbf, 0x91, 0xf4, 0x45, 0x51, 0x20, 0xb9, 0x17}}
-	FOLDERID_ProgramFilesX64        = &KNOWNFOLDERID{0x6d809377, 0x6af0, 0x444b, [8]byte{0x89, 0x57, 0xa3, 0x77, 0x3f, 0x02, 0x20, 0x0e}}
-	FOLDERID_ProgramFilesCommonX64  = &KNOWNFOLDERID{0x6365d5a7, 0x0f0d, 0x45e5, [8]byte{0x87, 0xf6, 0x0d, 0xa5, 0x6b, 0x6a, 0x4f, 0x7d}}
-	FOLDERID_ProgramFiles           = &KNOWNFOLDERID{0x905e63b6, 0xc1bf, 0x494e, [8]byte{0xb2, 0x9c, 0x65, 0xb7, 0x32, 0xd3, 0xd2, 0x1a}}
-	FOLDERID_ProgramFilesCommon     = &KNOWNFOLDERID{0xf7f1ed05, 0x9f6d, 0x47a2, [8]byte{0xaa, 0xae, 0x29, 0xd3, 0x17, 0xc6, 0xf0, 0x66}}
-	FOLDERID_UserProgramFiles       = &KNOWNFOLDERID{0x5cd7aee2, 0x2219, 0x4a67, [8]byte{0xb8, 0x5d, 0x6c, 0x9c, 0xe1, 0x56, 0x60, 0xcb}}
-	FOLDERID_UserProgramFilesCommon = &KNOWNFOLDERID{0xbcbd3057, 0xca5c, 0x4622, [8]byte{0xb4, 0x2d, 0xbc, 0x56, 0xdb, 0x0a, 0xe5, 0x16}}
-	FOLDERID_AdminTools             = &KNOWNFOLDERID{0x724ef170, 0xa42d, 0x4fef, [8]byte{0x9f, 0x26, 0xb6, 0x0e, 0x84, 0x6f, 0xba, 0x4f}}
-	FOLDERID_CommonAdminTools       = &KNOWNFOLDERID{0xd0384e7d, 0xbac3, 0x4797, [8]byte{0x8f, 0x14, 0xcb, 0xa2, 0x29, 0xb3, 0x92, 0xb5}}
-	FOLDERID_Music                  = &KNOWNFOLDERID{0x4bd8d571, 0x6d19, 0x48d3, [8]byte{0xbe, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0e, 0x43}}
-	FOLDERID_Videos                 = &KNOWNFOLDERID{0x18989b1d, 0x99b5, 0x455b, [8]byte{0x84, 0x1c, 0xab, 0x7c, 0x74, 0xe4, 0xdd, 0xfc}}
-	FOLDERID_Ringtones              = &KNOWNFOLDERID{0xc870044b, 0xf49e, 0x4126, [8]byte{0xa9, 0xc3, 0xb5, 0x2a, 0x1f, 0xf4, 0x11, 0xe8}}
-	FOLDERID_PublicPictures         = &KNOWNFOLDERID{0xb6ebfb86, 0x6907, 0x413c, [8]byte{0x9a, 0xf7, 0x4f, 0xc2, 0xab, 0xf0, 0x7c, 0xc5}}
-	FOLDERID_PublicMusic            = &KNOWNFOLDERID{0x3214fab5, 0x9757, 0x4298, [8]byte{0xbb, 0x61, 0x92, 0xa9, 0xde, 0xaa, 0x44, 0xff}}
-	FOLDERID_PublicVideos           = &KNOWNFOLDERID{0x2400183a, 0x6185, 0x49fb, [8]byte{0xa2, 0xd8, 0x4a, 0x39, 0x2a, 0x60, 0x2b, 0xa3}}
-	FOLDERID_PublicRingtones        = &KNOWNFOLDERID{0xe555ab60, 0x153b, 0x4d17, [8]byte{0x9f, 0x04, 0xa5, 0xfe, 0x99, 0xfc, 0x15, 0xec}}
-	FOLDERID_ResourceDir            = &KNOWNFOLDERID{0x8ad10c31, 0x2adb, 0x4296, [8]byte{0xa8, 0xf7, 0xe4, 0x70, 0x12, 0x32, 0xc9, 0x72}}
-	FOLDERID_LocalizedResourcesDir  = &KNOWNFOLDERID{0x2a00375e, 0x224c, 0x49de, [8]byte{0xb8, 0xd1, 0x44, 0x0d, 0xf7, 0xef, 0x3d, 0xdc}}
-	FOLDERID_CommonOEMLinks         = &KNOWNFOLDERID{0xc1bae2d0, 0x10df, 0x4334, [8]byte{0xbe, 0xdd, 0x7a, 0xa2, 0x0b, 0x22, 0x7a, 0x9d}}
-	FOLDERID_CDBurning              = &KNOWNFOLDERID{0x9e52ab10, 0xf80d, 0x49df, [8]byte{0xac, 0xb8, 0x43, 0x30, 0xf5, 0x68, 0x78, 0x55}}
-	FOLDERID_UserProfiles           = &KNOWNFOLDERID{0x0762d272, 0xc50a, 0x4bb0, [8]byte{0xa3, 0x82, 0x69, 0x7d, 0xcd, 0x72, 0x9b, 0x80}}
-	FOLDERID_Playlists              = &KNOWNFOLDERID{0xde92c1c7, 0x837f, 0x4f69, [8]byte{0xa3, 0xbb, 0x86, 0xe6, 0x31, 0x20, 0x4a, 0x23}}
-	FOLDERID_SamplePlaylists        = &KNOWNFOLDERID{0x15ca69b3, 0x30ee, 0x49c1, [8]byte{0xac, 0xe1, 0x6b, 0x5e, 0xc3, 0x72, 0xaf, 0xb5}}
-	FOLDERID_SampleMusic            = &KNOWNFOLDERID{0xb250c668, 0xf57d, 0x4ee1, [8]byte{0xa6, 0x3c, 0x29, 0x0e, 0xe7, 0xd1, 0xaa, 0x1f}}
-	FOLDERID_SamplePictures         = &KNOWNFOLDERID{0xc4900540, 0x2379, 0x4c75, [8]byte{0x84, 0x4b, 0x64, 0xe6, 0xfa, 0xf8, 0x71, 0x6b}}
-	FOLDERID_SampleVideos           = &KNOWNFOLDERID{0x859ead94, 0x2e85, 0x48ad, [8]byte{0xa7, 0x1a, 0x09, 0x69, 0xcb, 0x56, 0xa6, 0xcd}}
-	FOLDERID_PhotoAlbums            = &KNOWNFOLDERID{0x69d2cf90, 0xfc33, 0x4fb7, [8]byte{0x9a, 0x0c, 0xeb, 0xb0, 0xf0, 0xfc, 0xb4, 0x3c}}
-	FOLDERID_Public                 = &KNOWNFOLDERID{0xdfdf76a2, 0xc82a, 0x4d63, [8]byte{0x90, 0x6a, 0x56, 0x44, 0xac, 0x45, 0x73, 0x85}}
-	FOLDERID_ChangeRemovePrograms   = &KNOWNFOLDERID{0xdf7266ac, 0x9274, 0x4867, [8]byte{0x8d, 0x55, 0x3b, 0xd6, 0x61, 0xde, 0x87, 0x2d}}
-	FOLDERID_AppUpdates             = &KNOWNFOLDERID{0xa305ce99, 0xf527, 0x492b, [8]byte{0x8b, 0x1a, 0x7e, 0x76, 0xfa, 0x98, 0xd6, 0xe4}}
-	FOLDERID_AddNewPrograms         = &KNOWNFOLDERID{0xde61d971, 0x5ebc, 0x4f02, [8]byte{0xa3, 0xa9, 0x6c, 0x82, 0x89, 0x5e, 0x5c, 0x04}}
-	FOLDERID_Downloads              = &KNOWNFOLDERID{0x374de290, 0x123f, 0x4565, [8]byte{0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b}}
-	FOLDERID_PublicDownloads        = &KNOWNFOLDERID{0x3d644c9b, 0x1fb8, 0x4f30, [8]byte{0x9b, 0x45, 0xf6, 0x70, 0x23, 0x5f, 0x79, 0xc0}}
-	FOLDERID_SavedSearches          = &KNOWNFOLDERID{0x7d1d3a04, 0xdebb, 0x4115, [8]byte{0x95, 0xcf, 0x2f, 0x29, 0xda, 0x29, 0x20, 0xda}}
-	FOLDERID_QuickLaunch            = &KNOWNFOLDERID{0x52a4f021, 0x7b75, 0x48a9, [8]byte{0x9f, 0x6b, 0x4b, 0x87, 0xa2, 0x10, 0xbc, 0x8f}}
-	FOLDERID_Contacts               = &KNOWNFOLDERID{0x56784854, 0xc6cb, 0x462b, [8]byte{0x81, 0x69, 0x88, 0xe3, 0x50, 0xac, 0xb8, 0x82}}
-	FOLDERID_SidebarParts           = &KNOWNFOLDERID{0xa75d362e, 0x50fc, 0x4fb7, [8]byte{0xac, 0x2c, 0xa8, 0xbe, 0xaa, 0x31, 0x44, 0x93}}
-	FOLDERID_SidebarDefaultParts    = &KNOWNFOLDERID{0x7b396e54, 0x9ec5, 0x4300, [8]byte{0xbe, 0x0a, 0x24, 0x82, 0xeb, 0xae, 0x1a, 0x26}}
-	FOLDERID_PublicGameTasks        = &KNOWNFOLDERID{0xdebf2536, 0xe1a8, 0x4c59, [8]byte{0xb6, 0xa2, 0x41, 0x45, 0x86, 0x47, 0x6a, 0xea}}
-	FOLDERID_GameTasks              = &KNOWNFOLDERID{0x054fae61, 0x4dd8, 0x4787, [8]byte{0x80, 0xb6, 0x09, 0x02, 0x20, 0xc4, 0xb7, 0x00}}
-	FOLDERID_SavedGames             = &KNOWNFOLDERID{0x4c5c32ff, 0xbb9d, 0x43b0, [8]byte{0xb5, 0xb4, 0x2d, 0x72, 0xe5, 0x4e, 0xaa, 0xa4}}
-	FOLDERID_Games                  = &KNOWNFOLDERID{0xcac52c1a, 0xb53d, 0x4edc, [8]byte{0x92, 0xd7, 0x6b, 0x2e, 0x8a, 0xc1, 0x94, 0x34}}
-	FOLDERID_SEARCH_MAPI            = &KNOWNFOLDERID{0x98ec0e18, 0x2098, 0x4d44, [8]byte{0x86, 0x44, 0x66, 0x97, 0x93, 0x15, 0xa2, 0x81}}
-	FOLDERID_SEARCH_CSC             = &KNOWNFOLDERID{0xee32e446, 0x31ca, 0x4aba, [8]byte{0x81, 0x4f, 0xa5, 0xeb, 0xd2, 0xfd, 0x6d, 0x5e}}
-	FOLDERID_Links                  = &KNOWNFOLDERID{0xbfb9d5e0, 0xc6a9, 0x404c, [8]byte{0xb2, 0xb2, 0xae, 0x6d, 0xb6, 0xaf, 0x49, 0x68}}
-	FOLDERID_UsersFiles             = &KNOWNFOLDERID{0xf3ce0f7c, 0x4901, 0x4acc, [8]byte{0x86, 0x48, 0xd5, 0xd4, 0x4b, 0x04, 0xef, 0x8f}}
-	FOLDERID_UsersLibraries         = &KNOWNFOLDERID{0xa302545d, 0xdeff, 0x464b, [8]byte{0xab, 0xe8, 0x61, 0xc8, 0x64, 0x8d, 0x93, 0x9b}}
-	FOLDERID_SearchHome             = &KNOWNFOLDERID{0x190337d1, 0xb8ca, 0x4121, [8]byte{0xa6, 0x39, 0x6d, 0x47, 0x2d, 0x16, 0x97, 0x2a}}
-	FOLDERID_OriginalImages         = &KNOWNFOLDERID{0x2c36c0aa, 0x5812, 0x4b87, [8]byte{0xbf, 0xd0, 0x4c, 0xd0, 0xdf, 0xb1, 0x9b, 0x39}}
-	FOLDERID_DocumentsLibrary       = &KNOWNFOLDERID{0x7b0db17d, 0x9cd2, 0x4a93, [8]byte{0x97, 0x33, 0x46, 0xcc, 0x89, 0x02, 0x2e, 0x7c}}
-	FOLDERID_MusicLibrary           = &KNOWNFOLDERID{0x2112ab0a, 0xc86a, 0x4ffe, [8]byte{0xa3, 0x68, 0x0d, 0xe9, 0x6e, 0x47, 0x01, 0x2e}}
-	FOLDERID_PicturesLibrary        = &KNOWNFOLDERID{0xa990ae9f, 0xa03b, 0x4e80, [8]byte{0x94, 0xbc, 0x99, 0x12, 0xd7, 0x50, 0x41, 0x04}}
-	FOLDERID_VideosLibrary          = &KNOWNFOLDERID{0x491e922f, 0x5643, 0x4af4, [8]byte{0xa7, 0xeb, 0x4e, 0x7a, 0x13, 0x8d, 0x81, 0x74}}
-	FOLDERID_RecordedTVLibrary      = &KNOWNFOLDERID{0x1a6fdba2, 0xf42d, 0x4358, [8]byte{0xa7, 0x98, 0xb7, 0x4d, 0x74, 0x59, 0x26, 0xc5}}
-	FOLDERID_HomeGroup              = &KNOWNFOLDERID{0x52528a6b, 0xb9e3, 0x4add, [8]byte{0xb6, 0x0d, 0x58, 0x8c, 0x2d, 0xba, 0x84, 0x2d}}
-	FOLDERID_HomeGroupCurrentUser   = &KNOWNFOLDERID{0x9b74b6a3, 0x0dfd, 0x4f11, [8]byte{0x9e, 0x78, 0x5f, 0x78, 0x00, 0xf2, 0xe7, 0x72}}
-	FOLDERID_DeviceMetadataStore    = &KNOWNFOLDERID{0x5ce4a5e9, 0xe4eb, 0x479d, [8]byte{0xb8, 0x9f, 0x13, 0x0c, 0x02, 0x88, 0x61, 0x55}}
-	FOLDERID_Libraries              = &KNOWNFOLDERID{0x1b3ea5dc, 0xb587, 0x4786, [8]byte{0xb4, 0xef, 0xbd, 0x1d, 0xc3, 0x32, 0xae, 0xae}}
-	FOLDERID_PublicLibraries        = &KNOWNFOLDERID{0x48daf80b, 0xe6cf, 0x4f4e, [8]byte{0xb8, 0x00, 0x0e, 0x69, 0xd8, 0x4e, 0xe3, 0x84}}
-	FOLDERID_UserPinned             = &KNOWNFOLDERID{0x9e3995ab, 0x1f9c, 0x4f13, [8]byte{0xb8, 0x27, 0x48, 0xb2, 0x4b, 0x6c, 0x71, 0x74}}
-	FOLDERID_ImplicitAppShortcuts   = &KNOWNFOLDERID{0xbcb5256f, 0x79f6, 0x4cee, [8]byte{0xb7, 0x25, 0xdc, 0x34, 0xe4, 0x02, 0xfd, 0x46}}
-	FOLDERID_AccountPictures        = &KNOWNFOLDERID{0x008ca0b1, 0x55b4, 0x4c56, [8]byte{0xb8, 0xa8, 0x4d, 0xe4, 0xb2, 0x99, 0xd3, 0xbe}}
-	FOLDERID_PublicUserTiles        = &KNOWNFOLDERID{0x0482af6c, 0x08f1, 0x4c34, [8]byte{0x8c, 0x90, 0xe1, 0x7e, 0xc9, 0x8b, 0x1e, 0x17}}
-	FOLDERID_AppsFolder             = &KNOWNFOLDERID{0x1e87508d, 0x89c2, 0x42f0, [8]byte{0x8a, 0x7e, 0x64, 0x5a, 0x0f, 0x50, 0xca, 0x58}}
-	FOLDERID_StartMenuAllPrograms   = &KNOWNFOLDERID{0xf26305ef, 0x6948, 0x40b9, [8]byte{0xb2, 0x55, 0x81, 0x45, 0x3d, 0x09, 0xc7, 0x85}}
-	FOLDERID_CommonStartMenuPlaces  = &KNOWNFOLDERID{0xa440879f, 0x87a0, 0x4f7d, [8]byte{0xb7, 0x00, 0x02, 0x07, 0xb9, 0x66, 0x19, 0x4a}}
-	FOLDERID_ApplicationShortcuts   = &KNOWNFOLDERID{0xa3918781, 0xe5f2, 0x4890, [8]byte{0xb3, 0xd9, 0xa7, 0xe5, 0x43, 0x32, 0x32, 0x8c}}
-	FOLDERID_RoamingTiles           = &KNOWNFOLDERID{0x00bcfc5a, 0xed94, 0x4e48, [8]byte{0x96, 0xa1, 0x3f, 0x62, 0x17, 0xf2, 0x19, 0x90}}
-	FOLDERID_RoamedTileImages       = &KNOWNFOLDERID{0xaaa8d5a5, 0xf1d6, 0x4259, [8]byte{0xba, 0xa8, 0x78, 0xe7, 0xef, 0x60, 0x83, 0x5e}}
-	FOLDERID_Screenshots            = &KNOWNFOLDERID{0xb7bede81, 0xdf94, 0x4682, [8]byte{0xa7, 0xd8, 0x57, 0xa5, 0x26, 0x20, 0xb8, 0x6f}}
-	FOLDERID_CameraRoll             = &KNOWNFOLDERID{0xab5fb87b, 0x7ce2, 0x4f83, [8]byte{0x91, 0x5d, 0x55, 0x08, 0x46, 0xc9, 0x53, 0x7b}}
-	FOLDERID_SkyDrive               = &KNOWNFOLDERID{0xa52bba46, 0xe9e1, 0x435f, [8]byte{0xb3, 0xd9, 0x28, 0xda, 0xa6, 0x48, 0xc0, 0xf6}}
-	FOLDERID_OneDrive               = &KNOWNFOLDERID{0xa52bba46, 0xe9e1, 0x435f, [8]byte{0xb3, 0xd9, 0x28, 0xda, 0xa6, 0x48, 0xc0, 0xf6}}
-	FOLDERID_SkyDriveDocuments      = &KNOWNFOLDERID{0x24d89e24, 0x2f19, 0x4534, [8]byte{0x9d, 0xde, 0x6a, 0x66, 0x71, 0xfb, 0xb8, 0xfe}}
-	FOLDERID_SkyDrivePictures       = &KNOWNFOLDERID{0x339719b5, 0x8c47, 0x4894, [8]byte{0x94, 0xc2, 0xd8, 0xf7, 0x7a, 0xdd, 0x44, 0xa6}}
-	FOLDERID_SkyDriveMusic          = &KNOWNFOLDERID{0xc3f2459e, 0x80d6, 0x45dc, [8]byte{0xbf, 0xef, 0x1f, 0x76, 0x9f, 0x2b, 0xe7, 0x30}}
-	FOLDERID_SkyDriveCameraRoll     = &KNOWNFOLDERID{0x767e6811, 0x49cb, 0x4273, [8]byte{0x87, 0xc2, 0x20, 0xf3, 0x55, 0xe1, 0x08, 0x5b}}
-	FOLDERID_SearchHistory          = &KNOWNFOLDERID{0x0d4c3db6, 0x03a3, 0x462f, [8]byte{0xa0, 0xe6, 0x08, 0x92, 0x4c, 0x41, 0xb5, 0xd4}}
-	FOLDERID_SearchTemplates        = &KNOWNFOLDERID{0x7e636bfe, 0xdfa9, 0x4d5e, [8]byte{0xb4, 0x56, 0xd7, 0xb3, 0x98, 0x51, 0xd8, 0xa9}}
-	FOLDERID_CameraRollLibrary      = &KNOWNFOLDERID{0x2b20df75, 0x1eda, 0x4039, [8]byte{0x80, 0x97, 0x38, 0x79, 0x82, 0x27, 0xd5, 0xb7}}
-	FOLDERID_SavedPictures          = &KNOWNFOLDERID{0x3b193882, 0xd3ad, 0x4eab, [8]byte{0x96, 0x5a, 0x69, 0x82, 0x9d, 0x1f, 0xb5, 0x9f}}
-	FOLDERID_SavedPicturesLibrary   = &KNOWNFOLDERID{0xe25b5812, 0xbe88, 0x4bd9, [8]byte{0x94, 0xb0, 0x29, 0x23, 0x34, 0x77, 0xb6, 0xc3}}
-	FOLDERID_RetailDemo             = &KNOWNFOLDERID{0x12d4c69e, 0x24ad, 0x4923, [8]byte{0xbe, 0x19, 0x31, 0x32, 0x1c, 0x43, 0xa7, 0x67}}
-	FOLDERID_Device                 = &KNOWNFOLDERID{0x1c2ac1dc, 0x4358, 0x4b6c, [8]byte{0x97, 0x33, 0xaf, 0x21, 0x15, 0x65, 0x76, 0xf0}}
-	FOLDERID_DevelopmentFiles       = &KNOWNFOLDERID{0xdbe8e08e, 0x3053, 0x4bbc, [8]byte{0xb1, 0x83, 0x2a, 0x7b, 0x2b, 0x19, 0x1e, 0x59}}
-	FOLDERID_Objects3D              = &KNOWNFOLDERID{0x31c0dd25, 0x9439, 0x4f12, [8]byte{0xbf, 0x41, 0x7f, 0xf4, 0xed, 0xa3, 0x87, 0x22}}
-	FOLDERID_AppCaptures            = &KNOWNFOLDERID{0xedc0fe71, 0x98d8, 0x4f4a, [8]byte{0xb9, 0x20, 0xc8, 0xdc, 0x13, 0x3c, 0xb1, 0x65}}
-	FOLDERID_LocalDocuments         = &KNOWNFOLDERID{0xf42ee2d3, 0x909f, 0x4907, [8]byte{0x88, 0x71, 0x4c, 0x22, 0xfc, 0x0b, 0xf7, 0x56}}
-	FOLDERID_LocalPictures          = &KNOWNFOLDERID{0x0ddd015d, 0xb06c, 0x45d5, [8]byte{0x8c, 0x4c, 0xf5, 0x97, 0x13, 0x85, 0x46, 0x39}}
-	FOLDERID_LocalVideos            = &KNOWNFOLDERID{0x35286a68, 0x3c57, 0x41a1, [8]byte{0xbb, 0xb1, 0x0e, 0xae, 0x73, 0xd7, 0x6c, 0x95}}
-	FOLDERID_LocalMusic             = &KNOWNFOLDERID{0xa0c69a99, 0x21c8, 0x4671, [8]byte{0x87, 0x03, 0x79, 0x34, 0x16, 0x2f, 0xcf, 0x1d}}
-	FOLDERID_LocalDownloads         = &KNOWNFOLDERID{0x7d83ee9b, 0x2244, 0x4e70, [8]byte{0xb1, 0xf5, 0x53, 0x93, 0x04, 0x2a, 0xf1, 0xe4}}
-	FOLDERID_RecordedCalls          = &KNOWNFOLDERID{0x2f8b40c2, 0x83ed, 0x48ee, [8]byte{0xb3, 0x83, 0xa1, 0xf1, 0x57, 0xec, 0x6f, 0x9a}}
-	FOLDERID_AllAppMods             = &KNOWNFOLDERID{0x7ad67899, 0x66af, 0x43ba, [8]byte{0x91, 0x56, 0x6a, 0xad, 0x42, 0xe6, 0xc5, 0x96}}
-	FOLDERID_CurrentAppMods         = &KNOWNFOLDERID{0x3db40b20, 0x2a30, 0x4dbe, [8]byte{0x91, 0x7e, 0x77, 0x1d, 0xd2, 0x1d, 0xd0, 0x99}}
-	FOLDERID_AppDataDesktop         = &KNOWNFOLDERID{0xb2c5e279, 0x7add, 0x439f, [8]byte{0xb2, 0x8c, 0xc4, 0x1f, 0xe1, 0xbb, 0xf6, 0x72}}
-	FOLDERID_AppDataDocuments       = &KNOWNFOLDERID{0x7be16610, 0x1f7f, 0x44ac, [8]byte{0xbf, 0xf0, 0x83, 0xe1, 0x5f, 0x2f, 0xfc, 0xa1}}
-	FOLDERID_AppDataFavorites       = &KNOWNFOLDERID{0x7cfbefbc, 0xde1f, 0x45aa, [8]byte{0xb8, 0x43, 0xa5, 0x42, 0xac, 0x53, 0x6c, 0xc9}}
-	FOLDERID_AppDataProgramData     = &KNOWNFOLDERID{0x559d40a3, 0xa036, 0x40fa, [8]byte{0xaf, 0x61, 0x84, 0xcb, 0x43, 0x0a, 0x4d, 0x34}}
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zsyscall_windows.go","mode":420,"size":209178,"sha256":"c40bdeba110bf46782feb55976a00c88c2ae51d8c812de5ae023326eeb083c92","index":0,"count":5,"encoding":"utf-8","payloadBytes":48000}
-// Code generated by 'go generate'; DO NOT EDIT.
-
-package windows
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var _ unsafe.Pointer
-
-// Do the interface allocations only once for common
-// Errno values.
-const (
-	errnoERROR_IO_PENDING = 997
-)
-
-var (
-	errERROR_IO_PENDING error = syscall.Errno(errnoERROR_IO_PENDING)
-	errERROR_EINVAL     error = syscall.EINVAL
-)
-
-// errnoErr returns common boxed Errno values, to prevent
-// allocations at runtime.
-func errnoErr(e syscall.Errno) error {
-	switch e {
-	case 0:
-		return errERROR_EINVAL
-	case errnoERROR_IO_PENDING:
-		return errERROR_IO_PENDING
-	}
-	// TODO: add more here, after collecting data on the common
-	// error values see on Windows. (perhaps when running
-	// all.bat?)
-	return e
-}
-
-var (
-	modCfgMgr32 = NewLazySystemDLL("CfgMgr32.dll")
-	modadvapi32 = NewLazySystemDLL("advapi32.dll")
-	modcrypt32  = NewLazySystemDLL("crypt32.dll")
-	moddnsapi   = NewLazySystemDLL("dnsapi.dll")
-	moddwmapi   = NewLazySystemDLL("dwmapi.dll")
-	modiphlpapi = NewLazySystemDLL("iphlpapi.dll")
-	modkernel32 = NewLazySystemDLL("kernel32.dll")
-	modmswsock  = NewLazySystemDLL("mswsock.dll")
-	modnetapi32 = NewLazySystemDLL("netapi32.dll")
-	modntdll    = NewLazySystemDLL("ntdll.dll")
-	modole32    = NewLazySystemDLL("ole32.dll")
-	modpsapi    = NewLazySystemDLL("psapi.dll")
-	modsechost  = NewLazySystemDLL("sechost.dll")
-	modsecur32  = NewLazySystemDLL("secur32.dll")
-	modsetupapi = NewLazySystemDLL("setupapi.dll")
-	modshell32  = NewLazySystemDLL("shell32.dll")
-	moduser32   = NewLazySystemDLL("user32.dll")
-	moduserenv  = NewLazySystemDLL("userenv.dll")
-	modversion  = NewLazySystemDLL("version.dll")
-	modwinmm    = NewLazySystemDLL("winmm.dll")
-	modwintrust = NewLazySystemDLL("wintrust.dll")
-	modws2_32   = NewLazySystemDLL("ws2_32.dll")
-	modwtsapi32 = NewLazySystemDLL("wtsapi32.dll")
-
-	procCM_Get_DevNode_Status                                = modCfgMgr32.NewProc("CM_Get_DevNode_Status")
-	procCM_Get_Device_Interface_ListW                        = modCfgMgr32.NewProc("CM_Get_Device_Interface_ListW")
-	procCM_Get_Device_Interface_List_SizeW                   = modCfgMgr32.NewProc("CM_Get_Device_Interface_List_SizeW")
-	procCM_MapCrToWin32Err                                   = modCfgMgr32.NewProc("CM_MapCrToWin32Err")
-	procAdjustTokenGroups                                    = modadvapi32.NewProc("AdjustTokenGroups")
-	procAdjustTokenPrivileges                                = modadvapi32.NewProc("AdjustTokenPrivileges")
-	procAllocateAndInitializeSid                             = modadvapi32.NewProc("AllocateAndInitializeSid")
-	procBuildSecurityDescriptorW                             = modadvapi32.NewProc("BuildSecurityDescriptorW")
-	procChangeServiceConfig2W                                = modadvapi32.NewProc("ChangeServiceConfig2W")
-	procChangeServiceConfigW                                 = modadvapi32.NewProc("ChangeServiceConfigW")
-	procCheckTokenMembership                                 = modadvapi32.NewProc("CheckTokenMembership")
-	procCloseServiceHandle                                   = modadvapi32.NewProc("CloseServiceHandle")
-	procControlService                                       = modadvapi32.NewProc("ControlService")
-	procConvertSecurityDescriptorToStringSecurityDescriptorW = modadvapi32.NewProc("ConvertSecurityDescriptorToStringSecurityDescriptorW")
-	procConvertSidToStringSidW                               = modadvapi32.NewProc("ConvertSidToStringSidW")
-	procConvertStringSecurityDescriptorToSecurityDescriptorW = modadvapi32.NewProc("ConvertStringSecurityDescriptorToSecurityDescriptorW")
-	procConvertStringSidToSidW                               = modadvapi32.NewProc("ConvertStringSidToSidW")
-	procCopySid                                              = modadvapi32.NewProc("CopySid")
-	procCreateProcessAsUserW                                 = modadvapi32.NewProc("CreateProcessAsUserW")
-	procCreateServiceW                                       = modadvapi32.NewProc("CreateServiceW")
-	procCreateWellKnownSid                                   = modadvapi32.NewProc("CreateWellKnownSid")
-	procCryptAcquireContextW                                 = modadvapi32.NewProc("CryptAcquireContextW")
-	procCryptGenRandom                                       = modadvapi32.NewProc("CryptGenRandom")
-	procCryptReleaseContext                                  = modadvapi32.NewProc("CryptReleaseContext")
-	procDeleteService                                        = modadvapi32.NewProc("DeleteService")
-	procDeregisterEventSource                                = modadvapi32.NewProc("DeregisterEventSource")
-	procDuplicateTokenEx                                     = modadvapi32.NewProc("DuplicateTokenEx")
-	procEnumDependentServicesW                               = modadvapi32.NewProc("EnumDependentServicesW")
-	procEnumServicesStatusExW                                = modadvapi32.NewProc("EnumServicesStatusExW")
-	procEqualSid                                             = modadvapi32.NewProc("EqualSid")
-	procFreeSid                                              = modadvapi32.NewProc("FreeSid")
-	procGetAce                                               = modadvapi32.NewProc("GetAce")
-	procGetLengthSid                                         = modadvapi32.NewProc("GetLengthSid")
-	procGetNamedSecurityInfoW                                = modadvapi32.NewProc("GetNamedSecurityInfoW")
-	procGetSecurityDescriptorControl                         = modadvapi32.NewProc("GetSecurityDescriptorControl")
-	procGetSecurityDescriptorDacl                            = modadvapi32.NewProc("GetSecurityDescriptorDacl")
-	procGetSecurityDescriptorGroup                           = modadvapi32.NewProc("GetSecurityDescriptorGroup")
-	procGetSecurityDescriptorLength                          = modadvapi32.NewProc("GetSecurityDescriptorLength")
-	procGetSecurityDescriptorOwner                           = modadvapi32.NewProc("GetSecurityDescriptorOwner")
-	procGetSecurityDescriptorRMControl                       = modadvapi32.NewProc("GetSecurityDescriptorRMControl")
-	procGetSecurityDescriptorSacl                            = modadvapi32.NewProc("GetSecurityDescriptorSacl")
-	procGetSecurityInfo                                      = modadvapi32.NewProc("GetSecurityInfo")
-	procGetSidIdentifierAuthority                            = modadvapi32.NewProc("GetSidIdentifierAuthority")
-	procGetSidSubAuthority                                   = modadvapi32.NewProc("GetSidSubAuthority")
-	procGetSidSubAuthorityCount                              = modadvapi32.NewProc("GetSidSubAuthorityCount")
-	procGetTokenInformation                                  = modadvapi32.NewProc("GetTokenInformation")
-	procImpersonateSelf                                      = modadvapi32.NewProc("ImpersonateSelf")
-	procInitializeSecurityDescriptor                         = modadvapi32.NewProc("InitializeSecurityDescriptor")
-	procInitiateSystemShutdownExW                            = modadvapi32.NewProc("InitiateSystemShutdownExW")
-	procIsTokenRestricted                                    = modadvapi32.NewProc("IsTokenRestricted")
-	procIsValidSecurityDescriptor                            = modadvapi32.NewProc("IsValidSecurityDescriptor")
-	procIsValidSid                                           = modadvapi32.NewProc("IsValidSid")
-	procIsWellKnownSid                                       = modadvapi32.NewProc("IsWellKnownSid")
-	procLookupAccountNameW                                   = modadvapi32.NewProc("LookupAccountNameW")
-	procLookupAccountSidW                                    = modadvapi32.NewProc("LookupAccountSidW")
-	procLookupPrivilegeValueW                                = modadvapi32.NewProc("LookupPrivilegeValueW")
-	procMakeAbsoluteSD                                       = modadvapi32.NewProc("MakeAbsoluteSD")
-	procMakeSelfRelativeSD                                   = modadvapi32.NewProc("MakeSelfRelativeSD")
-	procNotifyServiceStatusChangeW                           = modadvapi32.NewProc("NotifyServiceStatusChangeW")
-	procOpenProcessToken                                     = modadvapi32.NewProc("OpenProcessToken")
-	procOpenSCManagerW                                       = modadvapi32.NewProc("OpenSCManagerW")
-	procOpenServiceW                                         = modadvapi32.NewProc("OpenServiceW")
-	procOpenThreadToken                                      = modadvapi32.NewProc("OpenThreadToken")
-	procQueryServiceConfig2W                                 = modadvapi32.NewProc("QueryServiceConfig2W")
-	procQueryServiceConfigW                                  = modadvapi32.NewProc("QueryServiceConfigW")
-	procQueryServiceDynamicInformation                       = modadvapi32.NewProc("QueryServiceDynamicInformation")
-	procQueryServiceLockStatusW                              = modadvapi32.NewProc("QueryServiceLockStatusW")
-	procQueryServiceStatus                                   = modadvapi32.NewProc("QueryServiceStatus")
-	procQueryServiceStatusEx                                 = modadvapi32.NewProc("QueryServiceStatusEx")
-	procRegCloseKey                                          = modadvapi32.NewProc("RegCloseKey")
-	procRegEnumKeyExW                                        = modadvapi32.NewProc("RegEnumKeyExW")
-	procRegNotifyChangeKeyValue                              = modadvapi32.NewProc("RegNotifyChangeKeyValue")
-	procRegOpenKeyExW                                        = modadvapi32.NewProc("RegOpenKeyExW")
-	procRegQueryInfoKeyW                                     = modadvapi32.NewProc("RegQueryInfoKeyW")
-	procRegQueryValueExW                                     = modadvapi32.NewProc("RegQueryValueExW")
-	procRegisterEventSourceW                                 = modadvapi32.NewProc("RegisterEventSourceW")
-	procRegisterServiceCtrlHandlerExW                        = modadvapi32.NewProc("RegisterServiceCtrlHandlerExW")
-	procReportEventW                                         = modadvapi32.NewProc("ReportEventW")
-	procRevertToSelf                                         = modadvapi32.NewProc("RevertToSelf")
-	procSetEntriesInAclW                                     = modadvapi32.NewProc("SetEntriesInAclW")
-	procSetKernelObjectSecurity                              = modadvapi32.NewProc("SetKernelObjectSecurity")
-	procSetNamedSecurityInfoW                                = modadvapi32.NewProc("SetNamedSecurityInfoW")
-	procSetSecurityDescriptorControl                         = modadvapi32.NewProc("SetSecurityDescriptorControl")
-	procSetSecurityDescriptorDacl                            = modadvapi32.NewProc("SetSecurityDescriptorDacl")
-	procSetSecurityDescriptorGroup                           = modadvapi32.NewProc("SetSecurityDescriptorGroup")
-	procSetSecurityDescriptorOwner                           = modadvapi32.NewProc("SetSecurityDescriptorOwner")
-	procSetSecurityDescriptorRMControl                       = modadvapi32.NewProc("SetSecurityDescriptorRMControl")
-	procSetSecurityDescriptorSacl                            = modadvapi32.NewProc("SetSecurityDescriptorSacl")
-	procSetSecurityInfo                                      = modadvapi32.NewProc("SetSecurityInfo")
-	procSetServiceStatus                                     = modadvapi32.NewProc("SetServiceStatus")
-	procSetThreadToken                                       = modadvapi32.NewProc("SetThreadToken")
-	procSetTokenInformation                                  = modadvapi32.NewProc("SetTokenInformation")
-	procStartServiceCtrlDispatcherW                          = modadvapi32.NewProc("StartServiceCtrlDispatcherW")
-	procStartServiceW                                        = modadvapi32.NewProc("StartServiceW")
-	procCertAddCertificateContextToStore                     = modcrypt32.NewProc("CertAddCertificateContextToStore")
-	procCertCloseStore                                       = modcrypt32.NewProc("CertCloseStore")
-	procCertCreateCertificateContext                         = modcrypt32.NewProc("CertCreateCertificateContext")
-	procCertDeleteCertificateFromStore                       = modcrypt32.NewProc("CertDeleteCertificateFromStore")
-	procCertDuplicateCertificateContext                      = modcrypt32.NewProc("CertDuplicateCertificateContext")
-	procCertEnumCertificatesInStore                          = modcrypt32.NewProc("CertEnumCertificatesInStore")
-	procCertFindCertificateInStore                           = modcrypt32.NewProc("CertFindCertificateInStore")
-	procCertFindChainInStore                                 = modcrypt32.NewProc("CertFindChainInStore")
-	procCertFindExtension                                    = modcrypt32.NewProc("CertFindExtension")
-	procCertFreeCertificateChain                             = modcrypt32.NewProc("CertFreeCertificateChain")
-	procCertFreeCertificateContext                           = modcrypt32.NewProc("CertFreeCertificateContext")
-	procCertGetCertificateChain                              = modcrypt32.NewProc("CertGetCertificateChain")
-	procCertGetNameStringW                                   = modcrypt32.NewProc("CertGetNameStringW")
-	procCertOpenStore                                        = modcrypt32.NewProc("CertOpenStore")
-	procCertOpenSystemStoreW                                 = modcrypt32.NewProc("CertOpenSystemStoreW")
-	procCertVerifyCertificateChainPolicy                     = modcrypt32.NewProc("CertVerifyCertificateChainPolicy")
-	procCryptAcquireCertificatePrivateKey                    = modcrypt32.NewProc("CryptAcquireCertificatePrivateKey")
-	procCryptDecodeObject                                    = modcrypt32.NewProc("CryptDecodeObject")
-	procCryptProtectData                                     = modcrypt32.NewProc("CryptProtectData")
-	procCryptQueryObject                                     = modcrypt32.NewProc("CryptQueryObject")
-	procCryptUnprotectData                                   = modcrypt32.NewProc("CryptUnprotectData")
-	procPFXImportCertStore                                   = modcrypt32.NewProc("PFXImportCertStore")
-	procDnsNameCompare_W                                     = moddnsapi.NewProc("DnsNameCompare_W")
-	procDnsQuery_W                                           = moddnsapi.NewProc("DnsQuery_W")
-	procDnsRecordListFree                                    = moddnsapi.NewProc("DnsRecordListFree")
-	procDwmGetWindowAttribute                                = moddwmapi.NewProc("DwmGetWindowAttribute")
-	procDwmSetWindowAttribute                                = moddwmapi.NewProc("DwmSetWindowAttribute")
-	procCancelMibChangeNotify2                               = modiphlpapi.NewProc("CancelMibChangeNotify2")
-	procFreeMibTable                                         = modiphlpapi.NewProc("FreeMibTable")
-	procGetAdaptersAddresses                                 = modiphlpapi.NewProc("GetAdaptersAddresses")
-	procGetAdaptersInfo                                      = modiphlpapi.NewProc("GetAdaptersInfo")
-	procGetBestInterfaceEx                                   = modiphlpapi.NewProc("GetBestInterfaceEx")
-	procGetIfEntry                                           = modiphlpapi.NewProc("GetIfEntry")
-	procGetIfEntry2Ex                                        = modiphlpapi.NewProc("GetIfEntry2Ex")
-	procGetIfTable2Ex                                        = modiphlpapi.NewProc("GetIfTable2Ex")
-	procGetIpForwardEntry2                                   = modiphlpapi.NewProc("GetIpForwardEntry2")
-	procGetIpForwardTable2                                   = modiphlpapi.NewProc("GetIpForwardTable2")
-	procGetIpInterfaceEntry                                  = modiphlpapi.NewProc("GetIpInterfaceEntry")
-	procGetIpInterfaceTable                                  = modiphlpapi.NewProc("GetIpInterfaceTable")
-	procGetUnicastIpAddressEntry                             = modiphlpapi.NewProc("GetUnicastIpAddressEntry")
-	procGetUnicastIpAddressTable                             = modiphlpapi.NewProc("GetUnicastIpAddressTable")
-	procNotifyIpInterfaceChange                              = modiphlpapi.NewProc("NotifyIpInterfaceChange")
-	procNotifyRouteChange2                                   = modiphlpapi.NewProc("NotifyRouteChange2")
-	procNotifyUnicastIpAddressChange                         = modiphlpapi.NewProc("NotifyUnicastIpAddressChange")
-	procAddDllDirectory                                      = modkernel32.NewProc("AddDllDirectory")
-	procAssignProcessToJobObject                             = modkernel32.NewProc("AssignProcessToJobObject")
-	procCancelIo                                             = modkernel32.NewProc("CancelIo")
-	procCancelIoEx                                           = modkernel32.NewProc("CancelIoEx")
-	procClearCommBreak                                       = modkernel32.NewProc("ClearCommBreak")
-	procClearCommError                                       = modkernel32.NewProc("ClearCommError")
-	procCloseHandle                                          = modkernel32.NewProc("CloseHandle")
-	procClosePseudoConsole                                   = modkernel32.NewProc("ClosePseudoConsole")
-	procConnectNamedPipe                                     = modkernel32.NewProc("ConnectNamedPipe")
-	procCreateDirectoryW                                     = modkernel32.NewProc("CreateDirectoryW")
-	procCreateEventExW                                       = modkernel32.NewProc("CreateEventExW")
-	procCreateEventW                                         = modkernel32.NewProc("CreateEventW")
-	procCreateFileMappingW                                   = modkernel32.NewProc("CreateFileMappingW")
-	procCreateFileW                                          = modkernel32.NewProc("CreateFileW")
-	procCreateHardLinkW                                      = modkernel32.NewProc("CreateHardLinkW")
-	procCreateIoCompletionPort                               = modkernel32.NewProc("CreateIoCompletionPort")
-	procCreateJobObjectW                                     = modkernel32.NewProc("CreateJobObjectW")
-	procCreateMutexExW                                       = modkernel32.NewProc("CreateMutexExW")
-	procCreateMutexW                                         = modkernel32.NewProc("CreateMutexW")
-	procCreateNamedPipeW                                     = modkernel32.NewProc("CreateNamedPipeW")
-	procCreatePipe                                           = modkernel32.NewProc("CreatePipe")
-	procCreateProcessW                                       = modkernel32.NewProc("CreateProcessW")
-	procCreatePseudoConsole                                  = modkernel32.NewProc("CreatePseudoConsole")
-	procCreateSymbolicLinkW                                  = modkernel32.NewProc("CreateSymbolicLinkW")
-	procCreateToolhelp32Snapshot                             = modkernel32.NewProc("CreateToolhelp32Snapshot")
-	procDefineDosDeviceW                                     = modkernel32.NewProc("DefineDosDeviceW")
-	procDeleteFileW                                          = modkernel32.NewProc("DeleteFileW")
-	procDeleteProcThreadAttributeList                        = modkernel32.NewProc("DeleteProcThreadAttributeList")
-	procDeleteVolumeMountPointW                              = modkernel32.NewProc("DeleteVolumeMountPointW")
-	procDeviceIoControl                                      = modkernel32.NewProc("DeviceIoControl")
-	procDisconnectNamedPipe                                  = modkernel32.NewProc("DisconnectNamedPipe")
-	procDuplicateHandle                                      = modkernel32.NewProc("DuplicateHandle")
-	procEscapeCommFunction                                   = modkernel32.NewProc("EscapeCommFunction")
-	procExitProcess                                          = modkernel32.NewProc("ExitProcess")
-	procExpandEnvironmentStringsW                            = modkernel32.NewProc("ExpandEnvironmentStringsW")
-	procFindClose                                            = modkernel32.NewProc("FindClose")
-	procFindCloseChangeNotification                          = modkernel32.NewProc("FindCloseChangeNotification")
-	procFindFirstChangeNotificationW                         = modkernel32.NewProc("FindFirstChangeNotificationW")
-	procFindFirstFileW                                       = modkernel32.NewProc("FindFirstFileW")
-	procFindFirstVolumeMountPointW                           = modkernel32.NewProc("FindFirstVolumeMountPointW")
-	procFindFirstVolumeW                                     = modkernel32.NewProc("FindFirstVolumeW")
-	procFindNextChangeNotification                           = modkernel32.NewProc("FindNextChangeNotification")
-	procFindNextFileW                                        = modkernel32.NewProc("FindNextFileW")
-	procFindNextVolumeMountPointW                            = modkernel32.NewProc("FindNextVolumeMountPointW")
-	procFindNextVolumeW                                      = modkernel32.NewProc("FindNextVolumeW")
-	procFindResourceW                                        = modkernel32.NewProc("FindResourceW")
-	procFindVolumeClose                                      = modkernel32.NewProc("FindVolumeClose")
-	procFindVolumeMountPointClose                            = modkernel32.NewProc("FindVolumeMountPointClose")
-	procFlushConsoleInputBuffer                              = modkernel32.NewProc("FlushConsoleInputBuffer")
-	procFlushFileBuffers                                     = modkernel32.NewProc("FlushFileBuffers")
-	procFlushViewOfFile                                      = modkernel32.NewProc("FlushViewOfFile")
-	procFormatMessageW                                       = modkernel32.NewProc("FormatMessageW")
-	procFreeEnvironmentStringsW                              = modkernel32.NewProc("FreeEnvironmentStringsW")
-	procFreeLibrary                                          = modkernel32.NewProc("FreeLibrary")
-	procGenerateConsoleCtrlEvent                             = modkernel32.NewProc("GenerateConsoleCtrlEvent")
-	procGetACP                                               = modkernel32.NewProc("GetACP")
-	procGetActiveProcessorCount                              = modkernel32.NewProc("GetActiveProcessorCount")
-	procGetCommModemStatus                                   = modkernel32.NewProc("GetCommModemStatus")
-	procGetCommState                                         = modkernel32.NewProc("GetCommState")
-	procGetCommTimeouts                                      = modkernel32.NewProc("GetCommTimeouts")
-	procGetCommandLineW                                      = modkernel32.NewProc("GetCommandLineW")
-	procGetComputerNameExW                                   = modkernel32.NewProc("GetComputerNameExW")
-	procGetComputerNameW                                     = modkernel32.NewProc("GetComputerNameW")
-	procGetConsoleCP                                         = modkernel32.NewProc("GetConsoleCP")
-	procGetConsoleMode                                       = modkernel32.NewProc("GetConsoleMode")
-	procGetConsoleOutputCP                                   = modkernel32.NewProc("GetConsoleOutputCP")
-	procGetConsoleScreenBufferInfo                           = modkernel32.NewProc("GetConsoleScreenBufferInfo")
-	procGetCurrentDirectoryW                                 = modkernel32.NewProc("GetCurrentDirectoryW")
-	procGetCurrentProcessId                                  = modkernel32.NewProc("GetCurrentProcessId")
-	procGetCurrentThreadId                                   = modkernel32.NewProc("GetCurrentThreadId")
-	procGetDiskFreeSpaceExW                                  = modkernel32.NewProc("GetDiskFreeSpaceExW")
-	procGetDriveTypeW                                        = modkernel32.NewProc("GetDriveTypeW")
-	procGetEnvironmentStringsW                               = modkernel32.NewProc("GetEnvironmentStringsW")
-	procGetEnvironmentVariableW                              = modkernel32.NewProc("GetEnvironmentVariableW")
-	procGetExitCodeProcess                                   = modkernel32.NewProc("GetExitCodeProcess")
-	procGetFileAttributesExW                                 = modkernel32.NewProc("GetFileAttributesExW")
-	procGetFileAttributesW                                   = modkernel32.NewProc("GetFileAttributesW")
-	procGetFileInformationByHandle                           = modkernel32.NewProc("GetFileInformationByHandle")
-	procGetFileInformationByHandleEx                         = modkernel32.NewProc("GetFileInformationByHandleEx")
-	procGetFileTime                                          = modkernel32.NewProc("GetFileTime")
-	procGetFileType                                          = modkernel32.NewProc("GetFileType")
-	procGetFinalPathNameByHandleW                            = modkernel32.NewProc("GetFinalPathNameByHandleW")
-	procGetFullPathNameW                                     = modkernel32.NewProc("GetFullPathNameW")
-	procGetLargePageMinimum                                  = modkernel32.NewProc("GetLargePageMinimum")
-	procGetLastError                                         = modkernel32.NewProc("GetLastError")
-	procGetLogicalDriveStringsW                              = modkernel32.NewProc("GetLogicalDriveStringsW")
-	procGetLogicalDrives                                     = modkernel32.NewProc("GetLogicalDrives")
-	procGetLongPathNameW                                     = modkernel32.NewProc("GetLongPathNameW")
-	procGetMaximumProcessorCount                             = modkernel32.NewProc("GetMaximumProcessorCount")
-	procGetModuleFileNameW                                   = modkernel32.NewProc("GetModuleFileNameW")
-	procGetModuleHandleExW                                   = modkernel32.NewProc("GetModuleHandleExW")
-	procGetNamedPipeClientProcessId                          = modkernel32.NewProc("GetNamedPipeClientProcessId")
-	procGetNamedPipeHandleStateW                             = modkernel32.NewProc("GetNamedPipeHandleStateW")
-	procGetNamedPipeInfo                                     = modkernel32.NewProc("GetNamedPipeInfo")
-	procGetNamedPipeServerProcessId                          = modkernel32.NewProc("GetNamedPipeServerProcessId")
-	procGetNumberOfConsoleInputEvents                        = modkernel32.NewProc("GetNumberOfConsoleInputEvents")
-	procGetOverlappedResult                                  = modkernel32.NewProc("GetOverlappedResult")
-	procGetPriorityClass                                     = modkernel32.NewProc("GetPriorityClass")
-	procGetProcAddress                                       = modkernel32.NewProc("GetProcAddress")
-	procGetProcessId                                         = modkernel32.NewProc("GetProcessId")
-	procGetProcessPreferredUILanguages                       = modkernel32.NewProc("GetProcessPreferredUILanguages")
-	procGetProcessShutdownParameters                         = modkernel32.NewProc("GetProcessShutdownParameters")
-	procGetProcessTimes                                      = modkernel32.NewProc("GetProcessTimes")
-	procGetProcessWorkingSetSizeEx                           = modkernel32.NewProc("GetProcessWorkingSetSizeEx")
-	procGetQueuedCompletionStatus                            = modkernel32.NewProc("GetQueuedCompletionStatus")
-	procGetShortPathNameW                                    = modkernel32.NewProc("GetShortPathNameW")
-	procGetStartupInfoW                                      = modkernel32.NewProc("GetStartupInfoW")
-	procGetStdHandle                                         = modkernel32.NewProc("GetStdHandle")
-	procGetSystemDirectoryW                                  = modkernel32.NewProc("GetSystemDirectoryW")
-	procGetSystemPreferredUILanguages                        = modkernel32.NewProc("GetSystemPreferredUILanguages")
-	procGetSystemTimeAsFileTime                              = modkernel32.NewProc("GetSystemTimeAsFileTime")
-	procGetSystemTimePreciseAsFileTime                       = modkernel32.NewProc("GetSystemTimePreciseAsFileTime")
-	procGetSystemWindowsDirectoryW                           = modkernel32.NewProc("GetSystemWindowsDirectoryW")
-	procGetTempPathW                                         = modkernel32.NewProc("GetTempPathW")
-	procGetThreadPreferredUILanguages                        = modkernel32.NewProc("GetThreadPreferredUILanguages")
-	procGetTickCount64                                       = modkernel32.NewProc("GetTickCount64")
-	procGetTimeZoneInformation                               = modkernel32.NewProc("GetTimeZoneInformation")
-	procGetUserPreferredUILanguages                          = modkernel32.NewProc("GetUserPreferredUILanguages")
-	procGetVersion                                           = modkernel32.NewProc("GetVersion")
-	procGetVolumeInformationByHandleW                        = modkernel32.NewProc("GetVolumeInformationByHandleW")
-	procGetVolumeInformationW                                = modkernel32.NewProc("GetVolumeInformationW")
-	procGetVolumeNameForVolumeMountPointW                    = modkernel32.NewProc("GetVolumeNameForVolumeMountPointW")
-	procGetVolumePathNameW                                   = modkernel32.NewProc("GetVolumePathNameW")
-	procGetVolumePathNamesForVolumeNameW                     = modkernel32.NewProc("GetVolumePathNamesForVolumeNameW")
-	procGetWindowsDirectoryW                                 = modkernel32.NewProc("GetWindowsDirectoryW")
-	procInitializeProcThreadAttributeList                    = modkernel32.NewProc("InitializeProcThreadAttributeList")
-	procIsProcessorFeaturePresent                            = modkernel32.NewProc("IsProcessorFeaturePresent")
-	procIsWow64Process                                       = modkernel32.NewProc("IsWow64Process")
-	procIsWow64Process2                                      = modkernel32.NewProc("IsWow64Process2")
-	procLoadLibraryExW                                       = modkernel32.NewProc("LoadLibraryExW")
-	procLoadLibraryW                                         = modkernel32.NewProc("LoadLibraryW")
-	procLoadResource                                         = modkernel32.NewProc("LoadResource")
-	procLocalAlloc                                           = modkernel32.NewProc("LocalAlloc")
-	procLocalFree                                            = modkernel32.NewProc("LocalFree")
-	procLockFileEx                                           = modkernel32.NewProc("LockFileEx")
-	procLockResource                                         = modkernel32.NewProc("LockResource")
-	procMapViewOfFile                                        = modkernel32.NewProc("MapViewOfFile")
-	procModule32FirstW                                       = modkernel32.NewProc("Module32FirstW")
-	procModule32NextW                                        = modkernel32.NewProc("Module32NextW")
-	procMoveFileExW                                          = modkernel32.NewProc("MoveFileExW")
-	procMoveFileW                                            = modkernel32.NewProc("MoveFileW")
-	procMultiByteToWideChar                                  = modkernel32.NewProc("MultiByteToWideChar")
-	procOpenEventW                                           = modkernel32.NewProc("OpenEventW")
-	procOpenMutexW                                           = modkernel32.NewProc("OpenMutexW")
-	procOpenProcess                                          = modkernel32.NewProc("OpenProcess")
-	procOpenThread                                           = modkernel32.NewProc("OpenThread")
-	procPostQueuedCompletionStatus                           = modkernel32.NewProc("PostQueuedCompletionStatus")
-	procProcess32FirstW                                      = modkernel32.NewProc("Process32FirstW")
-	procProcess32NextW                                       = modkernel32.NewProc("Process32NextW")
-	procProcessIdToSessionId                                 = modkernel32.NewProc("ProcessIdToSessionId")
-	procPulseEvent                                           = modkernel32.NewProc("PulseEvent")
-	procPurgeComm                                            = modkernel32.NewProc("PurgeComm")
-	procQueryDosDeviceW                                      = modkernel32.NewProc("QueryDosDeviceW")
-	procQueryFullProcessImageNameW                           = modkernel32.NewProc("QueryFullProcessImageNameW")
-	procQueryInformationJobObject                            = modkernel32.NewProc("QueryInformationJobObject")
-	procReadConsoleW                                         = modkernel32.NewProc("ReadConsoleW")
-	procReadDirectoryChangesW                                = modkernel32.NewProc("ReadDirectoryChangesW")
-	procReadFile                                             = modkernel32.NewProc("ReadFile")
-	procReadProcessMemory                                    = modkernel32.NewProc("ReadProcessMemory")
-	procReleaseMutex                                         = modkernel32.NewProc("ReleaseMutex")
-	procRemoveDirectoryW                                     = modkernel32.NewProc("RemoveDirectoryW")
-	procRemoveDllDirectory                                   = modkernel32.NewProc("RemoveDllDirectory")
-	procResetEvent                                           = modkernel32.NewProc("ResetEvent")
-	procResizePseudoConsole                                  = modkernel32.NewProc("ResizePseudoConsole")
-	procResumeThread                                         = modkernel32.NewProc("ResumeThread")
-	procSetCommBreak                                         = modkernel32.NewProc("SetCommBreak")
-	procSetCommMask                                          = modkernel32.NewProc("SetCommMask")
-	procSetCommState                                         = modkernel32.NewProc("SetCommState")
-	procSetCommTimeouts                                      = modkernel32.NewProc("SetCommTimeouts")
-	procSetConsoleCP                                         = modkernel32.NewProc("SetConsoleCP")
-	procSetConsoleCursorPosition                             = modkernel32.NewProc("SetConsoleCursorPosition")
-	procSetConsoleMode                                       = modkernel32.NewProc("SetConsoleMode")
-	procSetConsoleOutputCP                                   = modkernel32.NewProc("SetConsoleOutputCP")
-	procSetCurrentDirectoryW                                 = modkernel32.NewProc("SetCurrentDirectoryW")
-	procSetDefaultDllDirectories                             = modkernel32.NewProc("SetDefaultDllDirectories")
-	procSetDllDirectoryW                                     = modkernel32.NewProc("SetDllDirectoryW")
-	procSetEndOfFile                                         = modkernel32.NewProc("SetEndOfFile")
-	procSetEnvironmentVariableW                              = modkernel32.NewProc("SetEnvironmentVariableW")
-	procSetErrorMode                                         = modkernel32.NewProc("SetErrorMode")
-	procSetEvent                                             = modkernel32.NewProc("SetEvent")
-	procSetFileAttributesW                                   = modkernel32.NewProc("SetFileAttributesW")
-	procSetFileCompletionNotificationModes                   = modkernel32.NewProc("SetFileCompletionNotificationModes")
-	procSetFileInformationByHandle                           = modkernel32.NewProc("SetFileInformationByHandle")
-	procSetFilePointer                                       = modkernel32.NewProc("SetFilePointer")
-	procSetFileTime                                          = modkernel32.NewProc("SetFileTime")
-	procSetFileValidData                                     = modkernel32.NewProc("SetFileValidData")
-	procSetHandleInformation                                 = modkernel32.NewProc("SetHandleInformation")
-	procSetInformationJobObject                              = modkernel32.NewProc("SetInformationJobObject")
-	procSetNamedPipeHandleState                              = modkernel32.NewProc("SetNamedPipeHandleState")
-	procSetPriorityClass                                     = modkernel32.NewProc("SetPriorityClass")
-	procSetProcessPriorityBoost                              = modkernel32.NewProc("SetProcessPriorityBoost")
-	procSetProcessShutdownParameters                         = modkernel32.NewProc("SetProcessShutdownParameters")
-	procSetProcessWorkingSetSizeEx                           = modkernel32.NewProc("SetProcessWorkingSetSizeEx")
-	procSetStdHandle                                         = modkernel32.NewProc("SetStdHandle")
-	procSetVolumeLabelW                                      = modkernel32.NewProc("SetVolumeLabelW")
-	procSetVolumeMountPointW                                 = modkernel32.NewProc("SetVolumeMountPointW")
-	procSetupComm                                            = modkernel32.NewProc("SetupComm")
-	procSizeofResource                                       = modkernel32.NewProc("SizeofResource")
-	procSleepEx                                              = modkernel32.NewProc("SleepEx")
-	procTerminateJobObject                                   = modkernel32.NewProc("TerminateJobObject")
-	procTerminateProcess                                     = modkernel32.NewProc("TerminateProcess")
-	procThread32First                                        = modkernel32.NewProc("Thread32First")
-	procThread32Next                                         = modkernel32.NewProc("Thread32Next")
-	procUnlockFileEx                                         = modkernel32.NewProc("UnlockFileEx")
-	procUnmapViewOfFile                                      = modkernel32.NewProc("UnmapViewOfFile")
-	procUpdateProcThreadAttribute                            = modkernel32.NewProc("UpdateProcThreadAttribute")
-	procVirtualAlloc                                         = modkernel32.NewProc("VirtualAlloc")
-	procVirtualFree                                          = modkernel32.NewProc("VirtualFree")
-	procVirtualLock                                          = modkernel32.NewProc("VirtualLock")
-	procVirtualProtect                                       = modkernel32.NewProc("VirtualProtect")
-	procVirtualProtectEx                                     = modkernel32.NewProc("VirtualProtectEx")
-	procVirtualQuery                                         = modkernel32.NewProc("VirtualQuery")
-	procVirtualQueryEx                                       = modkernel32.NewProc("VirtualQueryEx")
-	procVirtualUnlock                                        = modkernel32.NewProc("VirtualUnlock")
-	procWTSGetActiveConsoleSessionId                         = modkernel32.NewProc("WTSGetActiveConsoleSessionId")
-	procWaitCommEvent                                        = modkernel32.NewProc("WaitCommEvent")
-	procWaitForMultipleObjects                               = modkernel32.NewProc("WaitForMultipleObjects")
-	procWaitForSingleObject                                  = modkernel32.NewProc("WaitForSingleObject")
-	procWriteConsoleW                                        = modkernel32.NewProc("WriteConsoleW")
-	procWriteFile                                            = modkernel32.NewProc("WriteFile")
-	procWriteProcessMemory                                   = modkernel32.NewProc("WriteProcessMemory")
-	procAcceptEx                                             = modmswsock.NewProc("AcceptEx")
-	procGetAcceptExSockaddrs                                 = modmswsock.NewProc("GetAcceptExSockaddrs")
-	procTransmitFile                                         = modmswsock.NewProc("TransmitFile")
-	procNetApiBufferFree                                     = modnetapi32.NewProc("NetApiBufferFree")
-	procNetGetJoinInformation                                = modnetapi32.NewProc("NetGetJoinInformation")
-	procNetUserEnum                                          = modnetapi32.NewProc("NetUserEnum")
-	procNetUserGetInfo                                       = modnetapi32.NewProc("NetUserGetInfo")
-	procNtCreateFile                                         = modntdll.NewProc("NtCreateFile")
-	procNtCreateNamedPipeFile                                = modntdll.NewProc("NtCreateNamedPipeFile")
-	procNtQueryEaFile                                        = modntdll.NewProc("NtQueryEaFile")
-	procNtQueryInformationFile                               = modntdll.NewProc("NtQueryInformationFile")
-	procNtQueryInformationProcess                            = modntdll.NewProc("NtQueryInformationProcess")
-	procNtQuerySystemInformation                             = modntdll.NewProc("NtQuerySystemInformation")
-	procNtSetEaFile                                          = modntdll.NewProc("NtSetEaFile")
-	procNtSetInformationFile                                 = modntdll.NewProc("NtSetInformationFile")
-	procNtSetInformationProcess                              = modntdll.NewProc("NtSetInformationProcess")
-	procNtSetSystemInformation                               = modntdll.NewProc("NtSetSystemInformation")
-	procRtlAddFunctionTable                                  = modntdll.NewProc("RtlAddFunctionTable")
-	procRtlDefaultNpAcl                                      = modntdll.NewProc("RtlDefaultNpAcl")
-	procRtlDeleteFunctionTable                               = modntdll.NewProc("RtlDeleteFunctionTable")
-	procRtlDosPathNameToNtPathName_U_WithStatus              = modntdll.NewProc("RtlDosPathNameToNtPathName_U_WithStatus")
-	procRtlDosPathNameToRelativeNtPathName_U_WithStatus      = modntdll.NewProc("RtlDosPathNameToRelativeNtPathName_U_WithStatus")
-	procRtlGetCurrentPeb                                     = modntdll.NewProc("RtlGetCurrentPeb")
-	procRtlGetNtVersionNumbers                               = modntdll.NewProc("RtlGetNtVersionNumbers")
-	procRtlGetVersion                                        = modntdll.NewProc("RtlGetVersion")
-	procRtlInitString                                        = modntdll.NewProc("RtlInitString")
-	procRtlInitUnicodeString                                 = modntdll.NewProc("RtlInitUnicodeString")
-	procRtlNtStatusToDosErrorNoTeb                           = modntdll.NewProc("RtlNtStatusToDosErrorNoTeb")
-	procCLSIDFromString                                      = modole32.NewProc("CLSIDFromString")
-	procCoCreateGuid                                         = modole32.NewProc("CoCreateGuid")
-	procCoGetObject                                          = modole32.NewProc("CoGetObject")
-	procCoInitializeEx                                       = modole32.NewProc("CoInitializeEx")
-	procCoTaskMemFree                                        = modole32.NewProc("CoTaskMemFree")
-	procCoUninitialize                                       = modole32.NewProc("CoUninitialize")
-	procStringFromGUID2                                      = modole32.NewProc("StringFromGUID2")
-	procEnumProcessModules                                   = modpsapi.NewProc("EnumProcessModules")
-	procEnumProcessModulesEx                                 = modpsapi.NewProc("EnumProcessModulesEx")
-	procEnumProcesses                                        = modpsapi.NewProc("EnumProcesses")
-	procGetModuleBaseNameW                                   = modpsapi.NewProc("GetModuleBaseNameW")
-	procGetModuleFileNameExW                                 = modpsapi.NewProc("GetModuleFileNameExW")
-	procGetModuleInformation                                 = modpsapi.NewProc("GetModuleInformation")
-	procQueryWorkingSetEx                                    = modpsapi.NewProc("QueryWorkingSetEx")
-	procSubscribeServiceChangeNotifications                  = modsechost.NewProc("SubscribeServiceChangeNotifications")
-	procUnsubscribeServiceChangeNotifications                = modsechost.NewProc("UnsubscribeServiceChangeNotifications")
-	procGetUserNameExW                                       = modsecur32.NewProc("GetUserNameExW")
-	procTranslateNameW                                       = modsecur32.NewProc("TranslateNameW")
-	procSetupDiBuildDriverInfoList                           = modsetupapi.NewProc("SetupDiBuildDriverInfoList")
-	procSetupDiCallClassInstaller                            = modsetupapi.NewProc("SetupDiCallClassInstaller")
-	procSetupDiCancelDriverInfoSearch                        = modsetupapi.NewProc("SetupDiCancelDriverInfoSearch")
-	procSetupDiClassGuidsFromNameExW                         = modsetupapi.NewProc("SetupDiClassGuidsFromNameExW")
-	procSetupDiClassNameFromGuidExW                          = modsetupapi.NewProc("SetupDiClassNameFromGuidExW")
-	procSetupDiCreateDeviceInfoListExW                       = modsetupapi.NewProc("SetupDiCreateDeviceInfoListExW")
-	procSetupDiCreateDeviceInfoW                             = modsetupapi.NewProc("SetupDiCreateDeviceInfoW")
-	procSetupDiDestroyDeviceInfoList                         = modsetupapi.NewProc("SetupDiDestroyDeviceInfoList")
-	procSetupDiDestroyDriverInfoList                         = modsetupapi.NewProc("SetupDiDestroyDriverInfoList")
-	procSetupDiEnumDeviceInfo                                = modsetupapi.NewProc("SetupDiEnumDeviceInfo")
-	procSetupDiEnumDriverInfoW                               = modsetupapi.NewProc("SetupDiEnumDriverInfoW")
-	procSetupDiGetClassDevsExW                               = modsetupapi.NewProc("SetupDiGetClassDevsExW")
-	procSetupDiGetClassInstallParamsW                        = modsetupapi.NewProc("SetupDiGetClassInstallParamsW")
-	procSetupDiGetDeviceInfoListDetailW                      = modsetupapi.NewProc("SetupDiGetDeviceInfoListDetailW")
-	procSetupDiGetDeviceInstallParamsW                       = modsetupapi.NewProc("SetupDiGetDeviceInstallParamsW")
-	procSetupDiGetDeviceInstanceIdW                          = modsetupapi.NewProc("SetupDiGetDeviceInstanceIdW")
-	procSetupDiGetDevicePropertyW                            = modsetupapi.NewProc("SetupDiGetDevicePropertyW")
-	procSetupDiGetDeviceRegistryPropertyW                    = modsetupapi.NewProc("SetupDiGetDeviceRegistryPropertyW")
-	procSetupDiGetDriverInfoDetailW                          = modsetupapi.NewProc("SetupDiGetDriverInfoDetailW")
-	procSetupDiGetSelectedDevice                             = modsetupapi.NewProc("SetupDiGetSelectedDevice")
-	procSetupDiGetSelectedDriverW                            = modsetupapi.NewProc("SetupDiGetSelectedDriverW")
-	procSetupDiOpenDevRegKey                                 = modsetupapi.NewProc("SetupDiOpenDevRegKey")
-	procSetupDiSetClassInstallParamsW                        = modsetupapi.NewProc("SetupDiSetClassInstallParamsW")
-	procSetupDiSetDeviceInstallParamsW                       = modsetupapi.NewProc("SetupDiSetDeviceInstallParamsW")
-	procSetupDiSetDeviceRegistryPropertyW                    = modsetupapi.NewProc("SetupDiSetDeviceRegistryPropertyW")
-	procSetupDiSetSelectedDevice                             = modsetupapi.NewProc("SetupDiSetSelectedDevice")
-	procSetupDiSetSelectedDriverW                            = modsetupapi.NewProc("SetupDiSetSelectedDriverW")
-	procSetupUninstallOEMInfW                                = modsetupapi.NewProc("SetupUninstallOEMInfW")
-	procCommandLineToArgvW                                   = modshell32.NewProc("CommandLineToArgvW")
-	procSHGetKnownFolderPath                                 = modshell32.NewProc("SHGetKnownFolderPath")
-	procShellExecuteW                                        = modshell32.NewProc("ShellExecuteW")
-	procEnumChildWindows                                     = moduser32.NewProc("EnumChildWindows")
-	procEnumWindows                                          = moduser32.NewProc("EnumWindows")
-	procExitWindowsEx                                        = moduser32.NewProc("ExitWindowsEx")
-	procGetClassNameW                                        = moduser32.NewProc("GetClassNameW")
-	procGetDesktopWindow                                     = moduser32.NewProc("GetDesktopWindow")
-	procGetForegroundWindow                                  = moduser32.NewProc("GetForegroundWindow")
-	procGetGUIThreadInfo                                     = moduser32.NewProc("GetGUIThreadInfo")
-	procGetKeyboardLayout                                    = moduser32.NewProc("GetKeyboardLayout")
-	procGetShellWindow                                       = moduser32.NewProc("GetShellWindow")
-	procGetWindowThreadProcessId                             = moduser32.NewProc("GetWindowThreadProcessId")
-	procIsWindow                                             = moduser32.NewProc("IsWindow")
-	procIsWindowUnicode                                      = moduser32.NewProc("IsWindowUnicode")
-	procIsWindowVisible                                      = moduser32.NewProc("IsWindowVisible")
-	procLoadKeyboardLayoutW                                  = moduser32.NewProc("LoadKeyboardLayoutW")
-	procMessageBoxW                           
 @@END
