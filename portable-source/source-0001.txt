@@ -1295,7 +1295,7 @@ class CallbackModule(CallbackBase):
         self._write(payload, "PLATFORM_CORE_DIAGNOSTIC_OUTPUT")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":7018,"sha256":"23e6c0c8078e3fc11790b5f24b8f968451de096900c71d20f341d96da5110076","index":0,"count":1,"encoding":"utf-8","payloadBytes":7018}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":7228,"sha256":"7f0e64f47c25afe31606cd979d67777e5c962c8eaa605caa16b6d64f1aab68ca","index":0,"count":1,"encoding":"utf-8","payloadBytes":7228}
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -1350,6 +1350,9 @@ class CallbackModule(CallbackBase):
     def _run_id(self):
         return os.environ.get("PLATFORM_EXECUTION_RUN_ID", "")
 
+    def _journal(self):
+        return Journal(os.environ.get("PLATFORM_EXECUTION_STATE_ROOT", EXECUTION_STATE_ROOT), self._run_id())
+
     def _uuid(self, task):
         value = getattr(task, "_uuid", "")
         return str(value) if value is not None else ""
@@ -1374,10 +1377,10 @@ class CallbackModule(CallbackBase):
                 return "Скрытая задача"
             return value
         try:
-            value = task.get_name()
+            value = getattr(task, "name", "")
         except Exception:
             return ""
-        return value if isinstance(value, str) else ""
+        return value if isinstance(value, str) and not any(marker in value for marker in ("{{", "{%", "{#")) else "Ansible task"
 
     def _no_log(self, task, result=None):
         if bool(getattr(task, "no_log", False)):
@@ -1406,7 +1409,7 @@ class CallbackModule(CallbackBase):
         task_uuid = self._uuid(task)
         no_log = self._no_log(task, result)
         try:
-            Journal(EXECUTION_STATE_ROOT, run_id).task_event(
+            self._journal().task_event(
                 event_type,
                 status,
                 task_uuid,
@@ -1415,11 +1418,12 @@ class CallbackModule(CallbackBase):
                 name=self._name(task, no_log),
                 elapsed_milliseconds=self._elapsed(task_uuid) if event_type == "TASK_COMPLETED" else None,
                 no_log=no_log,
+                failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
                 **self._context()
             )
         except Exception:
             try:
-                Journal(EXECUTION_STATE_ROOT, run_id).mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
+                self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
             except Exception:
                 pass
 
@@ -1444,7 +1448,7 @@ class CallbackModule(CallbackBase):
         if not isinstance(missing, list):
             return
         try:
-            journal = Journal(EXECUTION_STATE_ROOT, self._run_id())
+            journal = self._journal()
             for source in missing[:256]:
                 if not isinstance(source, str) or not SAFE_ROLE.fullmatch(source):
                     continue
@@ -1453,7 +1457,7 @@ class CallbackModule(CallbackBase):
                 journal.event("DIAGNOSTIC", "SKIPPED", "Интеграция HAProxy пропущена; установка сервиса продолжается", **context)
         except Exception:
             try:
-                Journal(EXECUTION_STATE_ROOT, self._run_id()).mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
+                self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
             except Exception:
                 pass
 
@@ -21105,7 +21109,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":30569,"sha256":"17ce7b617daf6b64b7412226a3dcdcf61088fdc8cf9c7894a44b5e1bf157f6ed","index":0,"count":1,"encoding":"utf-8","payloadBytes":30569}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":30812,"sha256":"c2d9c6014c6eff156a397e0bdd996b15b6d5f91f5d81ca0f4d390deb56e8c645","index":0,"count":1,"encoding":"utf-8","payloadBytes":30812}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -21344,7 +21348,10 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
             projection = project_member_listeners({"listeners": member_listeners}, projected_member)
             if projection["status"] != "PASS":
                 raise ValueError("Kafka listener unresolved")
-            selected = [item for item in projection["listeners"] if item["name"] == selector and item["purpose"] == "client"]
+            # An explicitly selected inter-broker listener serves the same broker
+            # protocol; controller listeners are never application connections.
+            selected = [item for item in projection["listeners"] if item["name"] == selector
+                        and item["purpose"] in {"client", "interBroker"} and "broker" in member.get("roles", [])]
             if "broker" in member.get("roles", []) and not selected:
                 raise ValueError("Kafka client listener missing")
             for item in selected:
@@ -29819,11 +29826,11 @@ platform_application_registry_config_directory: ''
   when: application_runtime_job.agentTemplate | default(false)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_delivery/defaults/main.yml","mode":420,"size":188,"sha256":"995430b9b27062c566fab87004d8c2a5e82e632e2318d345cb98b628a193cd6c","index":0,"count":1,"encoding":"utf-8","payloadBytes":188}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_delivery/defaults/main.yml","mode":420,"size":240,"sha256":"6347f7b3304ed068642c1c9f643034b52db51a6e7c5d6cfd551b8d46085c92fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":240}
 ---
 platform_artifact_stage_root: /var/tmp/platform-installer/artifacts
 platform_artifact_package_manager: dnf
-platform_execution_runtime_root: /var/lib/platform-installer/runtime/current
+platform_execution_runtime_root: "{{ platform_execution_bundle_root | default('/var/lib/platform-installer/runtime/current') }}"
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_delivery/tasks/deliver_requirement.yml","mode":420,"size":4743,"sha256":"967f456ccb10fa5ae86cbba1726915b5884d688849d0cf70787419afb4b391b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":4743}
@@ -32272,7 +32279,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"526f07fac6eb52a3bdc49078250ea12b6819129638d7c9de8441439142be2603","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
+@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"2c8f5f7a7833c3408aea88865a1c6f7db00ab943d644479b2e67970ffea203e2","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32280,7 +32287,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
@@ -32322,7 +32329,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"eb9c0a13835b705713d7c8f6aacd5ddc38f5ba85dba30c9514c1586df49363cf","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
+@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"23ad48f588b2c894ee3aa6373a9770e1f9c300e3488950372a0351fd6c4c87b9","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32330,7 +32337,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -32378,7 +32385,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"ae6167662171ee2c5ebaec2b22eaf298638ac5650a38c131c76065ee904a5155","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
+@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"f373b3477985f3ff15b2aed86f2f8fbfd95d2997b3bf33781062d383fb97a8fe","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32387,7 +32394,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -34092,7 +34099,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":61516,"sha256":"59c35aceead8b8a995974e8530221878dbaf560eaa7c7255c7e6bd78eaa76d3b","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":61575,"sha256":"4dcd52329758cb6a7539b09baf933a318c767d3298763089816eead0d109d1de","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -34621,6 +34628,7 @@ def _environment(release, journal=None, operation=None, leased_private_key=False
         environment.update({
             "ANSIBLE_CALLBACKS_ENABLED": "platform.core.execution_events_json",
             "PLATFORM_EXECUTION_RUN_ID": journal.run_id,
+            "PLATFORM_EXECUTION_STATE_ROOT": journal.root,
             "PLATFORM_EXECUTION_PHASE_ID": _context_value(operation, "phaseId"),
             "PLATFORM_EXECUTION_ACTION_ID": _context_value(operation, "operationId"),
             "PLATFORM_EXECUTION_SERVICE_DEPLOYMENT": _context_value(operation, "serviceDeployment"),
@@ -34948,11 +34956,11 @@ def _materialize_application_projection(journal, manifest):
         if item.get('source') == 'CURRENT_RUN_BOOTSTRAP':
             provider = item['providerDeployment']
             if provider not in declared:
-                raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
-        
+                raise Lifecy
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":61516,"sha256":"59c35aceead8b8a995974e8530221878dbaf560eaa7c7255c7e6bd78eaa76d3b","index":1,"count":2,"encoding":"utf-8","payloadBytes":13516}
-    try:
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":61575,"sha256":"4dcd52329758cb6a7539b09baf933a318c767d3298763089816eead0d109d1de","index":1,"count":2,"encoding":"utf-8","payloadBytes":13575}
+cleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
+            try:
                 values[item['runtimeReference']] = execution_secret_output.current_run_admin_token(
                     journal.root, journal.directory, manifest['projectIdentity'], provider, journal.run_id)
             except (OSError, ValueError, execution_secret_output.OutputWireError):
@@ -35155,7 +35163,7 @@ if __name__ == "__main__":
         raise SystemExit(2)
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35330,"sha256":"5fadf029bc7bc3ba0c9b6aad770c47aacf3620a1bd82bfb3b5f20d18a6c6d980","index":0,"count":1,"encoding":"utf-8","payloadBytes":35330}
+@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35390,"sha256":"1182d6c1b74d9876c49b9007aae5418d5bbd409e2165eecaed3ba8c1cf44fb5d","index":0,"count":1,"encoding":"utf-8","payloadBytes":35390}
 """Private, durable Execution Node lifecycle primitives for UI-BE-04C.
 
 This module deliberately has no Installer, SSH or arbitrary-command API.  The
@@ -35506,7 +35514,7 @@ class Journal(object):
         finally:
             os.close(event_lock)
 
-    def task_event(self, event_type, status, task_uuid, host="", role="", name="", elapsed_milliseconds=None, no_log=False, **context):
+    def task_event(self, event_type, status, task_uuid, host="", role="", name="", elapsed_milliseconds=None, no_log=False, failure_result=None, **context):
         event_lock = self.event_lock()
         try:
             validate_task_journal_ownership(self)
@@ -35545,7 +35553,8 @@ class Journal(object):
             if event_type == "TASK_COMPLETED" and isinstance(elapsed_milliseconds, int) and elapsed_milliseconds >= 0:
                 event["elapsedMilliseconds"] = elapsed_milliseconds
             if status == "FAILED":
-                event["error"] = {"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed"}
+                from execution_task_error import safe_task_error
+                event["error"] = safe_task_error(failure_result, no_log)
             committed = self._append_event_locked(current, event)
             if truncated:
                 _write(self.task_failure_reported_path, {"reported": True})
@@ -38714,6 +38723,55 @@ def verify(state_root, run_id, manifest):
 def required(manifest):
     return any(isinstance(item, dict) and item.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY")
                for item in manifest.get("operations", []))
+
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":3377,"sha256":"5313237582f244602bee5f2769473c8a3e4f9a18d53e41c87c3401545370e5fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":3377}
+"""Closed diagnostic vocabulary: arbitrary Ansible text never leaves this module."""
+
+
+def safe_task_error(result, no_log=False):
+    result = result if isinstance(result, dict) else {}
+    if no_log or result.get('_ansible_no_log') or 'censored' in result:
+        return {'code': 'ANSIBLE_FAILURE_REDACTED', 'summary': 'Ansible task failed; result hidden by no_log'}
+    children = result.get('results')
+    if isinstance(children, list):
+        for child in children[:256]:
+            if not isinstance(child, dict) or not (child.get('failed') or child.get('unreachable')):
+                continue
+            # One bounded loop level; never descend through arbitrary payload trees.
+            nested = safe_task_error({key: value for key, value in child.items() if key != 'results'})
+            if nested['code'] != 'ANSIBLE_TASK_FAILED':
+                return nested
+    message = ' '.join(result[key][:8192] for key in ('msg', 'stderr', 'module_stderr')
+                       if isinstance(result.get(key), str)).lower()
+    code, summary = 'ANSIBLE_TASK_FAILED', 'Ansible task failed; untrusted result text withheld'
+    for candidate, description, phrases in (
+        ('ANSIBLE_UNDEFINED_VARIABLE', 'Undefined Ansible variable or attribute', ('is undefined', 'has no attribute', 'undefined variable')),
+        ('ANSIBLE_BECOME_TIMEOUT', 'Privilege escalation timed out', ('timeout waiting for privilege escalation prompt',)),
+        ('ANSIBLE_BECOME_FAILED', 'Privilege escalation requires valid credentials', ('missing sudo password', 'incorrect sudo password', 'sudo: a password is required')),
+        ('ANSIBLE_SSH_AUTH_FAILED', 'SSH authentication failed', ('permission denied (publickey', 'permission denied (password')),
+        ('ANSIBLE_CONNECTION_TIMEOUT', 'Connection timed out', ('connection timed out', 'connection timeout')),
+        ('ANSIBLE_CONNECTION_LOST', 'Connection closed or reset', ('connection reset by peer', 'connection closed by remote host', 'broken pipe')),
+        ('ANSIBLE_FILESYSTEM_FULL', 'Filesystem has no free space', ('no space left on device',)),
+        ('ANSIBLE_FILESYSTEM_READ_ONLY', 'Filesystem is read-only', ('read-only file system',)),
+        ('ANSIBLE_PERMISSION_DENIED', 'Filesystem or operation permission denied', ('permission denied', 'operation not permitted')),
+        ('ANSIBLE_FILE_NOT_FOUND', 'Required file or executable not found', ('no such file or directory', 'could not find or access')),
+        ('ANSIBLE_TLS_VERIFY_FAILED', 'TLS certificate verification failed', ('certificate verify failed', 'certificate verification failed')),
+    ):
+        if any(phrase in message for phrase in phrases):
+            code, summary = candidate, description
+            break
+    else:
+        if result.get('unreachable') is True:
+            code, summary = 'ANSIBLE_HOST_UNREACHABLE', 'Ansible target host is unreachable'
+        elif isinstance(result.get('assertion'), str):
+            code, summary = 'ANSIBLE_ASSERTION_FAILED', 'Ansible assertion failed'
+    # Numeric exit/status codes are useful without exposing command/output values.
+    for key, label in (('rc', 'exit code'), ('status', 'HTTP status')):
+        value = result.get(key)
+        if type(value) is int and -255 <= value <= 65535:
+            summary += '; %s %d' % (label, value)
+    return {'code': code, 'summary': summary}
 
 @@END
 @@PORTABLE {"path":"ansible-core/tools/run_with_runtime_credentials.py","mode":420,"size":3354,"sha256":"8d51ded263f8a0b8ea0cb73138fe24c25490b0d45fe3b47e7c3e10ae7c6c6e8a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3354}
@@ -46025,10 +46083,10 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":57326,"sha256":"e90965f715e9eecc2c44f0dca93fbc03bfd67e32b4cb738b81c916361773b1ad","index":0,"count":2,"encoding":"utf-8","payloadBytes":49231}
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58062,"sha256":"b8e29685febccd6ea79b58df2aefba52a4176d1e7e9dadf8f72753a7e1a1c8bc","index":0,"count":2,"encoding":"utf-8","payloadBytes":49314}
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -46897,6 +46955,23 @@ definitions:
             label: PostgreSQL port
             section: Network
             order: 10
+        clientCidrs:
+          kind: MANAGED
+          roleVariable: platform_postgresql_client_cidrs
+          type: array
+          scopes:
+          - deployment
+          - member
+          validation:
+            maxItems: 32
+            items:
+              type: string
+              pattern: ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(?:[0-9]|[12][0-9]|3[0-2])$
+          ui:
+            label: Дополнительные клиентские IPv4 CIDR
+            section: Network
+            order: 11
+            description: Дополняют автоматически определённую подсеть. Доступ только через TLS и SCRAM.
         dataDirectory:
           kind: MANAGED
           roleVariable: platform_postgresql_data_directory
@@ -47059,7 +47134,7 @@ definitions:
         x-memberListVariable: platform_postgresql_instances
     artifacts: []
     compatibilityRef: ../../services/postgresql/compatibility.yml
-    x-definitionDigest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+    x-definitionDigest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
     x-sourceManifest: services/postgresql/service.yml
   redis:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -47664,7 +47739,10 @@ definitions:
         variablesPrefix: platform_keepalived_
     artifacts: []
     runtimeRequirements:
-    - id: keepalived
+    - id: 
+@@END
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58062,"sha256":"b8e29685febccd6ea79b58df2aefba52a4176d1e7e9dadf8f72753a7e1a1c8bc","index":1,"count":2,"encoding":"utf-8","payloadBytes":8748}
+keepalived
       name: keepalived
       version: ''
       os: redos
@@ -47682,10 +47760,7 @@ definitions:
       displayName: BIND
       description: Authoritative BIND primary with optional secondary DNS participants for one Platform-managed
         forward zone
-   
-@@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":57326,"sha256":"e90965f715e9eecc2c44f0dca93fbc03bfd67e32b4cb738b81c916361773b1ad","index":1,"count":2,"encoding":"utf-8","payloadBytes":8095}
-   category: network
+      category: network
     modes:
       authoritative-primary-secondary:
         displayName: Authoritative primary-secondary
@@ -47998,7 +48073,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"e50595a729fef62135fb764116d722e0758eebe3f4e052d30f85ce81f82989f3","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
+@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"89b1af2d35f1301eaf1360599f7ced1696cb58a7b663783e304db3e6aa0ef938","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -48010,7 +48085,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -48053,7 +48128,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"fde1bea8181eebc537335c07c0662c260c4afcbc1cf1dd9a58f9d10c8990d62d","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
+@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"7e4c86ee108cd88a3da9ed6e60d61b9ca6cbf8cc1c10f1eb8a979ae54aebffb7","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -48065,7 +48140,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -48108,7 +48183,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"bae8f03073ade460320e782e2caef86c139a2e92d08bc6a065c6f27d2f544255","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"20123c64767fa124e2a920edc8ab5693c7bc6d05c0d91a3a6746c9eeac9edb43","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -48120,7 +48195,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -49800,7 +49875,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"ad7252cc483cb2ec60c2f912b668923afe7fc73f7e267bebda43d90a78ff8eeb","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
+@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"d664e93b42f1d85df6a49de2db31b39c85190eb918c74ede04c3603a9d8f2c20","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -49812,7 +49887,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -49822,7 +49897,7 @@ catalogLock:
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
 
 @@END
 @@PORTABLE {"path":"examples/valid/bind-standalone/inventory/group_vars/all/platform.yml","mode":420,"size":278,"sha256":"1b72996ae432c150a0281315284da61868d8cfd121f3fa9e5b97b18f658ecff0","index":0,"count":1,"encoding":"utf-8","payloadBytes":278}
@@ -49849,7 +49924,7 @@ all:
         bind1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"151435c3f91caa69e2795465072f42eca2a142188150bedaf3b04a56cd66ace7","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"766253fb8cbba4f98f4e5be5b92bad05739aa84515678f08b88ec30758b1e451","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -49861,7 +49936,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -49888,7 +49963,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"07fb08c1a83050c04c88b68591180ec35f05338aa0dd14b217973f13ee203b9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
+@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"75f21ff26c9c54243e51946a61a82a1393c28e75479bae5f61e20d2e45093998","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -49900,7 +49975,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services: {}
 
 @@END
@@ -49994,7 +50069,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"8d854a43b02a82f31fd8df2eb2dcbb400574454252f7f3efce96e397d88f9fdd","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
+@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"fe763a1131d14353259b77fcf8711ff47ba219d8c67e90a71c55abfcd3083f0e","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50006,14 +50081,14 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
     keepalived:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
@@ -50082,7 +50157,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"2c3741269d05ac206b2f984f43eb4246318fa5a84230d0e246edfbc1a90cb7d1","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"d1e0784da0743acc27b65821a17ce54c583948d91546c1f712e95479c2a9eea9","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50094,7 +50169,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -50183,7 +50258,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"506d8d8bd923fefe5f2a71898c5e50395ab5032089e5bab48b2a916f4e512c64","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"098b7190f72840921c5fc7cc1d69f1ab22b81cce9982c7b6f19bf5ada2b8db95","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50195,7 +50270,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -50263,7 +50338,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"0f088012e6d1ca11fc8816b3817bb7077547289068668b57b2b43cce2390d7b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
+@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"3404709be528662674c1d3d6a51a72312bacbc1c4ef8e7a8877731d93a496303","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50275,7 +50350,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -50347,7 +50422,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"ae786b7c6d8f4dac1a08a4098c664835e701346708d5f7a6f70826d85e066d62","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"0d506a20b82d101a5cbda6a2a240a9707b1199067b3cff9c915321e11a5094bc","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50359,7 +50434,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -50484,7 +50559,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"4f396fff318eeb7f947150cb553c50a4607bf0dc10fa78063e8da2b61b0b238a","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"5ee67a8bfe5f990335ef48e3327b7f65fbdc09fe085b23c71540696ff68edc37","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50496,7 +50571,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1
@@ -50577,7 +50652,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"f6a07715abc6e170efa80e51981d83325bd6aa53409186a3331c1a13a1fa40a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
+@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"16aed2d48eada85c4d9cde48cbe9710345bce3b2203ae4a30469e40e8d4fd52f","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50589,7 +50664,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -50602,7 +50677,7 @@ catalogLock:
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
 
 @@END
 @@PORTABLE {"path":"examples/valid/pki-host-scope/inventory/group_vars/all/platform.yml","mode":420,"size":677,"sha256":"1bbfa69b2d1204f5f50ec429e8dd1b2bd56a11646ba833ad7f6a3c6a5d37a93a","index":0,"count":1,"encoding":"utf-8","payloadBytes":677}
@@ -50649,7 +50724,7 @@ all:
         node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"d2d70d133a32eca9248eaf7a20ce827215b65cc1bd1b005741ad85094f8b5c33","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
+@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"cecb771a7b84b5b697e0424986c3f2eed15ea9fd89dd5474cb8d9e15cdd28b32","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50661,7 +50736,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.2
@@ -50726,7 +50801,7 @@ all:
         db-node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"c701196126d4521e2a7feffc44b5a97dab66f45bab3896c2cedeab086b0beb74","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
+@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"97f23dc6f30d5d1fa9823dea65b6523ae55e4c13061bb377b5ac31a2cf9751fd","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50738,11 +50813,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
     etcd:
       definitionVersion: fixture-v1
       digest: sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0
@@ -50780,7 +50855,7 @@ all:
       hosts: {db-node1: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"17c798363959039b26a971478ce53242ad8f865669c33205f4c7ab644a9906c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"c6f54bafc93f6177ff76b869288c18a9eb00a718c6d3db45f9f2b070a06ea174","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50792,11 +50867,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
 
 @@END
 @@PORTABLE {"path":"examples/valid/ui-project-snapshot/inventory/group_vars/all/platform-installer.yml","mode":420,"size":1897,"sha256":"39fe7a02c3234e34407d1c4faf67d5232f8890065c1082661390c2592de99f12","index":0,"count":1,"encoding":"utf-8","payloadBytes":1897}
@@ -50908,7 +50983,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"53bf17f38e6c283d41576de8c292e84cd767ac523bdfae99fa7796848f32b1a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
+@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"fb9aff0e06c3bec0b8248105f624f03c87c2a2f7fbba1d1dbc0efdd489372b05","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -50920,7 +50995,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:f78bd84f7199eb08af436cf459ef71a4b1dd30e3dc845d29dcf0ef819908fdc8
+  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -50939,7 +51014,7 @@ catalogLock:
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:6a180e60c9e852b2b0215b6d3ef525f9188a1a04557045a689c6318814994d9f
+      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
 
 @@END
 @@PORTABLE {"path":"frontend/browser.html","mode":420,"size":358,"sha256":"44f1faf26782deb0b098d58bc8f65356df03805eb83044fb89859b506b769b0a","index":0,"count":1,"encoding":"utf-8","payloadBytes":358}
@@ -109108,7 +109183,7 @@ $TTL {{ platform_bind_zone_projection.defaultTtl }}
 {% endfor %}
 
 @@END
-@@PORTABLE {"path":"services/bind/compatibility.yml","mode":420,"size":235,"sha256":"a49099d6a16cb2cb73bcd5b0b8d33c4e56ff2ed93b2a6d7b5d2fca7d7f1b5bb0","index":0,"count":1,"encoding":"utf-8","payloadBytes":235}
+@@PORTABLE {"path":"services/bind/compatibility.yml","mode":420,"size":267,"sha256":"da7d7acb13d9c2c299fba8b718a7c8b5d9315bd47d73f01565054861397f7a43","index":0,"count":1,"encoding":"utf-8","payloadBytes":267}
 apiVersion: platform.installer/service-compatibility/v1alpha1
 kind: ServiceCompatibility
 metadata: {id: bind, version: "1.0.0-alpha.2"}
@@ -109117,6 +109192,7 @@ platforms:
     packages: [bind, bind-utils]
     service: named
     testedVersion: 9.18.41
+    testedOSVersions: ["7.3.7"]
 
 @@END
 @@PORTABLE {"path":"services/bind/configuration.schema.json","mode":420,"size":918,"sha256":"864e094b9041848fcd52785a48aff0dea7602efba7229aabbcd93bed4cf220a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":918}
@@ -109948,14 +110024,15 @@ if __name__ == '__main__':
     main()
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/defaults/main.yml","mode":420,"size":583,"sha256":"c1c32ddcd50b040468d55463c1a9702ef179f4ffd4c93dae3c5154925acddaad","index":0,"count":1,"encoding":"utf-8","payloadBytes":583}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/defaults/main.yml","mode":420,"size":744,"sha256":"8ddb69ede861f69df725e1efbd43058c8c2caf7e79ea9770a13ff58da66a0290","index":0,"count":1,"encoding":"utf-8","payloadBytes":744}
 ---
 platform_clickhouse_application_job: {}
 platform_clickhouse_application_phase: preflight
 platform_clickhouse_application_lock_timeout: 15
 platform_clickhouse_application_query_timeout: 60
-platform_clickhouse_config_root: /etc/platform-clickhouse
-platform_clickhouse_user: platform-clickhouse
+platform_clickhouse_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}clickhouse"
+platform_clickhouse_config_root: "/etc/{{ platform_clickhouse_name }}"
+platform_clickhouse_user: "{{ platform_clickhouse_name }}"
 platform_application_secret_root: ''
 platform_clickhouse_secret_files: {}
 platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret_files | combine(platform_application_secret_files | default({})) | combine(platform_application_credential_files | default({})) }}"
@@ -111304,10 +111381,16 @@ artifacts:
 status: approved-dev-artifact-offline-production
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/compatibility.yml","mode":420,"size":348,"sha256":"6017f09f799a7b7696ae2253d96ed926bfd7f30c33f9ffa6a7819a174e0c0270","index":0,"count":1,"encoding":"utf-8","payloadBytes":348}
+@@PORTABLE {"path":"services/clickhouse/compatibility.yml","mode":420,"size":522,"sha256":"d9f05b7637be145992879685f6958058314490296f002d1e28ae2f58576a781b","index":0,"count":1,"encoding":"utf-8","payloadBytes":522}
 apiVersion: platform.installer/compatibility/v1alpha1
 service: clickhouse
 combinations:
+  - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    clickhouse: "26.8.14.3-1"
+    source: verified-offline-bundle
+    status: runtime-verified-redos73-support-01
   - os: redos
     osVersion: "8.0"
     architecture: x86_64
@@ -111865,7 +111948,7 @@ DNS={{ platform_dns_client_local.servers | join(' ') }}
 Domains=~{{ platform_dns_client_local.managedZone }}
 
 @@END
-@@PORTABLE {"path":"services/dns-client/compatibility.yml","mode":420,"size":253,"sha256":"2136cc334e9c1f2b38dcf0771194d74c0dbab4a54782c85ca2909a98ac922568","index":0,"count":1,"encoding":"utf-8","payloadBytes":253}
+@@PORTABLE {"path":"services/dns-client/compatibility.yml","mode":420,"size":260,"sha256":"b4e1d3e50bed2443301f3b68974b84277be2a125a59a708a0f2f3c665d62cc10","index":0,"count":1,"encoding":"utf-8","payloadBytes":260}
 apiVersion: platform.installer/service-compatibility/v1alpha1
 kind: ServiceCompatibility
 metadata: {id: dns-client, version: "1.0.0-alpha.1"}
@@ -111873,7 +111956,7 @@ platforms:
   redos:
     packages: []
     adapters: [systemd-resolved, NetworkManager]
-    testedVersion: "8.0"
+    testedOSVersions: ["7.3.7"]
 
 @@END
 @@PORTABLE {"path":"services/dns-client/configuration.schema.json","mode":420,"size":362,"sha256":"e173572c0128ea61338d840f4be281565cf50f0a4e33da502c70ce371a1f01b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":362}
@@ -113155,10 +113238,15 @@ packageSource:
 status: candidate-system-repository-acceptance
 
 @@END
-@@PORTABLE {"path":"services/docker/compatibility.yml","mode":420,"size":306,"sha256":"e1c86bf33d793dcc23b609a939c338a27dc76ff37cf431678e42289fa5c3bc1d","index":0,"count":1,"encoding":"utf-8","payloadBytes":306}
+@@PORTABLE {"path":"services/docker/compatibility.yml","mode":420,"size":444,"sha256":"2bc8cc50525e80113d462ac1c215b32ab9ad4e1fb75f3ad7d0eb23933703d96d","index":0,"count":1,"encoding":"utf-8","payloadBytes":444}
 apiVersion: platform.installer/compatibility/v1alpha1
 service: docker
 combinations:
+  - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    source: system-repository
+    status: runtime-verified-redos73-support-01
   - os: redos
     osVersion: "8.0"
     architecture: x86_64
@@ -113992,7 +114080,7 @@ platform_haproxy_full_reconcile: false
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') | selectattr('key', 'in', platform_deployments | default({})) | list | length) > 0
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":11139,"sha256":"ac36665c3ded3b1c7c9259777ada94956a32d88009afc37b359ace7e57b6a96d","index":0,"count":1,"encoding":"utf-8","payloadBytes":11139}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":11139,"sha256":"63b9aa1db52fff9c515948f8c41b1078c14422d7392e221353c766b05bb60e78","index":0,"count":1,"encoding":"utf-8","payloadBytes":11139}
 ---
 - name: Capture exact prior Platform HAProxy backend inventory before candidate reset
   platform.haproxy.archive_managed_backends:
@@ -114011,12 +114099,6 @@ platform_haproxy_full_reconcile: false
       platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
 
-- name: Reset only the temporary HAProxy candidate graph
-  ansible.builtin.file:
-    path: "{{ platform_haproxy_candidate_directory }}"
-    state: absent
-  changed_when: false
-
 - name: Create persistent Platform HAProxy directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -114026,16 +114108,6 @@ platform_haproxy_full_reconcile: false
     mode: '0750'
   loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
   when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Create temporary HAProxy candidate workspace
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
-  changed_when: false
 
 - name: Require HAProxy PKI materialization
   ansible.builtin.assert:
@@ -114066,17 +114138,6 @@ platform_haproxy_full_reconcile: false
     excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
   register: _platform_haproxy_third_party_fragments
 
-- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
-  ansible.builtin.copy:
-    src: "{{ item.path }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: preserve
-  loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
-  changed_when: false
-
 - name: Select exact filenames owned by the partial endpoint source
   ansible.builtin.set_fact:
     _platform_haproxy_partial_source_files: >-
@@ -114084,22 +114145,6 @@ platform_haproxy_full_reconcile: false
          map(attribute='value') | flatten |
          selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id | default('')) |
          map(attribute='configFileName') | unique | list }}
-
-- name: Stage proven existing application backends for base provider update
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
-  when:
-    - not (platform_haproxy_full_reconcile | bool)
-    - >-
-      platform_haproxy_partial_deployment_id is not defined or
-      item.name not in _platform_haproxy_partial_source_files
-  changed_when: false
 
 - name: Build HAProxy PEM bundle atomically without logging key data
   ansible.builtin.assemble:
@@ -114165,6 +114210,49 @@ platform_haproxy_full_reconcile: false
 
 - name: Check the projected targets before candidate publication
   ansible.builtin.include_tasks: check_targets.yml
+
+- name: Reset only the temporary HAProxy candidate graph
+  ansible.builtin.file:
+    path: "{{ platform_haproxy_candidate_directory }}"
+    state: absent
+  changed_when: false
+
+- name: Create temporary HAProxy candidate workspace
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
+  changed_when: false
+
+- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+  loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
+  changed_when: false
+
+- name: Stage proven existing application backends for base provider update
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
+  when:
+    - not (platform_haproxy_full_reconcile | bool)
+    - >-
+      platform_haproxy_partial_deployment_id is not defined or
+      item.name not in _platform_haproxy_partial_source_files
+  changed_when: false
 
 - name: Render full Platform HAProxy candidate
   ansible.builtin.template:
@@ -114442,120 +114530,5 @@ backend {{ platform_haproxy_application_backend.backendName }}
 {% for target in platform_haproxy_application_backend.targets %}
     server {{ target.serverName }} {{ target.address }}:{{ target.port }}{% if platform_haproxy_application_backend.settings.checkInterval is defined %} inter {{ platform_haproxy_application_backend.settings.checkInterval }}{% endif %}{% if platform_haproxy_application_backend.settings.maxconn is defined %} maxconn {{ platform_haproxy_application_backend.settings.maxconn }}{% endif %}{% if platform_haproxy_application_backend.expectedServerName is defined %} sni str({{ platform_haproxy_application_backend.expectedServerName }}){% endif %}{{ '\n' }}
 {% endfor %}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/90-stats-backends.cfg.j2","mode":420,"size":1972,"sha256":"b27b0c6aa74720d5f7f101dd2d48a38fe17edb1783b72a89cb3e0bdcea07a33f","index":0,"count":1,"encoding":"utf-8","payloadBytes":1972}
-{% set endpoints = platform_haproxy_runtime_projection.endpoints %}
-{% set deployments = platform_desired_state.serviceDeployments %}
-{% for deployment_id, endpoint in endpoints.endpoints | dictsort %}
-{% if deployments[deployment_id].serviceType == 'haproxy' and deployment_id in platform_deployments %}
-backend {{ deployment_id }}-{{ endpoint.endpointGroupId }}
-    balance {{ platform_haproxy_stats_backend_defaults.balance }}
-    default-server{% if platform_haproxy_stats_backend_defaults.ssl %} ssl verify {{ platform_haproxy_stats_backend_defaults.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% endif %}{% if platform_haproxy_stats_backend_defaults.check %} check fall {{ platform_haproxy_stats_backend_defaults.fall }} rise {{ platform_haproxy_stats_backend_defaults.rise }}{% endif %}{{ '\n' }}
-{% for host in groups['platform_targets'] | sort if deployment_id in (hostvars[host].platform_deployments | default({})) %}
-    server {{ host }} {{ hostvars[host].ansible_host | default(host) }}:{{ platform_haproxy_internal_stats_port }}
-{% endfor %}
-{% for host_key, host_endpoint in endpoints.hostEndpoints | dictsort if host_endpoint.serviceDeploymentId == deployment_id %}
-backend {{ deployment_id }}-{{ host_endpoint.hostId }}-{{ host_endpoint.endpointGroupId }}
-    balance {{ platform_haproxy_stats_backend_defaults.balance }}
-    default-server{% if platform_haproxy_stats_backend_defaults.ssl %} ssl verify {{ platform_haproxy_stats_backend_defaults.sslVerify }} ca-file {{ platform_haproxy_pki_directory }}/02-ca-chain.pem{% endif %}{% if platform_haproxy_stats_backend_defaults.check %} check fall {{ platform_haproxy_stats_backend_defaults.fall }} rise {{ platform_haproxy_stats_backend_defaults.rise }}{% endif %}{{ '\n' }}
-    server {{ host_endpoint.hostId }} {{ hostvars[host_endpoint.hostId].ansible_host | default(host_endpoint.hostId) }}:{{ platform_haproxy_internal_stats_port }}
-{% endfor %}
-{% endif %}
-{% endfor %}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/haproxy-runtime-directory.conf.j2","mode":420,"size":61,"sha256":"b0cea1d4bd5b71924c8ebbc752442f9e2fb5986a8e88204f6b8b9ae731a48b7e","index":0,"count":1,"encoding":"utf-8","payloadBytes":61}
-[Service]
-RuntimeDirectory=haproxy
-RuntimeDirectoryMode=0755
-
-@@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/haproxy.cfg.j2","mode":420,"size":638,"sha256":"cd3349a1f855a7f08e53365b540bc85c2c94926f761d5307577ac87c905da95d","index":0,"count":1,"encoding":"utf-8","payloadBytes":638}
-global
-{% for log in platform_haproxy_global.log | sort(attribute='address') %}
-    log {{ log.address }} {{ log.facility }}{% if log.level | default('') | length > 0 %} {{ log.level }}{% endif %}{{ '\n' }}
-{% endfor %}
-    maxconn {{ platform_haproxy_global.maxconn }}
-    stats socket {{ platform_haproxy_runtime_socket_path }} level operator mode 0660 user haproxy group haproxy
-
-defaults
-    mode {{ platform_haproxy_defaults.mode }}
-    timeout connect {{ platform_haproxy_defaults.timeout_connect }}
-    timeout client {{ platform_haproxy_defaults.timeout_client }}
-    timeout server {{ platform_haproxy_defaults.timeout_server }}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/compatibility.yml","mode":420,"size":227,"sha256":"db7963f8a9f0474200cda088a589ec8c9d4c2c264586b260698da48d48ff5ff5","index":0,"count":1,"encoding":"utf-8","payloadBytes":227}
-apiVersion: platform.installer/service-compatibility/v1alpha1
-kind: ServiceCompatibility
-metadata: {id: haproxy, version: "1.0.0-alpha.1"}
-platforms:
-  redos:
-    packages: [haproxy]
-    service: haproxy
-    testedVersion: 2.8
-
-@@END
-@@PORTABLE {"path":"services/haproxy/configuration.schema.json","mode":420,"size":712,"sha256":"6bd4fbee3ae96112f708f3e88b2253575b90f6eeba3f44d7c5d79afacbb1124e","index":0,"count":1,"encoding":"utf-8","payloadBytes":712}
-{
-  "$id": "https://platform.installer/schemas/services/haproxy/configuration-v1alpha1.schema.json",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "advancedConfig": {
-      "additionalProperties": false,
-      "properties": {
-        "global": {
-          "additionalProperties": false,
-          "properties": {
-            "maxconn": {
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          "type": "object"
-        }
-      },
-      "type": "object"
-    },
-    "tlsProfile": {
-      "minLength": 1,
-      "type": "string"
-    }
-  },
-  "title": "HAProxy desired configuration",
-  "type": "object"
-}
-
-@@END
-@@PORTABLE {"path":"services/haproxy/playbooks/apply.yml","mode":420,"size":823,"sha256":"5e0078773334f315087c6eba42cd5a823d0573052a5c1acd63f23edfc6a3fb0e","index":0,"count":1,"encoding":"utf-8","payloadBytes":823}
----
-- import_playbook: ../../../ansible-core/playbooks/validate.yml
-- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
-- name: Prepare and validate HAProxy candidates
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      platform_haproxy_phase: prepare
-- name: Activate HAProxy only after cluster candidate barrier
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      platform_haproxy_phase: activate
-- name: Start HAProxy only after active configuration validation
-  hosts: platform_targets
-  become: true
-  gather_facts: false
-  any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      platform_haproxy_phase: start
 
 @@END

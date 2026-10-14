@@ -1,3 +1,1113 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/get.go","mode":420,"size":15879,"sha256":"1caad435ba91640e5893fd7f98f8cde46e510f64a7b9f3ba8e2b90b2353f61ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":15879}
+package lipgloss
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+// GetBold returns the style's bold value. If no value is set false is returned.
+func (s Style) GetBold() bool {
+	return s.getAsBool(boldKey, false)
+}
+
+// GetItalic returns the style's italic value. If no value is set false is
+// returned.
+func (s Style) GetItalic() bool {
+	return s.getAsBool(italicKey, false)
+}
+
+// GetUnderline returns the style's underline value. If no value is set false is
+// returned.
+func (s Style) GetUnderline() bool {
+	return s.getAsBool(underlineKey, false)
+}
+
+// GetStrikethrough returns the style's strikethrough value. If no value is set false
+// is returned.
+func (s Style) GetStrikethrough() bool {
+	return s.getAsBool(strikethroughKey, false)
+}
+
+// GetReverse returns the style's reverse value. If no value is set false is
+// returned.
+func (s Style) GetReverse() bool {
+	return s.getAsBool(reverseKey, false)
+}
+
+// GetBlink returns the style's blink value. If no value is set false is
+// returned.
+func (s Style) GetBlink() bool {
+	return s.getAsBool(blinkKey, false)
+}
+
+// GetFaint returns the style's faint value. If no value is set false is
+// returned.
+func (s Style) GetFaint() bool {
+	return s.getAsBool(faintKey, false)
+}
+
+// GetForeground returns the style's foreground color. If no value is set
+// NoColor{} is returned.
+func (s Style) GetForeground() TerminalColor {
+	return s.getAsColor(foregroundKey)
+}
+
+// GetBackground returns the style's background color. If no value is set
+// NoColor{} is returned.
+func (s Style) GetBackground() TerminalColor {
+	return s.getAsColor(backgroundKey)
+}
+
+// GetWidth returns the style's width setting. If no width is set 0 is
+// returned.
+func (s Style) GetWidth() int {
+	return s.getAsInt(widthKey)
+}
+
+// GetHeight returns the style's height setting. If no height is set 0 is
+// returned.
+func (s Style) GetHeight() int {
+	return s.getAsInt(heightKey)
+}
+
+// GetAlign returns the style's implicit horizontal alignment setting.
+// If no alignment is set Position.Left is returned.
+func (s Style) GetAlign() Position {
+	v := s.getAsPosition(alignHorizontalKey)
+	if v == Position(0) {
+		return Left
+	}
+	return v
+}
+
+// GetAlignHorizontal returns the style's implicit horizontal alignment setting.
+// If no alignment is set Position.Left is returned.
+func (s Style) GetAlignHorizontal() Position {
+	v := s.getAsPosition(alignHorizontalKey)
+	if v == Position(0) {
+		return Left
+	}
+	return v
+}
+
+// GetAlignVertical returns the style's implicit vertical alignment setting.
+// If no alignment is set Position.Top is returned.
+func (s Style) GetAlignVertical() Position {
+	v := s.getAsPosition(alignVerticalKey)
+	if v == Position(0) {
+		return Top
+	}
+	return v
+}
+
+// GetPadding returns the style's top, right, bottom, and left padding values,
+// in that order. 0 is returned for unset values.
+func (s Style) GetPadding() (top, right, bottom, left int) {
+	return s.getAsInt(paddingTopKey),
+		s.getAsInt(paddingRightKey),
+		s.getAsInt(paddingBottomKey),
+		s.getAsInt(paddingLeftKey)
+}
+
+// GetPaddingTop returns the style's top padding. If no value is set 0 is
+// returned.
+func (s Style) GetPaddingTop() int {
+	return s.getAsInt(paddingTopKey)
+}
+
+// GetPaddingRight returns the style's right padding. If no value is set 0 is
+// returned.
+func (s Style) GetPaddingRight() int {
+	return s.getAsInt(paddingRightKey)
+}
+
+// GetPaddingBottom returns the style's bottom padding. If no value is set 0 is
+// returned.
+func (s Style) GetPaddingBottom() int {
+	return s.getAsInt(paddingBottomKey)
+}
+
+// GetPaddingLeft returns the style's left padding. If no value is set 0 is
+// returned.
+func (s Style) GetPaddingLeft() int {
+	return s.getAsInt(paddingLeftKey)
+}
+
+// GetHorizontalPadding returns the style's left and right padding. Unset
+// values are measured as 0.
+func (s Style) GetHorizontalPadding() int {
+	return s.getAsInt(paddingLeftKey) + s.getAsInt(paddingRightKey)
+}
+
+// GetVerticalPadding returns the style's top and bottom padding. Unset values
+// are measured as 0.
+func (s Style) GetVerticalPadding() int {
+	return s.getAsInt(paddingTopKey) + s.getAsInt(paddingBottomKey)
+}
+
+// GetColorWhitespace returns the style's whitespace coloring setting. If no
+// value is set false is returned.
+func (s Style) GetColorWhitespace() bool {
+	return s.getAsBool(colorWhitespaceKey, false)
+}
+
+// GetMargin returns the style's top, right, bottom, and left margins, in that
+// order. 0 is returned for unset values.
+func (s Style) GetMargin() (top, right, bottom, left int) {
+	return s.getAsInt(marginTopKey),
+		s.getAsInt(marginRightKey),
+		s.getAsInt(marginBottomKey),
+		s.getAsInt(marginLeftKey)
+}
+
+// GetMarginTop returns the style's top margin. If no value is set 0 is
+// returned.
+func (s Style) GetMarginTop() int {
+	return s.getAsInt(marginTopKey)
+}
+
+// GetMarginRight returns the style's right margin. If no value is set 0 is
+// returned.
+func (s Style) GetMarginRight() int {
+	return s.getAsInt(marginRightKey)
+}
+
+// GetMarginBottom returns the style's bottom margin. If no value is set 0 is
+// returned.
+func (s Style) GetMarginBottom() int {
+	return s.getAsInt(marginBottomKey)
+}
+
+// GetMarginLeft returns the style's left margin. If no value is set 0 is
+// returned.
+func (s Style) GetMarginLeft() int {
+	return s.getAsInt(marginLeftKey)
+}
+
+// GetHorizontalMargins returns the style's left and right margins. Unset
+// values are measured as 0.
+func (s Style) GetHorizontalMargins() int {
+	return s.getAsInt(marginLeftKey) + s.getAsInt(marginRightKey)
+}
+
+// GetVerticalMargins returns the style's top and bottom margins. Unset values
+// are measured as 0.
+func (s Style) GetVerticalMargins() int {
+	return s.getAsInt(marginTopKey) + s.getAsInt(marginBottomKey)
+}
+
+// GetBorder returns the style's border style (type Border) and value for the
+// top, right, bottom, and left in that order. If no value is set for the
+// border style, Border{} is returned. For all other unset values false is
+// returned.
+func (s Style) GetBorder() (b Border, top, right, bottom, left bool) {
+	return s.getBorderStyle(),
+		s.getAsBool(borderTopKey, false),
+		s.getAsBool(borderRightKey, false),
+		s.getAsBool(borderBottomKey, false),
+		s.getAsBool(borderLeftKey, false)
+}
+
+// GetBorderStyle returns the style's border style (type Border). If no value
+// is set Border{} is returned.
+func (s Style) GetBorderStyle() Border {
+	return s.getBorderStyle()
+}
+
+// GetBorderTop returns the style's top border setting. If no value is set
+// false is returned.
+func (s Style) GetBorderTop() bool {
+	return s.getAsBool(borderTopKey, false)
+}
+
+// GetBorderRight returns the style's right border setting. If no value is set
+// false is returned.
+func (s Style) GetBorderRight() bool {
+	return s.getAsBool(borderRightKey, false)
+}
+
+// GetBorderBottom returns the style's bottom border setting. If no value is
+// set false is returned.
+func (s Style) GetBorderBottom() bool {
+	return s.getAsBool(borderBottomKey, false)
+}
+
+// GetBorderLeft returns the style's left border setting. If no value is
+// set false is returned.
+func (s Style) GetBorderLeft() bool {
+	return s.getAsBool(borderLeftKey, false)
+}
+
+// GetBorderTopForeground returns the style's border top foreground color. If
+// no value is set NoColor{} is returned.
+func (s Style) GetBorderTopForeground() TerminalColor {
+	return s.getAsColor(borderTopForegroundKey)
+}
+
+// GetBorderRightForeground returns the style's border right foreground color.
+// If no value is set NoColor{} is returned.
+func (s Style) GetBorderRightForeground() TerminalColor {
+	return s.getAsColor(borderRightForegroundKey)
+}
+
+// GetBorderBottomForeground returns the style's border bottom foreground
+// color.  If no value is set NoColor{} is returned.
+func (s Style) GetBorderBottomForeground() TerminalColor {
+	return s.getAsColor(borderBottomForegroundKey)
+}
+
+// GetBorderLeftForeground returns the style's border left foreground
+// color.  If no value is set NoColor{} is returned.
+func (s Style) GetBorderLeftForeground() TerminalColor {
+	return s.getAsColor(borderLeftForegroundKey)
+}
+
+// GetBorderTopBackground returns the style's border top background color. If
+// no value is set NoColor{} is returned.
+func (s Style) GetBorderTopBackground() TerminalColor {
+	return s.getAsColor(borderTopBackgroundKey)
+}
+
+// GetBorderRightBackground returns the style's border right background color.
+// If no value is set NoColor{} is returned.
+func (s Style) GetBorderRightBackground() TerminalColor {
+	return s.getAsColor(borderRightBackgroundKey)
+}
+
+// GetBorderBottomBackground returns the style's border bottom background
+// color.  If no value is set NoColor{} is returned.
+func (s Style) GetBorderBottomBackground() TerminalColor {
+	return s.getAsColor(borderBottomBackgroundKey)
+}
+
+// GetBorderLeftBackground returns the style's border left background
+// color.  If no value is set NoColor{} is returned.
+func (s Style) GetBorderLeftBackground() TerminalColor {
+	return s.getAsColor(borderLeftBackgroundKey)
+}
+
+// GetBorderTopWidth returns the width of the top border. If borders contain
+// runes of varying widths, the widest rune is returned. If no border exists on
+// the top edge, 0 is returned.
+//
+// Deprecated: This function simply calls Style.GetBorderTopSize.
+func (s Style) GetBorderTopWidth() int {
+	return s.GetBorderTopSize()
+}
+
+// GetBorderTopSize returns the width of the top border. If borders contain
+// runes of varying widths, the widest rune is returned. If no border exists on
+// the top edge, 0 is returned.
+func (s Style) GetBorderTopSize() int {
+	if !s.getAsBool(borderTopKey, false) {
+		return 0
+	}
+	return s.getBorderStyle().GetTopSize()
+}
+
+// GetBorderLeftSize returns the width of the left border. If borders contain
+// runes of varying widths, the widest rune is returned. If no border exists on
+// the left edge, 0 is returned.
+func (s Style) GetBorderLeftSize() int {
+	if !s.getAsBool(borderLeftKey, false) {
+		return 0
+	}
+	return s.getBorderStyle().GetLeftSize()
+}
+
+// GetBorderBottomSize returns the width of the bottom border. If borders
+// contain runes of varying widths, the widest rune is returned. If no border
+// exists on the left edge, 0 is returned.
+func (s Style) GetBorderBottomSize() int {
+	if !s.getAsBool(borderBottomKey, false) {
+		return 0
+	}
+	return s.getBorderStyle().GetBottomSize()
+}
+
+// GetBorderRightSize returns the width of the right border. If borders
+// contain runes of varying widths, the widest rune is returned. If no border
+// exists on the right edge, 0 is returned.
+func (s Style) GetBorderRightSize() int {
+	if !s.getAsBool(borderRightKey, false) {
+		return 0
+	}
+	return s.getBorderStyle().GetRightSize()
+}
+
+// GetHorizontalBorderSize returns the width of the horizontal borders. If
+// borders contain runes of varying widths, the widest rune is returned. If no
+// border exists on the horizontal edges, 0 is returned.
+func (s Style) GetHorizontalBorderSize() int {
+	return s.GetBorderLeftSize() + s.GetBorderRightSize()
+}
+
+// GetVerticalBorderSize returns the width of the vertical borders. If
+// borders contain runes of varying widths, the widest rune is returned. If no
+// border exists on the vertical edges, 0 is returned.
+func (s Style) GetVerticalBorderSize() int {
+	return s.GetBorderTopSize() + s.GetBorderBottomSize()
+}
+
+// GetInline returns the style's inline setting. If no value is set false is
+// returned.
+func (s Style) GetInline() bool {
+	return s.getAsBool(inlineKey, false)
+}
+
+// GetMaxWidth returns the style's max width setting. If no value is set 0 is
+// returned.
+func (s Style) GetMaxWidth() int {
+	return s.getAsInt(maxWidthKey)
+}
+
+// GetMaxHeight returns the style's max height setting. If no value is set 0 is
+// returned.
+func (s Style) GetMaxHeight() int {
+	return s.getAsInt(maxHeightKey)
+}
+
+// GetTabWidth returns the style's tab width setting. If no value is set 4 is
+// returned which is the implicit default.
+func (s Style) GetTabWidth() int {
+	return s.getAsInt(tabWidthKey)
+}
+
+// GetUnderlineSpaces returns whether or not the style is set to underline
+// spaces. If not value is set false is returned.
+func (s Style) GetUnderlineSpaces() bool {
+	return s.getAsBool(underlineSpacesKey, false)
+}
+
+// GetStrikethroughSpaces returns whether or not the style is set to strikethrough
+// spaces. If not value is set false is returned.
+func (s Style) GetStrikethroughSpaces() bool {
+	return s.getAsBool(strikethroughSpacesKey, false)
+}
+
+// GetHorizontalFrameSize returns the sum of the style's horizontal margins, padding
+// and border widths.
+//
+// Provisional: this method may be renamed.
+func (s Style) GetHorizontalFrameSize() int {
+	return s.GetHorizontalMargins() + s.GetHorizontalPadding() + s.GetHorizontalBorderSize()
+}
+
+// GetVerticalFrameSize returns the sum of the style's vertical margins, padding
+// and border widths.
+//
+// Provisional: this method may be renamed.
+func (s Style) GetVerticalFrameSize() int {
+	return s.GetVerticalMargins() + s.GetVerticalPadding() + s.GetVerticalBorderSize()
+}
+
+// GetFrameSize returns the sum of the margins, padding and border width for
+// both the horizontal and vertical margins.
+func (s Style) GetFrameSize() (x, y int) {
+	return s.GetHorizontalFrameSize(), s.GetVerticalFrameSize()
+}
+
+// GetTransform returns the transform set on the style. If no transform is set
+// nil is returned.
+func (s Style) GetTransform() func(string) string {
+	return s.getAsTransform(transformKey)
+}
+
+// Returns whether or not the given property is set.
+func (s Style) isSet(k propKey) bool {
+	return s.props.has(k)
+}
+
+func (s Style) getAsBool(k propKey, defaultVal bool) bool {
+	if !s.isSet(k) {
+		return defaultVal
+	}
+	return s.attrs&int(k) != 0
+}
+
+func (s Style) getAsColor(k propKey) TerminalColor {
+	if !s.isSet(k) {
+		return noColor
+	}
+
+	var c TerminalColor
+	switch k { //nolint:exhaustive
+	case foregroundKey:
+		c = s.fgColor
+	case backgroundKey:
+		c = s.bgColor
+	case marginBackgroundKey:
+		c = s.marginBgColor
+	case borderTopForegroundKey:
+		c = s.borderTopFgColor
+	case borderRightForegroundKey:
+		c = s.borderRightFgColor
+	case borderBottomForegroundKey:
+		c = s.borderBottomFgColor
+	case borderLeftForegroundKey:
+		c = s.borderLeftFgColor
+	case borderTopBackgroundKey:
+		c = s.borderTopBgColor
+	case borderRightBackgroundKey:
+		c = s.borderRightBgColor
+	case borderBottomBackgroundKey:
+		c = s.borderBottomBgColor
+	case borderLeftBackgroundKey:
+		c = s.borderLeftBgColor
+	}
+
+	if c != nil {
+		return c
+	}
+
+	return noColor
+}
+
+func (s Style) getAsInt(k propKey) int {
+	if !s.isSet(k) {
+		return 0
+	}
+	switch k { //nolint:exhaustive
+	case widthKey:
+		return s.width
+	case heightKey:
+		return s.height
+	case paddingTopKey:
+		return s.paddingTop
+	case paddingRightKey:
+		return s.paddingRight
+	case paddingBottomKey:
+		return s.paddingBottom
+	case paddingLeftKey:
+		return s.paddingLeft
+	case marginTopKey:
+		return s.marginTop
+	case marginRightKey:
+		return s.marginRight
+	case marginBottomKey:
+		return s.marginBottom
+	case marginLeftKey:
+		return s.marginLeft
+	case maxWidthKey:
+		return s.maxWidth
+	case maxHeightKey:
+		return s.maxHeight
+	case tabWidthKey:
+		return s.tabWidth
+	}
+	return 0
+}
+
+func (s Style) getAsPosition(k propKey) Position {
+	if !s.isSet(k) {
+		return Position(0)
+	}
+	switch k { //nolint:exhaustive
+	case alignHorizontalKey:
+		return s.alignHorizontal
+	case alignVerticalKey:
+		return s.alignVertical
+	}
+	return Position(0)
+}
+
+func (s Style) getBorderStyle() Border {
+	if !s.isSet(borderStyleKey) {
+		return noBorder
+	}
+	return s.borderStyle
+}
+
+func (s Style) getAsTransform(propKey) func(string) string {
+	if !s.isSet(transformKey) {
+		return nil
+	}
+	return s.transform
+}
+
+// Split a string into lines, additionally returning the size of the widest
+// line.
+func getLines(s string) (lines []string, widest int) {
+	lines = strings.Split(s, "\n")
+
+	for _, l := range lines {
+		w := ansi.StringWidth(l)
+		if widest < w {
+			widest = w
+		}
+	}
+
+	return lines, widest
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/join.go","mode":420,"size":4128,"sha256":"53df54bb304c584eaa1dfd0b2eebb81cea5877c25ff453eb314d335e9dc3440a","index":0,"count":1,"encoding":"utf-8","payloadBytes":4128}
+package lipgloss
+
+import (
+	"math"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+// JoinHorizontal is a utility function for horizontally joining two
+// potentially multi-lined strings along a vertical axis. The first argument is
+// the position, with 0 being all the way at the top and 1 being all the way
+// at the bottom.
+//
+// If you just want to align to the top, center or bottom you may as well just
+// use the helper constants Top, Center, and Bottom.
+//
+// Example:
+//
+//	blockB := "...\n...\n..."
+//	blockA := "...\n...\n...\n...\n..."
+//
+//	// Join 20% from the top
+//	str := lipgloss.JoinHorizontal(0.2, blockA, blockB)
+//
+//	// Join on the top edge
+//	str := lipgloss.JoinHorizontal(lipgloss.Top, blockA, blockB)
+func JoinHorizontal(pos Position, strs ...string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	if len(strs) == 1 {
+		return strs[0]
+	}
+
+	var (
+		// Groups of strings broken into multiple lines
+		blocks = make([][]string, len(strs))
+
+		// Max line widths for the above text blocks
+		maxWidths = make([]int, len(strs))
+
+		// Height of the tallest block
+		maxHeight int
+	)
+
+	// Break text blocks into lines and get max widths for each text block
+	for i, str := range strs {
+		blocks[i], maxWidths[i] = getLines(str)
+		if len(blocks[i]) > maxHeight {
+			maxHeight = len(blocks[i])
+		}
+	}
+
+	// Add extra lines to make each side the same height
+	for i := range blocks {
+		if len(blocks[i]) >= maxHeight {
+			continue
+		}
+
+		extraLines := make([]string, maxHeight-len(blocks[i]))
+
+		switch pos { //nolint:exhaustive
+		case Top:
+			blocks[i] = append(blocks[i], extraLines...)
+
+		case Bottom:
+			blocks[i] = append(extraLines, blocks[i]...)
+
+		default: // Somewhere in the middle
+			n := len(extraLines)
+			split := int(math.Round(float64(n) * pos.value()))
+			top := n - split
+			bottom := n - top
+
+			blocks[i] = append(extraLines[top:], blocks[i]...)
+			blocks[i] = append(blocks[i], extraLines[bottom:]...)
+		}
+	}
+
+	// Merge lines
+	var b strings.Builder
+	for i := range blocks[0] { // remember, all blocks have the same number of members now
+		for j, block := range blocks {
+			b.WriteString(block[i])
+
+			// Also make lines the same length
+			b.WriteString(strings.Repeat(" ", maxWidths[j]-ansi.StringWidth(block[i])))
+		}
+		if i < len(blocks[0])-1 {
+			b.WriteRune('\n')
+		}
+	}
+
+	return b.String()
+}
+
+// JoinVertical is a utility function for vertically joining two potentially
+// multi-lined strings along a horizontal axis. The first argument is the
+// position, with 0 being all the way to the left and 1 being all the way to
+// the right.
+//
+// If you just want to align to the left, right or center you may as well just
+// use the helper constants Left, Center, and Right.
+//
+// Example:
+//
+//	blockB := "...\n...\n..."
+//	blockA := "...\n...\n...\n...\n..."
+//
+//	// Join 20% from the top
+//	str := lipgloss.JoinVertical(0.2, blockA, blockB)
+//
+//	// Join on the right edge
+//	str := lipgloss.JoinVertical(lipgloss.Right, blockA, blockB)
+func JoinVertical(pos Position, strs ...string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	if len(strs) == 1 {
+		return strs[0]
+	}
+
+	var (
+		blocks   = make([][]string, len(strs))
+		maxWidth int
+	)
+
+	for i := range strs {
+		var w int
+		blocks[i], w = getLines(strs[i])
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+
+	var b strings.Builder
+	for i, block := range blocks {
+		for j, line := range block {
+			w := maxWidth - ansi.StringWidth(line)
+
+			switch pos { //nolint:exhaustive
+			case Left:
+				b.WriteString(line)
+				b.WriteString(strings.Repeat(" ", w))
+
+			case Right:
+				b.WriteString(strings.Repeat(" ", w))
+				b.WriteString(line)
+
+			default: // Somewhere in the middle
+				if w < 1 {
+					b.WriteString(line)
+					break
+				}
+
+				split := int(math.Round(float64(w) * pos.value()))
+				right := w - split
+				left := w - right
+
+				b.WriteString(strings.Repeat(" ", left))
+				b.WriteString(line)
+				b.WriteString(strings.Repeat(" ", right))
+			}
+
+			// Write a newline as long as we're not on the last line of the
+			// last block.
+			if !(i == len(blocks)-1 && j == len(block)-1) {
+				b.WriteRune('\n')
+			}
+		}
+	}
+
+	return b.String()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/position.go","mode":420,"size":4394,"sha256":"c98507b4848de4fbf9b960853c16622500af634cfa3626f6aefb43aa9c8d9bae","index":0,"count":1,"encoding":"utf-8","payloadBytes":4394}
+package lipgloss
+
+import (
+	"math"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+// Position represents a position along a horizontal or vertical axis. It's in
+// situations where an axis is involved, like alignment, joining, placement and
+// so on.
+//
+// A value of 0 represents the start (the left or top) and 1 represents the end
+// (the right or bottom). 0.5 represents the center.
+//
+// There are constants Top, Bottom, Center, Left and Right in this package that
+// can be used to aid readability.
+type Position float64
+
+func (p Position) value() float64 {
+	return math.Min(1, math.Max(0, float64(p)))
+}
+
+// Position aliases.
+const (
+	Top    Position = 0.0
+	Bottom Position = 1.0
+	Center Position = 0.5
+	Left   Position = 0.0
+	Right  Position = 1.0
+)
+
+// Place places a string or text block vertically in an unstyled box of a given
+// width or height.
+func Place(width, height int, hPos, vPos Position, str string, opts ...WhitespaceOption) string {
+	return renderer.Place(width, height, hPos, vPos, str, opts...)
+}
+
+// Place places a string or text block vertically in an unstyled box of a given
+// width or height.
+func (r *Renderer) Place(width, height int, hPos, vPos Position, str string, opts ...WhitespaceOption) string {
+	return r.PlaceVertical(height, vPos, r.PlaceHorizontal(width, hPos, str, opts...), opts...)
+}
+
+// PlaceHorizontal places a string or text block horizontally in an unstyled
+// block of a given width. If the given width is shorter than the max width of
+// the string (measured by its longest line) this will be a noop.
+func PlaceHorizontal(width int, pos Position, str string, opts ...WhitespaceOption) string {
+	return renderer.PlaceHorizontal(width, pos, str, opts...)
+}
+
+// PlaceHorizontal places a string or text block horizontally in an unstyled
+// block of a given width. If the given width is shorter than the max width of
+// the string (measured by its longest line) this will be a noöp.
+func (r *Renderer) PlaceHorizontal(width int, pos Position, str string, opts ...WhitespaceOption) string {
+	lines, contentWidth := getLines(str)
+	gap := width - contentWidth
+
+	if gap <= 0 {
+		return str
+	}
+
+	ws := newWhitespace(r, opts...)
+
+	var b strings.Builder
+	for i, l := range lines {
+		// Is this line shorter than the longest line?
+		short := max(0, contentWidth-ansi.StringWidth(l))
+
+		switch pos { //nolint:exhaustive
+		case Left:
+			b.WriteString(l)
+			b.WriteString(ws.render(gap + short))
+
+		case Right:
+			b.WriteString(ws.render(gap + short))
+			b.WriteString(l)
+
+		default: // somewhere in the middle
+			totalGap := gap + short
+
+			split := int(math.Round(float64(totalGap) * pos.value()))
+			left := totalGap - split
+			right := totalGap - left
+
+			b.WriteString(ws.render(left))
+			b.WriteString(l)
+			b.WriteString(ws.render(right))
+		}
+
+		if i < len(lines)-1 {
+			b.WriteRune('\n')
+		}
+	}
+
+	return b.String()
+}
+
+// PlaceVertical places a string or text block vertically in an unstyled block
+// of a given height. If the given height is shorter than the height of the
+// string (measured by its newlines) then this will be a noop.
+func PlaceVertical(height int, pos Position, str string, opts ...WhitespaceOption) string {
+	return renderer.PlaceVertical(height, pos, str, opts...)
+}
+
+// PlaceVertical places a string or text block vertically in an unstyled block
+// of a given height. If the given height is shorter than the height of the
+// string (measured by its newlines) then this will be a noöp.
+func (r *Renderer) PlaceVertical(height int, pos Position, str string, opts ...WhitespaceOption) string {
+	contentHeight := strings.Count(str, "\n") + 1
+	gap := height - contentHeight
+
+	if gap <= 0 {
+		return str
+	}
+
+	ws := newWhitespace(r, opts...)
+
+	_, width := getLines(str)
+	emptyLine := ws.render(width)
+	b := strings.Builder{}
+
+	switch pos { //nolint:exhaustive
+	case Top:
+		b.WriteString(str)
+		b.WriteRune('\n')
+		for i := 0; i < gap; i++ {
+			b.WriteString(emptyLine)
+			if i < gap-1 {
+				b.WriteRune('\n')
+			}
+		}
+
+	case Bottom:
+		b.WriteString(strings.Repeat(emptyLine+"\n", gap))
+		b.WriteString(str)
+
+	default: // Somewhere in the middle
+		split := int(math.Round(float64(gap) * pos.value()))
+		top := gap - split
+		bottom := gap - top
+
+		b.WriteString(strings.Repeat(emptyLine+"\n", top))
+		b.WriteString(str)
+
+		for i := 0; i < bottom; i++ {
+			b.WriteRune('\n')
+			b.WriteString(emptyLine)
+		}
+	}
+
+	return b.String()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/renderer.go","mode":420,"size":5125,"sha256":"ed1bce08d81c9ba7a7a85c6410a1b7664c8a8a72cfb5cd6311824ac89d77ff18","index":0,"count":1,"encoding":"utf-8","payloadBytes":5125}
+package lipgloss
+
+import (
+	"io"
+	"sync"
+
+	"github.com/muesli/termenv"
+)
+
+// We're manually creating the struct here to avoid initializing the output and
+// query the terminal multiple times.
+var renderer = &Renderer{
+	output: termenv.DefaultOutput(),
+}
+
+// Renderer is a lipgloss terminal renderer.
+type Renderer struct {
+	output            *termenv.Output
+	colorProfile      termenv.Profile
+	hasDarkBackground bool
+
+	getColorProfile      sync.Once
+	explicitColorProfile bool
+
+	getBackgroundColor      sync.Once
+	explicitBackgroundColor bool
+
+	mtx sync.RWMutex
+}
+
+// DefaultRenderer returns the default renderer.
+func DefaultRenderer() *Renderer {
+	return renderer
+}
+
+// SetDefaultRenderer sets the default global renderer.
+func SetDefaultRenderer(r *Renderer) {
+	renderer = r
+}
+
+// NewRenderer creates a new Renderer.
+//
+// w will be used to determine the terminal's color capabilities.
+func NewRenderer(w io.Writer, opts ...termenv.OutputOption) *Renderer {
+	r := &Renderer{
+		output: termenv.NewOutput(w, opts...),
+	}
+	return r
+}
+
+// Output returns the termenv output.
+func (r *Renderer) Output() *termenv.Output {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return r.output
+}
+
+// SetOutput sets the termenv output.
+func (r *Renderer) SetOutput(o *termenv.Output) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.output = o
+}
+
+// ColorProfile returns the detected termenv color profile.
+func (r *Renderer) ColorProfile() termenv.Profile {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+
+	if !r.explicitColorProfile {
+		r.getColorProfile.Do(func() {
+			// NOTE: we don't need to lock here because sync.Once provides its
+			// own locking mechanism.
+			r.colorProfile = r.output.EnvColorProfile()
+		})
+	}
+
+	return r.colorProfile
+}
+
+// ColorProfile returns the detected termenv color profile.
+func ColorProfile() termenv.Profile {
+	return renderer.ColorProfile()
+}
+
+// SetColorProfile sets the color profile on the renderer. This function exists
+// mostly for testing purposes so that you can assure you're testing against
+// a specific profile.
+//
+// Outside of testing you likely won't want to use this function as the color
+// profile will detect and cache the terminal's color capabilities and choose
+// the best available profile.
+//
+// Available color profiles are:
+//
+//	termenv.Ascii     // no color, 1-bit
+//	termenv.ANSI      //16 colors, 4-bit
+//	termenv.ANSI256   // 256 colors, 8-bit
+//	termenv.TrueColor // 16,777,216 colors, 24-bit
+//
+// This function is thread-safe.
+func (r *Renderer) SetColorProfile(p termenv.Profile) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	r.colorProfile = p
+	r.explicitColorProfile = true
+}
+
+// SetColorProfile sets the color profile on the default renderer. This
+// function exists mostly for testing purposes so that you can assure you're
+// testing against a specific profile.
+//
+// Outside of testing you likely won't want to use this function as the color
+// profile will detect and cache the terminal's color capabilities and choose
+// the best available profile.
+//
+// Available color profiles are:
+//
+//	termenv.Ascii     // no color, 1-bit
+//	termenv.ANSI      //16 colors, 4-bit
+//	termenv.ANSI256   // 256 colors, 8-bit
+//	termenv.TrueColor // 16,777,216 colors, 24-bit
+//
+// This function is thread-safe.
+func SetColorProfile(p termenv.Profile) {
+	renderer.SetColorProfile(p)
+}
+
+// HasDarkBackground returns whether or not the terminal has a dark background.
+func HasDarkBackground() bool {
+	return renderer.HasDarkBackground()
+}
+
+// HasDarkBackground returns whether or not the renderer will render to a dark
+// background. A dark background can either be auto-detected, or set explicitly
+// on the renderer.
+func (r *Renderer) HasDarkBackground() bool {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+
+	if !r.explicitBackgroundColor {
+		r.getBackgroundColor.Do(func() {
+			// NOTE: we don't need to lock here because sync.Once provides its
+			// own locking mechanism.
+			r.hasDarkBackground = r.output.HasDarkBackground()
+		})
+	}
+
+	return r.hasDarkBackground
+}
+
+// SetHasDarkBackground sets the background color detection value for the
+// default renderer. This function exists mostly for testing purposes so that
+// you can assure you're testing against a specific background color setting.
+//
+// Outside of testing you likely won't want to use this function as the
+// backgrounds value will be automatically detected and cached against the
+// terminal's current background color setting.
+//
+// This function is thread-safe.
+func SetHasDarkBackground(b bool) {
+	renderer.SetHasDarkBackground(b)
+}
+
+// SetHasDarkBackground sets the background color detection value on the
+// renderer. This function exists mostly for testing purposes so that you can
+// assure you're testing against a specific background color setting.
+//
+// Outside of testing you likely won't want to use this function as the
+// backgrounds value will be automatically detected and cached against the
+// terminal's current background color setting.
+//
+// This function is thread-safe.
+func (r *Renderer) SetHasDarkBackground(b bool) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	r.hasDarkBackground = b
+	r.explicitBackgroundColor = true
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/runes.go","mode":420,"size":891,"sha256":"6402bf410686d5a578c8d0ece933ce942c23f478dcc8d6090663dc5b3ded2e6f","index":0,"count":1,"encoding":"utf-8","payloadBytes":891}
+package lipgloss
+
+import (
+	"strings"
+)
+
+// StyleRunes apply a given style to runes at the given indices in the string.
+// Note that you must provide styling options for both matched and unmatched
+// runes. Indices out of bounds will be ignored.
+func StyleRunes(str string, indices []int, matched, unmatched Style) string {
+	// Convert slice of indices to a map for easier lookups
+	m := make(map[int]struct{})
+	for _, i := range indices {
+		m[i] = struct{}{}
+	}
+
+	var (
+		out   strings.Builder
+		group strings.Builder
+		style Style
+		runes = []rune(str)
+	)
+
+	for i, r := range runes {
+		group.WriteRune(r)
+
+		_, matches := m[i]
+		_, nextMatches := m[i+1]
+
+		if matches != nextMatches || i == len(runes)-1 {
+			// Flush
+			if matches {
+				style = matched
+			} else {
+				style = unmatched
+			}
+			out.WriteString(style.Render(group.String()))
+			group.Reset()
+		}
+	}
+
+	return out.String()
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/lipgloss/set.go","mode":420,"size":22583,"sha256":"e1a8a8d5a115eb4bef4266792ca95ace632e3d649ee4bef2fefe46cf6fe38ecc","index":0,"count":1,"encoding":"utf-8","payloadBytes":22583}
 package lipgloss
 
@@ -161751,7 +162861,4 @@ func (hc *HexColor) Decode(hexCode string) error {
 	return nil
 }
 
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hsluv-snapshot-rev4.json","mode":420,"size":1664600,"sha256":"fa702c58663587d1d1080ad1271be94f6c7002fcf5ba1125ac7e758ed5b98966","index":0,"count":35,"encoding":"utf-8","payloadBytes":48000}
-{"#11ee00":{"lch":[82.5213119008325577,127.202882727266427,127.478988192005161],"luv":[82.5213119008325577,-77.3991947082883627,100.945222931227221],"rgb":[0.0666666666666666657,0.933333333333333348,0],"xyz":[0.308043578886299796,0.612655858810891907,0.102019012460713238],"hpluv":[127.478988192005161,308.195222762673438,82.5213119008325577],"hsluv":[127.478988192005161,100.000000000002416,82.5213119008325577]},"#11ee11":{"lch":[82.5429986110943759,126.352581314528209,127.715012949240403],"luv":[82.5429986110943759,-77.2942129186682,99.9528861720763473],"rgb":[0.0666666666666666657,0.933333333333333348,0.0666666666666666657],"xyz":[0.3090552443859369,0.613060525010746815,0.107347117425468874],"hpluv":[127.715012949240403,306.573296560288782,82.5429986110943759],"hsluv":[127.715012949240403,98.9038130800949205,82.5429986110943759]},"#11ee22":{"lch":[82.5831747617793184,124.791738379333623,128.158354445562821],"luv":[82.5831747617793184,-77.1009570540098,98.1245147202868253],"rgb":[0.0666666666666666657,0.933333333333333348,0.133333333333333331],"xyz":[0.310930602524413957,0.613810668266137616,0.117224003621448067],"hpluv":[128.158354445562821,303.59085997924285,82.5831747617793184],"hsluv":[128.158354445562821,98.9085620232469864,82.5831747617793184]},"#11ee33":{"lch":[82.6492529720821381,122.265269823008623,128.905098358231896],"luv":[82.6492529720821381,-76.7865393115689301,95.1452762119380537],"rgb":[0.0666666666666666657,0.933333333333333348,0.2],"xyz":[0.314018353256871663,0.615045768559120742,0.133486157479059203],"hpluv":[128.905098358231896,298.749143147736106,82.6492529720821381],"hsluv":[128.905098358231896,98.916292078887,82.6492529720821381]},"#11ee44":{"lch":[82.7444986901015511,118.712635154498344,130.021230388522838],"luv":[82.7444986901015511,-76.3407023620842,90.9108734321077],"rgb":[0.0666666666666666657,0.933333333333333348,0.266666666666666663],"xyz":[0.318476348501090578,0.616828966656808308,0.156964932431945842],"hpluv":[130.021230388522838,291.911386756693616,82.7444986901015511],"hsluv":[130.021230388522838,98.9272612770947148,82.7444986901015511]},"#11ee55":{"lch":[82.8716000285422894,114.135934527262179,131.587310643629934],"luv":[82.8716000285422894,-75.758934185545,85.3674144008224],"rgb":[0.0666666666666666657,0.933333333333333348,0.333333333333333315],"xyz":[0.324438762540452563,0.619213932272553058,0.188366979705919757],"hpluv":[131.587310643629934,283.052591495130912,82.8716000285422894],"hsluv":[131.587310643629934,98.941589727101146,82.8716000285422894]},"#11ee66":{"lch":[83.0328193013522622,108.602333046050703,133.707640253052432],"luv":[83.0328193013522622,-75.0419109433949103,78.5059128028513697],"rgb":[0.0666666666666666657,0.933333333333333348,0.4],"xyz":[0.332023758313960748,0.622247930581956377,0.228314624113063719],"hpluv":[133.707640253052432,272.269449526145593,83.0328193013522622],"hsluv":[133.707640253052432,98.9592735060659,83.0328193013522622]},"#11ee77":{"lch":[83.2300736177455747,102.250357200027821,136.520544097163679],"luv":[83.2300736177455747,-74.1950209885278866,70.3579022430685228],"rgb":[0.0666666666666666657,0.933333333333333348,0.466666666666666674],"xyz":[0.341337771334162654,0.625973535790037228,0.277368426019461656],"hpluv":[136.520544097163679,259.803949175129901,83.2300736177455747],"hsluv":[136.520544097163679,98.9801962733070155,83.2300736177455747]},"#11ee88":{"lch":[83.4649827070576151,95.3003261118453651,140.209511574476238],"luv":[83.4649827070576151,-73.2277962837693082,60.990507527375577],"rgb":[0.0666666666666666657,0.933333333333333348,0.533333333333333326],"xyz":[0.352478188436106454,0.63042970263081477,0.336041289423033795],"hpluv":[140.209511574476238,246.084644167270028,83.4649827070576151],"hsluv":[140.209511574476238,99.0041428894333109,83.4649827070576151]},"#11ee99":{"lch":[83.7388997377875626,88.07037792773761,145.011549795441141],"luv":[83.7388997377875626,-72.1532115864445416,50.5005497603372433],"rgb":[0.0666666666666666657,0.933333333333333348,0.6],"xyz":[0.365535152545179209,0.635652488274444,0.404807967064151675],"hpluv":[145.011549795441141,231.793725377578141,83.7388997377875626],"hsluv":[145.011549795441141,99.0308160530368582,83.7388997377875626]},"#11eeaa":{"lch":[84.0529327571252907,80.9984265129003802,151.210882439188083],"luv":[84.0529327571252907,-70.9868724309634729,39.0078074241021824],"rgb":[0.0666666666666666657,0.933333333333333348,0.66666666666666663],"xyz":[0.38059284551043171,0.641675565460545,0.484111816681150331],"hpluv":[151.210882439188083,217.967504021816438,84.0529327571252907],"hsluv":[151.210882439188083,99.0598554997167895,84.0529327571252907]},"#11eebb":{"lch":[84.4079608499599914,74.6634505604909435,159.089705667287262],"luv":[84.4079608499599914,-69.7461428935043273,26.6478216947980826],"rgb":[0.0666666666666666657,0.933333333333333348,0.733333333333333282],"xyz":[0.397730437617768384,0.648530602303479808,0.574369801779792],"hpluv":[159.089705667287262,206.122134265545043,84.4079608499599914],"hsluv":[159.089705667287262,99.0908585861444209,84.4079608499599914]},"#11eecc":{"lch":[84.8046473826435,69.7804076798411,168.790807110150524],"luv":[84.8046473826435,-68.449275126866155,13.5647348138992196],"rgb":[0.0666666666666666657,0.933333333333333348,0.8],"xyz":[0.417022813061490139,0.656247552480968666,0.675976312450062178],"hpluv":[168.790807110150524,198.342538571842852,84.8046473826435],"hsluv":[168.790807110150524,99.123400814408285,84.8046473826435]},"#11eedd":{"lch":[85.2434517572140749,67.1146678094459,180.081412911690762],"luv":[85.2434517572140749,-67.114600056421537,-0.0953647673755886743],"rgb":[0.0666666666666666657,0.933333333333333348,0.866666666666666696],"xyz":[0.438541138612123627,0.664854882701222172,0.789306160350068176],"hpluv":[180.081412911690762,197.173954094180345,85.2434517572140749],"hsluv":[180.081412911690762,99.1570549081779546,85.2434517572140749]},"#11eeee":{"lch":[85.7246405502341275,67.2734484234975,192.17705063006116],"luv":[85.7246405502341275,-65.759826803247222,-14.1902093570146306],"rgb":[0.0666666666666666657,0.933333333333333348,0.933333333333333348],"xyz":[0.462353318878298392,0.674379754807692189,0.914716976418591399],"hpluv":[192.17705063006116,205.138082793863816,85.7246405502341275],"hsluv":[192.17705063006116,99.1914073274009098,85.7246405502341275]},"#11eeff":{"lch":[86.2482985645723517,70.4606934075819282,203.935071880927921],"luv":[86.2482985645723517,-64.401481656171029,-28.585983907627277],"rgb":[0.0666666666666666657,0.933333333333333348,1],"xyz":[0.488524367288129757,0.684848174171624913,1.05255116471037335],"hpluv":[203.935071880927921,224.026806300523,86.2482985645723517],"hsluv":[203.935071880927921,99.9999999999942304,86.2482985645723517]},"#11ff00":{"lch":[87.7931168603164,135.408535196841626,127.513270797457935],"luv":[87.7931168603164,-82.4563732780469,107.407718111808407],"rgb":[0.0666666666666666657,1,0],"xyz":[0.359895951315973628,0.716360603670241,0.119303136603937349],"hpluv":[127.513270797457935,491.310985978769054,87.7931168603164],"hsluv":[127.513270797457935,100.000000000002373,87.7931168603164]},"#11ff11":{"lch":[87.8126571401035108,134.634318462908169,127.715012949240432],"luv":[87.8126571401035108,-82.3604359259359313,106.50426424355777],"rgb":[0.0666666666666666657,1,0.0666666666666666657],"xyz":[0.360907616815610732,0.716765269870095922,0.124631241568692985],"hpluv":[127.715012949240432,489.364334505449051,87.8126571401035108],"hsluv":[127.715012949240432,99.999999999991914,87.8126571401035108]},"#11ff22":{"lch":[87.848860165327963,133.211117719966126,128.093229681784152],"luv":[87.848860165327963,-82.1836510367646,104.838205757586152],"rgb":[0.0666666666666666657,1,0.133333333333333331],"xyz":[0.362782974954087789,0.717515413125486723,0.134508127764672164],"hpluv":[128.093229681784152,485.7796458877379,87.848860165327963],"hsluv":[128.093229681784152,99.9999999999918572,87.848860165327963]},"#11ff33":{"lch":[87.9084130007832698,130.901693692038833,128.728166832562891],"luv":[87.9084130007832698,-81.8955348861488659,102.119414300885666],"rgb":[0.0666666666666666657,1,0.2],"xyz":[0.365870725686545495,0.71875051341846985,0.150770281622283314],"hpluv":[128.728166832562891,479.945632467831388,87.9084130007832698],"hsluv":[128.728166832562891,99.9999999999919567,87.9084130007832698]},"#11ff44":{"lch":[87.9942732352876,127.641489512823171,129.672386074694657],"luv":[87.9942732352876,-81.4859348177847806,98.2465891108891185],"rgb":[0.0666666666666666657,1,0.266666666666666663],"xyz":[0.37032872093076441,0.720533711516157416,0.174249056575169953],"hpluv":[129.672386074694657,471.674193406224788,87.9942732352876],"hsluv":[129.672386074694657,99.9999999999918856,87.9942732352876]},"#11ff55":{"lch":[88.1088871723243727,123.41738800901625,130.987994113812931],"luv":[88.1088871723243727,-80.9495722978130772,93.1612494966077662],"rgb":[0.0666666666666666657,1,0.333333333333333315],"xyz":[0.376291134970126395,0.722918677131902165,0.205651103849143868],"hpluv":[130.987994113812931,460.897243009671797,88.1088871723243727],"hsluv":[130.987994113812931,99.9999999999917,88.1088871723243727]},"#11ff66":{"lch":[88.2543278429396,118.268592142924746,132.753132104158254],"luv":[88.2543278429396,-80.2855559529031382,86.8429006471038],"rgb":[0.0666666666666666657,1,0.4],"xyz":[0.38387613074363458,0.725952675441305484,0.24559874825628783],"hpluv":[132.753132104158254,447.675525940365219,88.2543278429396],"hsluv":[132.753132104158254,99.9999999999916724,88.2543278429396]},"#11ff77":{"lch":[88.4323687925046613,112.290518027227137,135.069051083024959],"luv":[88.4323687925046613,-79.4970211443964558,79.3056370505300521],"rgb":[0.0666666666666666657,1,0.466666666666666674],"xyz":[0.393190143763836486,0.729678280649386335,0.294652550162685767],"hpluv":[135.069051083024959,432.222948715922314,88.4323687925046613],"hsluv":[135.069051083024959,99.999999999991644,88.4323687925046613]},"#11ff88":{"lch":[88.6445280109338825,105.641380676940045,138.068036362648229],"luv":[88.6445280109338825,-78.5907289650887577,70.5946076698930369],"rgb":[0.0666666666666666657,1,0.533333333333333326],"xyz":[0.404330560865780286,0.734134447490163877,0.353325413566257907],"hpluv":[138.068036362648229,414.95023459347243,88.6445280109338825],"hsluv":[138.068036362648229,99.9999999999915,88.6445280109338825]},"#11ff99":{"lch":[88.8920961876840465,98.552301258979881,141.921030988541872],"luv":[88.8920961876840465,-77.5765731609304225,60.7818342932124338],"rgb":[0.0666666666666666657,1,0.6],"xyz":[0.417387524974853,0.73935723313379309,0.422092091207375786],"hpluv":[141.921030988541872,396.537381185702543,88.8920961876840465],"hsluv":[141.921030988541872,99.9999999999913456,88.8920961876840465]},"#11ffaa":{"lch":[89.1761561490339147,91.3418654410923523,146.840553381528281],"luv":[89.1761561490339147,-76.4669946123218,49.9613362233014158],"rgb":[0.0666666666666666657,1,0.66666666666666663],"xyz":[0.432445217940105542,0.745380310319894157,0.501395940824374442],"hpluv":[146.840553381528281,378.048392077141443,89.1761561490339147],"hsluv":[146.840553381528281,99.9999999999913,89.1761561490339147]},"#11ffbb":{"lch":[89.4975971674113,84.4340589142561413,153.067388238784645],"luv":[89.4975971674113,-75.2763296710648859,38.2437510711127],"rgb":[0.0666666666666666657,1,0.733333333333333282],"xyz":[0.449582810047442216,0.752235347162828916,0.591653925923016133],"hpluv":[153.067388238784645,361.099415032935838,89.4975971674113],"hsluv":[153.067388238784645,99.9999999999909335,89.4975971674113]},"#11ffcc":{"lch":[89.8571262823018628,78.3714319324892159,160.817799258328876],"luv":[89.8571262823018628,-74.0201316086282901,25.7507564896672143],"rgb":[0.0666666666666666657,1,0.8],"xyz":[0.468875185491163915,0.759952297340317773,0.693260436593286289],"hpluv":[160.817799258328876,348.067615225706845,89.8571262823018628],"hsluv":[160.817799258328876,99.999999999991,89.8571262823018628]},"#11ffdd":{"lch":[90.2552779380141317,73.7997451229305,170.162013498752287],"luv":[90.2552779380141317,-72.7145076797264238,12.6096293801408788],"rgb":[0.0666666666666666657,1,0.866666666666666696],"xyz":[0.490393511041797514,0.768559627560571279,0.806590284493292287],"hpluv":[170.162013498752287,342.256686666565315,90.2552779380141317],"hsluv":[170.162013498752287,99.999999999990834,90.2552779380141317]},"#11ffee":{"lch":[90.6924227584195819,71.3832589696730793,180.844217403257659],"luv":[90.6924227584195819,-71.3755103944163665,-1.05174952720347981],"rgb":[0.0666666666666666657,1,0.933333333333333348],"xyz":[0.514205691307972224,0.778084499667041296,0.93200110056181551],"hpluv":[180.844217403257659,347.82122947809512,90.6924227584195819],"hsluv":[180.844217403257659,99.9999999999901803,90.6924227584195819]},"#11ffff":{"lch":[91.1687759776689859,71.6302608322469467,192.17705063006116],"luv":[91.1687759776689859,-70.0186129384549361,-15.1092061032524665],"rgb":[0.0666666666666666657,1,1],"xyz":[0.540376739717803645,0.788552919030974,1.06983528885359735],"hpluv":[192.17705063006116,369.258709956275879,91.1687759776689859],"hsluv":[192.17705063006116,99.9999999999898108,91.1687759776689859]},"#00aa00":{"lch":[60.5587499434736287,93.727653253516209,127.71501294924046],"luv":[60.5587499434736287,-57.3364240886418415,74.1445038903004559],"rgb":[0,0.66666666666666663,0],"xyz":[0.143740958848290495,0.287481917696585,0.0479136529494288144],"hpluv":[127.71501294924046,196.394882900214554,60.5587499434736287],"hsluv":[127.71501294924046,100.000000000002359,60.5587499434736287]},"#00aa11":{"lch":[60.5946550577951939,92.4075267438518182,128.220974416403209],"luv":[60.5946550577951939,-57.1721703645967665,72.5981675713458543],"rgb":[0,0.66666666666666663,0.0666666666666666657],"xyz":[0.144752624347927628,0.28788658389643984,0.0532417579141844441],"hpluv":[128.220974416403209,193.513984665985475,60.5946550577951939],"hsluv":[128.220974416403209,99.9999999999907772,60.5946550577951939]},"#00aa22":{"lch":[60.661124672570665,90.0113827545795715,129.185497299711983],"luv":[60.661124672570665,-56.8721735728637725,69.7682226983709199],"rgb":[0,0.66666666666666663,0.133333333333333331],"xyz":[0.146627982486404629,0.288636727151830641,0.0631186441101636436],"hpluv":[129.185497299711983,188.289586599726533,60.661124672570665],"hsluv":[129.185497299711983,99.9999999999908624,60.661124672570665]},"#00aa33":{"lch":[60.7703154938824355,86.2098857925288513,130.852037745481823],"luv":[60.7703154938824355,-56.3905639077229353,65.2092685937350751],"rgb":[0,0.66666666666666663,0.2],"xyz":[0.14971573321886239,0.289871827444813768,0.0793807979677747799],"hpluv":[130.852037745481823,180.013429236819462,60.7703154938824355],"hsluv":[130.852037745481823,99.9999999999908,60.7703154938824355]},"#00aa44":{"lch":[60.9274158721733841,81.0355822964375108,133.441426631804489],"luv":[60.9274158721733841,-55.7210928860807044,58.8381288426430444],"rgb":[0,0.66666666666666663,0.266666666666666663],"xyz":[0.15417372846308125,0.291655025542501334,0.102859572920661418],"hpluv":[133.441426631804489,168.77274926729055,60.9274158721733841],"hsluv":[133.441426631804489,99.9999999999908908,60.9274158721733841]},"#00aa55":{"lch":[61.1365343944832915,74.6960845180523592,137.272019015051796],"luv":[61.1365343944832915,-54.8704978500827636,50.6826746335676717],"rgb":[0,0.66666666666666663,0.333333333333333315],"xyz":[0.160136142502443235,0.294039991158246194,0.134261620194635334],"hpluv":[137.272019015051796,155.037353806827582,61.1365343944832915],"hsluv":[137.272019015051796,99.9999999999910614,61.1365343944832915]},"#00aa66":{"lch":[61.4009335299549264,67.6053275851037512,142.80970662058607],"luv":[61.4009335299549264,-53.8565898531593703,40.8649978254956139],"rgb":[0,0.66666666666666663,0.4],"xyz":[0.16772113827595142,0.297073989467649513,0.174209264601779296],"hpluv":[142.80970662058607,139.715720243970395,61.4009335299549264],"hsluv":[142.80970662058607,99.9999999999911893,61.4009335299549264]},"#00aa77":{"lch":[61.7231520087844814,60.4394033477847188,150.696962972825474],"luv":[61.7231520087844814,-52.7057786154446859,29.5807771631501382],"rgb":[0,0.66666666666666663,0.466666666666666674],"xyz":[0.177035151296153326,0.300799594675730309,0.223263066508177205],"hpluv":[150.696962972825474,124.254291935777843,61.7231520087844814],"hsluv":[150.696962972825474,99.9999999999911893,61.7231520087844814]},"#00aa88":{"lch":[62.1050795642419615,54.2095218153359397,161.640221068188367],"luv":[62.1050795642419615,-51.4501140589855126,17.0750700954568337],"rgb":[0,0.66666666666666663,0.533333333333333326],"xyz":[0.188175568398097182,0.305255761516507906,0.281935929911749372],"hpluv":[161.640221068188367,110.761232665855573,62.1050795642419615],"hsluv":[161.640221068188367,99.9999999999911466,62.1050795642419615]},"#00aa99":{"lch":[62.5480102999456307,50.2545412813378576,175.872445658321794],"luv":[62.5480102999456307,-50.1241952468173793,3.61717711159146882],"rgb":[0,0.66666666666666663,0.6],"xyz":[0.201232532507169881,0.310478547160137064,0.350702607552867307],"hpluv":[175.872445658321794,101.95326553071466,62.5480102999456307],"hsluv":[175.872445658321794,99.9999999999913314,62.5480102999456307]},"#00aaaa":{"lch":[63.0526871437625829,49.8847230087107931,192.17705063006116],"luv":[63.0526871437625829,-48.762339705407328,-10.5223484123201398],"rgb":[0,0.66666666666666663,0.66666666666666663],"xyz":[0.216290225472422437,0.316501624346238186,0.430006457169865852],"hpluv":[192.17705063006116,100.392967527320806,63.0526871437625829],"hsluv":[192.17705063006116,99.9999999999914451,63.0526871437625829]},"#00aabb":{"lch":[63.6193436646561565,53.6276681768737,207.895374658889665],"luv":[63.6193436646561565,-47.3963155750249143,-25.0901587081772526],"rgb":[0,0.66666666666666663,0.733333333333333282],"xyz":[0.233427817579759056,0.323356661189172945,0.520264442268507654],"hpluv":[207.895374658889665,106.964349821245364,63.6193436646561565],"hsluv":[207.895374658889665,99.9999999999916,63.6193436646561565]},"#00aacc":{"lch":[64.2477463386430259,60.9097449106327886,220.878520684721707],"luv":[64.2477463386430259,-46.0537892020538,-39.8628338833449],"rgb":[0,0.66666666666666663,0.8],"xyz":[0.25272019302348081,0.331073611366661746,0.62187095293877781],"hpluv":[220.878520684721707,120.300715116377788,64.2477463386430259],"hsluv":[220.878520684721707,99.9999999999916298,64.2477463386430259]},"#00aadd":{"lch":[64.9372385342214926,70.6418801813473465,230.685034316882962],"luv":[64.9372385342214926,-44.7574928469198525,-54.6538385624811625],"rgb":[0,0.66666666666666663,0.866666666666666696],"xyz":[0.274238518574114354,0.339680941586915253,0.735200800838783808],"hpluv":[230.685034316882962,138.04089297290011,64.9372385342214926],"hsluv":[230.685034316882962,99.9999999999918145,64.9372385342214926]},"#00aaee":{"lch":[65.6867863979168618,81.8478503674051,237.87423205753521],"luv":[65.6867863979168618,-43.5250094774703129,-69.3155405356638283],"rgb":[0,0.66666666666666663,0.933333333333333348],"xyz":[0.298050698840289119,0.34920581369338527,0.860611616907307],"hpluv":[237.87423205753521,158.11336767521891,65.6867863979168618],"hsluv":[237.87423205753521,99.999999999991843,65.6867863979168618]},"#00aaff":{"lch":[66.4950261675888,93.8462134827344,243.161780722675303],"luv":[66.4950261675888,-42.369016683119284,-83.7375555551541],"rgb":[0,0.66666666666666663,1],"xyz":[0.324221747250120484,0.359674233057318,0.998445805199088876],"hpluv":[243.161780722675303,179.088178632175044,66.4950261675888],"hsluv":[243.161780722675303,99.9999999999982805,66.4950261675888]},"#00bb00":{"lch":[66.1662429166961772,102.406451239047826,127.71501294924046],"luv":[66.1662429166961772,-62.6455428450044352,81.0099822060849135],"rgb":[0,0.733333333333333282,0],"xyz":[0.177695456756889275,0.355390913513783546,0.0592318189189614333],"hpluv":[127.71501294924046,196.39488290021464,66.1662429166961772],"hsluv":[127.71501294924046,100.000000000002373,66.1662429166961772]},"#00bb11":{"lch":[66.1974173108447559,101.237205455569821,128.123527834983577],"luv":[66.1974173108447559,-62.4996967519340956,79.6414444518024425],"rgb":[0,0.733333333333333282,0.0666666666666666657],"xyz":[0.178707122256526407,0.355795579713638399,0.064559923883717063],"hpluv":[128.123527834983577,194.061073356438868,66.1974173108447559],"hsluv":[128.123527834983577,99.9999999999909335,66.1974173108447559]},"#00bb22":{"lch":[66.2551438620851911,99.1062916374383747,128.898124119483072],"luv":[66.2551438620851911,-62.232564676438038,77.1308299962987718],"rgb":[0,0.733333333333333282,0.133333333333333331],"xyz":[0.180582480395003409,0.3565457229690292,0.0744368100796962556],"hpluv":[128.898124119483072,189.810813804630897,66.2551438620851911],"hsluv":[128.898124119483072,99.9999999999908624,66.2551438620851911]},"#00bb33":{"lch":[66.3500136661217255,95.7008075372637137,130.224174268563928],"luv":[66.3500136661217255,-61.8016571104716235,73.0698278476423155],"rgb":[0,0.733333333333333282,0.2],"xyz":[0.18367023112746117,0.357780823262012326,0.0906989639373074],"hpluv":[130.224174268563928,183.02647365261987,66.3500136661217255],"hsluv":[130.224174268563928,99.9999999999909335,66.3500136661217255]},"#00bb44":{"lch":[66.4865992404304,91.0092453899789859,132.255785626190885],"luv":[66.4865992404304,-61.1983980271068,67.3605138443080875],"rgb":[0,0.733333333333333282,0.266666666666666663],"xyz":[0.18812822637168003,0.359564021359699892,0.114177738890194044],"hpluv":[132.255785626190885,173.696361176634838,66.4865992404304],"hsluv":[132.255785626190885,99.9999999999909619,66.4865992404304]},"#00bb55":{"lch":[66.6685736373934219,85.1496193371524,135.204737263674588],"luv":[66.6685736373934219,-60.4246386982598,59.9943389949978751],"rgb":[0,0.733333333333333282,0.333333333333333315],"xyz":[0.194090640411042015,0.361948986975444753,0.145579786164167946],"hpluv":[135.204737263674588,162.069343805127659,66.6685736373934219],"hsluv":[135.204737263674588,99.9999999999909477,66.6685736373934219]},"#00bb66":{"lch":[66.8989180170192412,78.3861452968700689,139.371990675590268],"luv":[66.8989180170192412,-59.4914065933894,51.0407711152765629],"rgb":[0,0.733333333333333282,0.4],"xyz":[0.2016756361845502,0.364982985284848072,0.185527430571311908],"hpluv":[139.371990675590268,148.682392510907704,66.8989180170192412],"hsluv":[139.371990675590268,99.9999999999911182,66.8989180170192412]},"#00bb77":{"lch":[67.1800303821267448,71.1598447269708316,145.178146497089472],"luv":[67.1800303821267448,-58.4173559625633061,40.6341731047866617],"rgb":[0,0.733333333333333282,0.466666666666666674],"xyz":[0.210989649204752105,0.368708590492928867,0.234581232477709817],"hpluv":[145.178146497089472,134.410786503463328,67.1800303821267448],"hsluv":[145.178146497089472,99.9999999999910898,67.1800303821267448]},"#00bb88":{"lch":[67.5137905946342,64.1363411600919,153.159702568813543],"luv":[67.5137905946342,-57.2268359754185525,28.9578918715820954],"rgb":[0,0.733333333333333282,0.533333333333333326],"xyz":[0.222130066306695961,0.373164757333706465,0.293254095881282],"hpluv":[153.159702568813543,120.545503395456095,67.5137905946342],"hsluv":[153.159702568813543,99.9999999999911608,67.5137905946342]},"#00bb99":{"lch":[67.9016044714860811,58.2533417764790187,163.826150797364875],"luv":[67.9016044714860811,-55.9477282230567141,16.2266304205851419],"rgb":[0,0.733333333333333282,0.6],"xyz":[0.235187030415768661,0.378387542977335622,0.362020773522399919],"hpluv":[163.826150797364875,108.862958898475256,67.9016044714860811],"hsluv":[163.826150797364875,99.9999999999912461,67.9016044714860811]},"#00bbaa":{"lch":[68.3444379186728384,54.6744668749029543,177.202021912208522],"luv":[68.3444379186728384,-54.6092872876890922,2.66890801368250408],"rgb":[0,0.733333333333333282,0.66666666666666663],"xyz":[0.250244723381021217,0.384410620163436745,0.44132462313939852],"hpluv":[177.202021912208522,101.512776720033713,68.3444379186728384],"hsluv":[177.202021912208522,99.9999999999913598,68.3444379186728384]},"#00bbbb":{"lch":[68.8428468315880338,54.4656619866929645,192.177050630061132],"luv":[68.8428468315880338,-53.2402096652165113,-11.4886209116881091],"rgb":[0,0.733333333333333282,0.733333333333333282],"xyz":[0.267382315488357836,0.391265657006371503,0.531582608238040266],"hpluv":[192.177050630061132,100.392967527320806,68.8428468315880338],"hsluv":[192.177050630061132,99.9999999999914451,68.8428468315880338]},"#00bbcc":{"lch":[69.3970058395379397,58.0340346662075675,206.653495587531239],"luv":[69.3970058395379397,-51.8670935918889384,-26.0337047299998297],"rgb":[0,0.733333333333333282,0.8],"xyz":[0.28667469093207959,0.398982607183860305,0.633189118908310422],"hpluv":[206.653495587531239,106.116119046155191,69.3970058395379397],"hsluv":[206.653495587531239,99.9999999999915161,69.3970058395379397]},"#00bbdd":{"lch":[70.0067374807312461,64.9183055759271923,218.91244904401708],"luv":[70.0067374807312461,-50.5133677649133119,-40.7772740125682844],"rgb":[0,0.733333333333333282,0.866666666666666696],"xyz":[0.308193016482713134,0.407589937404113811,0.74651896680831642],"hpluv":[218.91244904401708,117.670246608059514,70.0067374807312461],"hsluv":[218.91244904401708,99.999999999991644,70.0067374807312461]},"#00bbee":{"lch":[70.6715424904064236,74.2108860535778,228.474155043258463],"luv":[70.6715424904064236,-49.1986871961444336,-55.5584807840624819],"rgb":[0,0.733333333333333282,0.933333333333333348],"xyz":[0.332005196748887843,0.417114809510583828,0.871929782876839643],"hpluv":[228.474155043258463,133.248513578578667,70.6715424904064236],"hsluv":[228.474155043258463,99.9999999999918288,70.6715424904064236]},"#00bbff":{"lch":[71.3906313155650167,85.0452269855302,235.688960914523477],"luv":[71.3906313155650167,-47.9387359102869155,-70.246481992653],"rgb":[0,0.733333333333333282,1],"xyz":[0.358176245158719264,0.427583228874516552,1.00976397116862149],"hpluv":[235.688960914523477,151.163886263776277,71.3906313155650167],"hsluv":[235.688960914523477,99.9999999999978,71.3906313155650167]},"#00cc00":{"lch":[71.6795694698327139,110.939506494120423,127.71501294924046],"luv":[71.6795694698327139,-67.8655057683618566,87.7601688009055181],"rgb":[0,0.8,0],"xyz":[0.215919200066506195,0.431838400133018441,0.0719730666888333814],"hpluv":[127.71501294924046,196.394882900214611,71.6795694698327139],"hsluv":[127.71501294924046,100.000000000002359,71.6795694698327139]},"#00cc11":{"lch":[71.7069484470386698,109.895339051400697,128.05073784188761],"luv":[71.7069484470386698,-67.7349868616780668,86.5387606802328548],"rgb":[0,0.8,0.0666666666666666657],"xyz":[0.216930865566143327,0.432243066332873294,0.0773011716535890181],"hpluv":[128.05073784188761,194.472124503698296,71.7069484470386698],"hsluv":[128.05073784188761,99.9999999999908766,71.7069484470386698]},"#00cc22":{"lch":[71.7576566073484,107.986601617430239,128.68476606632143],"luv":[71.7576566073484,-67.4954197535952289,84.2939763041676287],"rgb":[0,0.8,0.133333333333333331],"xyz":[0.218806223704620328,0.432993209588264094,0.0871780578495682107],"hpluv":[128.68476606632143,190.959361108477,71.7576566073484],"hsluv":[128.68476606632143,99.9999999999909193,71.7576566073484]},"#00cc33":{"lch":[71.8410194320707,104.91966800737103,129.762682813168567],"luv":[71.8410194320707,-67.1075822658835364,80.6517770244687853],"rgb":[0,0.8,0.2],"xyz":[0.22189397443707809,0.434228309881247221,0.103440211707179347],"hpluv":[129.762682813168567,185.320621425294917,71.8410194320707],"hsluv":[129.762682813168567,99.9999999999909761,71.8410194320707]},"#00cc44":{"lch":[71.9610975929873717,100.65733905537941,131.396818004218431],"luv":[71.9610975929873717,-66.561699323308261,75.5078809721416491],"rgb":[0,0.8,0.266666666666666663],"xyz":[0.226351969681296949,0.436011507978934787,0.126918986660065986],"hpluv":[131.396818004218431,177.495355343216744,71.9610975929873717],"hsluv":[131.396818004218431,99.9999999999909903,71.9610975929873717]},"#00cc55":{"lch":[72.1211872877728837,95.2615727691762828,133.734892870047815],"luv":[72.1211872877728837,-65.8564749898269639,68.8308938513177],"rgb":[0,0.8,0.333333333333333315],"xyz":[0.232314383720658935,0.438396473594679648,0.158321033934039901],"hpluv":[133.734892870047815,167.607792551030144,72.1211872877728837],"hsluv":[133.734892870047815,99.999999999991033,72.1211872877728837]},"#00cc66":{"lch":[72.3240060759138,88.9026050634798821,136.980115521422647],"luv":[72.3240060759138,-64.9982032665013207,60.6539921126355495],"rgb":[0,0.8,0.4],"xyz":[0.23989937949416712,0.441430471904082966,0.198268678341183863],"hpluv":[136.980115521422647,155.980870440536961,72.3240060759138],"hsluv":[136.980115521422647,99.9999999999910614,72.3240060759138]},"#00cc77":{"lch":[72.5717906268391459,81.8763194870781206,141.413175407098493],"luv":[72.5717906268391459,-63.9997644777707464,51.066249515114805],"rgb":[0,0.8,0.466666666666666674],"xyz":[0.249213392514369025,0.445156077112163762,0.247322480247581772],"hpluv":[141.413175407098493,143.162673336571032,72.5717906268391459],"hsluv":[141.413175407098493,99.9999999999910756,72.5717906268391459]},"#00cc88":{"lch":[72.8663546950801,74.6325704710961162,147.40707881161012],"luv":[72.8663546950801,-62.8793552775828672,40.2020802322297683],"rgb":[0,0.8,0.533333333333333326],"xyz":[0.260353809616312881,0.449612243952941359,0.305995343651153939],"hpluv":[147.40707881161012,129.969270924532168,72.8663546950801],"hsluv":[147.40707881161012,99.9999999999911608,72.8663546950801]},"#00cc99":{"lch":[73.2091273059676695,67.813783770663278,155.40051707617576],"luv":[73.2091273059676695,-61.6589956558222809,28.2290191825639418],"rgb":[0,0.8,0.6],"xyz":[0.273410773725385581,0.454835029596570517,0.374762021292271874],"hpluv":[155.40051707617576,117.541728748843539,73.2091273059676695],"hsluv":[155.40051707617576,99.9999999999911893,73.2091273059676695]},"#00ccaa":{"lch":[73.6011808048110368,62.2803364521242102,165.745935171574274],"luv":[73.6011808048110368,-60.3629393869259374,15.3347923742089414],"rgb":[0,0.8,0.66666666666666663],"xyz":[0.288468466690638137,0.460858106782671639,0.454065870909270419],"hpluv":[165.745935171574274,107.375573062224,73.6011808048110368],"hsluv":[165.745935171574274,99.9999999999912887,73.6011808048110368]},"#00ccbb":{"lch":[74.043253901593,59.041045922693165,178.335616576813749],"luv":[74.043253901593,-59.0161369965186395,1.7148404163965667],"rgb":[0,0.8,0.733333333333333282],"xyz":[0.305606058797974756,0.467713143625606398,0.544323856007912221],"hpluv":[178.335616576813749,101.183074845522739,74.043253901593],"hsluv":[178.335616576813749,99.9999999999913882,74.043253901593]},"#00cccc":{"lch":[74.5357725840108714,58.9696734274942429,192.177050630061132],"luv":[74.5357725840108714,-57.64288292201784,-12.4386668330598962],"rgb":[0,0.8,0.8],"xyz":[0.32489843424169651,0.4754300938030952,0.645930366678182377],"hpluv":[192.177050630061132,100.392967527320835,74.5357725840108714],"hsluv":[192.177050630061132,99.9999999999914877,74.5357725840108714]},"#00ccdd":{"lch":[75.0788705190671,62.3850861111967063,205.58971515357635],"luv":[75.0788705190671,-56.2657375800620656,-26.9456071312750254],"rgb":[0,0.8,0.866666666666666696],"xyz":[0.346416759792330053,0.484037424023348706,0.759260214578188375],"hpluv":[205.58971515357635,105.439266222061761,75.0788705190671],"hsluv":[205.58971515357635,99.9999999999915588,75.0788705190671]},"#00ccee":{"lch":[75.672409810316779,68.9113069897593,217.179575991302841],"luv":[75.672409810316779,-54.9047659259632326,-41.6441461630807765],"rgb":[0,0.8,0.933333333333333348],"xyz":[0.370228940058504818,0.493562296129818723,0.884671030646711598],"hpluv":[217.179575991302841,115.555933163518176,75.672409810316779],"hsluv":[217.179575991302841,99.9999999999916,75.672409810316779]},"#00ccff":{"lch":[76.3160024985922263,77.7871508482342193,226.46755023570978],"luv":[76.3160024985922263,-53.5770891110031471,-56.3944710009551713],"rgb":[0,0.8,1],"xyz":[0.396399988468336184,0.504030715493751447,1.02250521893849333],"hpluv":[226.46755023570978,131.600547876461974,76.3160024985922263],"hsluv":[226.46755023570978,99.9999999999969731,76.3160024985922263]},"#00dd00":{"lch":[77.1074905447145369,119.34037845513086,127.715012949240503],"luv":[77.1074905447145369,-73.004607631587163,94.4057900468603],"rgb":[0,0.866666666666666696,0],"xyz":[0.258553190613681372,0.51710638122737,0.0861843968712247],"hpluv":[127.715012949240503,210.385995725156505,77.1074905447145369],"hsluv":[127.715012949240503,100.000000000002203,77.1074905447145369]},"#00dd11":{"lch":[77.1317715771024268,118.40111864948102,127.995077421524911],"luv":[77.1317715771024268,-72.8869911141770359,93.3076171797906255],"rgb":[0,0.866666666666666696,0.0666666666666666657],"xyz":[0.259564856113318476,0.517511047427224868,0.0915125018359803366],"hpluv":[127.995077421524911,208.997725019578468,77.1317715771024268],"hsluv":[127.995077421524911,99.9999999999909193,77.1317715771024268]},"#00dd22":{"lch":[77.1767486793617081,116.680170458435171,128.522366120948305],"luv":[77.1767486793617081,-72.6707542705971434,91.2864921658838568],"rgb":[0,0.866666666666666696,0.133333333333333331],"xyz":[0.261440214251795533,0.518261190682615669,0.101389388031959529],"hpluv":[128.522366120948305,206.449864525990506,77.1767486793617081],"hsluv":[128.522366120948305,99.9999999999909335,77.1767486793617081]},"#00dd33":{"lch":[77.2507083817471312,113.903613467858165,129.414072915332611],"luv":[77.2507083817471312,-72.3197155087496668,87.9993858488157485],"rgb":[0,0.866666666666666696,0.2],"xyz":[0.264527964984253239,0.519496290975598796,0.117651541889570666],"hpluv":[129.414072915332611,202.327676795977681,77.2507083817471312],"hsluv":[129.414072915332611,99.9999999999909335,77.2507083817471312]},"#00dd44":{"lch":[77.3572825066044,110.019432359123073,130.755032484191332],"luv":[77.3572825066044,-71.8235777962907633,83.3405613681826907],"rgb":[0,0.866666666666666696,0.266666666666666663],"xyz":[0.268985960228472154,0.521279489073286362,0.141130316842457304],"hpluv":[130.755032484191332,196.537344059934071,77.3572825066044],"hsluv":[130.755032484191332,99.9999999999909193,77.3572825066044]},"#00dd55":{"lch":[77.499442461574418,105.05363654061,132.652443872197409],"luv":[77.499442461574418,-71.1790335676869717,77.2645567564888],"rgb":[0,0.866666666666666696,0.333333333333333315],"xyz":[0.274948374267834139,0.523664454689031111,0.172532364116431219],"hpluv":[132.652443872197409,189.094972829508237,77.499442461574418],"hsluv":[132.652443872197409,99.9999999999909477,77.499442461574418]},"#00dd66":{"lch":[77.6796666807438,99.1151742217995,135.249123061333165],"luv":[77.6796666807438,-70.3890792332532413,69.7796194150732276],"rgb":[0,0.866666666666666696,0.4],"xyz":[0.282533370041342324,0.52669845299843443,0.212480008523575181],"hpluv":[135.249123061333165,180.139247328423863,77.6796666807438],"hsluv":[135.249123061333165,99.9999999999909903,77.6796666807438]},"#00dd77":{"lch":[77.9000291762011301,92.4061998396230138,138.73841210181584],"luv":[77.9000291762011301,-69.4623356452591878,60.9416909472136155],"rgb":[0,0.866666666666666696,0.466666666666666674],"xyz":[0.29184738306154423,0.530424058206515281,0.26153381042997309],"hpluv":[138.73841210181584,169.957910917592017,77.9000291762011301],"hsluv":[138.73841210181584,99.9999999999910187,77.9000291762011301]},"#00dd88":{"lch":[78.1622519856154,85.2389230174627386,143.3784757437721],"luv":[78.1622519856154,-68.4122000424903,50.8472701580255091],"rgb":[0,0.866666666666666696,0.533333333333333326],"xyz":[0.30298780016348803,0.534880225047292823,0.320206673833545286],"hpluv":[143.3784757437721,159.033158409305884,78.1622519856154],"hsluv":[143.3784757437721,99.9999999999911608,78.1622519856154]},"#00dd99":{"lch":[78.4677391993035798,78.0607504013048583,149.494791226300919],"luv":[78.4677391993035798,-67.2558167964087801,39.6249398770864545],"rgb":[0,0.866666666666666696,0.6],"xyz":[0.316044764272560785,0.540103010690922,0.388973351474663165],"hpluv":[149.494791226300919,148.113090063328627,78.4677391993035798],"hsluv":[149.494791226300919,99.9999999999911466,78.4677391993035798]},"#00ddaa":{"lch":[78.8176011215583401,71.4835041270533225,157.438879868811341],"luv":[78.8176011215583401,-66.0129273361177,27.4259874352573583],"rgb":[0,0.866666666666666696,0.66666666666666663],"xyz":[0.331102457237813286,0.546126087877023103,0.468277201091661766],"hpluv":[157.438879868811341,138.307036304413771,78.8176011215583401],"hsluv":[157.438879868811341,99.9999999999912319,78.8176011215583401]},"#00ddbb":{"lch":[79.21267314937,66.2909050184163675,167.440816272526462],"luv":[79.21267314937,-64.7046905962200896,14.4148223370296193],"rgb":[0,0.866666666666666696,0.733333333333333282],"xyz":[0.34824004934514996,0.552981124719957862,0.558535186190303512],"hpluv":[167.440816272526462,131.160951364069831,79.21267314937],"hsluv":[167.440816272526462,99.9999999999912319,79.21267314937]},"#00ddcc":{"lch":[79.6535319864315738,63.3571261830985,179.312753048293331],"luv":[79.6535319864315738,-63.3525685364998381,0.759932897798095253],"rgb":[0,0.866666666666666696,0.8],"xyz":[0.367532424788871714,0.560698074897446719,0.660141696860573668],"hpluv":[179.312753048293331,128.577362979680402,79.6535319864315738],"hsluv":[179.312753048293331,99.9999999999913314,79.6535319864315738]},"#00dddd":{"lch":[80.1405107346531338,63.4039144225475795,192.177050630061245],"luv":[80.1405107346531338,-61.9773555359817649,-13.3739958452306631],"rgb":[0,0.866666666666666696,0.866666666666666696],"xyz":[0.389050750339505202,0.569305405117700225,0.773471544760579666],"hpluv":[192.177050630061245,132.399857962191078,80.1405107346531338],"hsluv":[192.177050630061245,99.9999999999915,80.1405107346531338]},"#00ddee":{"lch":[80.6737137665329,66.6843941199945078,204.668960845135786],"luv":[80.6737137665329,-60.59840405426975,-27.8323884211582282],"rgb":[0,0.866666666666666696,0.933333333333333348],"xyz":[0.412862930605679967,0.578830277224170242,0.898882360829102889],"hpluv":[204.668960845135786,143.769811077134563,80.6737137665329],"hsluv":[204.668960845135786,99.9999999999914735,80.6737137665329]},"#00ddff":{"lch":[81.2530318771427,72.8883394631876627,215.643856178856652],"luv":[81.2530318771427,-59.2330695533496296,-42.475328144570291],"rgb":[0,0.866666666666666696,1],"xyz":[0.439033979015511333,0.589298696588103,1.03671654912088473],"hpluv":[215.643856178856652,162.831862460855405,81.2530318771427],"hsluv":[215.643856178856652,99.9999999999960636,81.2530318771427]},"#00ee00":{"lch":[82.4573791946470749,127.620478503329409,127.715012949240503],"luv":[82.4573791946470749,-78.0698291684561241,100.955873068518613],"rgb":[0,0.933333333333333348,0],"xyz":[0.305731966954196188,0.611463933908400925,0.101910655651395884],"hpluv":[127.715012949240503,307.908475174189959,82.4573791946470749],"hsluv":[127.715012949240503,100.000000000002217,82.4573791946470749]},"#00ee11":{"lch":[82.4790940690076582,126.770138643430457,127.951660682688043],"luv":[82.4790940690076582,-77.963182339567652,99.9620440525398],"rgb":[0,0.933333333333333348,0.0666666666666666657],"xyz":[0.306743632453833293,0.611868600108255833,0.107238760616151521],"hpluv":[127.951660682688043,306.293921948395678,82.4790940690076582],"hsluv":[127.951660682688043,99.9999999999909193,82.4790940690076582]},"#00ee22":{"lch":[82.5193223464761729,125.209295581045268,128.396138884075839],"luv":[82.5193223464761729,-77.7668632323815814,98.1309466116455],"rgb":[0,0.933333333333333348,0.133333333333333331],"xyz":[0.308618990592310349,0.612618743363646634,0.117115646812130714],"hpluv":[128.396138884075839,303.325246698320768,82.5193223464761729],"hsluv":[128.396138884075839,99.9999999999907914,82.5193223464761729]},"#00ee33":{"lch":[82.5854861516441616,122.683025615083068,129.144698003447559],"luv":[82.5854861516441616,-77.4474668310457304,95.1473313105795881],"rgb":[0,0.933333333333333348,0.2],"xyz":[0.311706741324768055,0.613853843656629761,0.133377800669741864],"hpluv":[129.144698003447559,298.506449004286878,82.5854861516441616],"hsluv":[129.144698003447559,99.9999999999910187,82.5854861516441616]},"#00ee44":{"lch":[82.680854944152216,119.131104912681948,130.263308305441626],"luv":[82.680854944152216,-76.994580956063885,90.9068460629701889],"rgb":[0,0.933333333333333348,0.266666666666666663],"xyz":[0.31616473656898697,0.615637041754317327,0.156856575622628502],"hpluv":[130.263308305441626,291.702339981024693,82.680854944152216],"hsluv":[130.263308305441626,99.9999999999908624,82.680854944152216]},"#00ee55":{"lch":[82.8081199656530913,114.556122924925475,131.832385242542614],"luv":[82.8081199656530913,-76.4036333062175572,85.3556683366704192],"rgb":[0,0.933333333333333348,0.333333333333333315],"xyz":[0.322127150608348956,0.618022007370062076,0.18825862289660239],"hpluv":[131.832385242542614,282.889526663711365,82.8081199656530913],"hsluv":[131.832385242542614,99.9999999999908908,82.8081199656530913]},"#00ee66":{"lch":[82.9695459516691756,109.025909834785097,133.955863991345211],"luv":[82.9695459516691756,-75.6753248662734137,78.4849936082476347],"rgb":[0,0.933333333333333348,0.4],"xyz":[0.329712146381857141,0.621056005679465395,0.22820626730374638],"hpluv":[133.955863991345211,272.166364406401044,82.9695459516691756],"hsluv":[133.955863991345211,99.9999999999909193,82.9695459516691756]},"#00ee77":{"lch":[83.167051813506589,102.679799146220446,136.771308753659213],"luv":[83.167051813506589,-74.8151450958190338,70.3266323450776127],"rgb":[0,0.933333333333333348,0.466666666666666674],"xyz":[0.339026159402059046,0.624781610887546246,0.277260069210144289],"hpluv":[136.771308753659213,259.776444306911685,83.167051813506589],"hsluv":[136.771308753659213,99.9999999999910898,83.167051813506589]},"#00ee88":{"lch":[83.4022585136551839,95.7389522528198427,140.46074817536558],"luv":[83.4022585136551839,-73.8327925713246742,60.9480575538504],"rgb":[0,0.933333333333333348,0.533333333333333326],"xyz":[0.350166576504002847,0.629237777728323788,0.335932932613716428],"hpluv":[140.46074817536558,246.149488794882956,83.4022585136551839],"hsluv":[140.46074817536558,99.999999999991033,83.4022585136551839]},"#00ee99":{"lch":[83.6765199188301096,88.5221307628359142,145.258543938418427],"luv":[83.6765199188301096,-72.7414610621927,50.4464813176313],"rgb":[0,0.933333333333333348,0.6],"xyz":[0.363223540613075602,0.634460563371953,0.404699610254834363],"hpluv":[145.258543938418427,231.96752956627526,83.6765199188301096],"hsluv":[145.258543938418427,99.9999999999911,83.6765199188301096]},"#00eeaa":{"lch":[83.9909442670452364,81.4671227341597159,151.444498676017645],"luv":[83.9909442670452364,-71.557012704351564,38.9420854527837363],"rgb":[0,0.933333333333333348,0.66666666666666663],"xyz":[0.378281233578328102,0.640483640558054068,0.484003459871832964],"hpluv":[151.444498676017645,218.263507316576721,83.9909442670452364],"hsluv":[151.444498676017645,99.9999999999911893,83.9909442670452364]},"#00eebb":{"lch":[84.3464103530465366,75.1511025294100392,159.294479220170871],"luv":[84.3464103530465366,-70.2970903476626319,26.5707978811035801],"rgb":[0,0.933333333333333348,0.733333333333333282],"xyz":[0.395418825685664777,0.647338677400988827,0.57426144497047471],"hpluv":[159.294479220170871,206.543608310772072,84.3464103530465366],"hsluv":[159.294479220170871,99.9999999999912,84.3464103530465366]},"#00eecc":{"lch":[84.743580800257746,70.2844566194431195,168.945018717488722],"luv":[84.743580800257746,-68.9802322625990456,13.4771064879770393],"rgb":[0,0.933333333333333348,0.8],"xyz":[0.414711201129386531,0.655055627578477684,0.675867955640744866],"hpluv":[168.945018717488722,198.871854707918374,84.743580800257746],"hsluv":[168.945018717488722,99.9999999999913,84.743580800257746]},"#00eedd":{"lch":[85.1829138464002114,67.6253239558150625,180.163192871920216],"luv":[85.1829138464002114,-67.6250496492668418,-0.192613766721418916],"rgb":[0,0.933333333333333348,0.866666666666666696],"xyz":[0.43622952668002,0.66366295779873119,0.789197803540750864],"hpluv":[180.163192871920216,197.760624486431198,85.1829138464002114],"hsluv":[180.163192871920216,99.9999999999913882,85.1829138464002114]},"#00eeee":{"lch":[85.6646745174910507,67.7744082531008303,192.177050630061217],"luv":[85.6646745174910507,-66.2495152673009358,-14.2958784586901881],"rgb":[0,0.933333333333333348,0.933333333333333348],"xyz":[0.460041706946194784,0.673187829905201207,0.914608619609274087],"hpluv":[192.177050630061217,205.696714727687493,85.6646745174910507],"hsluv":[192.177050630061217,99.9999999999914309,85.6646745174910507]},"#00eeff":{"lch":[86.1889457184888,70.9350767712842867,203.864647638418489],"luv":[86.1889457184888,-64.8703943995767247,-28.6987290135183635],"rgb":[0,0.933333333333333348,1],"xyz":[0.486212755356026149,0.683656249269133931,1.05244280790105593],"hpluv":[203.864647638418489,224.453619733699583,86.1889457184888],"hsluv":[203.864647638418489,99.9999999999939888,86.1889457184888]},"#00ff00":{"lch":[87.7355191096597338,135.789531996666284,127.715012949240474],"luv":[87.7355191096597338,-83.0671197143942663,107.418111239344327],"rgb":[0,1,0],"xyz":[0.35758433938387,0.71516867876775,0.11919477979462],"hpluv":[127.715012949240474,490.145375063702204,87.7355191096597338],"hsluv":[127.715012949240474,100.000000000002217,87.7355191096597338]},"#00ff11":{"lch":[87.7550810882892165,135.01527678270574,127.917210072153054],"luv":[87.7550810882892165,-82.9698837721702915,106.513489059100834],"rgb":[0,1,0.0666666666666666657],"xyz":[0.358596004883507125,0.715573344967604941,0.124522884759375632],"hpluv":[127.917210072153054,488.208403570135204,87.7550810882892165],"hsluv":[127.917210072153054,99.9999999999917719,87.7550810882892165]},"#00ff22":{"lch":[87.7913242833811864,133.592052176160422,128.296258949772664],"luv":[87.7913242833811864,-82.7907071985999892,104.845291769319132],"rgb":[0,1,0.133333333333333331],"xyz":[0.360471363021984181,0.716323488222995741,0.134399770955354825],"hpluv":[128.296258949772664,484.641757887342919,87.7913242833811864],"hsluv":[128.296258949772664,99.9999999999919,87.7913242833811864]},"#00ff33":{"lch":[87.850943105558116,131.282721750620482,128.932531697131338],"luv":[87.850943105558116,-82.4986966230128616,102.123053644879462],"rgb":[0,1,0.2],"xyz":[0.363559113754441887,0.717558588515978868,0.150661924812965975],"hpluv":[128.932531697131338,478.837727878060548,87.850943105558116],"hsluv":[128.932531697131338,99.999999999991843,87.850943105558116]},"#00ff44":{"lch":[87.9368982766027756,128.022939247233296,129.878593634905172],"luv":[87.9368982766027756,-82.0835673214571528,98.245411848516369],"rgb":[0,1,0.266666666666666663],"xyz":[0.368017108998660802,0.719341786613666434,0.174140699765852613],"hpluv":[129.878593634905172,470.610169071279643,87.9368982766027756],"hsluv":[129.878593634905172,99.9999999999916724,87.9368982766027756]},"#00ff55":{"lch":[88.0516385770734189,123.799916713223595,131.196479790431113],"luv":[88.0516385770734189,-81.5399771501718362,93.1539129857171133],"rgb":[0,1,0.333333333333333315],"xyz":[0.373979523038022788,0.721726752229411184,0.205542747039826501],"hpluv":[131.196479790431113,459.892953467552729,88.0516385770734189],"hsluv":[131.196479790431113,99.9999999999917719,88.0516385770734189]},"#00ff66":{"lch":[88.197238997611,118.653311588493224,132.964137709394919],"luv":[88.197238997611,-80.8670327043222557,86.8281715373192498],"rgb":[0,1,0.4],"xyz":[0.381564518811531,0.724760750538814502,0.245490391446970491],"hpluv":[132.964137709394919,446.748834194207859,88.197238997611],"hsluv":[132.964137709394919,99.9999999999917719,88.197238997611]},"#00ff77":{"lch":[88.3754745956423164,112.679107800887323,135.2824164931273],"luv":[88.3754745956423164,-80.0679233099649537,79.2824633297525452],"rgb":[0,1,0.466666666666666674],"xyz":[0.390878531831732878,0.728486355746895353,0.2945441933533684],"hpluv":[135.2824164931273,431.3936933951166,88.3754745956423164],"hsluv":[135.2824164931273,99.9999999999915445,88.3754745956423164]},"#00ff88":{"lch":[88.587864465470858,106.036155512425779,138.2828406903445],"luv":[88.587864465470858,-79.1495135423216425,70.5621767086956311],"rgb":[0,1
 @@END

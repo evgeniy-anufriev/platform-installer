@@ -1,41 +1,41 @@
 {
   "format": "platform-installer-portable-source-v2",
   "maxPartBytes": 5000000,
-  "sourceRevision": "ca9d93d9543154391a622d1bf6bfe3d655954a3e",
-  "files": 6116,
-  "sourceBytes": 66241019,
-  "textFiles": 6028,
+  "sourceRevision": "0421456516ed72b8e9da6485ff30ba035eafe2aa",
+  "files": 6117,
+  "sourceBytes": 66252671,
+  "textFiles": 6029,
   "binaryFiles": 88,
   "parts": [
     {
       "name": "source-0001.txt",
-      "bytes": 4998516,
-      "sha256": "4b762c4410f6328d323c83e67ad324d45307b63596b9335aca29374cb3c915cb"
+      "bytes": 4998029,
+      "sha256": "25c1676c8361deb1a5f1bf92354b87b68725d19d22f4d8c2d551dada3e655cba"
     },
     {
       "name": "source-0002.txt",
-      "bytes": 4995707,
-      "sha256": "7959061e2166c0260ccd7e5e3939c145a8279a77fa6fb74844b9f93b9a099d81"
+      "bytes": 4943808,
+      "sha256": "ccb90e67b05b410c047178185e9e9a4c0950e2357b5615a062af82586400cca2"
     },
     {
       "name": "source-0003.txt",
-      "bytes": 4949985,
-      "sha256": "5f537a80b2220eea5dc9e35fab5eacf3818fd1790458d3aefa5e1c571bebb1a0"
+      "bytes": 4988661,
+      "sha256": "acb1b0490566d9c5ae226165c3fc769e4d231586805111f3890639078a439019"
     },
     {
       "name": "source-0004.txt",
-      "bytes": 4995358,
-      "sha256": "25979c09cd742707878b402a1303d0ce7d68cbed76566c50b0f73d7181b3c257"
+      "bytes": 4989255,
+      "sha256": "ca67b4fd62ffeb816e2e5691cdee29ae458298bd2585a158aefabd7f44abc16e"
     },
     {
       "name": "source-0005.txt",
-      "bytes": 4991804,
-      "sha256": "34916792ec7de3fb17c1970634e82ddf9485cda9731c6d55dc7768fc6d945edd"
+      "bytes": 4975222,
+      "sha256": "21eb260cba373f98ee1f5d5dcd72d86f394954f6f0e2cb1dafc33fb5243c5543"
     },
     {
       "name": "source-0006.txt",
-      "bytes": 4941429,
-      "sha256": "f673f5d9cac7ca0c24f3bb378416b92af0a620e1dd8457168a25a47f0040d075"
+      "bytes": 4989706,
+      "sha256": "f075b61ac5e23ad913e06772423ee488ed998ec1e36e27886ad43351935f2d6e"
     },
     {
       "name": "source-0007.txt",
