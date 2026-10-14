@@ -134,6 +134,15 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		return err
 	}
 	state := asMap(document["platform_desired_state"])
+	view.ApplicationLibraries = map[string]map[string]any{}
+	view.ApplicationPlacements = map[string]map[string]any{}
+	for id, raw := range asMap(state["applicationLibraryDeployments"]) {
+		value := asMap(raw)
+		if !validLibraryInputID(id) || value == nil || safeApplicationInput(value, 0) != nil {
+			return managedReadError("Managed application library input is unsafe", desiredDocument)
+		}
+		view.ApplicationLibraries[id] = asMap(deepCopy(value))
+	}
 	view.DataRootDirectory = "/var/lib"
 	if raw, found := document["platform_data_root_directory"]; found {
 		value, ok := raw.(string)
@@ -308,6 +317,12 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 		}
 		if !exists {
 			continue
+		}
+		if placements := asMap(document["platform_application_libraries"]); placements != nil {
+			if safeApplicationInput(placements, 0) != nil {
+				return managedReadError("Managed application placement is unsafe", logical)
+			}
+			view.ApplicationPlacements[hostID] = asMap(deepCopy(placements))
 		}
 		placements := asMap(document["platform_deployments"])
 		if placements == nil {

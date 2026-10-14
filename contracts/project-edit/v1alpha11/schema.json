@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-edit/v1alpha11/schema.json",
+  "title": "Bounded local application library edits",
+  "oneOf": [
+    {"$ref": "../v1alpha10/schema.json"},
+    {"$ref": "#/$defs/libraryWrite"},
+    {"$ref": "#/$defs/libraryDelete"},
+    {"$ref": "#/$defs/slotWrite"},
+    {"$ref": "#/$defs/slotDelete"},
+    {"$ref": "#/$defs/placementWrite"},
+    {"$ref": "#/$defs/placementDelete"},
+    {"$ref": "#/$defs/overrideWrite"},
+    {"$ref": "#/$defs/overrideDelete"}
+  ],
+  "$defs": {
+    "id": {"type":"string","pattern":"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$","maxLength":128},
+    "base": {"type":"object","required":["apiVersion","kind","baseProjectRevision","operation","deploymentId"],"properties":{"apiVersion":{"const":"platform.installer/edit-command/v1alpha11"},"kind":{"const":"EditCommand"},"baseProjectRevision":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},"operation":{"type":"string"},"deploymentId":{"$ref":"#/$defs/id"}}},
+    "libraryWrite": {"allOf":[{"$ref":"#/$defs/base"},{"required":["entity"],"properties":{"operation":{"enum":["CreateApplicationLibraryDeployment","UpdateApplicationLibraryDeployment"]},"entity":{"type":"object","maxProperties":7,"properties":{"libraryRef":{"type":"string","pattern":"^[a-z][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+$"},"runtimeRef":{"$ref":"#/$defs/id"},"bindings":{"type":"object"},"resources":{"type":"object"},"shared_secrets":{"type":"object"},"vault_ref":{"type":"object"},"applications":{"type":"object"}},"additionalProperties":false}},"if":{"properties":{"operation":{"const":"CreateApplicationLibraryDeployment"}}},"then":{"properties":{"entity":{"required":["libraryRef","runtimeRef"]}}}}],"unevaluatedProperties":false},
+    "libraryDelete": {"allOf":[{"$ref":"#/$defs/base"},{"properties":{"operation":{"const":"DeleteApplicationLibraryDeployment"}}}],"unevaluatedProperties":false},
+    "slotWrite": {"allOf":[{"$ref":"#/$defs/base"},{"required":["entityId","entity"],"properties":{"operation":{"const":"SetApplicationLibrarySlot"},"entityId":{"$ref":"#/$defs/id"},"entity":{"type":"object","properties":{"overrides":{"type":"object"},"accounts":{"type":"object"},"credentials":{"type":"object"}},"additionalProperties":false}}}],"unevaluatedProperties":false},
+    "slotDelete": {"allOf":[{"$ref":"#/$defs/base"},{"required":["entityId"],"properties":{"operation":{"const":"RemoveApplicationLibrarySlot"},"entityId":{"$ref":"#/$defs/id"}}}],"unevaluatedProperties":false},
+    "placementWrite": {"allOf":[{"$ref":"#/$defs/base"},{"required":["hostId","placement"],"properties":{"operation":{"const":"SetApplicationLibraryPlacement"},"hostId":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,62}$"},"placement":{"$ref":"../../application-libraries/v1alpha1/membership.schema.json#/additionalProperties"}}}],"unevaluatedProperties":false},
+    "placementDelete": {"allOf":[{"$ref":"#/$defs/base"},{"required":["hostId"],"properties":{"operation":{"const":"RemoveApplicationLibraryPlacement"},"hostId":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,62}$"}}}],"unevaluatedProperties":false},
+    "overrideFields": {"properties":{"entityId":{"$ref":"#/$defs/id"},"hostId":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,62}$"},"property":{"enum":["parameters","environment","ports","endpoint"]},"setting":{"type":"string","pattern":"^[A-Za-z][A-Za-z0-9._-]{0,127}$"}},"required":["setting"],"oneOf":[{"required":["entityId"],"not":{"required":["hostId"]}},{"required":["hostId","property"],"not":{"required":["entityId"]},"properties":{"property":{"enum":["parameters","ports"]}}}]},
+    "overrideWrite": {"allOf":[{"$ref":"#/$defs/base"},{"$ref":"#/$defs/overrideFields"},{"required":["value"],"properties":{"operation":{"const":"SetApplicationLibraryOverride"},"value":{"type":["string","number","boolean","object","array"]}}}],"unevaluatedProperties":false},
+    "overrideDelete": {"allOf":[{"$ref":"#/$defs/base"},{"$ref":"#/$defs/overrideFields"},{"properties":{"operation":{"const":"RemoveApplicationLibraryOverride"}}}],"unevaluatedProperties":false}
+  }
+}

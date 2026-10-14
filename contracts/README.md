@@ -1,5 +1,9 @@
 # Published contracts
 
+`project-edit/v1alpha11` adds fixed local application-library commands while
+retaining v1alpha10 payloads unchanged. See the
+[B2 writer contract](../docs/contracts/application-library-writer.md).
+
 This directory contains the machine-readable contracts shared by standalone
 Ansible Core, service packages and future Installer adapters. The contracts do
 not depend on Go, Wails, SQLite or a proprietary launcher.

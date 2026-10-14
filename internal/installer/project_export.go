@@ -274,7 +274,7 @@ func observeExportProject(root *exportDirectory) (exportObservation, error) {
 			return exportObservation{}, err
 		}
 	}
-	for _, logical := range []string{"inventory/group_vars", "inventory/host_vars"} {
+	for _, logical := range []string{"inventory/group_vars", "inventory/host_vars", "application-packages", "library-packages"} {
 		directory, err := root.openDirectory(strings.Split(logical, "/"))
 		if isExportNotExist(err) {
 			continue
@@ -287,6 +287,9 @@ func observeExportProject(root *exportDirectory) (exportObservation, error) {
 		if err != nil {
 			return exportObservation{}, err
 		}
+	}
+	if err := validateExportPackages(result.documents); err != nil {
+		return exportObservation{}, err
 	}
 	sort.Slice(result.documents, func(left, right int) bool {
 		return result.documents[left].LogicalPath < result.documents[right].LogicalPath
@@ -335,7 +338,12 @@ func collectExportDirectory(directory *exportDirectory, prefix string, result *e
 				continue
 			}
 			extension := strings.ToLower(path.Ext(entry.name))
-			if extension == ".yml" || extension == ".yaml" || extension == ".json" {
+			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
+				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
+					if !safeApplicationPackagePath(logical) {
+						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
+					}
+				}
 				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
 					return err
 				}

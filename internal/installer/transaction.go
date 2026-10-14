@@ -173,6 +173,9 @@ func validIdentity(value string) bool {
 }
 
 func validManagedTransactionPath(logical string) bool {
+	if safeApplicationPackagePath(logical) {
+		return true
+	}
 	if logical == "project.yml" || logical == "ansible.cfg" || logical == "inventory/hosts.yml" || logical == desiredDocument {
 		return true
 	}

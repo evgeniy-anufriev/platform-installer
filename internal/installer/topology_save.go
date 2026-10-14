@@ -32,6 +32,9 @@ type topologyMutationSet struct {
 }
 
 func topologyOperation(operation string) bool {
+	if applicationEditOperation(operation) {
+		return true
+	}
 	switch operation {
 	case "SetProjectSetting":
 		return true
@@ -122,9 +125,20 @@ func (b *Backend) planStructuralCandidate(ctx context.Context, root, classificat
 
 func validateStructuralCommandConflicts(commands []EditCommand) error {
 	lifecycle := make(map[string]bool)
+	applicationWrites := map[string]bool{}
 	relations := make(map[string]bool)
 	placements := make(map[string]bool)
 	for _, command := range commands {
+		if applicationEditOperation(command.Operation) {
+			for _, key := range applicationWritePaths(command) {
+				for prior := range applicationWrites {
+					if key == prior || strings.HasPrefix(key, prior+"/") || strings.HasPrefix(prior, key+"/") {
+						return blocked("EDIT_COMMAND_CONFLICT", "Application library edits overlap", "command")
+					}
+				}
+				applicationWrites[key] = true
+			}
+		}
 		var key string
 		switch command.Operation {
 		case "CreateServiceDeployment", "DeleteServiceDeployment":
@@ -404,6 +418,15 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 			changes = append(changes, commandSummary(command))
 		}
 	}
+	for _, command := range commands {
+		if !applicationEditOperation(command.Operation) {
+			continue
+		}
+		if err := candidate.reduceApplicationEdit(command); err != nil {
+			return nil, mutations, err
+		}
+		changes = append(changes, commandSummary(command))
+	}
 	if len(inventory.hosts) > maxManagedEntities || len(deployments) > maxManagedEntities || len(groups) > maxManagedEntities {
 		return nil, mutations, blocked("INVALID_EDIT_COMMAND", "Managed entity collection exceeds its limit", "command")
 	}
@@ -628,6 +651,9 @@ func stringValues(values []string) []any {
 }
 
 func (candidate *structuralCandidate) validateFinalReferences(mutations topologyMutationSet, catalog *projectlifecycle.ProjectCatalogView) error {
+	if err := candidate.validateApplicationReferences(); err != nil {
+		return err
+	}
 	inventory, err := candidate.inventory()
 	if err != nil {
 		return err

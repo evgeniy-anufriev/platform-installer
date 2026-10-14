@@ -451,3 +451,13 @@ approval/secret/lock boundaries. QA и cleanup подтверждены, review 
 ordering, §6 и B-Q21–22), B-P02 (явный verification scope, §7). Это редакционные
 уточнения предложенной архитектуры; повторный review не выполнялся, независимое
 RESOLVED для изменённого текста не заявляется. Решение о реализации — за владельцем.
+
+
+### B2 owner amendment - 2026-10-14
+
+D01/D02: user-defined environment, parameters and package files accept arbitrary
+parameter names and assignments, including PASSWORD. Do not infer credentials
+from names or assignment text. Explicit Installer credential source descriptors
+and runtime private-key custody remain separate. D03: reject overlapping
+parent/child edit writes while retaining independent slot edits. Reuse existing
+writer and Core validators; no new secret classification framework.

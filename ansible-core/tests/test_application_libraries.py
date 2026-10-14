@@ -53,7 +53,7 @@ class ApplicationLibrariesTest(unittest.TestCase):
             before = self.prepare(directory)
             self.assertEqual([], before["findings"])
             with open(os.path.join(directory, "library-packages/sdku/1.0.0/files/.env"), "a") as stream:
-                stream.write("EXTRA=value\n")
+                stream.write("PASSWORD=password=synthetic-user-value\n")
             after = self.prepare(directory)
             self.assertEqual([], after["findings"])
             before_digests = {job["libraryId"]: job["library"]["digest"] for job in before["jobs"]}
@@ -87,7 +87,7 @@ class ApplicationLibrariesTest(unittest.TestCase):
             shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
             before = SNAPSHOT.project_documents(directory)[1]
             with open(os.path.join(directory, "library-packages/sdku/1.0.0/files/.env"), "a") as stream:
-                stream.write("EXTRA=value\n")
+                stream.write("PASSWORD=password=synthetic-user-value\n")
             self.assertNotEqual(before, SNAPSHOT.project_documents(directory)[1])
 
     def test_symlink_escape_and_allowlist_fail_closed(self):
@@ -101,15 +101,18 @@ class ApplicationLibrariesTest(unittest.TestCase):
                 stream.write("extra")
             self.assertTrue(self.prepare(directory)["findings"])
 
-    def test_dotenv_reserved_and_secret_keys_rejected(self):
+    def test_dotenv_reserved_identity_rejected_and_user_password_allowed(self):
         for key in ("SERVER_ID", "REDIS_PASSWORD"):
             with self.subTest(key=key), tempfile.TemporaryDirectory() as directory:
                 shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
                 with open(os.path.join(directory, "library-packages/sdku/1.0.0/files/.env"), "a") as stream:
                     stream.write(key + "=DO-NOT-PRINT\n")
                 result = self.prepare(directory)
-                self.assertTrue(result["findings"])
-                self.assertNotIn("DO-NOT-PRINT", json.dumps(result))
+                if key == "SERVER_ID":
+                    self.assertTrue(result["findings"])
+                    self.assertNotIn("DO-NOT-PRINT", json.dumps(result))
+                else:
+                    self.assertEqual([], result["findings"])
 
     def test_kafka_uses_selected_client_advertised_address_and_port(self):
         desired = {"serviceDeployments": {"kafka": {"serviceType": "kafka", "members": {"broker": {"host": "node1", "roles": ["broker"]}}}}}
@@ -190,7 +193,7 @@ class ApplicationLibrariesTest(unittest.TestCase):
         self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
                          [item['operation'] for item in result['executionManifest']['operations'][-2:]])
 
-    def test_final_projection_boundary_preserves_refs_and_rejects_grants_secret(self):
+    def test_final_projection_boundary_preserves_refs_and_user_parameters(self):
         projection = {"libraries": {"sdku": {"resources": {}, "instances": {"apigateway-sdku": {
             "credentialRequirements": {"redis": {"credentials": {"password": {"source": {"kind": "runtime_secret_ref", "ref": "redis-password"}}}, "grants": []}},
             "placements": {"node1": {"parameters": {"redis": {"password_ref": "redis-password"}}}}
@@ -198,8 +201,11 @@ class ApplicationLibrariesTest(unittest.TestCase):
         self.assertEqual([], APP.validate_public_projection(projection))
         projection["libraries"]["sdku"]["instances"]["apigateway-sdku"]["credentialRequirements"]["redis"]["grants"] = [{"token": "DO-NOT-PRINT"}]
         findings = APP.validate_public_projection(projection)
+        self.assertEqual([], findings)
+        APP.nonsecret_values({"PASSWORD": "password=synthetic", "token": "user-data"}, "parameters", findings)
+        self.assertEqual([], findings)
+        APP.nonsecret_values("-----BEGIN PRIVATE KEY-----synthetic", "parameters", findings)
         self.assertTrue(findings)
-        self.assertNotIn("DO-NOT-PRINT", json.dumps(findings))
 
 
 if __name__ == "__main__":

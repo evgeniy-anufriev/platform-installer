@@ -611,3 +611,30 @@ decision. Existing A8 same-run barrier, secret custody and standalone Ansible pa
 are preserved. New request/capability/plan/manifest versions isolate the extension.
 See [technical plan B](work/application-libraries/milestones/b/b-technical-plan.md)
 and [execution contract](contracts/execution-planning-and-events.md#b0-cross-run-infrastructure-verification).
+
+## ADR-040: Library edits and package import reuse the local managed writer
+
+Owner-approved B2 scope, 2026-10-14. Library edits mutate only existing
+Installer-owned inventory/group_vars/host_vars through structural Review/Save.
+Ansible remains the desired-state resolver; local Save does not imply semantic
+validity, effective values or execution admission. Derived identities are not
+persisted in place of authored package references and overrides.
+
+Package import captures reviewed data-only manifest closure through existing
+handle-bound reads, derives a new immutable version directory and uses the same
+PlanStore and revision-guarded recoverable transaction. Imported package bytes
+remain ordinary portable sources without managed-header normalization; existing
+versions/user-owned documents are not adopted or overwritten. Local revision and
+fixed-root project export include this closure, never operational caches/secrets.
+No second catalog, YAML adoption framework or execution mechanism is introduced.
+See [B2 writer contract](contracts/application-library-writer.md).
+
+
+### B2 owner amendment - 2026-10-14
+
+D01/D02: user-defined environment, parameters and package files accept arbitrary
+parameter names and assignments, including PASSWORD. Do not infer credentials
+from names or assignment text. Explicit Installer credential source descriptors
+and runtime private-key custody remain separate. D03: reject overlapping
+parent/child edit writes while retaining independent slot edits. Reuse existing
+writer and Core validators; no new secret classification framework.

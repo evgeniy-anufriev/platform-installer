@@ -132,6 +132,9 @@ func validateCommand(command EditCommand) error {
 }
 
 func isEditCommandV2OrLater(version string) bool {
+	if version == EditCommandAPIVersionV11 {
+		return true
+	}
 	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7 || version == EditCommandAPIVersionV8 || version == EditCommandAPIVersionV9 || version == EditCommandAPIVersionV10
 }
 
@@ -140,6 +143,12 @@ func isEditCommandV5OrLater(version string) bool {
 }
 
 func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) error {
+	if applicationEditOperation(command.Operation) {
+		return validateApplicationEdit(command)
+	}
+	if command.APIVersion == EditCommandAPIVersionV11 {
+		return blocked("INVALID_EDIT_COMMAND", "This command version admits only application library edits", "command.operation")
+	}
 	if (command.APIVersion != EditCommandAPIVersion && !isEditCommandV2OrLater(command.APIVersion)) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (isEditCommandV2OrLater(command.APIVersion) && !validSHA256(command.BaseProjectRevision)) {
 		return blocked("INVALID_EDIT_COMMAND", "EditCommand version, kind, or base revision is invalid", "command")
 	}

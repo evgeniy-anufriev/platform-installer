@@ -17,7 +17,6 @@ CONTRACT = "platform.installer/project-desired-state/v3alpha1"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$")
 COMPOSE_PROJECT = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 REF = re.compile(r"^([a-z][a-z0-9-]*)@([0-9]+\.[0-9]+\.[0-9]+)$")
-SECRET = re.compile(r"password|passphrase|token|private.?key|role.?id", re.I)
 
 
 def finding(code, field):
@@ -59,18 +58,15 @@ def checked_file(root, relative):
 
 
 def nonsecret_values(value, field, findings):
-    """Only declared refs may carry credential-like keys in ordinary settings."""
+    """User-defined names and assignments are unrestricted; private keys are runtime material."""
     if isinstance(value, dict):
         for key, item in value.items():
             path = field + "." + str(key)
-            if SECRET.search(str(key)) and not str(key).lower().endswith(("_ref", "ref")):
-                findings.append(finding("APPLICATION_PLAINTEXT_FORBIDDEN", path))
-            else:
-                nonsecret_values(item, path, findings)
+            nonsecret_values(item, path, findings)
     elif isinstance(value, list):
         for index, item in enumerate(value):
             nonsecret_values(item, field + ".%s" % index, findings)
-    elif isinstance(value, str) and ("PRIVATE KEY-----" in value or re.search(r"(?:password|token|secret)\s*=", value, re.I)):
+    elif isinstance(value, str) and "PRIVATE KEY-----" in value:
         findings.append(finding("APPLICATION_PLAINTEXT_FORBIDDEN", field))
 
 
@@ -143,7 +139,7 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
                 if not line or line.startswith("#"):
                     continue
                 match_env = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)=(.*)", line)
-                if not match_env or match_env[1] in env_keys or match_env[1] == "SERVER_ID" or SECRET.search(match_env[1]):
+                if not match_env or match_env[1] in env_keys or match_env[1] == "SERVER_ID":
                     raise ValueError("Library dotenv contract invalid")
                 env_keys.add(match_env[1])
     return {"name": name, "version": version, "defaultsPath": os.path.join(root, folder, defaults_path),

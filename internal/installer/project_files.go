@@ -96,6 +96,15 @@ func safeProjectPath(root, logical string, allowMissing bool) (string, error) {
 
 func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 	candidates := []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"}
+	packageDocuments, err := applicationPackageDocuments(root)
+	if err != nil {
+		return nil, "", err
+	}
+	packageContents := map[string][]byte{}
+	for _, record := range packageDocuments {
+		candidates = append(candidates, record.LogicalPath)
+		packageContents[record.LogicalPath] = record.content
+	}
 	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars"} {
 		base := filepath.Join(root, filepath.FromSlash(directory))
 		if _, err := os.Stat(base); os.IsNotExist(err) {
@@ -139,7 +148,12 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		content, err := os.ReadFile(path)
+		content, packageFile := packageContents[logical]
+		if !packageFile {
+			content, err = os.ReadFile(path)
+		} else {
+			err = nil
+		}
 		if os.IsNotExist(err) {
 			continue
 		}

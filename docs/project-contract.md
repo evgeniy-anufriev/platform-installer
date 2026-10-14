@@ -238,6 +238,12 @@ application-aware planning and the mixed execution barrier; the original A1
 rejection is historical, not a current restriction.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
+B2 adds bounded local library edits through the existing structural writer and
+explicit data-only package import. Package bytes participate in local revision and
+portable export. Save remains local and does not prove Core validity or admission.
+See the [B2 writer contract](contracts/application-library-writer.md) and additive
+[project-edit v1alpha11](../contracts/project-edit/v1alpha11/schema.json).
+
 For standalone A2, the existing `platform_artifact_lock` carries the typed
 `x-container-images` extension described by artifact-source/v1alpha2. It is not
 a separate desired-state lock file. Each image records its config/image digest,
