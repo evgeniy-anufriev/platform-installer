@@ -52,6 +52,9 @@ class CallbackModule(CallbackBase):
     def _run_id(self):
         return os.environ.get("PLATFORM_EXECUTION_RUN_ID", "")
 
+    def _journal(self):
+        return Journal(os.environ.get("PLATFORM_EXECUTION_STATE_ROOT", EXECUTION_STATE_ROOT), self._run_id())
+
     def _uuid(self, task):
         value = getattr(task, "_uuid", "")
         return str(value) if value is not None else ""
@@ -76,10 +79,10 @@ class CallbackModule(CallbackBase):
                 return "Скрытая задача"
             return value
         try:
-            value = task.get_name()
+            value = getattr(task, "name", "")
         except Exception:
             return ""
-        return value if isinstance(value, str) else ""
+        return value if isinstance(value, str) and not any(marker in value for marker in ("{{", "{%", "{#")) else "Ansible task"
 
     def _no_log(self, task, result=None):
         if bool(getattr(task, "no_log", False)):
@@ -108,7 +111,7 @@ class CallbackModule(CallbackBase):
         task_uuid = self._uuid(task)
         no_log = self._no_log(task, result)
         try:
-            Journal(EXECUTION_STATE_ROOT, run_id).task_event(
+            self._journal().task_event(
                 event_type,
                 status,
                 task_uuid,
@@ -117,11 +120,12 @@ class CallbackModule(CallbackBase):
                 name=self._name(task, no_log),
                 elapsed_milliseconds=self._elapsed(task_uuid) if event_type == "TASK_COMPLETED" else None,
                 no_log=no_log,
+                failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
                 **self._context()
             )
         except Exception:
             try:
-                Journal(EXECUTION_STATE_ROOT, run_id).mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
+                self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
             except Exception:
                 pass
 
@@ -146,7 +150,7 @@ class CallbackModule(CallbackBase):
         if not isinstance(missing, list):
             return
         try:
-            journal = Journal(EXECUTION_STATE_ROOT, self._run_id())
+            journal = self._journal()
             for source in missing[:256]:
                 if not isinstance(source, str) or not SAFE_ROLE.fullmatch(source):
                     continue
@@ -155,7 +159,7 @@ class CallbackModule(CallbackBase):
                 journal.event("DIAGNOSTIC", "SKIPPED", "Интеграция HAProxy пропущена; установка сервиса продолжается", **context)
         except Exception:
             try:
-                Journal(EXECUTION_STATE_ROOT, self._run_id()).mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
+                self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")
             except Exception:
                 pass
 

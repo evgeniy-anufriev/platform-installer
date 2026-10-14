@@ -66,6 +66,39 @@ class ClientHBATests(unittest.TestCase):
                     if code:
                         self.assertIn('POSTGRES_CLIENT_SUBNET_UNAVAILABLE', result.stdout)
 
+    def test_extra_networks_preserve_tls_scram_and_do_not_duplicate_default(self):
+        template = (ROLE / 'templates/pg_hba.conf.j2').read_text(encoding='utf-8')
+        variables = {'platform_postgresql_user': 'postgres',
+                     'platform_postgresql_admin_superuser': {'username': 'platform_admin'},
+                     'platform_postgresql_mode': 'standalone',
+                     '_platform_postgresql_client_subnet': '192.168.56.0/24',
+                     'platform_postgresql_client_cidrs': ['10.0.3.0/24', '192.168.56.0/24', '10.0.3.0/24']}
+        rendered = Templar(loader=DataLoader(), variables=variables).template(template)
+        self.assertEqual(rendered.count('hostssl all all 10.0.3.0/24 scram-sha-256'), 1)
+        self.assertEqual(rendered.count('hostssl all all 192.168.56.0/24 scram-sha-256'), 1)
+        self.assertNotIn('host all all 10.0.3.0/24', rendered)
+
+    def test_role_rejects_invalid_client_networks_before_mutation(self):
+        task = yaml.safe_load((ROLE / 'tasks/validate.yml').read_text(encoding='utf-8'))[0]
+        variables = {'platform_postgresql_mode': 'standalone',
+                     'platform_postgresql_deployment_id': 'qa-postgresql',
+                     'platform_postgresql_advanced_config': {},
+                     'platform_postgresql_admin_superuser': {'username': 'admin', 'passwordSecretRef': 'qa-ref'},
+                     'platform_postgresql_secret_files': {'qa-ref': '/private/runtime-file'}}
+        cases = [([], 0), (['10.0.3.0/24'], 0), ('10.0.3.0/24', 2),
+                 (['999.0.3.0/24'], 2), (['10.0.3.0/33'], 2),
+                 (['10.0.3.0/24\nhost all all all trust'], 2), ([None], 2)]
+        with tempfile.TemporaryDirectory(prefix='platform-postgresql-cidrs-') as directory:
+            path = Path(directory) / 'test.yml'
+            for cidrs, expected in cases:
+                with self.subTest(cidrs=cidrs):
+                    play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False,
+                             'vars': dict(variables, platform_postgresql_client_cidrs=cidrs), 'tasks': [task]}]
+                    path.write_text(yaml.safe_dump(play), encoding='utf-8')
+                    result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)],
+                                            capture_output=True, text=True, timeout=30)
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

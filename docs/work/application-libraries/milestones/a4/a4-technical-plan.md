@@ -325,6 +325,12 @@ Docker-хостов и постоянный элемент **127.0.0.1/32** по
 Разрешение localhost не меняет endpoint-first правило и не разрешает обход
 настроенного endpoint. Вычисление: фактический host source IPv4 для выбранного Vault
 connection → network address /24 → union placements + 127.0.0.1/32 → сортировка/удаление дублей.
+Уточнение владельца 2026-10-13: дополнительно включить IPv4 подсети LXC bridge
+каждого Docker placement. Читать `ip -json -4 address show dev lxcbr0`
+(имя из host_vars `platform_docker_lxc_bridge`, default соответствует Docker роли).
+Использовать фактический prefixlen bridge, без фиксированного 10.0.3.0/24;
+пустой IPv4 bridge или /0 блокирует Apply. Повторный Apply обновляет существующую
+AppRole; уже выданные токены сохраняют прежние CIDR до переавторизации Agent.
 Не вводить SERVER_ID, ручной CIDR либо вычисление из management SSH адреса.
 IPv6-only в этом scope блокируется: правило /24 является IPv4 политикой.
 
@@ -338,9 +344,11 @@ IPv6-only в этом scope блокируется: правило /24 явля�
 Подтвердить настоящий AppRole login и последующий KV read из каждого placement
 через выбранный путь; оба действия нужны, поскольку CIDR ограничивает и token use.
 Если реальная сеть нарушает подтверждённый prerequisite, execution блокируется,
-CIDR не расширяется автоматически. Нельзя fallback на direct port при ошибке
+CIDR не расширяется за пределы host /24, localhost и явно разрешённых владельцем
+обнаруженных LXC bridge подсетей. Нельзя fallback на direct port при ошибке
 существующего endpoint. Проверка не выдаёт временную широкую роль и не передаёт
-admin token контейнеру. Negative case — source за пределами разрешённых /24 и 127.0.0.1/32;
+admin token контейнеру. Negative case — source за пределами разрешённых host /24,
+LXC bridge подсетей и 127.0.0.1/32;
 клиент внутри разрешённой /24 намеренно не считается запрещённым по CIDR.
 
 ## 6. Последовательность Apply

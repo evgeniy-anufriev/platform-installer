@@ -526,6 +526,7 @@ def _environment(release, journal=None, operation=None, leased_private_key=False
         environment.update({
             "ANSIBLE_CALLBACKS_ENABLED": "platform.core.execution_events_json",
             "PLATFORM_EXECUTION_RUN_ID": journal.run_id,
+            "PLATFORM_EXECUTION_STATE_ROOT": journal.root,
             "PLATFORM_EXECUTION_PHASE_ID": _context_value(operation, "phaseId"),
             "PLATFORM_EXECUTION_ACTION_ID": _context_value(operation, "operationId"),
             "PLATFORM_EXECUTION_SERVICE_DEPLOYMENT": _context_value(operation, "serviceDeployment"),

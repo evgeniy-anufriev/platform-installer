@@ -15,9 +15,20 @@ def delta(response, fields, owner):
     return dict(method='PATCH', changed=bool(changed), body={'options': {'cas': data['metadata']['version']}, 'data': changed})
 
 
-def cidrs(routes):
+def cidrs(routes, bridges=None):
     try:
-        return sorted({'127.0.0.1/32'} | {str(ipaddress.IPv4Network(item[0]['prefsrc']+'/24', strict=False)) for item in routes})
+        networks = {'127.0.0.1/32'} | {str(ipaddress.IPv4Network(item[0]['prefsrc']+'/24', strict=False)) for item in routes}
+        for placement in bridges or []:
+            addresses = [address for interface in placement for address in interface['addr_info']
+                         if address.get('family') == 'inet' and address.get('scope') == 'global']
+            if not addresses:
+                raise ValueError('Missing LXC bridge IPv4 subnet')
+            for address in addresses:
+                network = ipaddress.IPv4Network(address['local']+'/'+str(address['prefixlen']), strict=False)
+                if network.prefixlen == 0:
+                    raise ValueError('Unrestricted LXC subnet')
+                networks.add(str(network))
+        return sorted(networks)
     except (ValueError, KeyError, TypeError, IndexError):
         raise AnsibleFilterError('APPLICATION_VAULT_ROUTE_INVALID')
 

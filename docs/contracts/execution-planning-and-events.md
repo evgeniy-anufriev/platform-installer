@@ -282,6 +282,14 @@ events, but human recap text is never the API. Slow or disconnected Go/UI
 subscribers cannot block the controller because replay comes from the bounded
 Execution Node journal and each Installer subscriber has a bounded buffer.
 
+The controller passes the exact owned journal root to the task callback, including
+nondefault standalone state roots. Failed task events retain bounded static task
+identity, host and a closed diagnostic code/summary with numeric exit or HTTP
+status where available. Arbitrary module messages, stdout, stderr, commands,
+assertion expressions and tracebacks are never event payloads. Unknown failures
+remain generic; `no_log`/censored failures retain identity only and report
+`ANSIBLE_FAILURE_REDACTED`. Task names containing Jinja expressions are hidden.
+
 `CancelExecution` verifies the complete run ownership tuple, records the
 request, asks the fixed controller/unit to stop gracefully, then uses owned
 control-group termination if needed. It cannot address an arbitrary PID or

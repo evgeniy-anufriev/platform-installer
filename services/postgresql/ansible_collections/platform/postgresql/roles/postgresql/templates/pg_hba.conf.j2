@@ -21,4 +21,6 @@ hostssl postgres {{ platform_postgresql_replication_credential.username }} {{ me
 {% endfor %}
 {% endif %}
 # Client access remains TLS-only and requires SCRAM authentication.
-hostssl all all {{ _platform_postgresql_client_subnet }} scram-sha-256
+{% for cidr in ([_platform_postgresql_client_subnet] + (platform_postgresql_client_cidrs | default([]))) | unique %}
+hostssl all all {{ cidr }} scram-sha-256
+{% endfor %}

@@ -236,7 +236,10 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
             projection = project_member_listeners({"listeners": member_listeners}, projected_member)
             if projection["status"] != "PASS":
                 raise ValueError("Kafka listener unresolved")
-            selected = [item for item in projection["listeners"] if item["name"] == selector and item["purpose"] == "client"]
+            # An explicitly selected inter-broker listener serves the same broker
+            # protocol; controller listeners are never application connections.
+            selected = [item for item in projection["listeners"] if item["name"] == selector
+                        and item["purpose"] in {"client", "interBroker"} and "broker" in member.get("roles", [])]
             if "broker" in member.get("roles", []) and not selected:
                 raise ValueError("Kafka client listener missing")
             for item in selected:

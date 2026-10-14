@@ -16,12 +16,6 @@
       platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
 
-- name: Reset only the temporary HAProxy candidate graph
-  ansible.builtin.file:
-    path: "{{ platform_haproxy_candidate_directory }}"
-    state: absent
-  changed_when: false
-
 - name: Create persistent Platform HAProxy directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -31,16 +25,6 @@
     mode: '0750'
   loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
   when: platform_haproxy_partial_deployment_id is not defined
-
-- name: Create temporary HAProxy candidate workspace
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
-  changed_when: false
 
 - name: Require HAProxy PKI materialization
   ansible.builtin.assert:
@@ -71,17 +55,6 @@
     excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
   register: _platform_haproxy_third_party_fragments
 
-- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
-  ansible.builtin.copy:
-    src: "{{ item.path }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: preserve
-  loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
-  changed_when: false
-
 - name: Select exact filenames owned by the partial endpoint source
   ansible.builtin.set_fact:
     _platform_haproxy_partial_source_files: >-
@@ -89,22 +62,6 @@
          map(attribute='value') | flatten |
          selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id | default('')) |
          map(attribute='configFileName') | unique | list }}
-
-- name: Stage proven existing application backends for base provider update
-  ansible.builtin.copy:
-    src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0640'
-  loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
-  when:
-    - not (platform_haproxy_full_reconcile | bool)
-    - >-
-      platform_haproxy_partial_deployment_id is not defined or
-      item.name not in _platform_haproxy_partial_source_files
-  changed_when: false
 
 - name: Build HAProxy PEM bundle atomically without logging key data
   ansible.builtin.assemble:
@@ -170,6 +127,49 @@
 
 - name: Check the projected targets before candidate publication
   ansible.builtin.include_tasks: check_targets.yml
+
+- name: Reset only the temporary HAProxy candidate graph
+  ansible.builtin.file:
+    path: "{{ platform_haproxy_candidate_directory }}"
+    state: absent
+  changed_when: false
+
+- name: Create temporary HAProxy candidate workspace
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
+  changed_when: false
+
+- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+  loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
+  changed_when: false
+
+- name: Stage proven existing application backends for base provider update
+  ansible.builtin.copy:
+    src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
+    dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0640'
+  loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
+  when:
+    - not (platform_haproxy_full_reconcile | bool)
+    - >-
+      platform_haproxy_partial_deployment_id is not defined or
+      item.name not in _platform_haproxy_partial_source_files
+  changed_when: false
 
 - name: Render full Platform HAProxy candidate
   ansible.builtin.template:

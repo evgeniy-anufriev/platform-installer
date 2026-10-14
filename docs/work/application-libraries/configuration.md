@@ -111,7 +111,11 @@ connection_defaults:
 
 `CLIENT_SSL` — пример явно настроенного Kafka listener, не встроенное имя.
 Он должен существовать в effective `configuration.listeners` deployment и
-иметь `purpose: client`. Group_vars переопределяет выбор один раз для всех
+иметь `purpose: client` либо `interBroker` на broker member. Подключение
+приложения остаётся `purpose: client`: явно выбранный межброкерный listener
+обслуживает тот же Kafka protocol. Controller listener запрещён; selector
+обязателен, автоматического выбора или fallback нет.
+Group_vars переопределяет выбор один раз для всех
 deployments этого serviceType в данном экземпляре библиотеки:
 
 ```yaml
@@ -145,7 +149,8 @@ Core определяет serviceType выбранного deployment, прим�
 по deployment и новый каталог интерфейсов.
 
 Первоначальная поддержка: PostgreSQL `client`, Redis `client`/`sentinel`,
-ClickHouse `client`, Kafka — точное имя клиентского listener. ClickHouse `native`
+ClickHouse `client`, Kafka — точное имя broker listener (`client` либо явно
+выбранный `interBroker`), без controller listener. ClickHouse `native`
 подключается только после реализации корректной effective проекции.
 
 ### Приложения без секретов
@@ -359,3 +364,23 @@ endpoint после выключения — отдельный видимый r
 
 Справка: [Compose extends](https://docs.docker.com/reference/compose-file/services/#extends),
 [interpolation](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/).
+
+## Additional PostgreSQL client networks (A9 owner-approved extension)
+
+`platform_postgresql_client_cidrs: []` adds up to 32 IPv4 CIDRs to the automatically
+observed PostgreSQL member subnet. Existing default access is preserved; duplicate
+rules are removed. Every added rule remains `hostssl all all <CIDR> scram-sha-256`.
+No plaintext or trust rule is added. Core's ordinary service-package projection
+exposes the same variable as deployment/member `configuration.clientCidrs`:
+
+```yaml
+platform_desired_state:
+  serviceDeployments:
+    qa-postgresql:
+      configuration:
+        clientCidrs: [10.0.3.0/24]
+```
+
+Manual standalone inventory may use `platform_postgresql_client_cidrs` directly.
+Empty list keeps prior behavior. Configure only trusted client networks; this is
+infrastructure desired state, not an application-account hook side effect.

@@ -17,6 +17,32 @@ def authority(requirement_id, name, offline):
 
 @unittest.skipUnless(shutil.which("ansible-playbook"), "requires Ansible")
 class ArtifactSourceResolutionPlaybookTests(unittest.TestCase):
+    def test_delivery_root_uses_bundle_with_manual_override_and_legacy_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory = root / 'hosts.yml'
+            inventory.write_text(json.dumps({'all': {'hosts': {
+                'bundle': {'ansible_connection': 'local', 'platform_execution_bundle_root': '/tmp/exact-bundle', 'expected': '/tmp/exact-bundle'},
+                'manual': {'ansible_connection': 'local', 'platform_execution_bundle_root': '/tmp/exact-bundle', 'platform_execution_runtime_root': '/tmp/manual', 'expected': '/tmp/manual'},
+                'legacy': {'ansible_connection': 'local', 'expected': '/var/lib/platform-installer/runtime/current'},
+            }}}), encoding='utf-8')
+            playbook = root / 'play.yml'
+            playbook.write_text('''- hosts: all
+  gather_facts: false
+  vars:
+    platform_artifact_delivery_requirements: []
+  tasks:
+    - include_role:
+        name: platform.core.artifact_delivery
+        public: true
+    - assert:
+        that: platform_execution_runtime_root == expected
+''', encoding='utf-8')
+            environment = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core' / 'collections'))
+            completed = subprocess.run(['ansible-playbook', '-i', str(inventory), str(playbook)],
+                                       text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def test_unset_resolution_fact_is_populated_for_repository_and_offline(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); tools = root / "tools"; tools.mkdir()

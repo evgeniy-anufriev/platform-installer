@@ -1,7 +1,9 @@
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import shutil
 import subprocess
 import tempfile
+import threading
 import unittest
 
 import yaml
@@ -11,6 +13,60 @@ ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/hapro
 
 
 class PartialOptimizationTests(unittest.TestCase):
+    def test_unready_backend_preserves_prior_candidate_and_can_retry(self):
+        class Handler(BaseHTTPRequestHandler):
+            status = 503
+
+            def do_GET(self):
+                self.send_response(self.status)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        source = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
+        selected = [task for task in source if task.get('name') in {
+            'Check the projected targets before candidate publication',
+            'Reset only the temporary HAProxy candidate graph',
+            'Create temporary HAProxy candidate workspace'}]
+        for task in selected:
+            if 'ansible.builtin.include_tasks' in task:
+                task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/check_targets.yml')
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory(prefix='platform-haproxy-readiness-') as directory:
+                root = Path(directory)
+                candidate = root / 'candidate'
+                candidate.mkdir()
+                marker = candidate / 'retained-proof'
+                marker.write_text('last successful graph')
+                variables = {'platform_haproxy_candidate_directory': str(candidate),
+                             'platform_haproxy_application_backends': [{
+                                 'targetDeploymentId': 'qa-app', 'settings': {'ssl': False},
+                                 'endpoint': {'fqdn': 'qa-app.example'},
+                                 'probe': {'path': '/status', 'expected_status': 200, 'timeout': 2},
+                                 'targets': [{'address': '127.0.0.1', 'port': server.server_port}]}]}
+                path = root / 'test.yml'
+                path.write_text(yaml.safe_dump([{'hosts': 'localhost', 'connection': 'local',
+                                                'gather_facts': False, 'vars': variables,
+                                                'tasks': selected}]))
+                result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertEqual(marker.read_text(), 'last successful graph')
+                Handler.status = 200
+                result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertTrue((candidate / 'conf.d').is_dir())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
     def test_partial_reuses_provider_files_and_only_publishes_source(self):
         executable = shutil.which("ansible-playbook")
         if not executable:

@@ -45,6 +45,15 @@ configuration:
   additionalProperties: false
   settings:
     port: {kind: MANAGED, roleVariable: platform_postgresql_port, type: integer, scopes: [deployment, member], validation: {minimum: 1, maximum: 65535}, ui: {label: PostgreSQL port, section: Network, order: 10}}
+    clientCidrs:
+      kind: MANAGED
+      roleVariable: platform_postgresql_client_cidrs
+      type: array
+      scopes: [deployment, member]
+      validation:
+        maxItems: 32
+        items: {type: string, pattern: '^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(?:[0-9]|[12][0-9]|3[0-2])$'}
+      ui: {label: Дополнительные клиентские IPv4 CIDR, section: Network, order: 11, description: Дополняют автоматически определённую подсеть. Доступ только через TLS и SCRAM.}
     dataDirectory: {kind: MANAGED, roleVariable: platform_postgresql_data_directory, type: string, scopes: [deployment, member], validation: {minLength: 1, maxLength: 255}, ui: {label: Каталог данных, section: Хранение, order: 0, description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>/postgres. Существующие данные автоматически не переносятся.}}
     configDirectory: {kind: MANAGED, roleVariable: platform_postgresql_config_directory, type: string, scopes: [deployment, member], validation: {minLength: 1}, ui: {label: Config directory, section: Storage, order: 21}}
     tlsProfile: {kind: MANAGED, roleVariable: platform_postgresql_tls_profile, type: string, scopes: [deployment, member], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 30, x-referenceKind: TLS_PROFILE}}
