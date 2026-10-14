@@ -160,6 +160,12 @@ func writeLocalRunRecord(storeRoot string, record localRunRecord) error {
 	if err != nil || len(data) > 8192 {
 		return errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
+	return writeLocalOperationalRecord(storeRoot, path, data)
+}
+
+// Shared atomic publication for bounded operational records. Callers validate
+// their closed record and derive the path using localRunRecordPath.
+func writeLocalOperationalRecord(storeRoot, path string, data []byte) error {
 	temp, err := os.CreateTemp(storeRoot, ".run-record-")
 	if err != nil {
 		return err

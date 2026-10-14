@@ -61,20 +61,23 @@ const (
 )
 
 type DeploymentPlan struct {
-	ID                      string
-	Status                  string
-	ProjectIdentity         string
-	ProjectRevision         string
-	PlanFingerprint         string
-	Acknowledgements        []string
-	AcknowledgementDetails  []PlanAcknowledgement
-	Phases                  []DeploymentPlanPhase
-	RuntimeRelease          map[string]any
-	ArtifactRequirements    []artifactsource.Requirement
-	RequiredCredentials     []RequiredCredential
-	Findings                []Finding
-	stagingID               string
-	executionManifestDigest string
+	ExecutionMode              ExecutionMode
+	InfrastructureVerification *InfrastructureVerification
+	ID                         string
+	Status                     string
+	ProjectIdentity            string
+	ProjectRevision            string
+	PlanFingerprint            string
+	Acknowledgements           []string
+	AcknowledgementDetails     []PlanAcknowledgement
+	Phases                     []DeploymentPlanPhase
+	RuntimeRelease             map[string]any
+	ArtifactRequirements       []artifactsource.Requirement
+	ApplicationImages          []ApplicationImageRequirement
+	RequiredCredentials        []RequiredCredential
+	Findings                   []Finding
+	stagingID                  string
+	executionManifestDigest    string
 }
 
 // RequiredCredential is the bounded public-plan requirement projection. It

@@ -248,6 +248,10 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	if err != nil || !orderedDeploymentPlanRequestSupported(capabilities) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED")
 	}
+	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder})
+}
+
+func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node Node, projectRoot string, request map[string]any) (DeploymentPlan, error) {
 	runID, err := newRunID()
 	if err != nil {
 		return DeploymentPlan{}, err
@@ -255,12 +259,16 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "plan"); err != nil {
 		return DeploymentPlan{}, err
 	}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "operation": "BuildDeploymentPlan", "runId": runID, "project": "/var/lib/platform-installer/execution/runs/" + runID + "/project", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder})
+	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
+	response, err := t.runtimeProtocol(ctx, node, request)
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
 	value, ok := response["deploymentPlan"].(map[string]any)
 	if !ok {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
+	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha4" && (value["apiVersion"] != "platform.installer/plan/v1alpha5" || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
@@ -274,6 +282,9 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 }
 
 func orderedDeploymentPlanRequestSupported(response map[string]any) bool {
+	if response["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" {
+		return b0PlanCapabilitySupported(response) && contains(response["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha2")
+	}
 	if response["apiVersion"] != "platform.installer/execution-capabilities/v1alpha6" || response["kind"] != "ExecutionCapabilities" {
 		return false
 	}
@@ -975,6 +986,18 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" {
+		mode, ok := value["executionMode"].(string)
+		plan.ExecutionMode = ExecutionMode(mode)
+		if !ok || !plan.ExecutionMode.valid() {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		var err error
+		plan.InfrastructureVerification, err = decodeInfrastructureVerification(value["infrastructureVerification"])
+		if err != nil {
+			return DeploymentPlan{}, err
+		}
+	}
 	if v, ok := value["id"].(string); ok {
 		plan.ID = v
 	}
@@ -1011,6 +1034,14 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			item, ok := raw.(map[string]any)
 			if !ok {
 				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+			}
+			if item["artifactType"] == "container-image" {
+				image, err := decodeApplicationImage(item)
+				if err != nil {
+					return DeploymentPlan{}, err
+				}
+				plan.ApplicationImages = append(plan.ApplicationImages, image)
+				continue
 			}
 			requirement := artifactsource.Requirement{}
 			if v, ok := item["requirementId"].(string); ok {

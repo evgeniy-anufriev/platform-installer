@@ -3,6 +3,7 @@ package coreadapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 )
 
 // Adapter is the only boundary from Installer application logic to Core.
@@ -19,6 +20,8 @@ type Document struct {
 
 // Snapshot mirrors only fields consumed by Installer application semantics.
 type Snapshot struct {
+	APIVersion             string                                 `json:"apiVersion"`
+	ApplicationLibraries   *ApplicationLibraries                  `json:"applicationLibraries,omitempty"`
 	Status                 string                                 `json:"status"`
 	Partial                bool                                   `json:"partial"`
 	Project                map[string]any                         `json:"project"`
@@ -42,8 +45,14 @@ type Snapshot struct {
 }
 
 func DecodeSnapshot(data []byte) (*Snapshot, error) {
+	if len(data) > 2*1024*1024 {
+		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
+	}
 	var snapshot Snapshot
 	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return nil, err
+	}
+	if err := snapshot.validateApplications(); err != nil {
 		return nil, err
 	}
 	snapshot.Raw = append(snapshot.Raw[:0], data...)
